@@ -19,7 +19,7 @@ type ChannelFormValues = { name: string; baseUrl: string; apiKey?: string; inter
 const interfaceTypeOptions = [
     { label: "文本", options: [{ label: "Chat Completions", value: "chat-completion" }, { label: "OpenAI Responses", value: "openai-response" }] },
     { label: "图片", options: [{ label: "OpenAI Images", value: "openai-image" }] },
-    { label: "视频", options: [{ label: "NewAPI 视频", value: "newapi" }, { label: "NewAPI 渠道 1", value: "newapi-channel-1" }, { label: "NewAPI 渠道 2", value: "newapi-channel-2" }] },
+    { label: "视频", options: [{ label: "NewAPI 视频", value: "newapi" }, { label: "NewAPI 渠道 1", value: "newapi-channel-1" }, { label: "NewAPI 渠道 2", value: "newapi-channel-2" }, { label: "xAI / Sub2API 视频", value: "xai-video" }] },
 ];
 
 export default function ChannelsPage() {
@@ -134,7 +134,7 @@ export default function ChannelsPage() {
 
     const columns: ColumnsType<ModelChannel> = [
         { title: "渠道", dataIndex: "name", render: (_, channel) => <div><div className="font-medium">{channel.name}</div><div className="max-w-lg truncate text-xs text-foreground/45">{channel.baseUrl}</div></div> },
-        { title: "接口类型", dataIndex: "interfaceType", width: 160, render: (value: ChannelInterfaceType) => <Tag bordered={false} color={value === "newapi-channel-1" ? "green" : value === "newapi" ? "orange" : value === "newapi-channel-2" ? "purple" : "blue"}>{interfaceTypeLabel(value)}</Tag> },
+        { title: "接口类型", dataIndex: "interfaceType", width: 160, render: (value: ChannelInterfaceType) => <Tag bordered={false} color={value === "newapi-channel-1" ? "green" : value === "newapi" ? "orange" : value === "newapi-channel-2" ? "purple" : value === "xai-video" ? "cyan" : "blue"}>{interfaceTypeLabel(value)}</Tag> },
         { title: "模型", dataIndex: "models", width: 100, render: (models: string[]) => `${models?.length || 0} 个` },
         { title: "密钥", dataIndex: "hasApiKey", width: 100, render: (configured) => <Tag bordered={false} color={configured ? "success" : "default"}>{configured ? "已配置" : "未配置"}</Tag> },
         { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <Tag bordered={false} color={enabled !== false ? "success" : "default"}>{enabled !== false ? "已启用" : "已停用"}</Tag> },
@@ -171,5 +171,5 @@ export default function ChannelsPage() {
 function positiveInt(value: string | null, fallback: number) { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback; }
 function normalizePageSize(value: string | null) { const parsed = positiveInt(value, 20); return [20, 50, 100].includes(parsed) ? parsed : 20; }
 function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" { return value === "enabled" || value === "disabled" ? value : "all"; }
-function normalizeInterface(value: string | null): "all" | ChannelInterfaceType { return ["chat-completion", "openai-response", "openai-image", "newapi", "newapi-channel-1", "newapi-channel-2"].includes(value || "") ? value as ChannelInterfaceType : "all"; }
-function interfaceTypeLabel(value?: ChannelInterfaceType) { return ({ "chat-completion": "Chat Completions", "openai-response": "OpenAI Responses", "openai-image": "OpenAI Images", newapi: "NewAPI 视频", "newapi-channel-1": "NewAPI 渠道 1", "newapi-channel-2": "NewAPI 渠道 2" } as Record<string, string>)[value || ""] || "未设置"; }
+function normalizeInterface(value: string | null): "all" | ChannelInterfaceType { return ["chat-completion", "openai-response", "openai-image", "newapi", "newapi-channel-1", "newapi-channel-2", "xai-video"].includes(value || "") ? value as ChannelInterfaceType : "all"; }
+function interfaceTypeLabel(value?: ChannelInterfaceType) { return ({ "chat-completion": "Chat Completions", "openai-response": "OpenAI Responses", "openai-image": "OpenAI Images", newapi: "NewAPI 视频", "newapi-channel-1": "NewAPI 渠道 1", "newapi-channel-2": "NewAPI 渠道 2", "xai-video": "xAI / Sub2API 视频" } as Record<string, string>)[value || ""] || "未设置"; }

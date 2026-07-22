@@ -54,6 +54,7 @@ const (
 	ChannelInterfaceNewAPIVideo    ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1 ChannelInterfaceType = "newapi-channel-1"
 	ChannelInterfaceNewAPIChannel2 ChannelInterfaceType = "newapi-channel-2"
+	ChannelInterfaceXAIVideo       ChannelInterfaceType = "xai-video"
 
 	ApiCallStatusSucceeded ApiCallStatus = "succeeded"
 	ApiCallStatusFailed    ApiCallStatus = "failed"

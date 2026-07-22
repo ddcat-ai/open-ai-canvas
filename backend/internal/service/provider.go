@@ -574,12 +574,16 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	}
 	id := resumedProviderRequestID(ctx)
 	var created map[string]interface{}
-	if id == "" && isGrokVideoConfig(input.Config) {
+	if id == "" && (input.Config.InterfaceType == "xai-video" || isGrokVideoConfig(input.Config)) {
 		requestBody, err := grokVideoBody(input)
 		if err != nil {
 			return nil, err
 		}
-		if err := postJSON(ctx, input.Config, "/videos", requestBody, &created); err != nil {
+		createPath := "/videos"
+		if input.Config.InterfaceType == "xai-video" {
+			createPath = "/videos/generations"
+		}
+		if err := postJSON(ctx, input.Config, createPath, requestBody, &created); err != nil {
 			return nil, err
 		}
 	} else if id == "" {
@@ -608,17 +612,11 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		}
 	}
 	if id == "" {
-		id = stringField(created, "id")
-		if id == "" {
-			id = stringField(created, "task_id")
-		}
+		id = firstNonEmptyString(stringField(created, "id"), stringField(created, "request_id"), stringField(created, "task_id"))
 	}
 	if id == "" {
 		if data, ok := created["data"].(map[string]interface{}); ok {
-			id = stringField(data, "id")
-			if id == "" {
-				id = stringField(data, "task_id")
-			}
+			id = firstNonEmptyString(stringField(data, "id"), stringField(data, "request_id"), stringField(data, "task_id"))
 		}
 	}
 	if id == "" {
@@ -633,7 +631,7 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 			state = data
 		}
 		status := strings.ToLower(stringField(state, "status"))
-		if status == "completed" || status == "succeeded" || status == "success" {
+		if status == "completed" || status == "succeeded" || status == "success" || status == "done" {
 			if videoURL := newAPIVideoResultURL(state); videoURL != "" {
 				data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
 				if err != nil {
@@ -664,7 +662,7 @@ func newAPIVideoResultURL(state map[string]interface{}) string {
 
 func nestedNewAPIVideoResultURL(payload map[string]interface{}, allowResultURL bool, depth int) string {
 	if depth < 2 {
-		for _, key := range []string{"data", "result"} {
+		for _, key := range []string{"data", "result", "video"} {
 			if nested, ok := payload[key].(map[string]interface{}); ok {
 				if videoURL := nestedNewAPIVideoResultURL(nested, true, depth+1); videoURL != "" {
 					return videoURL
@@ -986,7 +984,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
 		"image": {"openai-image": true},
-		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true},
+		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true},
 	}
 	if allowed[mode] != nil && !allowed[mode][interfaceType] {
 		return fmt.Errorf("接口类型 %s 不支持%s生成", interfaceType, mode)

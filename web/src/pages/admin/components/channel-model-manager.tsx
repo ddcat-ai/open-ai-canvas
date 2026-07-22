@@ -193,7 +193,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
 function capabilityFromInterface(value?: ModelChannel["interfaceType"]): ChannelModel["capability"] {
     if (value === "openai-image") return "image";
-    if (value === "newapi" || value === "newapi-channel-1" || value === "newapi-channel-2") return "video";
+    if (value === "newapi" || value === "newapi-channel-1" || value === "newapi-channel-2" || value === "xai-video") return "video";
     return "text";
 }
 

@@ -200,7 +200,7 @@ func capabilityForChannel(channel model.ModelChannel) string {
 	switch channel.InterfaceType {
 	case model.ChannelInterfaceOpenAIImage:
 		return "image"
-	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
+	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo:
 		return "video"
 	default:
 		return "text"
