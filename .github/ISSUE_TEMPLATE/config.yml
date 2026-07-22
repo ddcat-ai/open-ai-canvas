@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私密安全报告
+    url: https://github.com/ddcat666/open-ai-canvas/security/advisories/new
+    about: 请勿在公开 Issue 中披露未修复漏洞
