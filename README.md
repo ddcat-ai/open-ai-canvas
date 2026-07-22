@@ -7,14 +7,19 @@
 <p align="center">面向 AI 影视创作的开源画布工作台</p>
 
 <p align="center">
-  <a href="https://github.com/ddcat666/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat666/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.15.10-2563eb?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.16.4-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
 无限画布把节点编排、图片/视频/音频生成、结构化分镜、3D 导演台、素材库、异步任务和 Agent 会话放在同一个创作空间中，适合连续探索视觉方案并沉淀影视资产。
 
 > 项目仍在快速开发，数据结构可能直接调整。当前更适合个人、本地或可信环境部署，不建议未经安全配置直接开放公网多人使用。
+
+## 在线体验
+
+- 测试环境：[https://ai.ddcat.pro/login](https://ai.ddcat.pro/login)
+- 代码仓库：[ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)
 
 ## 主要功能
 
@@ -25,12 +30,39 @@
 - **Agent 能力**：网页画布助手、本地 Canvas Agent、Codex App 插件和技能库。
 - **管理与安全**：用户与系统渠道、用量分析、私有 OSS、资源归属校验和敏感配置加密。
 
+## 界面预览
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <img src="assets/login.png" alt="登录与注册" width="100%">
+      <br><sub><b>登录与注册</b></sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="assets/huabu.png" alt="画布项目管理" width="100%">
+      <br><sub><b>画布项目管理</b></sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="assets/huabu-info.png" alt="画布创作工作台" width="100%">
+      <br><sub><b>画布创作工作台</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <img src="assets/backend.png" alt="运维管理后台" width="100%">
+      <br><sub><b>运维管理后台</b></sub>
+    </td>
+    <td width="33%"></td>
+    <td width="33%"></td>
+  </tr>
+</table>
+
 ## 新服务器一键部署（推荐）
 
 适用于刚买的 Linux 云服务器。准备一台 Ubuntu、Debian、CentOS 或 Rocky Linux 服务器，在云厂商防火墙（安全组）中先仅对自己的公网 IP 放行 TCP `3000` 端口，然后登录服务器执行这一条命令：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat666/open-ai-canvas/main/scripts/install-server.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
 ```
 
 脚本会自动安装 Docker 和 Docker Compose，把项目安装到 `/opt/open-ai-canvas`，生成随机数据库密码，并启动网页、后端、PostgreSQL 和 Redis。数据库和上传文件使用 Docker 数据卷持久保存，重新启动容器不会丢失。
@@ -52,7 +84,7 @@ sudo docker compose --env-file .env -f docker-compose.deploy.yml logs -f --tail=
 需要 Bun、Go 和可用的 OpenAI 兼容模型渠道。
 
 ```bash
-git clone https://github.com/ddcat666/open-ai-canvas.git
+git clone https://github.com/ddcat-ai/open-ai-canvas.git
 cd open-ai-canvas
 
 cd backend

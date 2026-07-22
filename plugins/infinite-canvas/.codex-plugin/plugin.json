@@ -5,7 +5,7 @@
   "author": {
     "name": "ddcat"
   },
-  "repository": "https://github.com/ddcat666/open-ai-canvas",
+  "repository": "https://github.com/ddcat-ai/open-ai-canvas",
   "license": "AGPL-3.0",
   "keywords": ["infinite-canvas", "canvas", "mcp", "agent"],
   "skills": "./skills/",

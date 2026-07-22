@@ -9,7 +9,7 @@
 把下面这段发给 Codex：
 
 ```text
-请从 https://github.com/ddcat666/open-ai-canvas.git 安装 Infinite Canvas Codex 插件。
+请从 https://github.com/ddcat-ai/open-ai-canvas.git 安装 Infinite Canvas Codex 插件。
 请 clone 仓库到 ~/plugins/open-ai-canvas，确认 plugins/infinite-canvas/.codex-plugin/plugin.json 存在，
 把 plugins/open-ai-canvas 加入 personal marketplace，先运行 codex plugin marketplace add ~，
 再运行 codex plugin add infinite-canvas@personal。
@@ -22,7 +22,7 @@
 
 ```bash
 mkdir -p ~/plugins
-git clone https://github.com/ddcat666/open-ai-canvas.git ~/plugins/open-ai-canvas
+git clone https://github.com/ddcat-ai/open-ai-canvas.git ~/plugins/open-ai-canvas
 ```
 
 确保 `~/.agents/plugins/marketplace.json` 中有 Infinite Canvas 条目，注意 `path` 指向仓库里的插件子目录：
