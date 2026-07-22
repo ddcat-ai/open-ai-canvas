@@ -75,11 +75,12 @@ func validateOutboundHost(host string) error {
 }
 
 func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
-	host = strings.TrimSpace(strings.ToLower(host))
+	host = normalizeOutboundHost(host)
 	if host == "" {
 		return nil, BadAuthRequest("外部服务域名无效")
 	}
-	if !allowPrivateUpstreams() && (host == "localhost" || strings.HasSuffix(host, ".localhost")) {
+	allowPrivateHost := allowPrivateUpstreams() || allowedPrivateUpstreamHost(host)
+	if !allowPrivateHost && (host == "localhost" || strings.HasSuffix(host, ".localhost")) {
 		return nil, BadAuthRequest("不允许访问本机或内网地址")
 	}
 	addresses, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
@@ -89,7 +90,7 @@ func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
 	if len(addresses) == 0 {
 		return nil, BadAuthRequest("外部服务域名没有可用地址")
 	}
-	if !allowPrivateUpstreams() {
+	if !allowPrivateHost {
 		for _, ip := range addresses {
 			if blockedOutboundIP(ip) {
 				return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
@@ -106,4 +107,23 @@ func blockedOutboundIP(ip net.IP) bool {
 func allowPrivateUpstreams() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS")))
 	return value == "1" || value == "true" || value == "yes"
+}
+
+// allowedPrivateUpstreamHost lets operators pin only explicitly trusted upstream
+// hostnames to an internal route without disabling SSRF protection for every URL.
+func allowedPrivateUpstreamHost(host string) bool {
+	host = normalizeOutboundHost(host)
+	if host == "" {
+		return false
+	}
+	for _, configured := range strings.Split(os.Getenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS"), ",") {
+		if normalizeOutboundHost(configured) == host {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeOutboundHost(host string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 }
