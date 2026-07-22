@@ -369,6 +369,64 @@ func TestRunVideoTaskUsesJSONForGrokVideo(t *testing.T) {
 	}
 }
 
+func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	paths := make([]string, 0, 3)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "POST /v1/videos/generations":
+			if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", contentType)
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if body["model"] != "grok-imagine-video-1.5" || body["prompt"] != "make it move" {
+				t.Errorf("request body = %#v", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"request_id":"video-1"}`))
+		case "GET /v1/videos/video-1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"done","video":{"url":"` + server.URL + `/files/video.mp4"}}`))
+		case "GET /files/video.mp4":
+			if authorization := r.Header.Get("Authorization"); authorization != "" {
+				t.Errorf("file Authorization = %q, want empty", authorization)
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	result, err := runVideoTask(context.Background(), canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{
+			BaseURL:       server.URL + "/v1",
+			APIKey:        "test-key",
+			Model:         "grok-imagine-video-1.5",
+			InterfaceType: "xai-video",
+			VideoSeconds:  "10",
+		},
+	})
+	if err != nil {
+		t.Fatalf("runVideoTask() error = %v", err)
+	}
+	video, ok := result["video"].(map[string]interface{})
+	if !ok || video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
+		t.Fatalf("video = %#v", result["video"])
+	}
+	want := "POST /v1/videos/generations,GET /v1/videos/video-1,GET /files/video.mp4"
+	if got := strings.Join(paths, ","); got != want {
+		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
 func TestNewAPIVideoPromptKeepsTextOnlyPromptUnchanged(t *testing.T) {
 	input := canvasGenerationInput{
 		Prompt: "make it move",
@@ -620,6 +678,9 @@ func TestValidateGenerationInterfaceRejectsMismatchedType(t *testing.T) {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}
 	if err := validateGenerationInterface("video", "newapi-channel-2"); err != nil {
+		t.Fatalf("validateGenerationInterface() error = %v", err)
+	}
+	if err := validateGenerationInterface("video", "xai-video"); err != nil {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}
 }

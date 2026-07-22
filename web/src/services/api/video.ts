@@ -8,8 +8,9 @@ import { buildApiUrl, isSystemProxyBaseUrl, modelOptionName, resolveModelRequest
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-type VideoResponse = { id: string; status?: string; error?: { message?: string } };
+type VideoResponse = { id?: string; request_id?: string; task_id?: string; status?: string; error?: { message?: string } };
 type ApiVideoResponse = VideoResponse | { code?: number; data?: VideoResponse | null; msg?: string };
+type ResolvedAiConfig = ReturnType<typeof resolveModelRequestConfig>;
 type SeedanceTask = {
     id: string;
     task_id?: string;
@@ -77,9 +78,9 @@ export async function storeGeneratedVideo(result: VideoGenerationResult): Promis
     throw new Error("视频接口没有返回可播放的视频");
 }
 
-async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], options?: RequestOptions): Promise<VideoGenerationTask> {
+async function createOpenAIVideoTask(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], options?: RequestOptions): Promise<VideoGenerationTask> {
     const modelName = modelOptionName(model);
-    if (modelName.toLowerCase().includes("grok")) {
+    if (config.interfaceType === "xai-video" || modelName.toLowerCase().includes("grok")) {
         const images = await Promise.all(references.slice(0, 7).map((image) => imageToDataUrl(image)));
         const seconds = normalizeVideoSeconds(config.videoSeconds);
         const payload = {
@@ -91,9 +92,11 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
             ...(images.length ? { image: images[0], images } : {}),
         };
         try {
-            const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), payload, { headers: aiHeaders(config, "application/json"), signal: options?.signal })).data);
-            if (!created.id) throw new Error("视频接口没有返回任务 ID");
-            return { id: created.id, provider: "openai", model };
+            const createPath = config.interfaceType === "xai-video" ? "/videos/generations" : "/videos";
+            const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, createPath), payload, { headers: aiHeaders(config, "application/json"), signal: options?.signal })).data);
+            const id = videoTaskId(created);
+            if (!id) throw new Error("视频接口没有返回任务 ID");
+            return { id, provider: "openai", model };
         } catch (error) {
             throw new Error(readAxiosError(error, "视频任务创建失败"));
         }
@@ -116,10 +119,10 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
     }
 }
 
-async function pollOpenAIVideoTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+async function pollOpenAIVideoTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     try {
         const video = unwrapVideoResponse((await axios.get<ApiVideoResponse>(aiApiUrl(config, `/videos/${task.id}`), { headers: aiHeaders(config), signal: options?.signal })).data);
-        if (video.status === "completed") {
+        if (video.status === "completed" || video.status === "succeeded" || video.status === "success" || video.status === "done") {
             const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${task.id}/content`), { headers: aiHeaders(config), responseType: "blob", signal: options?.signal });
             await assertVideoBlob(content.data);
             return { status: "completed", result: { blob: content.data } };
@@ -336,6 +339,10 @@ function normalizeVideoResolution(value: string) {
 
 function unwrapVideoResponse(payload: ApiVideoResponse) {
     return unwrapEnvelope(payload, "接口没有返回视频任务");
+}
+
+function videoTaskId(payload: VideoResponse) {
+    return payload.id || payload.request_id || payload.task_id || "";
 }
 
 function unwrapSeedanceTask(payload: ApiEnvelope<SeedanceTask>) {

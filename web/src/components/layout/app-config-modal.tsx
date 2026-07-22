@@ -80,6 +80,7 @@ const channelProtocolOptions = [
             { label: "NewAPI 视频", value: "newapi" },
             { label: "NewAPI 渠道 1", value: "newapi-channel-1" },
             { label: "NewAPI 渠道 2", value: "newapi-channel-2" },
+            { label: "xAI / Sub2API 视频", value: "xai-video" },
         ],
     },
 ];
@@ -750,6 +751,8 @@ function channelProtocolLabel(channel: ModelChannel) {
             return "NewAPI 渠道 1";
         case "newapi-channel-2":
             return "NewAPI 渠道 2";
+        case "xai-video":
+            return "xAI / Sub2API 视频";
         default:
             return "OpenAI 自动兼容";
     }

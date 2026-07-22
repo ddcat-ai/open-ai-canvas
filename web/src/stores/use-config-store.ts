@@ -7,7 +7,7 @@ import { scopedLocalStorage } from "@/lib/user-scope";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 
 export type ApiCallFormat = "openai" | "gemini";
-export type ChannelInterfaceType = "chat-completion" | "openai-response" | "openai-image" | "newapi" | "newapi-channel-1" | "newapi-channel-2";
+export type ChannelInterfaceType = "chat-completion" | "openai-response" | "openai-image" | "newapi" | "newapi-channel-1" | "newapi-channel-2" | "xai-video";
 
 export type ModelChannel = {
     id: string;
@@ -441,14 +441,14 @@ export function defaultBaseUrlForApiFormat(apiFormat: ApiCallFormat) {
 }
 
 export function defaultBaseUrlForChannelInterface(interfaceType?: ChannelInterfaceType) {
-    if (interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2") return "";
+    if (interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "";
     return OPENAI_BASE_URL;
 }
 
 function capabilityForChannelInterface(interfaceType?: ChannelInterfaceType): ModelCapability | undefined {
     if (interfaceType === "chat-completion" || interfaceType === "openai-response") return "text";
     if (interfaceType === "openai-image") return "image";
-    if (interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2") return "video";
+    if (interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "video";
     return undefined;
 }
 
@@ -457,7 +457,7 @@ function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
 }
 
 function normalizeChannelInterfaceType(value: unknown): ChannelInterfaceType | undefined {
-    return value === "chat-completion" || value === "openai-response" || value === "openai-image" || value === "newapi" || value === "newapi-channel-1" || value === "newapi-channel-2" ? value : undefined;
+    return value === "chat-completion" || value === "openai-response" || value === "openai-image" || value === "newapi" || value === "newapi-channel-1" || value === "newapi-channel-2" || value === "xai-video" ? value : undefined;
 }
 
 function uniqueRawModels(models: string[]) {

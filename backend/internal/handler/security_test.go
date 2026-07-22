@@ -48,10 +48,12 @@ func TestAuthorizeSystemProxyRestrictsConfiguredInterfaceType(t *testing.T) {
 	}
 }
 
-func TestAuthorizeSystemProxyBlocksNewAPIChannel2DirectBrowserProxy(t *testing.T) {
+func TestAuthorizeSystemProxyBlocksBackendOnlyVideoInterfaces(t *testing.T) {
 	body := []byte(`{"model":"grok-image-video"}`)
-	channel := &model.ModelChannel{APIFormat: "openai", InterfaceType: model.ChannelInterfaceNewAPIChannel2, ModelsJSON: `["grok-image-video"]`}
-	if err := authorizeSystemProxy(channel, http.MethodPost, "/video/generations", "application/json", body); err == nil {
-		t.Fatal("authorizeSystemProxy() error = nil for backend-only video interface")
+	for _, interfaceType := range []model.ChannelInterfaceType{model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo} {
+		channel := &model.ModelChannel{APIFormat: "openai", InterfaceType: interfaceType, ModelsJSON: `["grok-image-video"]`}
+		if err := authorizeSystemProxy(channel, http.MethodPost, "/video/generations", "application/json", body); err == nil {
+			t.Fatalf("authorizeSystemProxy() error = nil for backend-only interface %q", interfaceType)
+		}
 	}
 }

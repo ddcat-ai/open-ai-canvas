@@ -31,6 +31,26 @@ func TestChannelFromRequestStoresInterfaceType(t *testing.T) {
 	}
 }
 
+func TestChannelFromRequestStoresXAIVideoInterfaceType(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+
+	channel, err := channelFromRequest(ChannelRequest{
+		Name:          "xAI Video",
+		BaseURL:       server.URL + "/v1",
+		APIKey:        "secret",
+		InterfaceType: "xai-video",
+		Models:        []string{"grok-imagine-video-1.5"},
+	}, model.ModelChannel{})
+	if err != nil {
+		t.Fatalf("channelFromRequest() error = %v", err)
+	}
+	if channel.InterfaceType != model.ChannelInterfaceXAIVideo {
+		t.Fatalf("InterfaceType = %q", channel.InterfaceType)
+	}
+}
+
 func TestMergeChannelRequestSupportsEnabledOnlyPatch(t *testing.T) {
 	enabled := false
 	req := mergeChannelRequest(ChannelRequest{Enabled: &enabled}, model.ModelChannel{
