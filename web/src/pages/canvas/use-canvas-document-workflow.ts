@@ -7,7 +7,7 @@ import { parseDocumentCharacterBreakdown, partitionCharacterBreakdowns, upsertCh
 import { createDocumentChapter } from "@/lib/canvas/canvas-document";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { backendProviderConfig, buildGenerationConfig, runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
-import { createAgentSession, queryAgentSession } from "@/services/api/task-center";
+import { agentSessionFailureMessage, createAgentSession, queryAgentSession } from "@/services/api/task-center";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasDocumentChapter, type CanvasNodeData, type CanvasNodeMetadata, type CanvasRichDocument, type Position, type ViewportTransform } from "@/types/canvas";
 
@@ -167,7 +167,7 @@ export function useCanvasDocumentWorkflow({
             let detail = created;
             for (let attempt = 0; attempt < 120; attempt += 1) {
                 if (detail.session.status === "completed") break;
-                if (detail.session.status === "failed") throw new Error("后端影视 Agent 会话失败");
+                if (detail.session.status === "failed") throw new Error(agentSessionFailureMessage(detail));
                 await new Promise<void>((resolve) => window.setTimeout(resolve, 2000));
                 detail = await queryAgentSession(created.session.id);
             }
