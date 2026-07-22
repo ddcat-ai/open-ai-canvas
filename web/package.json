@@ -58,7 +58,7 @@
         "@tailwindcss/postcss": "^4.3.3",
         "@vitejs/plugin-react": "^6.0.3",
         "@types/file-saver": "^2.0.7",
-        "@types/node": "^20.19.43",
+        "@types/node": "^26.1.1",
         "@types/react": "19.2.17",
         "@types/react-dom": "19.2.3",
         "prettier": "^3.9.5",
