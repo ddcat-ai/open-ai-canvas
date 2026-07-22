@@ -57,6 +57,14 @@
   </tr>
 </table>
 
+## 交流与反馈
+
+Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
+
+<p align="center">
+  <img src="assets/qq.jpg" alt="无限画布 QQ 交流群" width="360">
+</p>
+
 ## 新服务器一键部署（推荐）
 
 适用于刚买的 Linux 云服务器。准备一台 Ubuntu、Debian、CentOS 或 Rocky Linux 服务器，在云厂商防火墙（安全组）中先仅对自己的公网 IP 放行 TCP `3000` 端口，然后登录服务器执行这一条命令：
