@@ -3,6 +3,7 @@ package handler
 import (
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -14,6 +15,54 @@ func TestAuthorizeSystemProxyAllowsConfiguredGenerationModel(t *testing.T) {
 	body := []byte(`{"model":"gpt-image-1","prompt":"test"}`)
 	if err := authorizeSystemProxy(channel, http.MethodPost, "/images/generations", "application/json", body); err != nil {
 		t.Fatalf("authorizeSystemProxy() error = %v", err)
+	}
+}
+
+func TestAuthorizeCustomRelayAllowsModelsAndAgentEndpoints(t *testing.T) {
+	tests := []struct {
+		method      string
+		target      string
+		apiFormat   string
+		contentType string
+	}{
+		{method: http.MethodGet, target: "https://api.example.com/v1/models", apiFormat: "openai"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/responses", apiFormat: "openai", contentType: "application/json"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/chat/completions", apiFormat: "openai", contentType: "application/json; charset=utf-8"},
+		{method: http.MethodPost, target: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse", apiFormat: "gemini", contentType: "application/json"},
+	}
+	for _, test := range tests {
+		target, err := url.Parse(test.target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizeCustomRelay(test.method, target, test.apiFormat, test.contentType); err != nil {
+			t.Fatalf("authorizeCustomRelay(%s %s) error = %v", test.method, test.target, err)
+		}
+	}
+}
+
+func TestAuthorizeCustomRelayRejectsArbitraryRequestsAndCredentialQueries(t *testing.T) {
+	tests := []struct {
+		method      string
+		target      string
+		apiFormat   string
+		contentType string
+	}{
+		{method: http.MethodDelete, target: "https://api.example.com/v1/models", apiFormat: "openai"},
+		{method: http.MethodGet, target: "https://api.example.com/account", apiFormat: "openai"},
+		{method: http.MethodGet, target: "https://api.example.com/v1/models?api_key=secret", apiFormat: "openai"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/responses", apiFormat: "openai", contentType: "text/plain"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/../account/chat/completions", apiFormat: "openai", contentType: "application/json"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/models/gemini:streamGenerateContent?alt=sse&token=secret", apiFormat: "gemini", contentType: "application/json"},
+	}
+	for _, test := range tests {
+		target, err := url.Parse(test.target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizeCustomRelay(test.method, target, test.apiFormat, test.contentType); err == nil {
+			t.Fatalf("authorizeCustomRelay(%s %s) should fail", test.method, test.target)
+		}
 	}
 }
 

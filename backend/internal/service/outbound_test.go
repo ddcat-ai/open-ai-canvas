@@ -1,6 +1,12 @@
 package service
 
-import "testing"
+import (
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+)
 
 func TestValidateOutboundURLRejectsPrivateHosts(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")
@@ -38,5 +44,65 @@ func TestAllowedPrivateUpstreamHostUsesExactCaseInsensitiveMatch(t *testing.T) {
 	}
 	if allowedPrivateUpstreamHost("api.example.com.evil.test") {
 		t.Fatal("allowedPrivateUpstreamHost() should reject hostname suffix confusion")
+	}
+}
+
+func TestValidateCustomRelayURLUsesHTTPSAndExactPrivateAllowlist(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "")
+	if _, err := ValidateCustomRelayURL("http://127.0.0.1:8080/v1/models"); err == nil {
+		t.Fatal("ValidateCustomRelayURL() should reject HTTP")
+	}
+	if _, err := ValidateCustomRelayURL("https://127.0.0.1:8080/v1/models"); err == nil {
+		t.Fatal("ValidateCustomRelayURL() should ignore the global private upstream override")
+	}
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	if _, err := ValidateCustomRelayURL("https://127.0.0.1:8080/v1/models"); err != nil {
+		t.Fatalf("ValidateCustomRelayURL() error = %v", err)
+	}
+}
+
+func TestValidateCustomRelayURLRejectsCredentialsAndFragment(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	for _, rawURL := range []string{
+		"https://user:pass@127.0.0.1/v1/models",
+		"https://127.0.0.1/v1/models#secret",
+	} {
+		if _, err := ValidateCustomRelayURL(rawURL); err == nil {
+			t.Fatalf("ValidateCustomRelayURL(%q) should fail", rawURL)
+		}
+	}
+}
+
+func TestBlockedCustomRelayIPRejectsCarrierGradeNATAndReservedRanges(t *testing.T) {
+	for _, value := range []string{"100.100.100.200", "192.0.2.10", "198.18.0.1", "2001:db8::1"} {
+		if !blockedCustomRelayIP(net.ParseIP(value)) {
+			t.Fatalf("blockedCustomRelayIP(%q) = false", value)
+		}
+	}
+	if blockedCustomRelayIP(net.ParseIP("8.8.8.8")) {
+		t.Fatal("blockedCustomRelayIP() rejected a public address")
+	}
+}
+
+func TestCustomRelayHTTPClientDoesNotFollowRedirects(t *testing.T) {
+	redirected := false
+	destination := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		redirected = true
+	}))
+	defer destination.Close()
+	source := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", destination.URL)
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer source.Close()
+
+	client := CustomRelayHTTPClient(time.Second)
+	client.Transport = source.Client().Transport
+	if _, err := client.Get(source.URL); err == nil {
+		t.Fatal("CustomRelayHTTPClient() should reject redirects")
+	}
+	if redirected {
+		t.Fatal("redirect destination should not receive the request")
 	}
 }
