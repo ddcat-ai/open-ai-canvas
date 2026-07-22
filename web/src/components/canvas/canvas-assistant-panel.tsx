@@ -8,7 +8,7 @@ import { modelOptionName, normalizeModelOptionValue, resolveModelChannel, resolv
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
-import { createAgentSession, queryAgentSession } from "@/services/api/task-center";
+import { agentSessionFailureMessage, createAgentSession, queryAgentSession } from "@/services/api/task-center";
 import { imageToDataUrl } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -1004,7 +1004,7 @@ async function createCinematicSessionOps(projectId: string, prompt: string, snap
     let detail = created;
     for (let attempt = 0; attempt < 120; attempt += 1) {
         if (detail.session.status === "completed") break;
-        if (detail.session.status === "failed") throw new Error("后端影视 Agent 会话失败");
+        if (detail.session.status === "failed") throw new Error(agentSessionFailureMessage(detail));
         await delay(2000);
         detail = await queryAgentSession(created.session.id);
     }

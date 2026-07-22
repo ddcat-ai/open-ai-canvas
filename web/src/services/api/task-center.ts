@@ -141,6 +141,18 @@ export function queryAgentSession(id: string) {
     return request<AgentSessionDetail>(api.get(`/query_session/${encodeURIComponent(id)}`));
 }
 
+export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback = "后端影视 Agent 会话失败") {
+    for (let index = detail.tasks.length - 1; index >= 0; index -= 1) {
+        const task = detail.tasks[index];
+        if ((task.status === "failed" || task.status === "cancelled") && task.error?.trim()) return generationErrorMessage(task.error.trim());
+    }
+    for (let index = detail.messages.length - 1; index >= 0; index -= 1) {
+        const message = detail.messages[index];
+        if (message.role === "assistant" && message.content.trim()) return generationErrorMessage(message.content.trim());
+    }
+    return fallback;
+}
+
 export function downloadSessionResults(id: string) {
     return request<TaskResult[]>(api.get(`/download_results/${encodeURIComponent(id)}`));
 }
