@@ -274,10 +274,19 @@ export type CanvasAssistantMessage = {
     references?: CanvasAssistantReference[];
 };
 
+export type CanvasAssistantPendingBackendSession = {
+    id: string;
+    kind: "cinematic";
+    messageId: string;
+    status: "pending";
+    startedAt: string;
+};
+
 export type CanvasAssistantSession = {
     id: string;
     title: string;
     messages: CanvasAssistantMessage[];
+    pendingBackendSession?: CanvasAssistantPendingBackendSession;
     createdAt: string;
     updatedAt: string;
 };
