@@ -85,7 +85,11 @@ export function startHttpServer() {
             await verifyCodexThreadWorkspace(emit, threadId, workspace.workspacePath);
             updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: threadId });
         }
-        void runCodexTurn(withAgentPrompt(String(req.body?.prompt || "")), emit, attachments, { threadId, cwd: workspace.workspacePath });
+        void runCodexTurn(withAgentPrompt(String(req.body?.prompt || "")), emit, attachments, {
+            threadId,
+            cwd: workspace.workspacePath,
+            onThreadId: (nextThreadId) => updateCanvasWorkspace(config, workspace.canvasId, { activeThreadId: nextThreadId }),
+        });
         res.json({ ok: true, threadId });
     }));
     app.post("/agent/claude/turn", (req, res) => {

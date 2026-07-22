@@ -6,12 +6,13 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { AGENT_PROMPT, VERSION } from "./config.js";
+import { assertCodexThreadWorkspace, codexThreadInWorkspace, resolveCodexThread } from "./codex-thread.js";
 import type { AgentAttachment, AgentEmit } from "./types.js";
 
 type Json = Record<string, unknown>;
 type AgentEvent = Json & { type: string; usage?: unknown };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-type CodexRunOptions = { threadId?: string; cwd?: string };
+type CodexRunOptions = { threadId?: string; cwd?: string; onThreadId?: (threadId: string) => void };
 type AgentHistoryMessage = { id: string; role: "user" | "assistant" | "tool" | "error"; title?: string; text: string; detail?: unknown; streamId?: string };
 
 let codexQueue: Promise<unknown> = Promise.resolve();
@@ -36,6 +37,7 @@ async function runCodexTurnNow(prompt: string, emit: AgentEmit, attachments: Age
         files = await writeAttachmentFiles(attachments);
         codexApp ||= await CodexAppClient.start(emit);
         const threadId = await ensureCodexThread(codexApp, options);
+        if (threadId !== options.threadId) options.onThreadId?.(threadId);
         await codexApp.startTurn(threadId, prompt, files);
     } catch (error) {
         emit("agent_error", { message: errorMessage(error) });
@@ -55,7 +57,7 @@ export async function resumeCodexThread(emit: AgentEmit, threadId: string, cwd?:
     codexApp ||= await CodexAppClient.start(emit);
     await loadCodexThread(emit, threadId, cwd, false);
     const thread = await codexApp.resumeThread(threadId, cwd);
-    assertThreadWorkspace(thread, cwd);
+    assertCodexThreadWorkspace(thread, cwd);
     codexThreadId = String(field(thread, "id") || threadId);
     return { thread, messages: threadMessages(thread) };
 }
@@ -70,7 +72,7 @@ export async function listCodexThreads(emit: AgentEmit, options: { cwd: string; 
         cwd: options.cwd,
         ...(options.searchTerm ? { searchTerm: options.searchTerm } : {}),
     });
-    const data = Array.isArray(field(result, "data")) ? (field(result, "data") as unknown[]).map(summarizeCodexThread).filter((thread) => threadInWorkspace(thread, options.cwd)) : [];
+    const data = Array.isArray(field(result, "data")) ? (field(result, "data") as unknown[]).map(summarizeCodexThread).filter((thread) => codexThreadInWorkspace(thread, options.cwd)) : [];
     return { data, nextCursor: field(result, "nextCursor") || null, backwardsCursor: field(result, "backwardsCursor") || null };
 }
 
@@ -97,18 +99,7 @@ export function runClaudeTurn(prompt: string, emit: AgentEmit) {
 }
 
 async function ensureCodexThread(app: CodexAppClient, options: CodexRunOptions) {
-    if (options.threadId) {
-        const result = await app.readThread(options.threadId, false);
-        assertThreadWorkspace(field(result, "thread") || {}, options.cwd);
-        const thread = await app.resumeThread(options.threadId, options.cwd);
-        assertThreadWorkspace(thread, options.cwd);
-        codexThreadId = String(field(thread, "id") || options.threadId);
-        return codexThreadId;
-    }
-    if (!codexThreadId) {
-        const thread = await app.startThread(options.cwd);
-        codexThreadId = String(field(thread, "id") || "");
-    }
+    codexThreadId = await resolveCodexThread(app, options, codexThreadId);
     return codexThreadId;
 }
 
@@ -301,18 +292,8 @@ async function loadCodexThread(emit: AgentEmit, threadId: string, cwd: string | 
     codexApp ||= await CodexAppClient.start(emit);
     const result = await codexApp.readThread(threadId, includeTurns);
     const thread = field(result, "thread") || {};
-    assertThreadWorkspace(thread, cwd);
+    assertCodexThreadWorkspace(thread, cwd);
     return thread;
-}
-
-function assertThreadWorkspace(thread: unknown, cwd?: string) {
-    if (!cwd || threadInWorkspace(thread, cwd)) return;
-    throw new Error("该 Codex 会话不属于当前画布工作空间");
-}
-
-function threadInWorkspace(thread: unknown, cwd: string) {
-    const threadCwd = String(field(thread, "cwd") || "");
-    return Boolean(threadCwd && path.resolve(threadCwd) === path.resolve(cwd));
 }
 
 function normalizeItem(item: unknown) {
