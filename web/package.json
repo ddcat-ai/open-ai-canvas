@@ -42,7 +42,7 @@
         "motion": "^12.42.2",
         "nanoid": "^6.0.0",
         "react": "19.2.7",
-        "react-dom": "19.2.7",
+        "react-dom": "19.2.8",
         "react-markdown": "^10.1.0",
         "react-router": "^8.2.0",
         "recharts": "^3.9.2",
