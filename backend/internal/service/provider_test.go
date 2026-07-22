@@ -387,6 +387,14 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 			if body["model"] != "grok-imagine-video-1.5" || body["prompt"] != "make it move" {
 				t.Errorf("request body = %#v", body)
 			}
+			if body["duration"] != float64(10) || body["aspect_ratio"] != "1:1" || body["resolution"] != "720p" {
+				t.Errorf("xAI settings = %#v", body)
+			}
+			for _, legacyField := range []string{"seconds", "size", "images"} {
+				if _, exists := body[legacyField]; exists {
+					t.Errorf("request body includes legacy field %q: %#v", legacyField, body)
+				}
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"request_id":"video-1"}`))
 		case "GET /v1/videos/video-1":
@@ -412,6 +420,8 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 			Model:         "grok-imagine-video-1.5",
 			InterfaceType: "xai-video",
 			VideoSeconds:  "10",
+			Size:          "1:1",
+			VQuality:      "720",
 		},
 	})
 	if err != nil {
@@ -424,6 +434,50 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 	want := "POST /v1/videos/generations,GET /v1/videos/video-1,GET /files/video.mp4"
 	if got := strings.Join(paths, ","); got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestXAIVideoBodyUsesOfficialImageShapeAndNormalizesSettings(t *testing.T) {
+	body, err := grokVideoBody(canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{
+			Model:         "grok-imagine-video-1.5",
+			InterfaceType: "xai-video",
+			VideoSeconds:  "20",
+			Size:          "1024x1792",
+			VQuality:      "1080",
+		},
+		ReferenceImages: []providerMedia{{ID: "image-1", DataURL: testReferenceImageDataURL}},
+		Metadata:        map[string]interface{}{"videoEditOperation": "image_to_video"},
+	})
+	if err != nil {
+		t.Fatalf("grokVideoBody() error = %v", err)
+	}
+	if body["duration"] != 15 || body["aspect_ratio"] != "9:16" || body["resolution"] != "1080p" {
+		t.Fatalf("xAI settings = %#v", body)
+	}
+	image, ok := body["image"].(map[string]interface{})
+	if !ok || image["url"] != testReferenceImageDataURL {
+		t.Fatalf("image = %#v", body["image"])
+	}
+	for _, legacyField := range []string{"seconds", "size", "images"} {
+		if _, exists := body[legacyField]; exists {
+			t.Fatalf("body includes legacy field %q: %#v", legacyField, body)
+		}
+	}
+}
+
+func TestXAIVideoBodyRejectsMultipleStartImages(t *testing.T) {
+	_, err := grokVideoBody(canvasGenerationInput{
+		Config: providerConfig{Model: "grok-imagine-video-1.5", InterfaceType: "xai-video"},
+		ReferenceImages: []providerMedia{
+			{ID: "image-1", DataURL: testReferenceImageDataURL},
+			{ID: "image-2", DataURL: testReferenceImageDataURL},
+		},
+		Metadata: map[string]interface{}{"videoEditOperation": "image_to_video"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "只支持 1 张起始图") {
+		t.Fatalf("grokVideoBody() error = %v", err)
 	}
 }
 
