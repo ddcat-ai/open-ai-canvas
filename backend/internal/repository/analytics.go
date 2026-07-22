@@ -41,29 +41,29 @@ func (r *Repository) RecordUserActivity(userID string, event string, count int, 
 	switch event {
 	case "login":
 		activity.LoginCount = count
-		updates["login_count"] = gorm.Expr("login_count + ?", count)
+		updates["login_count"] = gorm.Expr("user_daily_activities.login_count + ?", count)
 	case "task":
 		activity.TaskCount = count
-		updates["task_count"] = gorm.Expr("task_count + ?", count)
+		updates["task_count"] = gorm.Expr("user_daily_activities.task_count + ?", count)
 	case "agent_message":
 		activity.AgentMessageCount = count
-		updates["agent_message_count"] = gorm.Expr("agent_message_count + ?", count)
+		updates["agent_message_count"] = gorm.Expr("user_daily_activities.agent_message_count + ?", count)
 	case "canvas":
 		activity.CanvasActive = true
 		updates["canvas_active"] = true
 	case "asset":
 		activity.AssetCount = count
-		updates["asset_count"] = gorm.Expr("asset_count + ?", count)
+		updates["asset_count"] = gorm.Expr("user_daily_activities.asset_count + ?", count)
 	case "resource":
 		activity.ResourceCount = count
-		updates["resource_count"] = gorm.Expr("resource_count + ?", count)
+		updates["resource_count"] = gorm.Expr("user_daily_activities.resource_count + ?", count)
 	default:
 		return nil
 	}
 	if event != "login" {
 		activity.FirstActiveAt = &now
 		activity.LastActiveAt = &now
-		updates["first_active_at"] = gorm.Expr("COALESCE(first_active_at, ?)", now)
+		updates["first_active_at"] = gorm.Expr("COALESCE(user_daily_activities.first_active_at, ?)", now)
 		updates["last_active_at"] = now
 	}
 	return r.db.Clauses(clause.OnConflict{
