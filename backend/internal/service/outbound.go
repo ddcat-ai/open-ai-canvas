@@ -80,7 +80,7 @@ func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
 		return nil, BadAuthRequest("外部服务域名无效")
 	}
 	if !allowPrivateUpstreams() && (host == "localhost" || strings.HasSuffix(host, ".localhost")) {
-		return nil, BadAuthRequest("不允许访问本机或内网地址")
+		return nil, BadAuthRequest("不允许访问本机地址")
 	}
 	addresses, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 	if err != nil {
@@ -90,9 +90,10 @@ func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
 		return nil, BadAuthRequest("外部服务域名没有可用地址")
 	}
 	if !allowPrivateUpstreams() {
+		// 局域网地址用于连接自部署模型；默认仍阻止回环和链路本地等高风险目标。
 		for _, ip := range addresses {
 			if blockedOutboundIP(ip) {
-				return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
+				return nil, BadAuthRequest("不允许访问本机或链路本地地址")
 			}
 		}
 	}
@@ -100,7 +101,7 @@ func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
 }
 
 func blockedOutboundIP(ip net.IP) bool {
-	return ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
+	return ip == nil || ip.IsLoopback() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
 }
 
 func allowPrivateUpstreams() bool {
