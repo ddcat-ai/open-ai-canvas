@@ -1,0 +1,55 @@
+---
+title: 快速开始
+description: 用最少步骤把无限画布跑起来
+---
+
+# 快速开始
+
+如果你只是想先把项目跑起来，优先部署或启动 `web/` 前端。
+
+## Vercel 部署
+
+在 Vercel 中导入仓库即可，根目录 `vercel.json` 会构建 `web/`。如果只浏览画布和素材，可以先部署前端；如果要使用画布生成、任务中心或 Agent 会话，需要另外部署 `backend/` 并配置 `VITE_CANVAS_BACKEND_URL`。
+
+## 本地启动
+
+```bash
+cd infinite-canvas
+cd web
+bun install
+bun run dev
+```
+
+启动后访问：
+
+```text
+http://localhost:3000
+```
+
+如果需要使用异步任务中心和 Agent 会话接口，另开终端启动后端：
+
+```bash
+cd backend
+go mod tidy
+go run ./cmd/server
+```
+
+## Docker 启动
+
+如果你需要基于当前源码构建镜像：
+
+```bash
+docker build -t infinite-canvas .
+docker run --rm -p 3000:3000 infinite-canvas
+```
+
+## 首次使用建议
+
+- 先打开右上角配置弹窗，填入自己的 `Base URL`、`API Key` 和模型名。
+- 如果需要跨设备同步画布和素材，请先启动并配置 `backend/`；管理员可在后台系统配置中启用 OSS，让图片、视频、音频等资源也随账号读取。
+- 如果需要使用任务中心，先确认 `backend/` 服务运行在 `http://127.0.0.1:8080`，或配置 `VITE_CANVAS_BACKEND_URL`。
+
+## 说明
+
+- 登录账号后，画布项目和“我的素材”会同步到后端；OSS 未启用或不可用时，媒体资源会保留在当前浏览器本地降级存储。
+- AI API Key 保存在浏览器本地；画布生成任务会把必要配置提交到后端队列，由后端请求 OpenAI 兼容接口。

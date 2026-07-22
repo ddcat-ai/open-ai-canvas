@@ -1,0 +1,11 @@
+{
+  "title": "开发文档",
+  "root": true,
+  "defaultOpen": true,
+  "pages": [
+    "local-development",
+    "code-map",
+    "backend-database",
+    "canvas-data-structure"
+  ]
+}

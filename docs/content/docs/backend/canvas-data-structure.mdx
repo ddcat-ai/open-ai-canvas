@@ -1,0 +1,275 @@
+---
+title: 画布数据结构
+description: 画布账号同步、本地缓存、节点结构、媒体文件与清理机制
+---
+
+# 画布数据结构
+
+本文档说明当前画布的数据结构、账号同步、本地缓存、媒体文件存储和清理方式。
+
+## 当前存储位置
+
+登录账号后，画布和素材会同步到后端：
+
+- 画布项目 JSON：后端 `canvas_projects.payload_json`；`GET /api/canvas-projects` 只返回轻量清单，单项详情和写入使用 `/api/canvas-projects/:id`。
+- 我的素材 JSON：后端 `assets.payload_json`；`GET /api/assets` 只返回轻量清单，单项详情和写入使用 `/api/assets/:id`。
+- 图片、视频、音频等二进制资源：前端上传到 `/api/resources`，后端读取系统 OSS 配置并写入阿里云 OSS；`resources` 表保存资源状态、OSS 对象位置、公开 URL 和媒体元信息。
+
+浏览器本地仍保留缓存和降级存储：
+
+- 画布项目 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:canvas_store`。
+- 我的素材 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_store`。
+- 图片 Blob：OSS 不可用或上传失败时，单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `image_files`。
+- 视频等媒体 Blob：OSS 不可用或上传失败时，单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `media_files`。
+
+画布 JSON 不直接长期保存大体积 base64 图片或视频。图片节点、视频节点、助手图片和素材媒体只保存展示 URL、`storageKey` 和元信息，真实文件通过 `storageKey` 读取。新的 OSS 资源使用 `resource:<id>`；本地降级和旧数据仍可能使用 `image:<scope>:<id>`、`video:<scope>:<id>`、`audio:<scope>:<id>` 等 key。
+
+账号同步先比较轻量清单中的 `id` 和 `updatedAt`，只下载远端较新的单项，并按单项执行新增、更新或删除；禁止为一个项目或素材变化上传、删除并重建整个用户数据集合。
+
+## 画布项目结构
+
+每个画布项目是一个 `CanvasProject`：
+
+```ts
+type CanvasProject = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  nodes: CanvasNodeData[];
+  connections: CanvasConnection[];
+  chatSessions: CanvasAssistantSession[];
+  activeChatId: string | null;
+  backgroundMode: "lines" | "dots" | "blank";
+  viewport: { x: number; y: number; k: number };
+  directorScenes: DirectorScene[];
+};
+```
+
+字段说明：
+
+- `id`：画布项目 ID，当前前端生成。
+- `title`：画布名称。
+- `createdAt` / `updatedAt`：ISO 字符串。
+- `nodes`：画布节点列表。
+- `connections`：节点连线列表。
+- `chatSessions`：右侧画布助手会话。
+- `activeChatId`：当前选中的助手会话 ID。
+- `backgroundMode`：画布背景模式。
+- `viewport`：视口变换，`x/y` 是屏幕平移，`k` 是缩放比例。
+- `directorScenes`：项目级 3D 导演场景。场景包含对象、模型资源引用、灯光、摄影机、镜头和关键帧；只保存可序列化 JSON，不保存 Three.js 实例。
+
+## 3D 导演场景
+
+每个镜头配置节点可以通过 `metadata.directorSceneId` 和 `metadata.directorShotId` 关联项目级 `DirectorScene`。导演场景中的对象、摄影机和灯光使用 `[x, y, z]` 数组保存位置、旋转和缩放，关键帧保存时间与 Transform 快照。
+
+GLB / GLTF 模型作为“我的素材”中的 `model` 类型保存。模型文件使用现有资源存储规则：OSS 可用时保存为 `resource:<id>`，否则以 `model:<scope>:<id>` 保存到浏览器 `media_files`。导演场景只保存模型的 `storageKey`、当前展示 URL 和素材 ID。
+
+导演台应用镜头时会导出构图图、深度图和法线图，三者继续作为普通图片节点存储，并自动连到对应镜头配置节点。镜头节点记录 `directorPreviewNodeId`、`directorDepthNodeId` 和 `directorNormalNodeId`，生成链路仍复用已有图片引用解析，不新增专用生成协议。
+
+## 节点结构
+
+每个节点是一个 `CanvasNodeData`：
+
+```ts
+type CanvasNodeData = {
+  id: string;
+  type: "image" | "text" | "skill" | "config" | "video" | "audio" | "frame";
+  title: string;
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+  parentId?: string;
+  metadata?: CanvasNodeMetadata;
+};
+```
+
+通用字段：
+
+- `id`：节点 ID。
+- `type`：节点类型，当前有图片、文本、分镜脚本、技能、生成配置、视频、音频和背板。
+- `title`：节点标题。
+- `position`：画布世界坐标，不是屏幕坐标。
+- `width` / `height`：画布世界坐标下的节点尺寸。
+- `parentId`：图片、文本或视频节点所属的背板 ID；未加入背板时为空。
+- `metadata`：节点内容和业务状态。
+
+`metadata` 当前常用字段：
+
+```ts
+type CanvasNodeMetadata = {
+  content?: string;
+  prompt?: string;
+  status?: "idle" | "success" | "loading" | "error";
+  errorDetails?: string;
+  fontSize?: number;
+  generationMode?: "text" | "image" | "video" | "audio";
+  model?: string;
+  size?: string;
+  count?: number;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  freeResize?: boolean;
+  isBatchRoot?: boolean;
+  batchRootId?: string;
+  batchChildIds?: string[];
+  primaryImageId?: string;
+  imageBatchExpanded?: boolean;
+  inputOrder?: string[];
+  storageKey?: string;
+  mimeType?: string;
+  bytes?: number;
+  skillId?: string;
+  skillVersion?: number;
+  skillSnapshot?: {
+    id: string;
+    name: string;
+    description: string;
+    category: "writing" | "storyboard" | "image" | "video" | "utility";
+    template: string;
+    outputMode: "text" | "json" | "image_prompt" | "workflow";
+    outputContract: string;
+    version: number;
+    tags: string[];
+  };
+  storyboard?: {
+    rows: StoryboardRow[];
+    visibleColumns: StoryboardColumn[];
+    referenceNodeIds: string[];
+  };
+  frame?: {
+    collapsed: boolean;
+    expandedWidth: number;
+    expandedHeight: number;
+  };
+};
+```
+
+不同节点的使用方式：
+
+- 图片节点：`content` 是当前可展示的图片 URL，可能是 OSS 公开 URL、后端资源读取 URL 或 `blob:` URL；`storageKey` 指向 OSS 资源或本地图片 Blob；`naturalWidth/naturalHeight/bytes/mimeType` 保存原图信息。
+- 视频节点：`content` 是当前可播放的视频 URL，可能是 OSS 公开 URL、后端资源读取 URL 或 `blob:` URL；`storageKey` 指向 OSS 资源或本地视频 Blob；`bytes/mimeType` 保存文件信息。
+- 音频节点：`content` 是当前可播放的音频 URL，可能是 OSS 公开 URL、后端资源读取 URL 或 `blob:` URL；`storageKey` 指向 OSS 资源或本地音频 Blob；`bytes/mimeType/durationMs` 保存文件信息。
+- 文本节点：`content` 保存文本内容；`fontSize` 保存字体大小；`prompt/status/errorDetails` 保存生成状态。
+- 分镜脚本节点：`storyboard.rows` 保存结构化镜头行，每行包含镜号、时长、画面、台词、景别、情绪、光影、音效、图片提示词、视频提示词、参考节点和生成结果节点 ID；`visibleColumns` 保存全屏表格列设置。
+- 技能节点：`skillId/skillVersion/skillSnapshot` 保存技能库条目的当前版本快照；生成时会把技能模板和输出约束作为文本类上游输入参与组装。
+- 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片、视频或音频；上游输入通过 `connections` 计算。
+- 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。
+- 背板节点：`frame.collapsed` 记录展开/折叠状态，`expandedWidth/expandedHeight` 保存展开尺寸；内部图片、文本和视频通过自身的 `parentId` 指向背板，位置仍使用画布世界坐标。
+
+## 连线结构
+
+每条连线是一个 `CanvasConnection`：
+
+```ts
+type CanvasConnection = {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  fromHandleId?: string;
+  toHandleId?: string;
+};
+```
+
+普通连线只需要节点 ID。分镜脚本行级连线使用可选的 `fromHandleId` / `toHandleId`，格式为 `row:<rowId>`；端口坐标仍在渲染时根据脚本节点位置和镜头行序号计算，不写入持久化数据。
+
+删除节点时会同步删除以该节点为起点或终点的连线。删除图片组根节点时，会把对应子节点一起删除；删除背板时只解除内部节点的 `parentId`，不会删除内部内容。
+
+## 助手会话结构
+
+助手会话保存在画布项目内：
+
+```ts
+type CanvasAssistantSession = {
+  id: string;
+  title: string;
+  messages: CanvasAssistantMessage[];
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+消息结构：
+
+```ts
+type CanvasAssistantMessage = {
+  id: string;
+  role: "user" | "assistant";
+  mode: "ask" | "image";
+  text: string;
+  isLoading?: boolean;
+  references?: CanvasAssistantReference[];
+  images?: CanvasAssistantImage[];
+};
+```
+
+图片引用和助手生成图片也遵循同一套图片存储规则：
+
+- `dataUrl` 字段当前可能是 `blob:` URL，也可能是旧数据中的 `data:image/...`。
+- `storageKey` 存在时，以 `storageKey` 为准读取图片资源。
+- 发送到 AI 接口前，如果接口需要 base64，会通过 `imageToDataUrl` 临时把资源转成 data URL。
+
+## 图片写入流程
+
+所有新增图片应通过 `uploadImage(input)` 写入：
+
+1. 传入 `Blob` 或 data URL。
+2. 内部转成 `Blob`。
+3. 读取图片宽高。
+4. 优先通过 `/api/resources` 上传到后端，由后端使用管理员维护的 OSS 配置写入 OSS。
+5. OSS 上传成功时，返回 `storageKey = resource:<id>`，展示 URL 优先使用资源公开 URL；未配置公开域名时使用 `/api/resources/:id/file`。
+6. OSS 未启用或上传失败时，降级生成本地 `storageKey`，格式为 `image:<scope>:<id>`，并把 Blob 写入 `image_files`。
+7. 返回：
+
+```ts
+type UploadedImage = {
+  url: string;
+  storageKey: string;
+  width: number;
+  height: number;
+  bytes: number;
+  mimeType: string;
+};
+```
+
+图片节点会通过 `imageMetadata(image)` 写入：
+
+```ts
+{
+  content: image.url,
+  storageKey: image.storageKey,
+  status: "success",
+  naturalWidth: image.width,
+  naturalHeight: image.height,
+  bytes: image.bytes,
+  mimeType: image.mimeType
+}
+```
+
+因此，`content` 只适合当前展示，不能作为长期文件标识；长期标识是 `storageKey`。
+
+## 图片读取和旧数据迁移
+
+打开画布时会执行图片补水：
+
+- 如果图片节点有 `resource:<id>`，通过资源公开 URL 或 `/api/resources/:id/file` 读取。
+- 如果图片节点有本地 `storageKey`，通过 `resolveImageUrl(storageKey, fallback)` 读取 Blob 并生成新的 `blob:` URL。
+- 如果图片节点没有 `storageKey`，但 `content` 是旧的 `data:image/...`，会调用 `uploadImage(content)` 迁移并补上 `storageKey`；OSS 可用时会迁移为 `resource:<id>`，否则降级到 `image_files`。
+- 助手消息里的引用图和生成图也会执行同类逻辑。
+
+我的素材读取时也会做迁移：
+
+- 有 `storageKey`：恢复 `coverUrl` 和 `data.dataUrl` 的可展示 URL。
+- 无 `storageKey` 且保存了 base64：调用 `uploadImage` 迁移，然后更新素材里的 `storageKey`。
+
+## 图片移除和清理
+
+本地图片不是在删除节点时立即按节点逐张删除，而是做引用清理：
+
+1. 删除节点、清空画布、删除画布、删除素材、删除助手会话时，会触发 `cleanupImages`。
+2. `cleanupImages` 会收集当前仍被画布项目、素材和额外传入数据引用的所有 `storageKey`。
+3. `cleanupUnusedImages` 遍历 `image_files` 中当前用户 scope 下的全部图片。
+4. 不在引用集合里的本地图片会被删除；`resource:<id>` 只从画布或素材 JSON 中移除引用，当前不主动删除 OSS 对象。
+5. 删除时会同时 `URL.revokeObjectURL`，并从内存缓存 `objectUrls` 移除。
+
+这套方式可以避免同一张图片被画布、素材或助手同时引用时误删。

@@ -1,0 +1,32 @@
+name: 缺陷报告
+description: 报告可以稳定复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 安全漏洞请按 SECURITY.md 私下报告，不要创建公开 Issue。
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      placeholder: v0.12.0 / commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: 浏览器、操作系统、部署方式；请移除密钥和敏感日志。

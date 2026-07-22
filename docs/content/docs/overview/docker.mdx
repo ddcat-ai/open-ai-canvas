@@ -1,0 +1,107 @@
+---
+title: Docker 部署
+description: 使用 Docker Compose 部署无限画布
+---
+
+# Docker 部署
+
+如果你希望在自己的机器或服务器上运行项目，可以直接使用 Docker Compose。
+
+## 本地源码编排部署
+
+在仓库根目录执行：
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+如需改用自己的 Go 模块代理，可以在命令前指定 `GOPROXY`：
+
+```bash
+GOPROXY=https://proxy.golang.org,direct docker compose -f docker-compose.local.yml up -d --build
+```
+
+该编排会启动两个服务：
+
+- `web`：nginx 托管 Vite 前端，并把 `/api` 转发到后端服务。
+- `backend`：Go/Gin 任务中心，SQLite 数据和上传文件保存在 Docker 命名卷 `backend-data`。
+
+启动后访问：
+
+```text
+http://localhost:3000
+```
+
+## 持续更新本地容器
+
+开发时希望代码变更后自动重建并更新本地容器，可以保持下面命令运行：
+
+```bash
+docker compose -f docker-compose.local.yml watch
+```
+
+拉取新代码后的手动更新方式：
+
+```bash
+git pull
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+停止容器：
+
+```bash
+docker compose -f docker-compose.local.yml down
+```
+
+不要在保留任务中心数据时使用 `down -v`，否则会删除 `backend-data` 命名卷。
+
+## 使用发布镜像
+
+发布镜像适合快速启动主前端。若需要任务中心后端和 `/api` 代理，请优先使用上面的本地源码编排部署。
+
+```bash
+cd infinite-canvas
+docker compose up -d
+```
+
+启动后访问：
+
+```text
+http://localhost:3000
+```
+
+## 本地构建镜像
+
+如果需要基于当前源码构建镜像并同时启动任务中心后端：
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+## 文档站镜像
+
+文档站位于 `docs/` 目录，按带服务端能力的 Next.js standalone 应用单独构建，不打进主应用镜像。
+
+使用发布镜像：
+
+```bash
+cd docs
+docker compose up -d
+```
+
+基于当前源码本地构建：
+
+```bash
+cd docs
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+## 数据说明
+
+当前主应用前端由 nginx 托管。AI API Key 默认保存在浏览器本地；画布项目、素材、生成任务、Agent 会话、任务日志和上传文件由 `backend` 服务处理，本地 Docker 编排会把后端数据目录挂载到 `backend-data` 命名卷。图片、视频、音频不再写入 SQLite：配置 OSS 后写入私有 OSS，未配置时写入同一数据卷的 `resources/`。首次升级会在 `backups/` 保留迁移前数据库，确认数据后需自行归档或清理该备份。
+
+安全相关环境变量：
+
+- `CANVAS_REGISTRATION_ENABLED`：已有首个管理员后是否继续开放公开注册，默认 `false`。
+- `CANVAS_CORS_ORIGINS`：允许的跨域来源，默认 `*`，会对任意合法 HTTP(S) Origin 回显对应来源并允许携带凭据；可改为逗号分隔的明确来源列表以收紧生产访问范围。
+- `CANVAS_ALLOW_PRIVATE_UPSTREAMS`：是否允许模型渠道访问私网地址，默认 `false`。仅在可信内网自部署模型时开启，公网部署不要开启。

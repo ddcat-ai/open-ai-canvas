@@ -1,0 +1,84 @@
+---
+title: 代码功能地图
+description: 从产品功能快速定位主要代码入口
+---
+
+# 代码功能地图
+
+这是一张入口地图，不罗列所有文件。先找到功能所属层，再沿调用关系阅读。
+
+## 前端页面
+
+| 功能 | 页面入口 | 主要协作模块 |
+| --- | --- | --- |
+| 首页与导航 | `web/src/pages/home/`、`web/src/layouts/user-layout.tsx` | `components/layout/`、`router.tsx` |
+| 登录注册 | `web/src/pages/auth/` | `stores/use-user-store.ts`、`services/api/auth.ts`、后端 `service/linuxdo.go` |
+| 积分与计费 | `web/src/pages/wallet/`、`pages/admin/components/platform-finance-panel.tsx` | `services/api/wallet.ts`、后端 `service/finance.go`、`repository/finance.go` |
+| 任务中心 | `web/src/pages/tasks/` | `services/api/task-center.ts` |
+| 我的素材 | `web/src/pages/assets/` | `stores/use-asset-store.ts`、`services/image-storage.ts` |
+| 技能库 | `web/src/pages/skills/` | `services/api/skills.ts` |
+| 画布列表 | `web/src/pages/canvas/index.tsx` | `stores/canvas/use-canvas-store.ts` |
+| 画布编辑器 | `web/src/pages/canvas/project.tsx` | `pages/canvas/canvas-project-*`、`pages/canvas/use-canvas-*`、`components/canvas/`、`lib/canvas/`、`stores/canvas/` |
+| 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/infinite-canvas.tsx`、`services/api/canvas-share.ts` |
+| 管理后台 | `web/src/pages/admin/`、`router.tsx` | `admin-context.tsx`、`users/`、`channels/`、`logs/`、`storyboard-prompts/`、`settings/` |
+
+## 画布核心
+
+| 职责 | 代码位置 |
+| --- | --- |
+| 页面装配和跨域动作协调 | `web/src/pages/canvas/project.tsx` |
+| 画布领域规则和生成协议 | `web/src/lib/canvas/canvas-project-domain.ts`、`canvas-project-generation.ts` |
+| 项目恢复、持久化和项目级动作 | `web/src/pages/canvas/use-canvas-project-lifecycle.ts` |
+| Patch 历史、生成任务和重试控制 | `web/src/pages/canvas/use-canvas-history.ts`、`use-canvas-generation.ts`、`use-canvas-generation-executor.ts`、`use-canvas-generation-retry.ts` |
+| 文本、图片、视频和音频生成执行 | `web/src/pages/canvas/canvas-*-generation-executor*.ts` |
+| Agent、助手面板、导演台和全局快捷键控制 | `web/src/pages/canvas/use-canvas-agent-operations.ts`、`use-canvas-assistant-visibility.ts`、`use-canvas-director.ts`、`use-canvas-keyboard.ts` |
+| 选择拖拽与连线控制 | `web/src/pages/canvas/use-canvas-selection-controller.ts`、`use-canvas-connection-controller.ts` |
+| 上传、素材插入、媒体工具和短剧编排 | `web/src/pages/canvas/use-canvas-upload.ts`、`use-canvas-media-tools.ts`、`use-canvas-storyboard.ts`、`use-canvas-generation-batches.ts`、`use-canvas-short-drama.ts` |
+| 节点操作、节点编辑和视口导航 | `web/src/pages/canvas/use-canvas-node-operations.ts`、`use-canvas-node-editor.ts`、`use-canvas-viewport-controller.ts` |
+| 小说、画风和角色工作流 | `web/src/pages/canvas/use-canvas-document-workflow.ts` |
+| 派生渲染模型和画布分层 | `web/src/pages/canvas/use-canvas-render-model.ts`、`canvas-project-world-layers.tsx`、`canvas-project-context-menu.tsx`、`canvas-project-status-dialogs.tsx` |
+| 顶栏、反馈和 screen-space 浮层 | `web/src/pages/canvas/canvas-project-top-bar.tsx`、`canvas-project-feedback.tsx`、`canvas-project-selection-toolbar.tsx`、`components/canvas/canvas-workspace-overlays.tsx` |
+| 媒体弹窗装配 | `web/src/pages/canvas/canvas-project-media-dialogs.tsx` |
+| 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/infinite-canvas.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts` |
+| 节点渲染与节点工具 | `web/src/components/canvas/canvas-node.tsx`、`canvas-node-hover-toolbar.tsx` |
+| 生成 Composer | `web/src/components/canvas/canvas-node-prompt-panel.tsx`、`canvas-config-composer.tsx` |
+| 分镜脚本节点 | `web/src/components/canvas/canvas-script-node.tsx` |
+| 3D 导演台 | `web/src/components/canvas/director/` |
+| 节点生成上下文 | `web/src/components/canvas/canvas-node-generation.ts` |
+| 布局和连线算法 | `web/src/lib/canvas/canvas-layout.ts`、`canvas-frame.ts` |
+| 任务结果回填 | `web/src/lib/canvas/canvas-generation-task-sync.ts` |
+| 本地持久化状态 | `web/src/stores/canvas/use-canvas-store.ts` |
+| Agent 会话状态 | `web/src/stores/canvas/use-canvas-agent-store.ts` |
+
+## 后端调用链
+
+```text
+HTTP 请求 -> handler -> service -> repository/model -> SQLite/PostgreSQL 或资源存储
+                         |
+                         -> provider/outbound -> 模型上游
+```
+
+| 功能 | Handler | Service / Repository |
+| --- | --- | --- |
+| 路由与中间件 | `handler/routes.go` | `service/auth.go`、`handler/security.go` |
+| 用户和管理员 | `handler/auth.go` | `service/auth.go`、`service/admin.go` |
+| 管理后台批量操作 | `handler/auth.go` | `service/admin.go`、`repository/admin_audit.go`、`repository/analytics.go` |
+| 异步任务与 Agent | `handler/routes.go` | `service/service.go`、`service/provider.go` |
+| 用户画布与素材 | `handler/user_data.go` | `service/user_data.go` |
+| 文件和 OSS | `handler/routes.go` | `service/resource.go`、`service/settings.go` |
+| 画布分享 | `handler/canvas_share.go` | `service/canvas_share.go` |
+| 技能库 | `handler/skills.go` | `service/skills.go` |
+| 用量分析 | `handler/admin_analytics.go` | `service/analytics.go`、`repository/analytics.go` |
+
+## 其他入口
+
+- `canvas-agent/src/`：本地 Agent、MCP 工具和当前画布会话桥接。
+- `plugins/infinite-canvas/`：Codex App 插件清单与技能。
+- `docs/content/docs/`：产品、操作、开发和进度文档。
+- `docker-compose.local.yml`：本地前后端编排；`nginx.conf`：生产静态资源和 API 代理。
+
+## 修改原则
+
+- HTTP 参数与响应只在 handler 处理，业务规则进入 service。
+- 页面保留流程协调；可独立理解和测试的算法进入同业务域的 `lib`。
+- 新增功能时只更新本页的主要入口，不增加逐文件清单。

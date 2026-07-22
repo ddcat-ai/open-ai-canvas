@@ -1,0 +1,375 @@
+---
+title: 后端数据库
+description: 用户体系、系统渠道、异步任务中心和 Agent 会话的数据结构
+---
+
+# 后端数据库
+
+当前 `backend/` 使用 Go + Gin + GORM。本地开发默认使用 SQLite，数据库文件位于 `backend/data/open_ai_canvas.db`；生产 `docker-compose.server.yml` 默认使用独立 PostgreSQL 17，并通过 `DATABASE_URL` 连接。PostgreSQL 模式要求同时配置 `REDIS_URL`，用于跨实例限流、并发槽和熔断协调。
+
+生产环境从 SQLite 首次切换 PostgreSQL 时，发布脚本会先停止后端写入并创建 SQLite 备份，再在空的 PostgreSQL `public` schema 中事务化建表、复制全部模型数据并逐表逐字段核对；全部通过后才原子更新数据库驱动。后续发布改为生成 PostgreSQL custom dump，并用 `pg_restore --list` 校验备份可读性。PostgreSQL、Redis、SQLite 迁移备份和上传资源使用互相独立的持久化目录。
+
+## users
+
+账号表。首个注册用户自动成为管理员。
+
+- `id`：用户 ID，主键。
+- `username`：用户名，唯一。
+- `email`：邮箱，唯一，可为空。
+- `display_name`：显示名称。
+- `role`：`admin` 或 `user`。
+- `status`：`active` 或 `disabled`。
+- `password_hash`：密码哈希，不通过接口返回。
+- `last_login_at`：最近登录时间。
+- `created_at` / `updated_at`：用户时间。
+
+## auth_sessions
+
+登录会话表，用于 httpOnly Cookie 登录态。
+
+- `id`：会话 ID，主键。
+- `user_id`：所属用户 ID。
+- `token_hash`：会话令牌哈希，不通过接口返回。
+- `expires_at`：过期时间。
+- `created_at` / `updated_at`：会话时间。
+
+## user_identities
+
+外部身份绑定表。当前 `provider=linuxdo`，以 Linux.do 稳定用户 ID 为 `subject`，不使用用户名或邮箱作为登录绑定主键。
+
+- `provider + subject`：唯一约束，确保一个第三方身份只绑定一个本地用户。
+- `provider_username` / `avatar_url`：最近一次登录时的资料快照。
+- OAuth Access Token 不写入数据库。
+
+## oauth_states
+
+OAuth 一次性状态表，保存 `state` 哈希、PKCE verifier、站内回跳地址、过期时间和使用时间。回调消费使用条件更新，重复回调不能再次建立会话。
+
+## email_verification_codes
+
+邮箱验证码表，用于普通账号注册校验。验证码明文只发送到用户邮箱，数据库保存基于服务端 `.settings-key` 的 HMAC-SHA256 摘要。
+
+- `email` / `purpose`：规范化邮箱和用途，当前用途为 `registration`。
+- `code_hash`：验证码摘要，不保存或返回明文。
+- `expires_at`：验证码有效期，当前为 10 分钟。
+- `used_at`：成功注册后的消费时间；验证码消费与用户创建在同一事务中完成。
+- `created_at`：发送时间；同一邮箱一分钟内不重复发送。
+
+## model_channels
+
+模型渠道表。系统渠道由管理员维护，普通用户通过后端代理使用；用户自定义渠道仍保存在浏览器本地配置中。
+
+- `id`：渠道 ID，主键。
+- `user_id`：创建或所属用户 ID。
+- `scope`：`system` 或 `user`。
+- `enabled`：是否启用。
+- `name`：渠道名称。
+- `base_url`：上游 Base URL。
+- `api_key`：上游密钥，不通过普通用户接口返回。
+- `api_format`：`openai` 或 `gemini`。
+- `interface_type`：实际调用协议；文本为 `chat-completion` / `openai-response`，图片为 `openai-image`，视频为 `newapi` / `newapi-channel-1` / `newapi-channel-2`。
+- `models_json`：模型列表 JSON。
+- `created_at` / `updated_at`：渠道时间。
+
+## channel_models
+
+系统渠道的关系化模型与用户积分价格表。`channel_id + model_key` 唯一；旧 `models_json` 仅保留渠道兼容摘要。
+
+- `capability`：`text`、`image`、`video` 或 `audio`。
+- `billing_mode`：当前为 `fixed_request`，即一次创建请求收取固定积分。
+- `unit_price_microcredits`：每次价格，`1 积分 = 1,000,000 microcredits`。
+- `price_configured`：是否明确配置价格；未配置不等同免费，系统会拒绝调用。
+- `price_version`：每次修改递增；计费订单保存发生时版本和价格快照。
+
+## api_call_logs
+
+接口调用日志表。记录系统渠道代理调用和后端任务 worker 发起的真实上游 HTTP 请求；浏览器直连的用户自定义渠道不会经过后端，因此不会写入该表。
+
+- `id`：日志 ID，主键。
+- `user_id`：发起调用的用户 ID。
+- `channel_id`：系统渠道 ID。
+- `task_id`：关联任务 ID，可为空。
+- `source`：调用来源，例如 `system-channel`。
+- `capability`：能力类型，当前为 `text`、`image`、`video` 或 `audio`。
+- `operation`：关联任务的业务操作。
+- `request_kind`：请求阶段，当前为 `create`、`poll`、`download` 或 `repair`。
+- `billable`：该 HTTP 请求是否可能直接产生模型费用；轮询和下载不计为可计费请求。
+- `api_format`：调用格式。
+- `method`：HTTP 方法。
+- `path`：代理路径。
+- `model`：请求体中识别到的模型名。
+- `status`：`succeeded` 或 `failed`。
+- `status_code`：上游 HTTP 状态码。
+- `duration_ms`：耗时毫秒。
+- `input_tokens` / `output_tokens` / `cached_tokens`：上游返回的 Token 用量。
+- `usage_available`：上游是否返回可识别的 usage；为 `false` 时后台显示 `--`，不推测 Token。
+- `media_count` / `video_seconds`：输出媒体数量和创建视频时长。
+- `provider_request_id`：上游返回的请求或任务 ID。
+- `estimated_cost_micros` / `currency`：按调用发生时价格计算并固化的费用快照，金额单位为币种的百万分之一。
+- `cost_available`：是否命中有效价格配置；为 `false` 时后台显示 `--`，不把未知费用当作零。
+- `error_code`：供应商返回的结构化错误码；只保存短错误码，不保存完整请求体或提示词。
+- `error`：错误信息。
+- `upstream_url`：实际请求的上游地址。
+- `created_at`：创建时间。
+
+## model_pricings
+
+模型价格表。管理员可按渠道、模型和能力类型配置价格；`channel_id` 为空表示全部渠道的默认价格，指定渠道的配置优先。
+
+- `id`：价格配置 ID，主键。
+- `channel_id` / `model` / `capability`：价格适用范围，三者组成唯一约束。
+- `currency`：币种，例如 `USD` 或 `CNY`。
+- `input_per_million_micros` / `output_per_million_micros` / `cached_per_million_micros`：每百万 Token 价格，金额以币种的百万分之一保存。
+- `per_request_micros`：每次可计费创建请求的固定价格。
+- `per_media_micros`：每个输出图片或媒体的价格。
+- `per_video_second_micros`：每视频秒价格。
+- `created_at` / `updated_at`：配置时间。
+
+价格只用于计算后续调用的费用快照；修改价格不会改写已有 `api_call_logs` 历史费用。
+
+`model_pricings` 是供应商真实货币成本，`channel_models.unit_price_microcredits` 是用户积分售价，两者不可混用。
+
+## credit_accounts
+
+用户积分账户聚合表，以 `user_id` 为主键，保存 `available_microcredits`、`reserved_microcredits` 和并发版本号。所有余额更新使用事务内条件更新，禁止先读余额再覆盖保存。
+
+## credit_ledger_entries
+
+不可变积分账本。记录兑换充值、注册奖励、每日签到、管理员充值/调账、消费和退款，以及可用/冻结余额增量与变更后快照；消费记录同时保存模型、渠道、场景和计费订单。`reference_key` 为注册奖励和 UTC 每日签到提供唯一幂等键。应用不提供修改或删除账本接口。
+
+## billing_orders
+
+模型调用计费订单。保存用户、任务、渠道模型、场景、幂等键、价格版本、基础单价、模型倍率基点、数量和最终总积分。订单创建时固化倍率，后续修改策略不会改写历史订单。
+
+- `reserved`：调用前已冻结积分。
+- `running`：即将或正在请求上游。
+- `settled`：上游成功且结果已持久化，冻结积分转为消费。
+- `refunded`：确认失败或发出请求前取消，冻结积分已返还。
+- `uncertain`：上游费用无法确定，保留冻结并等待管理员核对。
+- `resolved_by` / `resolution_note`：人工核对的管理员和依据。
+
+`user_id + idempotency_key` 唯一。`api_call_logs.billing_order_id` 与订单关联，上游请求 ID 会同步回计费订单。
+
+## admin_audit_events
+
+不可变管理员操作事件表，只允许追加。保存操作管理员、动作、目标类型、目标 ID、摘要、结构化元数据和发生时间，用于用户状态变更、积分调账、计费核对、积分策略及兑换码禁用的跨模块审计。应用不提供修改或删除接口。
+
+## redeem_batches / redeem_codes
+
+兑换码批次和明细表。兑换码为 UUIDv4 去掉连字符后的 32 位十六进制字符串；单码始终保存 SHA-256 哈希和末四位用于核销，批次明文集合使用数据目录 `.settings-key` 加密后保存在 `redeem_batches.codes_cipher`，仅管理员详情接口可解密回看。旧批次没有密文，完整明文不可恢复。`redeem_codes` 记录核销状态、`redeemed_by`、`redeemed_at` 和 `redeemed_ip`；兑换使用状态条件更新、审计信息、钱包入账和充值流水同一事务，确保同一码并发时只成功一次。
+
+## user_daily_activities
+
+用户每日活动事实表，用于可重建的 DAU、WAU、MAU 和创作活动统计。
+
+- `id`：`user_id + ':' + YYYY-MM-DD` 组成的复合业务 ID，字段上限为 64 字符。
+
+- `id`：活动记录 ID，主键。
+- `day` / `user_id`：UTC 自然日和用户 ID，组成唯一约束。
+- `first_active_at` / `last_active_at`：当天首次和最后一次有意义创作行为时间。
+- `login_count`：登录次数，只用于登录观察，不单独计为活跃用户。
+- `task_count`：创建生成任务次数。
+- `agent_message_count`：用户发送 Agent 消息次数。
+- `canvas_active`：当天是否实际保存过画布编辑。
+- `asset_count` / `resource_count`：新增或同步素材、上传资源次数。
+- `created_at` / `updated_at`：记录时间。
+
+活跃用户口径要求当天至少发生任务创建、Agent 消息、画布编辑、素材创建或资源上传之一；单纯登录不计入活跃。
+
+## system_settings
+
+系统配置表。按配置键保存 JSON 值，用于承载 OSS、Linux.do OAuth、注册策略、积分策略和 SMTP 邮件等可扩展系统级配置。
+
+- `key`：配置键，主键，例如 `oss`、`linuxdo_oauth`、`registration`、`credit_policy`、`email`。`credit_policy` 保存注册默认积分、每日签到奖励、默认模型倍率和按模型覆盖倍率。
+- `value_json`：配置内容 JSON。`registration.enabled` 控制本地新用户注册和 Linux.do 首次建号，已存在账号登录不受影响，首个本地管理员始终允许创建；未保存该配置时回退到 `CANVAS_REGISTRATION_ENABLED`。`email` 保存 SMTP 主机、端口、加密方式、发件人和加密后的密码，启用后普通本地注册必须完成邮箱验证码。OSS 配置包含是否启用、服务商、Region、Endpoint、Bucket、AccessKey ID、加密后的 AccessKey Secret 和路径前缀；旧版公开访问域名字段仅保留兼容，不再用于资源读取。加密密钥单独保存在后端数据目录的 `.settings-key`，权限为 `0600`。
+- `updated_by`：最近更新配置的管理员用户 ID。
+- `created_at` / `updated_at`：配置时间。
+
+## user_oss_settings
+
+用户个人 OSS 配置版本表。用户每次保存都会新增一个加密版本，新上传资源优先使用最新启用版本；未启用时回退平台 OSS 或后端本地存储。
+
+- `id`：配置版本 ID，主键。
+- `user_id`：所属用户 ID；接口只允许当前登录用户读写自己的配置。
+- `enabled`：该次保存后是否启用个人 OSS。
+- `value_json`：Provider、Region、Endpoint、Bucket、AccessKey ID、AES-GCM 加密后的 AccessKey Secret 和路径前缀。
+- `created_at` / `updated_at`：版本时间。历史版本不会覆盖，用于读取已经引用旧配置的资源。
+
+## user_skill_states
+
+用户技能状态表。技能元数据来自 Updream 公开技能社区接口，本表只保存当前系统用户对 Updream 技能的个人状态。
+
+- `id`：状态 ID，主键。
+- `user_id`：所属用户 ID。
+- `skill_dir`：Updream 技能目录标识，例如 `ai-short-drama-asset-designer-i2`。
+- `activated`：当前用户是否激活该技能；已激活技能会出现在画布输入框 `@` 候选中。
+- `liked`：当前用户是否收藏该技能。
+- `created_at` / `updated_at`：状态时间。
+- 唯一约束：`user_id + skill_dir`，确保同一用户对同一技能只有一条状态记录。
+
+## announcements / user_announcement_reads
+
+系统公告及用户已读状态表。管理员发布公告后状态为 `active`，关闭后改为 `closed` 并记录 `closed_at`；关闭不删除历史记录，也不会继续出现在用户公告中心。
+
+- `announcements.title` / `content`：公告标题和正文，正文按纯文本展示。
+- `level`：`info`、`success`、`warning` 或 `critical`，用于用户时间线中的语义状态标识。
+- `status`：`active` 或 `closed`；只有 `active` 公告参与用户列表与未读数量计算。
+- `created_by` / `published_at` / `closed_at`：发布管理员、发布时间和可选关闭时间。
+- `user_announcement_reads.user_id + announcement_id`：唯一约束，每个用户对每条公告只保存一条已读记录。
+- `read_at`：用户打开公告中心并读取本次实际返回公告的时间；接口只接受当前有效公告 ID，避免并发发布的新公告在尚未展示时被提前标记已读。关闭公告不需要清理历史已读记录。
+
+## resources
+
+素材资源表。保存二进制资源元信息；启用 OSS 时真实文件写入私有 OSS，未启用时写入后端数据目录的 `resources/`，数据库只保存对象位置和状态。
+
+- `id`：资源 ID，主键；前端长期引用格式为 `resource:<id>`。
+- `user_id`：所属用户 ID。
+- `kind`：资源类型，当前支持 `image`、`video`、`audio`、`file`。
+- `status`：`pending`、`ready`、`failed` 或 `deleted`。
+- `provider`：存储服务商，当前为 `aliyun` 或 `local`。
+- `endpoint` / `bucket` / `object_key`：OSS 对象定位信息。
+- `storage_setting_id`：可选的用户 OSS 配置版本 ID；为空表示平台 OSS 或本地存储。该字段不通过接口返回。
+- `public_url`：保留字段，当前不向前端下发。展示请求使用 `/api/resources/:id/file?direct=1`，后端完成登录态和用户归属校验后为 OSS 对象签发 5 分钟下载地址；本地文件及 Blob、Range、导出等程序化读取继续通过不带 `direct` 的鉴权代理。
+- `mime_type` / `size` / `width` / `height` / `duration_ms`：文件类型、大小和媒体元信息。
+- `etag`：OSS 返回的对象 ETag。
+- `error`：上传失败原因。
+- `created_at` / `updated_at`：资源时间。
+
+## assets
+
+账号素材表。保存“我的素材”的结构化 JSON，不直接保存图片或视频文件。
+
+- `id`：素材 ID，主键。
+- `user_id`：所属用户 ID。
+- `kind`：素材类型，例如 `text`、`image`、`video`。
+- `title`：素材标题。
+- `payload_json`：前端素材对象原始 JSON；媒体字段必须通过 `storageKey` 引用 `resources`，接口拒绝内嵌媒体 data URL。
+- `created_at` / `updated_at`：素材时间。
+
+## canvas_projects
+
+账号画布项目表。保存画布项目 JSON 快照，不拆分节点和连线表。
+
+- `id`：画布项目 ID，主键。
+- `user_id`：所属用户 ID。
+- `title`：画布标题。
+- `payload_json`：前端 `CanvasProject` 原始 JSON；节点媒体字段必须通过 `storageKey` 引用 `resources`，接口拒绝内嵌媒体 data URL。
+- `created_at` / `updated_at`：画布时间。
+
+## canvas_shares
+
+画布公开分享表。一个账号下的一个画布最多保留一条有效分享配置，公开链接只读取服务端保存的画布快照。
+
+- `id`：分享记录 ID，主键。
+- `user_id`：画布所有者 ID。
+- `project_id`：关联画布项目 ID，与 `user_id` 组成唯一约束。
+- `token_hash`：公开令牌的 SHA-256 哈希，用于链接查询，不保存明文。
+- `token_cipher`：使用后端数据目录 `.settings-key` 加密的令牌，仅在所有者查询分享状态时解密返回。
+- `enabled`：分享是否启用。
+- `expires_at`：可选失效时间；为空时持续有效，直至所有者停止分享。
+- `created_at` / `updated_at`：分享时间。
+
+公开画布接口只返回节点、连线、视口和展示所需 metadata 白名单，不返回聊天会话、导演场景、任务 ID、会话 ID、API Key、存储密钥和错误详情。媒体文件通过分享令牌范围内的资源接口读取，并再次校验该资源确实被当前画布引用；未纳入受控资源存储的外部媒体 URL 不向访客加载。生产 nginx 不记录公开分享接口访问路径，后端请求日志也会隐藏令牌段。
+
+## storyboard_prompt_templates
+
+影视分镜提示词模板表。管理员可维护多个版本，同一时间只有一个启用版本；Agent 会话生成分镜时读取启用模板并替换剧情、用户要求和画布资产变量。
+
+- `id`：模板 ID，主键。
+- `name`：版本名称。
+- `content`：提示词模板内容。
+- `enabled`：是否为当前启用版本。
+- `created_by`：创建管理员用户 ID。
+- `created_at` / `updated_at`：模板时间。
+
+## tasks
+
+异步生成任务表。
+
+- `id`：任务 ID，主键。
+- `user_id`：所属用户 ID。
+- `session_id`：关联 Agent 会话 ID。
+- `project_id`：关联画布项目 ID。
+- `type`：任务类型，例如 `agent_storyboard`、`video_text_to_video`。
+- `status`：`queued`、`running`、`succeeded`、`failed`、`cancelled`。
+- `stage`：面向用户展示的当前处理阶段，例如等待队列、调用模型或持久化结果。
+- `progress`：当前任务整数进度，范围为 `0-100`。
+- `prompt`：用户创作指令。
+- `operation`：视频编辑或 Agent 操作语义。
+- `provider`：目标模型供应方。
+- `model`：目标模型。
+- `billing_order_id`：关联计费订单。
+- `provider_request_id`：异步供应商受理的任务 ID；服务重启后使用该 ID 继续轮询，禁止重复创建。
+- `poll_stage` / `next_poll_at`：已持久化的轮询阶段和下一次轮询时间。
+- `lease_owner` / `lease_expires_at`：任务 worker 租约。PostgreSQL 使用 `FOR UPDATE SKIP LOCKED` 领取待执行或租约过期任务，运行中定时续租。
+- `status + lease_expires_at + created_at`：任务领取复合索引，辅助 SQLite 定位排队任务和租约已过期任务；原有事务条件更新仍负责单实例领取原子性。
+- `input_json`：任务输入。
+- `result_json`：任务结果。生成媒体只保存 `resource:<id>`、受保护读取 URL 和媒体元信息，不保存 base64 文件内容。
+- `error`：失败原因。
+- `attempts`：尝试次数。
+- `started_at` / `completed_at` / `created_at` / `updated_at`：任务时间。
+
+SQLite 模式首次启动存储 v2 改造时会先在 `data/backups/` 创建备份，再把历史任务、素材和画布中的 data URL 迁移到资源存储，清理任务日志及无会话结果表中的重复媒体载荷，最后执行 `VACUUM`。PostgreSQL 新部署不执行这项 SQLite 文件迁移。迁移前备份可能仍含旧版明文配置，必须按敏感文件保护；确认新资源可读后，可由运维人员自行归档或删除，应用不会自动删除备份。
+
+## sessions
+
+Agent 会话表。
+
+- `id`：会话 ID，主键。
+- `user_id`：所属用户 ID。
+- `project_id`：关联画布项目 ID。
+- `status`：`active`、`completed`、`failed`。
+- `prompt`：会话初始创作指令。
+- `canvas_snapshot_json`：创建会话时的画布快照。
+- `canvas_ops_json`：Agent 生成的画布回写操作。
+- `created_at` / `updated_at`：会话时间。
+
+## messages
+
+会话消息表。
+
+- `id`：消息 ID，主键。
+- `user_id`：所属用户 ID。
+- `session_id`：关联会话 ID。
+- `role`：`user`、`assistant`、`system` 或 `tool`。
+- `content`：消息正文。
+- `payload`：结构化消息载荷。
+- `created_at`：创建时间。
+
+## task_logs
+
+任务日志表。
+
+- `id`：日志 ID，主键。
+- `user_id`：所属用户 ID。
+- `task_id`：关联任务 ID。
+- `level`：`info`、`warn`、`error`。
+- `message`：日志正文。
+- `payload`：结构化日志载荷。
+- `created_at`：创建时间。
+
+## session_files
+
+会话上传文件表。
+
+- `id`：文件 ID，主键。
+- `user_id`：所属用户 ID。
+- `session_id`：关联会话 ID。
+- `file_name`：原始文件名。
+- `mime_type`：文件类型。
+- `path`：服务端保存路径。
+- `size`：文件大小。
+- `created_at`：创建时间。
+
+## results
+
+任务和会话结果表。
+
+- `id`：结果 ID，主键。
+- `user_id`：所属用户 ID。
+- `task_id`：关联任务 ID。
+- `session_id`：关联会话 ID。
+- `kind`：结果类型，例如 `canvas_ops`。
+- `url`：结果文件 URL。
+- `payload`：结构化结果载荷。
+- `created_at`：创建时间。

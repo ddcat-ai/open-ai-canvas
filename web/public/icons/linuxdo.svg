@@ -1,0 +1,10 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <clipPath id="linuxdo-circle"><circle cx="12" cy="12" r="11" /></clipPath>
+    </defs>
+    <g clip-path="url(#linuxdo-circle)">
+        <rect width="24" height="24" fill="#EFEFEF" />
+        <rect width="24" height="8" fill="#1D1D1F" />
+        <rect y="16" width="24" height="8" fill="#FEB005" />
+    </g>
+</svg>

@@ -1,0 +1,25 @@
+Open AI Canvas
+Copyright (C) 2026 ddcat
+
+This program is licensed under the GNU Affero General Public License v3.0.
+The complete license text is provided in LICENSE.
+
+This project is a derivative work based on:
+
+  Infinite Canvas
+  https://github.com/basketikun/infinite-canvas
+  Base version: v0.5.0
+  Base commit: 568f0f1838df8de31fe885a4e130e2f346dd14ab
+
+The upstream project is maintained under the basketikun account. The base
+commit is authored by HouYunFei. Upstream authors and contributors retain
+their copyright and attribution for their respective contributions.
+
+Material changes in this repository are maintained by ddcat. They include a
+multi-user Go backend, task processing and analytics, private resource
+storage, canvas sharing, film-production workflows, canvas UI refactoring,
+and Canvas Agent integrations.
+
+Third-party packages remain subject to the licenses declared by their
+respective authors. Product names and logos under web/public/icons are the
+property of their respective owners and do not imply endorsement.
