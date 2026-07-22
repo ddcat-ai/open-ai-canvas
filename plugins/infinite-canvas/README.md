@@ -4,64 +4,42 @@
 
 ## 安装
 
+> Infinite Canvas 尚未上架 Codex 公共插件目录，直接搜索不会显示。请从本仓库自带的 marketplace 安装。
+
 ### AI 自动安装
 
 把下面这段发给 Codex：
 
 ```text
 请从 https://github.com/ddcat-ai/open-ai-canvas.git 安装 Infinite Canvas Codex 插件。
-请 clone 仓库到 ~/plugins/open-ai-canvas，确认 plugins/infinite-canvas/.codex-plugin/plugin.json 存在，
-把 plugins/open-ai-canvas 加入 personal marketplace，先运行 codex plugin marketplace add ~，
-再运行 codex plugin add infinite-canvas@personal。
+请 clone 仓库到 ~/plugins/open-ai-canvas，确认 .agents/plugins/marketplace.json 和
+plugins/infinite-canvas/.codex-plugin/plugin.json 都存在。然后运行
+codex plugin marketplace add ~/plugins/open-ai-canvas，
+再运行 codex plugin add infinite-canvas@infinite-canvas-local。
 安装后请校验插件，并告诉我是否需要开启一个新对话来加载新技能和 MCP 工具。
 ```
 
 ### 手动安装
 
-推荐把仓库 clone 到 Codex personal marketplace 默认会引用的位置：
+如果本机还没有仓库，先 clone：
 
 ```bash
 mkdir -p ~/plugins
 git clone https://github.com/ddcat-ai/open-ai-canvas.git ~/plugins/open-ai-canvas
 ```
 
-确保 `~/.agents/plugins/marketplace.json` 中有 Infinite Canvas 条目，注意 `path` 指向仓库里的插件子目录：
-
-```json
-{
-  "name": "personal",
-  "interface": {
-    "displayName": "Personal"
-  },
-  "plugins": [
-    {
-      "name": "infinite-canvas",
-      "source": {
-        "source": "local",
-        "path": "./plugins/open-ai-canvas/plugins/infinite-canvas"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    }
-  ]
-}
-```
-
-然后注册 personal marketplace 并安装插件：
+注册仓库 marketplace 并安装插件；如果使用已有仓库，请把路径替换为仓库的绝对路径：
 
 ```bash
-codex plugin marketplace add ~
-codex plugin add infinite-canvas@personal
+codex plugin marketplace add ~/plugins/open-ai-canvas
+codex plugin add infinite-canvas@infinite-canvas-local
 ```
 
 安装后建议开启一个新的 Codex 对话，让新的 skill 和 MCP 工具完整加载。
 
 ### 本仓库开发调试
 
-如果你就在 Infinite Canvas 仓库中调试插件，可以直接添加仓库自带 marketplace。建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
+如果你就在 Infinite Canvas 仓库中调试插件，可以直接添加当前仓库。建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
 
 ```bash
 cd /path/to/infinite-canvas

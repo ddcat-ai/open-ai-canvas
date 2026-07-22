@@ -1,0 +1,20 @@
+{
+  "name": "infinite-canvas-local",
+  "interface": {
+    "displayName": "Infinite Canvas Local"
+  },
+  "plugins": [
+    {
+      "name": "infinite-canvas",
+      "source": {
+        "source": "local",
+        "path": "./plugins/infinite-canvas"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
