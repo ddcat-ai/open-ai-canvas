@@ -23,9 +23,10 @@ import (
 const maxSystemProxyBodyBytes int64 = 64 << 20
 
 var (
-	runtimeService      *service.Service
-	geminiGeneratePath  = regexp.MustCompile(`^/models/([^/:]+):(generateContent|streamGenerateContent)$`)
-	openAIPostEndpoints = map[string]bool{
+	runtimeService        *service.Service
+	geminiGeneratePath    = regexp.MustCompile(`^/models/([^/:]+):(generateContent|streamGenerateContent)$`)
+	customGeminiRelayPath = regexp.MustCompile(`(?:^|/)models/[^/:]+:(generateContent|streamGenerateContent)$`)
+	openAIPostEndpoints   = map[string]bool{
 		"/responses": true, "/chat/completions": true, "/images/generations": true, "/images/edits": true,
 		"/audio/speech": true,
 	}
@@ -33,6 +34,72 @@ var (
 
 func ConfigureRuntime(svc *service.Service) {
 	runtimeService = svc
+}
+
+func authorizeCustomRelay(method string, target *url.URL, apiFormat string, contentType string) error {
+	requestPath, err := normalizedCustomRelayPath(target.EscapedPath())
+	if err != nil {
+		return err
+	}
+	query, err := url.ParseQuery(target.RawQuery)
+	if err != nil {
+		return errors.New("自定义渠道查询参数无效")
+	}
+	for key := range query {
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "key", "api_key", "access_token", "token":
+			return errors.New("自定义渠道地址不允许在查询参数中携带密钥")
+		}
+	}
+
+	apiFormat = strings.ToLower(strings.TrimSpace(apiFormat))
+	if apiFormat != "openai" && apiFormat != "gemini" {
+		return errors.New("自定义渠道调用格式无效")
+	}
+	if method == http.MethodGet {
+		if len(query) != 0 || (requestPath != "/models" && !strings.HasSuffix(requestPath, "/models")) {
+			return errors.New("自定义渠道不允许访问该上游接口")
+		}
+		return nil
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || mediaType != "application/json" {
+		return errors.New("自定义渠道生成请求必须使用 application/json")
+	}
+	if method != http.MethodPost {
+		return errors.New("自定义渠道不允许使用该请求方法")
+	}
+	if apiFormat == "openai" {
+		if len(query) != 0 || (!strings.HasSuffix(requestPath, "/responses") && !strings.HasSuffix(requestPath, "/chat/completions")) {
+			return errors.New("自定义渠道不允许访问该上游接口")
+		}
+		return nil
+	}
+	if !customGeminiRelayPath.MatchString(requestPath) {
+		return errors.New("自定义渠道不允许访问该上游接口")
+	}
+	if len(query) == 0 {
+		return nil
+	}
+	if len(query) == 1 && len(query["alt"]) == 1 && query.Get("alt") == "sse" && strings.HasSuffix(requestPath, ":streamGenerateContent") {
+		return nil
+	}
+	return errors.New("自定义渠道不允许使用该查询参数")
+}
+
+func normalizedCustomRelayPath(value string) (string, error) {
+	if len(value) > 2048 {
+		return "", errors.New("自定义渠道请求路径过长")
+	}
+	decoded, err := url.PathUnescape(value)
+	if err != nil || strings.Contains(decoded, "\\") || strings.Contains(decoded, "\x00") {
+		return "", errors.New("自定义渠道请求路径无效")
+	}
+	cleaned := path.Clean("/" + strings.TrimPrefix(decoded, "/"))
+	if cleaned != decoded && cleaned != "/"+strings.TrimPrefix(decoded, "/") {
+		return "", errors.New("自定义渠道请求路径无效")
+	}
+	return cleaned, nil
 }
 
 func enforceRateLimit(c *gin.Context, key string, limit int, window time.Duration) bool {
