@@ -128,6 +128,27 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"resource": resource})
 	})
+	r.GET("/resources/:id/oss-url", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resource, err := svc.Resource(user.ID, c.Param("id"))
+		if err != nil {
+			fail(c, http.StatusNotFound, err)
+			return
+		}
+		ossURL, err := svc.DirectResourceURL(user.ID, resource.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		// 签名地址只用于当前复制动作，禁止浏览器或中间代理缓存。
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		ok(c, gin.H{"url": ossURL})
+	})
 	r.GET("/resources/:id/file", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

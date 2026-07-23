@@ -28,6 +28,7 @@ type CanvasProjectContextMenuProps = {
     onEditText: (node: CanvasNodeData) => void;
     onGenerateImage: (node: CanvasNodeData) => void;
     onCopyContent: (node: CanvasNodeData | null) => void;
+    onCopyOssUrl: (node: CanvasNodeData | null) => void;
     onToggleFrame: (node: CanvasNodeData) => void;
 };
 
@@ -81,6 +82,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
                 if (node) props.onGenerateImage(node);
             }}
             onCopyContent={() => props.onCopyContent(node)}
+            onCopyOssUrl={() => props.onCopyOssUrl(node)}
             onToggleFrame={() => {
                 if (node?.type === CanvasNodeType.Frame) props.onToggleFrame(node);
             }}

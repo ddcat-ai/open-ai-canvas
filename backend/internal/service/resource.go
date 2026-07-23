@@ -69,7 +69,7 @@ func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
 		return "", BadAuthRequest("资源尚未上传完成")
 	}
 	if resource.Provider == "local" {
-		return "", nil
+		return "", BadAuthRequest("当前资源未存储在 OSS")
 	}
 	setting, err := s.ossSettingForResource(userID, resource)
 	if err != nil {

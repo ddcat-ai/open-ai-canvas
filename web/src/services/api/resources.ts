@@ -115,6 +115,19 @@ export function getResource(id: string): Promise<RemoteResource> {
     return task;
 }
 
+export async function getResourceOSSUrl(storageKey?: string) {
+    const id = resourceIdFromStorageKey(storageKey);
+    if (!id) throw new Error("当前媒体尚未上传到后端资源存储");
+    try {
+        const data = await request<{ url: string }>(api.get(`/resources/${encodeURIComponent(id)}/oss-url`));
+        if (!data.url) throw new Error("后端未返回 OSS 地址");
+        return data.url;
+    } catch (error) {
+        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data.msg || error.message || "获取 OSS 地址失败");
+        throw error;
+    }
+}
+
 function resourceCacheKey(id: string) {
     return `${getActiveUserScope()}:${id}`;
 }
