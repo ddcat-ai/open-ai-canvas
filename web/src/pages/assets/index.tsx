@@ -10,11 +10,13 @@ import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } f
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
-import { useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
+import { deleteAssetWithRemoteSync } from "@/services/user-data-sync";
 
 type AssetFormValues = {
     kind: AssetKind;
+    category: AssetCategory;
     title: string;
     coverUrl: string;
     tags: string[];
@@ -33,6 +35,17 @@ const kindOptions = [
     { label: "3D 模型", value: "model" },
 ];
 
+const categoryOptions = [
+    { label: "全部分类", value: "all" },
+    { label: "角色", value: "character" },
+    { label: "场景", value: "environment" },
+    { label: "服饰", value: "wardrobe" },
+    { label: "道具", value: "prop" },
+    { label: "武器", value: "weapon" },
+    { label: "画风", value: "style" },
+    { label: "其他", value: "other" },
+];
+
 export default function AssetsPage() {
     const { message } = App.useApp();
     const copyText = useCopyText();
@@ -44,9 +57,9 @@ export default function AssetsPage() {
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
     const updateAsset = useAssetStore((state) => state.updateAsset);
-    const removeAsset = useAssetStore((state) => state.removeAsset);
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
+    const [categoryFilter, setCategoryFilter] = useState<AssetCategory | "all">("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -65,10 +78,11 @@ export default function AssetsPage() {
         const query = keyword.trim().toLowerCase();
         return validAssets.filter((asset) => {
             if (kindFilter !== "all" && asset.kind !== kindFilter) return false;
+            if (categoryFilter !== "all" && (asset.category || "other") !== categoryFilter) return false;
             if (!query) return true;
             return assetSearchText(asset).includes(query);
         });
-    }, [validAssets, keyword, kindFilter]);
+    }, [validAssets, keyword, kindFilter, categoryFilter]);
 
     const visibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -84,7 +98,7 @@ export default function AssetsPage() {
         setEditingAsset(null);
         setImageDraft(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
+        form.setFieldsValue({ kind: "text", category: "other", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
         setIsAssetOpen(true);
     };
 
@@ -94,6 +108,7 @@ export default function AssetsPage() {
         setImageDraft(asset.kind === "image" ? asset.data : null);
         form.setFieldsValue({
             kind: asset.kind,
+            category: asset.category || "other",
             title: asset.title,
             coverUrl: asset.coverUrl,
             tags: asset.tags || [],
@@ -108,6 +123,9 @@ export default function AssetsPage() {
         const values = await form.validateFields();
         const base = {
             title: values.title.trim(),
+            category: values.category,
+            status: editingAsset?.status || "confirmed" as const,
+            primaryVersionId: editingAsset?.primaryVersionId,
             coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageDraft ? imageDraft.dataUrl : ""),
             tags: values.tags || [],
             source: values.source?.trim(),
@@ -192,11 +210,15 @@ export default function AssetsPage() {
         }
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (!deletingAsset) return;
-        removeAsset(deletingAsset.id);
-        message.success("素材已删除");
-        setDeletingAsset(null);
+        try {
+            await deleteAssetWithRemoteSync(deletingAsset.id);
+            message.success("素材已删除");
+            setDeletingAsset(null);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "素材删除失败");
+        }
     };
 
     return (
@@ -215,9 +237,10 @@ export default function AssetsPage() {
                         </>
                     )}
                 />
-                <ListToolbar active={Boolean(keyword || kindFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setPage(1); }}>
+                <ListToolbar active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
                     <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索标题、内容、标签或来源" onChange={(event) => { setPage(1); setKeyword(event.target.value); }} />
                     <Select className="w-36" value={kindFilter} options={kindOptions} onChange={(value) => { setPage(1); setKindFilter(value); }} />
+                    <Select className="w-36" value={categoryFilter} options={categoryOptions} onChange={(value) => { setPage(1); setCategoryFilter(value); }} />
                 </ListToolbar>
 
                 <div className="flex flex-col gap-4">
@@ -235,7 +258,7 @@ export default function AssetsPage() {
 
             <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
+                    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
                         <Form.Item name="kind" label="类型">
                             <Select
                                 options={[
@@ -244,6 +267,9 @@ export default function AssetsPage() {
                                 ]}
                                 onChange={(value) => setFormKind(value)}
                             />
+                        </Form.Item>
+                        <Form.Item name="category" label="业务分类">
+                            <Select options={categoryOptions.slice(1)} />
                         </Form.Item>
                         <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                             <Input size="large" placeholder="给素材起一个容易检索的名字" />
@@ -344,7 +370,7 @@ export default function AssetsPage() {
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
             <input ref={modelInputRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" className="hidden" onChange={(event) => { void readModelFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
 
-            <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+            <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={() => void confirmDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
             </Modal>
         </>
@@ -380,6 +406,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                         </div>
                         <span className="flex shrink-0 flex-wrap justify-end gap-1">
                             <Tag className="m-0 text-[11px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "model" ? "3D 模型" : "文本"}</Tag>
+                            <Tag className="m-0 text-[11px]" color="blue">{assetCategoryLabel(asset.category)}</Tag>
                             <StorageTag asset={asset} />
                         </span>
                     </div>
@@ -434,6 +461,7 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                         </Typography.Title>
                         <Space size={[4, 4]} wrap>
                             <Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "model" ? "3D 模型" : "文本"}</Tag>
+                            <Tag color="blue">{assetCategoryLabel(asset.category)}</Tag>
                             <StorageTag asset={asset} />
                             {(asset.tags || []).map((tag) => (
                                 <Tag key={tag}>{tag}</Tag>
@@ -503,5 +531,9 @@ function StorageTag({ asset }: { asset: Asset }) {
 }
 
 function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+    return [asset.title, asset.source || "", asset.note || "", assetCategoryLabel(asset.category), (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+}
+
+function assetCategoryLabel(category?: AssetCategory) {
+    return categoryOptions.find((item) => item.value === (category || "other"))?.label || "其他";
 }

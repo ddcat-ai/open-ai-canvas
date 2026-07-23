@@ -17,6 +17,7 @@ import { CanvasConfigNodePanel } from "@/components/canvas/canvas-config-node-pa
 import { CanvasAssistantPanel } from "@/components/canvas/canvas-assistant-panel";
 import { CanvasActiveTaskPanel } from "@/components/canvas/canvas-active-task-panel";
 import { CanvasAssetTray } from "@/components/canvas/canvas-asset-tray";
+import { CanvasProjectSidebar } from "@/components/canvas/canvas-project-sidebar";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
 import { CanvasDocumentEditorModal } from "@/components/canvas/canvas-document-editor-modal";
@@ -731,6 +732,7 @@ function InfiniteCanvasPage() {
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
     const { agentSnapshot, applyAgentOps, canUndoAgentOps, dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasAgentOperations({
         projectId,
+        domainProjectId: currentProject?.projectId,
         projectTitle: currentProject?.title || "未命名画布",
         nodes,
         connections,
@@ -1193,6 +1195,7 @@ function InfiniteCanvasPage() {
 
     return (
         <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+            {currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} /> : null}
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}

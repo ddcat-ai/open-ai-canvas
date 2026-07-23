@@ -48,6 +48,13 @@ export class CanvasSession {
         if (!isToolName(name)) throw new Error(`未知工具：${String(name)}`);
         let tool: ToolName = name;
         let input = parseToolInput(tool, rawInput) as Record<string, unknown>;
+        const projectTool = tool.startsWith("project_");
+        if (projectTool) {
+            if (!this.clients.size || !this.canvasState) throw new Error("当前没有已连接画布");
+            if (!input.projectId && this.canvasState.domainProjectId) input.projectId = this.canvasState.domainProjectId;
+            if (!input.projectId) throw new Error("当前画布没有关联短剧项目");
+            return await this.requestCanvasTool(tool, input);
+        }
         const readTool = ["canvas_get_state", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
         if (tool === "canvas_get_state" || tool === "canvas_export_snapshot") return compactCanvasState(this.canvasState);

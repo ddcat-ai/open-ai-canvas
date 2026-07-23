@@ -582,7 +582,8 @@ func publicTaskInputJSON(raw string) string {
 		return ""
 	}
 	public := map[string]any{}
-	for _, key := range []string{"mode", "metadata"} {
+	// 任务完成后仍需依靠这些非敏感 ID 恢复项目产物归属；密钥等配置继续被过滤。
+	for _, key := range []string{"mode", "metadata", "workflowStepId", "domainProjectId", "assetVersionId", "resourceId", "mediaType", "role"} {
 		if value, ok := input[key]; ok {
 			public[key] = value
 		}
@@ -780,6 +781,12 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		_ = s.markSessionFailed(*task, task.Error)
 		_ = s.log(task.UserID, task.ID, "error", "任务结果保存失败", task.Error)
 		return err
+	}
+	if completedTask, fetchErr := s.repo.Task(task.ID); fetchErr == nil {
+		if registerErr := s.RegisterTaskOutputFromTask(*completedTask); registerErr != nil {
+			// 任务成功与产物登记分开记账；登记失败保持步骤异常，允许项目页幂等补登记。
+			_ = s.log(task.UserID, task.ID, "error", "任务成功但项目产物登记失败", registerErr.Error())
+		}
 	}
 	if err := s.SettleBilling(task.BillingOrderID, ""); err != nil {
 		_ = s.MarkBillingUncertain(task.BillingOrderID, "生成成功但积分结算失败："+err.Error())

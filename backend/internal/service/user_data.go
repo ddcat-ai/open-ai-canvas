@@ -22,6 +22,8 @@ type CanvasProjectsSyncRequest struct {
 type UserDataSummary struct {
 	ID        string    `json:"id"`
 	Kind      string    `json:"kind,omitempty"`
+	Category  string    `json:"category,omitempty"`
+	Status    string    `json:"status,omitempty"`
 	Title     string    `json:"title"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -34,7 +36,7 @@ func (s *Service) UserAssetSummaries(userID string) ([]UserDataSummary, error) {
 	}
 	result := make([]UserDataSummary, 0, len(assets))
 	for _, asset := range assets {
-		result = append(result, UserDataSummary{ID: asset.ID, Kind: asset.Kind, Title: asset.Title, CreatedAt: asset.CreatedAt, UpdatedAt: asset.UpdatedAt})
+		result = append(result, UserDataSummary{ID: asset.ID, Kind: asset.Kind, Category: string(asset.Category), Status: string(asset.Status), Title: asset.Title, CreatedAt: asset.CreatedAt, UpdatedAt: asset.UpdatedAt})
 	}
 	return result, nil
 }
@@ -79,10 +81,20 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 	if existingErr != nil {
 		s.recordActivity(userID, "asset", 1)
 	}
-	return UserDataSummary{ID: asset.ID, Kind: asset.Kind, Title: asset.Title, CreatedAt: asset.CreatedAt, UpdatedAt: asset.UpdatedAt}, nil
+	return UserDataSummary{ID: asset.ID, Kind: asset.Kind, Category: string(asset.Category), Status: string(asset.Status), Title: asset.Title, CreatedAt: asset.CreatedAt, UpdatedAt: asset.UpdatedAt}, nil
 }
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
+	if _, err := s.repo.AssetForUser(userID, id); err != nil {
+		return err
+	}
+	references, err := s.repo.AssetReferenceCount(id)
+	if err != nil {
+		return err
+	}
+	if references > 0 {
+		return BadAuthRequest("素材仍被项目或镜头引用，请先解除引用")
+	}
 	return s.repo.DeleteAsset(userID, id)
 }
 
@@ -247,11 +259,14 @@ func assetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 		return model.Asset{}, err
 	}
 	var payload struct {
-		ID        string `json:"id"`
-		Kind      string `json:"kind"`
-		Title     string `json:"title"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
+		ID               string `json:"id"`
+		Kind             string `json:"kind"`
+		Category         string `json:"category"`
+		Status           string `json:"status"`
+		PrimaryVersionID string `json:"primaryVersionId"`
+		Title            string `json:"title"`
+		CreatedAt        string `json:"createdAt"`
+		UpdatedAt        string `json:"updatedAt"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return model.Asset{}, BadAuthRequest("素材数据格式错误")
@@ -263,14 +278,25 @@ func assetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 	if id == "" {
 		id = newID()
 	}
+	category := model.AssetCategory(strings.TrimSpace(payload.Category))
+	if category == "" {
+		category = model.AssetCategoryOther
+	}
+	status := model.AssetVersionStatus(strings.TrimSpace(payload.Status))
+	if status == "" {
+		status = model.AssetVersionStatusConfirmed
+	}
 	return model.Asset{
-		ID:          id,
-		UserID:      userID,
-		Kind:        strings.TrimSpace(payload.Kind),
-		Title:       strings.TrimSpace(payload.Title),
-		PayloadJSON: string(raw),
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
+		ID:               id,
+		UserID:           userID,
+		Kind:             strings.TrimSpace(payload.Kind),
+		Category:         category,
+		Status:           status,
+		PrimaryVersionID: strings.TrimSpace(payload.PrimaryVersionID),
+		Title:            strings.TrimSpace(payload.Title),
+		PayloadJSON:      string(raw),
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
 	}, nil
 }
 

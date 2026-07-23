@@ -6,6 +6,7 @@ import type { CanvasConnection, CanvasNodeData, ContextMenuState, ViewportTransf
 
 type UseCanvasAgentOperationsOptions = {
     projectId: string;
+    domainProjectId?: string;
     projectTitle: string;
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
@@ -32,6 +33,7 @@ export type CanvasAgentChange = {
 
 export function useCanvasAgentOperations({
     projectId,
+    domainProjectId,
     projectTitle,
     nodes,
     connections,
@@ -53,13 +55,13 @@ export function useCanvasAgentOperations({
     const [undoSnapshot, setUndoSnapshot] = useState<CanvasAgentSnapshot | null>(null);
     const [lastAgentChange, setLastAgentChange] = useState<CanvasAgentChange | null>(null);
     const snapshot = useMemo<CanvasAgentSnapshot>(
-        () => ({ projectId, title: projectTitle, nodes, connections, selectedNodeIds: Array.from(selectedNodeIds), viewport }),
-        [connections, nodes, projectId, projectTitle, selectedNodeIds, viewport],
+        () => ({ projectId, domainProjectId, title: projectTitle, nodes, connections, selectedNodeIds: Array.from(selectedNodeIds), viewport }),
+        [connections, domainProjectId, nodes, projectId, projectTitle, selectedNodeIds, viewport],
     );
 
     const applyOps = useCallback((ops?: CanvasAgentOp[]) => {
         const safeOps = Array.isArray(ops) ? ops.filter((op) => op?.type) : [];
-        const before = { projectId, title: projectTitle, nodes: nodesRef.current, connections: connectionsRef.current, selectedNodeIds: Array.from(selectedNodeIdsRef.current), viewport: viewportRef.current };
+        const before = { projectId, domainProjectId, title: projectTitle, nodes: nodesRef.current, connections: connectionsRef.current, selectedNodeIds: Array.from(selectedNodeIdsRef.current), viewport: viewportRef.current };
         const generationOps = safeOps.filter((op): op is Extract<CanvasAgentOp, { type: "run_generation" }> => op.type === "run_generation" && Boolean(op.nodeId));
         const next = applyCanvasAgentOps(before, safeOps.filter((op) => op.type !== "run_generation"));
         const beforeNodeIds = new Set(before.nodes.map((node) => node.id));
@@ -89,7 +91,7 @@ export function useCanvasAgentOperations({
             }));
         }
         return { ...next, projectId, title: projectTitle, selectedNodeIds: nextSelectedNodeIds };
-    }, [connectionsRef, focusSelection, generateNodeRef, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, viewportRef]);
+    }, [connectionsRef, domainProjectId, focusSelection, generateNodeRef, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, viewportRef]);
 
     const undoOps = useCallback(() => {
         if (!undoSnapshot) return null;
@@ -105,8 +107,8 @@ export function useCanvasAgentOperations({
         setContextMenu(null);
         setUndoSnapshot(null);
         setLastAgentChange(null);
-        return { ...undoSnapshot, projectId, title: projectTitle };
-    }, [connectionsRef, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, undoSnapshot, viewportRef]);
+        return { ...undoSnapshot, projectId, domainProjectId, title: projectTitle };
+    }, [connectionsRef, domainProjectId, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, undoSnapshot, viewportRef]);
 
     const viewLastAgentChange = useCallback(() => {
         if (!lastAgentChange?.nodeIds.length) return;

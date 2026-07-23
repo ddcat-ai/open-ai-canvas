@@ -94,6 +94,14 @@ export async function createCanvasProjectWithRemoteSync(title: string, projectId
     }
 }
 
+export async function deleteAssetWithRemoteSync(id: string) {
+    if (activeRemoteUserId) {
+        await deleteRemoteAsset(id);
+        remoteAssetVersions.delete(id);
+    }
+    useAssetStore.getState().removeAsset(id);
+}
+
 export async function saveRemoteUserDataNow() {
     if (!activeRemoteUserId) return;
     if (syncPromise) {

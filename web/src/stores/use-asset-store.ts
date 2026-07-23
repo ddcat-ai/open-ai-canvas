@@ -7,6 +7,8 @@ import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/im
 import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
 
 export type AssetKind = "text" | "image" | "video" | "model";
+export type AssetCategory = "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "other";
+export type AssetStatus = "draft" | "review" | "confirmed" | "archived";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
 export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
@@ -19,6 +21,9 @@ type AssetBase<T extends AssetKind> = {
     title: string;
     coverUrl: string;
     tags: string[];
+    category?: AssetCategory;
+    status?: AssetStatus;
+    primaryVersionId?: string;
     source?: string;
     note?: string;
     createdAt: string;

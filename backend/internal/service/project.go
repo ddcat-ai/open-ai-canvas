@@ -48,9 +48,14 @@ type ProjectSummary struct {
 }
 
 type ProjectDetail struct {
-	Project  model.Project         `json:"project"`
-	Units    []model.ProjectUnit   `json:"units"`
-	Canvases []model.CanvasProject `json:"canvases"`
+	Project         model.Project                 `json:"project"`
+	Units           []model.ProjectUnit           `json:"units"`
+	Canvases        []model.CanvasProject         `json:"canvases"`
+	Assets          []ProjectAssetSummary         `json:"assets"`
+	Workflows       []ProjectWorkflowDetail       `json:"workflows"`
+	Shots           []model.Shot                  `json:"shots"`
+	ShotReferences  []model.ShotAssetReference    `json:"shotReferences"`
+	AssetCandidates []model.ProjectAssetCandidate `json:"assetCandidates"`
 }
 
 func (s *Service) ListProjects(userID string) ([]ProjectSummary, error) {
@@ -92,10 +97,33 @@ func (s *Service) ProjectDetail(userID string, id string) (ProjectDetail, error)
 	if err != nil {
 		return ProjectDetail{}, err
 	}
-	return ProjectDetail{Project: *project, Units: units, Canvases: canvases}, nil
+	assets, err := s.ProjectAssets(userID, project.ID)
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	workflows, err := s.ProjectWorkflows(project.ID)
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	shots, err := s.repo.ProjectShots(project.ID)
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	shotReferences, err := s.repo.ProjectShotAssetReferences(project.ID)
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	candidates, err := s.repo.ProjectAssetCandidates(project.ID)
+	if err != nil {
+		return ProjectDetail{}, err
+	}
+	return ProjectDetail{Project: *project, Units: units, Canvases: canvases, Assets: assets, Workflows: workflows, Shots: shots, ShotReferences: shotReferences, AssetCandidates: candidates}, nil
 }
 
 func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.Project, error) {
+	if err := s.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
+		return model.Project{}, err
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return model.Project{}, BadAuthRequest("项目名称不能为空")
@@ -117,6 +145,12 @@ func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.
 	if err := s.repo.CreateProject(&project); err != nil {
 		return model.Project{}, err
 	}
+	if _, err := s.createProjectWorkflow(project.ID, "", "project"); err != nil {
+		_ = s.repo.DeleteProject(userID, project.ID)
+		return model.Project{}, err
+	}
+	project.Revision++
+	project.UpdatedAt = time.Now()
 	return project, nil
 }
 
@@ -185,6 +219,9 @@ func (s *Service) CreateProjectUnit(userID string, projectID string, req CreateP
 	if err := s.repo.CreateProjectUnit(&unit); err != nil {
 		return model.ProjectUnit{}, err
 	}
+	if err := s.repo.BumpProjectRevision(projectID); err != nil {
+		return model.ProjectUnit{}, err
+	}
 	return unit, nil
 }
 
@@ -213,6 +250,9 @@ func (s *Service) LinkCanvasUnit(userID string, projectID string, req LinkCanvas
 	now := time.Now()
 	link := model.CanvasUnitLink{ID: newID(), ProjectID: projectID, CanvasID: canvasID, UnitID: unitID, Role: role, CreatedAt: now}
 	if err := s.repo.UpsertCanvasUnitLink(&link); err != nil {
+		return model.CanvasUnitLink{}, err
+	}
+	if err := s.repo.BumpProjectRevision(projectID); err != nil {
 		return model.CanvasUnitLink{}, err
 	}
 	return link, nil
