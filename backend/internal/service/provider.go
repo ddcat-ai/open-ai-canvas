@@ -31,24 +31,25 @@ type canvasGenerationInput struct {
 }
 
 type providerConfig struct {
-	ChannelID          string `json:"channelId"`
-	APIFormat          string `json:"apiFormat"`
-	InterfaceType      string `json:"interfaceType"`
-	BaseURL            string `json:"baseUrl"`
-	APIKey             string `json:"apiKey"`
-	Model              string `json:"model"`
-	Size               string `json:"size"`
-	Quality            string `json:"quality"`
-	Count              string `json:"count"`
-	VideoSeconds       string `json:"videoSeconds"`
-	VQuality           string `json:"vquality"`
-	VideoGenerateAudio string `json:"videoGenerateAudio"`
-	VideoWatermark     string `json:"videoWatermark"`
-	AudioVoice         string `json:"audioVoice"`
-	AudioFormat        string `json:"audioFormat"`
-	AudioSpeed         string `json:"audioSpeed"`
-	AudioInstructions  string `json:"audioInstructions"`
-	SystemPrompt       string `json:"systemPrompt"`
+	ChannelID             string `json:"channelId"`
+	APIFormat             string `json:"apiFormat"`
+	InterfaceType         string `json:"interfaceType"`
+	BaseURL               string `json:"baseUrl"`
+	APIKey                string `json:"apiKey"`
+	Model                 string `json:"model"`
+	Size                  string `json:"size"`
+	Quality               string `json:"quality"`
+	TransparentBackground string `json:"transparentBackground"`
+	Count                 string `json:"count"`
+	VideoSeconds          string `json:"videoSeconds"`
+	VQuality              string `json:"vquality"`
+	VideoGenerateAudio    string `json:"videoGenerateAudio"`
+	VideoWatermark        string `json:"videoWatermark"`
+	AudioVoice            string `json:"audioVoice"`
+	AudioFormat           string `json:"audioFormat"`
+	AudioSpeed            string `json:"audioSpeed"`
+	AudioInstructions     string `json:"audioInstructions"`
+	SystemPrompt          string `json:"systemPrompt"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -325,6 +326,9 @@ func systemChannelIDFromBaseURL(baseURL string) string {
 }
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.TransparentBackground == "true" && !supportsTransparentImageBackground(input.Config) {
+		return nil, errors.New("当前模型不支持透明背景，请关闭透明背景或切换至 GPT Image 1 系列模型")
+	}
 	var payload imageResponse
 	if len(input.ReferenceImages) > 0 || input.Mask != nil {
 		body := &bytes.Buffer{}
@@ -334,6 +338,9 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		writeField(writer, "n", "1")
 		writeField(writer, "response_format", "b64_json")
 		writeField(writer, "output_format", "png")
+		if input.Config.TransparentBackground == "true" {
+			writeField(writer, "background", "transparent")
+		}
 		if input.Config.Quality != "" {
 			writeField(writer, "quality", normalizeImageQuality(input.Config.Quality))
 		}
@@ -363,6 +370,9 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 			"n":               1,
 			"response_format": "b64_json",
 			"output_format":   "png",
+		}
+		if input.Config.TransparentBackground == "true" {
+			body["background"] = "transparent"
 		}
 		if input.Config.Quality != "" {
 			body["quality"] = normalizeImageQuality(input.Config.Quality)
@@ -1760,6 +1770,12 @@ func isGrokVideoConfig(config providerConfig) bool {
 
 func isArkPlanVideoConfig(config providerConfig) bool {
 	return strings.Contains(strings.ToLower(config.BaseURL), "/api/plan/v3")
+}
+
+// 透明背景必须按模型能力显式开放，避免上游静默忽略参数后返回不透明图片。
+func supportsTransparentImageBackground(config providerConfig) bool {
+	model := strings.ToLower(strings.TrimSpace(config.Model))
+	return strings.EqualFold(strings.TrimSpace(config.APIFormat), "openai") && (model == "gpt-image-1" || strings.HasPrefix(model, "gpt-image-1-") || strings.HasPrefix(model, "gpt-image-1."))
 }
 
 func normalizeImageQuality(value string) string {

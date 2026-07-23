@@ -29,7 +29,8 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
-    const summary = showCount ? `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)} · ${count} 张` : `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)}`;
+    const transparentLabel = config.transparentBackground === "true" ? " · 透明" : "";
+    const summary = showCount ? `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)} · ${count} 张${transparentLabel}` : `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)}${transparentLabel}`;
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);

@@ -107,6 +107,7 @@ export function backendProviderConfig(config: AiConfig) {
         model: requestConfig.model,
         size: config.size,
         quality: config.quality,
+        transparentBackground: config.transparentBackground,
         count: config.count,
         videoSeconds: config.videoSeconds,
         vquality: config.vquality,
@@ -177,6 +178,7 @@ export function buildImageGenerationMetadata(type: CanvasImageGenerationType, co
         model: config.model,
         size: config.size,
         quality: config.quality,
+        transparentBackground: config.transparentBackground,
         count,
         references: references.map(referenceUrl).filter((url): url is string => Boolean(url)),
     };
@@ -338,6 +340,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         model,
         quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
         size: node?.metadata?.size || config.size || defaultConfig.size,
+        transparentBackground: (node?.metadata?.transparentBackground || config.transparentBackground) === "true" ? "true" : "false",
         videoSeconds: normalizeVideoDuration(node?.metadata?.seconds || config.videoSeconds || defaultConfig.videoSeconds),
         vquality: normalizeVideoResolution(node?.metadata?.vquality || config.vquality || defaultConfig.vquality),
         videoGenerateAudio: node?.metadata?.generateAudio || config.videoGenerateAudio || defaultConfig.videoGenerateAudio,

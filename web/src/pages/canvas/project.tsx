@@ -1030,6 +1030,8 @@ function InfiniteCanvasPage() {
                     prompt: "",
                     model: effectiveConfig.imageModel || effectiveConfig.model,
                     size: effectiveConfig.size,
+                    quality: effectiveConfig.quality,
+                    transparentBackground: effectiveConfig.transparentBackground,
                     count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count),
                 },
             );

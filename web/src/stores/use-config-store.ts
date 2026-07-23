@@ -55,6 +55,7 @@ export type AiConfig = {
     audioModels: string[];
     quality: string;
     size: string;
+    transparentBackground: string;
     count: string;
     canvasImageCount: string;
 };
@@ -101,6 +102,7 @@ export const defaultConfig: AiConfig = {
     audioModels: ["default::gpt-4o-mini-tts"],
     quality: "auto",
     size: "1:1",
+    transparentBackground: "false",
     count: "1",
     canvasImageCount: "1",
 };
@@ -274,6 +276,7 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
             vquality: normalizeVideoResolution(config.vquality),
             videoGenerateAudio: config.videoGenerateAudio || "true",
             videoWatermark: config.videoWatermark || "false",
+            transparentBackground: config.transparentBackground === "true" ? "true" : "false",
             canvasImageCount: config.canvasImageCount || defaultConfig.canvasImageCount,
             imageModels,
             videoModels,
@@ -377,6 +380,13 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     const model = decoded?.model || value;
     const matched = decoded ? config.channels.find((channel) => channel.id === decoded.channelId) : config.channels.find((channel) => channel.models.includes(model));
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
+}
+
+// 透明背景必须按模型能力显式开放，避免代理接口静默忽略参数后返回不透明图片。
+export function supportsTransparentImageBackground(config: AiConfig, value: string) {
+    const channel = resolveModelChannel(config, value);
+    const model = modelOptionName(value).trim().toLowerCase();
+    return channel.apiFormat === "openai" && (model === "gpt-image-1" || model.startsWith("gpt-image-1-") || model.startsWith("gpt-image-1."));
 }
 
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
