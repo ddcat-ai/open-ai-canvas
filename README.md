@@ -89,6 +89,16 @@ sudo docker compose --env-file .env -f docker-compose.deploy.yml logs -f --tail=
 
 默认拉取 `ghcr.io/ddcat-ai/open-ai-canvas-web:latest` 和 `ghcr.io/ddcat-ai/open-ai-canvas-backend:latest`。发布版本还会生成去掉 `v` 前缀的版本标签；如需固定版本，可在 `.env` 中设置 `CANVAS_IMAGE_TAG=1.0.2`。
 
+### 直接使用 GitHub Packages 镜像
+
+如果服务器不需要源码目录，可以使用只拉取 GitHub Container Registry（GHCR）镜像的快速脚本。脚本会下载部署 Compose 文件，不会 clone Git 仓库；首次执行仍会自动安装 Docker、生成 `/opt/open-ai-canvas/.env` 并启动全部服务：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
+```
+
+默认使用 `latest` 标签。固定版本或修改端口可在首次执行后编辑 `/opt/open-ai-canvas/.env`，然后重新执行脚本；使用私有 GHCR 镜像时，请先执行 `docker login ghcr.io`，或在直接运行脚本时提供 `GHCR_USERNAME` 和 `GHCR_TOKEN` 环境变量完成登录。
+
 部署配置和 PostgreSQL 密码保存在 `/opt/open-ai-canvas/.env`，不要发送给他人，也不要删除 `backend-data`、`postgres-data` 和 `redis-data` 数据卷。数据卷持久化不等于备份，请定期备份 PostgreSQL 和上传文件。直接使用 IP 访问仅适合首次配置；公网长期使用必须绑定域名并配置 HTTPS。
 
 ## 本地开发
