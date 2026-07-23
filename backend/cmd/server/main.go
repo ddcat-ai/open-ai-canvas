@@ -71,6 +71,8 @@ func main() {
 	handler.RegisterAdminAnalyticsRoutes(api, svc)
 	handler.RegisterAnnouncementRoutes(api, svc)
 	handler.RegisterFinanceRoutes(api, svc)
+	// 登录态模型目录代理：避免浏览器直连各上游时分别处理 CORS。
+	handler.RegisterChannelModelRoutes(api, svc)
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterCustomRelayRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
