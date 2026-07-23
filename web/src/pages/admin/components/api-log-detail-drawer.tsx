@@ -33,6 +33,7 @@ export function ApiLogDetailDrawer({ logId, onClose }: { logId: string | null; o
               ["方法与路径", `${log.method} ${log.path}`],
               ["HTTP 状态", String(log.statusCode || "--")],
               ["耗时", `${log.durationMs} ms`],
+              ["渠道并发上限", log.concurrencyLimit ? String(log.concurrencyLimit) : "--"],
               ["Token", log.usageAvailable ? `${log.inputTokens} 输入 / ${log.outputTokens} 输出 / ${log.cachedTokens} 缓存` : "未返回"],
               ["错误码", log.errorCode || "--"],
               ["错误详情", log.error || "--"],

@@ -18,11 +18,50 @@ type localRateEntry struct {
 	count   int
 }
 
+const (
+	minChannelConcurrencyLimit     = 1
+	maxChannelConcurrencyLimit     = 100
+	defaultChannelConcurrencyValue = 3
+)
+
+type channelSlotError struct {
+	scope string
+	limit int
+	err   error
+}
+
+func (e channelSlotError) Error() string {
+	if errors.Is(e.err, context.DeadlineExceeded) {
+		return fmt.Sprintf("等待渠道并发槽位超时（渠道 %s，并发上限 %d）", e.scope, e.limit)
+	}
+	if errors.Is(e.err, context.Canceled) {
+		return fmt.Sprintf("等待渠道并发槽位已取消（渠道 %s，并发上限 %d）", e.scope, e.limit)
+	}
+	return fmt.Sprintf("获取渠道并发配额失败（渠道 %s，并发上限 %d）：%v", e.scope, e.limit, e.err)
+}
+
+func (e channelSlotError) Unwrap() error { return e.err }
+
+func ChannelSlotFailureDetails(err error) (string, string) {
+	var slotErr channelSlotError
+	if !errors.As(err, &slotErr) {
+		return "", ""
+	}
+	if errors.Is(slotErr, context.DeadlineExceeded) {
+		return "channel_concurrency_wait_timeout", slotErr.Error()
+	}
+	if errors.Is(slotErr, context.Canceled) {
+		return "channel_concurrency_wait_cancelled", slotErr.Error()
+	}
+	return "channel_concurrency_unavailable", slotErr.Error()
+}
+
 type runtimeCoordinator struct {
 	redis      *redis.Client
 	instanceID string
 	localMu    sync.Mutex
 	localRate  map[string]localRateEntry
+	localSlots map[string]map[string]time.Time
 }
 
 var fixedWindowScript = redis.NewScript(`
@@ -40,7 +79,7 @@ return 1
 `)
 
 func newRuntimeCoordinator(dialect string) (*runtimeCoordinator, error) {
-	coordinator := &runtimeCoordinator{instanceID: newID(), localRate: map[string]localRateEntry{}}
+	coordinator := &runtimeCoordinator{instanceID: newID(), localRate: map[string]localRateEntry{}, localSlots: map[string]map[string]time.Time{}}
 	redisURL := strings.TrimSpace(os.Getenv("REDIS_URL"))
 	if redisURL == "" {
 		if dialect == "postgres" {
@@ -84,7 +123,30 @@ func (c *runtimeCoordinator) allow(ctx context.Context, key string, limit int, w
 
 func (c *runtimeCoordinator) acquire(ctx context.Context, scope string, limit int, ttl time.Duration) (func(), bool, error) {
 	if c.redis == nil {
-		return func() {}, true, nil
+		c.localMu.Lock()
+		now := time.Now()
+		slots := c.localSlots[scope]
+		if slots == nil {
+			slots = map[string]time.Time{}
+			c.localSlots[scope] = slots
+		}
+		for token, expiresAt := range slots {
+			if !expiresAt.After(now) {
+				delete(slots, token)
+			}
+		}
+		if len(slots) >= limit {
+			c.localMu.Unlock()
+			return nil, false, nil
+		}
+		token := c.instanceID + ":" + newID()
+		slots[token] = now.Add(ttl)
+		c.localMu.Unlock()
+		return func() {
+			c.localMu.Lock()
+			delete(c.localSlots[scope], token)
+			c.localMu.Unlock()
+		}, true, nil
 	}
 	// 有过期分数的有序集合避免实例崩溃后永久占槽，业务数据库仍保存任务与账本真相。
 	key := "canvas:slots:" + scope
@@ -95,6 +157,28 @@ func (c *runtimeCoordinator) acquire(ctx context.Context, scope string, limit in
 		return nil, false, err
 	}
 	return func() { _ = c.redis.ZRem(context.Background(), key, token).Err() }, true, nil
+}
+
+func (c *runtimeCoordinator) acquireWithWait(ctx context.Context, scope string, limit int, ttl time.Duration) (func(), error) {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		release, acquired, err := c.acquire(ctx, scope, limit, ttl)
+		if err != nil {
+			return nil, err
+		}
+		if acquired {
+			return release, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (c *runtimeCoordinator) circuitOpen(ctx context.Context, channelID string) (bool, error) {
@@ -131,6 +215,52 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+func defaultChannelConcurrencyLimit() int {
+	return effectiveChannelConcurrencyLimit(envInt("CANVAS_CHANNEL_CONCURRENCY", defaultChannelConcurrencyValue))
+}
+
+func effectiveChannelConcurrencyLimit(configured int) int {
+	if configured < minChannelConcurrencyLimit || configured > maxChannelConcurrencyLimit {
+		return defaultChannelConcurrencyValue
+	}
+	return configured
+}
+
+func (s *Service) AcquireChannelSlot(ctx context.Context, channelID string, fallbackScope string, ttl time.Duration) (func(), int, error) {
+	setting, err := s.runtimeConcurrencySetting()
+	limit := defaultChannelConcurrencyLimit()
+	if err != nil {
+		return nil, limit, channelSlotError{scope: firstNonEmpty(strings.TrimSpace(channelID), strings.TrimSpace(fallbackScope), "unknown"), limit: limit, err: fmt.Errorf("读取全局并发配置失败：%w", err)}
+	}
+	limit = setting.ChannelConcurrency
+	scope := strings.TrimSpace(channelID)
+	if scope != "" {
+		channel, err := s.repo.SystemChannel(scope)
+		if err != nil {
+			return nil, limit, channelSlotError{scope: scope, limit: limit, err: fmt.Errorf("读取渠道并发配置失败：%w", err)}
+		}
+		if channel.ConcurrencyLimit > 0 {
+			if channel.ConcurrencyLimit < minChannelConcurrencyLimit || channel.ConcurrencyLimit > maxChannelConcurrencyLimit {
+				return nil, limit, channelSlotError{scope: scope, limit: limit, err: errors.New("渠道并发配置超出 1-100 范围")}
+			}
+			limit = channel.ConcurrencyLimit
+		}
+	} else {
+		scope = strings.TrimSpace(fallbackScope)
+	}
+	if scope == "" {
+		return nil, limit, channelSlotError{scope: "unknown", limit: limit, err: errors.New("渠道并发范围为空")}
+	}
+	if s.coordinator == nil {
+		return nil, limit, channelSlotError{scope: scope, limit: limit, err: errors.New("运行时协调器未初始化")}
+	}
+	release, err := s.coordinator.acquireWithWait(ctx, "channel:"+scope, limit, ttl)
+	if err != nil {
+		return nil, limit, channelSlotError{scope: scope, limit: limit, err: err}
+	}
+	return release, limit, nil
 }
 
 func (s *Service) ValidateRuntime() error {

@@ -120,6 +120,8 @@ bun run dev
 
 打开 `http://localhost:3000`，注册首个管理员账号，再在系统设置中配置渠道和模型。
 
+任务 Worker 和全局渠道并发可在“系统配置 → 任务并发”中热更新；系统渠道可选择跟随全局值，或单独设置 `1-100` 的最大并发数。未保存后台配置时分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
+
 Docker 一体化运行：
 
 ```bash

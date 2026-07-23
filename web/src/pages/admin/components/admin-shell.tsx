@@ -1,5 +1,5 @@
 import { Tooltip } from "antd";
-import { BarChart3, BellRing, Coins, FileClock, HardDrive, Home, Mail, MessageSquareText, PanelLeftClose, PanelLeftOpen, RadioTower, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
+import { BarChart3, BellRing, Coins, FileClock, Gauge, HardDrive, Home, Mail, MessageSquareText, PanelLeftClose, PanelLeftOpen, RadioTower, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
 
@@ -40,6 +40,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
+            { path: "/admin/settings/concurrency", label: "任务并发", description: "Worker 与渠道请求调度", icon: <Gauge className="size-4" />, secondary: true },
             { path: "/admin/settings/access", label: "登录与注册", description: "注册策略与 Linux.do", icon: <ShieldCheck className="size-4" />, secondary: true },
             { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码 SMTP", icon: <Mail className="size-4" />, secondary: true },
             { path: "/admin/settings/storage", label: "存储服务", description: "OSS 与资源存储", icon: <HardDrive className="size-4" />, secondary: true },

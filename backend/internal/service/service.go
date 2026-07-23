@@ -160,10 +160,14 @@ func New(repo *repository.Repository, dataDir string) *Service {
 
 func (s *Service) StartWorker() {
 	go func() {
-		workerConcurrency := envInt("CANVAS_WORKER_CONCURRENCY", taskWorkerConcurrency)
-		slots := make(chan struct{}, workerConcurrency)
+		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
-			for len(slots) < cap(slots) {
+			setting, err := s.runtimeConcurrencySetting()
+			if err != nil {
+				return
+			}
+			workerConcurrency := setting.WorkerConcurrency
+			for len(slots) < workerConcurrency {
 				releaseGlobal, acquired, err := s.coordinator.acquire(context.Background(), "workers", workerConcurrency, 45*time.Minute)
 				if err != nil || !acquired {
 					return
@@ -697,6 +701,10 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		result, err = s.persistGeneratedMediaResult(task.UserID, result)
 	}
 	if err != nil {
+		channelSlotFailedBeforeRequest := false
+		if code, _ := ChannelSlotFailureDetails(err); code != "" {
+			channelSlotFailedBeforeRequest = true
+		}
 		select {
 		case leaseErr := <-leaseLost:
 			_ = s.log(task.UserID, task.ID, "warn", "任务租约失效，等待其他 worker 恢复", leaseErr.Error())
@@ -709,7 +717,11 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 			task.Error = "任务已取消"
 			task.CompletedAt = ptr(time.Now())
 			_ = s.repo.Save(task)
-			_ = s.MarkBillingUncertain(task.BillingOrderID, "任务取消时上游费用状态不明确")
+			if channelSlotFailedBeforeRequest {
+				_ = s.RefundBilling(task.BillingOrderID, "等待渠道槽位期间取消，上游请求未发出")
+			} else {
+				_ = s.MarkBillingUncertain(task.BillingOrderID, "任务取消时上游费用状态不明确")
+			}
 			_ = s.markSessionFailed(*task, "会话任务已取消。")
 			_ = s.log(task.UserID, task.ID, "warn", "任务已取消", "")
 			return nil
@@ -722,7 +734,7 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_ = s.repo.Save(task)
-		if providerSucceeded || s.BillingFailureRequiresReview(task.BillingOrderID, task.ID, err) {
+		if providerSucceeded || (!channelSlotFailedBeforeRequest && s.BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)) {
 			_ = s.MarkBillingUncertain(task.BillingOrderID, task.Error)
 		} else {
 			_ = s.RefundBilling(task.BillingOrderID, task.Error)

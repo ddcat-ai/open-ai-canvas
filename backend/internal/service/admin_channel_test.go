@@ -14,11 +14,12 @@ func TestChannelFromRequestStoresInterfaceType(t *testing.T) {
 	defer server.Close()
 
 	channel, err := channelFromRequest(ChannelRequest{
-		Name:          "NewAPI 渠道 1",
-		BaseURL:       server.URL + "/v1",
-		APIKey:        "secret",
-		InterfaceType: "newapi-channel-1",
-		Models:        []string{"seedance-2.0"},
+		Name:             "NewAPI 渠道 1",
+		BaseURL:          server.URL + "/v1",
+		APIKey:           "secret",
+		InterfaceType:    "newapi-channel-1",
+		ConcurrencyLimit: intPtr(6),
+		Models:           []string{"seedance-2.0"},
 	}, model.ModelChannel{})
 	if err != nil {
 		t.Fatalf("channelFromRequest() error = %v", err)
@@ -28,6 +29,9 @@ func TestChannelFromRequestStoresInterfaceType(t *testing.T) {
 	}
 	if channel.APIFormat != "openai" {
 		t.Fatalf("APIFormat = %q, want openai", channel.APIFormat)
+	}
+	if channel.ConcurrencyLimit != 6 {
+		t.Fatalf("ConcurrencyLimit = %d, want 6", channel.ConcurrencyLimit)
 	}
 }
 
@@ -70,3 +74,29 @@ func TestChannelFromRequestRejectsUnknownInterfaceType(t *testing.T) {
 		t.Fatal("channelFromRequest() error = nil")
 	}
 }
+
+func TestChannelFromRequestRejectsInvalidConcurrencyLimit(t *testing.T) {
+	for _, limit := range []int{0, 101} {
+		_, err := channelFromRequest(ChannelRequest{Name: "Bad", BaseURL: "https://example.com/v1", InterfaceType: "newapi", ConcurrencyLimit: &limit}, model.ModelChannel{})
+		if err == nil {
+			t.Fatalf("channelFromRequest() concurrencyLimit = %d, error = nil", limit)
+		}
+	}
+}
+
+func TestRuntimeConcurrencyUsesEnvironmentFallback(t *testing.T) {
+	t.Setenv("CANVAS_CHANNEL_CONCURRENCY", "7")
+	t.Setenv("CANVAS_WORKER_CONCURRENCY", "9")
+	setting := runtimeConcurrencyFromEnvironment()
+	if setting.ChannelConcurrency != 7 || setting.WorkerConcurrency != 9 {
+		t.Fatalf("runtimeConcurrencyFromEnvironment() = %#v", setting)
+	}
+
+	useGlobal := true
+	channel, err := channelFromRequest(ChannelRequest{Name: "Global", BaseURL: "https://example.com/v1", InterfaceType: "newapi", UseGlobalConcurrency: &useGlobal}, model.ModelChannel{ConcurrencyLimit: 4})
+	if err != nil || channel.ConcurrencyLimit != 0 {
+		t.Fatalf("global concurrency channel = %#v, error = %v", channel, err)
+	}
+}
+
+func intPtr(value int) *int { return &value }

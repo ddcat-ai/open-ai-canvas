@@ -61,6 +61,7 @@ export type ApiCallLog = {
     currency?: string;
     errorCode?: string;
     error?: string;
+    concurrencyLimit: number;
     upstreamUrl: string;
     createdAt: string;
 };
@@ -196,6 +197,14 @@ export type AdminOSSSetting = {
     updatedAt?: string;
 };
 
+export type RuntimeConcurrencySetting = {
+    workerConcurrency: number;
+    channelConcurrency: number;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
 type BackendEnvelope<T> = { code: number; data: T; msg: string };
 
 async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
@@ -284,11 +293,11 @@ export function listAdminChannels(params: AdminListParams = {}) {
     return request<{ channels: ModelChannel[]; total: number; page: number; limit: number }>(api.get("/admin/channels", { params }));
 }
 
-export function createAdminChannel(input: Partial<ModelChannel>) {
+export function createAdminChannel(input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
     return request<{ channel: ModelChannel }>(api.post("/admin/channels", input));
 }
 
-export function updateAdminChannel(id: string, input: Partial<ModelChannel>) {
+export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
     return request<{ channel: ModelChannel }>(api.patch(`/admin/channels/${encodeURIComponent(id)}`, input));
 }
 
@@ -318,6 +327,14 @@ export function getAdminOSSSetting() {
 
 export function updateAdminOSSSetting(input: Partial<AdminOSSSetting>) {
     return request<{ setting: AdminOSSSetting }>(api.patch("/admin/settings/oss", input));
+}
+
+export function getAdminRuntimeConcurrencySetting() {
+    return request<{ setting: RuntimeConcurrencySetting }>(api.get("/admin/settings/concurrency"));
+}
+
+export function updateAdminRuntimeConcurrencySetting(input: Pick<RuntimeConcurrencySetting, "workerConcurrency" | "channelConcurrency">) {
+    return request<{ setting: RuntimeConcurrencySetting }>(api.patch("/admin/settings/concurrency", input));
 }
 
 export function listAdminApiLogs(params: AdminListParams = {}) {

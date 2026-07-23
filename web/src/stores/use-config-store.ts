@@ -20,6 +20,7 @@ export type ModelChannel = {
     scope?: "system" | "user";
     enabled?: boolean;
     hasApiKey?: boolean;
+    concurrencyLimit?: number;
     modelCosts?: Array<{
         model: string;
         capability: ModelCapability;
