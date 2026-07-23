@@ -218,6 +218,11 @@ export function listAdminChannelModels(channelId: string) {
     return request<{ models: ChannelModel[] }>(api.get(`/admin/channels/${encodeURIComponent(channelId)}/models`));
 }
 
+// 管理员从上游拉取模型目录；服务端只导入缺失项，价格和启用仍需人工确认。
+export function fetchAdminChannelModels(channelId: string) {
+    return request<{ models: string[]; added: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`));
+}
+
 export function createAdminChannelModel(channelId: string, input: Omit<ChannelModel, "id" | "channelId" | "priceVersion" | "createdAt" | "updatedAt">) {
     return request<{ model: ChannelModel }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models`, input));
 }
