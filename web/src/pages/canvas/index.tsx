@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Empty, Input, Select } from "antd";
 import { Download, FileUp, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 
@@ -13,7 +14,8 @@ import type { CanvasExportFile } from "@/types/canvas-export";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
-import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
+import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { listProjects } from "@/services/api/projects";
 
 export default function CanvasPage() {
     const { message } = App.useApp();
@@ -30,6 +32,10 @@ export default function CanvasPage() {
     const importProject = useCanvasStore((state) => state.importProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
+    const updateProject = useCanvasStore((state) => state.updateProject);
+    const [associationOpen, setAssociationOpen] = useState(false);
+    const [associationProjectId, setAssociationProjectId] = useState("");
+    const projectQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
 
     const mode = searchParams.get("mode");
     const agentMode = mode === "new" || mode === "recent" || mode === "choose";
@@ -50,6 +56,18 @@ export default function CanvasPage() {
         return values;
     }, [keyword, projects, sort]);
     const visibleProjects = filteredProjects.slice((page - 1) * pageSize, page * pageSize);
+    const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
+    const associateSelected = async (nextProjectId = associationProjectId) => {
+        const projectId = nextProjectId || undefined;
+        selectedIds.forEach((id) => updateProject(id, { projectId }));
+        try {
+            await saveRemoteUserDataNow();
+            message.success(projectId ? "已加入项目" : "已移出项目，画布仍保留");
+            setAssociationOpen(false);
+        } catch (error) {
+            message.error(error instanceof Error ? `画布关系保存失败：${error.message}` : "画布关系保存失败");
+        }
+    };
     const importCanvas = async (file?: File) => {
         if (!file) return;
         try {
@@ -101,6 +119,8 @@ export default function CanvasPage() {
                         <>
                         {selectedIds.length ? (
                             <>
+                                <Button disabled={!hydrated || projectQuery.isLoading} onClick={() => { setAssociationProjectId(selectedProjects[0]?.projectId || ""); setAssociationOpen(true); }}>加入项目</Button>
+                                {selectedProjects.some((project) => project.projectId) ? <Button disabled={!hydrated} onClick={() => { setAssociationProjectId(""); void associateSelected(""); }}>移出项目</Button> : null}
                                 <Button disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>导出选中</Button>
                                 <Button danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>删除选中</Button>
                             </>
@@ -139,6 +159,10 @@ export default function CanvasPage() {
                 <PaginationBar current={page} pageSize={pageSize} total={filteredProjects.length} pageSizeOptions={[12, 24, 48]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
 
                 <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
+                <Modal title="加入项目" open={associationOpen} okText="保存关联" cancelText="取消" okButtonProps={{ disabled: !associationProjectId, loading: projectQuery.isFetching }} onCancel={() => setAssociationOpen(false)} onOk={() => void associateSelected()}>
+                    <p className="mb-3 text-sm text-foreground/60">选中的画布会保留原有节点和本地媒体，只增加项目关联。</p>
+                    <Select className="w-full" value={associationProjectId || undefined} placeholder="选择项目" options={(projectQuery.data?.projects || []).map((item) => ({ label: item.project.name, value: item.project.id }))} onChange={setAssociationProjectId} />
+                </Modal>
         </WorkspacePage>
     );
 }

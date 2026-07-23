@@ -24,6 +24,8 @@ import RouteErrorPage from "@/pages/route-error";
 import SkillsPage from "@/pages/skills";
 import TasksPage from "@/pages/tasks";
 import WalletPage from "@/pages/wallet";
+import ProjectsPage from "@/pages/projects";
+import ProjectDetailPage from "@/pages/projects/detail";
 
 export const router = createBrowserRouter([
     {
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
             { path: "/assets", element: <RequireAuth><AssetsPage /></RequireAuth> },
             { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
             { path: "/wallet", element: <RequireAuth><WalletPage /></RequireAuth> },
+            { path: "/projects", element: <RequireAuth><ProjectsPage /></RequireAuth> },
+            { path: "/projects/:projectId", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
             { path: "/canvas", element: <RequireAuth><CanvasPage /></RequireAuth> },
             { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
             {

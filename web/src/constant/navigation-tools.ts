@@ -1,9 +1,14 @@
-import { BookOpenCheck, Images, ListChecks, Maximize2 } from "lucide-react";
+import { BookOpenCheck, FolderKanban, Images, ListChecks, Maximize2 } from "lucide-react";
 
 export const navigationTools = [
     {
+        slug: "projects",
+        label: "项目",
+        icon: FolderKanban,
+    },
+    {
         slug: "canvas",
-        label: "我的画布",
+        label: "游离画布",
         icon: Maximize2,
     },
     {

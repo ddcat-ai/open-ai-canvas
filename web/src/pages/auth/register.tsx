@@ -121,6 +121,6 @@ function Notice({ icon, tone, children }: { icon: ReactNode; tone: "cyan" | "amb
 }
 
 function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/canvas";
+    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/projects";
     return value;
 }

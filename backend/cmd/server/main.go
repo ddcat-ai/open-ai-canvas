@@ -77,6 +77,7 @@ func main() {
 	handler.RegisterSessionRoutes(api, svc)
 	handler.RegisterSkillRoutes(api, svc)
 	handler.RegisterUserDataRoutes(api, svc)
+	handler.RegisterProjectRoutes(api, svc)
 	handler.RegisterCanvasShareRoutes(api, svc)
 
 	addr := env("CANVAS_BACKEND_ADDR", ":8080")

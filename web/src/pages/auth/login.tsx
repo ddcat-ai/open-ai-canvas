@@ -53,6 +53,6 @@ function AuthField({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/canvas";
+    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/projects";
     return value;
 }

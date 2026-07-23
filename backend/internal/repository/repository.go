@@ -695,7 +695,7 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 	result := r.db.Model(&model.CanvasProject{}).
 		Where("id = ? AND user_id = ?", project.ID, project.UserID).
-		Updates(map[string]any{"title": project.Title, "payload_json": project.PayloadJSON, "updated_at": project.UpdatedAt})
+		Updates(map[string]any{"project_id": project.ProjectID, "title": project.Title, "payload_json": project.PayloadJSON, "updated_at": project.UpdatedAt})
 	if result.Error != nil || result.RowsAffected > 0 {
 		return result.Error
 	}
@@ -704,6 +704,100 @@ func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 
 func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 	return r.db.Delete(&model.CanvasProject{}, "id = ? AND user_id = ?", id, userID).Error
+}
+
+func (r *Repository) Projects(userID string) ([]model.Project, error) {
+	var projects []model.Project
+	err := r.db.Where("user_id = ?", userID).Order("updated_at desc").Find(&projects).Error
+	return projects, err
+}
+
+func (r *Repository) ProjectForUser(userID string, id string) (*model.Project, error) {
+	var project model.Project
+	if err := r.db.First(&project, "id = ? AND user_id = ?", id, userID).Error; err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+func (r *Repository) CreateProject(project *model.Project) error {
+	return r.db.Create(project).Error
+}
+
+func (r *Repository) UpdateProject(project *model.Project) error {
+	return r.db.Model(&model.Project{}).Where("id = ? AND user_id = ?", project.ID, project.UserID).Updates(map[string]any{
+		"name": project.Name, "type": project.Type, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
+		"description": project.Description, "status": project.Status, "revision": project.Revision, "updated_at": project.UpdatedAt,
+	}).Error
+}
+
+func (r *Repository) DeleteProject(userID string, id string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND project_id = ?", userID, id).Update("project_id", "").Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", id).Delete(&model.CanvasUnitLink{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", id).Delete(&model.ProjectUnit{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Project{}, "id = ? AND user_id = ?", id, userID).Error
+	})
+}
+
+func (r *Repository) ProjectUnits(projectID string) ([]model.ProjectUnit, error) {
+	var units []model.ProjectUnit
+	err := r.db.Where("project_id = ?", projectID).Order("position asc, created_at asc").Find(&units).Error
+	return units, err
+}
+
+func (r *Repository) CreateProjectUnit(unit *model.ProjectUnit) error {
+	return r.db.Create(unit).Error
+}
+
+func (r *Repository) ProjectUnit(projectID string, id string) (*model.ProjectUnit, error) {
+	var unit model.ProjectUnit
+	if err := r.db.First(&unit, "id = ? AND project_id = ?", id, projectID).Error; err != nil {
+		return nil, err
+	}
+	return &unit, nil
+}
+
+func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit) error {
+	return r.db.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unit.ID, unit.ProjectID).Updates(map[string]any{
+		"parent_id": unit.ParentID, "title": unit.Title, "source_text": unit.SourceText, "status": unit.Status, "position": unit.Position, "updated_at": unit.UpdatedAt,
+	}).Error
+}
+
+func (r *Repository) DeleteProjectUnit(projectID string, id string) error {
+	return r.db.Delete(&model.ProjectUnit{}, "id = ? AND project_id = ?", id, projectID).Error
+}
+
+func (r *Repository) CanvasUnitLink(projectID string, canvasID string, unitID string) (*model.CanvasUnitLink, error) {
+	var link model.CanvasUnitLink
+	if err := r.db.First(&link, "project_id = ? AND canvas_id = ? AND unit_id = ?", projectID, canvasID, unitID).Error; err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+func (r *Repository) UpsertCanvasUnitLink(link *model.CanvasUnitLink) error {
+	result := r.db.Model(&model.CanvasUnitLink{}).Where("project_id = ? AND canvas_id = ? AND unit_id = ?", link.ProjectID, link.CanvasID, link.UnitID).Updates(map[string]any{"role": link.Role})
+	if result.Error != nil || result.RowsAffected > 0 {
+		return result.Error
+	}
+	return r.db.Create(link).Error
+}
+
+func (r *Repository) ProjectCanvasSummaries(userID string, projectID string) ([]model.CanvasProject, error) {
+	var canvases []model.CanvasProject
+	err := r.db.Select("id", "user_id", "project_id", "title", "created_at", "updated_at").Where("user_id = ? AND project_id = ?", userID, projectID).Order("updated_at desc").Find(&canvases).Error
+	return canvases, err
+}
+
+func (r *Repository) AssignCanvasToProject(userID string, canvasID string, projectID string) error {
+	return r.db.Model(&model.CanvasProject{}).Where("id = ? AND user_id = ?", canvasID, userID).Update("project_id", projectID).Error
 }
 
 func (r *Repository) CanvasShareForProject(userID string, projectID string) (*model.CanvasShare, error) {

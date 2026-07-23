@@ -9,6 +9,7 @@ import type { DirectorScene } from "@/types/director";
 
 export type CanvasProject = {
     id: string;
+    projectId?: string;
     title: string;
     createdAt: string;
     updatedAt: string;
@@ -25,13 +26,13 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
-    createProject: (title?: string) => string;
+    createProject: (title?: string, projectId?: string) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "directorScenes">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "directorScenes">>) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -82,11 +83,12 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
-            createProject: (title = "未命名画布") => {
+            createProject: (title = "未命名画布", projectId) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const project: CanvasProject = {
                     id,
+                    projectId,
                     title,
                     createdAt: now,
                     updatedAt: now,
@@ -106,6 +108,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 const now = new Date().toISOString();
                 const project: CanvasProject = {
                     id: nanoid(),
+                    projectId: source.projectId,
                     title: source.title || "导入画布",
                     createdAt: source.createdAt || now,
                     updatedAt: now,

@@ -281,6 +281,7 @@ func canvasProjectFromJSON(userID string, raw json.RawMessage) (model.CanvasProj
 	var payload struct {
 		ID        string `json:"id"`
 		Title     string `json:"title"`
+		ProjectID string `json:"projectId"`
 		CreatedAt string `json:"createdAt"`
 		UpdatedAt string `json:"updatedAt"`
 	}
@@ -297,6 +298,7 @@ func canvasProjectFromJSON(userID string, raw json.RawMessage) (model.CanvasProj
 	return model.CanvasProject{
 		ID:          id,
 		UserID:      userID,
+		ProjectID:   strings.TrimSpace(payload.ProjectID),
 		Title:       strings.TrimSpace(payload.Title),
 		PayloadJSON: string(raw),
 		CreatedAt:   createdAt,

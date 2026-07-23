@@ -15,6 +15,9 @@ type CreditLedgerType string
 type RedeemCodeStatus string
 type AnnouncementStatus string
 type AnnouncementLevel string
+type ProjectStatus string
+type ProjectUnitKind string
+type ProjectUnitStatus string
 
 // AdminAuditEvent 只允许追加，用于还原管理员写操作，禁止作为可编辑业务状态使用。
 type AdminAuditEvent struct {
@@ -90,6 +93,16 @@ const (
 	AnnouncementLevelSuccess  AnnouncementLevel = "success"
 	AnnouncementLevelWarning  AnnouncementLevel = "warning"
 	AnnouncementLevelCritical AnnouncementLevel = "critical"
+
+	ProjectStatusActive   ProjectStatus = "active"
+	ProjectStatusArchived ProjectStatus = "archived"
+
+	ProjectUnitKindChapter ProjectUnitKind = "chapter"
+	ProjectUnitKindEpisode ProjectUnitKind = "episode"
+
+	ProjectUnitStatusDraft     ProjectUnitStatus = "draft"
+	ProjectUnitStatusReady     ProjectUnitStatus = "ready"
+	ProjectUnitStatusCompleted ProjectUnitStatus = "completed"
 )
 
 type User struct {
@@ -401,9 +414,47 @@ type Asset struct {
 	UpdatedAt   time.Time `json:"updatedAt" gorm:"index:idx_assets_user_updated,priority:2"`
 }
 
+// Project 是短剧领域聚合根；CanvasProject 仍代表可游离的画布文档。
+type Project struct {
+	ID          string        `json:"id" gorm:"primaryKey;size:36"`
+	UserID      string        `json:"userId" gorm:"index;size:36;uniqueIndex:idx_projects_user_name,priority:1"`
+	Name        string        `json:"name" gorm:"size:240;uniqueIndex:idx_projects_user_name,priority:2"`
+	Type        string        `json:"type" gorm:"size:32;index"`
+	AspectRatio string        `json:"aspectRatio" gorm:"size:16"`
+	SourceType  string        `json:"sourceType" gorm:"size:32"`
+	Description string        `json:"description" gorm:"type:text"`
+	Status      ProjectStatus `json:"status" gorm:"index;size:24"`
+	Revision    int64         `json:"revision"`
+	CreatedAt   time.Time     `json:"createdAt"`
+	UpdatedAt   time.Time     `json:"updatedAt" gorm:"index"`
+}
+
+type ProjectUnit struct {
+	ID         string            `json:"id" gorm:"primaryKey;size:36"`
+	ProjectID  string            `json:"projectId" gorm:"index;size:36"`
+	ParentID   string            `json:"parentId,omitempty" gorm:"index;size:36"`
+	Kind       ProjectUnitKind   `json:"kind" gorm:"index;size:24"`
+	Title      string            `json:"title" gorm:"size:240"`
+	SourceText string            `json:"sourceText" gorm:"type:text"`
+	Status     ProjectUnitStatus `json:"status" gorm:"index;size:24"`
+	Position   int               `json:"position"`
+	CreatedAt  time.Time         `json:"createdAt"`
+	UpdatedAt  time.Time         `json:"updatedAt"`
+}
+
+type CanvasUnitLink struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:1"`
+	CanvasID  string    `json:"canvasId" gorm:"index;size:80;uniqueIndex:idx_canvas_unit_links_unique,priority:2"`
+	UnitID    string    `json:"unitId" gorm:"index;size:36;uniqueIndex:idx_canvas_unit_links_unique,priority:3"`
+	Role      string    `json:"role" gorm:"size:32"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type CanvasProject struct {
 	ID          string    `json:"id" gorm:"primaryKey;size:80"`
 	UserID      string    `json:"userId" gorm:"index;size:36;index:idx_canvas_projects_user_updated,priority:1"`
+	ProjectID   string    `json:"projectId,omitempty" gorm:"index;size:36"`
 	Title       string    `json:"title" gorm:"size:240"`
 	PayloadJSON string    `json:"payloadJson" gorm:"type:text"`
 	CreatedAt   time.Time `json:"createdAt"`
