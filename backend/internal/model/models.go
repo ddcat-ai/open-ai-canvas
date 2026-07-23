@@ -147,18 +147,19 @@ type EmailVerificationCode struct {
 }
 
 type ModelChannel struct {
-	ID            string               `json:"id" gorm:"primaryKey;size:36"`
-	UserID        string               `json:"userId" gorm:"index;size:36"`
-	Scope         ChannelScope         `json:"scope" gorm:"index;size:24"`
-	Enabled       bool                 `json:"enabled" gorm:"index"`
-	Name          string               `json:"name" gorm:"size:80"`
-	BaseURL       string               `json:"baseUrl"`
-	APIKey        string               `json:"-"`
-	APIFormat     string               `json:"apiFormat" gorm:"size:24"`
-	InterfaceType ChannelInterfaceType `json:"interfaceType" gorm:"size:32"`
-	ModelsJSON    string               `json:"modelsJson" gorm:"type:text"`
-	CreatedAt     time.Time            `json:"createdAt"`
-	UpdatedAt     time.Time            `json:"updatedAt"`
+	ID               string               `json:"id" gorm:"primaryKey;size:36"`
+	UserID           string               `json:"userId" gorm:"index;size:36"`
+	Scope            ChannelScope         `json:"scope" gorm:"index;size:24"`
+	Enabled          bool                 `json:"enabled" gorm:"index"`
+	Name             string               `json:"name" gorm:"size:80"`
+	BaseURL          string               `json:"baseUrl"`
+	APIKey           string               `json:"-"`
+	APIFormat        string               `json:"apiFormat" gorm:"size:24"`
+	InterfaceType    ChannelInterfaceType `json:"interfaceType" gorm:"size:32"`
+	ConcurrencyLimit int                  `json:"concurrencyLimit"`
+	ModelsJSON       string               `json:"modelsJson" gorm:"type:text"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	UpdatedAt        time.Time            `json:"updatedAt"`
 }
 
 type ChannelModel struct {
@@ -207,6 +208,7 @@ type ApiCallLog struct {
 	Currency            string        `json:"currency" gorm:"size:12"`
 	ErrorCode           string        `json:"errorCode,omitempty" gorm:"index;size:80"`
 	Error               string        `json:"error"`
+	ConcurrencyLimit    int           `json:"concurrencyLimit"`
 	UpstreamURL         string        `json:"upstreamUrl"`
 	CreatedAt           time.Time     `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2"`
 }

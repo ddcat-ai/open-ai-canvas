@@ -439,6 +439,37 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
+	r.GET("/admin/settings/concurrency", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminRuntimeConcurrencySetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/concurrency", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.RuntimeConcurrencySettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateRuntimeConcurrencySetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
 	r.GET("/admin/api-logs", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -524,12 +555,35 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	}
 	modelName := proxyRequestModel(c.GetHeader("Content-Type"), body)
 	billingOrderID := ""
+	query := c.Request.URL.Query()
+	for _, key := range []string{"key", "api_key", "access_token", "token"} {
+		query.Del(key)
+	}
+	target := strings.TrimRight(channel.BaseURL, "/") + path
+	if encodedQuery := query.Encode(); encodedQuery != "" {
+		target += "?" + encodedQuery
+	}
+	if _, err := service.ValidateOutboundURL(target); err != nil {
+		_ = svc.RefundBilling(billingOrderID, "系统渠道地址校验失败")
+		failService(c, err)
+		return
+	}
+	// 同步代理与后台任务必须共享渠道槽位，否则两条入口会共同超过供应商并发上限。
+	releaseChannel, concurrencyLimit, err := svc.AcquireChannelSlot(c.Request.Context(), channel.ID, "", 36*time.Minute)
+	if err != nil {
+		log := apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, model.ApiCallStatusFailed, 0, time.Since(startedAt), err.Error(), concurrencyLimit)
+		log.ErrorCode, log.Error = service.ChannelSlotFailureDetails(err)
+		logSystemProxyCall(svc, log, nil)
+		fail(c, http.StatusServiceUnavailable, err)
+		return
+	}
+	defer releaseChannel()
 	if c.Request.Method == http.MethodPost {
 		capability := "text"
 		switch channel.InterfaceType {
 		case model.ChannelInterfaceOpenAIImage:
 			capability = "image"
-		case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
+		case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo:
 			capability = "video"
 		}
 		order, err := svc.ReserveProxyBilling(user.ID, channel.ID, strings.TrimPrefix(modelName, "models/"), capability, c.GetHeader("X-Canvas-Scene"), c.GetHeader("X-Idempotency-Key"))
@@ -543,19 +597,6 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 			failService(c, err)
 			return
 		}
-	}
-	query := c.Request.URL.Query()
-	for _, key := range []string{"key", "api_key", "access_token", "token"} {
-		query.Del(key)
-	}
-	target := strings.TrimRight(channel.BaseURL, "/") + path
-	if encodedQuery := query.Encode(); encodedQuery != "" {
-		target += "?" + encodedQuery
-	}
-	if _, err := service.ValidateOutboundURL(target); err != nil {
-		_ = svc.RefundBilling(billingOrderID, "系统渠道地址校验失败")
-		failService(c, err)
-		return
 	}
 	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, bytes.NewReader(body))
 	if err != nil {
@@ -583,7 +624,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()
 		_ = svc.MarkBillingUncertain(billingOrderID, "系统渠道连接中断，费用状态待核对")
-		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText), nil)
+		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
 		fail(c, http.StatusBadGateway, errors.New("系统渠道连接失败"))
 		return
 	}
@@ -597,7 +638,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		status = model.ApiCallStatusFailed
 		errorText = readErr.Error()
 		_ = svc.MarkBillingUncertain(billingOrderID, "系统渠道响应读取失败，费用状态待核对")
-		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText), nil)
+		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
 		fail(c, http.StatusBadGateway, errors.New("系统渠道响应读取失败"))
 		return
 	}
@@ -615,7 +656,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	} else {
 		_ = svc.RefundBilling(billingOrderID, "上游明确返回失败")
 	}
-	logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText), responseBody)
+	logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, c.Request.Method, path, target, body, status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
 	for _, key := range []string{"Content-Type", "Cache-Control", "Content-Disposition"} {
 		if value := resp.Header.Get(key); value != "" {
 			c.Header(key, value)
@@ -625,12 +666,12 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
 }
 
-func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID string, method string, path string, target string, body []byte, status model.ApiCallStatus, statusCode int, duration time.Duration, errorText string) model.ApiCallLog {
+func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID string, method string, path string, target string, body []byte, status model.ApiCallStatus, statusCode int, duration time.Duration, errorText string, concurrencyLimit int) model.ApiCallLog {
 	capability := "text"
 	switch channel.InterfaceType {
 	case model.ChannelInterfaceOpenAIImage:
 		capability = "image"
-	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
+	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo:
 		capability = "video"
 	}
 	requestKind := "create"
@@ -641,22 +682,23 @@ func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID st
 		}
 	}
 	return model.ApiCallLog{
-		UserID:         user.ID,
-		ChannelID:      channel.ID,
-		BillingOrderID: billingOrderID,
-		Source:         "system-channel",
-		Capability:     capability,
-		RequestKind:    requestKind,
-		Billable:       method == http.MethodPost,
-		APIFormat:      channel.APIFormat,
-		Method:         method,
-		Path:           path,
-		Model:          readPayloadModel(body),
-		Status:         status,
-		StatusCode:     statusCode,
-		DurationMs:     duration.Milliseconds(),
-		Error:          errorText,
-		UpstreamURL:    target,
+		UserID:           user.ID,
+		ChannelID:        channel.ID,
+		BillingOrderID:   billingOrderID,
+		Source:           "system-channel",
+		Capability:       capability,
+		RequestKind:      requestKind,
+		Billable:         method == http.MethodPost,
+		APIFormat:        channel.APIFormat,
+		Method:           method,
+		Path:             path,
+		Model:            readPayloadModel(body),
+		Status:           status,
+		StatusCode:       statusCode,
+		DurationMs:       duration.Milliseconds(),
+		Error:            errorText,
+		ConcurrencyLimit: concurrencyLimit,
+		UpstreamURL:      target,
 	}
 }
 

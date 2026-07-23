@@ -75,29 +75,32 @@ type AdminReferenceData struct {
 }
 
 type ChannelRequest struct {
-	Name          string   `json:"name"`
-	BaseURL       string   `json:"baseUrl"`
-	APIKey        string   `json:"apiKey"`
-	InterfaceType string   `json:"interfaceType"`
-	Models        []string `json:"models"`
-	Enabled       *bool    `json:"enabled"`
+	Name                 string   `json:"name"`
+	BaseURL              string   `json:"baseUrl"`
+	APIKey               string   `json:"apiKey"`
+	InterfaceType        string   `json:"interfaceType"`
+	ConcurrencyLimit     *int     `json:"concurrencyLimit"`
+	UseGlobalConcurrency *bool    `json:"useGlobalConcurrency"`
+	Models               []string `json:"models"`
+	Enabled              *bool    `json:"enabled"`
 }
 
 type PublicModelChannel struct {
-	ID            string                     `json:"id"`
-	UserID        string                     `json:"userId"`
-	Scope         model.ChannelScope         `json:"scope"`
-	Enabled       bool                       `json:"enabled"`
-	Name          string                     `json:"name"`
-	BaseURL       string                     `json:"baseUrl"`
-	APIKey        string                     `json:"apiKey"`
-	APIFormat     string                     `json:"apiFormat"`
-	InterfaceType model.ChannelInterfaceType `json:"interfaceType"`
-	Models        []string                   `json:"models"`
-	ModelCosts    []PublicChannelModelPrice  `json:"modelCosts"`
-	HasAPIKey     bool                       `json:"hasApiKey"`
-	CreatedAt     time.Time                  `json:"createdAt"`
-	UpdatedAt     time.Time                  `json:"updatedAt"`
+	ID               string                     `json:"id"`
+	UserID           string                     `json:"userId"`
+	Scope            model.ChannelScope         `json:"scope"`
+	Enabled          bool                       `json:"enabled"`
+	Name             string                     `json:"name"`
+	BaseURL          string                     `json:"baseUrl"`
+	APIKey           string                     `json:"apiKey"`
+	APIFormat        string                     `json:"apiFormat"`
+	InterfaceType    model.ChannelInterfaceType `json:"interfaceType"`
+	ConcurrencyLimit int                        `json:"concurrencyLimit"`
+	Models           []string                   `json:"models"`
+	ModelCosts       []PublicChannelModelPrice  `json:"modelCosts"`
+	HasAPIKey        bool                       `json:"hasApiKey"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	UpdatedAt        time.Time                  `json:"updatedAt"`
 }
 
 type PublicChannelModelPrice struct {
@@ -530,6 +533,16 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	// 系统渠道均由后端按已声明的接口类型分发，调用格式固定为 Bearer/OpenAI 兼容鉴权。
 	channel.APIFormat = "openai"
 	channel.InterfaceType = interfaceType
+	if req.UseGlobalConcurrency != nil && *req.UseGlobalConcurrency {
+		channel.ConcurrencyLimit = 0
+	} else if req.ConcurrencyLimit != nil {
+		if *req.ConcurrencyLimit < minChannelConcurrencyLimit || *req.ConcurrencyLimit > maxChannelConcurrencyLimit {
+			return channel, BadAuthRequest("最大并发数必须是 1-100 的整数")
+		}
+		channel.ConcurrencyLimit = *req.ConcurrencyLimit
+	} else if req.UseGlobalConcurrency != nil {
+		return channel, BadAuthRequest("请填写渠道最大并发数")
+	}
 	channel.ModelsJSON = string(modelsJSON)
 	if req.Enabled != nil {
 		channel.Enabled = *req.Enabled
@@ -611,20 +624,21 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		interfaceType = inferChannelInterfaceType(models)
 	}
 	return PublicModelChannel{
-		ID:            channel.ID,
-		UserID:        channel.UserID,
-		Scope:         channel.Scope,
-		Enabled:       channel.Enabled,
-		Name:          channel.Name,
-		BaseURL:       baseURL,
-		APIKey:        apiKey,
-		APIFormat:     channel.APIFormat,
-		InterfaceType: interfaceType,
-		Models:        models,
-		ModelCosts:    modelCosts,
-		HasAPIKey:     strings.TrimSpace(channel.APIKey) != "",
-		CreatedAt:     channel.CreatedAt,
-		UpdatedAt:     channel.UpdatedAt,
+		ID:               channel.ID,
+		UserID:           channel.UserID,
+		Scope:            channel.Scope,
+		Enabled:          channel.Enabled,
+		Name:             channel.Name,
+		BaseURL:          baseURL,
+		APIKey:           apiKey,
+		APIFormat:        channel.APIFormat,
+		InterfaceType:    interfaceType,
+		ConcurrencyLimit: channel.ConcurrencyLimit,
+		Models:           models,
+		ModelCosts:       modelCosts,
+		HasAPIKey:        strings.TrimSpace(channel.APIKey) != "",
+		CreatedAt:        channel.CreatedAt,
+		UpdatedAt:        channel.UpdatedAt,
 	}
 }
 

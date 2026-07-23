@@ -245,9 +245,9 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	var buffer bytes.Buffer
 	buffer.WriteString("\xEF\xBB\xBF")
 	writer := csv.NewWriter(&buffer)
-	_ = writer.Write([]string{"时间", "用户ID", "渠道ID", "任务ID", "计费单ID", "能力", "请求阶段", "模型", "状态", "HTTP状态", "耗时毫秒", "供应商任务ID", "错误码", "错误"})
+	_ = writer.Write([]string{"时间", "用户ID", "渠道ID", "任务ID", "计费单ID", "能力", "请求阶段", "模型", "状态", "HTTP状态", "耗时毫秒", "渠道并发上限", "供应商任务ID", "错误码", "错误"})
 	for _, log := range logs {
-		_ = writer.Write([]string{log.CreatedAt.UTC().Format(time.RFC3339), log.UserID, log.ChannelID, log.TaskID, log.BillingOrderID, log.Capability, log.RequestKind, log.Model, string(log.Status), strconv.Itoa(log.StatusCode), strconv.FormatInt(log.DurationMs, 10), log.ProviderRequestID, log.ErrorCode, log.Error})
+		_ = writer.Write([]string{log.CreatedAt.UTC().Format(time.RFC3339), log.UserID, log.ChannelID, log.TaskID, log.BillingOrderID, log.Capability, log.RequestKind, log.Model, string(log.Status), strconv.Itoa(log.StatusCode), strconv.FormatInt(log.DurationMs, 10), strconv.Itoa(log.ConcurrencyLimit), log.ProviderRequestID, log.ErrorCode, log.Error})
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {

@@ -96,6 +96,7 @@ type providerAnalyticsContext struct {
 	VideoSeconds      int
 	RequestKind       string
 	ProviderRequestID string
+	ConcurrencyLimit  int
 }
 
 func withProviderAnalytics(ctx context.Context, service *Service, task model.Task) context.Context {
@@ -1264,17 +1265,17 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		if open {
 			return nil, "", errors.New("当前渠道连续失败，已暂时熔断，请稍后重试")
 		}
-		var acquired bool
 		slotID := channelID
 		if slotID == "" {
 			slotID = "custom:" + strings.ToLower(req.URL.Host)
 		}
-		release, acquired, err = coordinator.acquire(req.Context(), "channel:"+slotID, envInt("CANVAS_CHANNEL_CONCURRENCY", 2), providerHTTPTimeout+time.Minute)
+		var concurrencyLimit int
+		release, concurrencyLimit, err = metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, providerHTTPTimeout+time.Minute)
+		metadata.ConcurrencyLimit = concurrencyLimit
+		req = req.WithContext(context.WithValue(req.Context(), providerAnalyticsKey{}, metadata))
 		if err != nil {
-			return nil, "", fmt.Errorf("获取渠道并发配额失败：%w", err)
-		}
-		if !acquired {
-			return nil, "", errors.New("当前渠道并发已满，请稍后重试")
+			recordProviderRequest(req, startedAt, 0, nil, err)
+			return nil, "", err
 		}
 		defer release()
 	}
@@ -1346,7 +1347,13 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		RequestKind: requestKind, Billable: req.Method == http.MethodPost,
 		APIFormat: "openai", Method: req.Method, Path: req.URL.Path, Model: metadata.Model,
 		Status: status, StatusCode: statusCode, DurationMs: time.Since(startedAt).Milliseconds(),
-		Error: errorText, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
+		Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
+	}
+	channelSlotFailure := false
+	if code, message := ChannelSlotFailureDetails(requestErr); code != "" {
+		channelSlotFailure = true
+		log.ErrorCode = code
+		log.Error = message
 	}
 	if requestKind == "create" && metadata.Capability == "video" {
 		log.VideoSeconds = metadata.VideoSeconds
@@ -1360,7 +1367,9 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	}
 	metadata.Service.EnrichAPICallLog(&log, responseBody)
 	if err := metadata.Service.LogAPICall(log); err != nil {
-		_ = metadata.Service.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对")
+		if !channelSlotFailure {
+			_ = metadata.Service.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对")
+		}
 	}
 }
 
