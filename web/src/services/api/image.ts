@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRequestConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRequestConfig, supportsTransparentImageBackground, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
@@ -231,6 +231,13 @@ function readStatusError(status: number | undefined, fallback: string) {
     if (status === 401 || status === 403) return "鉴权失败，请检查 API Key、套餐权限或模型权限";
     if (status === 429) return "请求被限流或额度不足，请稍后重试";
     return status ? `${fallback}：${status}` : fallback;
+}
+
+function assertTransparentBackgroundSupported(config: AiConfig, model: string) {
+    if (config.transparentBackground !== "true") return;
+    if (!supportsTransparentImageBackground(config, model)) {
+        throw new Error("当前模型不支持透明背景，请关闭“透明背景”或切换至 GPT Image 1 系列模型");
+    }
 }
 
 function withSystemPrompt(config: AiConfig, prompt: string) {
@@ -756,7 +763,9 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 }
 
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
+    const selectedModel = config.model || config.imageModel;
+    assertTransparentBackgroundSupported(config, selectedModel);
+    const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     if (requestConfig.apiFormat === "gemini") {
         try {
@@ -778,6 +787,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                 ...(requestSize ? { size: requestSize } : {}),
                 response_format: "b64_json",
                 output_format: IMAGE_OUTPUT_FORMAT,
+                ...(config.transparentBackground === "true" ? { background: "transparent" } : {}),
             },
             {
                 headers: aiHeaders(requestConfig, "application/json"),
@@ -792,7 +802,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
+    const selectedModel = config.model || config.imageModel;
+    assertTransparentBackgroundSupported(config, selectedModel);
+    const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     if (requestConfig.apiFormat === "gemini") {
@@ -811,6 +823,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     formData.set("n", String(n));
     formData.set("response_format", "b64_json");
     formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+    if (config.transparentBackground === "true") {
+        formData.set("background", "transparent");
+    }
     if (quality) {
         formData.set("quality", quality);
     }

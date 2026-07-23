@@ -278,6 +278,7 @@ export function useCanvasUpload({
                     model: undefined,
                     size: undefined,
                     quality: undefined,
+                    transparentBackground: undefined,
                     count: undefined,
                     references: undefined,
                     primaryImageId: undefined,

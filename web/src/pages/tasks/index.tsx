@@ -493,6 +493,7 @@ function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConf
         model: config.model,
         size: config.size,
         quality: config.quality,
+        transparentBackground: config.transparentBackground,
         count: config.count,
         videoSeconds: config.videoSeconds,
         vquality: config.vquality,
