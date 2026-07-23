@@ -3,6 +3,7 @@ import { Modal } from "antd";
 import { Bell, BellOff, CircleAlert, Info, ShieldAlert, Wrench } from "lucide-react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { AnnouncementContent } from "@/components/ui/announcement-content";
 import type { AnnouncementLevel, SystemAnnouncement } from "@/services/api/announcements";
 
 type AnnouncementTimelineModalProps = {
@@ -108,7 +109,7 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
                     <h3 className="text-[15px] font-semibold leading-6 tracking-normal text-foreground sm:text-base">{announcement.title}</h3>
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-foreground/75 sm:text-[15px]">{announcement.content}</p>
+                <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[15px]" />
                 <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">{relativeTime(announcement.publishedAt)} · {formatDateTime(announcement.publishedAt)}</time>
             </div>
         </motion.article>
