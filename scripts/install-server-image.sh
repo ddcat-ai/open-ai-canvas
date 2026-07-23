@@ -126,7 +126,9 @@ download_compose() {
 
 start_services() {
     step "拉取并启动 GHCR 网页与后端镜像"
-    docker compose --env-file .env -f "$COMPOSE_FILE" pull
+    if ! docker compose --env-file .env -f "$COMPOSE_FILE" pull; then
+        fail "GHCR 镜像拉取失败；如果容器包尚未公开，请通过 GHCR_USERNAME 和 GHCR_TOKEN 登录后重试"
+    fi
     docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600
 }
 
