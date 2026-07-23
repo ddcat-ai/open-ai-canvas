@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.2-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.4-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
