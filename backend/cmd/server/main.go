@@ -71,6 +71,7 @@ func main() {
 	handler.RegisterAdminAnalyticsRoutes(api, svc)
 	handler.RegisterAnnouncementRoutes(api, svc)
 	handler.RegisterFinanceRoutes(api, svc)
+	handler.RegisterChannelModelRoutes(api, svc)
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
 	handler.RegisterSessionRoutes(api, svc)

@@ -78,6 +78,7 @@ type ChannelRequest struct {
 	Name          string   `json:"name"`
 	BaseURL       string   `json:"baseUrl"`
 	APIKey        string   `json:"apiKey"`
+	APIFormat     string   `json:"apiFormat"`
 	InterfaceType string   `json:"interfaceType"`
 	Models        []string `json:"models"`
 	Enabled       *bool    `json:"enabled"`
@@ -507,6 +508,7 @@ func (s *Service) APICallLogs(actor *model.User, limit int) ([]model.ApiCallLog,
 func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.ModelChannel, error) {
 	name := strings.TrimSpace(req.Name)
 	baseURL := strings.TrimSpace(req.BaseURL)
+	apiFormat := normalizeChannelAPIFormat(req.APIFormat)
 	interfaceType := model.ChannelInterfaceType(strings.TrimSpace(req.InterfaceType))
 	if name == "" {
 		return channel, BadAuthRequest("请填写渠道名称")
@@ -514,8 +516,14 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	if baseURL == "" {
 		return channel, BadAuthRequest("请填写 Base URL")
 	}
-	if !validChannelInterfaceType(interfaceType) {
+	if apiFormat == "" {
+		return channel, BadAuthRequest("请选择有效的接口协议")
+	}
+	if interfaceType != "" && !validChannelInterfaceType(interfaceType) {
 		return channel, BadAuthRequest("请选择有效的接口类型")
+	}
+	if apiFormat == "gemini" && interfaceType != "" {
+		return channel, BadAuthRequest("Gemini 原生渠道不应选择 OpenAI 接口类型")
 	}
 	if _, err := ValidateOutboundURL(baseURL); err != nil {
 		return channel, err
@@ -527,8 +535,8 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	if req.APIKey != "" {
 		channel.APIKey = req.APIKey
 	}
-	// 系统渠道均由后端按已声明的接口类型分发，调用格式固定为 Bearer/OpenAI 兼容鉴权。
-	channel.APIFormat = "openai"
+	// 空接口类型是协议层的明确选择：OpenAI 表示自动兼容，Gemini 表示原生调用。
+	channel.APIFormat = apiFormat
 	channel.InterfaceType = interfaceType
 	channel.ModelsJSON = string(modelsJSON)
 	if req.Enabled != nil {
@@ -547,13 +555,27 @@ func mergeChannelRequest(req ChannelRequest, channel model.ModelChannel) Channel
 	if req.Models == nil {
 		req.Models = channelModelNames(channel)
 	}
-	if strings.TrimSpace(req.InterfaceType) == "" {
-		req.InterfaceType = string(channel.InterfaceType)
-		if req.InterfaceType == "" {
-			req.InterfaceType = string(inferChannelInterfaceType(req.Models))
+	if strings.TrimSpace(req.APIFormat) == "" {
+		req.APIFormat = channel.APIFormat
+		if req.APIFormat == "" {
+			req.APIFormat = "openai"
+		}
+		if strings.TrimSpace(req.InterfaceType) == "" {
+			req.InterfaceType = string(channel.InterfaceType)
 		}
 	}
 	return req
+}
+
+func normalizeChannelAPIFormat(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "openai":
+		return "openai"
+	case "gemini":
+		return "gemini"
+	default:
+		return ""
+	}
 }
 
 func validChannelInterfaceType(value model.ChannelInterfaceType) bool {
@@ -606,8 +628,12 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 	} else if admin {
 		apiKey = channel.APIKey
 	}
+	apiFormat := normalizeChannelAPIFormat(channel.APIFormat)
+	if apiFormat == "" {
+		apiFormat = "openai"
+	}
 	interfaceType := channel.InterfaceType
-	if !validChannelInterfaceType(interfaceType) {
+	if interfaceType != "" && !validChannelInterfaceType(interfaceType) {
 		interfaceType = inferChannelInterfaceType(models)
 	}
 	return PublicModelChannel{
@@ -618,7 +644,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		Name:          channel.Name,
 		BaseURL:       baseURL,
 		APIKey:        apiKey,
-		APIFormat:     channel.APIFormat,
+		APIFormat:     apiFormat,
 		InterfaceType: interfaceType,
 		Models:        models,
 		ModelCosts:    modelCosts,

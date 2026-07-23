@@ -182,7 +182,7 @@ export function AppConfigModal() {
         }
         setChannelLoading(channel.id, true);
         try {
-            const models = await fetchChannelModels(channel);
+            const models = await fetchChannelModels(channel, Boolean(userId));
             if (!models.length) {
                 message.warning(`${channel.name || "当前渠道"}未返回模型，已保留现有手工模型`);
                 return;
@@ -219,7 +219,7 @@ export function AppConfigModal() {
             const results = await Promise.all(
                 runnable.map(async (channel) => {
                     try {
-                        const models = await fetchChannelModels(channel);
+                        const models = await fetchChannelModels(channel, Boolean(userId));
                         return { channel, models, error: "" };
                     } catch (error) {
                         return { channel, models: [] as string[], error: error instanceof Error ? error.message : "读取失败" };

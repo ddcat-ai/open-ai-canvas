@@ -469,7 +469,15 @@ func (r *Repository) AdminSystemChannels(keyword string, interfaceType string, s
 		query = query.Where("lower(name) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern)
 	}
 	if value := strings.TrimSpace(interfaceType); value != "" && value != "all" {
-		query = query.Where("interface_type = ?", value)
+		switch value {
+		case "auto":
+			// 自动兼容没有具体接口类型，按协议字段和空接口类型联合筛选。
+			query = query.Where("(api_format = ? OR api_format = '') AND (interface_type = ? OR interface_type IS NULL)", "openai", "")
+		case "gemini":
+			query = query.Where("api_format = ?", "gemini")
+		default:
+			query = query.Where("interface_type = ?", value)
+		}
 	}
 	if status == "enabled" {
 		query = query.Where("enabled = ?", true)

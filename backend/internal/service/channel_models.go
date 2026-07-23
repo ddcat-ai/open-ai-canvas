@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
@@ -15,6 +16,11 @@ type ChannelModelRequest struct {
 	UnitPriceMicrocredits int64  `json:"unitPriceMicrocredits"`
 	PriceConfigured       bool   `json:"priceConfigured"`
 	Enabled               *bool  `json:"enabled"`
+}
+
+type AdminChannelModelFetchResult struct {
+	Models []string `json:"models"`
+	Added  int64    `json:"added"`
 }
 
 func (s *Service) EnsureSystemChannelModels() error {
@@ -44,6 +50,42 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 		return nil, err
 	}
 	return s.ensureChannelModels(channelID, true)
+}
+
+func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User, channelID string) (*AdminChannelModelFetchResult, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	channel, err := s.repo.AdminSystemChannel(channelID)
+	if err != nil {
+		return nil, err
+	}
+	// 使用服务端保存的渠道密钥请求上游，避免密钥为了拉目录再次经过浏览器。
+	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat})
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.repo.ChannelModels(channelID, true)
+	if err != nil {
+		return nil, err
+	}
+	known := make(map[string]struct{}, len(existing))
+	for _, item := range existing {
+		known[item.ModelKey] = struct{}{}
+	}
+	missing := make([]model.ChannelModel, 0, len(models))
+	for _, name := range models {
+		if _, ok := known[name]; ok {
+			continue
+		}
+		// 自动发现不能绕过定价边界；新模型由管理员定价后再手动启用。
+		missing = append(missing, model.ChannelModel{ID: newID(), ChannelID: channelID, ModelKey: name, DisplayName: name, Capability: capabilityForChannel(*channel), BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
+	}
+	added, err := s.repo.CreateMissingChannelModels(missing)
+	if err != nil {
+		return nil, err
+	}
+	return &AdminChannelModelFetchResult{Models: models, Added: added}, nil
 }
 
 func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id string, req ChannelModelRequest) (*model.ChannelModel, error) {

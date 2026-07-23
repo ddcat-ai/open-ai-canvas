@@ -93,6 +93,15 @@ func (r *Repository) SaveChannelModel(item *model.ChannelModel) error {
 	return r.db.Save(item).Error
 }
 
+func (r *Repository) CreateMissingChannelModels(items []model.ChannelModel) (int64, error) {
+	if len(items) == 0 {
+		return 0, nil
+	}
+	// 拉取目录可能与其他管理员操作并发，唯一键冲突时保留已有定价配置。
+	result := r.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "channel_id"}, {Name: "model_key"}}, DoNothing: true}).Create(&items)
+	return result.RowsAffected, result.Error
+}
+
 func (r *Repository) CreditAccount(userID string) (*model.CreditAccount, error) {
 	account := model.CreditAccount{UserID: userID}
 	if err := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
