@@ -20,8 +20,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const maxSystemProxyBodyBytes int64 = 64 << 20
-
 var (
 	runtimeService        *service.Service
 	geminiGeneratePath    = regexp.MustCompile(`^/models/([^/:]+):(generateContent|streamGenerateContent)$`)
@@ -118,6 +116,15 @@ func enforceRateLimit(c *gin.Context, key string, limit int, window time.Duratio
 	c.Header("Retry-After", "60")
 	fail(c, http.StatusTooManyRequests, errors.New("请求过于频繁，请稍后再试"))
 	return false
+}
+
+func loadRuntimePolicy(c *gin.Context, svc *service.Service) (service.RuntimePolicySetting, bool) {
+	policy, err := svc.RuntimePolicy()
+	if err != nil {
+		fail(c, http.StatusServiceUnavailable, errors.New("读取运行时策略失败："+err.Error()))
+		return service.RuntimePolicySetting{}, false
+	}
+	return policy, true
 }
 
 func authorizeSystemProxy(channel *model.ModelChannel, method string, requestPath string, contentType string, body []byte) error {

@@ -8,7 +8,6 @@ import (
 	"mime"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"infinite-canvas/backend/internal/service"
@@ -16,23 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	maxCustomRelayBodyBytes          int64 = 32 << 20
-	maxCustomRelayModelResponseBytes int64 = 4 << 20
-	maxCustomRelayJSONResponseBytes  int64 = 16 << 20
-	maxCustomRelayErrorResponseBytes int64 = 64 << 10
-	maxCustomRelayStreamBytes        int64 = 32 << 20
-	maxCustomRelayConcurrency              = 4
-	customRelayHTTPTimeout                 = 10 * time.Minute
-)
+const maxCustomRelayErrorResponseBytes int64 = 64 << 10
 
-var (
-	customRelayClient = service.CustomRelayHTTPClient
-	customRelayActive = struct {
-		sync.Mutex
-		users map[string]int
-	}{users: map[string]int{}}
-)
+var customRelayClient = service.CustomRelayHTTPClient
 
 func RegisterCustomRelayRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.Any("/ai/custom", func(c *gin.Context) {
@@ -41,19 +26,26 @@ func RegisterCustomRelayRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "custom-relay:"+user.ID, 120, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "custom-relay:"+user.ID, policy.Request.CustomRelayPerMinute, time.Minute) {
 			return
 		}
-		if !acquireCustomRelaySlot(user.ID) {
+		ttl := time.Duration(policy.Request.CustomRelayTimeoutMinutes+1) * time.Minute
+		release, acquired, err := svc.AcquireCustomRelaySlot(c.Request.Context(), user.ID, policy.Request.CustomRelayConcurrency, ttl)
+		if err != nil {
+			fail(c, http.StatusServiceUnavailable, errors.New("自定义渠道并发协调服务不可用"))
+			return
+		}
+		if !acquired {
 			fail(c, http.StatusTooManyRequests, errors.New("自定义渠道并发请求过多，请等待已有请求完成"))
 			return
 		}
-		defer releaseCustomRelaySlot(user.ID)
-		proxyCustomRelayRequest(c)
+		defer release()
+		proxyCustomRelayRequest(c, policy.Request)
 	})
 }
 
-func proxyCustomRelayRequest(c *gin.Context) {
+func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy) {
 	target, err := service.ValidateCustomRelayURL(c.GetHeader("X-Canvas-Upstream-URL"))
 	if err != nil {
 		failService(c, err)
@@ -72,16 +64,17 @@ func proxyCustomRelayRequest(c *gin.Context) {
 		fail(c, http.StatusUnauthorized, err)
 		return
 	}
-	if c.Request.ContentLength > maxCustomRelayBodyBytes {
-		fail(c, http.StatusRequestEntityTooLarge, errors.New("自定义渠道请求不能超过 32MB"))
+	requestLimit := policy.CustomRelayRequestMB << 20
+	if c.Request.ContentLength > requestLimit {
+		fail(c, http.StatusRequestEntityTooLarge, errors.New("自定义渠道请求超过配置上限"))
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCustomRelayBodyBytes)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, requestLimit)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
-			fail(c, http.StatusRequestEntityTooLarge, errors.New("自定义渠道请求不能超过 32MB"))
+			fail(c, http.StatusRequestEntityTooLarge, errors.New("自定义渠道请求超过配置上限"))
 			return
 		}
 		fail(c, http.StatusBadRequest, errors.New("读取自定义渠道请求失败"))
@@ -111,16 +104,16 @@ func proxyCustomRelayRequest(c *gin.Context) {
 		upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
-	resp, err := customRelayClient(customRelayHTTPTimeout).Do(upstreamReq)
+	resp, err := customRelayClient(time.Duration(policy.CustomRelayTimeoutMinutes) * time.Minute).Do(upstreamReq)
 	if err != nil {
 		fail(c, http.StatusBadGateway, errors.New("自定义渠道上游连接失败"))
 		return
 	}
 	defer resp.Body.Close()
-	writeCustomRelayResponse(c, resp, apiKey, c.Request.Method == http.MethodGet)
+	writeCustomRelayResponse(c, resp, apiKey, policy.CustomRelayResponseMB<<20)
 }
 
-func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string, modelList bool) {
+func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string, responseLimit int64) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("X-Content-Type-Options", "nosniff")
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
@@ -133,17 +126,14 @@ func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string
 		c.Header("X-Accel-Buffering", "no")
 		c.Status(resp.StatusCode)
 		c.Writer.WriteHeaderNow()
-		copyCustomRelayStream(c, resp.Body, apiKey)
+		copyCustomRelayStream(c, resp.Body, apiKey, responseLimit)
 		return
 	}
 	if mediaType != "application/json" && !strings.HasSuffix(mediaType, "+json") {
 		fail(c, http.StatusBadGateway, errors.New("自定义渠道上游返回了不支持的内容类型"))
 		return
 	}
-	limit := maxCustomRelayJSONResponseBytes
-	if modelList {
-		limit = maxCustomRelayModelResponseBytes
-	}
+	limit := responseLimit
 	body, err := readLimitedRelayBody(resp.Body, limit)
 	if err != nil || !json.Valid(body) {
 		fail(c, http.StatusBadGateway, errors.New("自定义渠道上游返回无效或过大的 JSON"))
@@ -167,14 +157,14 @@ func writeCustomRelayError(c *gin.Context, resp *http.Response, apiKey string, m
 	fail(c, resp.StatusCode, errors.New("自定义渠道上游请求失败"))
 }
 
-func copyCustomRelayStream(c *gin.Context, source io.Reader, apiKey string) {
+func copyCustomRelayStream(c *gin.Context, source io.Reader, apiKey string, maxBytes int64) {
 	redactor := newRelayStreamRedactor(apiKey)
 	buffer := make([]byte, 32<<10)
 	var written int64
-	for written < maxCustomRelayStreamBytes {
+	for written < maxBytes {
 		read, err := source.Read(buffer)
 		if read > 0 {
-			remaining := maxCustomRelayStreamBytes - written
+			remaining := maxBytes - written
 			if int64(read) > remaining {
 				read = int(remaining)
 			}
@@ -215,26 +205,6 @@ func customRelayAPIKey(value string) (string, error) {
 		return "", errors.New("自定义渠道 API Key 无效")
 	}
 	return apiKey, nil
-}
-
-func acquireCustomRelaySlot(userID string) bool {
-	customRelayActive.Lock()
-	defer customRelayActive.Unlock()
-	if customRelayActive.users[userID] >= maxCustomRelayConcurrency {
-		return false
-	}
-	customRelayActive.users[userID]++
-	return true
-}
-
-func releaseCustomRelaySlot(userID string) {
-	customRelayActive.Lock()
-	defer customRelayActive.Unlock()
-	if customRelayActive.users[userID] <= 1 {
-		delete(customRelayActive.users, userID)
-		return
-	}
-	customRelayActive.users[userID]--
 }
 
 func redactRelaySecret(body []byte, apiKey string) []byte {

@@ -1,9 +1,9 @@
 import type { CanvasGenerationBatch, CanvasGenerationBatchStatus } from "@/types/canvas";
 
-const TASK_CAPACITY_MESSAGE = "同时排队或运行的任务最多 5 个";
+const TASK_CAPACITY_MESSAGE = /同时排队或运行的任务最多 \d+ 个/;
 
 export function isGenerationTaskCapacityError(error: unknown) {
-    return error instanceof Error && error.message.includes(TASK_CAPACITY_MESSAGE);
+    return error instanceof Error && TASK_CAPACITY_MESSAGE.test(error.message);
 }
 
 export function isGenerationCostUncertainError(error: unknown) {

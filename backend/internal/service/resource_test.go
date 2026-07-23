@@ -216,7 +216,7 @@ func TestPersistGeneratedMediaAppliesStoredFileQuota(t *testing.T) {
 		ID:     "existing",
 		UserID: "user-1",
 		Status: model.ResourceStatusReady,
-		Size:   MaxUserStoredFileBytes - 1,
+		Size:   gigabytes(defaultRuntimePolicy().Resource.StoredFileGB) - 1,
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"infinite-canvas/backend/internal/service"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,7 +46,7 @@ func TestCustomRelayForwardsOpenAIRequestWithoutBrowserHeaders(t *testing.T) {
 	context, _ := gin.CreateTestContext(response)
 	context.Request = request
 
-	proxyCustomRelayRequest(context)
+	proxyCustomRelayRequest(context, defaultCustomRelayTestPolicy())
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -82,7 +84,7 @@ func TestCustomRelayConvertsGeminiAuthentication(t *testing.T) {
 	context, _ := gin.CreateTestContext(response)
 	context.Request = request
 
-	proxyCustomRelayRequest(context)
+	proxyCustomRelayRequest(context, defaultCustomRelayTestPolicy())
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -106,7 +108,7 @@ func TestCustomRelayStreamsBeforeUpstreamCompletes(t *testing.T) {
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		context, _ := gin.CreateTestContext(w)
 		context.Request = r
-		proxyCustomRelayRequest(context)
+		proxyCustomRelayRequest(context, defaultCustomRelayTestPolicy())
 	}))
 	defer proxy.Close()
 	request, _ := http.NewRequest(http.MethodPost, proxy.URL, strings.NewReader(`{"model":"test"}`))
@@ -157,7 +159,7 @@ func TestCustomRelayRejectsOversizedDeclaredBodyBeforeConnecting(t *testing.T) {
 	t.Cleanup(func() { customRelayClient = previous })
 
 	request := httptest.NewRequest(http.MethodPost, "/api/ai/custom", strings.NewReader(`{"model":"test"}`))
-	request.ContentLength = maxCustomRelayBodyBytes + 1
+	request.ContentLength = (defaultCustomRelayTestPolicy().CustomRelayRequestMB << 20) + 1
 	request.Header.Set("Authorization", "Bearer test-key")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Canvas-Upstream-URL", "https://127.0.0.1/v1/responses")
@@ -166,7 +168,7 @@ func TestCustomRelayRejectsOversizedDeclaredBodyBeforeConnecting(t *testing.T) {
 	context, _ := gin.CreateTestContext(response)
 	context.Request = request
 
-	proxyCustomRelayRequest(context)
+	proxyCustomRelayRequest(context, defaultCustomRelayTestPolicy())
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -175,28 +177,15 @@ func TestCustomRelayRejectsOversizedDeclaredBodyBeforeConnecting(t *testing.T) {
 	}
 }
 
-func TestCustomRelayConcurrencyLimitReleasesSlots(t *testing.T) {
-	const userID = "relay-limit-test-user"
-	for index := 0; index < maxCustomRelayConcurrency; index++ {
-		if !acquireCustomRelaySlot(userID) {
-			t.Fatalf("slot %d should be available", index)
-		}
-	}
-	if acquireCustomRelaySlot(userID) {
-		t.Fatal("request above the concurrency limit should be rejected")
-	}
-	for index := 0; index < maxCustomRelayConcurrency; index++ {
-		releaseCustomRelaySlot(userID)
-	}
-	if !acquireCustomRelaySlot(userID) {
-		t.Fatal("released slot should be reusable")
-	}
-	releaseCustomRelaySlot(userID)
-}
-
 func useCustomRelayTestClient(t *testing.T, client *http.Client) {
 	t.Helper()
 	previous := customRelayClient
 	customRelayClient = func(time.Duration) *http.Client { return client }
 	t.Cleanup(func() { customRelayClient = previous })
+}
+
+func defaultCustomRelayTestPolicy() service.RuntimeRequestPolicy {
+	return service.RuntimeRequestPolicy{
+		CustomRelayRequestMB: 32, CustomRelayResponseMB: 32, CustomRelayTimeoutMinutes: 10,
+	}
 }
