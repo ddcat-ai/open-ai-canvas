@@ -1,11 +1,12 @@
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronRight, Clapperboard, Clipboard, Copy, FileText, FolderOpen, FolderPlus, Image as ImageIcon, Layers3, Maximize2, MessageSquare, Music2, PanelTop, Plus, Redo2, Settings2, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { ChevronRight, Clapperboard, Clipboard, Copy, FileText, FolderOpen, FolderPlus, Image as ImageIcon, Layers3, Link2, Maximize2, MessageSquare, Music2, PanelTop, Plus, Redo2, Settings2, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { CanvasCreateCommandGrid, type CanvasCreateCommand } from "@/components/canvas/canvas-create-command-grid";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
@@ -34,6 +35,7 @@ type CanvasNodeContextMenuProps = {
     onEditText: () => void;
     onGenerateImage: () => void;
     onCopyContent: () => void;
+    onCopyOssUrl: () => void;
     onToggleFrame: () => void;
 };
 
@@ -62,6 +64,7 @@ export function CanvasNodeContextMenu({
     onEditText,
     onGenerateImage,
     onCopyContent,
+    onCopyOssUrl,
     onToggleFrame,
 }: CanvasNodeContextMenuProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -104,6 +107,7 @@ export function CanvasNodeContextMenu({
     const canOpenPreview = Boolean(isImage && hasNodeContent);
     const canOpenEditor = Boolean(node && (isText || isImage || isVideo));
     const canGenerateFromText = Boolean(isText && hasNodeContent);
+    const canCopyOssUrl = Boolean((isImage || isVideo) && resourceIdFromStorageKey(node?.metadata?.storageKey));
     const position = getContextMenuPosition(menu);
 
     return (
@@ -146,6 +150,7 @@ export function CanvasNodeContextMenu({
                             <MenuButton icon={<Copy className="size-4" />} label={isFrame ? "复制背板及内容" : "复制节点"} shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
                             {isImage ? <MenuButton icon={<ImageIcon className="size-4" />} label="复制图片" disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
                             {isText ? <MenuButton icon={<Clipboard className="size-4" />} label="复制文本" disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
+                            {isImage || isVideo ? <MenuButton icon={<Link2 className="size-4" />} label="复制 OSS 地址" disabled={!canCopyOssUrl} onClick={() => runAction(onCopyOssUrl)} /> : null}
                             <MenuButton icon={<Copy className="size-4" />} label={isFrame ? "创建背板副本" : "创建参数变体"} shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
                             <MenuButton icon={<Clipboard className="size-4" />} label="粘贴" shortcut="⌘V" disabled={!canPaste} onClick={() => runAction(onPaste)} />
                             <MenuButton icon={<Trash2 className="size-4" />} label={isFrame ? "删除背板" : "删除节点"} danger onClick={() => runAction(onDelete)} />

@@ -243,12 +243,17 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
 	defer body.Close()
-	data, err := io.ReadAll(io.LimitReader(body, maxTaskResourceBytes+1))
+	policy, err := s.RuntimePolicy()
 	if err != nil {
 		return err
 	}
-	if int64(len(data)) > maxTaskResourceBytes {
-		return errors.New("任务参考资源超过 512MB")
+	resourceLimit := megabytes(policy.Resource.ResourceUploadMB)
+	data, err := io.ReadAll(io.LimitReader(body, resourceLimit+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) > resourceLimit {
+		return fmt.Errorf("任务参考资源超过 %dMB", policy.Resource.ResourceUploadMB)
 	}
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
 	media.DataURL = dataURL(mimeType, data)
@@ -327,9 +332,6 @@ func systemChannelIDFromBaseURL(baseURL string) string {
 }
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
-	if input.Config.TransparentBackground == "true" && !supportsTransparentImageBackground(input.Config) {
-		return nil, errors.New("当前模型不支持透明背景，请关闭透明背景或切换至 GPT Image 1 系列模型")
-	}
 	var payload imageResponse
 	if len(input.ReferenceImages) > 0 || input.Mask != nil {
 		body := &bytes.Buffer{}
@@ -633,7 +635,7 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	if id == "" {
 		return nil, errors.New("视频接口没有返回任务 ID")
 	}
-	for deadline := time.Now().Add(videoPollTimeout); time.Now().Before(deadline); {
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/videos/"+id, &state); err != nil {
 			return nil, err
@@ -874,7 +876,7 @@ func runNewAPIChannel1VideoTask(ctx context.Context, input canvasGenerationInput
 	if id == "" {
 		return nil, errors.New("NewAPI 渠道 1 没有返回任务 ID")
 	}
-	for deadline := time.Now().Add(videoPollTimeout); time.Now().Before(deadline); {
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/videos/"+id, &state); err != nil {
 			return nil, err
@@ -1079,7 +1081,7 @@ func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput) (ma
 	if id == "" {
 		return nil, errors.New("Seedance 接口没有返回任务 ID")
 	}
-	for deadline := time.Now().Add(videoPollTimeout); time.Now().Before(deadline); {
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/videos/"+id, &state); err != nil {
 			return nil, err
@@ -1141,7 +1143,7 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 	if id == "" {
 		return nil, errors.New("Seedance 接口没有返回任务 ID")
 	}
-	for deadline := time.Now().Add(videoPollTimeout); time.Now().Before(deadline); {
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
 		var state map[string]interface{}
 		if err := getJSON(ctx, input.Config, "/contents/generations/tasks/"+id, &state); err != nil {
 			return nil, err
@@ -1262,12 +1264,26 @@ func doJSON(req *http.Request, target interface{}) error {
 
 func doBinary(req *http.Request) ([]byte, string, error) {
 	startedAt := time.Now()
+	requestTimeout := providerHTTPTimeout
+	if deadline, ok := req.Context().Deadline(); ok {
+		if remaining := time.Until(deadline); remaining > 0 {
+			requestTimeout = remaining
+		}
+	}
 	var release func()
 	var coordinator *runtimeCoordinator
+	var runtimeService *Service
+	responseLimit := maxProviderResponseBytes
 	channelID := ""
 	if metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok && metadata.Service != nil {
+		runtimeService = metadata.Service
 		coordinator = metadata.Service.coordinator
 		channelID = metadata.ChannelID
+		policy, err := metadata.Service.RuntimePolicy()
+		if err != nil {
+			return nil, "", fmt.Errorf("读取生成资源限制失败：%w", err)
+		}
+		responseLimit = megabytes(policy.Resource.GeneratedFileMB)
 		open, err := coordinator.circuitOpen(req.Context(), channelID)
 		if err != nil {
 			return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
@@ -1280,7 +1296,7 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 			slotID = "custom:" + strings.ToLower(req.URL.Host)
 		}
 		var concurrencyLimit int
-		release, concurrencyLimit, err = metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, providerHTTPTimeout+time.Minute)
+		release, concurrencyLimit, err = metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, requestTimeout+time.Minute)
 		metadata.ConcurrencyLimit = concurrencyLimit
 		req = req.WithContext(context.WithValue(req.Context(), providerAnalyticsKey{}, metadata))
 		if err != nil {
@@ -1293,45 +1309,52 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
-	client := OutboundHTTPClient(providerHTTPTimeout)
+	client := OutboundHTTPClient(requestTimeout)
 	resp, err := client.Do(req)
 	if err != nil {
-		if coordinator != nil {
-			coordinator.recordChannelResult(req.Context(), channelID, !errors.Is(err, context.Canceled))
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, !errors.Is(err, context.Canceled))
 		}
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
 	defer resp.Body.Close()
-	if resp.ContentLength > maxProviderResponseBytes {
-		err = errors.New("上游响应超过 64MB 限制")
+	if resp.ContentLength > responseLimit {
+		err = fmt.Errorf("上游响应超过 %s 限制", formatStorageLimit(responseLimit))
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
 		return nil, "", err
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderResponseBytes+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
 	if err != nil {
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
 		return nil, "", err
 	}
-	if int64(len(data)) > maxProviderResponseBytes {
-		err = errors.New("上游响应超过 64MB 限制")
+	if int64(len(data)) > responseLimit {
+		err = fmt.Errorf("上游响应超过 %s 限制", formatStorageLimit(responseLimit))
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
 		return nil, "", err
 	}
 	mimeType := resp.Header.Get("Content-Type")
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if coordinator != nil {
-			coordinator.recordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
 		}
 		httpErr := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data)}
 		recordProviderRequest(req, startedAt, resp.StatusCode, data, httpErr)
 		return nil, "", httpErr
 	}
 	recordProviderRequest(req, startedAt, resp.StatusCode, data, nil)
-	if coordinator != nil {
-		coordinator.recordChannelResult(req.Context(), channelID, false)
+	if runtimeService != nil {
+		_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
 	}
 	return data, mimeType, nil
+}
+
+func providerPollingDeadline(ctx context.Context) time.Time {
+	if deadline, ok := ctx.Deadline(); ok {
+		return deadline
+	}
+	return time.Now().Add(videoPollTimeout)
 }
 
 func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode int, responseBody []byte, requestErr error) {
@@ -1779,12 +1802,6 @@ func isGrokVideoConfig(config providerConfig) bool {
 
 func isArkPlanVideoConfig(config providerConfig) bool {
 	return strings.Contains(strings.ToLower(config.BaseURL), "/api/plan/v3")
-}
-
-// 透明背景必须按模型能力显式开放，避免上游静默忽略参数后返回不透明图片。
-func supportsTransparentImageBackground(config providerConfig) bool {
-	model := strings.ToLower(strings.TrimSpace(config.Model))
-	return strings.EqualFold(strings.TrimSpace(config.APIFormat), "openai") && (model == "gpt-image-1" || strings.HasPrefix(model, "gpt-image-1-") || strings.HasPrefix(model, "gpt-image-1."))
 }
 
 func normalizeImageQuality(value string) string {

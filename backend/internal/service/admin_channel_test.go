@@ -76,7 +76,7 @@ func TestChannelFromRequestRejectsUnknownInterfaceType(t *testing.T) {
 }
 
 func TestChannelFromRequestRejectsInvalidConcurrencyLimit(t *testing.T) {
-	for _, limit := range []int{0, 101} {
+	for _, limit := range []int{0, 1000} {
 		_, err := channelFromRequest(ChannelRequest{Name: "Bad", BaseURL: "https://example.com/v1", InterfaceType: "newapi", ConcurrencyLimit: &limit}, model.ModelChannel{})
 		if err == nil {
 			t.Fatalf("channelFromRequest() concurrencyLimit = %d, error = nil", limit)
@@ -87,7 +87,7 @@ func TestChannelFromRequestRejectsInvalidConcurrencyLimit(t *testing.T) {
 func TestRuntimeConcurrencyUsesEnvironmentFallback(t *testing.T) {
 	t.Setenv("CANVAS_CHANNEL_CONCURRENCY", "7")
 	t.Setenv("CANVAS_WORKER_CONCURRENCY", "9")
-	setting := runtimeConcurrencyFromEnvironment()
+	setting := defaultRuntimePolicy().Task
 	if setting.ChannelConcurrency != 7 || setting.WorkerConcurrency != 9 {
 		t.Fatalf("runtimeConcurrencyFromEnvironment() = %#v", setting)
 	}

@@ -487,6 +487,10 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			return err
 		}
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return err
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	usage, err := s.repo.UserStorageUsage(log.UserID)
@@ -494,7 +498,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 		return err
 	}
 	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL))
-	if err := validateAPICallLogQuota(usage, incomingBytes); err != nil {
+	if err := validateAPICallLogQuotaWithPolicy(usage, incomingBytes, policy.Resource); err != nil {
 		return err
 	}
 	return s.repo.Create(&log)
@@ -537,7 +541,7 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 		channel.ConcurrencyLimit = 0
 	} else if req.ConcurrencyLimit != nil {
 		if *req.ConcurrencyLimit < minChannelConcurrencyLimit || *req.ConcurrencyLimit > maxChannelConcurrencyLimit {
-			return channel, BadAuthRequest("最大并发数必须是 1-100 的整数")
+			return channel, BadAuthRequest("最大并发数必须是 1-999 的整数")
 		}
 		channel.ConcurrencyLimit = *req.ConcurrencyLimit
 	} else if req.UseGlobalConcurrency != nil {

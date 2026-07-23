@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -33,7 +34,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		if !enforceRateLimit(c, "register:"+c.ClientIP(), 5, time.Hour) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "register:"+c.ClientIP(), policy.Request.RegisterPerHour, time.Hour) {
 			return
 		}
 		result, err := svc.Register(req)
@@ -53,7 +55,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		if !enforceRateLimit(c, "email-code:"+c.ClientIP(), 10, time.Hour) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "email-code:"+c.ClientIP(), policy.Request.EmailCodePerHour, time.Hour) {
 			return
 		}
 		if err := svc.SendRegistrationEmailCode(req.Email); err != nil {
@@ -69,10 +72,11 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		if !enforceRateLimit(c, "login-ip:"+c.ClientIP(), 50, 10*time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "login-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) {
 			return
 		}
-		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+strings.ToLower(strings.TrimSpace(req.Username)), 10, 10*time.Minute) {
+		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+strings.ToLower(strings.TrimSpace(req.Username)), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
 			return
 		}
 		result, err := svc.Login(req)
@@ -112,7 +116,12 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		channels, _ := svc.PublicSystemChannels()
-		ok(c, gin.H{"user": publicUser, "systemChannels": channels})
+		limits, err := svc.PublicRuntimeLimits()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		if _, err := currentUser(c, svc); err != nil {
@@ -439,31 +448,58 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
-	r.GET("/admin/settings/concurrency", func(c *gin.Context) {
+	r.GET("/admin/settings/runtime-policy", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		setting, err := svc.AdminRuntimeConcurrencySetting(user)
+		setting, err := svc.AdminRuntimePolicySetting(user)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"setting": setting})
 	})
-	r.PATCH("/admin/settings/concurrency", func(c *gin.Context) {
+	r.GET("/admin/settings/runtime-policy/self-use", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		var req service.RuntimeConcurrencySettingRequest
+		setting, err := svc.AdminSelfUseRuntimePolicy(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PUT("/admin/settings/runtime-policy", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.RuntimePolicySetting
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		setting, err := svc.UpdateRuntimeConcurrencySetting(user, req)
+		setting, err := svc.UpdateRuntimePolicySetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.DELETE("/admin/settings/runtime-policy", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.ResetRuntimePolicySetting(user)
 		if err != nil {
 			failService(c, err)
 			return
@@ -536,14 +572,15 @@ func RegisterSystemProxyRoutes(r *gin.RouterGroup, svc *service.Service) {
 
 func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, channel *model.ModelChannel) {
 	startedAt := time.Now()
-	if !enforceRateLimit(c, "system-proxy:"+user.ID, 120, time.Minute) {
+	policy, available := loadRuntimePolicy(c, svc)
+	if !available || !enforceRateLimit(c, "system-proxy:"+user.ID, policy.Request.SystemRelayPerMinute, time.Minute) {
 		return
 	}
 	path := c.Param("path")
 	if path == "" {
 		path = "/"
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSystemProxyBodyBytes)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, policy.Request.SystemRelayRequestMB<<20)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		fail(c, http.StatusBadRequest, err)
@@ -633,7 +670,8 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		status = model.ApiCallStatusFailed
 	}
-	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, (128<<20)+1))
+	responseLimit := policy.Request.SystemRelayResponseMB << 20
+	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
 	if readErr != nil {
 		status = model.ApiCallStatusFailed
 		errorText = readErr.Error()
@@ -642,9 +680,9 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		fail(c, http.StatusBadGateway, errors.New("系统渠道响应读取失败"))
 		return
 	}
-	if len(responseBody) > 128<<20 {
+	if int64(len(responseBody)) > responseLimit {
 		_ = svc.MarkBillingUncertain(billingOrderID, "上游已响应但响应体超过限制，费用状态待核对")
-		fail(c, http.StatusBadGateway, errors.New("系统渠道响应超过 128MB 限制"))
+		fail(c, http.StatusBadGateway, fmt.Errorf("系统渠道响应超过 %dMB 限制", policy.Request.SystemRelayResponseMB))
 		return
 	}
 	if status == model.ApiCallStatusSucceeded {

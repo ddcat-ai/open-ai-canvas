@@ -3,6 +3,8 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
+import { getResourceOSSUrl } from "@/services/api/resources";
+import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
@@ -914,6 +916,20 @@ function InfiniteCanvasPage() {
         [message],
     );
 
+    const copyNodeOssUrlToClipboard = useCallback(
+        async (node: CanvasNodeData | null) => {
+            try {
+                const ossURL = await getResourceOSSUrl(node?.metadata?.storageKey);
+                if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(ossURL);
+                else if (!copyToClipboard(ossURL)) throw new Error("当前浏览器不支持写入剪贴板");
+                message.success("临时 OSS 地址已复制");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "复制 OSS 地址失败");
+            }
+        },
+        [message],
+    );
+
     const handleCanvasContextMenu = useCallback(
         (event: ReactMouseEvent) => {
             const target = event.target instanceof Element ? event.target : null;
@@ -1439,6 +1455,7 @@ function InfiniteCanvasPage() {
                     onEditText={openTextEditor}
                     onGenerateImage={generateImageFromTextNode}
                     onCopyContent={(node) => { void copyNodeContentToClipboard(node); }}
+                    onCopyOssUrl={(node) => { void copyNodeOssUrlToClipboard(node); }}
                     onToggleFrame={(node) => toggleFrameCollapsed(node.id)}
                 />
 

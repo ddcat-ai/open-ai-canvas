@@ -17,7 +17,8 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "tasks:"+user.ID, 30, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "tasks:"+user.ID, policy.Request.TaskCreatePerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<20)
@@ -112,7 +113,8 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "sessions:"+user.ID, 20, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "sessions:"+user.ID, policy.Request.SessionCreatePerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<20)
@@ -147,10 +149,11 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "session-files:"+user.ID, 30, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "session-files:"+user.ID, policy.Request.SessionFilePerMinute, time.Minute) {
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.MaxSessionUploadBytes+(1<<20))
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (policy.Resource.SessionUploadMB<<20)+(1<<20))
 		file, err := c.FormFile("file")
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)

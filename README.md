@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.2-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.4-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
@@ -120,7 +120,7 @@ bun run dev
 
 打开 `http://localhost:3000`，注册首个管理员账号，再在系统设置中配置渠道和模型。
 
-任务 Worker 和全局渠道并发可在“系统配置 → 任务并发”中热更新；系统渠道可选择跟随全局值，或单独设置 `1-100` 的最大并发数。未保存后台配置时分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
+资源配额、Worker/渠道/账号任务并发、业务频控、任务超时和渠道中转策略可在“系统配置 → 资源与策略”中统一热更新，支持重置和自用模式；系统渠道可选择跟随全局值，或单独设置 `1-999` 的最大并发数。未保存后台配置时 Worker 和全局渠道并发分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
 
 Docker 一体化运行：
 
@@ -133,7 +133,7 @@ docker compose -f docker-compose.local.yml up -d --build
 - 用户自定义 AI API Key 保存在浏览器本地；登录态拉取模型目录时会临时提交给自部署后端但不会保存，创建异步任务时会加密入队；仅应使用可信部署，生产环境必须启用 HTTPS。
 - 画布和素材登录后同步到后端，本地 `localForage` 继续承担缓存和降级存储。
 - 媒体资源在启用 OSS 时保存到私有 OSS，否则保存到后端数据目录；删除业务记录不会自动清理 OSS 对象。
-- 用户主动上传的单个文件必须小于 50MB，每个账号按 UTC 自然日累计必须小于 200MB；AI 生成结果不计入主动上传额度。
+- 用户主动上传、Agent 会话附件和 AI 生成资源的单文件上限、账号容量及 UTC 日上传总量由后台“资源与策略”统一维护，默认分别为 50MB、32MB、64MB、2GB 和 200MB；管理员可按可信部署需要调整，单文件业务上限最高 999MB，Nginx 请求体硬上限为 1024MB。
 
 ## 公网部署安全
 

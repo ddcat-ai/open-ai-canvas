@@ -76,7 +76,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom
-                className="z-[1200] w-[270px] max-w-[calc(100vw-24px)] rounded-lg border border-border/50 bg-popover p-1 text-[11px] font-normal shadow-md"
+                className={cn(
+                    "z-[1200] max-w-[calc(100vw-24px)] rounded-lg border border-border/50 bg-popover p-1 text-[11px] font-normal shadow-md",
+                    capability === "image" || capability === "video" ? "w-[320px]" : "w-[270px]",
+                )}
                 position="popper"
                 align="start"
                 side="bottom"

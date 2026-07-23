@@ -27,8 +27,6 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-const maxImportedResourceBytes int64 = MaxResourceUploadBytes
-const maxTaskResourceBytes int64 = 512 << 20
 const providerResourceURLTTL = 4 * time.Hour
 const directResourceURLTTL = 5 * time.Minute
 
@@ -69,7 +67,7 @@ func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
 		return "", BadAuthRequest("资源尚未上传完成")
 	}
 	if resource.Provider == "local" {
-		return "", nil
+		return "", BadAuthRequest("当前资源未存储在 OSS")
 	}
 	setting, err := s.ossSettingForResource(userID, resource)
 	if err != nil {
@@ -125,7 +123,11 @@ func detectUploadedMimeType(file multipart.File, fileName string, declared strin
 }
 
 func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, width int, height int, durationMs int64) (*model.Resource, error) {
-	payload, err := downloadRemoteResource(rawURL)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := downloadRemoteResource(rawURL, megabytes(policy.Resource.ResourceUploadMB))
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +296,7 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 		return item, nil
 	case map[string]interface{}:
 		if raw := inlineMediaValue(item); raw != "" {
-			mimeType, data, err := decodeDataURL(raw)
+			mimeType, data, err := s.decodeDataURL(raw)
 			if err != nil && !skipInvalidDataURL {
 				return nil, err
 			}
@@ -361,7 +363,7 @@ func inlineMediaValue(item map[string]interface{}) string {
 	return ""
 }
 
-func decodeDataURL(value string) (string, []byte, error) {
+func (s *Service) decodeDataURL(value string) (string, []byte, error) {
 	header, encoded, ok := strings.Cut(value, ",")
 	if !ok || !strings.HasPrefix(header, "data:") || !strings.HasSuffix(strings.ToLower(header), ";base64") {
 		return "", nil, fmt.Errorf("%w：格式无效", errInvalidGeneratedDataURL)
@@ -371,8 +373,12 @@ func decodeDataURL(value string) (string, []byte, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("%w：base64 解码失败：%v", errInvalidGeneratedDataURL, err)
 	}
-	if int64(len(data)) > maxTaskResourceBytes {
-		return "", nil, errors.New("单个生成资源超过 512MB")
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return "", nil, err
+	}
+	if int64(len(data)) > megabytes(policy.Resource.GeneratedFileMB) {
+		return "", nil, fmt.Errorf("单个生成资源超过 %dMB", policy.Resource.GeneratedFileMB)
 	}
 	return mimeType, data, nil
 }
@@ -398,7 +404,7 @@ type remoteResourcePayload struct {
 	data     []byte
 }
 
-func downloadRemoteResource(rawURL string) (remoteResourcePayload, error) {
+func downloadRemoteResource(rawURL string, maxBytes int64) (remoteResourcePayload, error) {
 	parsed, err := validateRemoteResourceURL(rawURL)
 	if err != nil {
 		return remoteResourcePayload{}, err
@@ -416,12 +422,12 @@ func downloadRemoteResource(rawURL string) (remoteResourcePayload, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return remoteResourcePayload{}, fmt.Errorf("远程资源下载失败：%s", resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImportedResourceBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 	if err != nil {
 		return remoteResourcePayload{}, err
 	}
-	if int64(len(data)) >= maxImportedResourceBytes {
-		return remoteResourcePayload{}, BadAuthRequest("远程资源必须小于 50MB")
+	if int64(len(data)) >= maxBytes {
+		return remoteResourcePayload{}, BadAuthRequest(fmt.Sprintf("远程资源必须小于 %s", formatStorageLimit(maxBytes)))
 	}
 	mimeType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if idx := strings.Index(mimeType, ";"); idx >= 0 {

@@ -11,30 +11,33 @@ import (
 )
 
 func TestValidateStructuredStorageQuotaRejectsBytesAndCounts(t *testing.T) {
-	usage := repository.UserStorageUsage{AssetBytes: MaxUserStructuredDataBytes - 8, AssetCount: MaxUserAssetCount}
-	if err := validateStructuredStorageQuota(usage, "asset", false, 9); err == nil {
+	policy := defaultRuntimePolicy().Resource
+	usage := repository.UserStorageUsage{AssetBytes: megabytes(policy.StructuredDataMB) - 8, AssetCount: policy.AssetCount}
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", false, 9, policy); err == nil {
 		t.Fatal("validateStructuredStorageQuota() byte error = nil")
 	}
-	if err := validateStructuredStorageQuota(usage, "asset", true, 0); err == nil {
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", true, 0, policy); err == nil {
 		t.Fatal("validateStructuredStorageQuota() count error = nil")
 	}
 }
 
 func TestValidateStructuredStorageQuotaAllowsReplacementThatShrinksData(t *testing.T) {
-	usage := repository.UserStorageUsage{AssetBytes: MaxUserStructuredDataBytes, AssetCount: MaxUserAssetCount}
-	if err := validateStructuredStorageQuota(usage, "asset", false, -1); err != nil {
+	policy := defaultRuntimePolicy().Resource
+	usage := repository.UserStorageUsage{AssetBytes: megabytes(policy.StructuredDataMB), AssetCount: policy.AssetCount}
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", false, -1, policy); err != nil {
 		t.Fatalf("validateStructuredStorageQuota() error = %v", err)
 	}
 }
 
 func TestValidateTaskStorageQuotaRejectsHistoryGrowth(t *testing.T) {
-	if err := validateTaskStorageQuota(repository.UserStorageUsage{TaskCount: MaxUserTaskCount}, 0); err == nil {
+	policy := defaultRuntimePolicy().Resource
+	if err := validateTaskStorageQuotaWithPolicy(repository.UserStorageUsage{TaskCount: policy.TaskCount}, 0, policy); err == nil {
 		t.Fatal("validateTaskStorageQuota() count error = nil")
 	}
-	if err := validateTaskStorageQuota(repository.UserStorageUsage{TaskBytes: MaxUserTaskDataBytes}, 1); err == nil {
+	if err := validateTaskStorageQuotaWithPolicy(repository.UserStorageUsage{TaskBytes: gigabytes(policy.TaskDataGB)}, 1, policy); err == nil {
 		t.Fatal("validateTaskStorageQuota() byte error = nil")
 	}
-	if err := validateAPICallLogQuota(repository.UserStorageUsage{APICallCount: MaxUserAPICallLogCount}, 0); err == nil {
+	if err := validateAPICallLogQuotaWithPolicy(repository.UserStorageUsage{APICallCount: policy.APICallLogCount}, 0, policy); err == nil {
 		t.Fatal("validateAPICallLogQuota() count error = nil")
 	}
 }
@@ -44,7 +47,7 @@ func TestUserStorageUsageCountsPersistedPayloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Asset{}, &model.CanvasProject{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	items := []any{
@@ -76,7 +79,7 @@ func TestSaveTaskCompletionPersistsRelatedRowsTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Asset{}, &model.CanvasProject{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Session{}, &model.Message{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	session := model.Session{ID: "session-1", UserID: "user-1", Status: model.SessionStatusActive}

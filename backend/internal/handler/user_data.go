@@ -68,10 +68,11 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "resources-upload:"+user.ID, 30, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.MaxResourceUploadBytes+(1<<20))
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (policy.Resource.ResourceUploadMB<<20)+(1<<20))
 		file, err := c.FormFile("file")
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -93,7 +94,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "resources-import:"+user.ID, 30, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-import:"+user.ID, policy.Request.ResourceImportPerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
@@ -127,6 +129,27 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"resource": resource})
+	})
+	r.GET("/resources/:id/oss-url", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resource, err := svc.Resource(user.ID, c.Param("id"))
+		if err != nil {
+			fail(c, http.StatusNotFound, err)
+			return
+		}
+		ossURL, err := svc.DirectResourceURL(user.ID, resource.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		// 签名地址只用于当前复制动作，禁止浏览器或中间代理缓存。
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		ok(c, gin.H{"url": ossURL})
 	})
 	r.GET("/resources/:id/file", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -226,7 +249,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "assets-write:"+user.ID, 120, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "assets-write:"+user.ID, policy.Request.AssetWritePerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
@@ -295,7 +319,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if !enforceRateLimit(c, "canvas-write:"+user.ID, 120, time.Minute) {
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "canvas-write:"+user.ID, policy.Request.CanvasWritePerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)

@@ -10,9 +10,13 @@ import (
 )
 
 type AdminUserDetail struct {
-	User    model.User                 `json:"user"`
-	Account model.CreditAccount        `json:"account"`
-	Counts  repository.AdminUserCounts `json:"counts"`
+	User             model.User                  `json:"user"`
+	Account          model.CreditAccount         `json:"account"`
+	Counts           repository.AdminUserCounts  `json:"counts"`
+	StorageUsage     repository.UserStorageUsage `json:"storageUsage"`
+	StoredFileBytes  int64                       `json:"storedFileBytes"`
+	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
+	Quota            RuntimeResourcePolicy       `json:"quota"`
 }
 
 type AdminTaskPage struct {
@@ -63,7 +67,26 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
-	return &AdminUserDetail{User: *user, Account: *account, Counts: counts}, nil
+	usage, err := s.repo.UserStorageUsage(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	storedFileBytes, err := s.repo.UserStoredFileBytes(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	dailyUploadBytes, err := s.repo.DailyUploadBytes(user.ID, time.Now().UTC().Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	return &AdminUserDetail{
+		User: *user, Account: *account, Counts: counts, StorageUsage: usage,
+		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
+	}, nil
 }
 
 func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {

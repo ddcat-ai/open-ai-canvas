@@ -20,7 +20,7 @@ type localRateEntry struct {
 
 const (
 	minChannelConcurrencyLimit     = 1
-	maxChannelConcurrencyLimit     = 100
+	maxChannelConcurrencyLimit     = maxRuntimeConcurrency
 	defaultChannelConcurrencyValue = 3
 )
 
@@ -189,7 +189,7 @@ func (c *runtimeCoordinator) circuitOpen(ctx context.Context, channelID string) 
 	return count > 0, err
 }
 
-func (c *runtimeCoordinator) recordChannelResult(ctx context.Context, channelID string, failed bool) {
+func (c *runtimeCoordinator) recordChannelResult(ctx context.Context, channelID string, failed bool, failureLimit int, openDuration time.Duration) {
 	if c.redis == nil || strings.TrimSpace(channelID) == "" {
 		return
 	}
@@ -204,8 +204,8 @@ func (c *runtimeCoordinator) recordChannelResult(ctx context.Context, channelID 
 		return
 	}
 	_ = c.redis.Expire(ctx, failureKey, time.Minute).Err()
-	if count >= int64(envInt("CANVAS_CHANNEL_CIRCUIT_FAILURES", 5)) {
-		_ = c.redis.Set(ctx, openKey, "1", time.Duration(envInt("CANVAS_CHANNEL_CIRCUIT_SECONDS", 60))*time.Second).Err()
+	if count >= int64(failureLimit) {
+		_ = c.redis.Set(ctx, openKey, "1", openDuration).Err()
 	}
 }
 
@@ -243,7 +243,7 @@ func (s *Service) AcquireChannelSlot(ctx context.Context, channelID string, fall
 		}
 		if channel.ConcurrencyLimit > 0 {
 			if channel.ConcurrencyLimit < minChannelConcurrencyLimit || channel.ConcurrencyLimit > maxChannelConcurrencyLimit {
-				return nil, limit, channelSlotError{scope: scope, limit: limit, err: errors.New("渠道并发配置超出 1-100 范围")}
+				return nil, limit, channelSlotError{scope: scope, limit: limit, err: errors.New("渠道并发配置超出 1-999 范围")}
 			}
 			limit = channel.ConcurrencyLimit
 		}
@@ -272,4 +272,23 @@ func (s *Service) AllowRequest(ctx context.Context, key string, limit int, windo
 		return false, errors.New("运行时协调器未初始化")
 	}
 	return s.coordinator.allow(ctx, key, limit, window)
+}
+
+func (s *Service) AcquireCustomRelaySlot(ctx context.Context, userID string, limit int, ttl time.Duration) (func(), bool, error) {
+	if s.coordinator == nil {
+		return nil, false, errors.New("运行时协调器未初始化")
+	}
+	return s.coordinator.acquire(ctx, "custom-relay:"+userID, limit, ttl)
+}
+
+func (s *Service) RecordChannelResult(ctx context.Context, channelID string, failed bool) error {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return err
+	}
+	if s.coordinator == nil {
+		return errors.New("运行时协调器未初始化")
+	}
+	s.coordinator.recordChannelResult(ctx, channelID, failed, policy.Request.ChannelCircuitFailureCount, time.Duration(policy.Request.ChannelCircuitOpenSeconds)*time.Second)
+	return nil
 }

@@ -37,15 +37,6 @@ type Service struct {
 
 const taskWorkerConcurrency = 3
 const taskLogPayloadLimit = 4000
-const MaxSessionUploadBytes int64 = 32 << 20
-const (
-	imageTaskTimeout      = 8 * time.Minute
-	textTaskTimeout       = 8 * time.Minute
-	audioTaskTimeout      = 8 * time.Minute
-	videoTaskTimeout      = 30 * time.Minute
-	storyboardTaskTimeout = 12 * time.Minute
-	defaultTaskTimeout    = 10 * time.Minute
-)
 
 type CreateSessionRequest struct {
 	ProjectID      string            `json:"projectId"`
@@ -202,6 +193,10 @@ func (s *Service) CreateSession(userID string, req CreateSessionRequest) (*Sessi
 	compactedSnapshot := compactPersistedValue(req.CanvasSnapshot)
 	snapshotJSON, _ := json.Marshal(compactedSnapshot)
 	session := model.Session{ID: newID(), UserID: userID, ProjectID: req.ProjectID, Status: model.SessionStatusActive, Prompt: prompt, CanvasSnapshotJSON: string(snapshotJSON)}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
 	s.storageMu.Lock()
 	usage, err := s.repo.UserStorageUsage(userID)
 	if err != nil {
@@ -209,7 +204,7 @@ func (s *Service) CreateSession(userID string, req CreateSessionRequest) (*Sessi
 		return nil, err
 	}
 	incomingBytes := int64(len([]byte(prompt))*2 + len(snapshotJSON))
-	if err := validateStructuredStorageQuota(usage, "session", true, incomingBytes); err != nil {
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "session", true, incomingBytes, policy.Resource); err != nil {
 		s.storageMu.Unlock()
 		return nil, err
 	}
@@ -279,12 +274,16 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if containsInlineMediaDataURL(normalizedInput) {
 		return nil, BadAuthRequest("任务输入不能包含内嵌媒体，请先上传到资源存储")
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
 	activeTasks, err := s.repo.ActiveTaskCountForUser(userID)
 	if err != nil {
 		return nil, err
 	}
-	if activeTasks >= 5 {
-		return nil, BadAuthRequest("同时排队或运行的任务最多 5 个，请等待已有任务完成")
+	if activeTasks >= int64(policy.Task.ActiveTaskLimit) {
+		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
 	taskType := req.Type
 	if taskType == "" {
@@ -303,9 +302,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if billingOrder != nil {
 		task.BillingOrderID = billingOrder.ID
 	}
-	err = s.createTaskWithinStorageQuota(&task, billingOrder)
+	err = s.createTaskWithinStorageQuota(&task, billingOrder, policy)
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
-		return nil, BadAuthRequest("同时排队或运行的任务最多 5 个，请等待已有任务完成")
+		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
@@ -407,12 +406,16 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	task, err = s.repo.RetryTaskWithBilling(userID, task.ID, billingOrder)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	task, err = s.repo.RetryTaskWithBilling(userID, task.ID, billingOrder, policy.Task.ActiveTaskLimit)
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
-		return nil, BadAuthRequest("同时排队或运行的任务最多 5 个，请等待已有任务完成")
+		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
 	if errors.Is(err, repository.ErrTaskNotRetryable) {
 		return nil, BadAuthRequest("任务已被其他请求重新入队，请勿重复重试")
@@ -592,10 +595,15 @@ func publicTaskInputJSON(raw string) string {
 }
 
 func (s *Service) StoreUpload(userID string, sessionID string, header *multipart.FileHeader) (*model.SessionFile, error) {
-	if header == nil || header.Size > MaxSessionUploadBytes {
-		return nil, BadAuthRequest("会话文件不能超过 32MB")
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
 	}
-	day, err := s.reserveUserUploadQuota(userID, header.Size)
+	maxBytes := megabytes(policy.Resource.SessionUploadMB)
+	if header == nil || header.Size > maxBytes {
+		return nil, BadAuthRequest(fmt.Sprintf("会话文件不能超过 %dMB", policy.Resource.SessionUploadMB))
+	}
+	day, err := s.reserveSessionUploadQuota(userID, header.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -625,7 +633,7 @@ func (s *Service) StoreUpload(userID string, sessionID string, header *multipart
 	if err != nil {
 		return nil, err
 	}
-	size, err := io.Copy(dst, io.LimitReader(file, MaxSessionUploadBytes+1))
+	size, err := io.Copy(dst, io.LimitReader(file, maxBytes+1))
 	closeErr := dst.Close()
 	if err != nil {
 		_ = os.Remove(path)
@@ -635,9 +643,9 @@ func (s *Service) StoreUpload(userID string, sessionID string, header *multipart
 		_ = os.Remove(path)
 		return nil, closeErr
 	}
-	if size > MaxSessionUploadBytes {
+	if size > maxBytes {
 		_ = os.Remove(path)
-		return nil, BadAuthRequest("会话文件不能超过 32MB")
+		return nil, BadAuthRequest(fmt.Sprintf("会话文件不能超过 %dMB", policy.Resource.SessionUploadMB))
 	}
 	item := model.SessionFile{ID: newID(), UserID: userID, SessionID: sessionID, FileName: header.Filename, MimeType: header.Header.Get("Content-Type"), Path: path, Size: size}
 	if err := s.repo.Create(&item); err != nil {
@@ -659,7 +667,11 @@ func (s *Service) ProcessNextTask() error {
 
 func (s *Service) processClaimedTask(task *model.Task) error {
 	_ = s.log(task.UserID, task.ID, "info", "后端任务开始处理", "")
-	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeout(task.Type))
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeoutWithPolicy(task.Type, policy.Task))
 	defer cancel()
 	leaseDone := make(chan struct{})
 	leaseLost := make(chan error, 1)
@@ -784,20 +796,20 @@ func taskFailureMessage(err error) string {
 	return truncateRunes(err.Error(), 2_000)
 }
 
-func taskExecutionTimeout(taskType string) time.Duration {
+func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) time.Duration {
 	switch {
 	case taskType == "agent_storyboard" || taskType == "agent_storyboard_rows":
-		return storyboardTaskTimeout
+		return time.Duration(policy.StoryboardTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_video") || strings.HasPrefix(taskType, "video_"):
-		return videoTaskTimeout
+		return time.Duration(policy.VideoTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_image"):
-		return imageTaskTimeout
+		return time.Duration(policy.ImageTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_audio"):
-		return audioTaskTimeout
+		return time.Duration(policy.AudioTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_text"):
-		return textTaskTimeout
+		return time.Duration(policy.TextTimeoutMinutes) * time.Minute
 	default:
-		return defaultTaskTimeout
+		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
 	}
 }
 

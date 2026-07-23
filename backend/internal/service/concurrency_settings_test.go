@@ -28,11 +28,14 @@ func TestRuntimeConcurrencySettingPersistsAndChannelOverrideWins(t *testing.T) {
 	}
 	svc := New(repository.New(db), t.TempDir())
 	actor := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
-	setting, err := svc.UpdateRuntimeConcurrencySetting(actor, RuntimeConcurrencySettingRequest{WorkerConcurrency: 8, ChannelConcurrency: 6})
+	policy := defaultRuntimePolicy()
+	policy.Task.WorkerConcurrency = 8
+	policy.Task.ChannelConcurrency = 6
+	setting, err := svc.UpdateRuntimePolicySetting(actor, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.WorkerConcurrency != 8 || setting.ChannelConcurrency != 6 {
+	if setting.Task.WorkerConcurrency != 8 || setting.Task.ChannelConcurrency != 6 {
 		t.Fatalf("setting = %#v", setting)
 	}
 

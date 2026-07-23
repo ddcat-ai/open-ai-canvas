@@ -153,9 +153,9 @@ func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, err
 	return count > 0, err
 }
 
-func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder) error {
+func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := enforceActiveTaskLimit(tx, task.UserID); err != nil {
+		if err := enforceActiveTaskLimit(tx, task.UserID, activeTaskLimit); err != nil {
 			return err
 		}
 		if err := reserveBillingOrder(tx, order); err != nil {
@@ -165,19 +165,19 @@ func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *mo
 	})
 }
 
-func (r *Repository) CreateTaskWithActiveLimit(task *model.Task) error {
+func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := enforceActiveTaskLimit(tx, task.UserID); err != nil {
+		if err := enforceActiveTaskLimit(tx, task.UserID, activeTaskLimit); err != nil {
 			return err
 		}
 		return tx.Create(task).Error
 	})
 }
 
-func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *model.BillingOrder) (*model.Task, error) {
+func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *model.BillingOrder, activeTaskLimit int) (*model.Task, error) {
 	var task model.Task
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		if err := enforceActiveTaskLimit(tx, userID); err != nil {
+		if err := enforceActiveTaskLimit(tx, userID, activeTaskLimit); err != nil {
 			return err
 		}
 		if order != nil {
@@ -206,12 +206,12 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 	return &task, err
 }
 
-func enforceActiveTaskLimit(tx *gorm.DB, userID string) error {
+func enforceActiveTaskLimit(tx *gorm.DB, userID string, activeTaskLimit int) error {
 	var count int64
 	if err := tx.Model(&model.Task{}).Where("user_id = ? AND status IN ?", userID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).Count(&count).Error; err != nil {
 		return err
 	}
-	if count >= 5 {
+	if count >= int64(activeTaskLimit) {
 		return ErrActiveTaskLimit
 	}
 	return nil

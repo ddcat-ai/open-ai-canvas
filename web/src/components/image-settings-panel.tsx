@@ -2,7 +2,7 @@ import { type ReactNode, useState } from "react";
 import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { supportsTransparentImageBackground, type AiConfig } from "@/stores/use-config-store";
+import { type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
     { value: "auto", label: "自动" },
@@ -19,6 +19,7 @@ const aspectOptions = [
     { value: "4:3", label: "4:3", width: 1360, height: 1024, icon: "landscape" },
     { value: "3:4", label: "3:4", width: 1024, height: 1360, icon: "portrait" },
     { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape" },
+    { value: "21:9", label: "21:9", size: "2352x1008", width: 2352, height: 1008, icon: "landscape" },
     { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait" },
     { value: "1:1-2k", label: "1:1(2k)", size: "2048x2048", width: 2048, height: 2048, icon: "square" },
     { value: "16:9-2k", label: "16:9(2k)", size: "2048x1152", width: 2048, height: 1152, icon: "landscape" },
@@ -43,7 +44,6 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const [snapDimensionToStep, setSnapDimensionToStep] = useState(true);
     const quality = config.quality || "auto";
     const transparentBackground = config.transparentBackground === "true";
-    const transparentBackgroundSupported = supportsTransparentImageBackground(config, config.model || config.imageModel);
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
     const selectedAspect = aspectOptions.find((item) => (item.size || item.value) === activeSize || item.value === activeSize);
@@ -84,15 +84,14 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                         <SettingTitle color={theme.node.muted}>透明背景</SettingTitle>
-                        <div className="mt-1 text-[11px]" style={{ color: transparentBackgroundSupported ? theme.node.muted : theme.accent.danger }}>
-                            {transparentBackgroundSupported ? "输出保留 Alpha 通道的 PNG" : transparentBackground ? "当前模型不支持，生成会被阻止" : "当前模型不支持透明背景"}
+                        <div className="mt-1 text-[11px]" style={{ color: theme.node.muted }}>
+                            请求模型输出保留 Alpha 通道的 PNG
                         </div>
                     </div>
-                    <span title={transparentBackgroundSupported ? "使用透明背景生成 PNG 图片" : "仅 GPT Image 1 系列模型支持透明背景"} onMouseDown={(event) => event.stopPropagation()}>
+                    <span title="是否支持透明背景由当前模型接口决定" onMouseDown={(event) => event.stopPropagation()}>
                         <Switch
                             size="small"
                             checked={transparentBackground}
-                            disabled={!transparentBackgroundSupported && !transparentBackground}
                             onChange={(checked) => onConfigChange("transparentBackground", checked ? "true" : "false")}
                         />
                     </span>

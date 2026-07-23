@@ -7,12 +7,12 @@ import { buildGenerationConfig, generationTaskMetadata, resetGenerationTaskMetad
 import { unchangedModeratedPrompt } from "@/lib/generation-error";
 import { cancelGenerationTask, listGenerationTasks } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchMode, CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 
-const MAX_ACTIVE_TASKS_PER_USER = 5;
 const SCHEDULER_INTERVAL_MS = 2_000;
 const MAX_BATCH_HISTORY = 20;
 
@@ -31,6 +31,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
     const { message, modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const activeTaskLimit = useUserStore((state) => state.runtimeLimits.activeTaskLimit);
     const schedulingRef = useRef(false);
     const controllersRef = useRef(new Map<string, AbortController>());
 
@@ -139,7 +140,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
         });
     }, [projectId, setNodes]);
 
-    // 调度只补齐用户级 5 个活跃任务的空位，后端 3 个 worker 继续负责实际执行并发。
+    // 调度只补齐后台返回的用户级活跃任务空位，最终并发仍由后端原子校验。
     const scheduleWaitingItems = useCallback(async () => {
         if (!projectLoaded || schedulingRef.current) return;
         schedulingRef.current = true;
@@ -154,7 +155,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                 const item = currentNodes.flatMap((node) => node.metadata?.generationBatches || []).flatMap((batch) => batch.items).find((candidate) => candidate.id === itemId);
                 return item ? !nodeById.get(item.nodeId)?.metadata?.taskId : false;
             }).length;
-            let availableSlots = Math.max(0, MAX_ACTIVE_TASKS_PER_USER - activeTaskCount - pendingReservations);
+            let availableSlots = Math.max(0, activeTaskLimit - activeTaskCount - pendingReservations);
             if (!availableSlots) return;
 
             const candidates: Array<{ batch: CanvasGenerationBatch; item: CanvasGenerationBatchItem; node: CanvasNodeData }> = [];
@@ -198,7 +199,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
         } finally {
             schedulingRef.current = false;
         }
-    }, [effectiveConfig, handleGenerateNode, isAiConfigReady, nodesRef, projectId, projectLoaded, reconcileBatches, updateBatch]);
+    }, [activeTaskLimit, effectiveConfig, handleGenerateNode, isAiConfigReady, nodesRef, projectId, projectLoaded, reconcileBatches, updateBatch]);
 
     const retryFailedBatchItems = useCallback((sourceNodeId: string, batchId: string, itemId?: string) => {
         const batch = findBatch(nodesRef.current, sourceNodeId, batchId);
