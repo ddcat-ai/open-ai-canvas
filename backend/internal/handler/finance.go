@@ -205,6 +205,23 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"models": items})
 	})
+	r.POST("/admin/channels/:id/models/fetch", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if !enforceRateLimit(c, "admin-channel-models-fetch:"+user.ID+":"+c.Param("id"), 10, time.Minute) {
+			return
+		}
+		// 上游密钥只在 service 内使用，handler 仅返回去重后的模型标识和新增数量。
+		result, err := svc.FetchAdminChannelModels(c.Request.Context(), user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.POST("/admin/channels/:id/models", func(c *gin.Context) {
 		saveChannelModel(c, svc, "")
 	})

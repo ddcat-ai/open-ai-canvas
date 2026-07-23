@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeft, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
-import { createAdminChannelModel, disableAdminChannelModel, listAdminChannelModels, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
+import { createAdminChannelModel, disableAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 
 type FormValues = {
@@ -20,6 +20,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [items, setItems] = useState<ChannelModel[]>([]);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
     const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
@@ -50,6 +51,23 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         setStatus("all");
         setPage(1);
     }, [channel.id]);
+
+    const fetchModels = async () => {
+        setFetching(true);
+        try {
+            // 拉取只导入缺失项；新模型仍需管理员定价并手动启用。
+            const result = await fetchAdminChannelModels(channel.id);
+            await reload();
+            await onChanged();
+            if (result.models.length === 0) message.warning("上游没有返回可用模型");
+            else if (result.added > 0) message.success(`已拉取 ${result.models.length} 个模型，新增 ${result.added} 个待配置模型`);
+            else message.info(`已拉取 ${result.models.length} 个模型，没有需要新增的模型`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "拉取模型失败");
+        } finally {
+            setFetching(false);
+        }
+    };
 
     const startCreate = () => {
         setEditing(null);
@@ -148,7 +166,14 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                         <p className="mt-1 text-xs text-foreground/50">维护此渠道的模型能力、启用状态和每次积分价格。</p>
                     </div>
                 </div>
-                <Button type="primary" icon={<Plus className="size-4" />} onClick={startCreate}>新增模型</Button>
+                <Space wrap>
+                    <Button loading={fetching} icon={<RefreshCw className="size-4" />} onClick={() => void fetchModels()}>
+                        拉取模型
+                    </Button>
+                    <Button type="primary" icon={<Plus className="size-4" />} onClick={startCreate}>
+                        新增模型
+                    </Button>
+                </Space>
             </div>
             <ListToolbar active={Boolean(keyword || capability !== "all" || status !== "all")} onReset={() => { setKeyword(""); setCapability("all"); setStatus("all"); setPage(1); }}>
                 <Input allowClear className="w-full sm:w-72" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索模型标识或显示名称" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />

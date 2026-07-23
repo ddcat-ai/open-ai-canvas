@@ -922,8 +922,28 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
     }
 }
 
-export async function fetchChannelModels(channel: ModelChannel) {
-    return fetchImageModels({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, apiFormat: channel.apiFormat });
+export async function fetchChannelModels(channel: ModelChannel, viaBackend = false) {
+    if (!viaBackend) {
+        return fetchImageModels({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, apiFormat: channel.apiFormat });
+    }
+    try {
+        // 登录态由同源后端代取模型目录，避免每个 OpenAI 兼容服务分别维护浏览器 CORS 白名单。
+        const response = await axios.post<{ code?: number; data?: { models?: string[] }; msg?: string }>(
+            resolveBackendApiUrl("/api/ai/models"),
+            {
+                baseUrl: channel.baseUrl,
+                apiKey: channel.apiKey,
+                apiFormat: channel.apiFormat,
+            },
+            { withCredentials: true },
+        );
+        if (typeof response.data.code === "number" && response.data.code !== 0) {
+            throw new Error(response.data.msg || "读取模型失败");
+        }
+        return Array.from(new Set((response.data.data?.models || []).map((model) => model.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    } catch (error) {
+        throw new Error(readAxiosError(error, "读取模型失败"));
+    }
 }
 
 const defaultGeminiConfig: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat" | "model" | "systemPrompt"> = {
