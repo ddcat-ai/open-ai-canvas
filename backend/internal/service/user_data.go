@@ -52,6 +52,10 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 	if err != nil {
 		return UserDataSummary{}, err
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return UserDataSummary{}, err
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	existing, existingErr := s.repo.AssetForUser(userID, asset.ID)
@@ -66,7 +70,7 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 	if err != nil {
 		return UserDataSummary{}, err
 	}
-	if err := validateStructuredStorageQuota(usage, "asset", errors.Is(existingErr, gorm.ErrRecordNotFound), int64(len(raw))-existingBytes); err != nil {
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", errors.Is(existingErr, gorm.ErrRecordNotFound), int64(len(raw))-existingBytes, policy.Resource); err != nil {
 		return UserDataSummary{}, err
 	}
 	if err := s.repo.UpsertAsset(&asset); err != nil {
@@ -107,13 +111,17 @@ func (s *Service) ReplaceUserAssets(userID string, req AssetsSyncRequest) ([]jso
 		assets = append(assets, item)
 		totalBytes += int64(len(raw))
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	usage, err := s.repo.UserStorageUsage(userID)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateStructuredReplacementQuota(usage, "asset", len(assets), totalBytes); err != nil {
+	if err := validateStructuredReplacementQuotaWithPolicy(usage, "asset", len(assets), totalBytes, policy.Resource); err != nil {
 		return nil, err
 	}
 	if err := s.repo.ReplaceAssets(userID, assets); err != nil {
@@ -164,6 +172,10 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	if err != nil {
 		return UserDataSummary{}, err
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return UserDataSummary{}, err
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	existing, existingErr := s.repo.CanvasProjectForUser(userID, project.ID)
@@ -178,7 +190,7 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	if err != nil {
 		return UserDataSummary{}, err
 	}
-	if err := validateStructuredStorageQuota(usage, "canvas", errors.Is(existingErr, gorm.ErrRecordNotFound), int64(len(raw))-existingBytes); err != nil {
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "canvas", errors.Is(existingErr, gorm.ErrRecordNotFound), int64(len(raw))-existingBytes, policy.Resource); err != nil {
 		return UserDataSummary{}, err
 	}
 	if err := s.repo.UpsertCanvasProject(&project); err != nil {
@@ -208,13 +220,17 @@ func (s *Service) ReplaceUserCanvasProjects(userID string, req CanvasProjectsSyn
 		projects = append(projects, item)
 		totalBytes += int64(len(raw))
 	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	usage, err := s.repo.UserStorageUsage(userID)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateStructuredReplacementQuota(usage, "canvas", len(projects), totalBytes); err != nil {
+	if err := validateStructuredReplacementQuotaWithPolicy(usage, "canvas", len(projects), totalBytes, policy.Resource); err != nil {
 		return nil, err
 	}
 	if err := s.repo.ReplaceCanvasProjects(userID, projects); err != nil {

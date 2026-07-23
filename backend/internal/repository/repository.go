@@ -18,15 +18,15 @@ type Repository struct {
 }
 
 type UserStorageUsage struct {
-	AssetCount   int64
-	AssetBytes   int64
-	CanvasCount  int64
-	CanvasBytes  int64
-	SessionCount int64
-	SessionBytes int64
-	TaskCount    int64
-	TaskBytes    int64
-	APICallCount int64
+	AssetCount   int64 `json:"assetCount"`
+	AssetBytes   int64 `json:"assetBytes"`
+	CanvasCount  int64 `json:"canvasCount"`
+	CanvasBytes  int64 `json:"canvasBytes"`
+	SessionCount int64 `json:"sessionCount"`
+	SessionBytes int64 `json:"sessionBytes"`
+	TaskCount    int64 `json:"taskCount"`
+	TaskBytes    int64 `json:"taskBytes"`
+	APICallCount int64 `json:"apiCallCount"`
 }
 
 func New(db *gorm.DB) *Repository {
@@ -530,6 +530,10 @@ func (r *Repository) SystemSetting(key string) (*model.SystemSetting, error) {
 
 func (r *Repository) SaveSystemSetting(setting *model.SystemSetting) error {
 	return r.db.Save(setting).Error
+}
+
+func (r *Repository) DeleteSystemSetting(key string) error {
+	return r.db.Delete(&model.SystemSetting{}, "key = ?", key).Error
 }
 
 func (r *Repository) LatestUserOSSSetting(userID string) (*model.UserOSSSetting, error) {

@@ -9,7 +9,7 @@ import (
 
 func TestReserveUserUploadQuotaRejectsSingleFileAtLimit(t *testing.T) {
 	svc := newResourceTestService(t)
-	_, err := svc.reserveUserUploadQuota("user-1", MaxResourceUploadBytes)
+	_, err := svc.reserveUserUploadQuota("user-1", megabytes(defaultRuntimePolicy().Resource.ResourceUploadMB))
 	if err == nil || !strings.Contains(err.Error(), "小于 50MB") {
 		t.Fatalf("reserveUserUploadQuota() error = %v", err)
 	}
@@ -60,7 +60,7 @@ func TestCommitUserUploadQuotaKeepsDailyUsageWithoutPendingStorage(t *testing.T)
 
 func TestReserveUserUploadQuotaRejectsTotalStoredFilesAtLimit(t *testing.T) {
 	svc := newResourceTestService(t)
-	if err := svc.repo.Create(&model.Resource{ID: "resource-1", UserID: "user-1", Status: model.ResourceStatusReady, Size: MaxUserStoredFileBytes - 1}); err != nil {
+	if err := svc.repo.Create(&model.Resource{ID: "resource-1", UserID: "user-1", Status: model.ResourceStatusReady, Size: gigabytes(defaultRuntimePolicy().Resource.StoredFileGB) - 1}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.reserveUserUploadQuota("user-1", 1); err == nil || !strings.Contains(err.Error(), "2GB 上限") {

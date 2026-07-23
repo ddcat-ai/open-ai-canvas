@@ -29,6 +29,13 @@ export type AdminUser = LocalUser & {
 export type AuthSessionPayload = {
     user: LocalUser | null;
     systemChannels?: ModelChannel[];
+    runtimeLimits?: RuntimeLimits;
+};
+
+export type RuntimeLimits = {
+    activeTaskLimit: number;
+    resourceUploadMB: number;
+    sessionUploadMB: number;
 };
 
 export type ApiCallLog = {
@@ -81,6 +88,13 @@ export type AdminUserDetail = {
     user: LocalUser;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
     counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number };
+    storageUsage: {
+        assetCount: number; assetBytes: number; canvasCount: number; canvasBytes: number;
+        sessionCount: number; sessionBytes: number; taskCount: number; taskBytes: number; apiCallCount: number;
+    };
+    storedFileBytes: number;
+    dailyUploadBytes: number;
+    quota: RuntimeResourcePolicy;
 };
 
 export type AdminUserTask = {
@@ -197,9 +211,62 @@ export type AdminOSSSetting = {
     updatedAt?: string;
 };
 
-export type RuntimeConcurrencySetting = {
+export type RuntimeResourcePolicy = {
+    resourceUploadMB: number;
+    sessionUploadMB: number;
+    generatedFileMB: number;
+    dailyUploadMB: number;
+    storedFileGB: number;
+    structuredDataMB: number;
+    taskDataGB: number;
+    assetCount: number;
+    canvasCount: number;
+    sessionCount: number;
+    taskCount: number;
+    apiCallLogCount: number;
+};
+
+export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;
+    activeTaskLimit: number;
+    imageTimeoutMinutes: number;
+    textTimeoutMinutes: number;
+    audioTimeoutMinutes: number;
+    videoTimeoutMinutes: number;
+    storyboardTimeoutMinutes: number;
+    defaultTimeoutMinutes: number;
+};
+
+export type RuntimeRequestPolicy = {
+    taskCreatePerMinute: number;
+    sessionCreatePerMinute: number;
+    resourceUploadPerMinute: number;
+    resourceImportPerMinute: number;
+    sessionFilePerMinute: number;
+    assetWritePerMinute: number;
+    canvasWritePerMinute: number;
+    registerPerHour: number;
+    emailCodePerHour: number;
+    loginIPPerTenMinutes: number;
+    loginAccountPerTenMinutes: number;
+    systemRelayPerMinute: number;
+    customRelayPerMinute: number;
+    customRelayConcurrency: number;
+    customRelayRequestMB: number;
+    customRelayResponseMB: number;
+    customRelayTimeoutMinutes: number;
+    systemRelayRequestMB: number;
+    systemRelayResponseMB: number;
+    channelCircuitFailureCount: number;
+    channelCircuitOpenSeconds: number;
+};
+
+export type RuntimePolicySetting = {
+    resource: RuntimeResourcePolicy;
+    task: RuntimeTaskPolicy;
+    request: RuntimeRequestPolicy;
+    configured?: boolean;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -329,12 +396,20 @@ export function updateAdminOSSSetting(input: Partial<AdminOSSSetting>) {
     return request<{ setting: AdminOSSSetting }>(api.patch("/admin/settings/oss", input));
 }
 
-export function getAdminRuntimeConcurrencySetting() {
-    return request<{ setting: RuntimeConcurrencySetting }>(api.get("/admin/settings/concurrency"));
+export function getAdminRuntimePolicySetting() {
+    return request<{ setting: RuntimePolicySetting }>(api.get("/admin/settings/runtime-policy"));
 }
 
-export function updateAdminRuntimeConcurrencySetting(input: Pick<RuntimeConcurrencySetting, "workerConcurrency" | "channelConcurrency">) {
-    return request<{ setting: RuntimeConcurrencySetting }>(api.patch("/admin/settings/concurrency", input));
+export function getAdminSelfUseRuntimePolicy() {
+    return request<{ setting: RuntimePolicySetting }>(api.get("/admin/settings/runtime-policy/self-use"));
+}
+
+export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting, "resource" | "task" | "request">) {
+    return request<{ setting: RuntimePolicySetting }>(api.put("/admin/settings/runtime-policy", input));
+}
+
+export function resetAdminRuntimePolicySetting() {
+    return request<{ setting: RuntimePolicySetting }>(api.delete("/admin/settings/runtime-policy"));
 }
 
 export function listAdminApiLogs(params: AdminListParams = {}) {
