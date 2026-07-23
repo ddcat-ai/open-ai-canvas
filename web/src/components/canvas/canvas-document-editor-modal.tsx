@@ -45,7 +45,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import type { Editor } from "@tiptap/core";
 import type { CanvasDocumentChapter, CanvasNodeData, CanvasRichDocument } from "@/types/canvas";
-import { buildRichDocument, createDocumentChapter, emptyDocument, normalizeDocumentChapters, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
+import { buildRichDocument, createDocumentChapter, decodeNovelText, emptyDocument, normalizeDocumentChapters, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 
@@ -281,7 +281,7 @@ export function CanvasDocumentEditorModal({ node, open, saving = false, analyzin
             if (file.name.toLowerCase().endsWith(".docx")) {
                 const mammoth = await import("mammoth");
                 text = (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
-            } else text = await file.text();
+            } else text = decodeNovelText(await file.arrayBuffer());
             if (!text.trim()) throw new Error("文件中没有可编辑的文字");
             const imported = splitTextIntoChapters(text);
             setChapters(imported);
