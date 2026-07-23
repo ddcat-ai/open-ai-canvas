@@ -383,13 +383,6 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
-// 透明背景必须按模型能力显式开放，避免代理接口静默忽略参数后返回不透明图片。
-export function supportsTransparentImageBackground(config: AiConfig, value: string) {
-    const channel = resolveModelChannel(config, value);
-    const model = modelOptionName(value).trim().toLowerCase();
-    return channel.apiFormat === "openai" && (model === "gpt-image-1" || model.startsWith("gpt-image-1-") || model.startsWith("gpt-image-1."));
-}
-
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     return {
