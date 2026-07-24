@@ -6,6 +6,7 @@ docs/
 !.env.example
 data/
 .local/
+/.local/docker-compose.postgres.yml
 coverage/
 dist/
 *.log

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { App, Button, Dropdown, Empty, Input, Select } from "antd";
+import { App, Button, Dropdown, Empty, Input, Modal, Select } from "antd";
 import { Download, FileUp, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
