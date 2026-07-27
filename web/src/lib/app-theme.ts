@@ -8,8 +8,8 @@ const neutral = {
         primaryText: "#ffffff",
         menuBg: "#f5f5f5",
         menuText: "#171717",
-        selectActiveBg: "#f5f5f5",
-        selectSelectedBg: "#f0f0f0",
+        selectActiveBg: "rgba(17, 17, 17, 0.035)",
+        selectSelectedBg: "rgba(17, 17, 17, 0.065)",
         selectText: "#171717",
         tableSelectedBg: "rgba(17, 17, 17, 0.05)",
         tableSelectedHoverBg: "rgba(17, 17, 17, 0.08)",
@@ -20,8 +20,8 @@ const neutral = {
         primaryText: "#171717",
         menuBg: "#262626",
         menuText: "#fafafa",
-        selectActiveBg: "#262626",
-        selectSelectedBg: "#333333",
+        selectActiveBg: "rgba(255, 255, 255, 0.055)",
+        selectSelectedBg: "rgba(255, 255, 255, 0.09)",
         selectText: "#fafafa",
         tableSelectedBg: "rgba(255, 255, 255, 0.08)",
         tableSelectedHoverBg: "rgba(255, 255, 255, 0.12)",
@@ -33,7 +33,19 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
     const elevatedBackground = dark ? "rgba(31, 31, 32, 0.96)" : "rgba(255, 255, 255, 0.96)";
     const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
     const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
-    const focusShadow = dark ? "0 0 0 3px rgba(116, 133, 238, 0.16)" : "0 0 0 3px rgba(17, 17, 17, 0.08)";
+    const focusShadow = dark ? "0 0 0 3px rgba(255, 255, 255, 0.12)" : "0 0 0 3px rgba(17, 17, 17, 0.08)";
+    // 暗色界面的黑白主按钮与选择控件分色，避免开关轨道、勾选符号和滑块融成一片。
+    const selectionControl = dark
+        ? {
+              active: "#4657c5",
+              border: "rgba(255, 255, 255, 0.3)",
+              disabledBackground: "rgba(255, 255, 255, 0.06)",
+              focus: "rgba(116, 133, 238, 0.28)",
+              hover: "#7485ee",
+              primary: "#5b6ee1",
+              surface: "rgba(255, 255, 255, 0.035)",
+          }
+        : null;
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
@@ -51,9 +63,11 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             borderRadius: 6,
             borderRadiusLG: 8,
             borderRadiusSM: 5,
-            controlHeight: 34,
-            controlHeightLG: 40,
-            controlHeightSM: 28,
+            controlHeight: 36,
+            controlHeightLG: 42,
+            controlHeightSM: 30,
+            fontSize: 13,
+            fontSizeSM: 12,
             motionDurationFast: "0.12s",
             motionDurationMid: "0.18s",
             motionDurationSlow: "0.24s",
@@ -61,12 +75,16 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
         components: {
             Button: {
                 primaryShadow: "none",
+                fontWeight: 500,
+                paddingInline: 14,
+                paddingInlineLG: 16,
+                paddingInlineSM: 10,
                 ...(dark
                     ? {
-                          colorPrimary: "#5b6ee1",
-                          colorPrimaryHover: "#7485ee",
-                          colorPrimaryActive: "#4657c5",
-                          primaryColor: "#ffffff",
+                          colorPrimary: "#f5f5f4",
+                          colorPrimaryHover: "#ffffff",
+                          colorPrimaryActive: "#e7e5e4",
+                          primaryColor: "#171717",
                           defaultBg: "#262626",
                           defaultColor: "#f5f5f4",
                           defaultBorderColor: "#404040",
@@ -80,6 +98,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                     : {}),
             },
             Input: {
+                paddingInline: 11,
                 activeBg: elevatedBackground,
                 hoverBg: elevatedBackground,
                 activeBorderColor: interactiveBorder,
@@ -96,12 +115,47 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             Switch: {
                 handleBg: dark ? "#fafafa" : "#ffffff",
                 handleShadow: dark ? "0 1px 4px rgba(0, 0, 0, 0.42)" : "0 1px 2px rgba(0, 0, 0, 0.2)",
-                ...(dark
+                ...(selectionControl
                     ? {
-                          colorPrimary: "#5b6ee1",
-                          colorPrimaryHover: "#7485ee",
-                          colorTextQuaternary: "rgba(255, 255, 255, 0.18)",
-                          colorTextTertiary: "rgba(255, 255, 255, 0.26)",
+                          colorPrimary: selectionControl.primary,
+                          colorPrimaryActive: selectionControl.active,
+                          colorPrimaryHover: selectionControl.hover,
+                          colorTextQuaternary: "rgba(255, 255, 255, 0.16)",
+                          colorTextTertiary: "rgba(255, 255, 255, 0.24)",
+                          controlOutline: selectionControl.focus,
+                      }
+                    : {}),
+            },
+            Checkbox: {
+                ...(selectionControl
+                    ? {
+                          colorBgContainer: selectionControl.surface,
+                          colorBgContainerDisabled: selectionControl.disabledBackground,
+                          colorBorder: selectionControl.border,
+                          colorPrimary: selectionControl.primary,
+                          colorPrimaryActive: selectionControl.active,
+                          colorPrimaryHover: selectionControl.hover,
+                          controlOutline: selectionControl.focus,
+                      }
+                    : {}),
+            },
+            Radio: {
+                radioSize: 16,
+                dotSize: 6,
+                ...(selectionControl
+                    ? {
+                          buttonBg: selectionControl.surface,
+                          buttonCheckedBg: "rgba(91, 110, 225, 0.12)",
+                          buttonSolidCheckedActiveBg: selectionControl.active,
+                          buttonSolidCheckedBg: selectionControl.primary,
+                          buttonSolidCheckedHoverBg: selectionControl.hover,
+                          colorBgContainer: selectionControl.surface,
+                          colorBgContainerDisabled: selectionControl.disabledBackground,
+                          colorBorder: selectionControl.border,
+                          colorPrimary: selectionControl.primary,
+                          colorPrimaryActive: selectionControl.active,
+                          colorPrimaryHover: selectionControl.hover,
+                          controlOutline: selectionControl.focus,
                       }
                     : {}),
             },
@@ -116,9 +170,12 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             },
             Select: {
                 selectorBg: elevatedBackground,
+                optionHeight: 36,
+                optionPadding: "8px 10px",
+                multipleItemHeight: 24,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
-                activeOutlineColor: dark ? "rgba(116, 133, 238, 0.16)" : "rgba(17, 17, 17, 0.08)",
+                activeOutlineColor: dark ? "rgba(255, 255, 255, 0.12)" : "rgba(17, 17, 17, 0.08)",
                 optionActiveBg: color.selectActiveBg,
                 optionSelectedBg: color.selectSelectedBg,
                 optionSelectedColor: color.selectText,
@@ -161,6 +218,10 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             },
             Dropdown: {
                 paddingBlock: 6,
+            },
+            Skeleton: {
+                gradientFromColor: dark ? "rgba(255, 255, 255, 0.055)" : "rgba(15, 23, 42, 0.055)",
+                gradientToColor: dark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.1)",
             },
             Card: {
                 headerBg: "transparent",

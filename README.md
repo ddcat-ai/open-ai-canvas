@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="无限画布 logo">
+  <img src="web/public/logo.svg" width="88" alt="影策 logo">
 </p>
 
-<h1 align="center">无限画布</h1>
+<h1 align="center">影策</h1>
 
-<p align="center">面向 AI 影视创作的开源画布工作台</p>
+<p align="center">让一个故事，从文字走向银幕</p>
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
@@ -12,7 +12,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
-无限画布把节点编排、图片/视频/音频生成、结构化分镜、3D 导演台、素材库、异步任务和 Agent 会话放在同一个创作空间中，适合连续探索视觉方案并沉淀影视资产。
+一个故事也许始于一页小说、一个人物，或一句还没写完的对白。影策从章节中梳理角色与情节，让人物的外观、声音和气质成为可复用的角色资产，再把分镜、图片、视频和音频组织在同一张画布上。从最初的文字到可以被看见、被听见的镜头，创作者始终掌握故事的方向。
+
+影策是一款面向 AI 影视与短剧创作的开源工作台，集成自由画布、结构化分镜、角色卡、3D 导演台、素材库、异步生成任务和 Agent 协作能力。
 
 > 项目仍在快速开发，数据结构可能直接调整。当前更适合个人、本地或可信环境部署，不建议未经安全配置直接开放公网多人使用。
 
@@ -23,7 +25,7 @@
 
 ## 主要功能
 
-- **无限画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
+- **自由画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
 - **AI 生成**：支持文本、图片、视频和音频任务，以及参考图编辑、首尾帧、运镜、视频续写和局部修改。
 - **影视工作流**：结构化分镜脚本、角色卡、批量镜头节点、3D 导演台和控制图回写。
 - **任务与素材**：后端异步队列、任务日志、失败重试、素材库及登录后的后端同步。
@@ -64,7 +66,7 @@
 Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/qq.jpg" alt="无限画布 QQ 交流群" width="360">
+  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="360">
 </p>
 
 ## 新服务器一键部署（推荐）

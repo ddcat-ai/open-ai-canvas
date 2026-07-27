@@ -1,6 +1,6 @@
 import { App, Button, Drawer, Form, Input, InputNumber, Select, Switch, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Pencil, Plus, Power, Search } from "lucide-react";
+import { Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -123,8 +123,7 @@ export default function ChannelsPage() {
 
     const toggleChannel = async (channel: ModelChannel) => {
         try {
-            if (channel.enabled === false) await updateAdminChannel(channel.id, { enabled: true });
-            else await deleteAdminChannel(channel.id);
+            await updateAdminChannel(channel.id, { enabled: channel.enabled === false });
             await syncChannels();
             await reload();
             message.success(channel.enabled === false ? "系统渠道已启用" : "系统渠道已停用");
@@ -133,14 +132,25 @@ export default function ChannelsPage() {
         }
     };
 
+    const removeChannel = async (channel: ModelChannel) => {
+        try {
+            await deleteAdminChannel(channel.id);
+            await syncChannels();
+            await reload();
+            message.success("系统渠道已删除");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "删除系统渠道失败");
+        }
+    };
+
     const columns: ColumnsType<ModelChannel> = [
         { title: "渠道", dataIndex: "name", render: (_, channel) => <div><div className="font-medium">{channel.name}</div><div className="max-w-lg truncate text-xs text-foreground/45">{channel.baseUrl}</div></div> },
-        { title: "接口类型", dataIndex: "interfaceType", width: 160, render: (value: ChannelInterfaceType) => <Tag bordered={false} color={value === "newapi-channel-1" ? "green" : value === "newapi" ? "orange" : value === "newapi-channel-2" ? "purple" : value === "xai-video" ? "cyan" : "blue"}>{interfaceTypeLabel(value)}</Tag> },
+        { title: "接口类型", dataIndex: "interfaceType", width: 160, render: (value: ChannelInterfaceType) => <Tag variant="filled" color={value === "newapi-channel-1" ? "green" : value === "newapi" ? "orange" : value === "newapi-channel-2" ? "purple" : value === "xai-video" ? "cyan" : "blue"}>{interfaceTypeLabel(value)}</Tag> },
         { title: "模型", dataIndex: "models", width: 100, render: (models: string[]) => `${models?.length || 0} 个` },
         { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, render: (value: number) => value > 0 ? value : <span className="text-foreground/45">跟随系统</span> },
-        { title: "密钥", dataIndex: "hasApiKey", width: 100, render: (configured) => <Tag bordered={false} color={configured ? "success" : "default"}>{configured ? "已配置" : "未配置"}</Tag> },
-        { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <Tag bordered={false} color={enabled !== false ? "success" : "default"}>{enabled !== false ? "已启用" : "已停用"}</Tag> },
-        { title: "操作", width: 160, fixed: "right", align: "right", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑渠道", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，历史账单和调用记录继续保留。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }]} /> },
+        { title: "密钥", dataIndex: "hasApiKey", width: 100, render: (configured) => <Tag variant="filled" color={configured ? "success" : "default"}>{configured ? "已配置" : "未配置"}</Tag> },
+        { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <Tag variant="filled" color={enabled !== false ? "success" : "default"}>{enabled !== false ? "已启用" : "已停用"}</Tag> },
+        { title: "操作", width: 160, fixed: "right", align: "right", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑渠道", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }, { key: "delete", label: "删除渠道", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" }, onClick: () => removeChannel(channel) }]} /> },
     ];
 
     if (managingChannel) {
@@ -150,19 +160,19 @@ export default function ChannelsPage() {
     return (
         <AdminPageFrame title="系统渠道" description="渠道、模型与售价" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>}>
             <ListToolbar active={hasFilters} onReset={() => updateUrl({ filter: "", interfaceType: "all", status: "all", page: 1 })}>
-                <Input allowClear className="w-full sm:w-72" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索渠道名称或地址" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />
+                <Input id="admin-channel-search" aria-label="搜索系统渠道" autoComplete="off" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索渠道名称或地址" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />
                 <Select className="w-40" value={interfaceType} onChange={(value) => updateUrl({ interfaceType: value, page: 1 })} options={[{ label: "全部接口", value: "all" }, ...interfaceTypeOptions.flatMap((group) => group.options)]} />
                 <Select className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />
             </ListToolbar>
             <TableSurface>
                 {loading && channels.length === 0 ? <AdminTableSkeleton rows={8} columns={7} /> : <Table className="app-data-table" size="middle" rowKey="id" loading={loading} columns={columns} dataSource={channels} locale={{ emptyText: <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} description={hasFilters ? undefined : "创建渠道并配置模型后，普通用户即可使用系统模型。"} action={hasFilters ? undefined : <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>} /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 条`, onChange: (nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize }) }} scroll={{ x: 970 }} />}
             </TableSurface>
-            <Drawer title={editingChannel ? "编辑系统渠道" : "新增系统渠道"} open={drawerOpen} width="min(560px, 100vw)" onClose={closeDrawer} maskClosable={!saving} destroyOnHidden extra={<Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>}>
+            <Drawer title={editingChannel ? "编辑系统渠道" : "新增系统渠道"} open={drawerOpen} size="min(560px, 100vw)" onClose={closeDrawer} maskClosable={!saving} destroyOnHidden extra={<Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>}>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请填写渠道名称" }]}><Input placeholder="例如：OpenAI 官方渠道" /></Form.Item>
                     <Form.Item name="interfaceType" label="接口类型" rules={[{ required: true, message: "请选择接口类型" }]} extra="按生成能力选择实际上游协议；系统渠道统一使用 Bearer 鉴权。"><Select options={interfaceTypeOptions} onChange={(value: ChannelInterfaceType) => { const current = String(form.getFieldValue("baseUrl") || "").trim(); if (!current || current === defaultBaseUrlForChannelInterface()) form.setFieldValue("baseUrl", defaultBaseUrlForChannelInterface(value)); }} /></Form.Item>
                     <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}><Input placeholder="填写渠道 Base URL" /></Form.Item>
-                    <Form.Item name="apiKey" label={editingChannel ? `API Key（${configuredSecretText}）` : "API Key"} rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key" }]}><Input.Password placeholder={editingChannel ? "留空保留原密钥" : "系统渠道密钥"} /></Form.Item>
+                    <Form.Item name="apiKey" label={editingChannel ? `API Key（${configuredSecretText}）` : "API Key"} rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key" }]}><Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原密钥" : "系统渠道密钥"} /></Form.Item>
                     <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked"><Switch /></Form.Item>
                     <Form.Item name="concurrencyLimit" label="渠道最大并发数" extra="后台任务和系统代理请求共享该渠道上限；槽位暂满时请求会等待。" rules={useGlobalConcurrency ? [] : [{ required: true, message: "请填写渠道最大并发数" }, { type: "number", min: 1, max: 999, message: "请输入 1-999 的整数" }]}><InputNumber className="w-full" min={1} max={999} precision={0} disabled={useGlobalConcurrency} placeholder={useGlobalConcurrency ? "使用系统默认值" : "1-999"} /></Form.Item>
                     <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>

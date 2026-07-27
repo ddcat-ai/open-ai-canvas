@@ -1,6 +1,6 @@
 import { App, Button, Input, Select, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Download, Eye, Search } from "lucide-react";
+import { Eye, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -10,7 +10,7 @@ import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/service
 import { useAdminContext } from "../admin-context";
 import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminBatchBar, AdminTableEmpty, AdminTableSkeleton } from "../components/admin-ui";
+import { AdminBatchBar, AdminExportButton, AdminTableEmpty, AdminTableSkeleton } from "../components/admin-ui";
 
 export default function LogsPage() {
     const { message } = App.useApp();
@@ -24,7 +24,6 @@ export default function LogsPage() {
     const [logs, setLogs] = useState<ApiCallLog[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
     const requestSequence = useRef(0);
@@ -56,31 +55,13 @@ export default function LogsPage() {
             .finally(() => sequence === requestSequence.current && setLoading(false));
     }, [debouncedKeyword, status, page, pageSize]);
 
-    const exportLogs = async (ids?: string[]) => {
-        setExporting(true);
-        try {
-            const blob = await exportAdminApiLogs({ keyword: ids?.length ? undefined : debouncedKeyword || undefined, status: ids?.length ? undefined : status === "all" ? undefined : status, ids });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = ids?.length ? `请求明细-已选${ids.length}条.csv` : `请求明细-${new Date().toISOString().slice(0, 10)}.csv`;
-            link.click();
-            URL.revokeObjectURL(url);
-            message.success(ids?.length ? `已导出选中的 ${ids.length} 条请求明细` : "已按当前筛选导出请求明细");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "导出请求明细失败");
-        } finally {
-            setExporting(false);
-        }
-    };
-
     const columns: ColumnsType<ApiCallLog> = [
         { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
         { title: "用户", dataIndex: "userId", width: 160, render: (id) => userNameById.get(id) || id },
         { title: "渠道", dataIndex: "channelName", width: 170, render: (name, log) => name || log.channelId || <span className="text-foreground/40">未记录</span> },
         { title: "模型", dataIndex: "model", width: 180, render: (model) => model || <span className="text-foreground/40">未识别</span> },
         { title: "能力 / 阶段", width: 125, render: (_, log) => `${capabilityText(log.capability)} / ${requestKindText(log.requestKind)}` },
-        { title: "状态", dataIndex: "status", width: 110, render: (value, log) => <Tag bordered={false} color={value === "succeeded" ? "success" : "error"}>{value === "succeeded" ? "成功" : `失败 ${log.statusCode || ""}`}</Tag> },
+        { title: "状态", dataIndex: "status", width: 110, render: (value, log) => <Tag variant="filled" color={value === "succeeded" ? "success" : "error"}>{value === "succeeded" ? "成功" : `失败 ${log.statusCode || ""}`}</Tag> },
         { title: "错误码", dataIndex: "errorCode", width: 160, ellipsis: true, render: (value) => value || "--" },
         { title: "耗时", dataIndex: "durationMs", width: 100, render: (value) => `${value}ms` },
         { title: "Token", width: 145, render: (_, log) => log.usageAvailable ? `${log.inputTokens} / ${log.outputTokens}` : "--" },
@@ -89,12 +70,12 @@ export default function LogsPage() {
     ];
 
     return (
-        <AdminPageFrame title="请求明细" description="上游调用与费用" actions={<Button icon={<Download className="size-4" />} loading={exporting} onClick={() => void exportLogs()}>导出当前筛选</Button>}>
+        <AdminPageFrame title="请求明细" description="上游调用与费用" actions={<AdminExportButton exportFile={() => exportAdminApiLogs({ keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })} fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`} label="导出当前筛选" successMessage="已按当前筛选导出请求明细" errorMessage="导出请求明细失败" />}>
             <ListToolbar active={hasFilters} onReset={() => updateUrl({ filter: "", status: "all", page: 1 })}>
-                <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索用户、渠道、模型、路径或请求号" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />
+                <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索用户、渠道、模型、路径或请求号" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />
                 <Select className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部结果", value: "all" }, { label: "成功", value: "succeeded" }, { label: "失败", value: "failed" }]} />
             </ListToolbar>
-            <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}><Button type="primary" size="small" icon={<Download className="size-3.5" />} loading={exporting} onClick={() => void exportLogs(selectedIds)}>导出已选</Button></AdminBatchBar>
+            <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}><AdminExportButton type="primary" size="small" exportFile={() => exportAdminApiLogs({ ids: selectedIds })} fileName={() => `请求明细-已选${selectedIds.length}条.csv`} label="导出已选" successMessage={`已导出选中的 ${selectedIds.length} 条请求明细`} errorMessage="导出请求明细失败" /></AdminBatchBar>
             <TableSurface>
                 {loading && logs.length === 0 ? <AdminTableSkeleton rows={8} columns={11} /> : <Table className="app-data-table" size="middle" rowKey="id" loading={loading} rowSelection={{ selectedRowKeys: selectedIds, preserveSelectedRowKeys: false, onChange: (keys) => setSelectedIds(keys.map(String)) }} columns={columns} dataSource={logs} locale={{ emptyText: <AdminTableEmpty filtered={hasFilters} /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 条`, onChange: (nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize }) }} scroll={{ x: 1280 }} />}
             </TableSurface>

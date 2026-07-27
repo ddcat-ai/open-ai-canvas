@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Ban, Copy, Download, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
+import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
 import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
+import { AdminExportButton } from "./admin-ui";
 
 type RedeemFormValues = { amount: number; count: number; note?: string; expiresAt?: string };
 
@@ -84,14 +85,14 @@ export default function RedemptionCodesPanel() {
                     </span>
                     <span className="text-xs text-foreground/45">已核销</span>
                     {(batch.expiredCount ?? 0) > 0 ? (
-                        <Tag bordered={false} color="default">
+                        <Tag variant="filled" color="default">
                             {batch.expiredCount} 已过期
                         </Tag>
                     ) : null}
                 </div>
             ),
         },
-        { title: "有效期", dataIndex: "expiresAt", width: 180, render: (value) => (value ? formatTime(value) : <Tag bordered={false}>永久有效</Tag>) },
+        { title: "有效期", dataIndex: "expiresAt", width: 180, render: (value) => (value ? formatTime(value) : <Tag variant="filled">永久有效</Tag>) },
         { title: "批次备注", dataIndex: "note", render: (value) => value || <span className="text-foreground/35">未填写</span> },
         {
             title: "操作",
@@ -181,7 +182,7 @@ export default function RedemptionCodesPanel() {
                 >
                     <Input
                         allowClear
-                        className="w-full sm:w-72"
+                        className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
                         value={keyword}
                         placeholder="搜索批次备注、积分或数量"
@@ -242,14 +243,6 @@ function GeneratedCodesModal({ codes, onClose }: { codes: string[]; onClose: () 
         await navigator.clipboard.writeText(content);
         message.success("兑换码已复制");
     };
-    const download = () => {
-        const url = URL.createObjectURL(new Blob([content + "\n"], { type: "text/plain;charset=utf-8" }));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `兑换码-${new Date().toISOString().slice(0, 10)}.txt`;
-        link.click();
-        URL.revokeObjectURL(url);
-    };
     return (
         <Modal
             title={`已生成 ${codes.length} 个兑换码`}
@@ -260,9 +253,7 @@ function GeneratedCodesModal({ codes, onClose }: { codes: string[]; onClose: () 
                     <Button icon={<Copy className="size-4" />} onClick={() => void copy()}>
                         复制全部
                     </Button>
-                    <Button type="primary" icon={<Download className="size-4" />} onClick={download}>
-                        下载 TXT
-                    </Button>
+                    <AdminExportButton type="primary" exportFile={() => new Blob([content + "\n"], { type: "text/plain;charset=utf-8" })} fileName={() => `兑换码-${new Date().toISOString().slice(0, 10)}.txt`} label="下载 TXT" />
                 </Space>
             }
             width={680}
@@ -390,14 +381,14 @@ function RedeemBatchCodesModal({ batch, onClose }: { batch: RedeemBatch | null; 
             {!plaintextAvailable ? <div className="mb-4 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
-                    <Tag bordered={false} color="green">
+                    <Tag variant="filled" color="green">
                         可用 {batchSummary?.availableCount ?? 0}
                     </Tag>
-                    <Tag bordered={false} color="blue">
+                    <Tag variant="filled" color="blue">
                         已核销 {batchSummary?.redeemedCount ?? 0}
                     </Tag>
-                    <Tag bordered={false}>已过期 {batchSummary?.expiredCount ?? 0}</Tag>
-                    <Tag bordered={false}>已禁用 {batchSummary?.disabledCount ?? 0}</Tag>
+                    <Tag variant="filled">已过期 {batchSummary?.expiredCount ?? 0}</Tag>
+                    <Tag variant="filled">已禁用 {batchSummary?.disabledCount ?? 0}</Tag>
                 </div>
                 <Select
                     className="w-32"
@@ -448,7 +439,7 @@ function renderCodeStatus(status: AdminRedeemCode["status"]) {
         expired: { label: "已过期", color: "default" },
     }[status];
     return (
-        <Tag bordered={false} color={config.color}>
+        <Tag variant="filled" color={config.color}>
             {config.label}
         </Tag>
     );

@@ -160,7 +160,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
             >
                 <Input
                     allowClear
-                    className="w-full sm:w-72"
+                    className="app-list-search"
                     prefix={<Search className="size-4 text-foreground/40" />}
                     value={state.filter}
                     placeholder="搜索用户名、名称或邮箱"

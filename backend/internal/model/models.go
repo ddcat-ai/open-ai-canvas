@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type TaskStatus string
 type SessionStatus string
@@ -202,21 +206,23 @@ type ModelChannel struct {
 	ModelsJSON       string               `json:"modelsJson" gorm:"type:text"`
 	CreatedAt        time.Time            `json:"createdAt"`
 	UpdatedAt        time.Time            `json:"updatedAt"`
+	DeletedAt        gorm.DeletedAt       `json:"-" gorm:"index"`
 }
 
 type ChannelModel struct {
-	ID                    string    `json:"id" gorm:"primaryKey;size:36"`
-	ChannelID             string    `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key,priority:1"`
-	ModelKey              string    `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key,priority:2"`
-	DisplayName           string    `json:"displayName" gorm:"size:160"`
-	Capability            string    `json:"capability" gorm:"size:32;index"`
-	BillingMode           string    `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits int64     `json:"unitPriceMicrocredits"`
-	PriceConfigured       bool      `json:"priceConfigured" gorm:"index"`
-	Enabled               bool      `json:"enabled" gorm:"index"`
-	PriceVersion          int64     `json:"priceVersion"`
-	CreatedAt             time.Time `json:"createdAt"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	ID                    string         `json:"id" gorm:"primaryKey;size:36"`
+	ChannelID             string         `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
+	ModelKey              string         `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
+	DisplayName           string         `json:"displayName" gorm:"size:160"`
+	Capability            string         `json:"capability" gorm:"size:32;index"`
+	BillingMode           string         `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits int64          `json:"unitPriceMicrocredits"`
+	PriceConfigured       bool           `json:"priceConfigured" gorm:"index"`
+	Enabled               bool           `json:"enabled" gorm:"index"`
+	PriceVersion          int64          `json:"priceVersion"`
+	CreatedAt             time.Time      `json:"createdAt"`
+	UpdatedAt             time.Time      `json:"updatedAt"`
+	DeletedAt             gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type ApiCallLog struct {
@@ -482,27 +488,54 @@ type AssetVersion struct {
 type AssetRepresentation struct {
 	ID             string    `json:"id" gorm:"primaryKey;size:36"`
 	TaskID         string    `json:"taskId,omitempty" gorm:"index;size:36;uniqueIndex:idx_asset_representations_task_role,priority:1"`
-	AssetVersionID string    `json:"assetVersionId" gorm:"index;size:36"`
+	AssetVersionID string    `json:"assetVersionId" gorm:"index;size:36;uniqueIndex:idx_asset_representations_version_role,priority:1"`
 	ResourceID     string    `json:"resourceId,omitempty" gorm:"index;size:36"`
 	MediaType      string    `json:"mediaType" gorm:"index;size:24"`
-	Role           string    `json:"role" gorm:"index;size:32;uniqueIndex:idx_asset_representations_task_role,priority:2"`
+	Role           string    `json:"role" gorm:"index;size:32;uniqueIndex:idx_asset_representations_task_role,priority:2;uniqueIndex:idx_asset_representations_version_role,priority:2"`
 	MetadataJSON   string    `json:"metadataJson" gorm:"type:text"`
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
-// Project 是短剧领域聚合根；CanvasProject 仍代表可游离的画布文档。
+// VoiceProfile 是可复用的声音身份；试听音频只是表现资源，不等同于声音本身。
+type VoiceProfile struct {
+	ID                   string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID               string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_voice_profiles_user_provider_key,priority:1"`
+	Name                 string    `json:"name" gorm:"size:160"`
+	Provider             string    `json:"provider" gorm:"size:48;uniqueIndex:idx_voice_profiles_user_provider_key,priority:2"`
+	VoiceKey             string    `json:"voiceKey" gorm:"size:160;uniqueIndex:idx_voice_profiles_user_provider_key,priority:3"`
+	Language             string    `json:"language" gorm:"size:80"`
+	Timbre               string    `json:"timbre" gorm:"size:240"`
+	SampleResourceID     string    `json:"sampleResourceId,omitempty" gorm:"index;size:36"`
+	CompatibleModelsJSON string    `json:"compatibleModelsJson" gorm:"type:text"`
+	Status               string    `json:"status" gorm:"index;size:24"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+}
+
+type CharacterVoiceBinding struct {
+	ID               string    `json:"id" gorm:"primaryKey;size:36"`
+	AssetVersionID   string    `json:"assetVersionId" gorm:"uniqueIndex;size:36"`
+	VoiceProfileID   string    `json:"voiceProfileId" gorm:"index;size:36"`
+	Instructions     string    `json:"instructions" gorm:"type:text"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// Project 是短剧领域聚合根；CanvasProject 仍代表可独立创作的画布文档。
 type Project struct {
-	ID          string        `json:"id" gorm:"primaryKey;size:36"`
-	UserID      string        `json:"userId" gorm:"index;size:36;uniqueIndex:idx_projects_user_name,priority:1"`
-	Name        string        `json:"name" gorm:"size:240;uniqueIndex:idx_projects_user_name,priority:2"`
-	Type        string        `json:"type" gorm:"size:32;index"`
-	AspectRatio string        `json:"aspectRatio" gorm:"size:16"`
-	SourceType  string        `json:"sourceType" gorm:"size:32"`
-	Description string        `json:"description" gorm:"type:text"`
-	Status      ProjectStatus `json:"status" gorm:"index;size:24"`
-	Revision    int64         `json:"revision"`
-	CreatedAt   time.Time     `json:"createdAt"`
-	UpdatedAt   time.Time     `json:"updatedAt" gorm:"index"`
+	ID              string        `json:"id" gorm:"primaryKey;size:36"`
+	UserID          string        `json:"userId" gorm:"index;size:36;uniqueIndex:idx_projects_user_name,priority:1"`
+	Name            string        `json:"name" gorm:"size:240;uniqueIndex:idx_projects_user_name,priority:2"`
+	Type            string        `json:"type" gorm:"size:32;index"`
+	AspectRatio     string        `json:"aspectRatio" gorm:"size:16"`
+	SourceType      string        `json:"sourceType" gorm:"size:32"`
+	Description     string        `json:"description" gorm:"type:text"`
+	StylePresetID   string        `json:"stylePresetId" gorm:"size:64"`
+	ActiveTaskLimit int           `json:"activeTaskLimit" gorm:"default:3"`
+	Status          ProjectStatus `json:"status" gorm:"index;size:24"`
+	Revision        int64         `json:"revision"`
+	CreatedAt       time.Time     `json:"createdAt"`
+	UpdatedAt       time.Time     `json:"updatedAt" gorm:"index"`
 }
 
 type ProjectUnit struct {

@@ -1,6 +1,8 @@
 import { App, Button, Dropdown, Tag } from "antd";
-import type { MenuProps } from "antd";
-import { CheckSquare2, MoreHorizontal, SearchX, X } from "lucide-react";
+import type { ButtonProps, MenuProps } from "antd";
+import { saveAs } from "file-saver";
+import { CheckSquare2, Download, MoreHorizontal, SearchX, X } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -12,24 +14,38 @@ function isStatusConfig(value: ReactNode | { label: string; color?: string }): v
     return typeof (value as { label?: unknown }).label === "string";
 }
 
-export function AdminPageHeader({
-    title,
-    description,
-    actions,
-}: {
-    title: string;
-    description?: string;
-    actions?: ReactNode;
+export function AdminExportButton({
+    exportFile,
+    fileName,
+    label = "导出",
+    successMessage,
+    errorMessage = "导出失败",
+    size,
+    ...buttonProps
+}: Omit<ButtonProps, "children" | "icon" | "loading" | "onClick"> & {
+    exportFile: () => Blob | Promise<Blob>;
+    fileName: string | (() => string);
+    label?: string;
+    successMessage?: string;
+    errorMessage?: string;
 }) {
-    return (
-        <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-4 sm:px-6">
-            <div className="min-w-0">
-                <h1 className="truncate text-lg font-semibold">{title}</h1>
-                {description ? <p className="mt-0.5 truncate text-xs text-foreground/55">{description}</p> : null}
-            </div>
-            {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
-        </header>
-    );
+    const { message } = App.useApp();
+    const [exporting, setExporting] = useState(false);
+
+    const runExport = async () => {
+        setExporting(true);
+        try {
+            const blob = await exportFile();
+            saveAs(blob, typeof fileName === "function" ? fileName() : fileName);
+            if (successMessage) message.success(successMessage);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : errorMessage);
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    return <Button {...buttonProps} size={size} icon={<Download className={size === "small" ? "size-3.5" : "size-4"} />} loading={exporting} onClick={() => void runExport()}>{label}</Button>;
 }
 
 export function AdminTableEmpty({
@@ -181,7 +197,7 @@ export function SettingsSectionCard({
                         <p className="mt-1 text-xs leading-5 text-foreground/55">{description}</p>
                     </div>
                 </div>
-                {isStatusConfig(status) ? <Tag bordered={false} color={status.color}>{status.label}</Tag> : status}
+                {isStatusConfig(status) ? <Tag variant="filled" color={status.color}>{status.label}</Tag> : status}
             </div>
             {children}
             {footer ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">{footer}</div> : null}

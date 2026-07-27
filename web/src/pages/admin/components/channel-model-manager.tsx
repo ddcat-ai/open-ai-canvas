@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag } from "antd";
+import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Switch, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ArrowLeft, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
-import { createAdminChannelModel, disableAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
+import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 
 type FormValues = {
     modelKey: string;
     displayName?: string;
     capability: ChannelModel["capability"];
+    billingMode: ChannelModel["billingMode"];
     unitPrice: number;
     enabled: boolean;
 };
@@ -29,6 +30,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [form] = Form.useForm<FormValues>();
+    const billingMode = Form.useWatch("billingMode", form) || "fixed_request";
+    const modelCapability = Form.useWatch("capability", form);
 
     const reload = async () => {
         if (!channel) return;
@@ -71,13 +74,13 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const startCreate = () => {
         setEditing(null);
-        form.setFieldsValue({ modelKey: "", displayName: "", capability: capabilityFromInterface(channel?.interfaceType), unitPrice: 0, enabled: true });
+        form.setFieldsValue({ modelKey: "", displayName: "", capability: capabilityFromInterface(channel?.interfaceType), billingMode: "fixed_request", unitPrice: 0, enabled: true });
         setEditorOpen(true);
     };
 
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
-        form.setFieldsValue({ modelKey: item.modelKey, displayName: item.displayName, capability: item.capability, unitPrice: item.unitPriceMicrocredits / 1_000_000, enabled: item.enabled });
+        form.setFieldsValue({ modelKey: item.modelKey, displayName: item.displayName, capability: item.capability, billingMode: item.billingMode, unitPrice: item.unitPriceMicrocredits / 1_000_000, enabled: item.enabled });
         setEditorOpen(true);
     };
 
@@ -89,7 +92,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 modelKey: values.modelKey.trim(),
                 displayName: values.displayName?.trim() || values.modelKey.trim(),
                 capability: values.capability,
-                billingMode: "fixed_request" as const,
+                billingMode: values.billingMode,
                 unitPriceMicrocredits: Math.round(values.unitPrice * 1_000_000),
                 priceConfigured: true,
                 enabled: values.enabled !== false,
@@ -108,14 +111,14 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         }
     };
 
-    const disable = async (item: ChannelModel) => {
+    const remove = async (item: ChannelModel) => {
         try {
-            await disableAdminChannelModel(channel.id, item.id);
+            await deleteAdminChannelModel(channel.id, item.id);
             await reload();
             await onChanged();
-            message.success("模型已停用");
+            message.success("模型已删除");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "停用模型失败");
+            message.error(error instanceof Error ? error.message : "删除模型失败");
         }
     };
 
@@ -130,7 +133,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             ),
         },
         { title: "能力", dataIndex: "capability", width: 90, render: capabilityLabel },
-        { title: "计费", width: 150, render: (_, item) => (item.priceConfigured ? `${formatCredits(item.unitPriceMicrocredits)} 积分 / 次` : <Tag color="orange">未配置价格</Tag>) },
+        { title: "计费", width: 165, render: (_, item) => (item.priceConfigured ? `${formatCredits(item.unitPriceMicrocredits)} 积分 / ${item.billingMode === "per_second" ? "秒" : "次"}` : <Tag color="orange">未配置价格</Tag>) },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => (enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
         {
@@ -139,8 +142,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             render: (_, item) => (
                 <Space>
                     <Button size="small" onClick={() => startEdit(item)}>编辑</Button>
-                    <Popconfirm title="停用模型" description="新任务将不能再使用该模型，历史账单不受影响。" okText="停用" cancelText="取消" onConfirm={() => void disable(item)}>
-                        <Button size="small" danger disabled={!item.enabled} icon={<Trash2 className="size-3.5" />} />
+                    <Popconfirm title="删除模型" description="删除后模型不再显示，历史账单仍会保留。该操作不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
+                        <Button size="small" danger title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
                 </Space>
             ),
@@ -163,7 +166,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     <Button aria-label="返回系统渠道" icon={<ArrowLeft className="size-4" />} onClick={onClose} />
                     <div className="min-w-0">
                         <h2 className="truncate text-lg font-semibold">{channel.name} / 模型管理</h2>
-                        <p className="mt-1 text-xs text-foreground/50">维护此渠道的模型能力、启用状态和每次积分价格。</p>
+                        <p className="mt-1 text-xs text-foreground/50">维护模型能力、计费单位、积分单价与启用状态。</p>
                     </div>
                 </div>
                 <Space wrap>
@@ -176,7 +179,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 </Space>
             </div>
             <ListToolbar active={Boolean(keyword || capability !== "all" || status !== "all")} onReset={() => { setKeyword(""); setCapability("all"); setStatus("all"); setPage(1); }}>
-                <Input allowClear className="w-full sm:w-72" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索模型标识或显示名称" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索模型标识或显示名称" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
                 <Select className="w-32" value={capability} onChange={(value) => { setCapability(value); setPage(1); }} options={[{ label: "全部能力", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
                 <Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />
             </ListToolbar>
@@ -192,7 +195,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     scroll={{ x: 760 }}
                 />
             </TableSurface>
-            <Drawer title={editing ? "编辑模型" : "新增模型"} open={editorOpen} width="min(520px, 100vw)" onClose={() => setEditorOpen(false)} styles={{ body: { paddingBottom: 88 } }} extra={editing ? <Button size="small" icon={<Plus className="size-3.5" />} onClick={startCreate}>新增</Button> : null}>
+            <Drawer title={editing ? "编辑模型" : "新增模型"} open={editorOpen} size="min(520px, 100vw)" onClose={() => setEditorOpen(false)} styles={{ body: { paddingBottom: 88 } }} extra={editing ? <Button size="small" icon={<Plus className="size-3.5" />} onClick={startCreate}>新增</Button> : null}>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="modelKey" label="模型标识" rules={[{ required: true, message: "请输入模型标识" }]}>
                         <Input placeholder="gpt-image-2" />
@@ -201,9 +204,12 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                         <Input placeholder="不填则使用模型标识" />
                     </Form.Item>
                     <Form.Item name="capability" label="能力" rules={[{ required: true }]}>
-                        <Select options={[{ label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
+                        <Select onChange={(value) => { if (value !== "video") form.setFieldValue("billingMode", "fixed_request"); }} options={[{ label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
                     </Form.Item>
-                    <Form.Item name="unitPrice" label="每次消耗积分" rules={[{ required: true, message: "请输入积分价格" }]}>
+                    <Form.Item name="billingMode" label="计费方式" rules={[{ required: true }]}>
+                        <Segmented block options={[{ label: "按次计费", value: "fixed_request" }, { label: "按秒计费", value: "per_second", disabled: modelCapability !== "video" }]} />
+                    </Form.Item>
+                    <Form.Item name="unitPrice" label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
                         <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
                     </Form.Item>
                     <Form.Item name="enabled" label="启用" valuePropName="checked">

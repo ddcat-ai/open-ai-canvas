@@ -162,8 +162,8 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
             dataIndex: "status",
             width: 105,
             render: (value) => (
-                <Tag bordered={false} color={value === "settled" ? "success" : value === "refunded" ? "default" : "warning"}>
-                    {({ uncertain: "待核对", running: "运行中", reserved: "已冻结", settled: "已结算", refunded: "已退款" } as Record<string, string>)[value] || value}
+                <Tag variant="filled" color={value === "settled" ? "success" : value === "refunded" ? "default" : "warning"}>
+                    {({ uncertain: "待核对", running: "运行中", reserved: "已冻结", settled: "已结算", refunded: "已退款" } as Record<string, string>)[value] || "未知状态"}
                 </Tag>
             ),
         },
@@ -300,7 +300,7 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
                     <div>
                         <div className="flex items-center gap-2">
                             <h2 className="text-base font-semibold">计费订单</h2>
-                            <Tag bordered={false} color={orderStatus === "review" && total ? "warning" : "default"}>
+                            <Tag variant="filled" color={orderStatus === "review" && total ? "warning" : "default"}>
                                 {total} 条
                             </Tag>
                         </div>
@@ -320,7 +320,7 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
                 >
                     <Input
                         allowClear
-                        className="w-full sm:w-80"
+                        className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
                         value={keyword}
                         placeholder="搜索用户、模型、场景或请求号"

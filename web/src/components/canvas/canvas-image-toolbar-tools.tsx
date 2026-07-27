@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Scissors, Sparkles, Upload, ZoomIn } from "lucide-react";
+import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Scissors, Smile, Sparkles, Upload, ZoomIn } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 
-export type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
+export type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
 export type ImageQuickToolId = "info" | "delete" | "saveAsset" | "download" | "edit" | ImageNodeActionToolId;
 
 export type ImageToolHandlers = {
@@ -11,6 +11,7 @@ export type ImageToolHandlers = {
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onAnnotate: (node: CanvasNodeData) => void;
     onMaskEdit: (node: CanvasNodeData) => void;
+    onEmotion: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onSplit: (node: CanvasNodeData) => void;
     onUpscale: (node: CanvasNodeData) => void;
@@ -32,7 +33,7 @@ export type ImageToolDefinition = {
     run: (node: CanvasNodeData, handlers: ImageToolHandlers) => void;
 };
 
-export const IMAGE_QUICK_TOOLS_STORAGE_KEY = "canvas-image-quick-tools-v11";
+export const IMAGE_QUICK_TOOLS_STORAGE_KEY = "canvas-image-quick-tools-v12";
 
 const defaultBaseToolIds: ImageQuickToolId[] = ["info", "delete", "saveAsset", "download", "edit"];
 
@@ -93,11 +94,20 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
         run: (node, handlers) => handlers.onMaskEdit(node),
     },
     {
+        id: "emotion",
+        defaultVisible: true,
+        panelLabel: "表情与情绪",
+        label: "情绪",
+        title: "调整人物表情与情绪",
+        icon: () => <Smile className="size-3.5" />,
+        run: (node, handlers) => handlers.onEmotion(node),
+    },
+    {
         id: "crop",
         defaultVisible: true,
-        panelLabel: "裁剪",
-        label: "裁剪",
-        title: "裁剪并生成新节点",
+        panelLabel: "剪裁",
+        label: "剪裁",
+        title: "剪裁并生成新节点",
         icon: () => <Scissors className="size-3.5" />,
         run: (node, handlers) => handlers.onCrop(node),
     },
@@ -131,9 +141,9 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
     {
         id: "angle",
         defaultVisible: true,
-        panelLabel: "多角度",
-        label: "多角度",
-        title: "生成角度",
+        panelLabel: "多视角",
+        label: "多视角",
+        title: "生成不同观察视角",
         icon: () => <Camera className="size-3.5" />,
         run: (node, handlers) => handlers.onAngle(node),
     },
@@ -148,7 +158,7 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
     },
 ];
 
-export const defaultImageQuickToolIds: ImageQuickToolId[] = ["download", "copyPrompt", "reversePrompt", "annotation", "maskEdit", "crop", "angle"];
+export const defaultImageQuickToolIds: ImageQuickToolId[] = ["info", "reversePrompt", "annotation", "maskEdit", "emotion", "crop", "angle"];
 
 export function isImageQuickToolId(value: string): value is ImageQuickToolId {
     return defaultBaseToolIds.some((id) => id === value) || imageToolDefinitions.some((tool) => tool.id === value);

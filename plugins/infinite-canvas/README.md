@@ -1,17 +1,17 @@
-# Infinite Canvas Codex Plugin
+# 影策 Codex 插件
 
-这个插件把 Infinite Canvas 的本地 Canvas Agent MCP 打包给 Codex app 使用，让 Codex 能打开本地画布、读取当前节点、创建内容并触发生成流程。
+这个插件把影策的本地 Canvas Agent MCP 打包给 Codex app 使用，让 Codex 能打开本地画布、读取当前节点、创建内容并触发生成流程。
 
 ## 安装
 
-> Infinite Canvas 尚未上架 Codex 公共插件目录，直接搜索不会显示。请从本仓库自带的 marketplace 安装。
+> 影策尚未上架 Codex 公共插件目录，直接搜索不会显示。请从本仓库自带的 marketplace 安装。
 
 ### AI 自动安装
 
 把下面这段发给 Codex：
 
 ```text
-请从 https://github.com/ddcat-ai/open-ai-canvas.git 安装 Infinite Canvas Codex 插件。
+请从 https://github.com/ddcat-ai/open-ai-canvas.git 安装影策 Codex 插件。
 请 clone 仓库到 ~/plugins/open-ai-canvas，确认 .agents/plugins/marketplace.json 和
 plugins/infinite-canvas/.codex-plugin/plugin.json 都存在。然后运行
 codex plugin marketplace add ~/plugins/open-ai-canvas，
@@ -39,7 +39,7 @@ codex plugin add infinite-canvas@infinite-canvas-local
 
 ### 本仓库开发调试
 
-如果你就在 Infinite Canvas 仓库中调试插件，可以直接添加当前仓库。建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
+如果你就在影策仓库中调试插件，可以直接添加当前仓库。建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
 
 ```bash
 cd /path/to/infinite-canvas
@@ -49,15 +49,15 @@ codex plugin add infinite-canvas@infinite-canvas-local
 
 ## 使用
 
-1. 新建 Codex 线程后说“打开 Infinite Canvas”。
-2. 插件会确认当前仓库的本地画布服务是否已运行；端口被占用时会检查进程归属，不会把其他项目的 `3000` 当作 Infinite Canvas。
+1. 新建 Codex 线程后说“打开影策”。
+2. 插件会确认当前仓库的本地画布服务是否已运行；端口被占用时会检查进程归属，不会把其他项目的 `3000` 当作影策。
 3. 确认或启动后，插件会直接打开新建画布 URL，并自动尝试连接本地 Agent。
 4. 画布打开后，让 Codex 读取或操作当前画布。
 
 常用提示：
 
 ```text
-打开 Infinite Canvas
+打开影策
 读取当前画布并总结节点结构
 根据选中节点创建一组生图提示词
 ```

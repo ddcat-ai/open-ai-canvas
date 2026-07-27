@@ -105,6 +105,7 @@ type PublicModelChannel struct {
 
 type PublicChannelModelPrice struct {
 	Model                 string `json:"model"`
+	DisplayName           string `json:"displayName"`
 	Capability            string `json:"capability"`
 	BillingMode           string `json:"billingMode"`
 	UnitPriceMicrocredits int64  `json:"unitPriceMicrocredits"`
@@ -451,12 +452,17 @@ func (s *Service) DeleteSystemChannel(actor *model.User, id string) error {
 	}
 	channel, err := s.repo.AdminSystemChannel(id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return BadAuthRequest("系统渠道不存在或已删除")
+		}
 		return err
 	}
-	// 历史账单和调用日志需要保留渠道主体，删除入口仅停用。
-	channel.Enabled = false
-	channel.UpdatedAt = time.Now()
-	return s.repo.Save(channel)
+	// 保留主体供历史账单和调用日志关联，但从所有业务查询中隐藏并清除密钥。
+	err = s.repo.DeleteSystemChannel(channel.ID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return BadAuthRequest("系统渠道不存在或已删除")
+	}
+	return err
 }
 
 func (s *Service) LogAPICall(log model.ApiCallLog) error {
@@ -607,7 +613,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		}
 		models = append(models, item.ModelKey)
 		if item.Enabled && item.PriceConfigured {
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, Capability: item.Capability, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits})
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits})
 		}
 	}
 	if len(models) == 0 {

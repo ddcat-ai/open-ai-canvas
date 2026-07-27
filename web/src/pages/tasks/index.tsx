@@ -1,9 +1,11 @@
-import { App, Button, Empty, Form, Input, Modal, Segmented, Select, Space, Table, Typography } from "antd";
+import { App, Button, Drawer, Form, Input, Modal, Progress, Segmented, Select, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { FileText, Plus, RefreshCw, RotateCcw, Search, X } from "lucide-react";
+import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, Plus, RefreshCw, RotateCcw, Search, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import { ListToolbar, PageHeader, TableSurface, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-task-display";
 
@@ -11,21 +13,35 @@ import { cancelGenerationTask, createAgentSession, createGenerationTask, listGen
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { formatCredits } from "@/constant/credits";
+import { listProjects, type ProjectSummary } from "@/services/api/projects";
 
 const taskTableClassName = "app-data-table";
+type TaskStatusFilter = "failed" | "active" | "succeeded";
+
+function taskStatusFilter(value: string | null): TaskStatusFilter {
+    return value === "active" || value === "succeeded" ? value : "failed";
+}
 
 export default function TasksPage() {
     const { message } = App.useApp();
+    const [searchParams, setSearchParams] = useSearchParams();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const projects = useCanvasStore((state) => state.projects);
     const [form] = Form.useForm<CreateTaskInput & { operation: string }>();
     const [tasks, setTasks] = useState<GenerationTask[]>([]);
+    const [domainProjects, setDomainProjects] = useState<ProjectSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [actingId, setActingId] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
     const [creating, setCreating] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<"all" | "active" | "succeeded" | "failed">("all");
+    const statusFilter = taskStatusFilter(searchParams.get("status"));
+    const setStatusFilter = (value: TaskStatusFilter) => {
+        const next = new URLSearchParams(searchParams);
+        next.set("status", value);
+        setSearchParams(next, { replace: true });
+    };
     const [keyword, setKeyword] = useState("");
     const [projectFilter, setProjectFilter] = useState("all");
     const [page, setPage] = useState(1);
@@ -34,21 +50,37 @@ export default function TasksPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
     const [logsLoading, setLogsLoading] = useState(false);
+    const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
     const syncedCanvasTaskIdsRef = useRef(new Set<string>());
     const tasksRef = useRef<GenerationTask[]>([]);
 
-    const projectTitleById = useMemo(() => new Map(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
-    const projectOptions = useMemo(() => projects.map((project) => ({ label: project.title || "未命名画布", value: project.id })), [projects]);
+    const canvasById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+    const domainProjectNameById = useMemo(() => new Map(domainProjects.map((item) => [item.project.id, item.project.name])), [domainProjects]);
+    const projectOptions = useMemo(() => projects.map((project) => {
+        const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
+        return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
+    }), [domainProjectNameById, projects]);
     const filteredTasks = useMemo(() => tasks.filter((task) => {
         if (statusFilter === "active") return task.status === "queued" || task.status === "running";
         if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
         if (statusFilter === "succeeded") return task.status === "succeeded";
-        return true;
+        return false;
     }).filter((task) => {
         if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
         const query = keyword.trim().toLowerCase();
-        return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${getCanvasTitle(task, projectTitleById)}`.toLowerCase().includes(query);
-    }), [keyword, projectFilter, projectTitleById, statusFilter, tasks]);
+        const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
+        return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
+    }), [canvasById, domainProjectNameById, keyword, projectFilter, statusFilter, tasks]);
+
+    useEffect(() => {
+        let cancelled = false;
+        void listProjects().then((result) => {
+            if (!cancelled) setDomainProjects(result.projects);
+        }).catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
@@ -204,84 +236,118 @@ export default function TasksPage() {
     const columns = useMemo<ColumnsType<GenerationTask>>(
         () => [
             {
-                title: "任务",
-                dataIndex: "prompt",
-                width: 420,
-                render: (prompt, task) => (
-                    <div className="min-w-0 space-y-1 overflow-hidden">
-                        <div title={prompt} className="line-clamp-2 max-w-full break-words text-sm font-medium leading-5 text-stone-950 dark:text-stone-100">
-                            {prompt}
-                        </div>
-                        <Typography.Text className="block !text-xs !text-stone-500 dark:!text-stone-400">
-                            {formatTaskKind(task)}
-                        </Typography.Text>
-                    </div>
-                ),
-            },
-            {
-                title: "画布名称",
-                width: 180,
+                title: "画布（项目）",
+                width: 190,
+                responsive: ["lg"],
                 render: (_, task) => {
-                    const name = getCanvasTitle(task, projectTitleById);
+                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
                     return (
-                        <Typography.Text ellipsis className={task.projectId ? "block max-w-[160px] !text-stone-700 dark:!text-stone-200" : "block max-w-[160px] !text-stone-400 dark:!text-stone-500"}>
-                            {name}
-                        </Typography.Text>
+                        <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-foreground/82" title={context.canvasName}>{context.canvasName}</div>
+                            <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-foreground/42" title={context.projectName || "未加入项目"}>
+                                <FolderKanban className="size-3 shrink-0" />
+                                <span className="truncate">{context.projectName || "未加入项目"}</span>
+                            </div>
+                        </div>
                     );
                 },
             },
             {
+                title: "类型｜模型",
+                width: 180,
+                responsive: ["md"],
+                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[10px] text-foreground/42" title={formatModelName(task)}>{formatModelName(task)}</div></div>,
+            },
+            {
+                title: "任务名称",
+                dataIndex: "prompt",
+                width: 340,
+                render: (prompt, task) => {
+                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
+                    return <div className="flex min-w-0 items-start gap-3 md:items-center">
+                        <TaskPreviewThumbnail task={task} onOpen={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: prompt || formatTaskKind(task) })} />
+                        <div className="min-w-0 flex-1">
+                            <div title={prompt} className="line-clamp-2 max-w-full break-words text-xs font-medium leading-5 text-foreground/88">{prompt || "未命名任务"}</div>
+                            <div className={`mt-1 hidden truncate text-[10px] md:block ${task.status === "failed" ? "text-red-600 dark:text-red-400" : task.status === "cancelled" ? "text-amber-600 dark:text-amber-400" : "text-foreground/38"}`} title={task.error ? generationErrorMessage(task.error) : undefined}>
+                                {task.status === "failed" || task.status === "cancelled" ? taskAttentionReason(task) : task.stage || statusLabel[task.status]}
+                            </div>
+                            <div className="mt-2 space-y-2 md:hidden">
+                                <div className="truncate text-[10px] text-foreground/45">{formatTaskKind(task)} · {formatModelName(task)}</div>
+                                <div className="truncate text-[10px] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-2 text-[11px]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span><TaskBilling billing={task.billing} /></div>
+                                    <Space size={0}>
+                                        <Button type="text" size="small" aria-label="查看详情" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)} />
+                                        {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")} /> : null}
+                                        {task.status === "queued" || task.status === "running" ? <Button type="text" size="small" aria-label="取消任务" danger icon={<X className="size-3.5" />} loading={actingId === task.id} onClick={() => runAction(task.id, "cancel")} /> : null}
+                                    </Space>
+                                </div>
+                            </div>
+                        </div>
+                    </div>;
+                },
+            },
+            {
                 title: "状态",
-                width: 160,
+                width: 135,
+                responsive: ["md"],
                 render: (_, task) => (
                     <div className="min-w-0">
-                        <span className={`inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium ${statusBadgeClassName(task.status)}`}>{statusLabel[task.status]}</span>
-                        <div className="mt-1 truncate text-[10px] text-stone-500 dark:text-stone-400" title={task.stage || statusLabel[task.status]}>{task.stage || statusLabel[task.status]}{typeof task.progress === "number" ? ` · ${task.progress}%` : ""}</div>
+                        <div className="flex items-center gap-2 text-xs font-medium">
+                            <span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} />
+                            <span>{statusLabel[task.status]}</span>
+                            {task.status === "queued" || task.status === "running" ? <span className="ml-auto text-[10px] tabular-nums text-foreground/42">{task.progress || 0}%</span> : null}
+                        </div>
+                        {task.status === "queued" || task.status === "running" ? <Progress className="!mb-0 !mt-1.5 block" percent={task.progress || 0} showInfo={false} size={[90, 3]} strokeColor="var(--workspace-accent)" /> : null}
                     </div>
                 ),
             },
             {
-                title: "模型",
-                width: 190,
-                render: (_, task) => (
-                    <Typography.Text ellipsis className="block max-w-[170px] !text-stone-700 dark:!text-stone-200">
-                        {formatModelName(task)}
-                    </Typography.Text>
-                ),
-            },
-            {
-                title: "尝试",
+                title: "重试",
                 dataIndex: "attempts",
-                width: 90,
-                render: (attempts: number) => <span className="text-stone-500 dark:text-stone-400">第 {attempts || 1} 次</span>,
+                width: 75,
+                align: "center",
+                responsive: ["lg"],
+                render: (attempts: number) => <span className="text-xs tabular-nums text-foreground/55">{Math.max(0, (attempts || 1) - 1)} 次</span>,
             },
             {
                 title: "创建时间",
                 dataIndex: "createdAt",
-                width: 190,
-                render: (value) => <span className="text-stone-500 dark:text-stone-400">{formatDate(value)}</span>,
+                width: 145,
+                responsive: ["lg"],
+                render: (value) => <TaskDate value={value} />,
+            },
+            {
+                title: "消耗积分",
+                width: 130,
+                align: "right",
+                responsive: ["md"],
+                render: (_, task) => <TaskBilling billing={task.billing} />,
             },
             {
                 title: "操作",
-                width: 140,
+                width: 168,
+                align: "right",
+                responsive: ["md"],
                 render: (_, task) => (
                     <Space size={2}>
-                        <Button type="text" size="small" title="查看详情" className="!text-stone-500 hover:!text-stone-950 dark:!text-stone-400 dark:hover:!text-white" icon={<FileText className="size-3.5" />} onClick={() => openTaskDetail(task)} />
-                        <Button type="text" size="small" title={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error) ? "内容审核未通过，请修改提示词后新建任务" : "重新生成"} className="!text-stone-500 hover:!text-stone-950 dark:!text-stone-400 dark:hover:!text-white" icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={(task.status !== "failed" && task.status !== "cancelled") || task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")} />
-                        <Button type="text" size="small" title="取消任务" className="!text-stone-500 hover:!text-red-600 dark:!text-stone-400 dark:hover:!text-red-300" danger icon={<X className="size-3.5" />} loading={actingId === task.id} disabled={task.status === "succeeded" || task.status === "cancelled"} onClick={() => runAction(task.id, "cancel")} />
+                        <Button type="text" size="small" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)}>详情</Button>
+                        {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" title={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error) ? "内容审核未通过，请修改提示词后新建任务" : "重新生成"} icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")}>重试</Button> : null}
+                        {task.status === "queued" || task.status === "running" ? <Button type="text" size="small" aria-label="取消任务" danger icon={<X className="size-3.5" />} loading={actingId === task.id} onClick={() => runAction(task.id, "cancel")}>取消</Button> : null}
                     </Space>
                 ),
             },
         ],
-        [actingId, openTaskDetail, projectTitleById],
+        [actingId, canvasById, domainProjectNameById, openTaskDetail],
     );
 
     return (
         <>
             <WorkspacePage grid>
                 <PageHeader
+                    icon="tasks"
                     title="任务中心"
-                    description="查看生成进度、结果和失败原因。"
+                    description="先处理失败任务，再跟踪运行进度和检查生成结果。"
                     meta={<span className="text-xs text-foreground/45">{filteredTasks.length} 个任务{loading ? " · 正在同步" : ""}</span>}
                     actions={(
                         <>
@@ -290,23 +356,22 @@ export default function TasksPage() {
                         </>
                     )}
                 />
-                <ListToolbar active={Boolean(keyword || projectFilter !== "all" || statusFilter !== "all")} onReset={() => { setKeyword(""); setProjectFilter("all"); setStatusFilter("all"); setPage(1); }}>
-                    <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索指令、模型、类型或画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                    <Select className="w-44" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
+                <ListToolbar active={Boolean(keyword || projectFilter !== "all")} onReset={() => { setKeyword(""); setProjectFilter("all"); setPage(1); }}>
+                    <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型、画布或项目" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                    <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
                     <Segmented
                         size="small"
                         value={statusFilter}
                         onChange={(value) => { setStatusFilter(value as typeof statusFilter); setPage(1); }}
                         options={[
-                            { label: `全部 ${tasks.length}`, value: "all" },
-                            { label: `进行中 ${tasks.filter((task) => task.status === "queued" || task.status === "running").length}`, value: "active" },
+                            { label: `需要处理 ${tasks.filter((task) => task.status === "failed" || task.status === "cancelled").length}`, value: "failed" },
+                            { label: `运行中 ${tasks.filter((task) => task.status === "queued" || task.status === "running").length}`, value: "active" },
                             { label: `已完成 ${tasks.filter((task) => task.status === "succeeded").length}`, value: "succeeded" },
-                            { label: `异常 ${tasks.filter((task) => task.status === "failed" || task.status === "cancelled").length}`, value: "failed" },
                         ]}
                     />
                 </ListToolbar>
 
-                <TableSurface>
+                <TableSurface className="task-table-surface">
                     <Table
                         rowKey="id"
                         size="middle"
@@ -314,11 +379,11 @@ export default function TasksPage() {
                         columns={columns}
                         dataSource={filteredTasks}
                         loading={loading}
-                        rowClassName={() => "align-top"}
+                        rowClassName={() => "task-table-row align-middle"}
                         tableLayout="fixed"
                         pagination={{ current: page, pageSize, total: filteredTasks.length, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (total, range) => `${range[0]}-${range[1]} / 共 ${total} 个任务`, onChange: (nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); } }}
-                        scroll={{ x: 1320 }}
-                        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-stone-500 dark:text-stone-400">暂无任务</span>} className="py-12" /> }}
+                        scroll={{ x: 1280 }}
+                        locale={{ emptyText: <WorkspaceState compact title={taskEmptyState(statusFilter).title} description={taskEmptyState(statusFilter).description} /> }}
                     />
                 </TableSurface>
             </WorkspacePage>
@@ -338,18 +403,18 @@ export default function TasksPage() {
                     </Form.Item>
                 </Form>
             </Modal>
-            <Modal title="任务详情" open={Boolean(detailTask)} onCancel={() => setDetailTask(null)} footer={null} width={820}>
+            <Drawer title="任务详情" open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
                 {detailTask ? (
-                    <div className="space-y-4">
-                        <div className="grid gap-3 text-sm md:grid-cols-2">
+                    <div className="space-y-5">
+                        <div className="grid border-y border-border text-sm sm:grid-cols-2">
                             <InfoItem label="状态" value={statusLabel[detailTask.status]} />
-                            <InfoItem label="画布名称" value={getCanvasTitle(detailTask, projectTitleById)} />
+                            <InfoItem label="画布名称" value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
                             <InfoItem label="任务类型" value={formatTaskKind(detailTask)} />
                             <InfoItem label="模型" value={formatModelName(detailTask)} />
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
                         </div>
-                        {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-lg bg-red-50 p-3 text-xs text-red-700">{generationErrorMessage(detailTask.error)}</pre> : null}
+                        {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
                         <DetailBlock title="输入" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.inputJson)} />
                         <DetailBlock title="结果" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.resultJson)} />
@@ -361,6 +426,20 @@ export default function TasksPage() {
                         </div>
                     </div>
                 ) : null}
+            </Drawer>
+            <Modal
+                title={<span className="block truncate pr-8">{mediaPreview?.title || "生成结果预览"}</span>}
+                open={Boolean(mediaPreview)}
+                onCancel={() => setMediaPreview(null)}
+                footer={null}
+                centered
+                width="min(1040px, calc(100vw - 32px))"
+                destroyOnHidden
+                className="task-media-preview-modal"
+            >
+                {mediaPreview?.kind === "video"
+                    ? <video src={mediaPreview.url} className="max-h-[76vh] w-full bg-black object-contain" controls playsInline preload="metadata" />
+                    : mediaPreview ? <img src={mediaPreview.url} alt={mediaPreview.title} className="max-h-[76vh] w-full bg-black object-contain" /> : null}
             </Modal>
         </>
     );
@@ -372,7 +451,7 @@ function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[
     let changed = false;
     const reconciled = next.map((task) => {
         const previous = currentById.get(task.id);
-        if (previous?.updatedAt === task.updatedAt) return previous;
+        if (previous?.updatedAt === task.updatedAt && previous.previewUrl === task.previewUrl && previous.billing?.status === task.billing?.status && previous.billing?.amountMicrocredits === task.billing?.amountMicrocredits) return previous;
         changed = true;
         return task;
     });
@@ -422,17 +501,66 @@ function isVideoResult(value: string, taskType: string) {
     return value.startsWith("data:video/") || /\.(mp4|webm|mov)(?:$|\?)/i.test(value) || taskType.includes("video");
 }
 
-function getCanvasTitle(task: GenerationTask, projectTitleById: Map<string, string>) {
-    if (!task.projectId) return "未绑定";
-    return projectTitleById.get(task.projectId) || "未同步画布";
+function TaskPreviewThumbnail({ task, onOpen }: { task: GenerationTask; onOpen: () => void }) {
+    const isVideo = task.previewKind === "video";
+    const fallbackVideo = task.type.includes("video");
+    if (!task.previewUrl) {
+        const Icon = fallbackVideo ? Video : task.type.includes("image") ? ImageIcon : FileText;
+        return <span className="grid h-12 w-[68px] shrink-0 place-items-center rounded-md border border-border/70 bg-muted/35 text-foreground/28"><Icon className="size-4" /></span>;
+    }
+    return (
+        <button type="button" onClick={onOpen} className="group relative h-12 w-[68px] shrink-0 overflow-hidden rounded-md border border-border/80 bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={isVideo ? "放大预览生成视频" : "放大预览生成图片"}>
+            {isVideo
+                ? <video src={task.previewUrl} width={68} height={48} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                : <img src={task.previewUrl} alt="" width={68} height={48} loading="lazy" className="h-full w-full object-cover" />}
+            <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-[background-color,opacity] duration-150 group-hover:bg-black/30 group-hover:opacity-100 group-focus-visible:bg-black/30 group-focus-visible:opacity-100">
+                {isVideo ? <Play className="size-4 fill-current" /> : <Eye className="size-4" />}
+            </span>
+        </button>
+    );
 }
 
-function statusBadgeClassName(status: TaskStatus) {
-    if (status === "succeeded") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-    if (status === "running") return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-    if (status === "queued") return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300";
-    if (status === "failed") return "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300";
-    return "border-stone-300 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400";
+function getTaskCanvasContext(task: GenerationTask, canvasById: Map<string, { title: string; projectId?: string }>, projectNameById: Map<string, string>) {
+    if (!task.projectId) return { canvasName: "未绑定画布", projectName: "" };
+    const canvas = canvasById.get(task.projectId);
+    if (canvas) return { canvasName: canvas.title || "未命名画布", projectName: canvas.projectId ? projectNameById.get(canvas.projectId) || "" : "" };
+    const projectName = projectNameById.get(task.projectId);
+    return projectName ? { canvasName: "项目级任务", projectName } : { canvasName: "画布已移除", projectName: "" };
+}
+
+function taskAttentionReason(task: GenerationTask) {
+    if (task.status === "cancelled") return "任务已取消，可按原输入重新提交";
+    if (task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)) return "内容审核未通过，请修改输入后新建任务";
+    if (task.error) return generationErrorMessage(task.error);
+    return task.stage || "生成失败，打开详情查看原因";
+}
+
+function taskEmptyState(status: TaskStatusFilter) {
+    if (status === "active") return { title: "没有运行中的任务", description: "新提交的生成会在这里显示排队状态和实时进度。" };
+    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和积分消耗会保留在这里。" };
+    return { title: "目前没有需要处理的任务", description: "失败或取消的生成会出现在这里，并提供原因和可用操作。" };
+}
+
+function statusDotClassName(status: TaskStatus) {
+    if (status === "succeeded") return "bg-emerald-500";
+    if (status === "running") return "bg-amber-500";
+    if (status === "queued") return "bg-blue-500";
+    if (status === "failed") return "bg-red-500";
+    return "bg-foreground/30";
+}
+
+function TaskDate({ value }: { value?: string }) {
+    if (!value) return <span className="text-xs text-foreground/38">-</span>;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return <span className="text-xs text-foreground/38">-</span>;
+    return <div className="text-xs tabular-nums text-foreground/62"><div>{date.toLocaleDateString()}</div><div className="mt-1 text-[10px] text-foreground/38">{date.toLocaleTimeString()}</div></div>;
+}
+
+function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }) {
+    if (!billing) return <span className="text-xs text-foreground/30">-</span>;
+    const amount = formatCredits(billing.amountMicrocredits);
+    const note = billing.status === "settled" ? "已结算" : billing.status === "refunded" ? "已退回" : billing.status === "uncertain" ? "待核对" : "预计";
+    return <div className="text-right"><div className="text-xs font-medium tabular-nums text-foreground/78">{amount}</div><div className={`mt-1 text-[10px] ${billing.status === "uncertain" ? "text-amber-600 dark:text-amber-300" : "text-foreground/38"}`}>{note}</div></div>;
 }
 
 function formatModelName(task: GenerationTask) {
@@ -455,7 +583,7 @@ function formatDate(value?: string) {
 
 function InfoItem({ label, value }: { label: string; value: string }) {
     return (
-        <div className="min-w-0 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+        <div className="min-w-0 border-b border-border px-0 py-2.5">
             <Typography.Text type="secondary" className="block text-xs">
                 {label}
             </Typography.Text>
@@ -470,7 +598,7 @@ function DetailBlock({ title, value }: { title: string; value: string }) {
     return (
         <div>
             <Typography.Text strong>{title}</Typography.Text>
-            <pre className="mt-2 max-h-60 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">{value}</pre>
+            <pre className="mt-2 max-h-60 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100">{value}</pre>
         </div>
     );
 }
@@ -508,7 +636,7 @@ function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConf
 }
 
 function buildVideoOperationPrompt(operation: string, prompt: string) {
-    const operationLabel = operationOptions.find((item) => item.value === operation)?.label || operation;
+    const operationLabel = operationOptions.find((item) => item.value === operation)?.label || "其他视频操作";
     if (operation === "compare_versions") return `请对以下视频结果版本做对比分析，输出推荐版本、差异点和修改建议：\n${prompt}`;
     return `视频编辑任务：${operationLabel}\n创作要求：${prompt}`;
 }

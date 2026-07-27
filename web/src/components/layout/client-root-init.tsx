@@ -3,13 +3,13 @@ import { useEffect, useRef } from "react";
 import { App } from "antd";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
+import { navigateToSettings } from "@/lib/settings-navigation";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const config = useConfigStore((state) => state.config);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
 
     useEffect(() => {
         if (handledConfigParams.current) return;
@@ -38,10 +38,10 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                 : [createModelChannel({ id: "default", name: "默认渠道", baseUrl: baseUrl || undefined })],
         );
         if (baseUrl) updateConfig("baseUrl", baseUrl);
-        openConfigDialog(false);
+        navigateToSettings({ section: "channels" });
         if (ignoredApiKey) message.warning("出于安全考虑，链接中的 API Key 已忽略，请在配置中手动填写");
         else message.success("已导入本地直连地址");
-    }, [config.channels, message, openConfigDialog, updateConfig]);
+    }, [config.channels, message, updateConfig]);
 
     return <>{children}</>;
 }

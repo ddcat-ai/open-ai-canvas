@@ -192,7 +192,8 @@ func (s *Service) AdminAPICallLogs(actor *model.User, query APICallLogQuery) (*A
 	if err != nil {
 		return nil, err
 	}
-	channels, err := s.repo.SystemChannels(true)
+	// 历史日志允许读取逻辑删除渠道的名称，但不读取或返回渠道密钥。
+	channels, err := s.repo.HistoricalSystemChannelReferences()
 	if err != nil {
 		return nil, err
 	}

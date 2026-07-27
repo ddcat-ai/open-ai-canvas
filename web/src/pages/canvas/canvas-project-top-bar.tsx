@@ -1,12 +1,12 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Bot, Check, ChevronDown, Coins, Gauge, Home, Images, LoaderCircle, Menu, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Dropdown, Modal } from "antd";
+import { Bot, Check, ChevronDown, Coins, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, Dropdown, Modal, Tooltip } from "antd";
 
-import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -37,6 +37,7 @@ type CanvasTopBarProps = {
     mediaPerformanceMode: CanvasMediaPerformanceMode;
     onMediaPerformanceModeChange: (mode: CanvasMediaPerformanceMode) => void;
     onOpenSearch: () => void;
+    projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
 };
 
 export function CanvasTopBar({
@@ -64,6 +65,7 @@ export function CanvasTopBar({
     mediaPerformanceMode,
     onMediaPerformanceModeChange,
     onOpenSearch,
+    projectContext,
 }: CanvasTopBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
@@ -93,7 +95,7 @@ export function CanvasTopBar({
                         menu={{
                             items: [
                                 { key: "home", icon: <Home className="size-4" />, label: <Link to="/">主页</Link> },
-                                { key: "projects", icon: <Images className="size-4" />, label: <Link to="/canvas">我的画布</Link> },
+                                { key: "projects", icon: <LayoutGrid className="size-4" />, label: <Link to="/canvas">画布</Link> },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
@@ -121,10 +123,11 @@ export function CanvasTopBar({
                         </button>
                     </Dropdown>
 
-                    <div ref={titleRef} className="flex min-w-0 items-center gap-2">
+                    <div ref={titleRef} className="flex min-w-0 flex-col items-start">
                         {isTitleEditing ? (
                             <input
                                 autoFocus
+                                size={canvasTitleInputSize(titleDraft)}
                                 value={titleDraft}
                                 onChange={(event) => onTitleDraftChange(event.target.value)}
                                 onBlur={onFinishTitleEditing}
@@ -132,14 +135,36 @@ export function CanvasTopBar({
                                     if (event.key === "Enter") onFinishTitleEditing();
                                     if (event.key === "Escape") onCancelTitleEditing();
                                 }}
-                                className="max-w-[280px] bg-transparent p-0 text-left text-lg font-semibold tracking-normal outline-none"
-                                style={{ color: theme.node.text }}
+                                className="h-8 w-auto min-w-12 max-w-[min(280px,42vw)] appearance-none border-0 bg-transparent p-0 text-left text-base font-semibold tracking-normal outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                                style={{ color: theme.node.text, caretColor: theme.accent.primary, border: 0, boxShadow: "none", outline: "none" }}
+                                aria-label="画布名称"
                             />
                         ) : (
-                            <button type="button" className="max-w-[280px] truncate border-b border-dashed border-transparent text-left text-lg font-semibold tracking-normal transition hover:border-current" onDoubleClick={onStartTitleEditing} title="双击修改画布名称">
-                                {title}
-                            </button>
+                            <div className="flex min-w-0 items-center gap-0.5">
+                                <button type="button" className="max-w-[280px] truncate text-left text-base font-semibold tracking-normal transition-opacity hover:opacity-75" onClick={onStartTitleEditing} title="点击修改画布名称">
+                                    {title}
+                                </button>
+                                <Tooltip title="重命名画布">
+                                    <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md opacity-60 transition hover:bg-black/5 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 dark:hover:bg-white/10" style={{ color: theme.node.text }} onClick={onStartTitleEditing} aria-label="重命名画布">
+                                        <Pencil className="size-3.5" />
+                                    </button>
+                                </Tooltip>
+                            </div>
                         )}
+                        {projectContext && !isTitleEditing ? (
+                            <div className="mt-0.5 flex max-w-[360px] items-center gap-1.5 text-[10px]" style={{ color: theme.node.muted }}>
+                                <Link to={`/projects/${projectContext.projectId}/overview`} className="inline-flex min-w-0 items-center gap-1 hover:underline" title={`返回项目：${projectContext.projectName}`}>
+                                    <FolderKanban className="size-3 shrink-0" />
+                                    <span className="max-w-[120px] truncate">{projectContext.projectName}</span>
+                                </Link>
+                                <span aria-hidden>·</span>
+                                <button type="button" className="min-w-0 truncate hover:underline" onClick={onOpenSearch} title="搜索并定位章节或镜头">
+                                    {projectContext.chapterLabel || `${projectContext.nodeCount} 个节点`}
+                                    {projectContext.shotLabel ? ` · ${projectContext.shotLabel}` : ""}
+                                    {projectContext.selectedCount ? ` · 已选 ${projectContext.selectedCount}` : ""}
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
@@ -175,7 +200,6 @@ export function CanvasTopBar({
                         </Link>
                     ) : null}
                     <Button type="text" className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
-                    <UserStatusActions variant="canvas" onOpenShortcuts={() => setShortcutsOpen(true)} />
                     <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
                     <Button
                         type="text"
@@ -321,6 +345,11 @@ function MenuLabel({ text, shortcut }: { text: string; shortcut: string }) {
             <span className="text-xs opacity-45">{shortcut}</span>
         </span>
     );
+}
+
+function canvasTitleInputSize(value: string) {
+    const visualLength = Array.from(value || "画布名称").reduce((length, character) => length + (character.codePointAt(0)! > 0xff ? 2 : 1), 0);
+    return Math.min(30, Math.max(5, visualLength));
 }
 
 function CompactAgentStatus({ status, onClick }: { status: { connected: boolean; enabled: boolean; activity: string }; onClick: () => void }) {

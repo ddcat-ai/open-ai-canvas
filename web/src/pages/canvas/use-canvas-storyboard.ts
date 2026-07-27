@@ -17,15 +17,14 @@ import {
     storyboardRowsFromTask,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
+import { navigateToSettings } from "@/lib/settings-navigation";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
 import { modelOptionName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import {
     CanvasNodeType,
     type CanvasConnection,
-    type CanvasDocumentChapter,
     type CanvasGenerationBatchMode,
     type CanvasNodeData,
-    type CanvasRichDocument,
     type StoryboardRow,
 } from "@/types/canvas";
 
@@ -56,7 +55,6 @@ export function useCanvasStoryboard({
     const { message, modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
 
     const confirmGenerationSubmission = useCallback((count: number, model: string, taskLabel: string) => new Promise<boolean>((resolve) => {
         if (!count) return resolve(false);
@@ -117,7 +115,7 @@ export function useCanvasStoryboard({
         const expandedPrompt = expandStoryboardTextMentions(prompt, buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current));
         const generationConfig = buildGenerationConfig(effectiveConfig, scriptNode, "text");
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined } } : node));
@@ -166,58 +164,7 @@ export function useCanvasStoryboard({
             message.error(details);
             return false;
         }
-    }, [connectionsRef, effectiveConfig, isAiConfigReady, message, nodesRef, openConfigDialog, projectId, setNodes]);
-
-    const analyzeDocumentChapter = useCallback(async (documentNode: CanvasNodeData, document: CanvasRichDocument, chapter: CanvasDocumentChapter, documentTitle: string) => {
-        if (!chapter.plainText.trim()) return;
-        let scriptNode = nodesRef.current.find((node) => node.type === CanvasNodeType.Script && node.metadata?.documentNodeId === documentNode.id && node.metadata?.chapterId === chapter.id);
-        if (!scriptNode) {
-            const chapterIndex = Math.max(0, document.chapters?.findIndex((item) => item.id === chapter.id) ?? 0);
-            scriptNode = createCanvasNode(CanvasNodeType.Script, { x: documentNode.position.x + documentNode.width + 140, y: documentNode.position.y + chapterIndex * 140 }, {
-                workflowKind: "storyboard",
-                workflowTitle: `${chapter.title} · 分镜`,
-                workflowDescription: `由《${documentTitle}》${chapter.title}生成`,
-                documentNodeId: documentNode.id,
-                chapterId: chapter.id,
-                chapterTitle: chapter.title,
-                composerContent: chapter.plainText,
-                status: NODE_STATUS_IDLE,
-            });
-            scriptNode.title = `${chapter.title} · 分镜`;
-            const nextNodes = [...nodesRef.current, scriptNode];
-            nodesRef.current = nextNodes;
-            setNodes(nextNodes);
-            if (!connectionsRef.current.some((connection) => connection.fromNodeId === documentNode.id && connection.toNodeId === scriptNode?.id)) {
-                const connection = { id: nanoid(), fromNodeId: documentNode.id, toNodeId: scriptNode.id };
-                connectionsRef.current = [...connectionsRef.current, connection];
-                setConnections(connectionsRef.current);
-            }
-        } else {
-            const updatedScriptNode = {
-                ...scriptNode,
-                title: `${chapter.title} · 分镜`,
-                metadata: {
-                    ...scriptNode.metadata,
-                    workflowTitle: `${chapter.title} · 分镜`,
-                    workflowDescription: `由《${documentTitle}》${chapter.title}生成`,
-                    chapterTitle: chapter.title,
-                    composerContent: chapter.plainText,
-                },
-            };
-            scriptNode = updatedScriptNode;
-            nodesRef.current = nodesRef.current.map((node) => node.id === updatedScriptNode.id ? updatedScriptNode : node);
-            setNodes(nodesRef.current);
-        }
-        const prompt = [
-            `请将《${documentTitle}》中的“${chapter.title}”拆分为结构化短剧分镜。`,
-            "镜头必须覆盖本章完整剧情，保持角色、场景和时间连续；每行给出画面描述、对白、景别、情绪、镜头运动、图片提示词和视频运动提示词。",
-            "章节正文：",
-            chapter.plainText,
-        ].join("\n\n");
-        const succeeded = await generateScriptRows(scriptNode.id, prompt);
-        if (!succeeded) return;
-        return { storyboardNodeId: scriptNode.id };
-    }, [connectionsRef, generateScriptRows, nodesRef, setConnections, setNodes]);
+    }, [connectionsRef, effectiveConfig, isAiConfigReady, message, nodesRef, projectId, setNodes]);
 
     const ensureScriptImageNodes = useCallback((nodeId: string, rowIds: string[]) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
@@ -293,7 +240,7 @@ export function useCanvasStoryboard({
         if (missing.length) return message.warning(`有 ${missing.length} 个镜头缺少画面描述或图片提示词`);
         const imageModel = effectiveConfig.imageModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, imageModel)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         const activeNodeIds = activeGenerationBatchNodeIds(scriptNode, "storyboard_image");
@@ -305,7 +252,7 @@ export function useCanvasStoryboard({
         if (!await confirmGenerationSubmission(targetRows.length, imageModel, "图片生成")) return;
         const targets = ensureScriptImageNodes(nodeId, targetRows.map((row) => row.id));
         if (enqueueGenerationBatch(nodeId, "storyboard_image", targets.map((target) => ({ rowId: target.row.id, nodeId: target.node.id })))) message.success("分镜图已加入生成队列");
-    }, [effectiveConfig, enqueueGenerationBatch, ensureScriptImageNodes, confirmGenerationSubmission, isAiConfigReady, message, nodesRef, openConfigDialog]);
+    }, [effectiveConfig, enqueueGenerationBatch, ensureScriptImageNodes, confirmGenerationSubmission, isAiConfigReady, message, nodesRef]);
 
     const createScriptVideoNodes = useCallback((nodeId: string, silent = false, rowIds?: string[]) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
@@ -357,7 +304,7 @@ export function useCanvasStoryboard({
     const createAndGenerateScriptVideos = useCallback(async (nodeId: string) => {
         const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, videoModel)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         let scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
@@ -403,7 +350,7 @@ export function useCanvasStoryboard({
         setConnections(nextConnections);
         setSelectedNodeIds(new Set(targets.map((target) => target.videoNode.id)));
         if (enqueueGenerationBatch(nodeId, "storyboard_video", targets.map((target) => ({ rowId: target.row.id, nodeId: target.videoNode.id })))) message.success("镜头视频已加入生成队列");
-    }, [connectionsRef, confirmGenerationSubmission, createScriptVideoNodes, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, openConfigDialog, setConnections, setNodes, setSelectedNodeIds]);
+    }, [connectionsRef, confirmGenerationSubmission, createScriptVideoNodes, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes, setSelectedNodeIds]);
 
     const createScriptActionBoards = useCallback(async (nodeId: string) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
@@ -411,7 +358,7 @@ export function useCanvasStoryboard({
         if (!scriptNode || !rows.length) return;
         const imageModel = effectiveConfig.imageModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, imageModel)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         const actionBoardRows = rows.filter((row) => !nodesRef.current.some((node) => node.type === CanvasNodeType.Image && node.metadata?.workflowKind === "action_board" && node.metadata.shotIndex === row.shotNumber && Boolean(node.metadata.content)));
@@ -450,7 +397,7 @@ export function useCanvasStoryboard({
         setNodes(nextNodes);
         setConnections(nextConnections);
         if (enqueueGenerationBatch(nodeId, "action_board", targets.map((target) => ({ rowId: target.row.id, nodeId: target.node.id })))) message.success("动作拆分板已加入生成队列");
-    }, [connectionsRef, confirmGenerationSubmission, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, openConfigDialog, setConnections, setNodes]);
+    }, [connectionsRef, confirmGenerationSubmission, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes]);
 
     const generateScriptVideos = useCallback(async (nodeId: string, rowIds: string[]) => {
         let scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
@@ -461,7 +408,7 @@ export function useCanvasStoryboard({
         if (readyRows.length !== rows.length) message.warning(`${rows.length - readyRows.length} 个镜头没有可用分镜图，已跳过`);
         const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, videoModel)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         const activeNodeIds = activeGenerationBatchNodeIds(scriptNode, "storyboard_video");
@@ -504,11 +451,10 @@ export function useCanvasStoryboard({
         setNodes(nextNodes);
         setConnections(nextConnections);
         if (enqueueGenerationBatch(nodeId, "storyboard_video", targets.map((target) => ({ rowId: target.row.id, nodeId: target.node.id })))) message.success("镜头视频已加入生成队列");
-    }, [connectionsRef, confirmGenerationSubmission, createScriptVideoNodes, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, openConfigDialog, setConnections, setNodes]);
+    }, [connectionsRef, confirmGenerationSubmission, createScriptVideoNodes, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes]);
 
     return {
         addScriptRow,
-        analyzeDocumentChapter,
         createAndGenerateScriptVideos,
         createScriptActionBoards,
         createScriptImageNodes,

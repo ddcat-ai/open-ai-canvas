@@ -13,6 +13,10 @@ type LinkProjectAssetRequest struct {
 	Category string `json:"category"`
 }
 
+type UpdateProjectAssetCategoryRequest struct {
+	Category string `json:"category"`
+}
+
 type CreateAssetVersionRequest struct {
 	Prompt         string `json:"prompt"`
 	DefinitionJSON string `json:"definitionJson"`
@@ -29,6 +33,7 @@ type ProjectAssetSummary struct {
 	VersionCount     int                      `json:"versionCount"`
 	Usages           []string                 `json:"usages"`
 	UpdatedAt        time.Time                `json:"updatedAt"`
+	Character        *CharacterCardSummary    `json:"character,omitempty"`
 }
 
 type ProjectAssetFilter struct {
@@ -73,15 +78,11 @@ func (s *Service) ProjectAssets(userID string, projectID string) ([]ProjectAsset
 	}
 	result := make([]ProjectAssetSummary, 0, len(assets))
 	for _, asset := range assets {
-		versions, versionErr := s.repo.AssetVersions(asset.ID)
-		if versionErr != nil {
-			return nil, versionErr
+		summary, summaryErr := s.projectAssetSummary(userID, projectID, &asset)
+		if summaryErr != nil {
+			return nil, summaryErr
 		}
-		usages, usageErr := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
-		if usageErr != nil {
-			return nil, usageErr
-		}
-		result = append(result, ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt})
+		result = append(result, summary)
 	}
 	return result, nil
 }
@@ -102,6 +103,21 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	if !validAssetCategory(category) {
 		return ProjectAssetSummary{}, BadAuthRequest("不支持的资产业务分类")
 	}
+	linked, err := s.repo.ProjectAssetLinked(projectID, asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	if linked {
+		versions, versionErr := s.repo.AssetVersions(asset.ID)
+		if versionErr != nil {
+			return ProjectAssetSummary{}, versionErr
+		}
+		usages, usageErr := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
+		if usageErr != nil {
+			return ProjectAssetSummary{}, usageErr
+		}
+		return ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt}, nil
+	}
 	now := time.Now()
 	asset.Category = category
 	if asset.Status == "" {
@@ -111,24 +127,33 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	if err != nil {
 		return ProjectAssetSummary{}, err
 	}
+	var initialVersion *model.AssetVersion
 	if len(versions) == 0 {
 		version := model.AssetVersion{ID: newID(), AssetID: asset.ID, Version: 1, Status: asset.Status, DefinitionJSON: "{}", CreatedAt: now, UpdatedAt: now}
-		if err := s.repo.CreateAssetVersion(&version); err != nil {
-			return ProjectAssetSummary{}, err
-		}
+		initialVersion = &version
 		asset.PrimaryVersionID = version.ID
 		versions = append(versions, version)
 	}
 	asset.UpdatedAt = now
-	if err := s.repo.UpdateAssetDomain(asset); err != nil {
-		return ProjectAssetSummary{}, err
-	}
 	link := model.ProjectAssetLink{ID: newID(), ProjectID: projectID, AssetID: asset.ID, CreatedAt: now}
-	if err := s.repo.UpsertProjectAssetLink(&link); err != nil {
+	created, err := s.repo.LinkProjectAsset(asset, initialVersion, &link)
+	if err != nil {
 		return ProjectAssetSummary{}, err
 	}
-	if err := s.repo.BumpProjectRevision(projectID); err != nil {
-		return ProjectAssetSummary{}, err
+	if !created {
+		current, currentErr := s.repo.AssetForUser(userID, asset.ID)
+		if currentErr != nil {
+			return ProjectAssetSummary{}, currentErr
+		}
+		currentVersions, versionErr := s.repo.AssetVersions(asset.ID)
+		if versionErr != nil {
+			return ProjectAssetSummary{}, versionErr
+		}
+		usages, usageErr := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
+		if usageErr != nil {
+			return ProjectAssetSummary{}, usageErr
+		}
+		return ProjectAssetSummary{ID: current.ID, Title: current.Title, MediaType: current.Kind, Category: current.Category, Status: current.Status, PrimaryVersionID: current.PrimaryVersionID, VersionCount: len(currentVersions), Usages: usages, UpdatedAt: current.UpdatedAt}, nil
 	}
 	return ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: []string{}, UpdatedAt: asset.UpdatedAt}, nil
 }
@@ -137,8 +162,24 @@ func (s *Service) UnlinkProjectAsset(userID string, projectID string, assetID st
 	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
 		return err
 	}
-	if _, err := s.repo.AssetForUser(userID, assetID); err != nil {
+	asset, err := s.repo.AssetForUser(userID, assetID)
+	if err != nil {
 		return err
+	}
+	if asset.Category == model.AssetCategoryCharacter {
+		canvases, canvasErr := s.repo.ProjectCanvasDocuments(userID, projectID)
+		if canvasErr != nil {
+			return canvasErr
+		}
+		for _, canvas := range canvases {
+			referenced, parseErr := canvasReferencesCharacterAsset(canvas.PayloadJSON, assetID)
+			if parseErr != nil {
+				return BadAuthRequest("画布数据格式错误，无法确认角色引用")
+			}
+			if referenced {
+				return BadAuthRequest("角色仍被项目画布引用，请先删除对应角色卡节点")
+			}
+		}
 	}
 	references, err := s.repo.ProjectAssetShotReferenceCount(projectID, assetID)
 	if err != nil {
@@ -151,6 +192,64 @@ func (s *Service) UnlinkProjectAsset(userID string, projectID string, assetID st
 		return err
 	}
 	return s.repo.BumpProjectRevision(projectID)
+}
+
+func canvasReferencesCharacterAsset(payloadJSON string, assetID string) (bool, error) {
+	var payload struct {
+		Nodes []struct {
+			Metadata struct {
+				WorkflowKind     string `json:"workflowKind"`
+				CharacterAssetID string `json:"characterAssetId"`
+			} `json:"metadata"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal([]byte(payloadJSON), &payload); err != nil {
+		return false, err
+	}
+	for _, node := range payload.Nodes {
+		if node.Metadata.WorkflowKind == "character" && node.Metadata.CharacterAssetID == assetID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Service) UpdateProjectAssetCategory(userID string, projectID string, assetID string, req UpdateProjectAssetCategoryRequest) (ProjectAssetSummary, error) {
+	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	asset, err := s.repo.AssetForUser(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	linked, err := s.repo.ProjectAssetLinked(projectID, asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	if !linked {
+		return ProjectAssetSummary{}, BadAuthRequest("素材尚未加入当前项目")
+	}
+	category := model.AssetCategory(strings.TrimSpace(req.Category))
+	if !validAssetCategory(category) {
+		return ProjectAssetSummary{}, BadAuthRequest("不支持的资产业务分类")
+	}
+	asset.Category = category
+	asset.UpdatedAt = time.Now()
+	if err := s.repo.UpdateAssetDomain(asset); err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	if err := s.repo.BumpProjectRevision(projectID); err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	versions, err := s.repo.AssetVersions(asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	usages, err := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	return ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt}, nil
 }
 
 func (s *Service) CreateProjectAssetVersion(userID string, projectID string, assetID string, req CreateAssetVersionRequest) (model.AssetVersion, error) {
@@ -213,21 +312,56 @@ func (s *Service) ConfirmProjectAssetCandidate(userID string, projectID string, 
 	}
 	now := time.Now()
 	assetID := strings.TrimSpace(req.AssetID)
+	if assetID != "" && candidate.Category == model.AssetCategoryCharacter {
+		asset, assetErr := s.repo.ProjectCharacterAsset(userID, projectID, assetID)
+		if assetErr != nil {
+			return ProjectAssetSummary{}, assetErr
+		}
+		current, versionErr := s.repo.AssetVersion(asset.PrimaryVersionID)
+		if versionErr != nil {
+			return ProjectAssetSummary{}, versionErr
+		}
+		definition, mergeErr := mergeCharacterCandidateDefinition(current.DefinitionJSON, candidate.DetailsJSON, asset.Title, candidate.Name)
+		if mergeErr != nil {
+			return ProjectAssetSummary{}, mergeErr
+		}
+		nextAsset, nextVersion, representations, voice, prepareErr := s.prepareNextCharacterVersion(asset, asset.Title, definition, nil, nil, false)
+		if prepareErr != nil {
+			return ProjectAssetSummary{}, prepareErr
+		}
+		candidate.Status = "confirmed"
+		candidate.ResolvedAssetID = asset.ID
+		candidate.UpdatedAt = now
+		if saveErr := s.repo.ConfirmProjectCharacterCandidate(candidate, &nextAsset, &nextVersion, representations, voice); saveErr != nil {
+			return ProjectAssetSummary{}, saveErr
+		}
+		return s.projectAssetSummary(userID, projectID, &nextAsset)
+	}
 	createAsset := assetID == ""
 	var asset model.Asset
 	var version model.AssetVersion
 	if createAsset {
 		assetID = newID()
 		versionID := newID()
-		payload, marshalErr := json.Marshal(map[string]any{
-			"id": assetID, "kind": "text", "category": candidate.Category, "status": model.AssetVersionStatusConfirmed,
-			"primaryVersionId": versionID, "title": candidate.Name, "tags": []string{}, "data": map[string]string{"content": ""},
-			"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
-		})
+		kind := "text"
+		var payload []byte
+		var marshalErr error
+		if candidate.Category == model.AssetCategoryCharacter {
+			kind = "entity"
+			var characterPayload string
+				characterPayload, marshalErr = characterAssetPayload(assetID, versionID, candidate.Name, json.RawMessage(candidate.DetailsJSON), now, now)
+			payload = []byte(characterPayload)
+		} else {
+			payload, marshalErr = json.Marshal(map[string]any{
+				"id": assetID, "kind": kind, "category": candidate.Category, "status": model.AssetVersionStatusConfirmed,
+				"primaryVersionId": versionID, "title": candidate.Name, "tags": []string{}, "data": map[string]string{"content": ""},
+				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+			})
+		}
 		if marshalErr != nil {
 			return ProjectAssetSummary{}, marshalErr
 		}
-		asset = model.Asset{ID: assetID, UserID: userID, Kind: "text", Category: candidate.Category, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: candidate.Name, PayloadJSON: string(payload), CreatedAt: now, UpdatedAt: now}
+		asset = model.Asset{ID: assetID, UserID: userID, Kind: kind, Category: candidate.Category, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: candidate.Name, PayloadJSON: string(payload), CreatedAt: now, UpdatedAt: now}
 		version = model.AssetVersion{ID: versionID, AssetID: assetID, Version: 1, Status: model.AssetVersionStatusConfirmed, DefinitionJSON: candidate.DetailsJSON, CreatedAt: now, UpdatedAt: now}
 	} else {
 		existing, assetErr := s.repo.AssetForUser(userID, assetID)
@@ -243,15 +377,61 @@ func (s *Service) ConfirmProjectAssetCandidate(userID string, projectID string, 
 	if err := s.repo.ConfirmProjectAssetCandidate(candidate, &asset, &version, &link, createAsset); err != nil {
 		return ProjectAssetSummary{}, err
 	}
-	versions, err := s.repo.AssetVersions(assetID)
-	if err != nil {
-		return ProjectAssetSummary{}, err
+	return s.projectAssetSummary(userID, projectID, &asset)
+}
+
+func mergeCharacterCandidateDefinition(currentJSON string, candidateJSON string, currentName string, candidateName string) (string, error) {
+	current := map[string]any{}
+	candidate := map[string]any{}
+	if err := json.Unmarshal([]byte(currentJSON), &current); err != nil {
+		return "", err
 	}
-	usages, err := s.repo.ProjectAssetUsageRoles(projectID, assetID)
-	if err != nil {
-		return ProjectAssetSummary{}, err
+	if err := json.Unmarshal([]byte(candidateJSON), &candidate); err != nil {
+		return "", BadAuthRequest("角色候选设定格式无效")
 	}
-	return ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt}, nil
+	for key, value := range candidate {
+		if key == "aliases" || !emptyCharacterDefinitionValue(current[key]) {
+			continue
+		}
+		current[key] = value
+	}
+	aliases := make([]string, 0)
+	seen := map[string]bool{}
+	appendAlias := func(value string) {
+		value = strings.TrimSpace(value)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] || strings.EqualFold(value, strings.TrimSpace(currentName)) {
+			return
+		}
+		seen[key] = true
+		aliases = append(aliases, value)
+	}
+	for _, value := range []any{current["aliases"], candidate["aliases"]} {
+		if list, ok := value.([]any); ok {
+			for _, item := range list {
+				if text, valid := item.(string); valid {
+					appendAlias(text)
+				}
+			}
+		}
+	}
+	appendAlias(candidateName)
+	current["aliases"] = aliases
+	encoded, err := json.Marshal(current)
+	return string(encoded), err
+}
+
+func emptyCharacterDefinitionValue(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(typed) == ""
+	case []any:
+		return len(typed) == 0
+	default:
+		return false
+	}
 }
 
 func containsString(values []string, target string) bool {
@@ -270,4 +450,24 @@ func validAssetCategory(category model.AssetCategory) bool {
 	default:
 		return false
 	}
+}
+
+func (s *Service) projectAssetSummary(userID string, projectID string, asset *model.Asset) (ProjectAssetSummary, error) {
+	versions, err := s.repo.AssetVersions(asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	usages, err := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
+	if err != nil {
+		return ProjectAssetSummary{}, err
+	}
+	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt}
+	if asset.Category == model.AssetCategoryCharacter && asset.PrimaryVersionID != "" {
+		card, cardErr := s.characterCard(userID, asset)
+		if cardErr != nil {
+			return ProjectAssetSummary{}, cardErr
+		}
+		summary.Character = &card
+	}
+	return summary, nil
 }

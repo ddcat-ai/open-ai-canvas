@@ -11,21 +11,24 @@ export function CreditSymbol({ className, ...props }: ComponentProps<"span">) {
 
 export type ModelCreditCost = {
     model: string;
+    billingMode: "fixed_request" | "per_second";
     unitPriceMicrocredits: number;
 };
 
 function modelCreditCost(modelCosts: ModelCreditCost[] | undefined, model: string) {
-    const microcredits = modelCosts?.find((item) => item.model === model)?.unitPriceMicrocredits;
-    return microcredits === undefined ? null : microcredits / 1_000_000;
+    return modelCosts?.find((item) => item.model === model) || null;
 }
 
 export function formatCredits(value: number, maximumFractionDigits = 6) {
     return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits });
 }
 
-export function requestCreditCost(options: { channelMode: string; modelCosts?: ModelCreditCost[]; model: string; count?: string | number }) {
+export function requestCreditCost(options: { channelMode: string; modelCosts?: ModelCreditCost[]; model: string; count?: string | number; seconds?: string | number }) {
     if (options.channelMode !== "remote") return null;
-    const unitCredits = modelCreditCost(options.modelCosts, options.model);
-    const count = Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
-    return unitCredits === null ? null : unitCredits * count;
+    const cost = modelCreditCost(options.modelCosts, options.model);
+    if (!cost) return null;
+    const quantity = cost.billingMode === "per_second"
+        ? Math.max(1, Math.floor(Math.abs(Number(options.seconds)) || 1))
+        : Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
+    return (cost.unitPriceMicrocredits / 1_000_000) * quantity;
 }

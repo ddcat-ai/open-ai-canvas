@@ -10,7 +10,7 @@ export function isFrameNode(node?: CanvasNodeData | null): node is CanvasNodeDat
 }
 
 export function canFrameContain(node: CanvasNodeData) {
-    return node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Video;
+    return node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Drawing || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Video;
 }
 
 export function getFrameChildren(frameId: string, nodes: CanvasNodeData[]) {

@@ -99,7 +99,7 @@ export async function executeImageGeneration({
             if (isConfigNode) return { ...node, metadata: { ...node.metadata, prompt: effectivePrompt, status: NODE_STATUS_LOADING, errorDetails: undefined } };
             if (isEmptyImageNode) return { ...node, position: rootNode.position, width: rootNode.width, height: rootNode.height, title: rootNode.title, metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined } };
             if (isImageNode) return { ...node, title: rootNode.title, metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined } };
-            return { ...node, type: CanvasNodeType.Text, title: prompt.slice(0, 32) || "Prompt", width: parentConfig.width, height: parentConfig.height, metadata: { ...node.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined } };
+            return { ...node, type: CanvasNodeType.Text, title: prompt.slice(0, 32) || "Prompt", width: parentConfig.width, height: parentConfig.height, metadata: { ...node.metadata, content: prompt, richText: undefined, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined } };
         }),
         ...(isImageNode ? [] : [rootNode]),
         ...childNodes,
@@ -118,7 +118,7 @@ export async function executeImageGeneration({
     await Promise.all(
         targetIds.map(async (targetId) => {
             try {
-                const result = await runBackendCanvasGenerationTask({ projectId, nodeId: targetId, mode: "image", prompt: effectivePrompt, config: { ...generationConfig, count: "1" }, referenceImages, signal: controller.signal, metadata: { sourceNodeId: nodeId }, onTaskCreated: (task) => bindGenerationTask(targetId, task) });
+                const result = await runBackendCanvasGenerationTask({ projectId, nodeId: targetId, mode: "image", prompt: effectivePrompt, config: { ...generationConfig, count: "1" }, referenceImages, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions }, onTaskCreated: (task) => bindGenerationTask(targetId, task) });
                 const image = result.images?.[0];
                 if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
                 const uploaded = await uploadImage(image.dataUrl);

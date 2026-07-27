@@ -1,6 +1,5 @@
 import { nanoid } from "nanoid";
 
-import { createDocumentChapter } from "@/lib/canvas/canvas-document";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position } from "@/types/canvas";
@@ -41,11 +40,10 @@ export function createShortDramaPipeline(center: Position) {
         status: "idle",
         workflowKind: "story_input",
         workflowTitle: "故事输入",
-        workflowDescription: "小说或梗概",
-        storyInputMode: "novel",
+        workflowDescription: "题材、角色、冲突和结局方向",
         fontSize: 14,
     });
-    storyNode.title = "故事输入 · 小说";
+    storyNode.title = "故事梗概";
     storyNode.width = 420;
     storyNode.height = 260;
 
@@ -80,8 +78,7 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
     const scriptIds = new Set(storyboardScripts.map((node) => node.id));
     const isConnectedToStoryboard = (nodeId: string) => connections.some((connection) => connection.fromNodeId === nodeId && scriptIds.has(connection.toNodeId));
     const styleNode = nodes.find((node) => node.metadata?.workflowKind === "styleboard");
-    const linkedNovelNode = nodes.find((node) => node.type === CanvasNodeType.Text && node.metadata?.document?.kind === "novel" && isConnectedToStoryboard(node.id));
-    const storyNode = storyInputNode || linkedNovelNode || agentScriptNode;
+    const storyNode = storyInputNode || agentScriptNode;
     const scriptNode = storyboardScripts.find((node) => meaningfulStoryboardRows(node).length > 0) || storyboardScripts[0];
     const meaningfulRows = scriptNode ? meaningfulStoryboardRows(scriptNode) : [];
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -89,7 +86,7 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
     const completedShotVideos = nodes.filter((node) => isSuccessfulVideoNode(node) && (node.metadata?.workflowKind === "shot" || connections.some((connection) => shotNodes.some((shot) => shot.id === connection.fromNodeId) && connection.toNodeId === node.id)));
     const finalNode = finalNodes.find((node) => node.metadata?.status === "success" && Boolean(node.metadata.content));
 
-    const storyText = (storyNode?.metadata?.document?.plainText || storyNode?.metadata?.content || "").trim();
+    const storyText = (storyNode?.metadata?.content || "").trim();
     // 手工流水线要求输入真实连到分镜脚本；Agent 协议的风格板和剧本没有这条连线，按领域节点本身判断。
     const styleDone = Boolean((styleNode?.metadata?.content || styleNode?.metadata?.prompt || "").trim() && (hasAgentPipeline || !scriptNode || isConnectedToStoryboard(styleNode!.id)));
     const storyDone = Boolean(storyText && storyNode && (storyNode === agentScriptNode || !scriptNode || isConnectedToStoryboard(storyNode.id)));
@@ -120,36 +117,6 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
         completed: done.every(Boolean),
         completedCount: done.filter(Boolean).length,
         steps,
-    };
-}
-
-export function storyInputNodeWithMode(node: CanvasNodeData, mode: "novel" | "brief") {
-    const content = (node.metadata?.document?.plainText || node.metadata?.content || "").trim();
-    if (mode === "brief") {
-        const metadata = { ...node.metadata, content, storyInputMode: mode, status: content ? "success" as const : "idle" as const };
-        delete metadata.document;
-        return { ...node, title: "故事输入 · 梗概", metadata };
-    }
-    const chapter = createDocumentChapter("第 1 章", content, 0);
-    return {
-        ...node,
-        title: "故事输入 · 小说",
-        metadata: {
-            ...node.metadata,
-            content,
-            storyInputMode: mode,
-            status: content ? "success" as const : "idle" as const,
-            document: {
-                kind: "novel" as const,
-                format: "tiptap-json" as const,
-                json: chapter.json,
-                plainText: content,
-                characterCount: Array.from(content).length,
-                chapters: [chapter],
-                activeChapterId: chapter.id,
-                updatedAt: new Date().toISOString(),
-            },
-        },
     };
 }
 

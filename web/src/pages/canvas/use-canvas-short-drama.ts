@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 
-import { createShortDramaPipeline, deriveShortDramaProgress, persistShortDramaGuideDismissed, readShortDramaGuideDismissed, storyInputNodeWithMode, type CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
+import { createShortDramaPipeline, deriveShortDramaProgress, persistShortDramaGuideDismissed, readShortDramaGuideDismissed, type CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import type { CanvasConnection, CanvasNodeData, Position } from "@/types/canvas";
 
 type UseCanvasShortDramaOptions = {
@@ -16,13 +16,12 @@ type UseCanvasShortDramaOptions = {
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setStylePickerOpen: Dispatch<SetStateAction<boolean>>;
-    setDocumentEditorNodeId: Dispatch<SetStateAction<string | null>>;
     fitCanvasSelection: () => boolean;
     focusCanvasNode: (nodeId: string) => void;
     openTextEditor: (node: CanvasNodeData) => void;
 };
 
-export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setStylePickerOpen, setDocumentEditorNodeId, fitCanvasSelection, focusCanvasNode, openTextEditor }: UseCanvasShortDramaOptions) {
+export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setStylePickerOpen, fitCanvasSelection, focusCanvasNode, openTextEditor }: UseCanvasShortDramaOptions) {
     const { message } = App.useApp();
     const dismissedRef = useRef(readShortDramaGuideDismissed());
     const [guideCollapsed, setGuideCollapsed] = useState(dismissedRef.current);
@@ -50,19 +49,6 @@ export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsR
         });
         message.success("短剧流水线已创建");
     }, [connectionsRef, fitCanvasSelection, getCanvasCenter, message, nodesRef, selectNodes, setConnections, setNodes, setStylePickerOpen]);
-
-    const setStoryInputMode = useCallback((nodeId: string, mode: "novel" | "brief") => {
-        const current = nodesRef.current.find((node) => node.id === nodeId);
-        if (!current || current.metadata?.workflowKind !== "story_input") return;
-        const updated = storyInputNodeWithMode(current, mode);
-        nodesRef.current = nodesRef.current.map((node) => node.id === nodeId ? updated : node);
-        setNodes(nodesRef.current);
-        selectNodes([nodeId]);
-        queueMicrotask(() => {
-            if (mode === "novel") setDocumentEditorNodeId(nodeId);
-            else openTextEditor(updated);
-        });
-    }, [nodesRef, openTextEditor, selectNodes, setDocumentEditorNodeId, setNodes]);
 
     const openStoryInput = useCallback((nodeId?: string) => {
         const storyNode = (nodeId ? nodesRef.current.find((node) => node.id === nodeId) : undefined)
@@ -113,7 +99,6 @@ export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsR
         openStoryInput,
         progress,
         setGuideCollapsed,
-        setStoryInputMode,
         skipGuide,
     };
 }

@@ -81,7 +81,7 @@ export default function RegisterPage() {
 
     return (
         <form onSubmit={submit} className="space-y-4">
-            {settings?.firstUser ? <Notice icon={<Info className="size-3.5" />} tone="cyan">首个账号自动成为管理员，邮箱验证码暂不要求。</Notice> : null}
+            {settings?.firstUser ? <Notice icon={<Info className="size-3.5" />} tone="blue">首个账号自动成为管理员，邮箱验证码暂不要求。</Notice> : null}
             {registrationClosed ? <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">当前已关闭普通注册，请联系管理员创建账号。</Notice> : null}
             {mailUnavailable ? <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">管理员尚未配置注册邮件，普通邮箱注册暂不可用。</Notice> : null}
 
@@ -116,8 +116,8 @@ function AuthField({ label, children }: { label: string; children: ReactNode }) 
     return <label className="block space-y-2"><span className="text-xs font-medium text-white/62">{label}</span>{children}</label>;
 }
 
-function Notice({ icon, tone, children }: { icon: ReactNode; tone: "cyan" | "amber"; children: ReactNode }) {
-    return <div className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs leading-5 ${tone === "cyan" ? "border-cyan-300/15 bg-cyan-300/[0.06] text-cyan-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}><span className="mt-0.5 shrink-0">{icon}</span>{children}</div>;
+function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amber"; children: ReactNode }) {
+    return <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tone === "blue" ? "border-blue-300/15 bg-blue-300/[0.06] text-blue-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}><span className="mt-0.5 shrink-0">{icon}</span>{children}</div>;
 }
 
 function safeNext(value: string | null) {

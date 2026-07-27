@@ -53,13 +53,17 @@
     --motion-state: 180ms;
     --motion-panel: 240ms;
     --ease-aceternity: cubic-bezier(0.2, 0.85, 0.18, 1);
-    --workspace-canvas: #f6f6f3;
-    --workspace-surface: rgba(255, 255, 255, 0.68);
-    --workspace-surface-strong: rgba(255, 255, 255, 0.9);
-    --workspace-border: rgba(23, 23, 23, 0.09);
-    --workspace-border-strong: rgba(23, 23, 23, 0.18);
-    --workspace-grid-line: rgba(23, 23, 23, 0.045);
-    --workspace-nav: rgba(246, 246, 243, 0.82);
+    --ease-product-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    --workspace-canvas: #ffffff;
+    --workspace-surface: rgba(255, 255, 255, 0.82);
+    --workspace-surface-strong: #ffffff;
+    --workspace-border: rgba(15, 23, 42, 0.1);
+    --workspace-border-strong: rgba(15, 23, 42, 0.18);
+    --workspace-grid-line: rgba(51, 65, 85, 0.045);
+    --workspace-nav: rgba(255, 255, 255, 0.88);
+    --workspace-sidebar: #f5f6f8;
+    --workspace-accent: #2563eb;
+    --workspace-accent-soft: #eaf1ff;
     --border: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --background: oklch(1 0 0);
@@ -119,6 +123,9 @@
     --workspace-border-strong: rgba(255, 255, 255, 0.16);
     --workspace-grid-line: rgba(255, 255, 255, 0.038);
     --workspace-nav: rgba(11, 12, 13, 0.82);
+    --workspace-sidebar: #101112;
+    --workspace-accent: #7da2ff;
+    --workspace-accent-soft: rgba(80, 125, 230, 0.16);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -126,7 +133,7 @@
     --chart-5: oklch(0.269 0 0);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary: oklch(0.922 0 0);
     --sidebar-primary-foreground: oklch(0.985 0 0);
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
@@ -173,60 +180,80 @@
 @layer utilities {
     .app-user-workspace {
         background-color: var(--workspace-canvas);
-        background-image:
-            linear-gradient(to right, var(--workspace-grid-line) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--workspace-grid-line) 1px, transparent 1px);
-        background-position: -1px -1px;
-        background-size: 36px 36px;
     }
 
-    .app-user-top-nav {
-        border-bottom: 1px solid var(--workspace-border);
-        background: var(--workspace-nav);
-        box-shadow: 0 1px 0 color-mix(in srgb, var(--workspace-canvas) 76%, transparent);
+    .app-workspace-sidebar {
+        border-right: 1px solid var(--workspace-border);
+        background: var(--workspace-sidebar);
+        transition: width var(--motion-state) var(--ease-aceternity);
     }
 
-    .app-top-nav-link.is-active {
-        background: color-mix(in srgb, var(--foreground) 7%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent);
+    .app-workspace-nav-link.is-active {
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+        color: var(--foreground);
     }
 
-    .app-home-primary-action {
-        border: 1px solid #171717;
-        background: #171717;
-        /* 非分层的表单 reset 会覆盖 utilities 层颜色，主操作必须固定前景色。 */
-        color: #fafafa !important;
-        box-shadow: 0 12px 30px rgba(23, 23, 23, 0.16);
+    .app-workspace-nav-link.is-active::before {
+        position: absolute;
+        left: -8px;
+        width: 2px;
+        height: 18px;
+        border-radius: 0 2px 2px 0;
+        background: var(--workspace-accent);
+        content: "";
     }
 
-    .dark .app-home-primary-action {
-        border-color: #fafafa;
-        background: #fafafa;
-        color: #171717 !important;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    .app-workspace-icon-button {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        color: color-mix(in srgb, var(--foreground) 58%, transparent);
+        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
     }
 
-    .app-home-primary-action:not(:disabled):hover {
-        opacity: 0.86;
+    .app-workspace-icon-button:hover {
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+        color: var(--foreground);
+    }
+
+    .workspace-signal-icon {
+        filter: drop-shadow(0 7px 16px color-mix(in srgb, var(--workspace-accent) 14%, transparent));
+    }
+
+    .workspace-state {
+        animation: workspace-state-enter var(--motion-panel) var(--ease-product-enter) both;
+    }
+
+    .workspace-loading-state .ant-skeleton-title,
+    .workspace-loading-state .ant-skeleton-paragraph > li {
+        border-radius: 4px;
+    }
+
+    :where(.ant-btn) {
+        letter-spacing: 0;
+        transition:
+            color var(--motion-instant) ease-out,
+            background-color var(--motion-instant) ease-out,
+            border-color var(--motion-instant) ease-out,
+            box-shadow var(--motion-instant) ease-out,
+            transform 90ms ease-out;
+    }
+
+    :where(.ant-btn:not(:disabled)):active {
+        transform: scale(0.98);
+    }
+
+    :where(.ant-select-item-option-content) {
+        min-width: 0;
     }
 
     .app-user-content,
     .app-workspace-grid {
         background: transparent;
-    }
-
-    .app-page-header {
-        position: relative;
-    }
-
-    .app-page-header::after {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        height: 1px;
-        background: linear-gradient(90deg, var(--workspace-border-strong), var(--workspace-border) 42%, transparent 82%);
-        content: "";
     }
 
     .app-workspace-surface {
@@ -267,16 +294,63 @@
         border-radius: 10px;
         background: var(--workspace-surface-strong);
         transition:
-            transform var(--motion-instant) var(--ease-aceternity),
+            background-color var(--motion-instant) ease-out,
             border-color var(--motion-instant) ease-out,
             box-shadow var(--motion-instant) ease-out;
     }
 
     .app-collection-card:hover,
     .app-collection-card:focus-within {
-        transform: translateY(-1px);
         border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
-        box-shadow: 0 12px 32px color-mix(in srgb, var(--foreground) 8%, transparent);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 96%, var(--foreground) 4%);
+        box-shadow: none;
+    }
+
+    /* 画布文件采用“缩略图 + 元信息”结构，避免整张卡片形成笨重的白色容器。 */
+    .app-canvas-project-card {
+        min-width: 0;
+        color: var(--foreground);
+    }
+
+    .app-canvas-project-preview {
+        overflow: hidden;
+        border: 1px solid var(--workspace-border);
+        border-radius: 8px;
+        background: var(--workspace-surface-strong);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        transition:
+            border-color var(--motion-instant) ease-out,
+            box-shadow var(--motion-instant) ease-out;
+    }
+
+    .app-canvas-project-card:hover .app-canvas-project-preview,
+    .app-canvas-project-card:focus-within .app-canvas-project-preview {
+        border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .app-canvas-project-card.is-selected .app-canvas-project-preview {
+        border-color: var(--workspace-accent);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--workspace-accent) 22%, transparent);
+    }
+
+    .app-canvas-project-checkbox {
+        accent-color: var(--workspace-accent);
+    }
+
+    .app-canvas-selection-toolbar {
+        border-color: color-mix(in srgb, var(--workspace-accent) 24%, var(--workspace-border));
+        background: var(--workspace-accent-soft);
+        color: color-mix(in srgb, var(--workspace-accent) 48%, var(--foreground));
+    }
+
+    .dark .app-canvas-project-preview {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+    }
+
+    .dark .app-canvas-project-card:hover .app-canvas-project-preview,
+    .dark .app-canvas-project-card:focus-within .app-canvas-project-preview {
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
     }
 
     .app-data-table .ant-table-pagination {
@@ -288,6 +362,17 @@
         background: color-mix(in srgb, var(--background) 94%, transparent);
         padding: 12px 16px;
         backdrop-filter: blur(12px);
+    }
+
+    .app-list-search {
+        width: 100%;
+    }
+
+    @media (min-width: 640px) {
+        .app-list-search {
+            width: 20rem !important;
+            flex: 0 0 20rem;
+        }
     }
 
     .app-table-surface {
@@ -309,6 +394,51 @@
         white-space: nowrap;
     }
 
+    .task-table-surface {
+        border-radius: 6px;
+        box-shadow: none;
+    }
+
+    .task-table-surface .ant-table-thead > tr > th {
+        height: 38px;
+        padding: 8px 12px !important;
+        background: color-mix(in srgb, var(--foreground) 4%, var(--background)) !important;
+        color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .task-table-surface .ant-table-tbody > tr > td {
+        height: 72px;
+        padding: 10px 12px !important;
+        background: var(--background);
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .task-table-surface .ant-table-tbody > tr:hover > td {
+        background: color-mix(in srgb, var(--foreground) 2.5%, var(--background)) !important;
+    }
+
+    .task-media-preview-modal .ant-modal-body {
+        display: grid;
+        min-height: 240px;
+        place-items: center;
+        padding: 0 !important;
+        background: #000;
+    }
+
+    @media (max-width: 767px) {
+        .task-table-surface .ant-table-content table {
+            width: 100% !important;
+            min-width: 100% !important;
+        }
+
+        .task-table-surface .ant-table-tbody > tr > td {
+            height: auto;
+            padding: 12px !important;
+        }
+    }
+
     .wallet-ledger-table .ant-table-cell:nth-last-child(-n + 2) {
         white-space: nowrap;
     }
@@ -325,6 +455,41 @@
         border: 1px solid var(--border);
         box-shadow: 0 28px 84px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
         backdrop-filter: blur(24px);
+    }
+
+    :where(.ant-modal) .ant-modal-content {
+        padding: 0;
+        overflow: hidden;
+    }
+
+    :where(.ant-modal) .ant-modal-header {
+        margin: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 13px 16px 12px;
+    }
+
+    :where(.ant-modal) .ant-modal-body {
+        padding: 14px 16px;
+    }
+
+    :where(.ant-modal) .ant-modal-footer {
+        margin: 0;
+        border-top: 1px solid var(--border);
+        padding: 10px 16px;
+    }
+
+    :where(.ant-modal) .ant-modal-close {
+        top: 9px;
+        right: 10px;
+    }
+
+    .ant-drawer .ant-drawer-header {
+        min-height: 48px;
+        padding: 10px 14px;
+    }
+
+    .ant-drawer .ant-drawer-body {
+        padding: 14px;
     }
 
     .dark :where(.ant-modal-content, .ant-drawer-content) {
@@ -345,7 +510,7 @@
         box-shadow: 0 24px 64px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
     }
 
-    :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-selector) {
+    :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-content) {
         transition:
             border-color var(--motion-instant) ease-out,
             background-color var(--motion-instant) ease-out,
@@ -389,38 +554,8 @@
             transform: none;
         }
 
-        :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-selector) {
+        :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-content) {
             transition: none !important;
-        }
-    }
-
-    .app-config-modal .ant-modal-content {
-        border: 1px solid var(--border);
-        box-shadow: 0 28px 80px rgba(15, 23, 42, 0.18);
-    }
-
-    .dark .app-config-modal .ant-modal-content {
-        box-shadow: 0 32px 96px rgba(0, 0, 0, 0.48);
-    }
-
-    @media (max-width: 767px) {
-        .app-config-modal .ant-modal {
-            top: 0;
-            width: 100vw !important;
-            max-width: none;
-            margin: 0;
-            padding-bottom: 0;
-        }
-
-        .app-config-modal .ant-modal-content {
-            height: 100dvh !important;
-            max-height: none !important;
-            border: 0;
-            border-radius: 0;
-        }
-
-        .app-config-modal .ant-modal-footer > div > span {
-            display: none;
         }
     }
 
@@ -465,6 +600,23 @@
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 12px 30px rgba(15, 23, 42, 0.14);
     }
 
+    .aceternity-dock-command.is-labeled {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .aceternity-dock-command.is-labeled:hover:not(:disabled) {
+        border-color: transparent;
+        background: var(--dock-command-hover);
+        box-shadow: none;
+    }
+
+    .aceternity-dock-command.is-labeled.is-active {
+        border-color: transparent;
+        box-shadow: none;
+    }
+
     .aceternity-dock-command.is-active {
         border-color: color-mix(in srgb, var(--dock-command-active) 28%, transparent);
         background: var(--dock-command-active);
@@ -505,7 +657,7 @@
     }
 
     .aceternity-dock-separator {
-        background: color-mix(in srgb, currentColor 16%, transparent);
+        background: color-mix(in srgb, currentColor 13%, transparent);
     }
 
     .aceternity-dock-tooltip {
@@ -788,299 +940,6 @@
         background-clip: content-box;
     }
 
-    .canvas-document-editor p,
-    .canvas-document-editor h1,
-    .canvas-document-editor h2,
-    .canvas-document-editor h3,
-    .canvas-document-editor blockquote,
-    .canvas-document-editor ul,
-    .canvas-document-editor ol {
-        max-width: none;
-        margin-right: 0;
-        margin-left: 0;
-    }
-
-    .canvas-document-editor p {
-        min-height: 1.7rem;
-        margin-top: 0.55rem;
-        margin-bottom: 0.55rem;
-        font-size: 0.98rem;
-        line-height: 1.85;
-    }
-
-    .canvas-document-editor h1,
-    .canvas-document-editor h2,
-    .canvas-document-editor h3 {
-        margin-top: 1.6rem;
-        margin-bottom: 0.65rem;
-        font-weight: 700;
-        line-height: 1.35;
-    }
-
-    .canvas-document-editor h1 {
-        font-size: 1.65rem;
-    }
-    .canvas-document-editor h2 {
-        font-size: 1.35rem;
-    }
-    .canvas-document-editor h3 {
-        font-size: 1.12rem;
-    }
-
-    .canvas-document-editor blockquote {
-        margin-top: 1rem;
-        margin-bottom: 1rem;
-        border-left: 2px solid rgba(14, 165, 233, 0.55);
-        padding-left: 0.85rem;
-        color: rgba(100, 116, 139, 0.95);
-    }
-
-    .canvas-document-editor ul,
-    .canvas-document-editor ol {
-        padding-left: 1.5rem;
-        line-height: 1.8;
-    }
-
-    .canvas-document-editor code {
-        border-radius: 4px;
-        background: rgba(120, 113, 108, 0.12);
-        padding: 0.1em 0.35em;
-        font-size: 0.9em;
-    }
-
-    .canvas-document-editor pre {
-        overflow-x: auto;
-        border-radius: 10px;
-        background: rgba(15, 23, 42, 0.08);
-        padding: 0.9rem 1rem;
-    }
-
-    .canvas-document-editor pre code {
-        background: transparent;
-        padding: 0;
-    }
-
-    .canvas-document-editor hr {
-        margin: 1.5rem 0;
-        border: 0;
-        border-top: 1px solid rgba(120, 113, 108, 0.28);
-    }
-
-    .canvas-document-editor a {
-        color: #2563eb;
-        text-decoration: underline;
-        text-underline-offset: 3px;
-    }
-
-    .canvas-document-editor mark {
-        border-radius: 2px;
-        padding: 0.05em 0.12em;
-    }
-
-    .canvas-document-editor-scroll {
-        scrollbar-gutter: stable;
-    }
-
-    .canvas-document-modal .ant-modal-content {
-        overflow: hidden;
-        border-radius: 10px;
-        padding: 0;
-        box-shadow: 0 18px 56px rgba(15, 23, 42, 0.18);
-        color: inherit;
-    }
-
-    .canvas-document-modal {
-        max-width: calc(100vw - 32px);
-        padding-bottom: 0;
-    }
-
-    .canvas-document-modal .ant-input {
-        color: inherit;
-    }
-
-    .canvas-document-modal .ant-input::placeholder {
-        color: currentColor;
-        opacity: 0.36;
-    }
-
-    .canvas-document-title-input.ant-input {
-        font-size: 14px;
-        line-height: 1.25;
-    }
-
-    .canvas-document-action {
-        position: relative;
-        display: inline-flex;
-        height: 24px;
-        min-height: 24px;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        border: 1px solid transparent;
-        border-radius: 6px;
-        background: transparent;
-        padding-inline: 8px;
-        color: inherit;
-        font: inherit;
-        font-size: 10.5px;
-        font-weight: 540;
-        line-height: 1;
-        white-space: nowrap;
-        box-shadow: none;
-        cursor: pointer;
-        outline: none;
-        transition:
-            background-color 120ms ease,
-            border-color 120ms ease,
-            color 120ms ease,
-            opacity 120ms ease;
-    }
-
-    .canvas-document-action-content {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-    }
-
-    .canvas-document-action.is-icon {
-        width: 24px;
-        min-width: 24px;
-        padding-inline: 0;
-        border-color: transparent;
-    }
-
-    .canvas-document-action:hover:not(:disabled) {
-        background: rgba(120, 113, 108, 0.1);
-    }
-
-    .canvas-document-action:focus-visible {
-        box-shadow: 0 0 0 2px rgba(120, 113, 108, 0.3);
-    }
-
-    .canvas-document-action:disabled {
-        cursor: not-allowed;
-        opacity: 0.46;
-    }
-
-    .canvas-document-icon-button:hover,
-    .canvas-document-add-chapter:hover {
-        background: rgba(120, 113, 108, 0.1);
-    }
-
-    .canvas-document-icon-button {
-        color: inherit;
-    }
-
-    .canvas-document-chapter {
-        position: relative;
-        color: inherit;
-    }
-
-    .canvas-document-chapter.is-active {
-        font-weight: 600;
-    }
-
-    .canvas-document-chapter:not(.is-active):hover {
-        background: rgba(120, 113, 108, 0.08) !important;
-    }
-
-    .canvas-document-add-chapter {
-        background: transparent;
-        color: inherit;
-    }
-
-    .canvas-document-toolbar-groups {
-        gap: 2px;
-        scrollbar-width: none;
-    }
-
-    .canvas-document-toolbar-groups::-webkit-scrollbar {
-        display: none;
-    }
-
-    .canvas-document-toolbar .canvas-document-icon-button {
-        flex: 0 0 auto;
-    }
-
-    .canvas-document-tool-button,
-    .canvas-document-toolbar-menu {
-        color: inherit;
-    }
-
-    .canvas-document-tool-button:hover,
-    .canvas-document-toolbar-menu:hover {
-        background: rgba(120, 113, 108, 0.1);
-    }
-
-    .canvas-document-toolbar-menu {
-        display: inline-flex;
-        height: 30px;
-        min-width: 60px;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-        border: 0;
-        border-radius: 6px;
-        background: rgba(120, 113, 108, 0.08);
-        padding: 0 8px;
-        font-size: 11px;
-        font-weight: 600;
-        outline: none;
-        transition: background-color 140ms ease;
-    }
-
-    .canvas-document-toolbar-menu.is-icon {
-        min-width: 34px;
-        justify-content: center;
-        padding: 0 5px;
-    }
-
-    .canvas-document-tool-button:focus-visible,
-    .canvas-document-toolbar-menu:focus-visible {
-        box-shadow: 0 0 0 2px rgba(79, 110, 232, 0.28);
-    }
-
-    .canvas-document-footer {
-        background: transparent;
-    }
-
-    @media (max-width: 720px) {
-        .canvas-document-modal .ant-modal-content {
-            border-radius: 8px;
-        }
-
-        .canvas-document-header {
-            padding-inline: 10px;
-        }
-
-        .canvas-document-sidebar {
-            width: 184px;
-        }
-
-        .canvas-document-sidebar > div {
-            width: 184px;
-        }
-
-        .canvas-document-editor {
-            padding-inline: 8px !important;
-        }
-    }
-
-    .canvas-document-editor.ProseMirror-focused {
-        outline: none;
-    }
-
-    .canvas-document-editor p.is-editor-empty:first-child::before {
-        content: attr(data-placeholder);
-        float: left;
-        height: 0;
-        color: rgba(100, 116, 139, 0.62);
-        pointer-events: none;
-    }
-
     .hover-scrollbar {
         scrollbar-color: transparent transparent;
         scrollbar-width: thin;
@@ -1131,7 +990,7 @@
         opacity: 1;
     }
 
-    .canvas-control-select.ant-select .ant-select-selector,
+    .canvas-control-select.ant-select .ant-select-content,
     .canvas-control-number.ant-input-number {
         border-color: rgba(120, 113, 108, 0.32) !important;
         box-shadow: none !important;
@@ -1141,20 +1000,18 @@
         height: 100%;
     }
 
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selector,
+    .canvas-compact-control.canvas-control-select.ant-select .ant-select-content,
     .canvas-compact-control.canvas-control-number.ant-input-number {
         height: 100% !important;
     }
 
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selection-item,
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selection-placeholder {
+    .canvas-compact-control.canvas-control-select.ant-select .ant-select-content > :first-child {
         align-items: center;
         display: flex;
     }
 
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selection-item,
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selection-placeholder,
-    .canvas-compact-control.canvas-control-select.ant-select .ant-select-selection-search-input,
+    .canvas-compact-control.canvas-control-select.ant-select .ant-select-content,
+    .canvas-compact-control.canvas-control-select.ant-select .ant-select-input,
     .canvas-compact-control.canvas-control-number.ant-input-number .ant-input-number-input {
         height: 100% !important;
         line-height: 1 !important;
@@ -1174,18 +1031,51 @@
     }
 
     .canvas-composer-tools .canvas-composer-mode-button span,
-    .canvas-composer-tools .canvas-model-picker-text,
-    .canvas-composer-tools .canvas-select-chevron,
+    .canvas-composer-tools .canvas-model-picker-label > span:nth-child(n + 2),
     .canvas-composer-tools .canvas-composer-icon.ant-btn > span:not(.ant-btn-icon) {
         display: none;
     }
 
-    .canvas-composer-tools .canvas-composer-model-picker {
+    .canvas-composer-tools .canvas-composer-model-picker.ant-select {
         width: 32px;
         min-width: 32px;
-        justify-content: center;
-        gap: 0;
-        padding-inline: 0;
+    }
+
+    .canvas-composer-tools .canvas-composer-model-picker .ant-select-content {
+        padding-inline: 7px !important;
+    }
+
+    .canvas-composer-tools .canvas-composer-model-picker .ant-select-content,
+    .canvas-composer-tools .canvas-model-picker-label {
+        min-width: 0;
+    }
+
+    .canvas-model-picker-popup .ant-select-item-option-content {
+        overflow: visible;
+    }
+
+    .canvas-composer-model-picker.ant-select .ant-select-content {
+        background: color-mix(in srgb, var(--background) 96%, var(--foreground) 4%) !important;
+        border-color: color-mix(in srgb, var(--foreground) 16%, transparent) !important;
+        box-shadow: none !important;
+    }
+
+    .canvas-composer-model-picker.ant-select-focused .ant-select-content {
+        border-color: color-mix(in srgb, var(--foreground) 28%, transparent) !important;
+        box-shadow: none !important;
+    }
+
+    .canvas-model-picker-popup .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+    .canvas-model-picker-popup .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+        background: color-mix(in srgb, var(--foreground) 6%, transparent) !important;
+    }
+
+    .agent-text-model-select .ant-select-content {
+        padding-inline: 6px !important;
+    }
+
+    .agent-text-model-select .ant-select-content {
+        min-width: 0;
     }
 
     @container (min-width: 440px) {
@@ -1211,31 +1101,31 @@
             min-width: 0;
         }
 
-        .canvas-composer-tools .canvas-composer-model-picker {
+        .canvas-composer-tools .canvas-composer-model-picker.ant-select {
             width: auto;
             min-width: 9rem;
-            justify-content: flex-start;
-            gap: 0.5rem;
-            padding-inline: 0.75rem;
         }
 
-        .canvas-composer-tools .canvas-model-picker-text,
-        .canvas-composer-tools .canvas-select-chevron {
-            display: inline;
+        .canvas-composer-tools .canvas-composer-model-picker .ant-select-content {
+            padding-inline: 10px !important;
+        }
+
+        .canvas-composer-tools .canvas-model-picker-label > span:nth-child(n + 2) {
+            display: inline-flex;
         }
     }
 
-    .canvas-control-select.ant-select-focused .ant-select-selector,
+    .canvas-control-select.ant-select-focused .ant-select-content,
     .canvas-control-number.ant-input-number-focused {
         border-color: #a8a29e !important;
     }
 
-    .dark .canvas-control-select.ant-select .ant-select-selector,
+    .dark .canvas-control-select.ant-select .ant-select-content,
     .dark .canvas-control-number.ant-input-number {
         border-color: rgba(214, 211, 209, 0.2) !important;
     }
 
-    .dark .canvas-control-select.ant-select-focused .ant-select-selector,
+    .dark .canvas-control-select.ant-select-focused .ant-select-content,
     .dark .canvas-control-number.ant-input-number-focused {
         border-color: #78716c !important;
     }
@@ -1494,6 +1384,16 @@
     }
 }
 
+@keyframes workspace-state-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .workspace-state { animation: none; }
+    :where(.ant-btn:not(:disabled)):active { transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .aceternity-comet-card,
     .aceternity-dock-command,
@@ -1511,6 +1411,70 @@
 
     .canvas-node-shell-generating::before {
         background-position: 50% 0;
+    }
+}
+
+/* 章节编辑区用清晰边界区分工具栏与正文，同时保留连续写作空间。 */
+.project-workbench-page .project-chapter-editor-wrap {
+    min-height: 100%;
+}
+
+.project-chapter-editor {
+    min-height: 100%;
+    width: 100%;
+    padding: 24px 28px 48px;
+    color: var(--foreground);
+    font-size: 15px;
+    line-height: 1.8;
+}
+
+.project-chapter-editor p {
+    margin: 0 0 1em;
+}
+
+.project-chapter-editor h1,
+.project-chapter-editor h2,
+.project-chapter-editor h3 {
+    margin: 1.35em 0 0.55em;
+    font-weight: 650;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+}
+
+.project-chapter-editor h1 { font-size: 1.55em; }
+.project-chapter-editor h2 { font-size: 1.3em; }
+.project-chapter-editor h3 { font-size: 1.12em; }
+
+.project-chapter-editor ul,
+.project-chapter-editor ol {
+    margin: 0 0 1em;
+    padding-left: 1.4em;
+}
+
+.project-chapter-editor blockquote {
+    margin: 1.2em 0;
+    border-left: 2px solid color-mix(in srgb, var(--workspace-accent) 55%, transparent);
+    padding-left: 1em;
+    color: color-mix(in srgb, var(--foreground) 66%, transparent);
+}
+
+.project-chapter-editor p.is-editor-empty:first-child::before {
+    float: left;
+    height: 0;
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    content: attr(data-placeholder);
+    pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+    .project-workbench-page .project-chapter-editor-wrap {
+        min-height: 100%;
+    }
+
+    .project-chapter-editor {
+        min-height: 420px;
+        padding: 18px 20px 36px;
+        font-size: 15px;
     }
 }
 

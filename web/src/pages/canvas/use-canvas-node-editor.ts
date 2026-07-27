@@ -1,43 +1,41 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { saveAs } from "file-saver";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { getDataUrlByteSize } from "@/lib/image-utils";
 import { FRAME_COLLAPSED_HEIGHT, FRAME_COLLAPSED_WIDTH, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { applyNodeConfigPatch } from "@/lib/canvas/canvas-project-domain";
 import { audioExtension, imageExtension, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
 
 type UseCanvasNodeEditorOptions = {
+    canvasId: string;
+    domainProjectId?: string;
     nodesRef: { current: CanvasNodeData[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
-    setDocumentEditorNodeId: Dispatch<SetStateAction<string | null>>;
-    setEditingNodeId: Dispatch<SetStateAction<string | null>>;
-    setEditRequestNonce: Dispatch<SetStateAction<number>>;
     setToolbarNodeId: Dispatch<SetStateAction<string | null>>;
     setHoveredNodeId: Dispatch<SetStateAction<string | null>>;
 };
 
 export function useCanvasNodeEditor({
+    canvasId,
+    domainProjectId,
     nodesRef,
     setNodes,
     setSelectedNodeIds,
     setSelectedConnectionId,
     setDialogNodeId,
-    setDocumentEditorNodeId,
-    setEditingNodeId,
-    setEditRequestNonce,
     setToolbarNodeId,
     setHoveredNodeId,
 }: UseCanvasNodeEditorOptions) {
     const { message } = App.useApp();
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const queryClient = useQueryClient();
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
     const [openingBatchIds, setOpeningBatchIds] = useState<Set<string>>(new Set());
 
@@ -96,7 +94,7 @@ export function useCanvasNodeEditor({
     }, [setNodes]);
 
     const handleNodeContentChange = useCallback((nodeId: string, content: string) => {
-        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, content } } : node)));
+        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, content, richText: undefined } } : node)));
     }, [setNodes]);
 
     const toggleBatchExpanded = useCallback((nodeId: string) => {
@@ -125,20 +123,6 @@ export function useCanvasNodeEditor({
         );
     }, [setNodes]);
 
-    const openTextEditor = useCallback((node: CanvasNodeData) => {
-        if (node.type !== CanvasNodeType.Text) return;
-        setSelectedNodeIds(new Set([node.id]));
-        setSelectedConnectionId(null);
-        if (node.metadata?.document) {
-            setDocumentEditorNodeId(node.id);
-            setDialogNodeId(null);
-            return;
-        }
-        setDialogNodeId(node.id);
-        setEditingNodeId(node.id);
-        setEditRequestNonce((value) => value + 1);
-    }, [setDialogNodeId, setDocumentEditorNodeId, setEditRequestNonce, setEditingNodeId, setSelectedConnectionId, setSelectedNodeIds]);
-
     const handleNodePromptChange = useCallback((nodeId: string, prompt: string) => {
         setNodes((current) => current.map((node) => {
             if (node.id !== nodeId) return node;
@@ -154,7 +138,18 @@ export function useCanvasNodeEditor({
 
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => {
         setNodes((current) => current.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
-    }, [setNodes]);
+        if (!patch.assetCategory) return;
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node?.metadata?.content?.trim()) return;
+        const updatedNode = applyNodeConfigPatch(node, patch);
+        void ensureCanvasNodeAsset({ canvasId, domainProjectId, node: updatedNode, source: "canvas-manual", category: patch.assetCategory })
+            .then(async (result) => {
+                setNodes((current) => current.map((item) => item.id === nodeId ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
+                if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+                message.success("资产分类已更新");
+            })
+            .catch((error) => message.error(error instanceof Error ? error.message : "资产分类更新失败"));
+    }, [canvasId, domainProjectId, message, nodesRef, queryClient, setNodes]);
 
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
         if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
@@ -162,24 +157,17 @@ export function useCanvasNodeEditor({
     }, []);
 
     const saveNodeAsset = useCallback(async (node: CanvasNodeData) => {
-        if (node.type === CanvasNodeType.Text) {
-            const content = node.metadata?.content?.trim();
-            if (!content) return message.error("没有可保存的文本");
-            addAsset({ kind: "text", title: node.metadata?.prompt?.slice(0, 24) || "画布文本", coverUrl: "", tags: [], source: "Canvas", data: { content }, metadata: { source: "canvas", nodeId: node.id } });
-            message.success("已加入我的素材");
-            return;
+        if (node.type !== CanvasNodeType.Text && node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return message.error("当前节点类型不能保存为素材");
+        if (!node.metadata?.content?.trim()) return message.error("当前节点没有可保存的内容");
+        try {
+            const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-manual" });
+            setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
+            if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+            message.success(result.linkedToProject ? "已加入项目资产" : "已加入我的素材");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "素材保存失败");
         }
-        if (node.type === CanvasNodeType.Video) {
-            if (!node.metadata?.content) return message.error("没有可保存的视频");
-            addAsset({ kind: "video", title: node.metadata?.prompt?.slice(0, 24) || "画布视频", coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
-            message.success("已加入我的素材");
-            return;
-        }
-        if (!node.metadata?.content) return message.error("没有可保存的图片");
-        const dataUrl = node.metadata.storageKey ? "" : node.metadata.content;
-        addAsset({ kind: "image", title: node.metadata?.prompt?.slice(0, 24) || "画布图片", coverUrl: node.metadata.content, tags: [], source: "Canvas", data: { dataUrl, storageKey: node.metadata.storageKey, width: node.metadata.naturalWidth || node.width, height: node.metadata.naturalHeight || node.height, bytes: node.metadata.bytes || getDataUrlByteSize(dataUrl), mimeType: node.metadata.mimeType || "image/png" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
-        message.success("已加入我的素材");
-    }, [addAsset, message]);
+    }, [canvasId, domainProjectId, message, queryClient, setNodes]);
 
     const handleFontSizeChange = useCallback((nodeId: string, fontSize: number) => {
         setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, fontSize } } : node)));
@@ -194,7 +182,6 @@ export function useCanvasNodeEditor({
         handleNodePromptChange,
         handleNodeResize,
         handleNodeTitleChange,
-        openTextEditor,
         openingBatchIds,
         saveNodeAsset,
         setBatchPrimary,

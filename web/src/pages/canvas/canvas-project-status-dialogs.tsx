@@ -2,7 +2,7 @@ import { Button, Modal } from "antd";
 
 import { TaskDetailItem, taskStatusText } from "./canvas-project-feedback";
 import type { GenerationTask, TaskLog } from "@/services/api/task-center";
-import type { CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 type CanvasProjectStatusDialogsProps = {
     theme: { node: { stroke: string; panel: string; muted: string; fill: string } };
@@ -47,8 +47,9 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                 <div className="py-8 text-center text-base font-medium">暂未实现</div>
             </Modal>
 
-            <Modal title="图片详情" open={Boolean(previewNode?.metadata?.content)} centered onCancel={onClosePreview} footer={null} width="auto" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "80vh" } }}>
-                {previewNode?.metadata?.content ? <img src={previewNode.metadata.content} alt={previewNode.title || "图片"} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain" }} /> : null}
+            <Modal title={previewNode?.type === CanvasNodeType.Video ? "视频预览" : "图片预览"} open={Boolean(previewNode?.metadata?.content)} centered onCancel={onClosePreview} footer={null} width="min(1200px, calc(100vw - 32px))" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "#090909" } }}>
+                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? <video src={previewNode.metadata.content} controls className="max-h-[84vh] max-w-full bg-black object-contain" /> : null}
+                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? <img src={previewNode.metadata.content} alt={previewNode.title || "图片"} className="max-h-[84vh] max-w-full object-contain" /> : null}
             </Modal>
 
             <Modal

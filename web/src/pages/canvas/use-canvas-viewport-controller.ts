@@ -119,7 +119,7 @@ export function useCanvasViewportController({
         const scale = Math.min(1.18, Math.max(viewportRef.current.k, 0.72));
         transitionViewportTo({ x: size.width / 2 - (node.position.x + node.width / 2) * scale, y: size.height / 2 - (node.position.y + node.height / 2) * scale, k: scale });
         selectFocusedNode(node.id);
-        setDialogNodeId(node.id);
+        setDialogNodeId(node.type === CanvasNodeType.Drawing ? null : node.id);
     }, [nodesRef, selectFocusedNode, setDialogNodeId, size.height, size.width, transitionViewportTo, viewportRef]);
 
     const resetViewport = useCallback(() => {

@@ -41,7 +41,7 @@ export function ApiLogDetailDrawer({ logId, onClose }: { logId: string | null; o
           ].map(([label, children], index) => ({ key: String(index), label, children }))
         : [];
     return (
-        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} width="min(760px, 100vw)" destroyOnHidden>
+        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} size="min(760px, 100vw)" destroyOnHidden>
             {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : log ? <Descriptions bordered size="small" column={1} items={items} /> : <Empty description="没有请求详情" />}
         </Drawer>
     );

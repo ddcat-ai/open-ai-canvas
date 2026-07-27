@@ -1,155 +1,289 @@
-import { ArrowRight, Bot, Clapperboard, Film, FolderOpen, Images, Library, ListChecks, Plus, Sparkles, WandSparkles } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
-import { useNavigate } from "react-router";
-import { App } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { App, Button } from "antd";
+import { ArrowRight, Bot, CheckCircle2, CircleAlert, Clapperboard, Clock3, FolderKanban, Images, LayoutGrid, ListChecks, Plus, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
+import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
+import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
+import { projectContinueTarget, projectDetailStage, projectNextActions, projectSummaryCompletion } from "@/lib/project-workbench";
+import { getProject, listProjects, type ProjectSummary } from "@/services/api/projects";
 import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-const capabilities = [
-    {
-        icon: <Clapperboard className="size-4" />,
-        title: "故事与分镜在同一上下文里",
-        description: "从故事梗概、小说或文本节点拆解镜头，角色、场景和项目画风会沿连接关系持续引用。",
-    },
-    {
-        icon: <Images className="size-4" />,
-        title: "每个生成结果都能继续编辑",
-        description: "图片、视频和音频不是终点，可继续标注、局部编辑、创建变体并接入下一段工作流。",
-    },
-    {
-        icon: <Bot className="size-4" />,
-        title: "Agent 直接参与画布编排",
-        description: "把完整任务交给 Agent，也可以随时接管节点、调整提示词并撤销本次自动操作。",
-    },
-    {
-        icon: <WandSparkles className="size-4" />,
-        title: "模型与素材按项目统一管理",
-        description: "参考素材、生成配置、任务状态和最终结果都保留在项目中，减少跨工具搬运。",
-    },
-];
-
 const workflow = [
-    { title: "输入故事", description: "故事梗概、小说或已有文本" },
-    { title: "生成分镜", description: "拆分镜头与角色视觉资产" },
-    { title: "打磨镜头", description: "生成图片、视频并逐步调整" },
-    { title: "合并成片", description: "汇总镜头并输出最终视频" },
+    { title: "整理故事", description: "导入小说、粘贴文本或创建章节" },
+    { title: "确认设定", description: "整理角色、场景、画风和参考资料" },
+    { title: "制作镜头", description: "生成分镜、图片和视频候选" },
+    { title: "检查结果", description: "比较版本、处理失败并整理导出" },
 ];
 
 export default function IndexPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
-    const hydrated = useCanvasStore((state) => state.hydrated);
-    const projects = useCanvasStore((state) => state.projects);
+    const canvasHydrated = useCanvasStore((state) => state.hydrated);
+    const canvasProjects = useCanvasStore((state) => state.projects);
     const user = useUserStore((state) => state.user);
-    const recentProjects = useMemo(() => [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6), [projects]);
-    const createAndEnter = () => {
-        if (!hydrated) return;
+    const userHydrated = useUserStore((state) => state.hydrated);
+    const domainProjectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects, enabled: Boolean(user) });
+    const domainProjects = useMemo(
+        () => [...(domainProjectsQuery.data?.projects || [])].sort((left, right) => right.project.updatedAt.localeCompare(left.project.updatedAt)),
+        [domainProjectsQuery.data],
+    );
+    const activeProject = domainProjects.find(({ project }) => project.status !== "archived") || domainProjects[0];
+    const activeProjectQuery = useQuery({
+        queryKey: ["project", activeProject?.project.id],
+        queryFn: () => getProject(activeProject!.project.id),
+        enabled: Boolean(user && activeProject?.project.id),
+    });
+    const recentIndependentCanvases = useMemo(
+        () => canvasProjects.filter((project) => !project.projectId).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, 3),
+        [canvasProjects],
+    );
+
+    const createIndependentCanvas = () => {
+        if (!canvasHydrated) return;
         if (!user) {
             navigate(`/login?next=${encodeURIComponent("/canvas?mode=new")}`);
             return;
         }
-        void createCanvasProjectWithRemoteSync(`影视项目 ${projects.length + 1}`).then(({ id, syncError }) => {
+        void createCanvasProjectWithRemoteSync(`自由画布 ${canvasProjects.length + 1}`).then(({ id, syncError }) => {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             navigate(`/canvas/${id}`);
         });
     };
 
+    const loadingUserWorkspace = !userHydrated || (Boolean(user) && domainProjectsQuery.isLoading);
     return (
         <main className="app-user-content app-workspace-canvas h-full overflow-y-auto text-foreground">
-            <div className="mx-auto w-full max-w-[1440px] px-5 pb-12 pt-7 sm:px-8 lg:px-10">
-                <section className="grid gap-8 border-b border-stone-200/80 pb-9 pt-2 dark:border-stone-800 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)] lg:gap-14 lg:pb-11">
-                    <div className="flex min-w-0 flex-col justify-center">
-                        <div className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-stone-500 dark:text-stone-400">
-                            <Sparkles className="size-3.5" />无限画布
-                        </div>
-                        <h1 className="max-w-[720px] text-3xl font-semibold leading-[1.08] tracking-normal sm:text-4xl lg:text-5xl">
-                            从故事到成片，都在一张画布里完成
-                        </h1>
-                        <p className="mt-5 max-w-[660px] text-sm leading-7 text-stone-600 dark:text-stone-400 sm:text-base">
-                            连接文本、角色、分镜、图片和视频，让创作上下文沿节点持续流动。你可以自己编排，也可以让 Agent 完成整段工作流。
-                        </p>
-                        <div className="mt-7 flex flex-wrap items-center gap-3">
-                            <button type="button" disabled={!hydrated} className="app-home-primary-action inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40" onClick={createAndEnter}>
-                                <Plus className="size-4" />开始创作
-                            </button>
-                            <button type="button" disabled={!hydrated} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-[var(--workspace-surface)] px-4 text-sm font-semibold text-foreground backdrop-blur-xl transition-colors hover:border-[var(--workspace-border-strong)] hover:bg-[var(--workspace-surface-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40" onClick={() => navigate("/canvas?mode=new")}>
-                                <Bot className="size-4" />从 Agent 开始
-                            </button>
-                        </div>
-                        <nav aria-label="工作台快捷入口" className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-stone-500 dark:text-stone-400">
-                            <TextLink label="全部项目" icon={<FolderOpen />} onClick={() => navigate("/canvas")} />
-                            <TextLink label="素材库" icon={<Library />} onClick={() => navigate("/assets")} />
-                            <TextLink label="生成任务" icon={<ListChecks />} onClick={() => navigate("/tasks")} />
-                        </nav>
-                    </div>
-
-                    <div className="border-t border-stone-200/80 pt-6 dark:border-stone-800 lg:border-l lg:border-t-0 lg:pl-9 lg:pt-1">
-                        <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4" />一条完整创作链</div>
-                        <div className="mt-5 grid gap-0">
-                            {workflow.map((item, index) => (
-                                <div key={item.title} className="group relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-5 last:pb-0">
-                                    {index < workflow.length - 1 ? <span aria-hidden className="absolute bottom-0 left-[13px] top-6 w-px bg-stone-200 dark:bg-stone-800" /> : null}
-                                    <span className="relative grid size-7 place-items-center rounded-full border border-stone-300 bg-white text-[10px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">{index + 1}</span>
-                                    <span className="min-w-0 pt-0.5">
-                                        <span className="block text-sm font-semibold">{item.title}</span>
-                                        <span className="mt-1 block text-xs leading-5 text-stone-500 dark:text-stone-400">{item.description}</span>
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                <section className="py-9 lg:py-11">
-                    <div className="max-w-[660px]">
-                        <h2 className="text-xl font-semibold tracking-normal sm:text-2xl">让生成能力成为连续工作流</h2>
-                        <p className="mt-2 text-sm leading-6 text-stone-500 dark:text-stone-400">节点不只是内容容器。连接关系会保留上下文，让每一步生成都能继续编辑、复用和追踪。</p>
-                    </div>
-                    <div className="mt-7 grid border-t border-stone-200/80 dark:border-stone-800 md:grid-cols-2">
-                        {capabilities.map((item, index) => (
-                            <article key={item.title} className={`grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-b border-stone-200/80 py-5 dark:border-stone-800 ${index % 2 === 0 ? "md:pr-8" : "md:border-l md:pl-8"}`}>
-                                <span className="grid size-8 place-items-center rounded-lg border border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">{item.icon}</span>
-                                <span>
-                                    <h3 className="text-sm font-semibold">{item.title}</h3>
-                                    <p className="mt-1.5 max-w-[520px] text-xs leading-6 text-stone-500 dark:text-stone-400">{item.description}</p>
-                                </span>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-
-                <section className="border-t border-stone-200/80 pt-7 dark:border-stone-800">
-                    <div className="mb-5 flex items-end justify-between gap-4">
-                        <div>
-                            <h2 className="text-lg font-semibold">最近项目</h2>
-                            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{hydrated ? `${projects.length} 个项目` : "正在载入项目"}</p>
-                        </div>
-                        <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500 transition hover:text-stone-950 dark:text-stone-400 dark:hover:text-white" onClick={() => navigate("/canvas")}>查看全部<ArrowRight className="size-3.5" /></button>
-                    </div>
-                    {recentProjects.length ? (
-                        <div className="grid justify-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(260px,300px))]">
-                            {recentProjects.map((project) => <CanvasProjectCard key={project.id} project={project} variant="recent" />)}
-                        </div>
-                    ) : (
-                        <button type="button" disabled={!hydrated} className="flex h-36 w-full max-w-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center transition hover:border-stone-500 hover:bg-white/45 disabled:opacity-50 dark:border-stone-700 dark:hover:border-stone-500 dark:hover:bg-stone-900/45" onClick={createAndEnter}>
-                            <span className="grid size-9 place-items-center rounded-lg border border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"><Plus className="size-4" /></span>
-                            <span className="mt-3 text-sm font-semibold">创建第一个项目</span>
-                            <span className="mt-1 text-xs text-stone-500 dark:text-stone-400">从空白画布或 Agent 开始</span>
-                        </button>
-                    )}
-                </section>
+            <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
+                {loadingUserWorkspace ? (
+                    <WorkspaceLoadingState className="mt-3 max-w-[980px]" label="正在恢复工作台" detail="读取项目、章节和最近画布" rows={5} />
+                ) : user && domainProjectsQuery.isError ? (
+                    <WorkspaceErrorState title="项目工作台加载失败" description={domainProjectsQuery.error instanceof Error ? domainProjectsQuery.error.message : "暂时无法读取项目列表。"} onRetry={() => void domainProjectsQuery.refetch()} />
+                ) : activeProject ? (
+                    <ReturningWorkspace
+                        summary={activeProject}
+                        detail={activeProjectQuery.data}
+                        detailLoading={activeProjectQuery.isLoading}
+                        detailError={activeProjectQuery.isError}
+                        recentProjects={domainProjects.slice(0, 5)}
+                        recentIndependentCanvases={recentIndependentCanvases}
+                        onCreateIndependentCanvas={createIndependentCanvas}
+                    />
+                ) : (
+                    <FirstProjectWorkspace
+                        authenticated={Boolean(user)}
+                        canvasHydrated={canvasHydrated}
+                        recentIndependentCanvases={recentIndependentCanvases}
+                        onCreateIndependentCanvas={createIndependentCanvas}
+                    />
+                )}
             </div>
         </main>
     );
 }
 
-function TextLink({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function ReturningWorkspace({ summary, detail, detailLoading, detailError, recentProjects, recentIndependentCanvases, onCreateIndependentCanvas }: {
+    summary: ProjectSummary;
+    detail?: Awaited<ReturnType<typeof getProject>>;
+    detailLoading: boolean;
+    detailError: boolean;
+    recentProjects: ProjectSummary[];
+    recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
+    onCreateIndependentCanvas: () => void;
+}) {
+    const stage = detail ? projectDetailStage(detail) : { label: "进行中", detail: "读取项目进度" };
+    const continueTarget = detail ? projectContinueTarget(detail) : { href: `/projects/${summary.project.id}/overview`, title: summary.project.name, context: "打开项目概览", updatedAt: summary.project.updatedAt };
+    const nextActions = detail ? projectNextActions(detail, 3) : [];
+    const completion = projectSummaryCompletion(summary);
     return (
-        <button type="button" className="inline-flex items-center gap-1.5 transition hover:text-stone-950 dark:hover:text-white [&_svg]:size-3.5" onClick={onClick}>
-            {icon}{label}
-        </button>
+        <>
+            <header className="flex flex-col gap-4 border-b border-border/80 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                    <WorkspaceSignalIcon variant="home" />
+                    <div className="min-w-0">
+                        <h1 className="text-[22px] font-semibold leading-7">继续创作</h1>
+                        <p className="mt-1 text-xs leading-5 text-foreground/55">回到最近工作，或先处理阻塞制作的事项。</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button icon={<LayoutGrid className="size-3.5" />} onClick={onCreateIndependentCanvas}>打开画布</Button>
+                    <Link className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3.5 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to="/projects?create=1"><Plus className="size-3.5" />创建项目</Link>
+                </div>
+            </header>
+
+            <section className="grid gap-0 border-b border-border/80 py-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]">
+                <div className="min-w-0 py-2 lg:pr-8">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/50">
+                        <span className="font-medium text-[var(--workspace-accent)]">{stage.label}</span>
+                        <span aria-hidden>·</span>
+                        <span>{stage.detail}</span>
+                    </div>
+                    <h2 className="mt-3 truncate text-2xl font-semibold sm:text-3xl">{summary.project.name}</h2>
+                    <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-foreground/52">
+                        <span>{summary.completedUnitCount}/{summary.unitCount} 章已完成</span>
+                        <span>{summary.canvasCount} 张项目画布</span>
+                        <span>{summary.assetCount} 项资产</span>
+                        <span>更新于 {formatRelativeTime(summary.project.updatedAt)}</span>
+                    </div>
+                    <div className="mt-4 h-1.5 w-full max-w-[620px] overflow-hidden rounded-full bg-foreground/[.08]" aria-label={`章节完成度 ${completion}%`}>
+                        <div className="h-full rounded-full bg-[var(--workspace-accent)] transition-[width]" style={{ width: `${completion}%` }} />
+                    </div>
+                    <Link to={continueTarget.href} className="mt-6 inline-flex min-h-10 max-w-full items-center gap-3 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25">
+                        <span className="min-w-0 truncate">{continueTarget.context} · {continueTarget.title}</span>
+                        <ArrowRight className="size-4 shrink-0" />
+                    </Link>
+                </div>
+
+                <div className="mt-5 border-t border-border/75 pt-5 lg:mt-0 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-1">
+                    <div className="flex items-center justify-between gap-3">
+                        <h2 className="text-sm font-semibold">下一步</h2>
+                        <Link to={`/projects/${summary.project.id}/overview`} className="text-xs text-foreground/48 hover:text-foreground">查看项目</Link>
+                    </div>
+                    {detailLoading ? <div className="mt-4 text-xs text-foreground/45">正在整理项目待办...</div> : null}
+                    {detailError ? <div className="mt-4 text-xs leading-5 text-foreground/48">项目详情暂时无法读取。可先打开项目概览或自由画布继续工作。</div> : null}
+                    {!detailLoading && nextActions.length ? (
+                        <div className="mt-3 divide-y divide-border/70">
+                            {nextActions.map((action) => <WorkbenchActionLink key={action.id} action={action} />)}
+                        </div>
+                    ) : null}
+                </div>
+            </section>
+
+            <section className="grid gap-8 py-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
+                <div className="min-w-0">
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                        <div><h2 className="text-base font-semibold">最近项目</h2><p className="mt-1 text-xs text-foreground/45">按最近更新时间排列</p></div>
+                        <Link to="/projects" className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground">查看全部<ArrowRight className="size-3.5" /></Link>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-border/80 bg-background/65">
+                        {recentProjects.map((project, index) => <RecentProjectRow key={project.project.id} summary={project} divided={index > 0} />)}
+                    </div>
+                </div>
+
+                <div className="min-w-0">
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                        <div><h2 className="text-base font-semibold">最近自由画布</h2><p className="mt-1 text-xs text-foreground/45">不属于项目的自由创作空间</p></div>
+                        <Link to="/canvas" className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground">管理画布<ArrowRight className="size-3.5" /></Link>
+                    </div>
+                    {recentIndependentCanvases.length ? (
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                            {recentIndependentCanvases.slice(0, 2).map((project) => <CanvasProjectCard key={project.id} project={project} variant="recent" />)}
+                        </div>
+                    ) : (
+                        <button type="button" className="flex min-h-32 w-full items-center justify-center gap-3 rounded-lg border border-dashed border-border text-sm text-foreground/55 hover:border-foreground/30 hover:text-foreground" onClick={onCreateIndependentCanvas}>
+                            <LayoutGrid className="size-4" />打开第一张画布
+                        </button>
+                    )}
+                </div>
+            </section>
+        </>
     );
+}
+
+function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependentCanvases, onCreateIndependentCanvas }: {
+    authenticated: boolean;
+    canvasHydrated: boolean;
+    recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
+    onCreateIndependentCanvas: () => void;
+}) {
+    const projectHref = authenticated ? "/projects?create=1" : `/login?next=${encodeURIComponent("/projects?create=1")}`;
+    return (
+        <>
+            <section className="border-b border-border/80 pb-8 pt-3 sm:pb-10 sm:pt-6">
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-foreground/48"><WorkspaceSignalIcon variant="home" size="sm" />影策</div>
+                <h1 className="mt-5 max-w-[780px] text-3xl font-semibold leading-[1.08] sm:text-4xl lg:text-5xl">把一个故事推进到可交付的镜头</h1>
+                <p className="mt-5 max-w-[680px] text-sm leading-7 text-foreground/58 sm:text-base">从章节、角色和参考图开始，逐步生成分镜、视频和可复用资产。需要自由探索时，也可以先打开一张自由画布。</p>
+                <div className="mt-7 flex flex-wrap items-center gap-3">
+                    <Link className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to={projectHref}><FolderKanban className="size-4" />创建项目</Link>
+                    <Button size="large" disabled={!canvasHydrated} icon={<LayoutGrid className="size-4" />} onClick={onCreateIndependentCanvas}>打开画布</Button>
+                </div>
+            </section>
+
+            <section className="border-b border-border/80 py-7">
+                <div className="mb-5"><h2 className="text-lg font-semibold">从故事到结果</h2><p className="mt-1 text-xs leading-5 text-foreground/48">每一步都保留输入、版本和生成记录，可以随时返回调整。</p></div>
+                <div className="grid border-t border-border/75 sm:grid-cols-2 xl:grid-cols-4">
+                    {workflow.map((item, index) => (
+                        <div key={item.title} className={`min-w-0 border-b border-border/75 py-4 sm:px-4 xl:border-b-0 xl:border-r ${index % 2 === 0 ? "sm:pl-0" : "sm:border-l"} ${index === workflow.length - 1 ? "xl:border-r-0" : ""}`}>
+                            <span className="text-[11px] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
+                            <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
+                            <p className="mt-1 text-xs leading-5 text-foreground/48">{item.description}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="grid gap-8 py-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.6fr)]">
+                <div>
+                    <h2 className="text-base font-semibold">两种开始方式</h2>
+                    <div className="mt-3 divide-y divide-border/75 border-y border-border/75">
+                        <StartMode icon={<Clapperboard className="size-4" />} title="项目" description="适合短剧、故事板和多章节制作。集中管理章节、资产、画布与进度。" action="创建项目" href={projectHref} />
+                        <StartMode icon={<Sparkles className="size-4" />} title="自由画布" description="适合快速试图、提示词实验和不需要章节流程的自由创作。" action="打开画布" onClick={onCreateIndependentCanvas} />
+                    </div>
+                </div>
+                <div>
+                    <h2 className="text-base font-semibold">创作过程中</h2>
+                    <div className="mt-3 space-y-3 text-xs leading-5 text-foreground/52">
+                        <FeatureLine icon={<Images className="size-4" />} text="图片、视频和音频结果可以继续生成变体或接入下一步。" />
+                        <FeatureLine icon={<Bot className="size-4" />} text="Agent 读取你选择的章节、节点和参考资料，再执行画布操作。" />
+                        <FeatureLine icon={<ListChecks className="size-4" />} text="任务、失败原因和用量记录会保留，便于恢复和重试。" />
+                    </div>
+                </div>
+            </section>
+
+            {recentIndependentCanvases.length ? (
+                <section className="border-t border-border/80 pt-6">
+                    <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold">继续自由画布</h2><Link to="/canvas" className="text-xs text-foreground/50 hover:text-foreground">查看全部</Link></div>
+                    <div className="grid max-w-[940px] gap-4 sm:grid-cols-2 lg:grid-cols-3">{recentIndependentCanvases.map((project) => <CanvasProjectCard key={project.id} project={project} variant="recent" />)}</div>
+                </section>
+            ) : null}
+        </>
+    );
+}
+
+function WorkbenchActionLink({ action }: { action: ReturnType<typeof projectNextActions>[number] }) {
+    const Icon = action.tone === "danger" ? CircleAlert : action.tone === "attention" ? Clock3 : CheckCircle2;
+    return (
+        <Link to={action.href} className="group grid grid-cols-[20px_minmax(0,1fr)_auto] gap-2 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20">
+            <Icon className={`mt-0.5 size-4 ${action.tone === "danger" ? "text-red-500" : action.tone === "attention" ? "text-amber-500" : "text-foreground/35"}`} />
+            <span className="min-w-0"><span className="block text-xs font-medium">{action.title}</span><span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-foreground/45">{action.description}</span></span>
+            <span className="self-center text-[11px] font-medium text-foreground/45 transition-colors group-hover:text-foreground">{action.actionLabel}</span>
+        </Link>
+    );
+}
+
+function RecentProjectRow({ summary, divided }: { summary: ProjectSummary; divided: boolean }) {
+    const completion = projectSummaryCompletion(summary);
+    return (
+        <Link to={`/projects/${summary.project.id}/overview`} className={`group grid min-h-[68px] grid-cols-[minmax(0,1fr)_80px_20px] items-center gap-3 px-3 py-2.5 hover:bg-foreground/[.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:grid-cols-[minmax(0,1fr)_100px_120px_20px] ${divided ? "border-t border-border/65" : ""}`}>
+            <span className="min-w-0"><span className="block truncate text-sm font-medium">{summary.project.name}</span><span className="mt-1 block truncate text-[11px] text-foreground/42">{summary.unitCount} 章 · {summary.canvasCount} 张项目画布 · {summary.assetCount} 项资产</span></span>
+            <span className="hidden text-[11px] text-foreground/45 sm:block">更新于<br />{formatRelativeTime(summary.project.updatedAt)}</span>
+            <span className="min-w-0"><span className="flex items-center justify-between text-[10px] text-foreground/42"><span>章节</span><span>{completion}%</span></span><span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-foreground/[.08]"><span className="block h-full rounded-full bg-foreground/65" style={{ width: `${completion}%` }} /></span></span>
+            <ArrowRight className="size-4 text-foreground/25 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/60" />
+        </Link>
+    );
+}
+
+function StartMode({ icon, title, description, action, href, onClick }: { icon: ReactNode; title: string; description: string; action: string; href?: string; onClick?: () => void }) {
+    const content = <><span className="mt-0.5 text-foreground/45">{icon}</span><span className="min-w-0"><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs leading-5 text-foreground/48">{description}</span></span><span className="self-center text-xs font-medium text-foreground/50">{action} →</span></>;
+    const className = "grid grid-cols-[20px_minmax(0,1fr)_auto] gap-3 py-4 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
+    return href ? <Link to={href} className={className}>{content}</Link> : <button type="button" className={className} onClick={onClick}>{content}</button>;
+}
+
+function FeatureLine({ icon, text }: { icon: ReactNode; text: string }) {
+    return <div className="grid grid-cols-[20px_minmax(0,1fr)] gap-2.5"><span className="text-foreground/35">{icon}</span><p>{text}</p></div>;
+}
+
+function formatRelativeTime(value: string) {
+    const diffMinutes = Math.round((new Date(value).getTime() - Date.now()) / 60_000);
+    const formatter = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
+    if (Math.abs(diffMinutes) < 60) return formatter.format(diffMinutes, "minute");
+    const diffHours = Math.round(diffMinutes / 60);
+    if (Math.abs(diffHours) < 24) return formatter.format(diffHours, "hour");
+    const diffDays = Math.round(diffHours / 24);
+    if (Math.abs(diffDays) < 30) return formatter.format(diffDays, "day");
+    return new Date(value).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
 }

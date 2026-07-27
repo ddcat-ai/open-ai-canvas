@@ -17,6 +17,7 @@ var (
 	ErrInsufficientCredits  = errors.New("insufficient credits")
 	ErrRedeemCodeInvalid    = errors.New("redeem code invalid")
 	ErrActiveTaskLimit      = errors.New("active task limit reached")
+	ErrProjectTaskLimit     = errors.New("project active task limit reached")
 	ErrTaskNotRetryable     = errors.New("task is not retryable")
 	ErrBillingStateConflict = errors.New("billing state conflict")
 )
@@ -73,6 +74,12 @@ func (r *Repository) ChannelModels(channelID string, includeDisabled bool) ([]mo
 	return items, query.Find(&items).Error
 }
 
+func (r *Repository) ChannelModelsIncludingDeleted(channelID string) ([]model.ChannelModel, error) {
+	var items []model.ChannelModel
+	err := r.db.Unscoped().Where("channel_id = ?", channelID).Order("created_at asc").Find(&items).Error
+	return items, err
+}
+
 func (r *Repository) ChannelModelByID(channelID string, id string) (*model.ChannelModel, error) {
 	var item model.ChannelModel
 	if err := r.db.First(&item, "id = ? AND channel_id = ?", id, channelID).Error; err != nil {
@@ -93,12 +100,39 @@ func (r *Repository) SaveChannelModel(item *model.ChannelModel) error {
 	return r.db.Save(item).Error
 }
 
+func (r *Repository) DeleteChannelModel(channelID string, id string, modelsJSON string, now time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.ChannelModel{}).
+			Where("id = ? AND channel_id = ?", id, channelID).
+			Updates(map[string]any{"enabled": false, "price_version": gorm.Expr("price_version + 1"), "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Where("id = ? AND channel_id = ?", id, channelID).Delete(&model.ChannelModel{}).Error; err != nil {
+			return err
+		}
+		channelResult := tx.Model(&model.ModelChannel{}).
+			Where("id = ? AND scope = ?", channelID, model.ChannelScopeSystem).
+			Updates(map[string]any{"models_json": modelsJSON, "updated_at": now})
+		if channelResult.Error != nil {
+			return channelResult.Error
+		}
+		if channelResult.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+}
+
 func (r *Repository) CreateMissingChannelModels(items []model.ChannelModel) (int64, error) {
 	if len(items) == 0 {
 		return 0, nil
 	}
 	// 拉取目录可能与其他管理员操作并发，唯一键冲突时保留已有定价配置。
-	result := r.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "channel_id"}, {Name: "model_key"}}, DoNothing: true}).Create(&items)
+	result := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&items)
 	return result.RowsAffected, result.Error
 }
 
@@ -153,9 +187,12 @@ func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, err
 	return count > 0, err
 }
 
-func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int) error {
+func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int, domainProjectID string, projectTaskLimit int) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := enforceActiveTaskLimit(tx, task.UserID, activeTaskLimit); err != nil {
+			return err
+		}
+		if err := enforceProjectTaskLimit(tx, task.UserID, domainProjectID, projectTaskLimit); err != nil {
 			return err
 		}
 		if err := reserveBillingOrder(tx, order); err != nil {
@@ -165,19 +202,25 @@ func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *mo
 	})
 }
 
-func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int) error {
+func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int, domainProjectID string, projectTaskLimit int) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := enforceActiveTaskLimit(tx, task.UserID, activeTaskLimit); err != nil {
+			return err
+		}
+		if err := enforceProjectTaskLimit(tx, task.UserID, domainProjectID, projectTaskLimit); err != nil {
 			return err
 		}
 		return tx.Create(task).Error
 	})
 }
 
-func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *model.BillingOrder, activeTaskLimit int) (*model.Task, error) {
+func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *model.BillingOrder, activeTaskLimit int, domainProjectID string, projectTaskLimit int) (*model.Task, error) {
 	var task model.Task
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		if err := enforceActiveTaskLimit(tx, userID, activeTaskLimit); err != nil {
+			return err
+		}
+		if err := enforceProjectTaskLimit(tx, userID, domainProjectID, projectTaskLimit); err != nil {
 			return err
 		}
 		if order != nil {
@@ -213,6 +256,23 @@ func enforceActiveTaskLimit(tx *gorm.DB, userID string, activeTaskLimit int) err
 	}
 	if count >= int64(activeTaskLimit) {
 		return ErrActiveTaskLimit
+	}
+	return nil
+}
+
+func enforceProjectTaskLimit(tx *gorm.DB, userID string, projectID string, limit int) error {
+	if projectID == "" || limit <= 0 {
+		return nil
+	}
+	canvasIDs := tx.Model(&model.CanvasProject{}).Select("id").Where("user_id = ? AND project_id = ?", userID, projectID)
+	var count int64
+	if err := tx.Model(&model.Task{}).
+		Where("user_id = ? AND status IN ? AND (project_id = ? OR project_id IN (?))", userID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}, projectID, canvasIDs).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= int64(limit) {
+		return ErrProjectTaskLimit
 	}
 	return nil
 }

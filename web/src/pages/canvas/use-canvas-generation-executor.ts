@@ -7,6 +7,7 @@ import { buildGenerationConfig, isGenerationCanceled } from "@/lib/canvas/canvas
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationFailureMetadata } from "@/lib/generation-error";
+import { navigateToSettings } from "@/lib/settings-navigation";
 import type { UpdreamSkill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -18,6 +19,7 @@ import { executeTextGeneration } from "./canvas-text-generation-executor";
 
 type UseCanvasGenerationExecutorOptions = {
     projectId: string;
+    domainProjectId?: string;
     activatedSkills: UpdreamSkill[];
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
@@ -43,6 +45,7 @@ export type CanvasNodeGenerationOptions = {
 
 export function useCanvasGenerationExecutor({
     projectId,
+    domainProjectId,
     activatedSkills,
     nodesRef,
     connectionsRef,
@@ -59,7 +62,6 @@ export function useCanvasGenerationExecutor({
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
 
     return useCallback(
         async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => {
@@ -68,9 +70,9 @@ export function useCanvasGenerationExecutor({
                 message.info("合并成片节点不直接重新生成，请重新选择源视频合并");
                 return;
             }
-            const generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
+            let generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
-                openConfigDialog(true);
+                navigateToSettings({ continueCreation: true });
                 return;
             }
 
@@ -106,6 +108,8 @@ export function useCanvasGenerationExecutor({
             try {
                 rawGenerationContext = await hydrateNodeGenerationContext(
                     buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
+                    projectId,
+                    domainProjectId,
                 );
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成任务准备失败";
@@ -121,6 +125,22 @@ export function useCanvasGenerationExecutor({
             const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, activatedSkills);
             const effectivePrompt = expandedPrompt.trim();
             const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
+            if (mode === "audio" && generationContext.characterReferences.length) {
+                if (generationContext.characterReferences.length !== 1) {
+                    finishGenerationRequest(nodeId, controller);
+                    setRunningNodeId(null);
+                    message.error("角色配音一次只能引用一个角色卡");
+                    return;
+                }
+                const voice = generationContext.resolvedCharacterVoices[0];
+                if (!voice) {
+                    finishGenerationRequest(nodeId, controller);
+                    setRunningNodeId(null);
+                    message.error("角色尚未绑定可用声音，无法创建角色配音任务");
+                    return;
+                }
+                generationConfig = { ...generationConfig, audioVoice: voice.voiceKey, audioInstructions: [voice.instructions, generationConfig.audioInstructions].filter(Boolean).join("；") };
+            }
             if (controller.signal.aborted) {
                 if (isPreparingEmptyImage) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined } } : node)));
                 finishGenerationRequest(nodeId, controller);
@@ -191,6 +211,6 @@ export function useCanvasGenerationExecutor({
                 setRunningNodeId(null);
             }
         },
-        [activatedSkills, bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, openConfigDialog, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
+        [activatedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
 }

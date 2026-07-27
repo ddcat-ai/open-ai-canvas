@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { saveAs } from "file-saver";
-import { Download, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useSearchParams } from "react-router";
 
+import { ListToolbar } from "@/components/layout/workspace-page";
 import {
     createAdminModelPricing,
     deleteAdminModelPricing,
@@ -20,6 +20,7 @@ import {
     type AnalyticsFilters,
     type ModelPricing,
 } from "@/services/api/auth";
+import { AdminExportButton } from "./admin-ui";
 
 type Props = {
     users: AdminReferenceData["users"];
@@ -180,15 +181,6 @@ export default function AnalyticsPanel({ users, channels }: Props) {
         }
     };
 
-    const exportCSV = async () => {
-        try {
-            const blob = await exportAdminAnalytics(filters);
-            saveAs(blob, `usage-${filters.from}-${filters.to}.csv`);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "导出失败");
-        }
-    };
-
     const modelColumns: ColumnsType<AdminAnalytics["models"][number]> = [
         {
             title: "模型",
@@ -199,7 +191,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 <div>
                     <div className="font-medium">{value}</div>
                     <div className="mt-1">
-                        <Tag bordered={false}>{capabilityLabel(row.capability)}</Tag>
+                        <Tag variant="filled">{capabilityLabel(row.capability)}</Tag>
                     </div>
                 </div>
             ),
@@ -282,7 +274,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap items-end gap-3">
+            <ListToolbar trailing={<><Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>刷新</Button><AdminExportButton exportFile={() => exportAdminAnalytics(filters)} fileName={() => `usage-${filters.from}-${filters.to}.csv`} label="导出 CSV" /></>}>
                 <div>
                     <div className="mb-1 text-xs text-foreground/55">时间范围</div>
                     <DatePicker.RangePicker allowClear={false} value={range} onChange={(value) => value?.[0] && value?.[1] && setRange([value[0], value[1]])} />
@@ -291,15 +283,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 <FilterSelect label="模型" value={model} onChange={setModel} options={modelOptions} width={210} />
                 <FilterSelect label="渠道" value={channelId} onChange={setChannelId} options={channels.map((channel) => ({ label: channel.name, value: channel.id }))} />
                 <FilterSelect label="能力" value={capability} onChange={setCapability} options={capabilityOptions} />
-                <div className="ml-auto flex gap-2">
-                    <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
-                        刷新
-                    </Button>
-                    <Button icon={<Download className="size-4" />} onClick={() => void exportCSV()}>
-                        导出 CSV
-                    </Button>
-                </div>
-            </div>
+            </ListToolbar>
 
             <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 xl:grid-cols-6">
                 <Metric label="活跃用户" value={data?.kpi.activeUsers ?? "--"} detail={data ? `DAU ${data.kpi.dau} · WAU ${data.kpi.wau} · MAU ${data.kpi.mau}` : undefined} />
@@ -419,7 +403,7 @@ function PriceInput({ name, label }: { name: keyof PricingFormValues; label: str
 }
 
 function capabilityLabel(value: string) {
-    return capabilityOptions.find((item) => item.value === value)?.label || value || "未分类";
+    return capabilityOptions.find((item) => item.value === value)?.label || "未分类";
 }
 
 function percent(value: number) {

@@ -51,7 +51,7 @@ export function AuthScene() {
     return (
         <main className="h-dvh min-h-0 overflow-y-auto bg-[#08090c] text-white lg:overflow-hidden">
             <div className="grid min-h-full lg:h-full lg:grid-cols-[minmax(0,1.32fr)_minmax(520px,1fr)]">
-                <section className="relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label="无限画布品牌影片">
+                <section className="relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label="影策品牌影片">
                     <video
                         className="absolute inset-0 size-full object-cover"
                         src={AUTH_VIDEO_URL}
@@ -67,7 +67,7 @@ export function AuthScene() {
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
                         <Link to="/" className="inline-flex items-center gap-2.5 text-sm font-semibold text-white drop-shadow-sm transition-opacity hover:opacity-80">
                             <span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />
-                            无限画布
+                            影策
                         </Link>
                         <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[11px] text-white/76 backdrop-blur-xl">
                             <Play className="size-3 fill-current" />
@@ -80,8 +80,8 @@ export function AuthScene() {
                         transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
                         className="absolute inset-x-0 bottom-0 max-w-2xl p-5 sm:p-7 lg:p-10"
                     >
-                        <p className="text-xs font-semibold tracking-[0.18em] text-white/58">INFINITE CANVAS</p>
-                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">灵感，自此拥有空间。</h1>
+                        <p className="text-xs font-semibold tracking-[0.18em] text-white/58">YINGCE STUDIO</p>
+                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">让一个故事，从文字走向银幕。</h1>
                     </motion.div>
                 </section>
 
@@ -99,7 +99,7 @@ export function AuthScene() {
                         className="my-auto w-full max-w-[460px]"
                     >
                         <ConfigProvider theme={getAntThemeConfig(true)}>
-                            <SpotlightSurface spotlightColor="rgba(103,232,249,.16)" spotlightRadius={300} className="flex h-auto rounded-[26px]">
+                            <SpotlightSurface spotlightColor="rgba(96,165,250,.14)" spotlightRadius={300} className="flex h-auto rounded-[26px]">
                                 <CometCard
                                     rotateDepth={1.8}
                                     translateDepth={1.5}
@@ -109,7 +109,7 @@ export function AuthScene() {
                                 >
                                     <section aria-label={copy.title} className="flex min-h-[620px] flex-col sm:min-h-[640px]">
                                         <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
-                                            <p className="text-xs font-semibold tracking-[0.18em] text-cyan-300/80">{copy.eyebrow}</p>
+                                            <p className="text-xs font-semibold tracking-[0.18em] text-blue-300/80">{copy.eyebrow}</p>
                                             <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
                                             <p className="mt-2 text-sm leading-6 text-white/45">{copy.description}</p>
                                         </header>

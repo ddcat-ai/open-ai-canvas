@@ -6,14 +6,23 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
 
-export type AssetKind = "text" | "image" | "video" | "model";
+export type AssetKind = "text" | "image" | "video" | "audio" | "model" | "entity";
 export type AssetCategory = "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "other";
 export type AssetStatus = "draft" | "review" | "confirmed" | "archived";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
 export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
-export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
+export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; durationMs?: number; bytes: number; mimeType: string } };
+export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; durationMs?: number; bytes: number; mimeType: string } };
 export type ModelAsset = AssetBase<"model"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string; fileName: string } };
-export type Asset = TextAsset | ImageAsset | VideoAsset | ModelAsset;
+export type EntityAsset = AssetBase<"entity"> & { data: { definition: Record<string, unknown> } };
+export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset | ModelAsset | EntityAsset;
+export type NewAsset =
+    | Omit<TextAsset, "id" | "createdAt" | "updatedAt">
+    | Omit<ImageAsset, "id" | "createdAt" | "updatedAt">
+    | Omit<VideoAsset, "id" | "createdAt" | "updatedAt">
+    | Omit<AudioAsset, "id" | "createdAt" | "updatedAt">
+    | Omit<ModelAsset, "id" | "createdAt" | "updatedAt">
+    | Omit<EntityAsset, "id" | "createdAt" | "updatedAt">;
 
 type AssetBase<T extends AssetKind> = {
     id: string;
@@ -34,7 +43,7 @@ type AssetBase<T extends AssetKind> = {
 type AssetStore = {
     hydrated: boolean;
     assets: Asset[];
-    addAsset: (asset: Omit<Asset, "id" | "createdAt" | "updatedAt">) => string;
+    addAsset: (asset: NewAsset) => string;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
     replaceAssets: (assets: Asset[]) => void;
@@ -50,7 +59,7 @@ const assetStorage: PersistStorage<AssetStore> = {
         const parsed = JSON.parse(value) as StorageValue<AssetStore>;
         parsed.state.assets = await Promise.all(
             parsed.state.assets.map(async (asset) => {
-                if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
+                if ((asset.kind === "video" || asset.kind === "audio") && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
                 if (asset.kind === "model" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
                 if (asset.kind !== "image") return asset;
                 if (asset.data.storageKey)

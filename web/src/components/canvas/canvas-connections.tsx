@@ -41,9 +41,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
         <g>
             {emphasized ? <defs>
                 <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
-                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.3} />
-                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.92} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.56} />
+                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
+                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
+                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
                 </linearGradient>
             </defs> : null}
             <path
@@ -69,9 +69,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             <path
                 d={pathD}
                 stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 2.4 : 1.4}
+                strokeWidth={emphasized ? 1.6 : 1}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.68 : 0.34}
+                strokeOpacity={emphasized ? 0.52 : 0.24}
                 fill="none"
                 strokeLinecap="round"
                 style={{ pointerEvents: "none" }}
@@ -80,13 +80,13 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
-                strokeWidth="3.2"
+                strokeWidth="1.8"
                 vectorEffect="non-scaling-stroke"
                 strokeOpacity="1"
                 strokeDasharray="18 26"
                 fill="none"
                 strokeLinecap="round"
-                style={{ filter: `drop-shadow(0 0 6px ${theme.accent.primary}55)`, pointerEvents: "none" }}
+                style={{ filter: `drop-shadow(0 0 3px ${theme.accent.primary}35)`, pointerEvents: "none" }}
             /> : null}
         </g>
     );
@@ -107,7 +107,7 @@ export function ActiveConnectionPath({ node, handle, mouseWorld, target, nodeScr
     const distance = Math.abs(snappedEndX - snappedStartX);
     const pathD = `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
 
-    return <path className="canvas-connection-draft" d={pathD} stroke={theme.accent.primary} strokeWidth="2" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="8,8" strokeLinecap="round" />;
+    return <path className="canvas-connection-draft" d={pathD} stroke={theme.accent.primary} strokeWidth="1.4" strokeOpacity="0.72" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="8,8" strokeLinecap="round" />;
 }
 
 function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {

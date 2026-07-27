@@ -84,7 +84,7 @@ export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose 
         <div data-canvas-no-zoom aria-live="polite" className="absolute bottom-20 right-4 z-[90] w-[320px] rounded-lg border p-3 shadow-lg backdrop-blur-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <div className="flex items-start gap-2.5">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}><span className="size-2 rounded-full bg-current" /></span>
-                <span className="min-w-0 flex-1"><span className="block text-xs font-semibold">Agent 已写回画布</span><span className="mt-0.5 block truncate text-[11px]" style={{ color: theme.node.muted }}>{change.summary}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-xs font-semibold">Agent 已写回画布</span><span className="mt-0.5 block truncate text-[11px]" style={{ color: theme.node.muted }}>{change.summary} · 可撤销最近 {change.undoCount} 批</span></span>
                 <button type="button" className="grid size-7 place-items-center rounded-md opacity-55 transition hover:opacity-100" onClick={onClose} aria-label="关闭"><X className="size-3.5" /></button>
             </div>
             <div className="mt-3 flex items-center justify-end gap-1.5">

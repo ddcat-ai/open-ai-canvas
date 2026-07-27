@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
-import { Button, Checkbox, Modal, Space, Tag } from "antd";
-import { Ellipsis, Image as ImageIcon, Settings2 } from "lucide-react";
+import { Button, Checkbox, Modal, Space, Switch, Tag } from "antd";
+import { Ellipsis, Settings2, Type } from "lucide-react";
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -17,11 +17,13 @@ export type ImageToolbarSettingsTool = {
     danger?: boolean;
 };
 
-export function ImageToolSettingsModal({ open, tools, selectedIds, onToggle, onCancel, onSave }: {
+export function ImageToolSettingsModal({ open, tools, selectedIds, showLabels, onToggle, onShowLabelsChange, onCancel, onSave }: {
     open: boolean;
     tools: ImageToolbarSettingsTool[];
     selectedIds: ImageQuickToolId[];
+    showLabels: boolean;
     onToggle: (id: ImageQuickToolId, visible: boolean) => void;
+    onShowLabelsChange: (visible: boolean) => void;
     onCancel: () => void;
     onSave: () => void;
 }) {
@@ -30,8 +32,8 @@ export function ImageToolSettingsModal({ open, tools, selectedIds, onToggle, onC
     const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
     const selectedTools = tools.filter((tool) => selected.has(tool.id));
     const previewItems: FloatingDockEntry[] = [
-        ...selectedTools.map((tool) => ({ id: tool.id, label: tool.title, icon: tool.icon, active: tool.active, danger: tool.danger })),
-        { id: "more", label: "自定义节点工具", icon: <Ellipsis className="size-4" /> },
+        ...selectedTools.map((tool) => ({ id: tool.id, label: tool.title, displayLabel: tool.label, icon: tool.icon, active: tool.active, danger: tool.danger })),
+        { id: "more", label: "自定义节点工具", displayLabel: "更多", icon: <Ellipsis className="size-4" /> },
     ];
 
     const updateSelectedTools = (values: ImageQuickToolId[]) => {
@@ -44,35 +46,40 @@ export function ImageToolSettingsModal({ open, tools, selectedIds, onToggle, onC
 
     return (
         <Modal
-            title={<span className="inline-flex items-center gap-2 text-sm"><Settings2 className="size-3.5" />自定义节点 Dock</span>}
+            title={<span className="inline-flex h-6 items-center gap-2 text-sm font-semibold"><Settings2 className="size-3.5" />自定义节点 Dock</span>}
             open={open}
             centered
-            width={560}
+            width={520}
             onCancel={onCancel}
             destroyOnHidden
-            styles={{ header: { marginBottom: 10 }, footer: { marginTop: 12 } }}
-            footer={<Space size={6}><Button size="small" onClick={onCancel}>取消</Button><Button size="small" type="primary" onClick={onSave}>保存</Button></Space>}
+            styles={{ body: { padding: 0 }, footer: { marginTop: 0 } }}
+            footer={<Space size={6}><Button size="small" onClick={onCancel}>取消</Button><Button size="small" type="primary" onClick={onSave}>保存设置</Button></Space>}
         >
-            <p className="mb-3 text-xs" style={{ color: theme.node.muted }}>选择悬浮图片节点时直接出现的高频工具，其余能力仍可从节点菜单进入。</p>
-            <div className="relative mb-4 grid min-h-40 place-items-center overflow-hidden rounded-[18px] border" style={{ background: theme.canvas.background, borderColor: theme.toolbar.border }}>
+            <div className="flex h-11 items-center justify-between gap-3 border-b px-4" style={{ borderColor: theme.toolbar.border }}>
+                <span className="flex min-w-0 items-center gap-2">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-[8px]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}><Type className="size-3.5" /></span>
+                    <span className="flex h-5 items-center text-xs font-medium leading-none">显示功能名</span>
+                </span>
+                <Switch size="small" checked={showLabels} onChange={onShowLabelsChange} aria-label="显示节点 Dock 功能名" />
+            </div>
+            <div className="relative grid h-[92px] place-items-center overflow-hidden border-b" style={{ background: theme.canvas.background, borderColor: theme.toolbar.border }}>
                 <div className="absolute inset-0 bg-[radial-gradient(currentColor_1px,transparent_1px)] opacity-15 [background-size:18px_18px]" />
-                <div className="relative flex flex-col items-center gap-3">
-                    <FloatingDock items={previewItems} size="compact" ariaLabel="图片节点工具预览" style={canvasDockStyle(theme, theme.node.text)} />
-                    <div className="grid h-20 w-36 place-items-center rounded-[14px] border" style={{ background: theme.node.fill, borderColor: theme.node.stroke, boxShadow: `0 14px 38px ${theme.spatial.shadow}` }}>
-                        <span className="flex flex-col items-center gap-1.5 text-[10px]" style={{ color: theme.node.muted }}><ImageIcon className="size-5" />图片节点</span>
-                    </div>
+                <div className="thin-scrollbar relative flex max-w-full overflow-x-auto px-4 py-3">
+                    <FloatingDock items={previewItems} size="compact" showLabels={showLabels} ariaLabel="图片节点工具预览" className="shrink-0" style={canvasDockStyle(theme, theme.node.text)} />
                 </div>
             </div>
-            <div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-semibold">快捷工具</span><Tag className="m-0 text-[10px]" style={{ background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong, color: theme.accent.primary }}>{selectedTools.length}/{maxSelected}</Tag></div>
-            <Checkbox.Group value={selectedIds} className="grid w-full grid-cols-2 gap-1.5 md:grid-cols-4" onChange={(values) => updateSelectedTools(values as ImageQuickToolId[])}>
-                {tools.map((tool) => (
-                    <label key={tool.id} className="flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2 transition-colors" style={{ background: selected.has(tool.id) ? theme.accent.primarySoft : "transparent", borderColor: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.border, color: selected.has(tool.id) ? theme.accent.primary : theme.node.text }}>
-                        <Checkbox className="canvas-image-tool-checkbox" style={{ "--tool-accent": theme.accent.primary } as CSSProperties} value={tool.id} disabled={!selected.has(tool.id) && selectedTools.length >= maxSelected} />
-                        <span className="grid size-6 shrink-0 place-items-center rounded-md [&_svg]:size-3.5" style={{ background: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.itemHover, color: selected.has(tool.id) ? "#ffffff" : theme.node.muted }}>{tool.icon}</span>
-                        <span className="min-w-0 truncate text-[10px] font-semibold">{tool.label}</span>
-                    </label>
-                ))}
-            </Checkbox.Group>
+            <div className="px-4 py-3">
+                <div className="mb-2 flex h-5 items-center justify-between"><span className="text-xs font-semibold">快捷工具</span><Tag className="m-0 leading-5 text-[10px]" style={{ background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong, color: theme.accent.primary }}>{selectedTools.length}/{maxSelected}</Tag></div>
+                <Checkbox.Group value={selectedIds} className="grid w-full grid-cols-2 gap-1 sm:grid-cols-4" onChange={(values) => updateSelectedTools(values as ImageQuickToolId[])}>
+                    {tools.map((tool) => (
+                        <label key={tool.id} className="flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-[7px] border px-1.5 transition-colors" style={{ background: selected.has(tool.id) ? theme.accent.primarySoft : "transparent", borderColor: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.border, color: selected.has(tool.id) ? theme.accent.primary : theme.node.text }}>
+                            <Checkbox className="canvas-image-tool-checkbox shrink-0" style={{ "--tool-accent": theme.accent.primary } as CSSProperties} value={tool.id} disabled={!selected.has(tool.id) && selectedTools.length >= maxSelected} />
+                            <span className="grid size-5 shrink-0 place-items-center rounded-[5px] [&_svg]:size-3" style={{ background: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.itemHover, color: selected.has(tool.id) ? "#ffffff" : theme.node.muted }}>{tool.icon}</span>
+                            <span className="min-w-0 truncate text-[10px] font-medium leading-none">{tool.label}</span>
+                        </label>
+                    ))}
+                </Checkbox.Group>
+            </div>
         </Modal>
     );
 }

@@ -5,13 +5,32 @@ import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 import { getGenerationResourceNodes } from "@/lib/canvas/canvas-resource-references";
+import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
+import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
+
+export type CharacterGenerationReference = {
+    nodeId: string;
+    assetId: string;
+    requestedVersionId?: string;
+};
+
+export type ResolvedCharacterVoice = {
+    assetId: string;
+    versionId: string;
+    characterName: string;
+    voiceKey: string;
+    instructions: string;
+};
 
 export type NodeGenerationContext = {
     prompt: string;
     referenceImages: ReferenceImage[];
     referenceVideos: ReferenceVideo[];
     referenceAudios: ReferenceAudio[];
+    characterReferences: CharacterGenerationReference[];
+    resolvedCharacterVersions: Array<{ assetId: string; versionId: string }>;
+    resolvedCharacterVoices: ResolvedCharacterVoice[];
     textCount: number;
     imageCount: number;
     videoCount: number;
@@ -20,13 +39,15 @@ export type NodeGenerationContext = {
 
 export type NodeGenerationInput = {
     nodeId: string;
-    type: "text" | "image" | "video" | "audio";
+    type: "text" | "image" | "video" | "audio" | "character";
+    sourceKind?: "drawing";
     title: string;
     alwaysIncludeText?: boolean;
     text?: string;
     image?: ReferenceImage;
     video?: ReferenceVideo;
     audio?: ReferenceAudio;
+    character?: CharacterGenerationReference;
 };
 
 export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string): NodeGenerationContext {
@@ -40,6 +61,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
     const basePrompt = isStoryboardMedia && storyboardInputs.length ? removeTrailingInputBlocks(prompt, storyboardInputs) : prompt;
     const textInputs = inputs.filter((input) => input.type === "text");
+    const characterReferences = inputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
     const upstreamText = textInputs
         .map((input) => input.text)
         .filter(Boolean)
@@ -53,6 +75,9 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         referenceImages,
         referenceVideos,
         referenceAudios,
+        characterReferences,
+        resolvedCharacterVersions: [],
+        resolvedCharacterVoices: [],
         textCount: textInputs.length,
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
@@ -83,7 +108,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     const selectedInputs: NodeGenerationInput[] = [];
     const labelByNodeId = new Map<string, string>();
     const textBlocks: string[] = [];
-    const counts = { image: 0, video: 0, audio: 0, text: 0 };
+    const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
     let hasToken = false;
     let lastIndex = 0;
     let nextPrompt = "";
@@ -96,7 +121,8 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         if (input) {
             let label = labelByNodeId.get(input.nodeId);
             if (!label) {
-                label = generationLabel(input.type, counts[input.type]++);
+                const labelKind = input.sourceKind === "drawing" ? "drawing" : input.type;
+                label = generationLabel(labelKind, counts[labelKind]++);
                 labelByNodeId.set(input.nodeId, label);
                 if (input.type === "text") textBlocks.push(`【${label}】\n${input.text || ""}`);
                 else selectedInputs.push(input);
@@ -111,6 +137,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     const referenceImages = selectedInputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = selectedInputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
     const referenceAudios = selectedInputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const characterReferences = selectedInputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
 
     if (!hasToken && !textBlocks.length) {
         return {
@@ -118,6 +145,9 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
             referenceImages: [],
             referenceVideos: [],
             referenceAudios: [],
+            characterReferences: [],
+            resolvedCharacterVersions: [],
+            resolvedCharacterVoices: [],
             textCount: 0,
             imageCount: 0,
             videoCount: 0,
@@ -130,6 +160,9 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         referenceImages,
         referenceVideos,
         referenceAudios,
+        characterReferences,
+        resolvedCharacterVersions: [],
+        resolvedCharacterVoices: [],
         textCount: counts.text,
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
@@ -140,8 +173,10 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
     const resourceNodes = getGenerationResourceNodes(nodeId, nodes, connections);
     return resourceNodes.flatMap((node): NodeGenerationInput[] => {
+        const character = readCharacterReference(node);
+        if (character) return [{ nodeId: node.id, type: "character" as const, title: node.title, character }];
         const image = readReferenceImage(node);
-        if (image) return [{ nodeId: node.id, type: "image" as const, title: node.title, image }];
+        if (image) return [{ nodeId: node.id, type: "image" as const, sourceKind: image.source?.kind, title: node.title, image }];
         const video = readReferenceVideo(node);
         if (video) return [{ nodeId: node.id, type: "video" as const, title: node.title, video }];
         const audio = readReferenceAudio(node);
@@ -203,15 +238,71 @@ export function buildNodeResponseMessages(context: NodeGenerationContext): AiTex
     ];
 }
 
-export async function hydrateNodeGenerationContext(context: NodeGenerationContext) {
+export async function hydrateNodeGenerationContext(context: NodeGenerationContext, projectId: string, domainProjectId?: string) {
     const { imageToDataUrl } = await import("@/services/image-storage");
-    return { ...context, referenceImages: await Promise.all(context.referenceImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) }))) };
+    let referenceImages = await Promise.all(
+        context.referenceImages.map(async (image) => {
+            if (image.source?.kind === "drawing") return resolveCanvasDrawingReference(projectId, image);
+            return { ...image, dataUrl: await imageToDataUrl(image) };
+        }),
+    );
+    if (!context.characterReferences.length) return { ...context, referenceImages };
+    if (!domainProjectId) throw new Error("角色引用未关联短剧项目，无法解析角色版本");
+    const { getProjectCharacter } = await import("@/services/api/projects");
+    const { resourceStorageKey } = await import("@/services/api/resources");
+    const details = await Promise.all(context.characterReferences.map((reference) => getProjectCharacter(domainProjectId, reference.assetId)));
+    const remainingBudget = 9 - referenceImages.length;
+    const selected = details.flatMap((detail) => {
+        const representation = preferredCharacterRepresentation(detail.character.representations);
+        return representation ? [representation] : [];
+    });
+    if (selected.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${selected.length} 张主参考图`);
+    const usedResourceIds = new Set(selected.map((item) => item.resourceId));
+    const supplements = details.flatMap((detail) => detail.character.representations.filter((item) => {
+        if (!["front", "side", "back", "turnaround_sheet"].includes(item.role) || usedResourceIds.has(item.resourceId)) return false;
+        usedResourceIds.add(item.resourceId);
+        return true;
+    }));
+    const characterImages = [...selected, ...supplements].slice(0, Math.max(0, remainingBudget)).map((representation, index) => ({
+        id: `character-reference-${index + 1}`,
+        name: `character-reference-${index + 1}.png`,
+        type: "image/png",
+        dataUrl: "",
+        storageKey: resourceStorageKey(representation.resourceId),
+    } satisfies ReferenceImage));
+    const hydratedCharacterImages = await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
+    referenceImages = [...referenceImages, ...hydratedCharacterImages];
+    const characterBlocks = details.map((detail) => compileCharacterReferencePrompt(detail.asset.title, detail.character.definition));
+    const resolvedCharacterVersions = details.map((detail) => ({ assetId: detail.asset.id, versionId: detail.character.versionId }));
+    const resolvedCharacterVoices = details.flatMap((detail): ResolvedCharacterVoice[] => detail.character.voice ? [{ assetId: detail.asset.id, versionId: detail.character.versionId, characterName: detail.asset.title, voiceKey: detail.character.voice.profile.voiceKey, instructions: compileResolvedVoiceInstructions(detail.character.definition, detail.character.voice.instructions) }] : []);
+    return { ...context, prompt: [context.prompt.trim(), ...characterBlocks].filter(Boolean).join("\n\n"), referenceImages, resolvedCharacterVersions, resolvedCharacterVoices };
 }
 
 function readNodeTextInput(node: CanvasNodeData) {
     if (node.type === CanvasNodeType.Text) return node.metadata?.content || node.metadata?.prompt || "";
     if (node.type === CanvasNodeType.Skill) return readSkillInput(node);
     return node.metadata?.prompt || "";
+}
+
+function readCharacterReference(node: CanvasNodeData): CharacterGenerationReference | null {
+    const assetId = node.metadata?.workflowKind === "character" ? node.metadata.characterAssetId?.trim() : "";
+    return assetId ? { nodeId: node.id, assetId, requestedVersionId: node.metadata?.characterVersionPolicy === "pinned" ? node.metadata.characterVersionId : undefined } : null;
+}
+
+function preferredCharacterRepresentation(representations: Array<{ id: string; resourceId: string; role: string }>) {
+    return ["turnaround_sheet", "primary", "front", "side", "back"].map((role) => representations.find((item) => item.role === role)).find(Boolean);
+}
+
+function compileResolvedVoiceInstructions(definition: Record<string, unknown>, bindingInstructions: string) {
+    const fields: Array<[string, unknown]> = [
+        ["语言与口音", definition.voiceLanguage],
+        ["声音年龄感", definition.voiceAge],
+        ["音色气质", definition.voiceTimbre],
+    ];
+    const characterInstructions = fields
+        .map(([label, value]) => typeof value === "string" && value.trim() ? `${label}：${value.trim()}` : "")
+        .filter(Boolean);
+    return [...characterInstructions, bindingInstructions.trim()].filter(Boolean).join("；");
 }
 
 function readSkillInput(node: CanvasNodeData) {
@@ -228,7 +319,9 @@ function readSkillInput(node: CanvasNodeData) {
         .join("\n\n");
 }
 
-function generationLabel(type: NodeGenerationInput["type"], index: number) {
+function generationLabel(type: NodeGenerationInput["type"] | "drawing", index: number) {
+    if (type === "character") return `角色${index + 1}`;
+    if (type === "drawing") return `绘图${index + 1}`;
     if (type === "image") return imageReferenceLabel(index);
     if (type === "video") return seedanceReferenceLabel("video", index);
     if (type === "audio") return seedanceReferenceLabel("audio", index);
@@ -236,6 +329,20 @@ function generationLabel(type: NodeGenerationInput["type"], index: number) {
 }
 
 function readReferenceImage(node: CanvasNodeData): ReferenceImage | null {
+    if (node.type === CanvasNodeType.Drawing && node.metadata?.drawingId) {
+        return {
+            id: node.id,
+            name: node.title || `绘图-${node.id}`,
+            type: "image/png",
+            dataUrl: "",
+            source: {
+                kind: "drawing",
+                drawingId: node.metadata.drawingId,
+                revision: node.metadata.drawingRevision || 0,
+                shapeCount: node.metadata.drawingShapeCount || 0,
+            },
+        };
+    }
     return nodeReferenceImage(node);
 }
 

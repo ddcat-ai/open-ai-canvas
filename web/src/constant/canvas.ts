@@ -11,6 +11,7 @@ type CanvasNodeSpec = {
 export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Image]: { width: 340, height: 240, title: "New Generation" },
     [CanvasNodeType.Text]: { width: 340, height: 240, title: "Note" },
+    [CanvasNodeType.Drawing]: { width: 440, height: 300, title: "绘图" },
     [CanvasNodeType.Script]: { width: 920, height: 360, title: "分镜脚本" },
     [CanvasNodeType.Skill]: { width: 360, height: 220, title: "技能" },
     [CanvasNodeType.Config]: { width: 340, height: 300, title: "生成配置" },
@@ -27,6 +28,10 @@ export const NODE_SPECS = {
     [CanvasNodeType.Text]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Text],
         metadata: { content: "", status: "idle", fontSize: 14 },
+    },
+    [CanvasNodeType.Drawing]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Drawing],
+        metadata: { status: "success" },
     },
     [CanvasNodeType.Script]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Script],

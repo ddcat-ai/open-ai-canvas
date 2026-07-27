@@ -167,7 +167,7 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if err := s.repo.Create(&record); err != nil {
 		return err
 	}
-	if err := sendSMTPMail(setting, email, "无限画布注册验证码", registrationEmailBody(code)); err != nil {
+	if err := sendSMTPMail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
 		_ = s.repo.DeleteEmailVerificationCode(record.ID)
 		return fmt.Errorf("发送注册邮件失败：%w", err)
 	}
@@ -270,7 +270,7 @@ func normalizeEmailSetting(value emailSettingValue) emailSettingValue {
 		value.Encryption = "starttls"
 	}
 	if value.FromName == "" {
-		value.FromName = "无限画布"
+		value.FromName = "影策"
 	}
 	return value
 }
@@ -348,5 +348,5 @@ func randomNumericCode(length int) (string, error) {
 }
 
 func registrationEmailBody(code string) string {
-	return "你正在注册无限画布。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
+	return "你正在注册影策。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
 }

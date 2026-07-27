@@ -79,6 +79,8 @@ type TaskSummary struct {
 	Provider    string              `json:"provider,omitempty"`
 	Model       string              `json:"model,omitempty"`
 	ErrorCode   string              `json:"errorCode,omitempty"`
+	PreviewURL  string              `json:"previewUrl,omitempty"`
+	PreviewKind string              `json:"previewKind,omitempty"`
 	Attempts    int                 `json:"attempts"`
 	StartedAt   *time.Time          `json:"startedAt"`
 	CompletedAt *time.Time          `json:"completedAt"`
@@ -290,6 +292,10 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		taskType = "video_image_to_video"
 	}
 	task := model.Task{ID: newID(), UserID: userID, SessionID: req.SessionID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	domainProjectID, projectTaskLimit, err := s.projectTaskLimit(userID, req.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 	billingOrder, err := s.taskBillingOrder(userID, &task, normalizedInput)
 	if err != nil {
 		return nil, err
@@ -302,9 +308,12 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if billingOrder != nil {
 		task.BillingOrderID = billingOrder.ID
 	}
-	err = s.createTaskWithinStorageQuota(&task, billingOrder, policy)
+	err = s.createTaskWithinStorageQuota(&task, billingOrder, policy, domainProjectID, projectTaskLimit)
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+	}
+	if errors.Is(err, repository.ErrProjectTaskLimit) {
+		return nil, BadAuthRequest(fmt.Sprintf("当前项目同时排队或运行的任务最多 %d 个", projectTaskLimit))
 	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
@@ -410,12 +419,19 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	task, err = s.repo.RetryTaskWithBilling(userID, task.ID, billingOrder, policy.Task.ActiveTaskLimit)
+	domainProjectID, projectTaskLimit, err := s.projectTaskLimit(userID, task.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	task, err = s.repo.RetryTaskWithBilling(userID, task.ID, billingOrder, policy.Task.ActiveTaskLimit, domainProjectID, projectTaskLimit)
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+	}
+	if errors.Is(err, repository.ErrProjectTaskLimit) {
+		return nil, BadAuthRequest(fmt.Sprintf("当前项目同时排队或运行的任务最多 %d 个", projectTaskLimit))
 	}
 	if errors.Is(err, repository.ErrTaskNotRetryable) {
 		return nil, BadAuthRequest("任务已被其他请求重新入队，请勿重复重试")
@@ -539,6 +555,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	if isContentModerationFailure(task.Error) {
 		errorCode = contentModerationErrorCode
 	}
+	previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 	return TaskSummary{
 		ID:          task.ID,
 		SessionID:   task.SessionID,
@@ -552,12 +569,71 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		Provider:    task.Provider,
 		Model:       task.Model,
 		ErrorCode:   errorCode,
+		PreviewURL:  previewURL,
+		PreviewKind: previewKind,
 		Attempts:    task.Attempts,
 		StartedAt:   task.StartedAt,
 		CompletedAt: task.CompletedAt,
 		CreatedAt:   task.CreatedAt,
 		UpdatedAt:   task.UpdatedAt,
 	}
+}
+
+// 列表只暴露首个可访问媒体地址，避免把完整生成结果和内嵌数据带回前端。
+func taskMediaPreview(raw string, taskType string) (string, string) {
+	if strings.TrimSpace(raw) == "" {
+		return "", ""
+	}
+	var payload any
+	if json.Unmarshal([]byte(raw), &payload) != nil {
+		return "", ""
+	}
+	defaultKind := "image"
+	if strings.Contains(strings.ToLower(taskType), "video") {
+		defaultKind = "video"
+	}
+	return findTaskMediaPreview(payload, defaultKind)
+}
+
+func findTaskMediaPreview(value any, hint string) (string, string) {
+	switch item := value.(type) {
+	case string:
+		text := strings.TrimSpace(item)
+		if !strings.HasPrefix(text, "/api/resources/") && !strings.HasPrefix(text, "http://") && !strings.HasPrefix(text, "https://") {
+			return "", ""
+		}
+		kind := hint
+		lower := strings.ToLower(text)
+		if strings.Contains(lower, ".mp4") || strings.Contains(lower, ".webm") || strings.Contains(lower, ".mov") {
+			kind = "video"
+		} else if kind != "video" {
+			kind = "image"
+		}
+		return text, kind
+	case []any:
+		for _, child := range item {
+			if previewURL, previewKind := findTaskMediaPreview(child, hint); previewURL != "" {
+				return previewURL, previewKind
+			}
+		}
+	case map[string]any:
+		for _, key := range []string{"images", "image", "video", "dataUrl", "url", "resultUrl", "outputUrl"} {
+			child, exists := item[key]
+			if !exists {
+				continue
+			}
+			childHint := hint
+			if key == "video" {
+				childHint = "video"
+			} else if key == "images" || key == "image" {
+				childHint = "image"
+			}
+			if previewURL, previewKind := findTaskMediaPreview(child, childHint); previewURL != "" {
+				return previewURL, previewKind
+			}
+		}
+	}
+	return "", ""
 }
 
 func truncateRunes(value string, limit int) string {

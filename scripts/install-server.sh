@@ -64,7 +64,7 @@ install_docker() {
 }
 
 sync_source() {
-    step "下载无限画布源码"
+    step "下载影策源码"
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         cd "$INSTALL_DIR"
         [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "$INSTALL_DIR 存在本地代码改动，请先处理后再更新"

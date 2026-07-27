@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -364,14 +365,14 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 		capability = capabilityFromTaskType(task.Type)
 	}
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
-	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene)
+	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]))
 }
 
-func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string) (*model.BillingOrder, error) {
+func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
 	if strings.TrimSpace(idempotencyKey) == "" {
 		idempotencyKey = newID()
 	}
-	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"))
+	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +385,7 @@ func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey 
 	return order, nil
 }
 
-func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string) (*model.BillingOrder, error) {
+func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64) (*model.BillingOrder, error) {
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, BadAuthRequest("当前系统渠道模型未配置或已停用")
@@ -395,7 +396,18 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 	if !item.PriceConfigured {
 		return nil, BadAuthRequest("当前模型尚未配置用户积分价格")
 	}
-	if item.BillingMode != "fixed_request" {
+	quantity := int64(1)
+	switch item.BillingMode {
+	case "fixed_request":
+	case "per_second":
+		if item.Capability != "video" || capability != "video" {
+			return nil, BadAuthRequest("按秒计费仅适用于视频生成")
+		}
+		if requestedQuantity <= 0 {
+			return nil, BadAuthRequest("视频生成时长无效，无法按秒计费")
+		}
+		quantity = requestedQuantity
+	default:
 		return nil, BadAuthRequest("当前模型计费方式暂不支持")
 	}
 	policy, err := s.creditPolicy()
@@ -406,7 +418,7 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 	if configured := policy.ModelMultiplierBPS[modelKey]; configured > 0 {
 		multiplierBPS = configured
 	}
-	amount, err := creditAmount(item.UnitPriceMicrocredits, multiplierBPS)
+	amount, err := creditAmount(item.UnitPriceMicrocredits, quantity, multiplierBPS)
 	if err != nil {
 		return nil, err
 	}
@@ -414,9 +426,20 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 		ID: newID(), UserID: userID, IdempotencyKey: idempotencyKey, TaskID: taskID,
 		ChannelID: channelID, ChannelModelID: item.ID, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: item.BillingMode, PriceVersion: item.PriceVersion,
-		UnitPriceMicrocredits: item.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: 1, AmountMicrocredits: amount,
+		UnitPriceMicrocredits: item.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
 		Status: model.BillingStatusReserved,
 	}, nil
+}
+
+func billingQuantity(capability string, value any) int64 {
+	if capability != "video" {
+		return 1
+	}
+	quantity, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(value)), 10, 64)
+	if err != nil || quantity <= 0 {
+		return 0
+	}
+	return quantity
 }
 
 func (s *Service) MarkBillingRunning(orderID string) error {

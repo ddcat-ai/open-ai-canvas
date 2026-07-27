@@ -8,6 +8,7 @@ export type FloatingDockCommand = {
     kind?: "command";
     id: string;
     label: string;
+    displayLabel?: string;
     icon: ReactNode;
     onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
     active?: boolean;
@@ -24,6 +25,7 @@ type FloatingDockProps = {
     className?: string;
     style?: CSSProperties;
     ariaLabel?: string;
+    showLabels?: boolean;
 };
 
 type DockMetrics = {
@@ -44,7 +46,7 @@ const TOUCH_DOCK_METRICS: Record<NonNullable<FloatingDockProps["size"]>, DockMet
     compact: { base: 36, magnified: 36, icon: 16, iconMagnified: 16, distance: 0 },
 };
 
-export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = "画布工具" }, forwardedRef) {
+export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = "画布工具", showLabels = false }, forwardedRef) {
     const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
     const reducedMotion = useReducedMotion();
     const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
@@ -66,9 +68,14 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             role="toolbar"
             aria-label={ariaLabel}
             className={cn(
-                "aceternity-floating-dock flex items-end overflow-visible",
+                "aceternity-floating-dock flex overflow-visible",
+                showLabels ? "items-center" : "items-end",
                 embedded ? "shadow-none" : "border backdrop-blur-2xl",
-                coarsePointer
+                showLabels
+                    ? embedded
+                        ? size === "compact" ? "h-9 gap-0.5 px-0.5" : "h-10 gap-0.5 px-0.5"
+                        : size === "compact" ? "h-10 gap-0.5 rounded-[13px] px-1.5" : "h-11 gap-0.5 rounded-[15px] px-2"
+                    : coarsePointer
                     ? embedded
                         ? size === "compact" ? "h-10 gap-1 px-0.5" : "h-11 gap-1 px-0.5"
                         : size === "compact" ? "h-11 gap-1 rounded-[15px] px-1.5 pb-1" : "h-12 gap-1 rounded-[17px] px-2 pb-1"
@@ -83,12 +90,12 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             }}
             onPointerLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         >
-            {items.map((item) => item.kind === "separator" ? <DockSeparator key={item.id} compact={size === "compact"} /> : <DockCommandButton key={item.id} command={item} mouseX={mouseX} metrics={metrics} motionEnabled={motionEnabled} compact={size === "compact"} />)}
+            {items.map((item) => item.kind === "separator" ? <DockSeparator key={item.id} compact={size === "compact"} labeled={showLabels} /> : <DockCommandButton key={item.id} command={item} mouseX={mouseX} metrics={metrics} motionEnabled={motionEnabled && !showLabels} compact={size === "compact"} showLabel={showLabels} />)}
         </motion.div>
     );
 });
 
-function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact }: { command: FloatingDockCommand; mouseX: MotionValue<number>; metrics: DockMetrics; motionEnabled: boolean; compact: boolean }) {
+function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, showLabel }: { command: FloatingDockCommand; mouseX: MotionValue<number>; metrics: DockMetrics; motionEnabled: boolean; compact: boolean; showLabel: boolean }) {
     const ref = useRef<HTMLSpanElement>(null);
     const [focused, setFocused] = useState(false);
     const [hovered, setHovered] = useState(false);
@@ -101,7 +108,31 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact }:
     const iconTarget = useTransform(distance, (value) => proximitySize(value, metrics.icon, metrics.iconMagnified, metrics.distance, motionEnabled));
     const itemSize = useSpring(itemTarget, aceternityMotion.spring.dock);
     const iconSize = useSpring(iconTarget, aceternityMotion.spring.dock);
-    const showTooltip = (hovered || focused) && !command.disabled;
+    const showTooltip = !showLabel && (hovered || focused) && !command.disabled;
+
+    if (showLabel) {
+        return (
+            <motion.span ref={ref} className="relative block h-8 shrink-0">
+                <motion.button
+                    type="button"
+                    aria-label={command.label}
+                    aria-pressed={command.active || undefined}
+                    disabled={command.disabled}
+                    className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
+                    whileTap={!command.disabled ? { scale: 0.96 } : undefined}
+                    transition={aceternityMotion.spring.dock}
+                    onMouseEnter={() => setHovered(true)}
+                    onMouseLeave={() => setHovered(false)}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                    onClick={command.onClick}
+                >
+                    <span className="grid size-3.5 shrink-0 place-items-center">{command.icon}</span>
+                    <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">{command.displayLabel || command.label}</span>
+                </motion.button>
+            </motion.span>
+        );
+    }
 
     return (
         <motion.span ref={ref} className="relative block shrink-0" style={{ width: itemSize, height: itemSize }}>
@@ -141,8 +172,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact }:
     );
 }
 
-function DockSeparator({ compact }: { compact: boolean }) {
-    return <span aria-hidden className={cn("aceternity-dock-separator mb-0.5 shrink-0 self-center", compact ? "mx-0.5 h-3.5 w-px" : "mx-0.5 h-4 w-px")} />;
+function DockSeparator({ compact, labeled }: { compact: boolean; labeled: boolean }) {
+    return <span aria-hidden className={cn("aceternity-dock-separator shrink-0 self-center", labeled ? "mx-1.5 h-6 w-px" : compact ? "mx-0.5 mb-0.5 h-3.5 w-px" : "mx-0.5 mb-0.5 h-4 w-px")} />;
 }
 
 function proximitySize(distance: number, base: number, magnified: number, range: number, enabled: boolean) {

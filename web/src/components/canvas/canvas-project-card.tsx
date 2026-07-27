@@ -5,12 +5,12 @@ import { Dropdown, Input } from "antd";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
-import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveBackendApiUrl } from "@/stores/use-config-store";
+import { cn } from "@/lib/utils";
 
-export function CanvasProjectCard({ project, variant = "library" }: { project: CanvasProject; variant?: "library" | "recent" }) {
+export function CanvasProjectCard({ project, projectName, variant = "library" }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent" }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const renameProject = useCanvasStore((state) => state.renameProject);
@@ -32,9 +32,8 @@ export function CanvasProjectCard({ project, variant = "library" }: { project: C
 
     const compact = variant === "recent";
     return (
-        <CometCard containerClassName="h-full" className="h-full rounded-[10px]" rotateDepth={1.2} translateDepth={1} glare={false} disabled={editing}>
-        <article className="app-collection-card group h-full cursor-pointer" onClick={() => !editing && open()}>
-            <div className="relative">
+        <article className={cn("app-canvas-project-card group h-full cursor-pointer", selected && "is-selected")} onClick={() => !editing && open()}>
+            <div className="app-canvas-project-preview relative">
                 <button
                     type="button"
                     className="block aspect-[16/10] w-full overflow-hidden text-left"
@@ -45,24 +44,24 @@ export function CanvasProjectCard({ project, variant = "library" }: { project: C
                 >
                     <ProjectPreview project={project} />
                 </button>
-                {!compact ? <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => toggleSelected(project.id, event.target.checked)} className={`absolute left-3 top-3 size-4 accent-stone-950 transition-opacity dark:accent-stone-100 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`} aria-label={`选择 ${project.title}`} /> : null}
-                <span className="absolute right-3 top-3 rounded-md border border-white/15 bg-stone-950/75 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-xl">{project.nodes.length} 节点</span>
+                {!compact ? <span className={`absolute left-2.5 top-2.5 grid size-6 place-items-center rounded-md border border-black/10 bg-white/90 shadow-sm backdrop-blur transition-opacity dark:border-white/10 dark:bg-stone-900/90 ${selected ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox size-3.5" aria-label={`选择 ${project.title}`} /></span> : null}
+                <span className="absolute bottom-2 right-2 rounded-md border border-white/15 bg-stone-950/80 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-xl">{project.nodes.length} 节点</span>
             </div>
 
-            <div className="p-3">
+            <div className="px-1 pb-1 pt-2.5">
                 <div className="flex items-center justify-between gap-3">
                 {editing ? (
                     <Input className="min-w-0" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
                 ) : (
                     <button
                         type="button"
-                            className="min-w-0 cursor-pointer text-left"
+                            className="min-w-0 flex-1 cursor-pointer text-left"
                         onClick={(event) => {
                             event.stopPropagation();
                             open();
                         }}
                     >
-                            <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{project.title}</h2>
+                            <h2 className="line-clamp-1 text-[13px] font-semibold leading-5 text-foreground">{project.title}</h2>
                     </button>
                 )}
                     {editing ? (
@@ -76,21 +75,24 @@ export function CanvasProjectCard({ project, variant = "library" }: { project: C
                             menu={{
                                 onClick: ({ domEvent }) => domEvent.stopPropagation(),
                                 items: [
-                                    { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportCanvasProjects([project], project.title || "无限画布") },
+                                    { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportCanvasProjects([project], project.title || "影策画布") },
                                     { key: "rename", icon: <Pencil className="size-3.5" />, label: "重命名", onClick: () => startEditing(project.id, project.title) },
                                     { type: "divider" },
                                     { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => setDeleteIds([project.id]) },
                                 ],
                             }}
                         >
-                            <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-stone-500 opacity-45 transition hover:bg-black/5 hover:opacity-100 dark:text-stone-400 dark:hover:bg-white/10" onClick={(event) => event.stopPropagation()} aria-label={`${project.title} 项目操作`}><MoreHorizontal className="size-4" /></button>
+                            <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-foreground/42 opacity-100 transition hover:bg-foreground/[.06] hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 dark:hover:bg-white/10" onClick={(event) => event.stopPropagation()} aria-label={`${project.title} 画布操作`} title="画布操作"><MoreHorizontal className="size-4" /></button>
                         </Dropdown>
                     )}
                 </div>
-                <p className="mt-1 text-[11px] leading-5 text-stone-500 dark:text-stone-400">{project.connections.length} 条连线 · {formatProjectTime(project.updatedAt)}</p>
+                <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[11px] leading-5 text-foreground/52">
+                    <span className="truncate">{projectName || "自由画布"}</span>
+                    <span className="shrink-0">{project.connections.length} 条连线</span>
+                </div>
+                <p className="text-[10px] tabular-nums text-foreground/38">更新于 {formatProjectTime(project.updatedAt)}</p>
             </div>
         </article>
-        </CometCard>
     );
 }
 
@@ -165,6 +167,8 @@ function getNodePresentation(node: CanvasNodeData) {
             return { label: "视频", icon: <Video className="size-3.5" /> };
         case CanvasNodeType.Audio:
             return { label: "音频", icon: <Music2 className="size-3.5" /> };
+        case CanvasNodeType.Drawing:
+            return { label: "绘图", icon: <Pencil className="size-3.5" /> };
         case CanvasNodeType.Frame:
             return { label: "背板", icon: <Frame className="size-3.5" /> };
         case CanvasNodeType.Config:

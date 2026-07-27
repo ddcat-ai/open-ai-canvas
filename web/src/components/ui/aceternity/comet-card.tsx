@@ -82,6 +82,10 @@ export function CometCard({ containerClassName, className, rotateDepth = 5.5, tr
         };
     }, [clearSettleTimer, resetMotion]);
 
+    useEffect(() => {
+        if (!motionEnabled) resetMotion(true);
+    }, [motionEnabled, resetMotion]);
+
     return (
         <div className={cn("aceternity-comet-perspective h-full w-full", containerClassName)} data-comet-active={motionEnabled && motionActive ? "true" : "false"}>
             <motion.div

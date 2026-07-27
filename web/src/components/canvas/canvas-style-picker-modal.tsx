@@ -18,7 +18,7 @@ export type CanvasStylePreset = {
 // 分类按短剧制作语境组织：先看媒介，再看题材与视觉气质，避免用品牌名称代替画风。
 const PROJECT_STYLE_SCOPE = "【使用边界】本规范是全项目美术与影像风格基线，用于统一角色资产、服装材质、建筑世界观、色彩语言和成片质感；它不是某张图片或某个镜头的提示词。具体场景内容、构图、景别、机位、运镜、动作、光源位置、天气和单场情绪由剧情与分镜节点决定，不得从本规范机械复制。";
 
-const stylePresets: CanvasStylePreset[] = [
+export const canvasStylePresets: CanvasStylePreset[] = [
     {
         id: "urban-live-action",
         title: "都市真人短剧",
@@ -187,7 +187,7 @@ export function CanvasStylePickerModal({ open, value, onClose, onSelect }: { ope
                     <span className="ml-auto hidden items-center gap-1 text-[11px] sm:flex" style={{ color: theme.node.faint }}><Sparkles className="size-3.5" />先选媒介，再做细节</span>
                 </header>
                 <div className="thin-scrollbar grid max-h-[76vh] grid-cols-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
-                    {stylePresets.map((preset) => {
+                    {canvasStylePresets.map((preset) => {
                         const active = preset.id === value;
                         return (
                             <button key={preset.id} type="button" className="group overflow-hidden rounded-lg border text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2" style={{ background: theme.node.panel, borderColor: active ? theme.node.activeStroke : theme.node.stroke, boxShadow: active ? `0 0 0 1px ${theme.node.activeStroke}` : undefined, "--tw-ring-color": theme.node.activeStroke } as CSSProperties} onClick={() => onSelect(preset)}>

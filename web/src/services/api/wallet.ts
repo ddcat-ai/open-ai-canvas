@@ -65,7 +65,7 @@ export type ChannelModel = {
     modelKey: string;
     displayName: string;
     capability: "text" | "image" | "video" | "audio";
-    billingMode: "fixed_request";
+    billingMode: "fixed_request" | "per_second";
     unitPriceMicrocredits: number;
     priceConfigured: boolean;
     enabled: boolean;
@@ -160,6 +160,10 @@ export type BillingOrder = {
     model: string;
     capability: string;
     scene: string;
+    billingMode: "fixed_request" | "per_second";
+    unitPriceMicrocredits: number;
+    multiplierBasisPoints: number;
+    quantity: number;
     amountMicrocredits: number;
     status: "reserved" | "running" | "settled" | "refunded" | "uncertain";
     providerRequestId?: string;
@@ -231,8 +235,8 @@ export function updateAdminChannelModel(channelId: string, id: string, input: Om
     return request<{ model: ChannelModel }>(api.patch(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`, input));
 }
 
-export function disableAdminChannelModel(channelId: string, id: string) {
-    return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
+export function deleteAdminChannelModel(channelId: string, id: string) {
+	return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
 }
 
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; limit?: number };

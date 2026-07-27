@@ -167,7 +167,7 @@ export default function RuntimePolicySettingsPage() {
             <Form form={form} layout="vertical" requiredMark={false} disabled={loading} onValuesChange={() => setDirty(true)}>
                 <div className="mx-auto max-w-6xl space-y-5">
                     <PolicySection icon={<Database className="size-4" />} title="资源与账号配额" description="上传、文件容量、结构化数据和历史记录上限。" fields={resourceFields} />
-                    <PolicySection icon={<Gauge className="size-4" />} title="任务与并发" description="后台任务消费、渠道调度和单账号活动任务上限。" fields={concurrencyFields} status={<Tag bordered={false} color="blue">热更新</Tag>} />
+                    <PolicySection icon={<Gauge className="size-4" />} title="任务与并发" description="后台任务消费、渠道调度和单账号活动任务上限。" fields={concurrencyFields} status={<Tag variant="filled" color="blue">热更新</Tag>} />
                     <PolicySection icon={<TimerReset className="size-4" />} title="任务超时" description="不同生成类型的最长执行时间。" fields={timeoutFields} />
                     <PolicySection icon={<ShieldCheck className="size-4" />} title="业务频控" description="账号与 IP 维度的固定窗口请求限制。" fields={rateFields} />
                     <PolicySection icon={<Network className="size-4" />} title="渠道中转与熔断" description="请求体、响应体、并发、超时和上游故障保护。" fields={relayFields} />

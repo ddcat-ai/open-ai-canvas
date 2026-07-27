@@ -3,7 +3,6 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, 
 import { ActiveConnectionPath, ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
-import { CanvasNodeAnglePanel, type CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
@@ -18,6 +17,7 @@ type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 type NodeBounds = { left: number; top: number; width: number; height: number; count: number } | null;
 
 type CanvasProjectWorldLayersProps = {
+    projectId: string;
     theme: CanvasTheme;
     viewportScale: number;
     connectionLayerBounds: { left: number; top: number; width: number; height: number };
@@ -36,8 +36,6 @@ type CanvasProjectWorldLayersProps = {
     frameDropTargetId: string | null;
     relatedNodeIds: Set<string>;
     activeNodeId: string | null;
-    editingNodeId: string | null;
-    editRequestNonce: number;
     selectionBox: SelectionBox | null;
     batchChildCountById: Map<string, number>;
     collapsingBatchIds: Set<string>;
@@ -47,7 +45,7 @@ type CanvasProjectWorldLayersProps = {
     reduceMediaEffects: boolean;
     resourceReferenceByNodeId: Map<string, CanvasResourceReference>;
     mentionReferencesByNodeId: Map<string, CanvasResourceReference[]>;
-    angleNode: CanvasNodeData | null;
+    mediaEffectsDisabledNodeId?: string | null;
     selectedNodeBounds: NodeBounds;
     isNodeDragging: boolean;
     selectionBoundsElementRef: RefObject<HTMLDivElement | null>;
@@ -70,13 +68,11 @@ type CanvasProjectWorldLayersProps = {
     onCancelTask: (node: CanvasNodeData) => void;
     onOpenTaskDetails: (node: CanvasNodeData) => void;
     onOpenVersions: (node: CanvasNodeData) => void;
-    onGenerateImage: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onReplaceMedia: (node: CanvasNodeData) => void;
+    onOpenTextEditor: (node: CanvasNodeData) => void;
     onOpenDirector: (node: CanvasNodeData) => void;
-    onOpenDocument: (node: CanvasNodeData) => void;
-    onCloseAngle: () => void;
-    onGenerateAngle: (params: CanvasImageAngleParams) => void;
+    onOpenDrawing: (node: CanvasNodeData) => void;
 };
 
 const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
@@ -134,7 +130,6 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id}
                         isConnecting={Boolean(props.connectingParams)}
-                        editRequestNonce={props.editingNodeId === node.id ? props.editRequestNonce : 0}
                         batchCount={props.batchChildCountById.get(node.id) || 0}
                         batchExpanded={Boolean(node.metadata?.imageBatchExpanded)}
                         batchClosing={Boolean(node.metadata?.batchRootId && props.collapsingBatchIds.has(node.metadata.batchRootId))}
@@ -142,10 +137,11 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         batchRecovering={props.collapsingBatchIds.has(node.id)}
                         batchMotion={props.batchMotionById.get(node.id)}
                         showImageInfo={props.showImageInfo}
-                        reduceMediaEffects={props.reduceMediaEffects || props.isNodeDragging}
+                        reduceMediaEffects={props.reduceMediaEffects || props.isNodeDragging || props.mediaEffectsDisabledNodeId === node.id}
                         resourceLabel={props.resourceReferenceByNodeId.get(node.id)}
                         mentionReferences={props.mentionReferencesByNodeId.get(node.id) || EMPTY_RESOURCE_REFERENCES}
                         renderNodeContent={props.renderCanvasNodeContent}
+                        drawingProjectId={props.projectId}
                         onMouseDown={props.onNodeMouseDown}
                         onHoverStart={props.onNodeHoverStart}
                         onHoverEnd={props.onNodeHoverEnd}
@@ -158,21 +154,15 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         onCancelTask={props.onCancelTask}
                         onOpenTaskDetails={props.onOpenTaskDetails}
                         onOpenVersions={props.onOpenVersions}
-                        onGenerateImage={props.onGenerateImage}
                         onViewImage={props.onViewImage}
                         onReplaceMedia={props.onReplaceMedia}
+                        onOpenTextEditor={props.onOpenTextEditor}
                         onOpenDirector={props.onOpenDirector}
-                        onOpenDocument={props.onOpenDocument}
+                        onOpenDrawing={props.onOpenDrawing}
                         onContextMenu={props.onNodeContextMenu}
                     />
                 ),
             )}
-
-            {props.angleNode?.metadata?.content ? (
-                <div className="absolute z-[68]" style={{ left: props.angleNode.position.x, top: props.angleNode.position.y + props.angleNode.height + 16, width: Math.max(props.angleNode.width, 720) }}>
-                    <CanvasNodeAnglePanel dataUrl={props.angleNode.metadata.content} onClose={props.onCloseAngle} onConfirm={props.onGenerateAngle} />
-                </div>
-            ) : null}
 
             {props.selectedNodeBounds && !props.selectionBox && !props.isNodeDragging ? (
                 <div

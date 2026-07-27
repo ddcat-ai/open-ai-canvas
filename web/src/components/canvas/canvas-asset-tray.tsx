@@ -34,24 +34,25 @@ function clampTrayHeight(height: number) {
 type CanvasAssetTrayProps = {
     assetImages: ImageAsset[];
     canvasImages: CanvasNodeData[];
+    showLibrary?: boolean;
     activeNodeId?: string | null;
     onInsertAssetImage: (asset: ImageAsset) => void;
     onFocusCanvasImage: (nodeId: string) => void;
 };
 
-export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onInsertAssetImage, onFocusCanvasImage }: CanvasAssetTrayProps) {
+export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true, activeNodeId, onInsertAssetImage, onFocusCanvasImage }: CanvasAssetTrayProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<TrayTab>("library");
+    const [tab, setTab] = useState<TrayTab>(() => showLibrary ? "library" : "canvas");
     const [keyword, setKeyword] = useState("");
     const [trayHeight, setTrayHeight] = useState(() => clampTrayHeight(TRAY_DEFAULT_HEIGHT));
     const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
     const query = keyword.trim().toLowerCase();
     const filteredAssets = useMemo(() => assetImages.filter((asset) => !query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)), [assetImages, query]);
     const filteredNodes = useMemo(() => canvasImages.filter((node) => !query || canvasImageTitle(node).toLowerCase().includes(query)), [canvasImages, query]);
-    const activeItems = tab === "library" ? filteredAssets : filteredNodes;
+    const activeItems = showLibrary && tab === "library" ? filteredAssets : filteredNodes;
     const safeTrayHeight = clampTrayHeight(trayHeight);
     const motionEnabled = !reducedMotion;
 
@@ -92,6 +93,10 @@ export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onIns
     }, []);
 
     useEffect(() => {
+        if (!showLibrary && tab === "library") setTab("canvas");
+    }, [showLibrary, tab]);
+
+    useEffect(() => {
         if (!open) return;
         const closeTray = (event: PointerEvent) => {
             const target = event.target instanceof Node ? event.target : null;
@@ -112,8 +117,8 @@ export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onIns
     const dockItems: FloatingDockEntry[] = [
         {
             id: "asset-tray-toggle",
-            label: open ? "收起素材空间" : `打开素材空间，共 ${assetImages.length + canvasImages.length} 项`,
-            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[6px] font-bold leading-3" style={{ background: theme.accent.primary, color: "#ffffff" }}>{assetImages.length + canvasImages.length}</span></span>,
+            label: open ? "收起素材空间" : `打开素材空间，共 ${(showLibrary ? assetImages.length : 0) + canvasImages.length} 项`,
+            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[6px] font-bold leading-3" style={{ background: theme.accent.primary, color: "#ffffff" }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
             active: open,
             onClick: () => setOpen((value) => !value),
         },
@@ -151,8 +156,8 @@ export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onIns
                             </motion.button>
                         </div>
 
-                        <div className="relative grid grid-cols-2 gap-1 rounded-[12px] border p-0.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                            <TrayTabButton active={tab === "library"} label={`素材库 ${assetImages.length}`} theme={theme} onClick={() => setTab("library")} />
+                        <div className={cn("relative grid gap-1 rounded-[12px] border p-0.5", showLibrary ? "grid-cols-2" : "grid-cols-1")} style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                            {showLibrary ? <TrayTabButton active={tab === "library"} label={`素材库 ${assetImages.length}`} theme={theme} onClick={() => setTab("library")} /> : null}
                             <TrayTabButton active={tab === "canvas"} label={`当前画布 ${canvasImages.length}`} theme={theme} onClick={() => setTab("canvas")} />
                         </div>
 
@@ -163,7 +168,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onIns
                         </label>
 
                         <div className="thin-scrollbar mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
-                            {tab === "library" ? (
+                            {showLibrary && tab === "library" ? (
                                 filteredAssets.length ? (
                                     <div className="space-y-1.5">
                                         {filteredAssets.map((asset) => (
@@ -185,7 +190,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, activeNodeId, onIns
                         </div>
 
                         <div className="flex items-center justify-between px-1 pt-2.5 text-[10px]" style={{ color: theme.node.muted }}>
-                            <span>{tab === "library" ? "点击插入 · 拖拽定位" : "点击回到节点"}</span>
+                            <span>{showLibrary && tab === "library" ? "点击插入 · 拖拽定位" : "点击回到节点"}</span>
                             <span className="rounded-full border px-2 py-0.5 tabular-nums" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>{activeItems.length} 项</span>
                         </div>
                     </motion.aside>

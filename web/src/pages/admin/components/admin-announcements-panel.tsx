@@ -167,7 +167,7 @@ export default function AdminAnnouncementsPanel() {
             </div>
 
             <ListToolbar active={Boolean(keyword || status !== "all")} onReset={() => { setKeyword(""); setStatus("all"); setPage(1); }}>
-                <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
                 <Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "发布中", value: "active" }, { label: "已关闭", value: "closed" }]} />
             </ListToolbar>
             <TableSurface>

@@ -5,4 +5,10 @@ export type ReferenceImage = {
     dataUrl: string;
     url?: string;
     storageKey?: string;
+    source?: {
+        kind: "drawing";
+        drawingId: string;
+        revision: number;
+        shapeCount: number;
+    };
 };

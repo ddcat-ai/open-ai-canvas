@@ -623,7 +623,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo:
 			capability = "video"
 		}
-		order, err := svc.ReserveProxyBilling(user.ID, channel.ID, strings.TrimPrefix(modelName, "models/"), capability, c.GetHeader("X-Canvas-Scene"), c.GetHeader("X-Idempotency-Key"))
+		order, err := svc.ReserveProxyBilling(user.ID, channel.ID, strings.TrimPrefix(modelName, "models/"), capability, c.GetHeader("X-Canvas-Scene"), c.GetHeader("X-Idempotency-Key"), proxyRequestVideoSeconds(c.GetHeader("Content-Type"), body))
 		if err != nil {
 			failService(c, err)
 			return

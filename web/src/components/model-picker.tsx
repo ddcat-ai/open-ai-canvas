@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Coins, Cpu } from "lucide-react";
+import { Select } from "antd";
 
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -39,6 +39,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     }, [config, options]);
     const current = value || "";
     const currentPrice = modelMenuPrice(config, current);
+    const selectOptions = useMemo(() => optionGroups.map((group) => ({
+        label: <span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{group.label}</span><span className="shrink-0 text-[10px] font-normal text-foreground/38">{group.scope}</span></span>,
+        options: group.models.map((model) => ({ value: model, label: modelOptionLabel(config, model) })),
+    })), [config, optionGroups]);
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {
@@ -49,72 +53,47 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     }, [pickerId]);
 
     return (
-        <Select
-            open={open}
-            value={current}
-            onOpenChange={(nextOpen) => {
-                if (nextOpen && !options.length && config.channelMode === "local") onMissingConfig?.();
-                if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
-                setOpen(nextOpen);
-            }}
-            onValueChange={onChange}
+        <div
+            className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full", className)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
         >
-            <SelectTrigger
-                className={cn(
-                    "canvas-composer-model-picker h-7 w-fit max-w-full gap-1 rounded-lg border border-input bg-transparent px-2 text-[11px] font-normal leading-none shadow-none transition-colors [&_.canvas-select-chevron]:size-3",
-                    fullWidth ? "w-full min-w-0 justify-start" : "min-w-[9rem] justify-start",
-                    "data-[state=open]:border-ring data-[state=open]:ring-1 data-[state=open]:ring-ring/15",
-                    className,
+            <Select<string>
+                size="small"
+                open={open}
+                value={current || undefined}
+                options={selectOptions}
+                showSearch
+                filterOption={(input, option) => String(option?.label || "").toLocaleLowerCase().includes(input.toLocaleLowerCase())}
+                notFoundContent={<span className="block px-2 py-3 text-center text-xs text-foreground/48">{emptyModelLabel(config, capability)}</span>}
+                popupMatchSelectWidth={capability === "image" || capability === "video" ? 320 : 280}
+                placement="bottomLeft"
+                className={cn("canvas-composer-model-picker", fullWidth ? "w-full" : "min-w-36 max-w-full")}
+                classNames={{ popup: { root: "canvas-model-picker-popup" } }}
+                onOpenChange={(nextOpen) => {
+                    if (nextOpen && !options.length && config.channelMode === "local") onMissingConfig?.();
+                    if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+                    setOpen(nextOpen);
+                }}
+                onChange={onChange}
+                optionRender={(option) => <ModelLabel config={config} model={String(option.value)} capability={capability} />}
+                labelRender={() => (
+                    <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5 text-[11px]">
+                        <ModelIcon model={current} />
+                        <span className="min-w-0 flex-1 truncate">{current ? modelOptionLabel(config, current) : placeholder}</span>
+                        {showSelectedPrice ? <ModelPrice price={currentPrice} compact /> : null}
+                    </span>
                 )}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={placeholder}
                 title={current ? modelOptionLabel(config, current) : placeholder}
-            >
-                <ModelIcon model={current} />
-                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current ? modelOptionLabel(config, current) : placeholder}</span>
-                {showSelectedPrice ? <ModelPrice price={currentPrice} compact /> : null}
-            </SelectTrigger>
-            <SelectContent
-                data-canvas-no-zoom
-                className={cn(
-                    "z-[1200] max-w-[calc(100vw-24px)] rounded-lg border border-border/50 bg-popover p-1 text-[11px] font-normal shadow-md",
-                    capability === "image" || capability === "video" ? "w-[320px]" : "w-[270px]",
-                )}
-                position="popper"
-                align="start"
-                side="bottom"
-                sideOffset={4}
-                onPointerDown={(event) => event.stopPropagation()}
-                onMouseDown={(event) => event.stopPropagation()}
-            >
-                {optionGroups.length ? (
-                    optionGroups.map((group, index) => (
-                        <SelectGroup key={group.key} className="p-0">
-                            <SelectLabel className="flex min-w-0 items-center gap-1.5 px-1.5 py-1 text-[10px] font-medium">
-                                <span className="min-w-0 truncate opacity-75">{group.label}</span>
-                                <span className="shrink-0 font-normal opacity-40">{group.scope}</span>
-                            </SelectLabel>
-                            {group.models.map((model) => (
-                                <SelectItem key={model} value={model} textValue={modelOptionLabel(config, model)} className="py-0.5 pl-1 pr-7">
-                                    <ModelLabel config={config} model={model} capability={capability} />
-                                </SelectItem>
-                            ))}
-                            {index < optionGroups.length - 1 ? <SelectSeparator /> : null}
-                        </SelectGroup>
-                    ))
-                ) : (
-                    <SelectItem value="__empty__" disabled>
-                        {emptyModelLabel(config, capability)}
-                    </SelectItem>
-                )}
-            </SelectContent>
-        </Select>
+            />
+        </div>
     );
 }
 
 function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     const label = capability === "image" ? "生图" : capability === "video" ? "视频" : capability === "text" ? "文本" : capability === "audio" ? "音频" : "";
-    if (capability && config.models.length) return "请先在上方配置可选模型";
+    if (capability && config.models.length) return `当前渠道没有匹配的${label}模型`;
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
@@ -126,8 +105,8 @@ function ModelLabel({ config, model, capability }: { config: AiConfig; model: st
                 <ModelIcon model={model} />
             </span>
             <span className="min-w-0 flex-1">
-                <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelOptionName(model)}</span>
-                <span className="block truncate text-[10px] opacity-55">{meta.description}</span>
+                <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelDisplayName(config, model)}</span>
+                <span className="mt-0.5 block truncate text-[10px] opacity-55">{modelOptionName(model)} · {meta.description}</span>
             </span>
             <ModelPrice price={modelMenuPrice(config, model)} />
             {meta.time ? <span className="shrink-0 rounded-full bg-black/5 px-1 py-0.5 text-[10px] tabular-nums opacity-60 dark:bg-white/10">{meta.time}</span> : null}
@@ -135,21 +114,21 @@ function ModelLabel({ config, model, capability }: { config: AiConfig; model: st
     );
 }
 
-function modelMenuPrice(config: AiConfig, model: string): number | null | undefined {
+function modelMenuPrice(config: AiConfig, model: string): { value: number; unit: "次" | "秒" } | null | undefined {
     if (!model) return undefined;
     const channel = resolveModelChannel(config, model);
-    if (channel.scope !== "system") return undefined;
-    const microcredits = channel.modelCosts?.find((item) => item.model === modelOptionName(model))?.unitPriceMicrocredits;
-    return microcredits === undefined ? null : microcredits / 1_000_000;
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    if (!cost) return channel.scope === "system" ? null : undefined;
+    return { value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
 }
 
-function ModelPrice({ price, compact = false }: { price: number | null | undefined; compact?: boolean }) {
+function ModelPrice({ price, compact = false }: { price: { value: number; unit: "次" | "秒" } | null | undefined; compact?: boolean }) {
     if (price === undefined) return null;
-    if (price === null) return compact ? null : <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-300">未配置</span>;
+    if (price === null) return compact ? null : <span className="shrink-0 text-[10px] text-foreground/40">未配置</span>;
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-300" title={`每次消耗 ${price.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded border border-foreground/10 bg-foreground/[.045] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground/55" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
             <Coins className="size-3" />
-            {price.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}
+            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>
     );
 }

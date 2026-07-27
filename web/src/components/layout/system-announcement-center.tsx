@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Tag } from "antd";
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
@@ -12,9 +13,12 @@ type SystemAnnouncementCenterProps = {
     userId: string;
     className?: string;
     style?: CSSProperties;
+    showLabel?: boolean;
+    labelClassName?: string;
+    staticMotion?: boolean;
 };
 
-export function SystemAnnouncementCenter({ userId, className, style }: SystemAnnouncementCenterProps) {
+export function SystemAnnouncementCenter({ userId, className, style, showLabel = false, labelClassName, staticMotion = false }: SystemAnnouncementCenterProps) {
     const reducedMotion = useReducedMotion();
     const activeUserIdRef = useRef(userId);
     activeUserIdRef.current = userId;
@@ -84,28 +88,35 @@ export function SystemAnnouncementCenter({ userId, className, style }: SystemAnn
                 type="button"
                 className={className}
                 style={style}
-                whileHover={reducedMotion ? undefined : { y: -1, scale: 1.035 }}
-                whileTap={reducedMotion ? undefined : { scale: 0.94 }}
+                whileHover={reducedMotion || staticMotion ? undefined : { y: -1, scale: 1.035 }}
+                whileTap={reducedMotion || staticMotion ? undefined : { scale: 0.94 }}
                 transition={aceternityMotion.spring.dock}
                 onClick={() => void openAnnouncements()}
                 aria-label={unreadCount ? `系统公告，${unreadCount} 条未读` : "系统公告"}
                 title="系统公告"
             >
-                <Bell className="size-4" />
-                <AnimatePresence initial={false}>
-                    {unreadCount > 0 ? (
-                        <motion.span
-                            key="badge"
-                            initial={reducedMotion ? false : { opacity: 0, scale: 0.5 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.6 }}
-                            transition={aceternityMotion.spring.dock}
-                            className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white shadow-sm"
-                        >
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                        </motion.span>
-                    ) : null}
-                </AnimatePresence>
+                <span className="relative shrink-0">
+                    <Bell className="size-4" />
+                    <AnimatePresence initial={false}>
+                        {unreadCount > 0 ? (
+                            <motion.span
+                                key="unread-dot"
+                                initial={reducedMotion ? false : { opacity: 0, scale: 0.5 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.6 }}
+                                transition={aceternityMotion.spring.dock}
+                                className="absolute -right-1 -top-1 size-2 rounded-full border border-background bg-red-500"
+                                aria-hidden
+                            />
+                        ) : null}
+                    </AnimatePresence>
+                </span>
+                {showLabel ? (
+                    <span className={`min-w-0 flex-1 items-center justify-between gap-2 whitespace-nowrap ${labelClassName || ""}`}>
+                        <span>系统公告</span>
+                        <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-1.5 !text-center !text-[9px] !font-medium !leading-[18px] tabular-nums">{announcements.length}</Tag>
+                    </span>
+                ) : null}
             </motion.button>
             <AnnouncementTimelineModal open={open} announcements={announcements} loading={loading} error={announcements.length ? "" : error} onClose={() => setOpen(false)} onRetry={() => void refresh(true)} />
         </>

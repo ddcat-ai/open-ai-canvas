@@ -8,6 +8,7 @@ import { createCanvasNode, removeCanvasNodes } from "@/lib/canvas/canvas-project
 import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type Position } from "@/types/canvas";
+import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 
 type CanvasClipboard = {
     nodes: CanvasNodeData[];
@@ -15,6 +16,7 @@ type CanvasClipboard = {
 };
 
 type UseCanvasNodeOperationsOptions = {
+    projectId: string;
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     selectedNodeIdsRef: { current: Set<string> };
@@ -25,13 +27,14 @@ type UseCanvasNodeOperationsOptions = {
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
-    onNodesDeleted: (removedIds: Set<string>, nextNodes: CanvasNodeData[]) => void;
+    onNodesDeleted: (removedIds: Set<string>, nextNodes: CanvasNodeData[], removedNodes: CanvasNodeData[]) => void;
 };
 
 const NODE_STATUS_IDLE = "idle" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 
 export function useCanvasNodeOperations({
+    projectId,
     nodesRef,
     connectionsRef,
     selectedNodeIdsRef,
@@ -59,6 +62,29 @@ export function useCanvasNodeOperations({
         setConnections(nextConnections);
     }, [connectionsRef, setConnections]);
 
+    const cloneDrawingForNode = useCallback((source: CanvasNodeData, target: CanvasNodeData, failureMessage: string) => {
+        const sourceDrawingId = source.metadata?.drawingId;
+        const targetDrawingId = target.metadata?.drawingId;
+        if (!projectId || !sourceDrawingId || !targetDrawingId) return;
+        void cloneCanvasDrawing(projectId, sourceDrawingId, targetDrawingId).then((saved) => {
+            if (!saved) {
+                if (source.metadata?.drawingShapeCount) message.warning("原绘图内容未在本机找到，已创建空白副本");
+                return;
+            }
+            // 克隆落盘后提升修订号，确保已经挂载的新卡片重新读取派生预览。
+            commitNodes(nodesRef.current.map((node) => node.id === target.id ? {
+                ...node,
+                metadata: {
+                    ...node.metadata,
+                    drawingRevision: saved.revision,
+                    drawingUpdatedAt: saved.updatedAt,
+                    drawingShapeCount: saved.shapeCount,
+                    drawingPageCount: saved.pageCount,
+                },
+            } : node));
+        }).catch(() => message.error(failureMessage));
+    }, [commitNodes, message, nodesRef, projectId]);
+
     const selectNodes = useCallback((ids: Set<string>) => {
         selectedNodeIdsRef.current = ids;
         setSelectedNodeIds(ids);
@@ -76,7 +102,7 @@ export function useCanvasNodeOperations({
         const node = createCanvasNode(type, position || getCanvasCenter(), configMetadata);
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
-        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame) setDialogNodeId(node.id);
+        if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing) setDialogNodeId(node.id);
     }, [commitNodes, effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter, nodesRef, selectNodes, setDialogNodeId]);
 
     const arrangeSelectedNodes = useCallback((mode: "row" | "column" | "grid" | "flow") => {
@@ -208,11 +234,12 @@ export function useCanvasNodeOperations({
     const deleteNodes = useCallback((ids: Set<string>) => {
         if (!ids.size) return;
         const result = removeCanvasNodes(nodesRef.current, ids);
+        const removedNodes = nodesRef.current.filter((node) => result.removedIds.has(node.id));
         const nextConnections = connectionsRef.current.filter((connection) => !result.removedIds.has(connection.fromNodeId) && !result.removedIds.has(connection.toNodeId));
         commitNodes(result.nodes);
         commitConnections(nextConnections);
         selectNodes(new Set());
-        onNodesDeleted(result.removedIds, result.nodes);
+        onNodesDeleted(result.removedIds, result.nodes, removedNodes);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, onNodesDeleted, selectNodes]);
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -230,6 +257,13 @@ export function useCanvasNodeOperations({
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
         const copiedNodes = sources.map((node) => {
             const metadata: CanvasNodeMetadata = { ...node.metadata, frame: node.metadata?.frame ? { ...node.metadata.frame } : undefined };
+            if (node.type === CanvasNodeType.Drawing) {
+                metadata.drawingId = `${idMap.get(node.id)}-document`;
+                metadata.drawingRevision = 0;
+                metadata.drawingUpdatedAt = undefined;
+                metadata.drawingShapeCount = 0;
+                metadata.drawingPageCount = 1;
+            }
             if (node.id === source.id && versionRootId) {
                 delete metadata.taskId;
                 delete metadata.taskStatus;
@@ -267,8 +301,13 @@ export function useCanvasNodeOperations({
         commitNodes(nextNodes);
         commitConnections([...connectionsRef.current, ...copiedConnections]);
         selectNodes(new Set([id]));
-        if (!isFrameNode(source)) setDialogNodeId(id);
-    }, [commitConnections, commitNodes, connectionsRef, nodesRef, selectNodes, setDialogNodeId]);
+        const sourceByTargetId = new Map(sources.map((sourceNode) => [idMap.get(sourceNode.id), sourceNode]));
+        copiedNodes.filter((node) => node.type === CanvasNodeType.Drawing).forEach((targetNode) => {
+            const sourceNode = sourceByTargetId.get(targetNode.id);
+            if (sourceNode) cloneDrawingForNode(sourceNode, targetNode, "绘图副本保存失败，请重新复制");
+        });
+        if (!isFrameNode(source) && source.type !== CanvasNodeType.Drawing) setDialogNodeId(id);
+    }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, nodesRef, selectNodes, setDialogNodeId]);
 
     const setPrimaryVersion = useCallback((nodeId: string) => {
         const target = nodesRef.current.find((node) => node.id === nodeId);
@@ -318,7 +357,9 @@ export function useCanvasNodeOperations({
             title: node.title.endsWith(" Copy") ? node.title : `${node.title} Copy`,
             position: { x: node.position.x + dx, y: node.position.y + dy },
             parentId: node.parentId ? idMap.get(node.parentId) : undefined,
-            metadata: node.metadata ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined } : undefined,
+            metadata: node.type === CanvasNodeType.Drawing
+                ? { ...node.metadata, frame: node.metadata?.frame ? { ...node.metadata.frame } : undefined, drawingId: `${idMap.get(node.id)}-document`, drawingRevision: 0, drawingUpdatedAt: undefined, drawingShapeCount: 0, drawingPageCount: 1 }
+                : node.metadata ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined } : undefined,
         }));
         const nextConnections = clipboard.connections.flatMap((connection, index) => {
             const fromNodeId = idMap.get(connection.fromNodeId);
@@ -327,13 +368,18 @@ export function useCanvasNodeOperations({
         });
         commitNodes([...nodesRef.current, ...nextNodes]);
         commitConnections([...connectionsRef.current, ...nextConnections]);
+        const sourceByTargetId = new Map(clipboard.nodes.map((sourceNode) => [idMap.get(sourceNode.id), sourceNode]));
+        nextNodes.filter((node) => node.type === CanvasNodeType.Drawing).forEach((targetNode) => {
+            const sourceNode = sourceByTargetId.get(targetNode.id);
+            if (sourceNode) cloneDrawingForNode(sourceNode, targetNode, "绘图副本保存失败，请重新粘贴");
+        });
         const topLevelIds = new Set(nextNodes.filter((node) => !node.parentId).map((node) => node.id));
         selectNodes(topLevelIds);
         setContextMenu(null);
         const primaryNode = nextNodes.find((node) => !node.parentId);
-        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) ? primaryNode.id : null);
+        setDialogNodeId(primaryNode && !isFrameNode(primaryNode) && primaryNode.type !== CanvasNodeType.Drawing ? primaryNode.id : null);
         return true;
-    }, [commitConnections, commitNodes, connectionsRef, getCanvasCenter, nodesRef, selectNodes, setContextMenu, setDialogNodeId]);
+    }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, getCanvasCenter, nodesRef, selectNodes, setContextMenu, setDialogNodeId]);
 
     return {
         alignSelectedNodes,

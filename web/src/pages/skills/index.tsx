@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { App, Button, Empty, Input, Modal, Select, Skeleton, Tag } from "antd";
+import { App, Button, Collapse, Drawer, Input, Select, Skeleton } from "antd";
 import { Check, Flame, Heart, RefreshCw, Search, ShieldCheck, Sparkles, Star, UserRound, Zap } from "lucide-react";
 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceState } from "@/components/layout/workspace-state";
 import { renderSkillPrompt } from "@/lib/canvas/canvas-skill-mentions";
 import { activateSkill, deactivateSkill, favoriteSkill, getCommunitySkill, listActivatedSkills, listCommunitySkills, listFavoriteSkills, skillImageUrl, unfavoriteSkill, type UpdreamSkill, type UpdreamSkillSort } from "@/services/api/skills";
 
@@ -153,7 +154,8 @@ export default function SkillsPage() {
         <>
             <WorkspacePage grid>
                 <PageHeader
-                    title="技能库大厅"
+                    icon="skills"
+                    title="技能库"
                     description="浏览 Updream 技能，管理激活与收藏。"
                     meta={<span className="text-xs text-foreground/45">{displayedTotal} 个技能</span>}
                     actions={
@@ -195,17 +197,6 @@ export default function SkillsPage() {
                     />
                     {isPagedTab ? (
                         <Select
-                            className="w-40"
-                            value={category}
-                            options={[{ label: "全部分类", value: "all" }, ...categories.map((value) => ({ label: value, value }))]}
-                            onChange={(value) => {
-                                setCategory(value);
-                                setPage(1);
-                            }}
-                        />
-                    ) : null}
-                    {isPagedTab ? (
-                        <Select
                             className="w-32"
                             disabled={tab === "featured"}
                             value={tab === "featured" ? "hot" : sort}
@@ -218,18 +209,26 @@ export default function SkillsPage() {
                     ) : null}
                 </ListToolbar>
 
+                {isPagedTab && categories.length ? (
+                    <div className="thin-scrollbar flex gap-1 overflow-x-auto border-b border-border/70 py-2" aria-label="技能分类">
+                        {["all", ...categories].map((value) => (
+                            <button key={value} type="button" className={`h-7 shrink-0 rounded px-2.5 text-xs transition-colors ${category === value ? "bg-foreground text-background" : "text-foreground/55 hover:bg-foreground/[.05] hover:text-foreground"}`} onClick={() => { setCategory(value); setPage(1); }}>
+                                {value === "all" ? "全部分类" : value}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+
                 {loading ? (
                     <SkillSkeleton />
                 ) : displayedSkills.length ? (
-                    <CollectionGrid>
+                    <CollectionGrid className="sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
                         {displayedSkills.map((skill) => (
                             <SkillCard key={skill.dir} skill={skill} loading={mutatingDir === skill.dir} onOpen={() => openSkill(skill)} onActivate={() => toggleActivation(skill)} onFavorite={() => toggleFavorite(skill)} />
                         ))}
                     </CollectionGrid>
                 ) : (
-                    <section className="flex min-h-[360px] flex-col items-center justify-center text-center">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-foreground/50">暂无匹配技能</span>} />
-                    </section>
+                    <WorkspaceState icon="skills" title="暂无匹配技能" description="换一个关键词、分类或技能范围继续查找。" />
                 )}
 
                 <PaginationBar
@@ -254,31 +253,27 @@ function SkillCard({ skill, loading, onOpen, onActivate, onFavorite }: { skill: 
         <article className="app-collection-card group h-full">
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="relative aspect-[16/10] overflow-hidden bg-stone-100 dark:bg-stone-900">
-                    {skill.cover_url ? <img src={skillImageUrl(skill.cover_url)} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" /> : <SkillCoverFallback skill={skill} />}
-                    <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-                        <span className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 shadow-sm backdrop-blur dark:bg-stone-950/80 dark:text-stone-200">{featuredLabel(skill.featured_label)}</span>
-                        <span className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 shadow-sm backdrop-blur dark:bg-stone-950/80 dark:text-stone-200">V{skill.version || "-"}</span>
+                    {skill.cover_url ? <img src={skillImageUrl(skill.cover_url)} alt="" className="h-full w-full object-cover" /> : <SkillCoverFallback skill={skill} />}
+                    <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+                        <span className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-stone-700 backdrop-blur dark:bg-stone-950/80 dark:text-stone-200">{featuredLabel(skill.featured_label)}</span>
+                        {skill.activated ? <span className="rounded bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">已激活</span> : null}
                     </div>
                 </div>
                 <div className="p-3">
-                    <div className="mb-2 flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-                        <SkillIconLabel icon={skill.icon_url} />
-                        <span>{skill.review_status || "approved"}</span>
+                    <div className="flex items-start justify-between gap-2">
+                        <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{skill.name}</h2>
+                        <span className="shrink-0 text-[10px] text-stone-400">V{skill.version || "-"}</span>
                     </div>
-                    <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{skill.name}</h2>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                        <UserRound className="size-3.5" />
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                        {skill.uploader_avatar ? <img src={skillImageUrl(skill.uploader_avatar)} alt="" className="size-4 rounded-full object-cover" /> : <UserRound className="size-3.5" />}
                         <span className="truncate">{skill.uploader_name || "未知作者"}</span>
                     </div>
                     <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-stone-600 dark:text-stone-300">{skill.description || "暂无简介"}</p>
+                    {skill.categories?.length ? <div className="mt-2 flex gap-1 overflow-hidden">{skill.categories.slice(0, 3).map((item) => <span key={item} className="shrink-0 rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/50">{item}</span>)}</div> : null}
                 </div>
             </button>
-            <div className="border-t border-stone-100 px-3 py-3 dark:border-stone-800">
-                <div className="mb-2.5 flex items-center gap-3 text-[11px] text-stone-500 dark:text-stone-400">
-                    <span>{formatCount(skill.usage_count || 0)} 次使用</span>
-                    <span>{skill.avg_rating ? `${skill.avg_rating.toFixed(1)} 分` : "暂无评分"}</span>
-                    <span className="ml-auto">{formatCount(skill.like_count || 0)} 收藏</span>
-                </div>
+            <div className="border-t border-stone-100 px-3 py-2.5 dark:border-stone-800">
+                <div className="mb-2 flex items-center gap-3 text-[10px] text-stone-500 dark:text-stone-400"><span className="inline-flex items-center gap-1"><Zap className="size-3" />{formatCount(skill.usage_count || 0)}</span><span className="inline-flex items-center gap-1"><Star className="size-3" />{skill.avg_rating ? skill.avg_rating.toFixed(1) : "-"}</span><span className="inline-flex items-center gap-1"><Heart className="size-3" />{formatCount(skill.like_count || 0)}</span></div>
                 <div className="flex items-center gap-2">
                     <Button className="flex-1" loading={loading} type={skill.activated ? "default" : "primary"} icon={skill.activated ? <Check className="size-4" /> : <Zap className="size-4" />} onClick={onActivate}>
                         {skill.activated ? "已激活" : "激活"}
@@ -294,59 +289,41 @@ function SkillDetailModal({ skill, loading, mutating, onClose, onActivate, onFav
     const injectedPrompt = skill ? renderSkillPrompt(skill) : "";
 
     return (
-        <Modal open={Boolean(skill)} width={1080} footer={null} onCancel={onClose} destroyOnHidden title={skill?.name}>
+        <Drawer open={Boolean(skill)} size="large" onClose={onClose} destroyOnHidden title={skill?.name || "技能详情"}>
             {skill ? (
-                <div className="grid h-[min(720px,calc(100vh-168px))] min-h-0 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
-                    <aside className="thin-scrollbar min-h-0 overflow-y-auto rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-900/60">
-                        <div className="overflow-hidden rounded-xl bg-stone-100 dark:bg-stone-900">{skill.cover_url ? <img src={skillImageUrl(skill.cover_url)} alt="" className="aspect-[16/10] w-full object-cover" /> : <SkillCoverFallback skill={skill} />}</div>
-                        <div className="mt-4 flex items-center gap-2">
-                            <Button className="flex-1" loading={mutating} type={skill.activated ? "default" : "primary"} icon={skill.activated ? <Check className="size-4" /> : <Zap className="size-4" />} onClick={() => onActivate(skill)}>
-                                {skill.activated ? "已激活" : "激活"}
-                            </Button>
-                            <Button loading={mutating} icon={<Heart className={`size-4 ${skill.liked ? "fill-current text-rose-500" : ""}`} />} onClick={() => onFavorite(skill)}>
-                                收藏
-                            </Button>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-2">
-                            <Stat icon={<Flame className="size-4" />} label="热度" value={formatCount(skill.hot_score || 0)} />
-                            <Stat icon={<Zap className="size-4" />} label="使用" value={formatCount(skill.usage_count || 0)} />
-                            <Stat icon={<Heart className="size-4" />} label="收藏" value={formatCount(skill.like_count || 0)} />
-                            <Stat icon={<Star className="size-4" />} label="评分" value={skill.avg_rating ? `${skill.avg_rating.toFixed(1)} (${skill.rating_count || 0})` : "-"} />
-                        </div>
-                        <div className="mt-4 space-y-0 text-sm">
-                            <DetailRow label="dir" value={skill.dir} />
-                            <DetailRow label="icon_url" value={skill.icon_url || "-"} />
-                            <DetailRow label="version" value={`V${skill.version || "-"}`} />
-                            <DetailRow label="uploader_id" value={String(skill.uploader_id ?? "-")} />
-                            <DetailRow label="uploader_name" value={skill.uploader_name || "-"} />
-                            <DetailRow label="review_status" value={skill.review_status || "-"} />
-                            <DetailRow label="featured_label" value={skill.featured_label || "-"} />
-                            <DetailRow label="share_scope" value={skill.share_scope || "-"} />
-                            <DetailRow label="is_private" value={skill.is_private ? "true" : "false"} />
-                            <DetailRow label="ctime" value={formatDate(skill.ctime)} />
-                            <DetailRow label="mtime" value={formatDate(skill.mtime)} />
-                        </div>
-                    </aside>
-                    <section className="thin-scrollbar min-h-0 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
+                <div className="space-y-4">
+                    <div className="overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">{skill.cover_url ? <img src={skillImageUrl(skill.cover_url)} alt="" className="aspect-[16/8] w-full object-cover" /> : <SkillCoverFallback skill={skill} />}</div>
+                    <div className="flex items-center gap-2">
+                        <Button className="flex-1" loading={mutating} type={skill.activated ? "default" : "primary"} icon={skill.activated ? <Check className="size-4" /> : <Zap className="size-4" />} onClick={() => onActivate(skill)}>
+                            {skill.activated ? "已激活" : "激活"}
+                        </Button>
+                        <Button loading={mutating} icon={<Heart className={`size-4 ${skill.liked ? "fill-current text-rose-500" : ""}`} />} onClick={() => onFavorite(skill)}>收藏</Button>
+                    </div>
+                    <div className="grid grid-cols-4 divide-x divide-border border-y border-border py-3 text-center">
+                        <SkillMetric icon={<Flame className="size-3.5" />} label="热度" value={formatCount(skill.hot_score || 0)} />
+                        <SkillMetric icon={<Zap className="size-3.5" />} label="使用" value={formatCount(skill.usage_count || 0)} />
+                        <SkillMetric icon={<Heart className="size-3.5" />} label="收藏" value={formatCount(skill.like_count || 0)} />
+                        <SkillMetric icon={<Star className="size-3.5" />} label="评分" value={skill.avg_rating ? skill.avg_rating.toFixed(1) : "-"} />
+                    </div>
                         {loading ? (
                             <Skeleton active paragraph={{ rows: 14 }} />
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-5">
                                 <DetailPanel icon={<ShieldCheck className="size-4 text-stone-500" />} title="简介">
-                                    <p className="text-sm leading-7 text-stone-600 dark:text-stone-300">{skill.description || "暂无简介"}</p>
+                                    <p className="text-sm leading-6 text-stone-600 dark:text-stone-300">{skill.description || "暂无简介"}</p>
                                 </DetailPanel>
-                                <DetailPanel icon={<Sparkles className="size-4 text-stone-500" />} title="详情文本">
-                                    <pre className="thin-scrollbar max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-stone-50 p-4 text-sm leading-7 text-stone-700 dark:bg-stone-900 dark:text-stone-300">{skill.detail_text || skill.description || "暂无详情"}</pre>
+                                <DetailPanel icon={<Sparkles className="size-4 text-stone-500" />} title="能力说明">
+                                    <pre className="thin-scrollbar max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-stone-50 p-3 text-sm leading-6 text-stone-700 dark:bg-stone-900 dark:text-stone-300">{skill.detail_text || skill.description || "暂无详情"}</pre>
                                 </DetailPanel>
-                                <DetailPanel icon={<Zap className="size-4 text-stone-500" />} title="画布引用注入内容">
-                                    <pre className="thin-scrollbar max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-stone-50 p-4 text-sm leading-7 text-stone-700 dark:bg-stone-900 dark:text-stone-300">{injectedPrompt}</pre>
+                                <DetailPanel icon={<Zap className="size-4 text-stone-500" />} title="画布引用内容">
+                                    <pre className="thin-scrollbar max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-stone-50 p-3 text-sm leading-6 text-stone-700 dark:bg-stone-900 dark:text-stone-300">{injectedPrompt}</pre>
                                 </DetailPanel>
+                                <Collapse ghost size="small" items={[{ key: "technical", label: "技术信息", children: <div className="space-y-0 text-sm"><DetailRow label="目录" value={skill.dir} /><DetailRow label="图标标识" value={skill.icon_url || "-"} /><DetailRow label="版本" value={`V${skill.version || "-"}`} /><DetailRow label="上传者 ID" value={String(skill.uploader_id ?? "-")} /><DetailRow label="审核状态" value={skill.review_status || "-"} /><DetailRow label="共享范围" value={skill.share_scope || "-"} /><DetailRow label="更新时间" value={formatDate(skill.mtime)} /></div> }]} />
                             </div>
                         )}
-                    </section>
                 </div>
             ) : null}
-        </Modal>
+        </Drawer>
     );
 }
 
@@ -387,21 +364,11 @@ function SkillCoverFallback({ skill }: { skill: UpdreamSkill }) {
     );
 }
 
-function SkillIconLabel({ icon }: { icon?: string }) {
+function SkillMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
     return (
-        <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-            <Sparkles className="size-3" />
-            {icon || "skill"}
-        </span>
-    );
-}
-
-function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-    return (
-        <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-950">
-            <div className="mb-2 text-stone-400">{icon}</div>
-            <div className="text-sm font-semibold text-stone-950 dark:text-stone-100">{value}</div>
-            <div className="mt-1 text-xs text-stone-500">{label}</div>
+        <div className="min-w-0 px-2">
+            <div className="flex items-center justify-center gap-1 text-stone-400">{icon}<span className="text-sm font-semibold text-stone-950 dark:text-stone-100">{value}</span></div>
+            <div className="mt-0.5 text-[10px] text-stone-500">{label}</div>
         </div>
     );
 }

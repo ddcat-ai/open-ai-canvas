@@ -3,6 +3,7 @@ import { Button, Tooltip } from "antd";
 import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
 import type { LocalUser } from "@/stores/use-user-store";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
@@ -56,32 +57,36 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
 }
 
 export function AgentPendingToolCard({ summary, detail, theme, onReject, onApprove }: { summary: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onReject?: () => void; onApprove?: () => void }) {
+    const impact = agentImpactFromDetail(detail);
     return (
         <div className="flex items-start gap-3">
             <AgentAvatar theme={theme} />
             <div className="aceternity-floating-panel min-w-0 flex-1 rounded-lg border p-4" style={{ borderColor: "rgba(217,119,6,.24)", background: theme.spatial.surface, color: theme.node.text }}>
-                <details>
-                    <summary className="cursor-pointer list-none">
-                        <div className="flex items-start gap-3">
-                            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: "rgba(217,119,6,.24)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>
-                                <CircleAlert className="size-4" />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
-                                    <span>确认工具调用</span>
-                                    <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: "rgba(217,119,6,.22)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>
-                                        等待确认
-                                    </span>
-                                    {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
-                                </div>
-                                <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>
-                                    {summary}
-                                </div>
-                            </div>
+                <div className="flex items-start gap-3">
+                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: "rgba(217,119,6,.24)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>
+                        <CircleAlert className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
+                            <span>确认工具调用</span>
+                            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: "rgba(217,119,6,.22)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>等待确认</span>
                         </div>
-                    </summary>
-                    {detail ? <AgentDetailBlock detail={detail} theme={theme} /> : null}
-                </details>
+                        <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
+                    </div>
+                </div>
+                {impact?.operationCount ? (
+                    <div className="mt-3 border-t pt-3" style={{ borderColor: theme.node.stroke }}>
+                        <div className="grid grid-cols-2 gap-2">
+                            <ImpactMetric label="操作" value={impact.operationCount} theme={theme} />
+                            <ImpactMetric label="涉及节点" value={impact.affectedNodeCount} theme={theme} />
+                            <ImpactMetric label="删除" value={impact.destructiveCount} attention={impact.destructiveCount > 0} theme={theme} />
+                            <ImpactMetric label="生成" value={impact.generationCount} attention={impact.generationCount > 0} theme={theme} />
+                        </div>
+                        {impact.items.length ? <div className="mt-3 space-y-1.5">{impact.items.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}><span className="mt-2 size-1 shrink-0 rounded-full bg-current" /><span>{item}</span></div>)}</div> : null}
+                        {impact.warning ? <div className="mt-3 border-l-2 border-amber-500/70 bg-amber-500/[.05] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
+                    </div>
+                ) : null}
+                {detail ? <details className="mt-3 border-t pt-2" style={{ borderColor: theme.node.stroke }}><summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>技术详情</summary><AgentDetailBlock detail={detail} theme={theme} /></details> : null}
                 {onReject || onApprove ? (
                     <div className="mt-4 grid grid-cols-2 gap-2">
                         <Button danger className="!h-9" icon={<XCircle className="size-4" />} onClick={() => onReject?.()}>
@@ -95,6 +100,24 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
             </div>
         </div>
     );
+}
+
+function ImpactMetric({ label, value, attention = false, theme }: { label: string; value: number; attention?: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return <div className="rounded-md border px-2 py-1.5" style={{ borderColor: attention ? "rgba(217,119,6,.24)" : theme.node.stroke, background: attention ? "rgba(217,119,6,.04)" : theme.spatial.elevated }}><div className="text-[10px]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
+}
+
+function agentImpactFromDetail(detail: unknown) {
+    const impact = objectField(detail, "impact");
+    if (!impact || typeof impact !== "object") return null;
+    const value = impact as Partial<CanvasAgentOperationImpact>;
+    return {
+        operationCount: Number(value.operationCount) || 0,
+        affectedNodeCount: Number(value.affectedNodeCount) || 0,
+        destructiveCount: Number(value.destructiveCount) || 0,
+        generationCount: Number(value.generationCount) || 0,
+        items: Array.isArray(value.items) ? value.items.filter((item): item is string => typeof item === "string") : [],
+        warning: typeof value.warning === "string" ? value.warning : "",
+    } satisfies CanvasAgentOperationImpact;
 }
 
 export function AgentToolCard({ title, text, detail, theme }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {

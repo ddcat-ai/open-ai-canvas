@@ -85,7 +85,7 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
     }, [auditPage, message, userId]);
 
     return (
-        <Drawer title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"} open={Boolean(userId)} onClose={onClose} width="min(920px, 100vw)" destroyOnHidden>
+        <Drawer title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"} open={Boolean(userId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden>
             {loading && !detail ? (
                 <Skeleton active paragraph={{ rows: 10 }} />
             ) : detail ? (

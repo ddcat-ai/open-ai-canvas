@@ -1,4 +1,4 @@
-# Infinite Canvas Agent
+# 影策 Canvas Agent
 
 本地 Canvas Agent 用来连接画布网页和用户电脑上的 Codex / Claude Code。本地开发时优先连接 `http://localhost:3000`，不需要先使用线上站点。
 
@@ -58,7 +58,7 @@ codex plugin add infinite-canvas@infinite-canvas-local
 npx -y @ddcat666/open-ai-canvas-agent mcp
 ```
 
-使用时可以直接在 Codex 里说“打开 Infinite Canvas”，插件会优先启动本地画布和本地 Agent，读取 Local URL 和 Connect token，然后直接打开画布网页地址新建并连接画布。如果自动连接失败，再检查本地画布服务和 Canvas Agent 是否都已启动。
+使用时可以直接在 Codex 里说“打开影策”，插件会优先启动本地画布和本地 Agent，读取 Local URL 和 Connect token，然后直接打开画布网页地址新建并连接画布。如果自动连接失败，再检查本地画布服务和 Canvas Agent 是否都已启动。
 
 Canvas Agent 启动后，给 Codex 添加 MCP：
 

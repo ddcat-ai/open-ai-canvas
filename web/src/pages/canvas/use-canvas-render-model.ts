@@ -35,11 +35,11 @@ type UseCanvasRenderModelOptions = {
     upscaleNodeId: string | null;
     superResolveNodeId: string | null;
     angleNodeId: string | null;
+    emotionNodeId: string | null;
     previewNodeId: string | null;
     contextMenu: ContextMenuState | null;
     versionCompareRootId: string | null;
     directorNodeId: string | null;
-    documentEditorNodeId: string | null;
     scriptEditorNodeId: string | null;
     dialogNodeId: string | null;
 };
@@ -66,11 +66,11 @@ export function useCanvasRenderModel({
     upscaleNodeId,
     superResolveNodeId,
     angleNodeId,
+    emotionNodeId,
     previewNodeId,
     contextMenu,
     versionCompareRootId,
     directorNodeId,
-    documentEditorNodeId,
     scriptEditorNodeId,
     dialogNodeId,
 }: UseCanvasRenderModelOptions) {
@@ -150,6 +150,7 @@ export function useCanvasRenderModel({
     const upscaleNode = upscaleNodeId ? nodeById.get(upscaleNodeId) || null : null;
     const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
+    const emotionNode = emotionNodeId ? nodeById.get(emotionNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const contextMenuNode = contextMenu?.type === "node" ? nodeById.get(contextMenu.nodeId) || null : null;
     const activeNodeId = selectedNodeIds.size > 1 ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
@@ -237,7 +238,6 @@ export function useCanvasRenderModel({
         return map;
     }, [connections, semanticNodes]);
     const activeDirectorNode = useMemo(() => semanticNodes.find((node) => node.id === directorNodeId) || null, [directorNodeId, semanticNodes]);
-    const activeDocumentNode = useMemo(() => semanticNodes.find((node) => node.id === documentEditorNodeId && node.type === CanvasNodeType.Text) || null, [documentEditorNodeId, semanticNodes]);
     const activeStylePresetId = useMemo(() => semanticNodes.find((node) => node.metadata?.workflowKind === "styleboard")?.metadata?.stylePresetId, [semanticNodes]);
     const activeScriptNode = useMemo(() => semanticNodes.find((node) => node.id === scriptEditorNodeId && node.type === CanvasNodeType.Script) || null, [scriptEditorNodeId, semanticNodes]);
     const activeDirectorScene = useMemo(() => directorScenes?.find((scene) => scene.id === activeDirectorNode?.metadata?.directorSceneId) || null, [activeDirectorNode?.metadata?.directorSceneId, directorScenes]);
@@ -253,11 +253,11 @@ export function useCanvasRenderModel({
     return {
         activeDirectorNode,
         activeDirectorScene,
-        activeDocumentNode,
         activeNodeId,
         activeScriptNode,
         activeStylePresetId,
         angleNode,
+        emotionNode,
         annotationNode,
         batchChildCountById,
         batchMotionById,

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 
-import { getDataUrlByteSize } from "@/lib/image-utils";
 import { applyGenerationTaskResultToNodes, generationTaskNodeId } from "@/lib/canvas/canvas-generation-task-sync";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { cancelGenerationTask, listGenerationTasks, listTaskLogs, queryGenerationTask, waitForGenerationTask, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { cinematicStoryboardColumns, storyboardRowsFromTask } from "@/lib/canvas/canvas-project-domain";
@@ -19,6 +19,7 @@ type CanvasGenerationRequest = {
 
 type UseCanvasGenerationOptions = {
     projectId: string;
+    domainProjectId?: string;
     projectLoaded: boolean;
     nodes: CanvasNodeData[];
     nodesRef: { current: CanvasNodeData[] };
@@ -30,9 +31,9 @@ const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 
-export function useCanvasGeneration({ projectId, projectLoaded, nodes, nodesRef, setNodes }: UseCanvasGenerationOptions) {
+export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded, nodes, nodesRef, setNodes }: UseCanvasGenerationOptions) {
     const { message, modal } = App.useApp();
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const queryClient = useQueryClient();
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
     const recoveringTaskIdsRef = useRef(new Set<string>());
     const autoSavedTaskIdsRef = useRef(new Set<string>());
@@ -146,35 +147,11 @@ export function useCanvasGeneration({ projectId, projectLoaded, nodes, nodesRef,
         }));
     }, [setNodes]);
 
-    const addGeneratedAsset = useCallback((node: CanvasNodeData, taskId: string) => {
-        if (!node.metadata?.content || node.metadata.status !== NODE_STATUS_SUCCESS) return;
-        const exists = useAssetStore.getState().assets.some((asset) => asset.metadata?.taskId === taskId || (asset.metadata?.source === "canvas-generation" && asset.metadata?.nodeId === node.id));
-        if (exists) return;
-        if (node.type === CanvasNodeType.Image) {
-            const dataUrl = node.metadata.storageKey ? "" : node.metadata.content;
-            addAsset({
-                kind: "image",
-                title: node.metadata.prompt?.slice(0, 24) || node.title || "画布图片",
-                coverUrl: node.metadata.content,
-                tags: [],
-                source: "Canvas",
-                data: { dataUrl, storageKey: node.metadata.storageKey, width: node.metadata.naturalWidth || node.width, height: node.metadata.naturalHeight || node.height, bytes: node.metadata.bytes || getDataUrlByteSize(dataUrl), mimeType: node.metadata.mimeType || "image/png" },
-                metadata: { source: "canvas-generation", nodeId: node.id, taskId, prompt: node.metadata.prompt },
-            });
-            return;
-        }
-        if (node.type === CanvasNodeType.Video) {
-            addAsset({
-                kind: "video",
-                title: node.metadata.prompt?.slice(0, 24) || node.title || "画布视频",
-                coverUrl: "",
-                tags: [],
-                source: "Canvas",
-                data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.metadata.naturalWidth || node.width, height: node.metadata.naturalHeight || node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" },
-                metadata: { source: "canvas-generation", nodeId: node.id, taskId, prompt: node.metadata.prompt },
-            });
-        }
-    }, [addAsset]);
+    const saveGeneratedAsset = useCallback(async (node: CanvasNodeData, taskId: string) => {
+        const result = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node, source: "canvas-generation", taskId });
+        setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, assetId: result.assetId } } : item));
+        if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+    }, [domainProjectId, projectId, queryClient, setNodes]);
 
     const applyGenerationTaskResult = useCallback(async (nodeId: string, task: GenerationTask) => {
         const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
@@ -228,13 +205,16 @@ export function useCanvasGeneration({ projectId, projectLoaded, nodes, nodesRef,
         if (!projectLoaded) return;
         nodes.forEach((node) => {
             const taskId = node.metadata?.taskId;
-            if (!taskId || !node.metadata?.content || node.metadata.status !== NODE_STATUS_SUCCESS || (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video)) return;
-            const saveKey = `${taskId}:${node.id}`;
+            if (!taskId || !node.metadata?.content || node.metadata.status !== NODE_STATUS_SUCCESS || (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio)) return;
+            const saveKey = `${taskId}:${node.id}:${domainProjectId || "personal"}`;
             if (autoSavedTaskIdsRef.current.has(saveKey)) return;
             autoSavedTaskIdsRef.current.add(saveKey);
-            addGeneratedAsset(node, taskId);
+            void saveGeneratedAsset(node, taskId).catch((error) => {
+                autoSavedTaskIdsRef.current.delete(saveKey);
+                message.warning(error instanceof Error ? `生成结果已保留，但项目资产同步失败：${error.message}` : "生成结果已保留，但项目资产同步失败");
+            });
         });
-    }, [addGeneratedAsset, nodes, projectLoaded]);
+    }, [domainProjectId, message, nodes, projectLoaded, saveGeneratedAsset]);
 
     return {
         bindGenerationTask,

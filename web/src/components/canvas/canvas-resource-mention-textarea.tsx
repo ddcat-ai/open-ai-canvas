@@ -1,11 +1,12 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Image as ImageIcon, Music2, Sparkles, Video } from "lucide-react";
+import { FileText, Image as ImageIcon, Music2, Pencil, Sparkles, UserRound, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { CanvasNodeType } from "@/types/canvas";
 
 type MentionState = {
     start: number;
@@ -383,7 +384,7 @@ function createInlinePreview(reference: CanvasResourceReference) {
     }
     const fallback = document.createElement("span");
     fallback.className = "grid size-[1.18em] shrink-0 place-items-center rounded-[0.24em] bg-current/10";
-    fallback.textContent = reference.kind === "audio" ? "♪" : reference.kind === "video" ? "▶" : reference.kind === "image" ? "□" : reference.kind === "skill" ? "✦" : "T";
+    fallback.textContent = reference.sourceType === CanvasNodeType.Drawing ? "✎" : reference.kind === "character" ? "角" : reference.kind === "audio" ? "♪" : reference.kind === "video" ? "▶" : reference.kind === "image" ? "□" : reference.kind === "skill" ? "✦" : "T";
     return fallback;
 }
 
@@ -455,7 +456,7 @@ function ReferencePreview({ reference }: { reference: CanvasResourceReference })
             </span>
         );
     }
-    const Icon = reference.kind === "audio" ? Music2 : reference.kind === "video" ? Video : reference.kind === "image" ? ImageIcon : FileText;
+    const Icon = reference.sourceType === CanvasNodeType.Drawing ? Pencil : reference.kind === "character" ? UserRound : reference.kind === "audio" ? Music2 : reference.kind === "video" ? Video : reference.kind === "image" ? ImageIcon : FileText;
     return (
         <span className="grid size-9 shrink-0 place-items-center rounded-md bg-black/10">
             <Icon className="size-4" />

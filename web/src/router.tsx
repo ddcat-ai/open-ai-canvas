@@ -26,6 +26,7 @@ import TasksPage from "@/pages/tasks";
 import WalletPage from "@/pages/wallet";
 import ProjectsPage from "@/pages/projects";
 import ProjectDetailPage from "@/pages/projects/detail";
+import SettingsPage from "@/pages/settings";
 
 export const router = createBrowserRouter([
     {
@@ -50,8 +51,11 @@ export const router = createBrowserRouter([
             { path: "/assets", element: <RequireAuth><AssetsPage /></RequireAuth> },
             { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
             { path: "/wallet", element: <RequireAuth><WalletPage /></RequireAuth> },
+            { path: "/settings", element: <RequireAuth><SettingsPage /></RequireAuth> },
             { path: "/projects", element: <RequireAuth><ProjectsPage /></RequireAuth> },
             { path: "/projects/:projectId", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
+            { path: "/projects/:projectId/:view", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
+            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
             { path: "/canvas", element: <RequireAuth><CanvasPage /></RequireAuth> },
             { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
             {

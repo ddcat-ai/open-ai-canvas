@@ -388,7 +388,7 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "billing_order_id", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "result_json", "billing_order_id", "attempts", "started_at", "completed_at", "created_at", "updated_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))
@@ -461,6 +461,12 @@ func (r *Repository) SystemChannels(includeDisabled bool) ([]model.ModelChannel,
 	return channels, err
 }
 
+func (r *Repository) HistoricalSystemChannelReferences() ([]model.ModelChannel, error) {
+	var channels []model.ModelChannel
+	err := r.db.Unscoped().Select("id", "name").Where("scope = ?", model.ChannelScopeSystem).Order("created_at asc").Find(&channels).Error
+	return channels, err
+}
+
 func (r *Repository) AdminSystemChannels(keyword string, interfaceType string, status string, limit int, offset int) ([]model.ModelChannel, int64, error) {
 	var channels []model.ModelChannel
 	var total int64
@@ -506,6 +512,28 @@ func (r *Repository) AdminSystemChannel(id string) (*model.ModelChannel, error) 
 		return nil, err
 	}
 	return &channel, nil
+}
+
+func (r *Repository) DeleteSystemChannel(id string) error {
+	now := time.Now()
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		channelResult := tx.Model(&model.ModelChannel{}).
+			Where("id = ? AND scope = ?", id, model.ChannelScopeSystem).
+			Updates(map[string]any{"api_key": "", "enabled": false, "updated_at": now})
+		if channelResult.Error != nil {
+			return channelResult.Error
+		}
+		if channelResult.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Model(&model.ChannelModel{}).Where("channel_id = ?", id).Updates(map[string]any{"enabled": false, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("channel_id = ?", id).Delete(&model.ChannelModel{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ? AND scope = ?", id, model.ChannelScopeSystem).Delete(&model.ModelChannel{}).Error
+	})
 }
 
 func (r *Repository) ApiCallLogs(userID string, admin bool, limit int) ([]model.ApiCallLog, error) {
@@ -660,6 +688,9 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 func (r *Repository) DeleteAsset(userID string, id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", id)
+		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.CharacterVoiceBinding{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.AssetRepresentation{}).Error; err != nil {
 			return err
 		}
@@ -737,7 +768,8 @@ func (r *Repository) CreateProject(project *model.Project) error {
 func (r *Repository) UpdateProject(project *model.Project) error {
 	return r.db.Model(&model.Project{}).Where("id = ? AND user_id = ?", project.ID, project.UserID).Updates(map[string]any{
 		"name": project.Name, "type": project.Type, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
-		"description": project.Description, "status": project.Status, "revision": project.Revision, "updated_at": project.UpdatedAt,
+		"description": project.Description, "style_preset_id": project.StylePresetID, "active_task_limit": project.ActiveTaskLimit,
+		"status": project.Status, "revision": project.Revision, "updated_at": project.UpdatedAt,
 	}).Error
 }
 
@@ -790,8 +822,46 @@ func (r *Repository) ProjectUnits(projectID string) ([]model.ProjectUnit, error)
 	return units, err
 }
 
+func (r *Repository) ProjectUnitSummaries(projectID string) ([]model.ProjectUnit, error) {
+	var units []model.ProjectUnit
+	err := r.db.Select("id", "project_id", "kind", "title", "status", "position", "created_at", "updated_at").Where("project_id = ?", projectID).Order("position asc, created_at asc").Find(&units).Error
+	return units, err
+}
+
+func (r *Repository) ProjectAssetCount(projectID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&model.ProjectAssetLink{}).Where("project_id = ?", projectID).Count(&count).Error
+	return count, err
+}
+
 func (r *Repository) CreateProjectUnit(unit *model.ProjectUnit) error {
 	return r.db.Create(unit).Error
+}
+
+func (r *Repository) ImportProjectUnits(projectID string, units []model.ProjectUnit) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 分批写入仍处于同一事务，避免两千章导入超过 SQLite/PostgreSQL 单语句参数上限。
+		if err := tx.CreateInBatches(&units, 100).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
+}
+
+func (r *Repository) ReorderProjectUnits(projectID string, unitIDs []string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		for position, unitID := range unitIDs {
+			result := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unitID, projectID).Updates(map[string]any{"position": position, "updated_at": now})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return gorm.ErrRecordNotFound
+			}
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": now}).Error
+	})
 }
 
 func (r *Repository) ProjectUnit(projectID string, id string) (*model.ProjectUnit, error) {
@@ -809,7 +879,40 @@ func (r *Repository) UpdateProjectUnit(unit *model.ProjectUnit) error {
 }
 
 func (r *Repository) DeleteProjectUnit(projectID string, id string) error {
-	return r.db.Delete(&model.ProjectUnit{}, "id = ? AND project_id = ?", id, projectID).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, id).Delete(&model.CanvasUnitLink{}).Error; err != nil {
+			return err
+		}
+		shotIDs := tx.Model(&model.Shot{}).Select("id").Where("project_id = ? AND unit_id = ?", projectID, id)
+		if err := tx.Where("shot_id IN (?)", shotIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, id).Delete(&model.Shot{}).Error; err != nil {
+			return err
+		}
+		instanceIDs := tx.Model(&model.WorkflowInstance{}).Select("id").Where("project_id = ? AND unit_id = ?", projectID, id)
+		stepIDs := tx.Model(&model.WorkflowStepInstance{}).Select("id").Where("workflow_instance_id IN (?)", instanceIDs)
+		if err := tx.Where("workflow_step_id IN (?)", stepIDs).Delete(&model.WorkflowStepTask{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("workflow_instance_id IN (?)", instanceIDs).Delete(&model.WorkflowStepInstance{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, id).Delete(&model.WorkflowInstance{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, id).Delete(&model.ProjectAssetCandidate{}).Error; err != nil {
+			return err
+		}
+		result := tx.Delete(&model.ProjectUnit{}, "id = ? AND project_id = ?", id, projectID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
 }
 
 func (r *Repository) CanvasUnitLink(projectID string, canvasID string, unitID string) (*model.CanvasUnitLink, error) {
@@ -834,8 +937,51 @@ func (r *Repository) ProjectCanvasSummaries(userID string, projectID string) ([]
 	return canvases, err
 }
 
+func (r *Repository) ProjectCanvasDocuments(userID string, projectID string) ([]model.CanvasProject, error) {
+	var canvases []model.CanvasProject
+	err := r.db.Select("id", "title", "payload_json").Where("user_id = ? AND project_id = ?", userID, projectID).Find(&canvases).Error
+	return canvases, err
+}
+
+func (r *Repository) ProjectCanvasUnitLinks(projectID string) ([]model.CanvasUnitLink, error) {
+	var links []model.CanvasUnitLink
+	err := r.db.Where("project_id = ?", projectID).Order("created_at asc").Find(&links).Error
+	return links, err
+}
+
+func (r *Repository) DeleteCanvasUnitLink(projectID string, canvasID string, unitID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Delete(&model.CanvasUnitLink{}, "project_id = ? AND canvas_id = ? AND unit_id = ?", projectID, canvasID, unitID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
+}
+
 func (r *Repository) AssignCanvasToProject(userID string, canvasID string, projectID string) error {
 	return r.db.Model(&model.CanvasProject{}).Where("id = ? AND user_id = ?", canvasID, userID).Update("project_id", projectID).Error
+}
+
+func (r *Repository) UnassignCanvasFromProject(userID string, projectID string, canvasID string, payloadJSON string, updatedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("project_id = ? AND canvas_id = ?", projectID, canvasID).Delete(&model.CanvasUnitLink{}).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&model.CanvasProject{}).Where("id = ? AND user_id = ? AND project_id = ?", canvasID, userID, projectID).Updates(map[string]any{
+			"project_id": "", "payload_json": payloadJSON, "updated_at": updatedAt,
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": updatedAt}).Error
+	})
 }
 
 func (r *Repository) ProjectAssets(userID string, projectID string) ([]model.Asset, error) {
@@ -844,15 +990,35 @@ func (r *Repository) ProjectAssets(userID string, projectID string) ([]model.Ass
 	return assets, err
 }
 
-func (r *Repository) UpsertProjectAssetLink(link *model.ProjectAssetLink) error {
-	var count int64
-	if err := r.db.Model(&model.ProjectAssetLink{}).Where("project_id = ? AND asset_id = ?", link.ProjectID, link.AssetID).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-	return r.db.Create(link).Error
+// LinkProjectAsset 将首版本、素材领域字段、项目引用和修订号原子提交，避免产生半关联资产。
+func (r *Repository) LinkProjectAsset(asset *model.Asset, version *model.AssetVersion, link *model.ProjectAssetLink) (bool, error) {
+	createdLink := false
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "project_id"}, {Name: "asset_id"}}, DoNothing: true}).Create(link)
+		if created.Error != nil {
+			return created.Error
+		}
+		if created.RowsAffected == 0 {
+			return nil
+		}
+		createdLink = true
+		if version != nil {
+			if err := tx.Create(version).Error; err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&model.Asset{}).Where("id = ? AND user_id = ?", asset.ID, asset.UserID).Updates(map[string]any{
+			"category": asset.Category, "status": asset.Status, "primary_version_id": asset.PrimaryVersionID, "updated_at": asset.UpdatedAt,
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", link.ProjectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
+	return createdLink, err
 }
 
 func (r *Repository) DeleteProjectAssetLink(projectID string, assetID string) error {
@@ -956,6 +1122,25 @@ func (r *Repository) SaveShot(shot *model.Shot, create bool) error {
 		"unit_id": shot.UnitID, "title": shot.Title, "description": shot.Description, "position": shot.Position,
 		"duration_ms": shot.DurationMs, "status": shot.Status, "updated_at": shot.UpdatedAt,
 	}).Error
+}
+
+func (r *Repository) ReplaceProjectUnitShots(projectID string, unitID string, shots []model.Shot) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		shotIDs := tx.Model(&model.Shot{}).Select("id").Where("project_id = ? AND unit_id = ?", projectID, unitID)
+		if err := tx.Where("shot_id IN (?)", shotIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND shot_id IN (?)", projectID, shotIDs).Delete(&model.ProjectAssetCandidate{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND unit_id = ?", projectID, unitID).Delete(&model.Shot{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&shots).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Project{}).Where("id = ?", projectID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+	})
 }
 
 func (r *Repository) ShotForProject(projectID string, shotID string) (*model.Shot, error) {

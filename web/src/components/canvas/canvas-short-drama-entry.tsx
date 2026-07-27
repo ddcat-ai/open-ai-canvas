@@ -1,18 +1,33 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Dropdown } from "antd";
-import { AlignLeft, ArrowRight, Bot, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Clapperboard, FileText, MoreHorizontal, Palette, Pencil, Sparkles, Type, Upload, X } from "lucide-react";
+import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronRight, ChevronUp, Clapperboard, FolderKanban, Images, MoreHorizontal, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
-export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUpload, onAddText, onAddNovel, onAddScript }: {
+export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFirstChapter, onOpenAssets, onAddText }: { projectName: string; hasChapter: boolean; onAddFirstChapter: () => void; onOpenAssets: () => void; onAddText: () => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-16 pt-20">
+            <div className="pointer-events-auto w-full max-w-[440px] rounded-lg border p-3 shadow-sm backdrop-blur" data-canvas-no-zoom style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+                <div className="flex items-center gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}><FolderKanban className="size-4" /></span><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{projectName}</h2><p className="mt-0.5 text-[11px]" style={{ color: theme.node.muted }}>项目画布为空</p></div></div>
+                <div className="mt-3 grid grid-cols-3 gap-1.5">
+                    <button type="button" disabled={!hasChapter} onClick={onAddFirstChapter} className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium disabled:opacity-35" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Plus className="size-3.5 shrink-0" /><span className="truncate">添加首章</span></button>
+                    <button type="button" onClick={onOpenAssets} className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Images className="size-3.5 shrink-0" /><span className="truncate">项目资产</span></button>
+                    <button type="button" onClick={onAddText} className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Type className="size-3.5 shrink-0" /><span className="truncate">新建文本</span></button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUpload, onAddText, onAddScript }: {
     onCreatePipeline: () => void;
     onOpenAgent: () => void;
     onUpload: () => void;
     onAddText: () => void;
-    onAddNovel: () => void;
     onAddScript: () => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -53,7 +68,6 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUp
                             items: [
                                 { key: "upload", icon: <Upload className="size-4" />, label: "导入素材", onClick: onUpload },
                                 { key: "text", icon: <Type className="size-4" />, label: "新建文本", onClick: onAddText },
-                                { key: "novel", icon: <FileText className="size-4" />, label: "新建小说", onClick: onAddNovel },
                                 { key: "storyboard", icon: <Clapperboard className="size-4" />, label: "新建空白分镜", onClick: onAddScript },
                             ],
                         }}
@@ -149,19 +163,15 @@ export function CanvasStylePlaceholderNodeContent({ onChoose }: { onChoose: () =
     );
 }
 
-export function CanvasStoryInputNodeContent({ node, onModeChange, onEdit }: { node: CanvasNodeData; onModeChange: (mode: "novel" | "brief") => void; onEdit: () => void }) {
+export function CanvasStoryInputNodeContent({ node, onEdit }: { node: CanvasNodeData; onEdit: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const mode = node.metadata?.storyInputMode || "novel";
-    const content = (node.metadata?.document?.plainText || node.metadata?.content || "").replace(/\s+/g, " ").trim();
+    const content = (node.metadata?.content || "").replace(/\s+/g, " ").trim();
     return (
         <div className="flex h-full w-full flex-col overflow-hidden p-4" style={{ color: theme.node.text }}>
             <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2"><span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{mode === "novel" ? <BookOpen className="size-4" /> : <AlignLeft className="size-4" />}</span><span className="truncate text-sm font-semibold">故事输入</span></div>
-                <div className="inline-flex shrink-0 rounded-md border p-0.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
-                    {(["brief", "novel"] as const).map((value) => <button key={value} type="button" className="h-6 rounded px-2 text-[10px] font-medium outline-none transition focus-visible:ring-2" style={{ background: mode === value ? theme.toolbar.panel : "transparent", color: mode === value ? theme.node.text : theme.node.muted, "--tw-ring-color": theme.accent.primary } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onModeChange(value); }}>{value === "brief" ? "梗概" : "小说"}</button>)}
-                </div>
+                <div className="flex min-w-0 items-center gap-2"><span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}><AlignLeft className="size-4" /></span><span className="truncate text-sm font-semibold">故事梗概</span></div>
             </div>
-            <div className="mt-4 min-h-0 flex-1 overflow-hidden border-t pt-3 text-xs leading-6" style={{ borderColor: theme.node.stroke, color: content ? theme.node.muted : theme.node.placeholder }}>{content || (mode === "novel" ? "导入小说或开始写作…" : "写下题材、角色、冲突和结局方向…")}</div>
+            <div className="mt-4 min-h-0 flex-1 overflow-hidden border-t pt-3 text-xs leading-6" style={{ borderColor: theme.node.stroke, color: content ? theme.node.muted : theme.node.placeholder }}>{content || "写下题材、角色、冲突和结局方向…"}</div>
             <button type="button" className="mt-3 inline-flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onEdit(); }}><Pencil className="size-3.5" />编辑故事</button>
         </div>
     );

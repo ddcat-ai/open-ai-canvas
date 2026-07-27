@@ -12,6 +12,8 @@ export type Project = {
     aspectRatio: string;
     sourceType: string;
     description: string;
+    stylePresetId: string;
+    activeTaskLimit: number;
     status: "active" | "archived" | string;
     revision: number;
     createdAt: string;
@@ -24,6 +26,15 @@ export type ProjectCanvas = {
     title: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type CanvasUnitLink = {
+    id: string;
+    projectId: string;
+    canvasId: string;
+    unitId: string;
+    role: string;
+    createdAt: string;
 };
 
 export type ProjectUnit = {
@@ -46,8 +57,43 @@ export type ProjectAsset = {
     status: string;
     primaryVersionId?: string;
     versionCount: number;
-	usages: string[];
+    usages: string[];
     updatedAt: string;
+    character?: CharacterCardSummary;
+};
+
+export type CharacterRepresentation = {
+    id: string;
+    resourceId: string;
+    mediaType: string;
+    role: "primary" | "front" | "side" | "back" | "turnaround_sheet" | "expression_sheet" | string;
+};
+
+export type VoiceProfile = {
+    id: string;
+    name: string;
+    provider: string;
+    voiceKey: string;
+    language: string;
+    timbre: string;
+    sampleResourceId?: string;
+    compatibleModels: string[];
+    status: string;
+};
+
+export type CharacterCardSummary = {
+    versionId: string;
+    version: number;
+    definition: Record<string, unknown>;
+    representations: CharacterRepresentation[];
+    voice?: { profile: VoiceProfile; instructions: string };
+    visualStatus: "missing" | "partial" | "ready" | string;
+    voiceStatus: "missing" | "ready" | "unavailable" | string;
+};
+
+export type ProjectCharacterDetail = {
+    asset: ProjectAsset;
+    character: CharacterCardSummary;
 };
 
 export type ProjectAssetCandidate = {
@@ -105,6 +151,7 @@ export type ProjectWorkflow = {
 export type ProjectSummary = {
     project: Project;
     canvasCount: number;
+    assetCount: number;
     unitCount: number;
     completedUnitCount: number;
 };
@@ -113,11 +160,12 @@ export type ProjectDetail = {
     project: Project;
     units: ProjectUnit[];
     canvases: ProjectCanvas[];
+    canvasUnitLinks: CanvasUnitLink[];
     assets: ProjectAsset[];
     workflows: ProjectWorkflow[];
-	shots: ProjectShot[];
-	shotReferences: ShotAssetReference[];
-	assetCandidates: ProjectAssetCandidate[];
+    shots: ProjectShot[];
+    shotReferences: ShotAssetReference[];
+    assetCandidates: ProjectAssetCandidate[];
 };
 
 async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
@@ -139,16 +187,52 @@ export function getProject(id: string) {
     return request<ProjectDetail>(api.get(`/projects/${encodeURIComponent(id)}`));
 }
 
-export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string }) {
+export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string; activeTaskLimit?: number }) {
     return request<{ project: Project }>(api.post("/projects", input));
+}
+
+export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "stylePresetId" | "activeTaskLimit" | "status">>) {
+    return request<{ project: Project }>(api.patch(`/projects/${encodeURIComponent(projectId)}`, input));
+}
+
+export function deleteProject(projectId: string) {
+    return request<{ id: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}`));
 }
 
 export function createProjectUnit(projectId: string, input: { kind: string; title: string; sourceText?: string; position?: number }) {
     return request<{ unit: ProjectUnit }>(api.post(`/projects/${encodeURIComponent(projectId)}/units`, input));
 }
 
+export function getProjectUnit(projectId: string, unitId: string) {
+    return request<{ unit: ProjectUnit }>(api.get(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`));
+}
+
+export function importProjectUnits(projectId: string, units: Array<{ kind: string; title: string; sourceText?: string }>) {
+    return request<{ units: ProjectUnit[] }>(api.post(`/projects/${encodeURIComponent(projectId)}/units/import`, { units }));
+}
+
+export function reorderProjectUnits(projectId: string, unitIds: string[]) {
+    return request<{ unitIds: string[] }>(api.patch(`/projects/${encodeURIComponent(projectId)}/units/reorder`, { unitIds }));
+}
+
+export function updateProjectUnit(projectId: string, unitId: string, input: { title?: string; sourceText: string; status?: ProjectUnit["status"] }) {
+    return request<{ unit: ProjectUnit }>(api.patch(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`, input));
+}
+
+export function deleteProjectUnit(projectId: string, unitId: string) {
+    return request<{ id: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`));
+}
+
 export function linkCanvasUnit(projectId: string, input: { canvasId: string; unitId: string; role?: string }) {
     return request<{ link: { id: string; projectId: string; canvasId: string; unitId: string; role: string } }>(api.post(`/projects/${encodeURIComponent(projectId)}/canvas-links`, input));
+}
+
+export function unlinkCanvasUnit(projectId: string, canvasId: string, unitId: string) {
+    return request<{ canvasId: string; unitId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvas-links/${encodeURIComponent(canvasId)}/units/${encodeURIComponent(unitId)}`));
+}
+
+export function unlinkCanvasProject(projectId: string, canvasId: string) {
+    return request<{ canvasId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvases/${encodeURIComponent(canvasId)}`));
 }
 
 export function linkProjectAsset(projectId: string, input: { assetId: string; category: string }) {
@@ -159,8 +243,40 @@ export function unlinkProjectAsset(projectId: string, assetId: string) {
     return request<{ id: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`));
 }
 
+export function updateProjectAssetCategory(projectId: string, assetId: string, category: string) {
+    return request<{ asset: ProjectAsset }>(api.patch(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`, { category }));
+}
+
 export function createProjectAssetVersion(projectId: string, assetId: string, input: { prompt?: string; definitionJson?: string; note?: string }) {
     return request<{ version: { id: string; assetId: string; version: number; status: string } }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/versions`, input));
+}
+
+export function listVoiceProfiles() {
+    return request<{ profiles: VoiceProfile[] }>(api.get("/voice-profiles"));
+}
+
+export function createProjectCharacter(projectId: string, input: { name: string; definition?: Record<string, unknown> }) {
+    return request<ProjectCharacterDetail>(api.post(`/projects/${encodeURIComponent(projectId)}/characters`, input));
+}
+
+export function getProjectCharacter(projectId: string, assetId: string) {
+    return request<ProjectCharacterDetail>(api.get(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}`));
+}
+
+export function updateProjectCharacter(projectId: string, assetId: string, input: { name: string; definition: Record<string, unknown> }) {
+    return request<ProjectCharacterDetail>(api.patch(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}`, input));
+}
+
+export function replaceProjectCharacterRepresentations(projectId: string, assetId: string, representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>) {
+    return request<ProjectCharacterDetail>(api.put(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}/representations`, { representations }));
+}
+
+export function bindProjectCharacterVoice(projectId: string, assetId: string, input: { voiceProfileId: string; instructions?: string }) {
+    return request<ProjectCharacterDetail>(api.put(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}/voice`, input));
+}
+
+export function unbindProjectCharacterVoice(projectId: string, assetId: string) {
+    return request<ProjectCharacterDetail>(api.delete(`/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(assetId)}/voice`));
 }
 
 export function createUnitWorkflow(projectId: string, unitId: string) {
@@ -169,6 +285,10 @@ export function createUnitWorkflow(projectId: string, unitId: string) {
 
 export function saveProjectShot(projectId: string, input: { id?: string; unitId?: string; title: string; description?: string; position?: number; durationMs?: number; status?: string }) {
     return request<{ shot: ProjectShot }>(api.post(`/projects/${encodeURIComponent(projectId)}/shots`, input));
+}
+
+export function replaceProjectUnitShots(projectId: string, unitId: string, shots: Array<{ title: string; description: string; durationMs: number }>) {
+    return request<{ shots: ProjectShot[] }>(api.put(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}/shots`, { shots }));
 }
 
 export function linkShotAsset(projectId: string, shotId: string, input: { assetVersionId: string; role: ShotAssetReference["role"] }) {

@@ -3,6 +3,7 @@ import { ArrowRight, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { navigateToSettings } from "@/lib/settings-navigation";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -13,7 +14,6 @@ export function ModelSetupGuide({ hidden = false }: { hidden?: boolean }) {
     const hydrated = useUserStore((state) => state.hydrated);
     const user = useUserStore((state) => state.user);
     const models = useConfigStore((state) => state.config.models);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     if (hidden || dismissed || !hydrated || !user || user.role === "admin" || (!registrationGuide && models.length > 0)) return null;
 
     const close = () => {
@@ -23,7 +23,7 @@ export function ModelSetupGuide({ hidden = false }: { hidden?: boolean }) {
 
     const openModels = () => {
         close();
-        openConfigDialog(false, "models");
+        navigateToSettings({ section: "models" });
     };
 
     return (

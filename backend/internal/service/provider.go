@@ -333,6 +333,15 @@ func systemChannelIDFromBaseURL(baseURL string) string {
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	var payload imageResponse
+	if input.Mask != nil {
+		// 蒙版编辑是强校验写路径：协议能力不明确时必须失败，不能静默退化为整图重绘。
+		if strings.TrimSpace(input.Config.InterfaceType) != string(model.ChannelInterfaceOpenAIImage) {
+			return nil, errors.New("当前渠道未声明 OpenAI Images 编辑协议，已拒绝可能忽略蒙版的整图重绘")
+		}
+		if len(input.ReferenceImages) == 0 {
+			return nil, errors.New("蒙版编辑必须提供与蒙版同尺寸的源图片")
+		}
+	}
 	if len(input.ReferenceImages) > 0 || input.Mask != nil {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
@@ -548,6 +557,12 @@ func shouldFallbackTextToChat(err error) bool {
 }
 
 func runAudioTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if resolved, ok := input.Metadata["resolvedCharacterVersions"].([]interface{}); ok && len(resolved) > 0 {
+		voiceKey := metadataString(input.Metadata, "resolvedCharacterVoiceKey")
+		if voiceKey == "" || strings.TrimSpace(input.Config.AudioVoice) != voiceKey {
+			return nil, errors.New("角色配音缺少已解析的声音绑定")
+		}
+	}
 	format := defaultString(input.Config.AudioFormat, "mp3")
 	body := map[string]interface{}{
 		"model":           input.Config.Model,

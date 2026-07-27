@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRe
 import { App } from "antd";
 import { useNavigate } from "react-router";
 
-import { removeLegacyCharacterCards } from "@/lib/canvas/canvas-character-reference";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
+import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { hydrateAssistantImages, hydrateCanvasImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listActivatedSkills, type UpdreamSkill } from "@/services/api/skills";
 import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -87,11 +87,9 @@ export function useCanvasProjectLifecycle({
 
         const applyRestoredProject = (restoredNodes: CanvasNodeData[], restoredSessions: CanvasAssistantSession[]) => {
             if (cancelled) return;
-            // 历史角色卡迁移只清理废弃中间节点，生成后的角色图片继续保留。
-            const migrated = removeLegacyCharacterCards(restoredNodes, project.connections);
             const snapshot: CanvasHistorySnapshot = {
-                nodes: migrated.nodes,
-                connections: migrated.connections,
+                nodes: restoredNodes,
+                connections: project.connections,
                 chatSessions: restoredSessions,
                 activeChatId: project.activeChatId || null,
                 backgroundMode: project.backgroundMode,
@@ -112,8 +110,7 @@ export function useCanvasProjectLifecycle({
         };
 
         const restore = async () => {
-            const resetNodes = resetInterruptedGeneration(project.nodes);
-            const initialNodes = removeLegacyCharacterCards(resetNodes, project.connections).nodes;
+            const initialNodes = resetInterruptedGeneration(project.nodes);
             const initialSessions = project.chatSessions || [];
 
             // 先恢复可交互的节点和布局，媒体缓存/资源校验放到后台，避免首屏被远程资源拖住。
@@ -169,17 +166,22 @@ export function useCanvasProjectLifecycle({
     }, [projectId, projectLoaded, updateProject, viewportRef]);
 
     const createAndOpenProject = useCallback(() => {
-        void createCanvasProjectWithRemoteSync(`无限画布 ${useCanvasStore.getState().projects.length + 1}`).then(({ id, syncError }) => {
+        void createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`).then(({ id, syncError }) => {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             navigate(`/canvas/${id}`);
         });
     }, [message, navigate]);
 
     const deleteCurrentProject = useCallback(() => {
+        const drawingIds = nodesRef.current.flatMap((node) => node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []);
+        if (drawingIds.length) {
+            void Promise.all(drawingIds.map((drawingId) => removeCanvasDrawing(projectId, drawingId)))
+                .catch(() => message.warning("项目已删除，但部分本地绘图缓存清理失败"));
+        }
         deleteProjects([projectId]);
         cleanupAssetImages();
         navigate("/canvas");
-    }, [cleanupAssetImages, deleteProjects, navigate, projectId]);
+    }, [cleanupAssetImages, deleteProjects, message, navigate, nodesRef, projectId]);
 
     const renameCurrentProject = useCallback((title: string) => {
         renameProject(projectId, title);

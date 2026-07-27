@@ -1,8 +1,9 @@
 import { Copy, Download, FileUp, MoreHorizontal, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Card, Drawer, Dropdown, Empty, Form, Image, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Drawer, Dropdown, Form, Image, Input, Modal, Select, Space, Tag, Typography } from "antd";
 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceState } from "@/components/layout/workspace-state";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -32,6 +33,7 @@ const kindOptions = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "音频", value: "audio" },
     { label: "3D 模型", value: "model" },
 ];
 
@@ -66,13 +68,18 @@ export default function AssetsPage() {
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
-    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "model"), [assets]);
+    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model"), [assets]);
+    const selectedAssets = useMemo(() => validAssets.filter((asset) => selectedIds.includes(asset.id)), [selectedIds, validAssets]);
+    const kindCounts = useMemo(() => new Map(kindOptions.map((option) => [option.value, option.value === "all" ? validAssets.length : validAssets.filter((asset) => asset.kind === option.value).length])), [validAssets]);
+    const categoryCounts = useMemo(() => new Map(categoryOptions.map((option) => [option.value, option.value === "all" ? validAssets.length : validAssets.filter((asset) => (asset.category || "other") === option.value).length])), [validAssets]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -93,6 +100,11 @@ export default function AssetsPage() {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
         setPage((value) => Math.min(value, maxPage));
     }, [filteredAssets.length, pageSize]);
+
+    useEffect(() => {
+        const existingIds = new Set(validAssets.map((asset) => asset.id));
+        setSelectedIds((current) => current.filter((id) => existingIds.has(id)));
+    }, [validAssets]);
 
     const openCreate = () => {
         setEditingAsset(null);
@@ -177,7 +189,7 @@ export default function AssetsPage() {
     };
 
     const downloadImage = (asset: Asset) => {
-        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "model") return;
+        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "model") return;
         const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
         const extension = asset.kind === "model" ? asset.data.fileName.split(".").pop() || "glb" : asset.data.mimeType.split("/")[1] || "png";
         saveAs(url, `${asset.title || "asset"}.${extension}`);
@@ -221,43 +233,72 @@ export default function AssetsPage() {
         }
     };
 
+    const exportSelectedAssets = async () => {
+        if (!selectedAssets.length) return;
+        await exportAssets(selectedAssets);
+    };
+
+    const confirmBatchDelete = async () => {
+        if (!selectedAssets.length) return;
+        try {
+            for (const asset of selectedAssets) await deleteAssetWithRemoteSync(asset.id);
+            message.success(`已删除 ${selectedAssets.length} 个素材`);
+            setSelectedIds([]);
+            setBatchDeleteOpen(false);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "批量删除失败");
+        }
+    };
+
     return (
         <>
             <WorkspacePage grid>
                 <PageHeader
-                    title="我的素材"
-                    description="管理文本、图片、视频和 3D 模型素材。"
+                    icon="assets"
+                    title="素材库"
+                    description="管理文本、图片、视频、音频和 3D 模型素材。"
                     meta={<span className="text-xs text-foreground/45">{filteredAssets.length} 个素材</span>}
                     actions={(
                         <>
-                            <Button icon={<Download className="size-4" />} onClick={() => void exportAllAssets()}>导出</Button>
-                            <Button icon={<FileUp className="size-4" />} onClick={() => assetInputRef.current?.click()}>导入</Button>
-                            <Button icon={<Upload className="size-4" />} onClick={() => modelInputRef.current?.click()}>上传 3D</Button>
+                            <Button icon={<Download className="size-4" />} onClick={() => void exportAllAssets()}>导出全部</Button>
+                            <Dropdown trigger={["click"]} menu={{ items: [{ key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() }, { key: "model", icon: <Upload className="size-4" />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() }] }}><Button icon={<FileUp className="size-4" />}>导入</Button></Dropdown>
                             <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>新增素材</Button>
                         </>
                     )}
                 />
                 <ListToolbar active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
                     <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索标题、内容、标签或来源" onChange={(event) => { setPage(1); setKeyword(event.target.value); }} />
-                    <Select className="w-36" value={kindFilter} options={kindOptions} onChange={(value) => { setPage(1); setKindFilter(value); }} />
-                    <Select className="w-36" value={categoryFilter} options={categoryOptions} onChange={(value) => { setPage(1); setCategoryFilter(value); }} />
                 </ListToolbar>
 
-                <div className="flex flex-col gap-4">
-                    <CollectionGrid>
-                        {visibleAssets.map((asset) => (
-                            <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
-                        ))}
-                    </CollectionGrid>
+                <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
+                    <aside className="thin-scrollbar flex gap-2 overflow-x-auto border-b border-border/70 py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:pr-3">
+                        <AssetFilterGroup title="素材类型" options={kindOptions} value={kindFilter} counts={kindCounts} onChange={(value) => { setKindFilter(value as AssetKind | "all"); setPage(1); }} />
+                        <AssetFilterGroup title="业务分类" options={categoryOptions} value={categoryFilter} counts={categoryCounts} onChange={(value) => { setCategoryFilter(value as AssetCategory | "all"); setPage(1); }} className="lg:mt-5" />
+                    </aside>
+                    <section className="min-w-0">
+                        {selectedAssets.length ? (
+                            <div className="mt-3 flex min-h-10 flex-wrap items-center gap-2 border-y border-border/75 py-2 text-xs">
+                                <strong className="mr-auto font-medium">已选择 {selectedAssets.length} 个素材</strong>
+                                <Button size="small" onClick={() => setSelectedIds([])}>取消选择</Button>
+                                <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void exportSelectedAssets()}>导出</Button>
+                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => setBatchDeleteOpen(true)}>删除</Button>
+                            </div>
+                        ) : null}
+                        <CollectionGrid className="sm:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(270px,1fr))]">
+                            {visibleAssets.map((asset) => (
+                                <AssetCard key={asset.id} asset={asset} selected={selectedIds.includes(asset.id)} onSelect={(selected) => setSelectedIds((current) => selected ? [...new Set([...current, asset.id])] : current.filter((id) => id !== asset.id))} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
+                            ))}
+                        </CollectionGrid>
 
-                    {!visibleAssets.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
+                        {!visibleAssets.length ? <WorkspaceState icon="assets" compact title={validAssets.length ? "没有匹配的素材" : "素材库还是空的"} description={validAssets.length ? "调整关键词或左侧分类后再试。" : "从画布保存结果，或导入已有素材包开始整理。"} action={!validAssets.length ? <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>新增素材</Button> : undefined} /> : null}
 
-                    <PaginationBar current={page} pageSize={pageSize} total={filteredAssets.length} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                        <PaginationBar current={page} pageSize={pageSize} total={filteredAssets.length} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                    </section>
                 </div>
             </WorkspacePage>
 
             <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
-                <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
                         <Form.Item name="kind" label="类型">
                             <Select
@@ -272,7 +313,7 @@ export default function AssetsPage() {
                             <Select options={categoryOptions.slice(1)} />
                         </Form.Item>
                         <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                            <Input size="large" placeholder="给素材起一个容易检索的名字" />
+                                <Input placeholder="给素材起一个容易检索的名字" />
                         </Form.Item>
                         <Form.Item name="coverUrl" label="封面 URL">
                             <Space.Compact className="w-full">
@@ -316,15 +357,15 @@ export default function AssetsPage() {
                             </Form.Item>
                         )}
                     </Form>
-                    <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
-                        <Typography.Text strong>预览</Typography.Text>
-                        <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+                    <div className="lg:border-l lg:border-border lg:pl-4">
+                        <Typography.Text strong className="text-xs">预览</Typography.Text>
+                        <div className="mt-2 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">
                             {coverUrl || imageDraft?.dataUrl ? (
                                 <img src={coverUrl || imageDraft?.dataUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
                             )}
-                            <div className="p-4">
+                            <div className="border-x border-b border-border bg-background p-3">
                                 <Typography.Text strong ellipsis className="block">
                                     {title || "未命名素材"}
                                 </Typography.Text>
@@ -373,28 +414,24 @@ export default function AssetsPage() {
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={() => void confirmDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
             </Modal>
+            <Modal title="批量删除素材" open={batchDeleteOpen} onCancel={() => setBatchDeleteOpen(false)} onOk={() => void confirmBatchDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+                确定删除已选择的 {selectedAssets.length} 个素材吗？此操作会同步移除远端记录。
+            </Modal>
         </>
     );
 }
 
-function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: Asset; onOpen: () => void; onEdit: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void; onDelete: () => void }) {
+function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: Asset; selected: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; onEdit: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void; onDelete: () => void }) {
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
-        <Card
-            hoverable
-            className="app-collection-card h-full overflow-hidden"
-            styles={{ body: { padding: 0 } }}
-            cover={
+        <article className={`app-collection-card group h-full overflow-hidden ${selected ? "border-foreground/45" : ""}`}>
+            <div className="relative">
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
-                    {cover ? (
-                        <img src={cover} alt={asset.title} loading="lazy" decoding="async" className="aspect-[16/10] w-full object-cover" />
-                    ) : (
-                        <div className="flex aspect-[16/10] items-center justify-center bg-stone-100 p-4 text-center text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
-                    )}
+                    {cover ? <img src={cover} alt={asset.title} loading="lazy" decoding="async" className="aspect-[16/10] w-full object-cover" /> : <div className="flex aspect-[16/10] items-center justify-center bg-stone-100 p-4 text-center text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>}
                 </button>
-            }
-        >
+                <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className={`absolute left-2 top-2 size-4 accent-[var(--workspace-accent)] ${selected ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"}`} aria-label={`选择 ${asset.title}`} />
+            </div>
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -405,34 +442,32 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                             </Typography.Text>
                         </div>
                         <span className="flex shrink-0 flex-wrap justify-end gap-1">
-                            <Tag className="m-0 text-[11px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "model" ? "3D 模型" : "文本"}</Tag>
-                            <Tag className="m-0 text-[11px]" color="blue">{assetCategoryLabel(asset.category)}</Tag>
-                            <StorageTag asset={asset} />
+                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{assetKindLabel(asset.kind)}</span>
+                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{assetCategoryLabel(asset.category)}</span>
                         </span>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} className="!mb-0 !mt-2 !text-xs !leading-5">
                         {summary}
                     </Typography.Paragraph>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-foreground/42"><span className="truncate">{assetProjectLabel(asset)}</span><span className="shrink-0">{formatAssetTime(asset.updatedAt)}</span></div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {(asset.tags || []).slice(0, 3).map((tag) => (
-                            <Tag key={tag} className="m-0 text-[11px]">
-                                {tag}
-                            </Tag>
+                            <span key={tag} className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{tag}</span>
                         ))}
-                        {!asset.tags?.length ? <Tag className="m-0 text-[11px]">无标签</Tag> : null}
+                        {!asset.tags?.length ? <span className="text-[10px] text-foreground/35">无标签</span> : null}
                     </div>
                 </div>
             </button>
-            <div className="flex items-center justify-between gap-2 px-3 pb-3">
+            <div className="flex items-center justify-between gap-2 border-t border-border/70 px-3 py-2.5">
                 <Button size="small" onClick={onOpen}>
                     查看
                 </Button>
                 <Dropdown
                     trigger={["click"]}
                     menu={{ items: [
-                        ...(asset.kind !== "video" && asset.kind !== "model" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
+                        ...(asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "model" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
                         ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
-                        ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
+                        ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
                         { type: "divider" as const },
                         { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: onDelete },
                     ] }}
@@ -440,7 +475,22 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                     <Button size="small" aria-label="更多素材操作" icon={<MoreHorizontal className="size-4" />} />
                 </Dropdown>
             </div>
-        </Card>
+        </article>
+    );
+}
+
+function AssetFilterGroup({ title, options, value, counts, onChange, className = "" }: { title: string; options: Array<{ label: string; value: string }>; value: string; counts: Map<string, number>; onChange: (value: string) => void; className?: string }) {
+    return (
+        <div className={className}>
+            <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/38">{title}</div>
+            <div className="flex gap-1 lg:block">
+                {options.map((option) => (
+                    <button key={option.value} type="button" className={`flex h-8 shrink-0 items-center justify-between gap-3 rounded px-2 text-xs transition-colors lg:mb-0.5 lg:w-full ${value === option.value ? "bg-foreground/[.08] font-medium text-foreground" : "text-foreground/56 hover:bg-foreground/[.04] hover:text-foreground"}`} onClick={() => onChange(option.value)}>
+                        <span>{option.label}</span><span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[10px] tabular-nums text-foreground/45">{counts.get(option.value) || 0}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
     );
 }
 
@@ -460,8 +510,8 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                             {asset.title}
                         </Typography.Title>
                         <Space size={[4, 4]} wrap>
-                            <Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "model" ? "3D 模型" : "文本"}</Tag>
-                            <Tag color="blue">{assetCategoryLabel(asset.category)}</Tag>
+                            <Tag>{assetKindLabel(asset.kind)}</Tag>
+                            <Tag>{assetCategoryLabel(asset.category)}</Tag>
                             <StorageTag asset={asset} />
                             {(asset.tags || []).map((tag) => (
                                 <Tag key={tag}>{tag}</Tag>
@@ -476,6 +526,8 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                             <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph>
                         ) : asset.kind === "video" ? (
                             <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" />
+                        ) : asset.kind === "audio" ? (
+                            <audio src={asset.data.url} controls className="mt-2 w-full" />
                         ) : asset.kind === "model" ? (
                             <Typography.Text className="mt-2 block">{asset.data.fileName} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}</Typography.Text>
                         ) : (
@@ -483,7 +535,7 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                                 {asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}
                             </Typography.Text>
                         )}
-                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "model" ? (
+                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? (
                             <Typography.Text type="secondary" className="mt-2 block text-xs">
                                 存储位置：{resourceStorageTitle(asset.data.storageKey)}
                             </Typography.Text>
@@ -501,9 +553,9 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                                 复制文本
                             </Button>
                         ) : null}
-                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "model" ? (
+                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? (
                             <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>
-                                {asset.kind === "video" ? "下载视频" : asset.kind === "model" ? "下载模型" : "下载图片"}
+                                {asset.kind === "video" ? "下载视频" : asset.kind === "audio" ? "下载音频" : asset.kind === "model" ? "下载模型" : "下载图片"}
                             </Button>
                         ) : null}
                     </Space>
@@ -515,12 +567,13 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
 
 function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
+    if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
     if (asset.kind === "model") return `${asset.data.fileName} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
 function StorageTag({ asset }: { asset: Asset }) {
-    if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "model") return null;
+    if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "model") return null;
     const location = resourceStorageLocation(asset.data.storageKey);
     const color = location === "oss" ? "green" : location === "local" ? "gold" : "default";
     return (
@@ -536,4 +589,24 @@ function assetSearchText(asset: Asset) {
 
 function assetCategoryLabel(category?: AssetCategory) {
     return categoryOptions.find((item) => item.value === (category || "other"))?.label || "其他";
+}
+
+function assetProjectLabel(asset: Asset) {
+    const projectName = asset.metadata?.projectName;
+    if (typeof projectName === "string" && projectName.trim()) return projectName;
+    return Array.isArray(asset.metadata?.projectIds) && asset.metadata.projectIds.length ? "已关联项目" : "未关联项目";
+}
+
+function assetKindLabel(kind: AssetKind) {
+    return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "model" ? "3D 模型" : "文本";
+}
+
+function formatAssetDuration(durationMs?: number) {
+    if (!durationMs) return "时长未知";
+    return `${Math.round(durationMs / 100) / 10} 秒`;
+}
+
+function formatAssetTime(value: string) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
 }

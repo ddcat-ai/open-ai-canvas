@@ -12,6 +12,7 @@ export type ViewportTransform = {
 export enum CanvasNodeType {
     Image = "image",
     Text = "text",
+    Drawing = "drawing",
     Script = "script",
     Skill = "skill",
     Config = "config",
@@ -23,30 +24,6 @@ export enum CanvasNodeType {
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasMediaPerformanceMode = "auto" | "quality" | "performance";
 export type CanvasWorkspaceMode = "simple" | "professional";
-export type CanvasDocumentKind = "novel" | "brief" | "notes";
-export type CanvasDocumentChapterStatus = "idle" | "processing" | "success" | "error";
-export type CanvasDocumentChapter = {
-    id: string;
-    title: string;
-    order: number;
-    json: Record<string, unknown>;
-    plainText: string;
-    characterCount: number;
-    storyboardStatus?: CanvasDocumentChapterStatus;
-    storyboardNodeId?: string;
-    updatedAt: string;
-};
-export type CanvasRichDocument = {
-    kind: CanvasDocumentKind;
-    format: "tiptap-json";
-    json: Record<string, unknown>;
-    plainText: string;
-    characterCount: number;
-    chapters?: CanvasDocumentChapter[];
-    activeChapterId?: string;
-    sourceFileName?: string;
-    updatedAt: string;
-};
 export type StoryboardShotDuration = "auto" | "5" | "10" | "15" | "30";
 export type StoryboardShotCount = "auto" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
@@ -132,7 +109,7 @@ export type CanvasSkillSnapshot = {
 
 export type CanvasNodeMetadata = {
     content?: string;
-    document?: CanvasRichDocument;
+    richText?: Record<string, unknown>;
     composerContent?: string;
     prompt?: string;
     status?: CanvasNodeStatus;
@@ -170,12 +147,13 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    assetId?: string;
     assetTags?: string[];
+    assetCategory?: "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "other";
     workflowKind?: CanvasWorkflowKind;
     workflowTitle?: string;
     workflowDescription?: string;
     stylePresetId?: string;
-    documentNodeId?: string;
     chapterId?: string;
     chapterTitle?: string;
     shotIndex?: number;
@@ -186,6 +164,21 @@ export type CanvasNodeMetadata = {
     characterName?: string;
     characterPrompt?: string;
     characterAliases?: string[];
+    characterDefinition?: Record<string, unknown>;
+    characterAssetId?: string;
+    characterVersionId?: string;
+    characterVersionPolicy?: "current" | "pinned";
+    characterVisualStatus?: string;
+    characterVoiceStatus?: string;
+    characterVoiceName?: string;
+    characterVoiceProfile?: {
+        name: string;
+        provider: string;
+        language: string;
+        timbre: string;
+    };
+    characterVoiceInstructions?: string;
+    characterCoverUrl?: string;
     characterView?: "front" | "side" | "back" | "multi";
     characterViewNodeIds?: {
         front?: string;
@@ -221,12 +214,45 @@ export type CanvasNodeMetadata = {
     storyboardShotDuration?: StoryboardShotDuration;
     storyboardShotCount?: StoryboardShotCount;
     storyboardComposerHeight?: number;
-    storyInputMode?: "novel" | "brief";
     generationBatches?: CanvasGenerationBatch[];
     frame?: {
         collapsed: boolean;
         expandedWidth: number;
         expandedHeight: number;
+    };
+    drawingId?: string;
+    drawingRevision?: number;
+    drawingUpdatedAt?: string;
+    drawingPreviewStorageKey?: string;
+    drawingPreviewUrl?: string;
+    drawingShapeCount?: number;
+    drawingPageCount?: number;
+    emotionEdit?: {
+        sourceNodeId: string;
+        characterName: string;
+        presetId: string;
+        intimacy: number;
+        arousal: number;
+        label: string;
+        faceBox: {
+            id: string;
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            confidence?: number;
+            source: "detected" | "manual";
+        };
+        editRegion?: {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        };
+        sourceWidth?: number;
+        sourceHeight?: number;
+        providerSize?: string;
+        maskStorageKey?: string;
     };
 };
 

@@ -54,19 +54,19 @@ export default function StorageSettingsPage() {
                     icon={<Cloud className="size-4" />}
                     title="平台 OSS"
                     description="配置平台媒体资源的默认存储位置。"
-                    status={<Space size={6}><Tag bordered={false} color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag><Tag bordered={false} color={setting?.hasAccessKeySecret ? "blue" : "warning"}>{setting?.hasAccessKeySecret ? configuredSecretText : "未保存密钥"}</Tag></Space>}
+                    status={<Space size={6}><Tag variant="filled" color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag><Tag variant="filled" color={setting?.hasAccessKeySecret ? "blue" : "warning"}>{setting?.hasAccessKeySecret ? configuredSecretText : "未保存密钥"}</Tag></Space>}
                     footer={<><div className="text-xs text-foreground/45">{setting?.updatedAt ? `上次更新：${formatTime(setting.updatedAt)}${setting.updatedBy ? ` · ${userNameById.get(setting.updatedBy) || setting.updatedBy}` : ""}` : "尚未保存 OSS 配置"}</div><Button type="primary" loading={saving} onClick={() => void save()}>保存 OSS 配置</Button></>}
                 >
                     <Form form={form} layout="vertical" requiredMark={false} disabled={loading}>
                         <div className="grid grid-cols-1 gap-x-5 px-5 pt-5 md:grid-cols-2">
                             <Form.Item name="enabled" label="启用 OSS" valuePropName="checked"><Switch /></Form.Item>
                             <Form.Item name="provider" label="存储渠道" rules={[{ required: true, message: "请选择存储渠道" }]}><Select options={[{ label: "阿里云 OSS", value: "aliyun" }]} /></Form.Item>
-                            <Form.Item name="region" label="Region"><Input placeholder="例如：oss-cn-hangzhou" /></Form.Item>
-                            <Form.Item name="endpoint" label="Endpoint"><Input placeholder="https://oss-cn-hangzhou.aliyuncs.com" /></Form.Item>
-                            <Form.Item name="bucket" label="Bucket"><Input placeholder="例如：my-canvas-assets" /></Form.Item>
-                            <Form.Item name="pathPrefix" label="路径前缀"><Input placeholder="例如：uploads/infinite-canvas" /></Form.Item>
-                            <Form.Item name="accessKeyId" label="AccessKey ID"><Input placeholder="阿里云 AccessKey ID" /></Form.Item>
-                            <Form.Item name="accessKeySecret" label={setting?.hasAccessKeySecret ? `AccessKey Secret（${configuredSecretText}）` : "AccessKey Secret"}><Input.Password placeholder={setting?.hasAccessKeySecret ? "留空保留原密钥" : "阿里云 AccessKey Secret"} /></Form.Item>
+                            <Form.Item name="region" label="Region"><Input autoComplete="off" placeholder="例如：oss-cn-hangzhou" /></Form.Item>
+                            <Form.Item name="endpoint" label="Endpoint"><Input autoComplete="off" placeholder="https://oss-cn-hangzhou.aliyuncs.com" /></Form.Item>
+                            <Form.Item name="bucket" label="Bucket"><Input autoComplete="off" placeholder="例如：my-canvas-assets" /></Form.Item>
+                            <Form.Item name="pathPrefix" label="路径前缀"><Input autoComplete="off" placeholder="例如：uploads/infinite-canvas" /></Form.Item>
+                            <Form.Item name="accessKeyId" label="AccessKey ID"><Input autoComplete="off" placeholder="阿里云 AccessKey ID" /></Form.Item>
+                            <Form.Item name="accessKeySecret" label={setting?.hasAccessKeySecret ? `AccessKey Secret（${configuredSecretText}）` : "AccessKey Secret"}><Input.Password autoComplete="new-password" placeholder={setting?.hasAccessKeySecret ? "留空保留原密钥" : "阿里云 AccessKey Secret"} /></Form.Item>
                         </div>
                     </Form>
                 </SettingsSectionCard>

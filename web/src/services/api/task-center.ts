@@ -25,6 +25,8 @@ export type GenerationTask = {
     provider?: string;
     model?: string;
     errorCode?: string;
+    previewUrl?: string;
+    previewKind?: "image" | "video";
     inputJson?: string;
     resultJson?: string;
     error?: string;

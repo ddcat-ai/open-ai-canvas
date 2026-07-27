@@ -18,6 +18,10 @@ type CreateProjectShotRequest struct {
 	Status      string `json:"status"`
 }
 
+type ReplaceProjectUnitShotsRequest struct {
+	Shots []CreateProjectShotRequest `json:"shots"`
+}
+
 type LinkShotAssetRequest struct {
 	AssetVersionID string `json:"assetVersionId"`
 	Role           string `json:"role"`
@@ -84,6 +88,34 @@ func (s *Service) CreateProjectShot(userID string, projectID string, req CreateP
 	return shot, nil
 }
 
+func (s *Service) ReplaceProjectUnitShots(userID string, projectID string, unitID string, req ReplaceProjectUnitShotsRequest) ([]model.Shot, error) {
+	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
+		return nil, err
+	}
+	unitID = strings.TrimSpace(unitID)
+	if _, err := s.repo.ProjectUnit(projectID, unitID); err != nil {
+		return nil, err
+	}
+	if len(req.Shots) == 0 || len(req.Shots) > 200 {
+		return nil, BadAuthRequest("章节分镜数量必须在 1 到 200 之间")
+	}
+	now := time.Now()
+	shots := make([]model.Shot, 0, len(req.Shots))
+	for position, input := range req.Shots {
+		title := strings.TrimSpace(input.Title)
+		description := strings.TrimSpace(input.Description)
+		if title == "" || description == "" || input.DurationMs < 0 {
+			return nil, BadAuthRequest("分镜标题、描述或时长无效")
+		}
+		shots = append(shots, model.Shot{ID: newID(), ProjectID: projectID, UnitID: unitID, Title: title, Description: description, Position: position, DurationMs: input.DurationMs, Status: "draft", CreatedAt: now, UpdatedAt: now})
+	}
+	// 章节级重生成是一个整体写操作，旧镜头与引用必须和新镜头在同一事务中替换。
+	if err := s.repo.ReplaceProjectUnitShots(projectID, unitID, shots); err != nil {
+		return nil, err
+	}
+	return shots, nil
+}
+
 func validShotStatus(status string) bool {
 	switch status {
 	case "draft", "ready", "running", "review", "completed", "failed":
@@ -147,6 +179,11 @@ func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, 
 		if err != nil {
 			return nil, BadAuthRequest("资产候选详情格式无效")
 		}
+		if category == model.AssetCategoryCharacter {
+			if err := validateCharacterCandidateDetails(input.Details); err != nil {
+				return nil, err
+			}
+		}
 		candidates = append(candidates, model.ProjectAssetCandidate{ID: newID(), ProjectID: projectID, UnitID: strings.TrimSpace(input.UnitID), ShotID: strings.TrimSpace(input.ShotID), Name: name, Category: category, Status: "pending_confirmation", DetailsJSON: detailsJSON, CreatedAt: now, UpdatedAt: now})
 	}
 	if err := s.repo.CreateProjectAssetCandidates(candidates); err != nil {
@@ -173,4 +210,21 @@ func marshalProjectDetails(value map[string]any) (string, error) {
 	}
 	encoded, err := json.Marshal(value)
 	return string(encoded), err
+}
+
+func validateCharacterCandidateDetails(details map[string]any) error {
+	text := func(key string) string {
+		value, _ := details[key].(string)
+		return strings.TrimSpace(value)
+	}
+	descriptiveCount := 0
+	for _, key := range []string{"appearance", "clothing", "physique", "personality", "consistencyPrompt", "multiViewPrompt"} {
+		if text(key) != "" {
+			descriptiveCount++
+		}
+	}
+	if text("role") == "" || descriptiveCount < 3 || text("voiceLanguage") == "" || text("voiceAge") == "" || text("voiceTimbre") == "" {
+		return BadAuthRequest("角色候选必须包含剧情定位、稳定设定和声音画像")
+	}
+	return nil
 }

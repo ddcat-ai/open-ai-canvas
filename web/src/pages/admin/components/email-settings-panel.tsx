@@ -48,7 +48,7 @@ export default function EmailSettingsPanel() {
             icon={<MailCheck className="size-4" />}
             title="注册验证邮件"
             description="通过 SMTP 发送普通用户注册验证码。"
-            status={<Space size={6}><Tag bordered={false} color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>{setting?.hasPassword ? <Tag bordered={false} color="blue">{configuredSecretText}</Tag> : null}</Space>}
+            status={<Space size={6}><Tag variant="filled" color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>{setting?.hasPassword ? <Tag variant="filled" color="blue">{configuredSecretText}</Tag> : null}</Space>}
             footer={<><span className="text-xs text-foreground/45">SMTP 密码使用服务端密钥加密，接口不回显明文。</span><Button type="primary" loading={saving} onClick={() => void save()}>保存邮件配置</Button></>}
         >
             <Form form={form} layout="vertical" requiredMark={false} disabled={loading}>
@@ -60,7 +60,7 @@ export default function EmailSettingsPanel() {
                     <Form.Item name="username" label="SMTP 用户名"><Input autoComplete="off" placeholder="通常为完整邮箱地址" /></Form.Item>
                     <Form.Item name="password" label={setting?.hasPassword ? `SMTP 密码（${configuredSecretText}）` : "SMTP 密码"}><Input.Password autoComplete="new-password" placeholder={setting?.hasPassword ? "留空保留原密码" : "SMTP 密码或授权码"} /></Form.Item>
                     <Form.Item name="fromEmail" label="发件邮箱" rules={[{ type: "email", message: "请输入有效的发件邮箱" }]}><Input placeholder="noreply@example.com" /></Form.Item>
-                    <Form.Item name="fromName" label="发件人名称"><Input placeholder="无限画布" /></Form.Item>
+                    <Form.Item name="fromName" label="发件人名称"><Input placeholder="影策" /></Form.Item>
                 </div>
             </Form>
         </SettingsSectionCard>

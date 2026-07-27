@@ -23,8 +23,9 @@ export type ModelChannel = {
     concurrencyLimit?: number;
     modelCosts?: Array<{
         model: string;
+        displayName?: string;
         capability: ModelCapability;
-        billingMode: "fixed_request";
+        billingMode: "fixed_request" | "per_second";
         unitPriceMicrocredits: number;
     }>;
 };
@@ -110,16 +111,10 @@ export const defaultConfig: AiConfig = {
 
 type ConfigStore = {
     config: AiConfig;
-    isConfigOpen: boolean;
-    shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
     replaceConfig: (config: AiConfig) => void;
     mergeSystemChannels: (channels: ModelChannel[]) => void;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
-    configDialogSection?: "channels" | "models" | "preferences" | "storage";
-    openConfigDialog: (shouldPromptContinue?: boolean, section?: "channels" | "models" | "preferences" | "storage") => void;
-    setConfigDialogOpen: (isOpen: boolean) => void;
-    clearPromptContinue: () => void;
 };
 
 export type ConfigStoreSnapshot = {
@@ -171,6 +166,8 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
     return models.filter((model) => {
         const decoded = decodeChannelModel(model);
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
+        const configuredCapability = channel?.modelCosts?.find((item) => item.model === decoded?.model)?.capability;
+        if (configuredCapability) return configuredCapability === capability;
         const channelCapability = capabilityForChannelInterface(channel?.interfaceType);
         return channelCapability ? channelCapability === capability : modelMatchesCapability(model, capability);
     });
@@ -178,17 +175,13 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
 
 export function selectableModelsByCapability(config: AiConfig, capability?: ModelCapability) {
     if (!capability) return config.models;
-    return config[modelListKey(capability)];
+    return filterModelsByCapability(config.models, capability, config.channels);
 }
 
 export function configuredModelMatchesCapability(config: AiConfig, model: string, capability?: ModelCapability) {
     const normalized = normalizeModelOptionValue(model, config.channels);
     if (!normalized || !config.models.includes(normalized)) return false;
     return capability ? selectableModelsByCapability(config, capability).includes(normalized) : true;
-}
-
-function modelListKey(capability: ModelCapability) {
-    return `${capability}Models` as "imageModels" | "videoModels" | "textModels" | "audioModels";
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
@@ -200,9 +193,6 @@ export const useConfigStore = create<ConfigStore>()(
     persist(
         (set) => ({
             config: defaultConfig,
-            isConfigOpen: false,
-            shouldPromptContinue: false,
-            configDialogSection: undefined,
             updateConfig: (key, value) =>
                 set((state) => ({
                     config: {
@@ -226,9 +216,6 @@ export const useConfigStore = create<ConfigStore>()(
                     return normalizeConfigSnapshot({ config: { ...state.config, channels: [...systemChannels, ...userChannels] } });
                 }),
             isAiConfigReady: (config, model) => isAiConfigReady(config, model),
-            openConfigDialog: (shouldPromptContinue = false, configDialogSection) => set({ isConfigOpen: true, shouldPromptContinue, configDialogSection }),
-            setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
-            clearPromptContinue: () => set({ shouldPromptContinue: false }),
         }),
         {
             name: CONFIG_STORE_KEY,
@@ -252,10 +239,10 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
     if (!hasPersistedChannels) config.channels = [];
     const channels = normalizeChannels(config, !hasPersistedChannels);
     const models = modelOptionsFromChannels(channels);
-    const imageModels = normalizeSelectableModelList(persistedConfig.imageModels, channels, models, "image");
-    const videoModels = normalizeSelectableModelList(persistedConfig.videoModels, channels, models, "video");
-    const textModels = normalizeSelectableModelList(persistedConfig.textModels, channels, models, "text");
-    const audioModels = normalizeSelectableModelList(persistedConfig.audioModels, channels, models, "audio");
+    const imageModels = filterModelsByCapability(models, "image", channels);
+    const videoModels = filterModelsByCapability(models, "video", channels);
+    const textModels = filterModelsByCapability(models, "text", channels);
+    const audioModels = filterModelsByCapability(models, "audio", channels);
     const model = normalizeSelectedModel(config.model || config.imageModel || config.textModel, channels, models);
     return {
         config: {
@@ -285,12 +272,6 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
             audioModels,
         },
     };
-}
-
-function normalizeModelList(models: string[], channels: ModelChannel[]) {
-    const allModelOptions = channels.flatMap((channel) => channel.models.map((model) => encodeChannelModel(channel.id, model)));
-    return Array.from(new Set((models || []).map((model) => normalizeModelOptionValue(model, channels)).filter(Boolean)))
-        .filter((model) => allModelOptions.includes(model));
 }
 
 function normalizeSelectedModel(value: string, channels: ModelChannel[], options: string[]) {
@@ -340,11 +321,18 @@ export function modelOptionName(value: string) {
     return decodeChannelModel(value)?.model || value;
 }
 
+export function modelDisplayName(config: AiConfig, value: string) {
+    const model = modelOptionName(value);
+    const channel = resolveModelChannel(config, value);
+    return channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim() || model;
+}
+
 export function modelOptionLabel(config: AiConfig, value: string) {
     const decoded = decodeChannelModel(value);
-    if (!decoded) return value;
+    if (!decoded) return modelDisplayName(config, value);
     const channel = config.channels.find((item) => item.id === decoded.channelId);
-    return channel ? `${decoded.model}（${channel.name}）` : decoded.model;
+    const displayName = modelDisplayName(config, value);
+    return channel ? `${displayName}（${channel.name}）` : displayName;
 }
 
 export function modelOptionsFromChannels(channels: ModelChannel[]) {
@@ -421,13 +409,6 @@ function normalizeChannels(config: AiConfig, ensureDefault = true) {
         );
     }
     return channels.map((channel) => ({ ...channel, models: uniqueRawModels(channel.models) }));
-}
-
-function normalizeSelectableModelList(value: string[] | undefined, channels: ModelChannel[], models: string[], capability: ModelCapability) {
-    const suggested = filterModelsByCapability(models, capability, channels);
-    if (!Array.isArray(value)) return suggested;
-    // 字段缺失表示旧配置尚未选择过；显式空数组表示用户主动清空，不能重新补回推荐模型。
-    return normalizeModelList(value, channels);
 }
 
 function isEmptyDefaultChannel(channel: ModelChannel) {

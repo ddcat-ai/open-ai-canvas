@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -220,4 +222,36 @@ func proxyRequestModel(contentType string, body []byte) string {
 	}
 	modelName, _ := payload["model"].(string)
 	return strings.TrimSpace(modelName)
+}
+
+func proxyRequestVideoSeconds(contentType string, body []byte) int64 {
+	mediaType, params, _ := mime.ParseMediaType(contentType)
+	if strings.HasPrefix(mediaType, "multipart/") {
+		reader := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+		for {
+			part, err := reader.NextPart()
+			if err != nil {
+				return 0
+			}
+			if part.FormName() == "seconds" || part.FormName() == "duration" {
+				value, _ := io.ReadAll(io.LimitReader(part, 32))
+				seconds, _ := strconv.ParseInt(strings.TrimSpace(string(value)), 10, 64)
+				return seconds
+			}
+			_ = part.Close()
+		}
+	}
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return 0
+	}
+	for _, key := range []string{"seconds", "duration"} {
+		value, exists := payload[key]
+		if !exists {
+			continue
+		}
+		seconds, _ := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(value)), 10, 64)
+		return seconds
+	}
+	return 0
 }

@@ -1,5 +1,6 @@
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -61,7 +62,7 @@ export function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
     return { content: audio.url, storageKey: audio.storageKey, status: "success", bytes: audio.bytes, mimeType: audio.mimeType || "audio/mpeg", durationMs: audio.durationMs, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined };
 }
 
-export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask): Promise<CanvasNodeData> {
+export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]): Promise<CanvasNodeData> {
     const mode = generationTaskMode(task, node.type === CanvasNodeType.Text ? "text" : node.type === CanvasNodeType.Video ? "video" : node.type === CanvasNodeType.Audio ? "audio" : "image");
     const prompt = node.metadata?.prompt || task.prompt;
     const result = parseBackendGenerationResult(task);
@@ -69,9 +70,19 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     if (mode === "image") {
         const image = result.images?.[0];
         if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
-        const uploaded = image.storageKey
+        let resultDataUrl = image.dataUrl;
+        const emotionEdit = node.metadata?.emotionEdit;
+        if (emotionEdit) {
+            if (!emotionEdit.editRegion) throw new Error("情绪编辑任务缺少局部合成区域，已拒绝使用整图重绘结果");
+            const sourceNode = nodes.find((item) => item.id === emotionEdit.sourceNodeId);
+            if (!sourceNode?.metadata?.content) throw new Error("情绪编辑源图片已删除，无法恢复局部合成结果");
+            const sourceDataUrl = await resolveImageUrl(sourceNode.metadata.storageKey, sourceNode.metadata.content);
+            if (!sourceDataUrl) throw new Error("无法读取情绪编辑源图片，未使用整图重绘结果");
+            resultDataUrl = await compositeEmotionImage(sourceDataUrl, image.dataUrl, emotionEdit.editRegion, emotionEdit.faceBox);
+        }
+        const uploaded = image.storageKey && !emotionEdit
             ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
-            : await uploadImage(image.dataUrl);
+            : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
         const imageSize = fitNodeSize(uploaded.width, uploaded.height, node.width || imageConfig.width, node.height || imageConfig.height);
         return {
@@ -109,13 +120,13 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     }
 
     if (!result.text) throw new Error("后端任务没有返回文本");
-    return { ...node, type: CanvasNodeType.Text, metadata: { ...node.metadata, content: result.text, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } };
+    return { ...node, type: CanvasNodeType.Text, metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } };
 }
 
 export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, targetNodeId?: string) {
     const node = findGenerationTaskNode(nodes, task, targetNodeId);
     if (!node) return { nodes, updated: false, nodeId: "", node: null };
-    const updatedNode = await buildGenerationTaskNodeResult(node, task);
+    const updatedNode = await buildGenerationTaskNodeResult(node, task, nodes);
     return {
         nodes: nodes.map((item) => (item.id === node.id ? updatedNode : item)),
         updated: true,
@@ -132,7 +143,7 @@ export async function syncGenerationTaskToCanvasStore(task: GenerationTask) {
     const node = findGenerationTaskNode(project.nodes, task);
     if (!node) return false;
     if (node.metadata?.taskId === task.id && node.metadata.status === "success" && node.metadata.content) return false;
-    const updatedNode = await buildGenerationTaskNodeResult(node, task);
+    const updatedNode = await buildGenerationTaskNodeResult(node, task, project.nodes);
     const latest = useCanvasStore.getState().projects.find((item) => item.id === project.id);
     if (!latest?.nodes.some((item) => item.id === node.id)) return false;
     useCanvasStore.getState().updateProject(project.id, { nodes: latest.nodes.map((item) => (item.id === node.id ? updatedNode : item)) });

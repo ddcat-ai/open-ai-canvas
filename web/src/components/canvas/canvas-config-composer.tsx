@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { Button, Image } from "antd";
-import { FileText, Image as ImageIcon, Music2, Sparkles, Video, X } from "lucide-react";
+import { FileText, Image as ImageIcon, Music2, Pencil, Sparkles, Video, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -306,6 +306,13 @@ function ResourcePreview({ candidate }: { candidate: ComposerCandidate }) {
         );
     }
     const input = candidate.input;
+    if (input.sourceKind === "drawing") {
+        return (
+            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-black/10">
+                <Pencil className="size-4" />
+            </span>
+        );
+    }
     if (input.type === "image" && input.image) return <img src={input.image.dataUrl} alt="" className="size-9 rounded-md object-cover" />;
     if (input.type === "video" && input.video) return <video src={input.video.url} className="size-9 rounded-md bg-black object-cover" muted preload="metadata" />;
     const Icon = input.type === "audio" ? Music2 : input.type === "video" ? Video : input.type === "image" ? ImageIcon : FileText;
@@ -327,7 +334,7 @@ function createReferenceChip(input: NodeGenerationInput, inputs: NodeGenerationI
     wrapper.dataset.referenceNodeId = input.nodeId;
     wrapper.className = "mx-px inline-flex h-7 max-w-40 items-center justify-center overflow-hidden rounded-md border px-1 text-xs leading-none align-middle";
     Object.assign(wrapper.style, chipStyle(theme));
-    if (input.type === "image" && input.image) {
+    if (input.type === "image" && input.image && input.sourceKind !== "drawing") {
         const image = document.createElement("img");
         image.src = input.image.dataUrl;
         image.alt = input.title;
@@ -340,10 +347,10 @@ function createReferenceChip(input: NodeGenerationInput, inputs: NodeGenerationI
             onImagePreview(input.image?.dataUrl || "");
         });
     } else {
-        wrapper.title = input.text || input.title;
+        wrapper.title = input.sourceKind === "drawing" ? resourceLabel(input, inputs) : input.text || input.title;
         const text = document.createElement("span");
         text.className = "block truncate";
-        text.textContent = input.type === "text" ? input.text || input.title : input.title;
+        text.textContent = input.sourceKind === "drawing" ? resourceLabel(input, inputs) : input.type === "text" ? input.text || input.title : input.title;
         wrapper.appendChild(text);
     }
     return wrapper;
@@ -449,8 +456,9 @@ function parseComposerTokens(value: string): Token[] {
 }
 
 function resourceLabel(input: NodeGenerationInput, inputs: NodeGenerationInput[]) {
-    const sameTypeInputs = inputs.filter((item) => item.type === input.type);
+    const sameTypeInputs = inputs.filter((item) => item.type === input.type && item.sourceKind === input.sourceKind);
     const index = Math.max(0, sameTypeInputs.findIndex((item) => item.nodeId === input.nodeId));
+    if (input.sourceKind === "drawing") return `绘图${index + 1}`;
     if (input.type === "image") return `图片${index + 1}`;
     if (input.type === "video") return `视频${index + 1}`;
     if (input.type === "audio") return `音频${index + 1}`;

@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { ChevronRight, Image as ImageIcon, List, Music2, Settings2, Video, WandSparkles, X } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, List, Music2, Pencil, Settings2, Video, WandSparkles, X } from "lucide-react";
 
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -85,16 +85,16 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
     );
 }
 
-export function CanvasNodePanelOverlay({ node, viewport, containerRef, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
+export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth = 520, panelHeight = 420, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
-    const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, 520, 420);
+    const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, panelWidth, panelHeight);
 
     useLayoutEffect(() => {
         const container = containerRef.current;
         const panel = panelRef.current;
         if (!container || !panel) return;
         const update = (nextViewport: ViewportTransform) => {
-            const position = getNodePanelPosition(node, nextViewport, { width: container.clientWidth, height: container.clientHeight }, panel.offsetWidth || 520, panel.offsetHeight || 420);
+            const position = getNodePanelPosition(node, nextViewport, { width: container.clientWidth, height: container.clientHeight }, panel.offsetWidth || panelWidth, panel.offsetHeight || panelHeight);
             panel.style.left = `${position.left}px`;
             panel.style.top = `${position.top}px`;
         };
@@ -107,14 +107,14 @@ export function CanvasNodePanelOverlay({ node, viewport, containerRef, children 
             resizeObserver.disconnect();
             unsubscribeViewport();
         };
-    }, [containerRef, node.height, node.id, node.position.x, node.position.y, node.width, viewport]);
+    }, [containerRef, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, viewport]);
 
     return (
         <div
             ref={panelRef}
             data-canvas-no-zoom
             className="thin-scrollbar absolute z-[120] max-w-[calc(100%_-_24px)] overflow-y-auto"
-            style={{ left: initialPosition.left, top: initialPosition.top, width: 520, maxHeight: "calc(100% - 84px)" }}
+            style={{ left: initialPosition.left, top: initialPosition.top, width: panelWidth, maxHeight: "calc(100% - 84px)" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -123,12 +123,12 @@ export function CanvasNodePanelOverlay({ node, viewport, containerRef, children 
     );
 }
 
-export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio) => void; onClose: () => void }) {
+export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => void; onClose: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const menuRef = useRef<HTMLDivElement>(null);
     const menuWidth = 248;
-    const menuHeight = 332;
+    const menuHeight = canCreateDrawing ? 376 : 332;
     const gap = 12;
     const initialPosition = getConnectionMenuPosition(pending.position, viewport, viewportSize, menuWidth, menuHeight, gap);
 
@@ -171,6 +171,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             <div className="grid gap-1">
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<List className="size-4" />} title="文本生成" onClick={() => onCreate(CanvasNodeType.Text)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title="图片生成" onClick={() => onCreate(CanvasNodeType.Image)} />
+                {canCreateDrawing ? <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title="绘图" onClick={() => onCreate(CanvasNodeType.Drawing)} /> : null}
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title="视频生成" onClick={() => onCreate(CanvasNodeType.Video)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Music2 className="size-4" />} title="音频参考" onClick={() => onCreate(CanvasNodeType.Audio)} />
                 <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Settings2 className="size-4" />} title="配置节点" onClick={() => onCreate(CanvasNodeType.Config)} />

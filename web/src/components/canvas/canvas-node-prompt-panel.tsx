@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Square, Video } from "lucide-react";
+import { ArrowUp, AtSign, Boxes, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, Square, Video } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { configuredModelMatchesCapability, defaultConfig, modelOptionName, resolveModelChannel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { configuredModelMatchesCapability, defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
@@ -35,17 +36,14 @@ type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, mentionReferences = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const themeName = useThemeStore((state) => state.theme);
     const theme = canvasThemes[themeName];
-    const isDark = themeName === "dark";
     const simpleMode = workspaceMode === "simple";
     const mode = defaultMode(node.type);
     const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
-    const isEditingExistingContent = hasTextContent || hasImageContent;
-    const savedPrompt = node.metadata?.composerContent ?? (isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const savedPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
     const [prompt, setPrompt] = useState(savedPrompt);
     const [presetOpen, setPresetOpen] = useState(false);
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
@@ -53,12 +51,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [promptContentHeight, setPromptContentHeight] = useState(0);
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
-    const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? generationCount : 1 });
+    const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? generationCount : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
     const activeReferenceCount = mentionReferences.filter((item) => item.active && item.kind !== "skill").length;
     const videoFrameOptions = mentionReferences
         .filter((item) => item.active && item.kind === "image")
         .map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
-    const composerSurface = isDark ? "rgba(255,255,255,.035)" : "rgba(17,24,39,.028)";
+    const composerSurface = theme.spatial.dropzone;
     const referenceShelfHeight = activeReferenceCount ? 42 : 0;
     const composerMinHeight = activeReferenceCount ? 82 : 58;
     const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
@@ -69,8 +67,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     }, []);
 
     useEffect(() => {
-        setPrompt(node.metadata?.composerContent ?? (isEditingExistingContent ? "" : node.metadata?.prompt || ""));
-    }, [isEditingExistingContent, node.id, node.metadata?.composerContent, node.metadata?.prompt]);
+        setPrompt(node.metadata?.composerContent ?? node.metadata?.prompt ?? "");
+    }, [node.id, node.metadata?.composerContent, node.metadata?.prompt]);
 
     useEffect(() => setPromptContentHeight(0), [node.id]);
 
@@ -179,7 +177,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     ) : (
         <div className="flex min-w-0 items-center justify-between gap-0.5 px-0.5">
             <div className={`${expanded ? "max-w-[320px]" : mode === "image" || mode === "video" ? "max-w-[240px]" : "max-w-[174px]"} min-w-[104px] flex-1`}>
-                <ModelPicker className="!h-7 !w-full !min-w-0 !rounded-md !border-0 !bg-transparent !px-1.5 !text-[10px] !font-normal !shadow-none [&_img]:!size-3 [&_.lucide]:!size-3 [&_.canvas-select-chevron]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => openConfigDialog(true)} showSelectedPrice={false} />
+                <ModelPicker className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} showSelectedPrice={false} />
             </div>
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5">
                 {mode === "image" ? (
@@ -188,7 +186,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         placement={expanded ? "topRight" : "topLeft"}
                         buttonClassName="!h-7 !w-[138px] !justify-start !rounded-md !border-0 !bg-transparent !px-1.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3"
                         onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
-                        onMissingConfig={() => openConfigDialog(true)}
+                        onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         onOpenChange={expanded ? undefined : onImageSettingsOpenChange}
                     />
                 ) : mode === "video" ? (
@@ -345,7 +343,7 @@ function ReferenceThumbnail({ reference }: { reference: CanvasResourceReference 
     if (reference.kind === "image" && reference.previewUrl) return <img src={reference.previewUrl} alt="" className="size-full object-cover" />;
     if (reference.kind === "video" && reference.previewUrl) return <video src={reference.previewUrl} className="size-full bg-black object-cover" muted preload="metadata" />;
 
-    const Icon = reference.kind === "audio" ? Music2 : reference.kind === "video" ? Video : reference.kind === "image" ? ImageIcon : FileText;
+    const Icon = reference.sourceType === CanvasNodeType.Drawing ? Pencil : reference.kind === "audio" ? Music2 : reference.kind === "video" ? Video : reference.kind === "image" ? ImageIcon : FileText;
     return (
         <span className="grid size-full place-items-center bg-black/10 text-current dark:bg-white/10">
             <Icon className="size-3.5 opacity-75" />

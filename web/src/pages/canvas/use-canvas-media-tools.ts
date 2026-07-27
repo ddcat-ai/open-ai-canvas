@@ -7,6 +7,7 @@ import type { CanvasImageMaskEditPayload } from "@/components/canvas/canvas-node
 import type { CanvasImageSplitParams } from "@/components/canvas/canvas-node-split-dialog";
 import type { CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
+import type { CanvasImageEmotionPayload } from "@/components/canvas/canvas-node-emotion-panel";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "@/lib/canvas/canvas-image-data";
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
@@ -14,18 +15,20 @@ import { buildAngleLabel, buildAnglePrompt, createCanvasNode } from "@/lib/canva
 import {
     buildGenerationConfig,
     buildImageGenerationMetadata,
-    isGenerationCanceled,
     nodeReferenceImage,
+    isGenerationCanceled,
     runBackendCanvasGenerationTask,
 } from "@/lib/canvas/canvas-project-generation";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { compositeEmotionImage, emotionGenerationSize } from "@/lib/canvas/canvas-emotion";
 import { captureVideoLastFrame } from "@/lib/canvas/canvas-video-frame";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
+import { navigateToSettings } from "@/lib/settings-navigation";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { getMediaBlob } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import type { GenerationTask } from "@/services/api/task-center";
-import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { defaultConfig, resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState } from "@/types/canvas";
 import type { StartCanvasUploadStatus } from "./use-canvas-upload";
 
@@ -83,7 +86,6 @@ export function useCanvasMediaTools({
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const extractingVideoFrameNodeIdRef = useRef<string | null>(null);
     const mergeVideoRunningRef = useRef(false);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export function useCanvasMediaTools({
     const [splitNodeId, setSplitNodeId] = useState<string | null>(null);
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
+    const [emotionNodeId, setEmotionNodeId] = useState<string | null>(null);
     const [extractingVideoFrameNodeId, setExtractingVideoFrameNodeId] = useState<string | null>(null);
     const [mergeVideoProgress, setMergeVideoProgress] = useState<MergeVideoProgress | null>(null);
 
@@ -284,7 +287,7 @@ export function useCanvasMediaTools({
         if (!node.metadata?.content) return;
         const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1", size: node.metadata?.size || "auto" };
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         const userPrompt = payload.prompt.trim();
@@ -317,7 +320,7 @@ export function useCanvasMediaTools({
             finishGenerationRequest(childId, controller);
             setRunningNodeId(null);
         }
-    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest]);
+    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest]);
 
     const upscaleImageNode = useCallback(async (node: CanvasNodeData, params: CanvasImageUpscaleParams) => {
         if (!node.metadata?.content) return;
@@ -337,7 +340,7 @@ export function useCanvasMediaTools({
         if (!node.metadata?.content) return;
         const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1" };
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
-            openConfigDialog(true);
+            navigateToSettings({ continueCreation: true });
             return;
         }
         const childId = nanoid();
@@ -369,10 +372,62 @@ export function useCanvasMediaTools({
             finishGenerationRequest(childId, controller);
             setRunningNodeId(null);
         }
-    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, openConfigDialog, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, startGenerationRequest]);
+    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, startGenerationRequest]);
+
+    const generateEmotionNode = useCallback(async (node: CanvasNodeData, payload: CanvasImageEmotionPayload) => {
+        if (!node.metadata?.content) return;
+        const baseConfig = buildGenerationConfig(effectiveConfig, node, "image");
+        const providerSize = emotionGenerationSize(payload.editRegion);
+        const generationConfig = { ...baseConfig, count: "1", size: providerSize, quality: !baseConfig.quality || baseConfig.quality === "auto" ? "high" : baseConfig.quality };
+        if (!isAiConfigReady(generationConfig, generationConfig.model)) { navigateToSettings({ continueCreation: true }); return; }
+        if (resolveModelRequestConfig(generationConfig, generationConfig.model).interfaceType !== "openai-image") {
+            message.error("表情编辑需要支持蒙版的 OpenAI Images 渠道，当前渠道已拒绝整图重绘");
+            return;
+        }
+        const source = nodeReferenceImage(node);
+        if (!source) return;
+        const editReference = {
+            id: `${node.id}-${payload.presetId}-edit-region`,
+            name: "emotion-edit-region.png",
+            type: "image/png",
+            dataUrl: payload.sourceDataUrl,
+        };
+        const characterReference = {
+            id: `${node.id}-${payload.presetId}-character`,
+            name: `${payload.characterName}-face.jpg`,
+            type: "image/jpeg",
+            dataUrl: payload.characterDataUrl,
+        };
+        const childId = nanoid();
+        const generationMetadata = { ...buildImageGenerationMetadata("edit", generationConfig, 1, [source]), size: `${payload.imageWidth}x${payload.imageHeight}` };
+        const emotionEdit = { sourceNodeId: node.id, characterName: payload.characterName, presetId: payload.presetId, intimacy: payload.intimacy, arousal: payload.arousal, label: payload.label, faceBox: payload.faceBox, editRegion: payload.editRegion, sourceWidth: payload.imageWidth, sourceHeight: payload.imageHeight, providerSize };
+        setEmotionNodeId(null);
+        setRunningNodeId(childId);
+        setNodes((current) => [...current, { id: childId, type: CanvasNodeType.Image, title: `${payload.characterName} · ${payload.label}`, position: { x: node.position.x + node.width + 96, y: node.position.y }, width: node.width, height: node.height, metadata: { prompt: payload.prompt, status: NODE_STATUS_LOADING, ...generationMetadata, emotionEdit } }]);
+        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
+        setSelectedNodeIds(new Set([childId]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(childId);
+        const controller = startGenerationRequest(childId, node.id, childId);
+        try {
+            const result = await runBackendCanvasGenerationTask({ projectId, nodeId: childId, mode: "image", prompt: payload.prompt, config: generationConfig, referenceImages: [editReference, characterReference], mask: { id: `${node.id}-emotion-mask`, name: "emotion-mask.png", type: "image/png", dataUrl: payload.maskDataUrl }, signal: controller.signal, metadata: { sourceNodeId: node.id, edit: "emotion", emotion: emotionEdit }, onTaskCreated: (task) => bindGenerationTask(childId, task) });
+            const image = result.images?.[0];
+            if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
+            const composited = await compositeEmotionImage(node.metadata.content, image.dataUrl, payload.editRegion, payload.faceBox);
+            const uploaded = await uploadImage(composited);
+            const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
+            setNodes((current) => current.map((item) => item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt: payload.prompt, ...generationMetadata, emotionEdit } } : item));
+        } catch (error) {
+            if (isGenerationCanceled(error)) return;
+            const details = error instanceof Error ? error.message : "表情生成失败";
+            message.error(details);
+            setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
+        } finally { finishGenerationRequest(childId, controller); setRunningNodeId(null); }
+    }, [bindGenerationTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest]);
 
     return {
         angleNodeId,
+        emotionNodeId,
         annotationNodeId,
         createImageReversePromptNodes,
         cropImageNode,
@@ -387,6 +442,8 @@ export function useCanvasMediaTools({
         mergeVideoProgress,
         saveAnnotatedImageNode,
         setAngleNodeId,
+        generateEmotionNode,
+        setEmotionNodeId,
         setAnnotationNodeId,
         setCropNodeId,
         setMaskEditNodeId,

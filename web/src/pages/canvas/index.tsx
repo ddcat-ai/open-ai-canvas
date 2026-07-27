@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { App, Button, Dropdown, Empty, Input, Modal, Select } from "antd";
+import { App, Button, Dropdown, Input, Modal, Select } from "antd";
 import { Download, FileUp, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 
 import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
@@ -14,6 +15,7 @@ import type { CanvasExportFile } from "@/types/canvas-export";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
+import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/canvas-drawing-storage";
 import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { listProjects } from "@/services/api/projects";
 
@@ -25,6 +27,7 @@ export default function CanvasPage() {
     const autoOpenRef = useRef(false);
     const [keyword, setKeyword] = useState("");
     const [sort, setSort] = useState<"updated" | "name" | "nodes">("updated");
+    const [projectFilter, setProjectFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(24);
     const hydrated = useCanvasStore((state) => state.hydrated);
@@ -44,17 +47,19 @@ export default function CanvasPage() {
         navigate(`/canvas/${id}${agentQuery}`);
     };
     const createAndEnter = () => {
-        void createCanvasProjectWithRemoteSync(`无限画布 ${projects.length + 1}`).then(({ id, syncError }) => {
+        void createCanvasProjectWithRemoteSync(`自由画布 ${projects.length + 1}`).then(({ id, syncError }) => {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             enterProject(id);
         });
     };
     const filteredProjects = useMemo(() => {
         const query = keyword.trim().toLowerCase();
-        const values = query ? projects.filter((project) => project.title.toLowerCase().includes(query)) : [...projects];
+        const scoped = projects.filter((project) => projectFilter === "all" || (projectFilter === "independent" ? !project.projectId : project.projectId === projectFilter));
+        const values = query ? scoped.filter((project) => project.title.toLowerCase().includes(query)) : [...scoped];
         values.sort((a, b) => sort === "name" ? a.title.localeCompare(b.title, "zh-CN") : sort === "nodes" ? b.nodes.length - a.nodes.length : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
         return values;
-    }, [keyword, projects, sort]);
+    }, [keyword, projectFilter, projects, sort]);
+    const projectNames = useMemo(() => new Map((projectQuery.data?.projects || []).map(({ project }) => [project.id, project.name])), [projectQuery.data]);
     const visibleProjects = filteredProjects.slice((page - 1) * pageSize, page * pageSize);
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const associateSelected = async (nextProjectId = associationProjectId) => {
@@ -85,7 +90,26 @@ export default function CanvasPage() {
                     }),
                 ),
             );
-            data.projects.forEach((item) => importProject(item.project));
+            await Promise.all(data.projects.map(async (item) => {
+                const importedProjectId = importProject(item.project);
+                await Promise.all((item.drawingDocuments || []).map((document) => {
+                    const previewFile = document.previewPath ? zip.get(document.previewPath) : undefined;
+                    const preview = previewFile && !previewFile.type ? previewFile.slice(0, previewFile.size, "image/png") : previewFile;
+                    const renderFile = document.generationRender?.path ? zip.get(document.generationRender.path) : undefined;
+                    const renderBlob = renderFile && !renderFile.type ? renderFile.slice(0, renderFile.size, document.generationRender?.mimeType || "image/png") : renderFile;
+                    const render = renderBlob && document.generationRender
+                        ? {
+                              blob: renderBlob,
+                              pageId: document.generationRender.pageId,
+                              width: document.generationRender.width,
+                              height: document.generationRender.height,
+                              mimeType: document.generationRender.mimeType,
+                              background: document.generationRender.background,
+                          } satisfies CanvasDrawingRenderDraft
+                        : undefined;
+                    return saveCanvasDrawing(importedProjectId, document.drawingId, document.snapshot, { ...document, version: 1, revision: Math.max(0, document.revision - 1) }, preview, render);
+                }));
+            }));
             message.success(`已导入 ${data.projects.length} 个画布`);
         } catch {
             message.error("导入失败，请选择有效的画布压缩包");
@@ -101,7 +125,7 @@ export default function CanvasPage() {
             enterProject(projects[0].id);
             return;
         }
-        void createCanvasProjectWithRemoteSync(`无限画布 ${projects.length + 1}`).then(({ id, syncError }) => {
+        void createCanvasProjectWithRemoteSync(`自由画布 ${projects.length + 1}`).then(({ id, syncError }) => {
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             enterProject(id);
         });
@@ -110,50 +134,57 @@ export default function CanvasPage() {
     if (hydrated && (mode === "new" || mode === "recent")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
 
     return (
-        <WorkspacePage grid>
+        <WorkspacePage grid className="canvas-library-page">
                 <PageHeader
-                    title="我的画布"
-                    description="管理创作项目，快速继续最近的画布。"
-                    meta={<span className="text-xs text-foreground/45">{hydrated ? `${filteredProjects.length} 个项目${selectedIds.length ? ` · 已选择 ${selectedIds.length} 个` : ""}` : "正在载入"}</span>}
+                    icon="canvas"
+                    title="画布"
+                    description="管理自由创作空间和已加入项目的制作画布。"
+                    meta={<span className="text-xs tabular-nums text-foreground/45">{hydrated ? `${filteredProjects.length} 个` : "载入中"}</span>}
                     actions={(
                         <>
-                        {selectedIds.length ? (
-                            <>
-                                <Button disabled={!hydrated || projectQuery.isLoading} onClick={() => { setAssociationProjectId(selectedProjects[0]?.projectId || ""); setAssociationOpen(true); }}>加入项目</Button>
-                                {selectedProjects.some((project) => project.projectId) ? <Button disabled={!hydrated} onClick={() => { setAssociationProjectId(""); void associateSelected(""); }}>移出项目</Button> : null}
-                                <Button disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>导出选中</Button>
-                                <Button danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>删除选中</Button>
-                            </>
-                        ) : null}
                         {projects.length ? (
                                     <Dropdown menu={{ items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }] }} trigger={["click"]}>
-                                <Button aria-label="更多画布操作" icon={<MoreHorizontal className="size-4" />} />
+                                <Button className="!h-9 !w-9 !p-0" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
                                     </Dropdown>
                                 ) : null}
-                        <Button disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>导入画布</Button>
-                        <Button type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button>
+                        <Button className="!h-9 !px-3.5" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>导入</Button>
+                        <Button className="!h-9 !px-4" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button>
                         </>
                     )}
                 />
 
-                <ListToolbar active={Boolean(keyword || sort !== "updated")} onReset={() => { setKeyword(""); setSort("updated"); setPage(1); }}>
-                    <Input allowClear className="w-full sm:w-72" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索画布名称" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                    <Select className="w-36" value={sort} onChange={(value) => { setSort(value); setPage(1); }} options={[{ label: "最近更新", value: "updated" }, { label: "名称排序", value: "name" }, { label: "节点数量", value: "nodes" }]} />
+                <ListToolbar
+                    active={Boolean(keyword || projectFilter !== "all" || sort !== "updated")}
+                    trailing={<span className="text-xs tabular-nums text-foreground/42">显示 {visibleProjects.length} / {filteredProjects.length}</span>}
+                    onReset={() => { setKeyword(""); setProjectFilter("all"); setSort("updated"); setPage(1); }}
+                >
+                    <div className="min-w-[220px] flex-1 sm:max-w-[380px]">
+                        <Input allowClear className="w-full" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索画布" aria-label="搜索画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                    </div>
+                    <Select aria-label="按所属项目筛选" className="w-[168px]" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部项目", value: "all" }, { label: "自由画布", value: "independent" }, ...(projectQuery.data?.projects || []).map(({ project }) => ({ label: project.name, value: project.id }))]} />
+                    <Select aria-label="画布排序" className="w-[136px]" value={sort} onChange={(value) => { setSort(value); setPage(1); }} options={[{ label: "最近更新", value: "updated" }, { label: "名称排序", value: "name" }, { label: "节点数量", value: "nodes" }]} />
                 </ListToolbar>
 
+                {selectedIds.length ? (
+                    <div className="app-canvas-selection-toolbar mt-2 flex min-h-10 flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <strong className="mr-auto font-medium">已选 {selectedIds.length} 个画布</strong>
+                        <Button size="small" disabled={!hydrated || projectQuery.isLoading} onClick={() => { setAssociationProjectId(selectedProjects[0]?.projectId || ""); setAssociationOpen(true); }}>加入项目</Button>
+                        {selectedProjects.some((project) => project.projectId) ? <Button size="small" disabled={!hydrated} onClick={() => { setAssociationProjectId(""); void associateSelected(""); }}>移出项目</Button> : null}
+                        <Button size="small" disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(selectedProjects, `影策画布-${selectedIds.length}个画布`)}>导出</Button>
+                        <Button size="small" danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>删除</Button>
+                    </div>
+                ) : null}
+
                 {!hydrated ? (
-                    <section className="flex min-h-[320px] items-center justify-center text-sm text-foreground/50">正在加载画布...</section>
+                    <WorkspaceLoadingState label="正在恢复画布" detail="读取本地缓存与账号同步状态" />
                 ) : visibleProjects.length ? (
-                    <CollectionGrid>
+                    <CollectionGrid className="sm:grid-cols-[repeat(auto-fill,minmax(272px,320px))] sm:justify-start">
                         {visibleProjects.map((project) => (
-                            <CanvasProjectCard key={project.id} project={project} />
+                            <CanvasProjectCard key={project.id} project={project} projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined} />
                         ))}
                     </CollectionGrid>
                 ) : (
-                    <section className="flex min-h-[320px] flex-col items-center justify-center text-center">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-foreground/50">{keyword ? "没有匹配的画布" : "还没有画布"}</span>} />
-                        {!keyword ? <Button className="mt-5" type="primary" icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button> : null}
-                    </section>
+                    <WorkspaceState icon="canvas" title={keyword ? "没有匹配的画布" : "创建一张可继续生长的画布"} description={keyword ? "换一个画布名称或重置筛选条件。" : "把文本、图片、视频和 Agent 操作连接成可追踪的创作流程。"} action={!keyword ? <Button type="primary" icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button> : undefined} />
                 )}
 
                 <PaginationBar current={page} pageSize={pageSize} total={filteredProjects.length} pageSizeOptions={[12, 24, 48]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />

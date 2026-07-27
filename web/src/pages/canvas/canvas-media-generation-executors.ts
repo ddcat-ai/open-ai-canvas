@@ -79,7 +79,7 @@ export async function executeVideoGeneration({
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
     try {
-        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, ...videoGenerationMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
+        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, ...videoGenerationMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
         if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
         const video = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
@@ -98,6 +98,7 @@ export async function executeAudioGeneration({
     sourceNode,
     effectivePrompt,
     generationConfig,
+    generationContext,
     controller,
     projectId,
     setNodes,
@@ -126,7 +127,7 @@ export async function executeAudioGeneration({
 
     startGenerationRequest(audioId, nodeId, nodeId, controller);
     try {
-        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: audioId, mode: "audio", prompt: effectivePrompt, config: generationConfig, signal: controller.signal, metadata: { sourceNodeId: nodeId }, onTaskCreated: (task) => bindGenerationTask(audioId, task) });
+        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: audioId, mode: "audio", prompt: effectivePrompt, config: generationConfig, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoiceKey: generationContext.resolvedCharacterVoices[0]?.voiceKey }, onTaskCreated: (task) => bindGenerationTask(audioId, task) });
         if (!result.audio?.dataUrl) throw new Error("后端任务没有返回音频");
         const audio = await storeGeneratedAudio(await (await fetch(result.audio.dataUrl)).blob(), generationConfig.audioFormat);
         setNodes((current) => current.map((node) => (node.id === audioId ? { ...node, metadata: { ...node.metadata, ...audioMetadata(audio), prompt: effectivePrompt, ...buildAudioGenerationMetadata(generationConfig) } } : node)));

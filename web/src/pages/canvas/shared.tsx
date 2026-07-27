@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { App, Button, Result } from "antd";
+import { App, Button } from "antd";
 import { Clapperboard, Eye, FileText, Image as ImageIcon, LockKeyhole, LogIn, Send, Share2, Video } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { nanoid } from "nanoid";
@@ -11,6 +11,7 @@ import { CanvasNode } from "@/components/canvas/canvas-node";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { WorkspaceState } from "@/components/layout/workspace-state";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
@@ -217,7 +218,7 @@ export default function SharedCanvasPage() {
     const toolbarNode = toolbarNodeKey ? nodeById.get(toolbarNodeKey) || null : null;
 
     if (loading) return <FullScreenLoader label="正在打开共享画布" detail="读取节点、连线和视图状态" />;
-    if (loadError) return <div className="grid h-screen place-items-center" style={{ background: theme.canvas.background }}><Result status="404" title="分享链接不可用" subTitle={loadError} extra={<Link to="/"><Button>返回首页</Button></Link>} /></div>;
+    if (loadError) return <div className="grid h-screen place-items-center px-5" style={{ background: theme.canvas.background }}><WorkspaceState icon="error" title="分享链接不可用" description={loadError} action={<Link to="/"><Button>返回首页</Button></Link>} /></div>;
 
     return (
         <main className="relative h-screen overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
@@ -251,10 +252,10 @@ export default function SharedCanvasPage() {
                     setContextMenu(null);
                     dragRef.current = { primaryId: nodeId, nodeIds: [nodeId], startX: event.clientX, startY: event.clientY, origins: new Map([[nodeId, target.position]]), moved: false };
                     document.body.style.cursor = "grabbing";
-                }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onCancelTask={unauthorized} onOpenTaskDetails={unauthorized} onGenerateImage={unauthorized} onViewImage={(target) => setInfoNodeId(target.id)} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
+                }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onCancelTask={unauthorized} onOpenTaskDetails={unauthorized} onViewImage={(target) => setInfoNodeId(target.id)} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
             </InfiniteCanvas>
 
-            <CanvasNodeHoverToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onViewImage={unauthorized} onExtractVideoLastFrame={unauthorized} extractingVideoFrame={false} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
+            <CanvasNodeHoverToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onEmotion={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onViewImage={unauthorized} onExtractVideoLastFrame={unauthorized} extractingVideoFrame={false} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} />
 
             <div className="absolute bottom-5 left-5 z-[70]"><CanvasZoomControls scale={viewport.k} containerRef={containerRef} onScaleChange={setZoom} onReset={resetViewport} isMiniMapOpen={false} onToggleMiniMap={unauthorized} onOpenShortcuts={unauthorized} /></div>
             <div className="pointer-events-none absolute bottom-5 right-5 z-[70] max-w-[340px] text-right text-xs leading-5" style={{ color: theme.node.muted }}>访客操作仅在当前页面临时生效</div>

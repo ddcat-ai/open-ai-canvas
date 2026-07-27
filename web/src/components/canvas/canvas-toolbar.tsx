@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Segmented, Switch } from "antd";
-import { CircleDot, Clapperboard, Eraser, FileText, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Plus, Redo2, Square, Sun, Trash2, Type, Undo2, UploadCloud, Video, WandSparkles, X } from "lucide-react";
+import { CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Pencil, Plus, Redo2, Square, Sun, Trash2, Type, Undo2, UploadCloud, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
@@ -16,6 +16,7 @@ import type { CanvasWorkspaceMode } from "@/types/canvas";
 export function CanvasToolbar({
     selectedCount,
     workspaceMode,
+    isProjectLinked,
     canUndo,
     canRedo,
     backgroundMode,
@@ -24,10 +25,10 @@ export function CanvasToolbar({
     onAddVideo,
     onAddAudio,
     onAddText,
-    onAddNovel,
     onChooseStyle,
     onAddScript,
     onAddFrame,
+    onAddDrawing,
     onAddConfig,
     onOpenDirector,
     onUndo,
@@ -39,9 +40,11 @@ export function CanvasToolbar({
     onBackgroundModeChange,
     onShowImageInfoChange,
     onOpenMyAssets,
+    onOpenProjectCharacters,
 }: {
     selectedCount: number;
     workspaceMode: CanvasWorkspaceMode;
+    isProjectLinked: boolean;
     canUndo: boolean;
     canRedo: boolean;
     backgroundMode: CanvasBackgroundMode;
@@ -50,10 +53,10 @@ export function CanvasToolbar({
     onAddVideo: () => void;
     onAddAudio: () => void;
     onAddText: () => void;
-    onAddNovel: () => void;
     onChooseStyle: () => void;
     onAddScript: () => void;
     onAddFrame: () => void;
+    onAddDrawing: () => void;
     onAddConfig: () => void;
     onOpenDirector: () => void;
     onUndo: () => void;
@@ -65,6 +68,7 @@ export function CanvasToolbar({
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
     onOpenMyAssets: () => void;
+    onOpenProjectCharacters: () => void;
 }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
@@ -100,7 +104,7 @@ export function CanvasToolbar({
         { id: "tool-redo", label: "重做", icon: <Redo2 />, disabled: !canRedo, onClick: () => onRedo() },
         { kind: "separator", id: "create-separator" },
         { id: "tool-add", label: "添加节点", icon: <Plus />, active: addOpen, onClick: (event) => { placePanel(event); setAppearanceOpen(false); setAddOpen((value) => !value); } },
-        { id: "tool-assets", label: "素材库", icon: <FolderOpen />, onClick: () => onOpenMyAssets() },
+        ...(!isProjectLinked ? [{ id: "tool-assets", label: "素材库", icon: <FolderOpen />, onClick: () => onOpenMyAssets() }] : []),
         { id: "tool-style", label: "画布外观", icon: <Palette />, active: appearanceOpen, onClick: (event) => { placePanel(event); setAddOpen(false); setAppearanceOpen((value) => !value); } },
         ...(selectedCount ? [{ kind: "separator" as const, id: "selection-separator" }, { id: "tool-delete", label: selectedCount > 1 ? `删除 ${selectedCount} 个节点` : "删除选中节点", icon: <Trash2 />, danger: true, onClick: () => onDelete() }] : []),
         { id: "tool-clear", label: "清空画布", icon: <Eraser />, danger: true, onClick: () => onClear() },
@@ -114,11 +118,12 @@ export function CanvasToolbar({
                         x={panelX}
                         theme={theme}
                         workspaceMode={workspaceMode}
+                        isProjectLinked={isProjectLinked}
                         onAddText={() => runAddAction(onAddText)}
-                        onAddNovel={() => runAddAction(onAddNovel)}
                         onChooseStyle={() => runAddAction(onChooseStyle)}
                         onAddScript={() => runAddAction(onAddScript)}
                         onAddFrame={() => runAddAction(onAddFrame)}
+                        onAddDrawing={() => runAddAction(onAddDrawing)}
                         onAddImage={() => runAddAction(onAddImage)}
                         onAddVideo={() => runAddAction(onAddVideo)}
                         onAddAudio={() => runAddAction(onAddAudio)}
@@ -126,6 +131,7 @@ export function CanvasToolbar({
                         onOpenDirector={() => runAddAction(onOpenDirector)}
                         onUpload={() => runAddAction(onUpload)}
                         onOpenAssets={() => runAddAction(onOpenMyAssets)}
+                        onOpenProjectCharacters={() => runAddAction(onOpenProjectCharacters)}
                     />
                 ) : null}
             </AnimatePresence>
@@ -165,15 +171,16 @@ export function CanvasToolbar({
     );
 }
 
-function AddNodeMenu({ x, theme, workspaceMode, onAddText, onAddNovel, onChooseStyle, onAddScript, onAddFrame, onAddImage, onAddVideo, onAddAudio, onAddConfig, onOpenDirector, onUpload, onOpenAssets }: {
+function AddNodeMenu({ x, theme, workspaceMode, isProjectLinked, onAddText, onChooseStyle, onAddScript, onAddFrame, onAddDrawing, onAddImage, onAddVideo, onAddAudio, onAddConfig, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: {
     x: number;
     theme: CanvasTheme;
     workspaceMode: CanvasWorkspaceMode;
+    isProjectLinked: boolean;
     onAddText: () => void;
-    onAddNovel: () => void;
     onChooseStyle: () => void;
     onAddScript: () => void;
     onAddFrame: () => void;
+    onAddDrawing: () => void;
     onAddImage: () => void;
     onAddVideo: () => void;
     onAddAudio: () => void;
@@ -181,14 +188,17 @@ function AddNodeMenu({ x, theme, workspaceMode, onAddText, onAddNovel, onChooseS
     onOpenDirector: () => void;
     onUpload: () => void;
     onOpenAssets: () => void;
+    onOpenProjectCharacters: () => void;
 }) {
     const simpleMode = workspaceMode === "simple";
     const nodeCommands: CanvasCreateCommand[] = [
         { id: "text", label: "文本", icon: <Type />, onClick: onAddText },
-        { id: "novel", label: "小说", icon: <FileText />, badge: "文档", onClick: onAddNovel },
-        { id: "style", label: "项目画风", icon: <Palette />, onClick: onChooseStyle },
+        ...(!isProjectLinked ? [
+            { id: "style", label: "项目画风", icon: <Palette />, onClick: onChooseStyle },
+        ] : []),
         { id: "script", label: "分镜脚本", icon: <Clapperboard />, badge: "核心", onClick: onAddScript },
         ...(!simpleMode ? [{ id: "frame", label: "背板", icon: <PanelTop />, onClick: onAddFrame }] : []),
+        { id: "drawing", label: "绘图", icon: <Pencil />, onClick: onAddDrawing },
         { id: "image", label: "图片", icon: <ImageIcon />, onClick: onAddImage },
         { id: "video", label: "视频", icon: <Video />, onClick: onAddVideo },
         ...(!simpleMode ? [
@@ -199,7 +209,8 @@ function AddNodeMenu({ x, theme, workspaceMode, onAddText, onAddNovel, onChooseS
     ];
     const resourceCommands: CanvasCreateCommand[] = [
         { id: "upload", label: "上传文件", icon: <UploadCloud />, onClick: onUpload },
-        { id: "assets", label: "素材库", icon: <FolderOpen />, onClick: onOpenAssets },
+        ...(isProjectLinked ? [{ id: "project-character", label: "添加角色卡", icon: <UserRound />, onClick: onOpenProjectCharacters }] : []),
+        ...(!isProjectLinked ? [{ id: "assets", label: "素材库", icon: <FolderOpen />, onClick: onOpenAssets }] : []),
     ];
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-40 w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>

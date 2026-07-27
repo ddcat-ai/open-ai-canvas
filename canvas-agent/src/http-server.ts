@@ -100,7 +100,7 @@ export function startHttpServer() {
     app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => res.status(500).json({ ok: false, error: error.message }));
 
     app.listen(port, "127.0.0.1", () => {
-        console.log("Infinite Canvas Agent");
+        console.log("影策 Canvas Agent");
         console.log(`Local URL: ${config.url}`);
         console.log(`Connect token: ${config.token}`);
         console.log("Codex MCP: codex mcp add infinite-canvas -- npx -y @ddcat666/open-ai-canvas-agent mcp");

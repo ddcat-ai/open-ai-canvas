@@ -234,7 +234,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.DisableAdminChannelModel(user, c.Param("id"), c.Param("modelId")); err != nil {
+		if err := svc.DeleteAdminChannelModel(user, c.Param("id"), c.Param("modelId")); err != nil {
 			failService(c, err)
 			return
 		}

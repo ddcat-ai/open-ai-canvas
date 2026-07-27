@@ -3,9 +3,13 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
+
+	"gorm.io/gorm"
 )
 
 type ChannelModelRequest struct {
@@ -66,7 +70,8 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 	if err != nil {
 		return nil, err
 	}
-	existing, err := s.repo.ChannelModels(channelID, true)
+	// 删除项作为 tombstone 参与去重，避免再次拉取上游目录时自动恢复到页面。
+	existing, err := s.repo.ChannelModelsIncludingDeleted(channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +117,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if billingMode == "" {
 		billingMode = "fixed_request"
 	}
-	if billingMode != "fixed_request" {
-		return nil, BadAuthRequest("当前版本只支持按次固定计费")
+	if billingMode != "fixed_request" && billingMode != "per_second" {
+		return nil, BadAuthRequest("模型计费方式仅支持按次或按秒")
+	}
+	if billingMode == "per_second" && capability != "video" {
+		return nil, BadAuthRequest("只有视频模型可以按秒计费")
 	}
 	if req.UnitPriceMicrocredits < 0 {
 		return nil, BadAuthRequest("模型积分价格不能小于 0")
@@ -147,24 +155,42 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	return item, nil
 }
 
-func (s *Service) DisableAdminChannelModel(actor *model.User, channelID string, id string) error {
+func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, id string) error {
 	if err := s.RequireAdmin(actor); err != nil {
 		return err
 	}
-	item, err := s.repo.ChannelModelByID(channelID, id)
+	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return BadAuthRequest("系统渠道不存在或已删除")
+		}
+		return err
+	}
+	if _, err := s.repo.ChannelModelByID(channelID, id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return BadAuthRequest("渠道模型不存在或已删除")
+		}
+		return err
+	}
+	items, err := s.repo.ChannelModels(channelID, false)
 	if err != nil {
 		return err
 	}
-	item.Enabled = false
-	item.PriceVersion++
-	if err := s.repo.SaveChannelModel(item); err != nil {
-		return err
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.ID != id {
+			names = append(names, item.ModelKey)
+		}
 	}
-	channel, err := s.repo.AdminSystemChannel(channelID)
+	encoded, err := json.Marshal(names)
 	if err != nil {
 		return err
 	}
-	return s.syncChannelModelNames(channel)
+	// 删除模型与渠道的兼容模型清单必须同事务提交，避免接口报错但列表已部分变化。
+	err = s.repo.DeleteChannelModel(channelID, id, string(encoded), time.Now())
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return BadAuthRequest("渠道模型不存在或已删除")
+	}
+	return err
 }
 
 func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []string) error {

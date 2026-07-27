@@ -12,16 +12,20 @@ type AppChangelogButtonProps = {
     className?: string;
     style?: CSSProperties;
     showVersion?: boolean;
+    showLabel?: boolean;
+    labelClassName?: string;
+    versionClassName?: string;
 };
 
-export function AppChangelogButton({ className, style, showVersion = false }: AppChangelogButtonProps) {
+export function AppChangelogButton({ className, style, showVersion = false, showLabel = false, labelClassName, versionClassName }: AppChangelogButtonProps) {
     const [open, setOpen] = useState(false);
 
     return (
         <>
             <button type="button" className={className} style={style} onClick={() => setOpen(true)} aria-label="查看更新日志" title="更新日志">
                 <ScrollText className="size-4 shrink-0" />
-                {showVersion ? <span className="truncate">更新日志 · v{APP_VERSION.replace(/^v/, "")}</span> : null}
+                {showLabel ? <span className={`whitespace-nowrap ${labelClassName || ""}`}>更新日志</span> : null}
+                {showVersion ? <span className={versionClassName}>v{APP_VERSION.replace(/^v/, "")}</span> : null}
             </button>
             <AppChangelogModal open={open} onClose={() => setOpen(false)} />
         </>
@@ -34,7 +38,7 @@ function AppChangelogModal({ open, onClose }: { open: boolean; onClose: () => vo
     return (
         <Modal
             rootClassName="app-spatial-modal"
-            title={<div className="flex min-w-0 items-center gap-3 pr-8"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-muted/45"><ScrollText className="size-4" /></span><div className="min-w-0"><div className="flex items-center gap-2 text-base font-semibold">更新日志<Tag bordered={false}>v{APP_VERSION.replace(/^v/, "")}</Tag></div><div className="mt-0.5 text-xs font-normal text-foreground/45">产品能力、交互与稳定性变化</div></div></div>}
+            title={<div className="flex min-w-0 items-center gap-3 pr-8"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-muted/45"><ScrollText className="size-4" /></span><div className="min-w-0"><div className="flex items-center gap-2 text-base font-semibold">更新日志<Tag variant="filled">v{APP_VERSION.replace(/^v/, "")}</Tag></div><div className="mt-0.5 text-xs font-normal text-foreground/45">产品能力、交互与稳定性变化</div></div></div>}
             open={open}
             width={760}
             footer={null}
