@@ -1,4 +1,4 @@
-import { Button, Modal } from "antd";
+import { Button, Image, Modal } from "antd";
 
 import { TaskDetailItem, taskStatusText } from "./canvas-project-feedback";
 import type { GenerationTask, TaskLog } from "@/services/api/task-center";
@@ -47,10 +47,25 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                 <div className="py-8 text-center text-base font-medium">暂未实现</div>
             </Modal>
 
-            <Modal title={previewNode?.type === CanvasNodeType.Video ? "视频预览" : "图片预览"} open={Boolean(previewNode?.metadata?.content)} centered onCancel={onClosePreview} footer={null} width="min(1200px, calc(100vw - 32px))" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "#090909" } }}>
+            <Modal title="视频预览" open={Boolean(previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video)} centered onCancel={onClosePreview} footer={null} width="min(1200px, calc(100vw - 32px))" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "#090909" } }}>
                 {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? <video src={previewNode.metadata.content} controls className="max-h-[84vh] max-w-full bg-black object-contain" /> : null}
-                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? <img src={previewNode.metadata.content} alt={previewNode.title || "图片"} className="max-h-[84vh] max-w-full object-contain" /> : null}
             </Modal>
+
+            {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? (
+                <Image
+                    src={previewNode.metadata.content}
+                    alt={previewNode.title || "图片"}
+                    style={{ display: "none" }}
+                    preview={{
+                        open: true,
+                        movable: true,
+                        minScale: 0.5,
+                        maxScale: 12,
+                        scaleStep: 0.25,
+                        onOpenChange: (open) => !open && onClosePreview(),
+                    }}
+                />
+            ) : null}
 
             <Modal
                 title="清空画布？"
