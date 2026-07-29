@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openai/codex": "^0.144.6",
+    "@openai/codex": "^0.146.0",
     "express": "^5.2.1",
     "zod": "^3.25.76"
   },
