@@ -68,6 +68,7 @@ const (
 	ChannelInterfaceNewAPIVideo           ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1        ChannelInterfaceType = "newapi-channel-1"
 	ChannelInterfaceNewAPIChannel2        ChannelInterfaceType = "newapi-channel-2"
+	ChannelInterfaceAPIMartVideo          ChannelInterfaceType = "apimart-video"
 	ChannelInterfaceXAIVideo              ChannelInterfaceType = "xai-video"
 	ChannelInterfaceVolcengineArkVideo    ChannelInterfaceType = "volcengine-ark-video"
 	ChannelInterfaceVolcengineJiMengVideo ChannelInterfaceType = "volcengine-jimeng-video"

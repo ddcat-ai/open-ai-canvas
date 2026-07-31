@@ -12,6 +12,17 @@ import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
 type VideoResponse = { id?: string; request_id?: string; task_id?: string; status?: string; error?: { message?: string }; video?: { url?: string }; video_url?: string; result_url?: string };
 type ApiVideoResponse = VideoResponse | { code?: number; data?: VideoResponse | null; msg?: string };
+type APIMartTask = {
+    id?: string;
+    task_id?: string;
+    status?: string;
+    error?: { code?: number | string; message?: string } | null;
+    result?: {
+        videos?: Array<{ url?: string | string[]; video_url?: string | string[]; last_frame_url?: string | string[] }>;
+        last_frame_url?: string | string[];
+    } | null;
+};
+type APIMartEnvelope<T> = { code?: number; data?: T | null; msg?: string; error?: { message?: string } | null };
 type ResolvedAiConfig = ReturnType<typeof resolveModelRequestConfig>;
 type SeedanceTask = {
     id: string;
@@ -25,8 +36,8 @@ type SeedanceTask = {
 type ApiEnvelope<T> = T | { code?: number; data?: T | null; msg?: string };
 type RequestOptions = { signal?: AbortSignal };
 
-export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "video-generations" | "gemini-veo"; model: string };
+export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string; lastFrameUrl?: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "video-generations" | "apimart" | "gemini-veo"; model: string };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 function aiApiUrl(config: AiConfig, path: string) {
@@ -49,7 +60,8 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
         const state = await pollVideoGenerationTask(config, task, options);
         if (state.status === "completed") return state.result;
         if (state.status === "failed") throw new Error(state.error);
-        if (attempt === 119) throw new Error(`${task.provider === "seedance" ? "Seedance " : ""}视频生成超时，请稍后重试`);
+        const providerName = task.provider === "seedance" ? "Seedance " : task.provider === "apimart" ? "APIMart " : "";
+        if (attempt === 119) throw new Error(`${providerName}视频生成超时，请稍后重试`);
         await delay(delayMs, options?.signal);
     }
     throw new Error("视频生成超时，请稍后重试");
@@ -59,6 +71,9 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     const selectedModel = (config.model || config.videoModel).trim();
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     assertVideoConfig(requestConfig, requestConfig.model);
+    if (requestConfig.interfaceType === "apimart-video") {
+        return createAPIMartVideoTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
+    }
     if (requestConfig.interfaceType === "newapi-channel-2") {
         return createVideoGenerationsTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
@@ -81,6 +96,7 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
     if (task.provider === "seedance") return pollSeedanceTask(requestConfig, task, options);
+    if (task.provider === "apimart") return pollAPIMartVideoTask(requestConfig, task, options);
     if (task.provider === "video-generations") return pollVideoGenerationsTask(requestConfig, task, options);
     if (task.provider === "gemini-veo") return pollGeminiVeoTask(requestConfig, task, options);
     return pollOpenAIVideoTask(requestConfig, task, options);
@@ -129,6 +145,108 @@ async function pollVideoGenerationsTask(config: ResolvedAiConfig, task: VideoGen
     } catch (error) {
         throw new Error(readAxiosError(error, "NewAPI Video Generations 任务查询失败"));
     }
+}
+
+async function createAPIMartVideoTask(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+    if (references.length > 9 || videoReferences.length > 3 || audioReferences.length > 3) throw new Error("APIMart 视频最多支持 9 张参考图、3 个参考视频和 3 个参考音频");
+    const [imageUrls, videoUrls, audioUrls] = await Promise.all([
+        Promise.all(references.map((item) => resolveAPIMartVideoUrl(item.url || item.dataUrl, item.storageKey, "参考图"))),
+        Promise.all(videoReferences.map((item) => resolveAPIMartVideoUrl(item.url, item.storageKey, "参考视频"))),
+        Promise.all(audioReferences.map((item) => resolveAPIMartVideoUrl(item.url, item.storageKey, "参考音频"))),
+    ]);
+    if (audioUrls.length && !imageUrls.length && !videoUrls.length) throw new Error("APIMart 参考音频不能单独使用，请同时添加参考图或参考视频");
+    const modelName = modelOptionName(model);
+    const payload = {
+        model: modelName,
+        prompt: prompt.trim(),
+        duration: normalizeAPIMartVideoDuration(config.videoSeconds),
+        size: normalizeSeedanceRatio(config.size),
+        resolution: normalizeSeedanceResolution(config.vquality, modelName),
+        generate_audio: boolConfig(config.videoGenerateAudio, true),
+        ...(isAPIMartSeedance2Model(modelName) ? { return_last_frame: true } : {}),
+        ...(imageUrls.length ? { image_urls: imageUrls } : {}),
+        ...(videoUrls.length ? { video_urls: videoUrls } : {}),
+        ...(audioUrls.length ? { audio_urls: audioUrls } : {}),
+    };
+    try {
+        const created = unwrapAPIMartEnvelope(await channelPost<APIMartEnvelope<APIMartTask[]>>(config, aiApiUrl(config, "/videos/generations"), payload, options), "APIMart 视频接口没有返回任务");
+        const id = created[0]?.task_id || created[0]?.id || "";
+        if (!id) throw new Error("APIMart 视频接口没有返回任务 ID");
+        return { id, provider: "apimart", model };
+    } catch (error) {
+        throw new Error(readAxiosError(error, "APIMart 视频任务创建失败"));
+    }
+}
+
+async function pollAPIMartVideoTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+    try {
+        const state = unwrapAPIMartEnvelope(await channelGet<APIMartEnvelope<APIMartTask>>(config, aiApiUrl(config, `/tasks/${encodeURIComponent(task.id)}`), options), "APIMart 视频接口没有返回任务状态");
+        const status = String(state.status || "").toLowerCase();
+        if (status === "completed" || status === "succeeded" || status === "success") {
+            const url = findAPIMartVideoURL(state);
+            if (!url) return { status: "failed", error: `APIMart 视频任务 ${task.id} 已完成但没有返回视频地址` };
+            const result = await videoResultFromUrl(url, options);
+            const lastFrameUrl = findAPIMartLastFrameURL(state);
+            return { status: "completed", result: { ...result, ...(lastFrameUrl ? { lastFrameUrl } : {}) } };
+        }
+        if (status === "failed" || status === "cancelled" || status === "canceled") {
+            const code = state.error?.code ? `${state.error.code}：` : "";
+            const detail = `${code}${state.error?.message || "上游返回失败"}`;
+            return { status: "failed", error: `APIMart 视频生成失败（任务 ${task.id}）：${detail}` };
+        }
+        if (!status || ["pending", "processing", "submitted", "queued", "running"].includes(status)) return { status: "pending" };
+        return { status: "failed", error: `APIMart 视频任务 ${task.id} 返回未知状态：${status}` };
+    } catch (error) {
+        throw new Error(readAxiosError(error, "APIMart 视频任务查询失败"));
+    }
+}
+
+async function resolveAPIMartVideoUrl(value: string | undefined, storageKey: string | undefined, label: string) {
+    if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
+    const url = String(value || "").trim();
+    if (isPublicMediaUrl(url) || url.toLowerCase().startsWith("asset://")) return url;
+    throw new Error(`APIMart 的${label}需要公网 HTTP(S)、OSS 签名地址或 asset:// 素材`);
+}
+
+function unwrapAPIMartEnvelope<T>(payload: APIMartEnvelope<T>, emptyMessage: string): T {
+    if (payload.error?.message) throw new Error(payload.error.message);
+    if (payload.code !== undefined && payload.code !== 200) throw new Error(payload.msg || `APIMart 请求失败（业务码 ${payload.code}）`);
+    if (payload.data === undefined || payload.data === null) throw new Error(emptyMessage);
+    return payload.data;
+}
+
+function findAPIMartVideoURL(task: APIMartTask) {
+    for (const video of task.result?.videos || []) {
+        const url = readAPIMartURLValue(video.url) || readAPIMartURLValue(video.video_url);
+        if (url) return url;
+    }
+    return "";
+}
+
+function findAPIMartLastFrameURL(task: APIMartTask) {
+    const resultUrl = readAPIMartURLValue(task.result?.last_frame_url);
+    if (resultUrl) return resultUrl;
+    for (const video of task.result?.videos || []) {
+        const url = readAPIMartURLValue(video.last_frame_url);
+        if (url) return url;
+    }
+    return "";
+}
+
+function readAPIMartURLValue(value: string | string[] | undefined) {
+    if (typeof value === "string" && isPublicMediaUrl(value)) return value;
+    if (Array.isArray(value)) return value.find(isPublicMediaUrl) || "";
+    return "";
+}
+
+function normalizeAPIMartVideoDuration(value: string) {
+    const seconds = Math.floor(Number(value) || 5);
+    return Math.max(5, Math.min(15, seconds));
+}
+
+function isAPIMartSeedance2Model(model: string) {
+    const value = model.toLowerCase();
+    return value.includes("seedance-2.0") || value.includes("seedance-2-0");
 }
 
 async function resolveVideoGenerationsUrl(value: string | undefined, storageKey?: string) {

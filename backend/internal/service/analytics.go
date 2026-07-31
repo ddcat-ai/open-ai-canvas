@@ -927,6 +927,16 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 			}
 		}
 	}
+	// APIMart 的异步创建响应把 task_id 放在 data[0]，必须展开后才能记录并恢复上游任务。
+	if data, ok := payload["data"].([]any); ok && len(data) > 0 {
+		if item, ok := data[0].(map[string]any); ok {
+			for key, value := range item {
+				if _, exists := payload[key]; !exists {
+					payload[key] = value
+				}
+			}
+		}
+	}
 	if log.Status == model.ApiCallStatusFailed {
 		errorCode, errorMessage := providerFailureDetails(payload)
 		log.ErrorCode = errorCode

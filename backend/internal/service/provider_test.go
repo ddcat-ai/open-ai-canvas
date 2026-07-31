@@ -909,6 +909,9 @@ func TestValidateGenerationInterfaceRejectsMismatchedType(t *testing.T) {
 	if err := validateGenerationInterface("video", "newapi-channel-2"); err != nil {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}
+	if err := validateGenerationInterface("video", "apimart-video"); err != nil {
+		t.Fatalf("validateGenerationInterface() error = %v", err)
+	}
 	if err := validateGenerationInterface("video", "xai-video"); err != nil {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}

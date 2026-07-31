@@ -12,7 +12,7 @@ import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type Ca
 type BackendGenerationResult = {
     mode?: CanvasGenerationMode;
     images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string }>;
-    video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string };
+    video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string; lastFrameUrl?: string };
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
     text?: string;
 };
