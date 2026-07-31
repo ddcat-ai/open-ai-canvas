@@ -73,12 +73,6 @@ func (r *Repository) ChannelModels(channelID string, includeDisabled bool) ([]mo
 	return items, query.Find(&items).Error
 }
 
-func (r *Repository) ChannelModelsIncludingDeleted(channelID string) ([]model.ChannelModel, error) {
-	var items []model.ChannelModel
-	err := r.db.Unscoped().Where("channel_id = ?", channelID).Order("created_at asc").Find(&items).Error
-	return items, err
-}
-
 func (r *Repository) ChannelModelByID(channelID string, id string) (*model.ChannelModel, error) {
 	var item model.ChannelModel
 	if err := r.db.First(&item, "id = ? AND channel_id = ?", id, channelID).Error; err != nil {
@@ -90,6 +84,14 @@ func (r *Repository) ChannelModelByID(channelID string, id string) (*model.Chann
 func (r *Repository) ChannelModelByKey(channelID string, modelKey string) (*model.ChannelModel, error) {
 	var item model.ChannelModel
 	if err := r.db.First(&item, "channel_id = ? AND model_key = ? AND enabled = ?", channelID, modelKey, true).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *Repository) ChannelModelByKeyIncludingDisabled(channelID string, modelKey string) (*model.ChannelModel, error) {
+	var item model.ChannelModel
+	if err := r.db.First(&item, "channel_id = ? AND model_key = ?", channelID, modelKey).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil

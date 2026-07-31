@@ -659,6 +659,11 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		failService(c, err)
 		return
 	}
+	channelHeaders, err := service.ParseOutboundHeadersJSON(channel.HeadersJSON)
+	if err != nil {
+		failService(c, err)
+		return
+	}
 	// 同步代理与后台任务必须共享渠道槽位，否则两条入口会共同超过供应商并发上限。
 	releaseChannel, concurrencyLimit, err := svc.AcquireChannelSlot(c.Request.Context(), channel.ID, "", 36*time.Minute)
 	if err != nil {
@@ -694,6 +699,8 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	if accept := c.GetHeader("Accept"); accept != "" {
 		upstreamReq.Header.Set("Accept", accept)
 	}
+	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
+	service.ApplyDefaultOutboundHeaders(upstreamReq)
 	if protocol == model.ChannelInterfaceGeminiVeo {
 		upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
 	} else {

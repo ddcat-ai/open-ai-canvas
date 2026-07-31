@@ -37,6 +37,7 @@
         "dayjs": "^1.11.21",
         "fflate": "^0.8.3",
         "file-saver": "^2.0.5",
+        "leafer-ui": "^2.2.7",
         "localforage": "^1.10.0",
         "lucide-react": "^1.25.0",
         "mammoth": "^1.12.0",

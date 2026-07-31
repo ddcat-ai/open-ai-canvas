@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 
+import { applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateNodeAlignment, createNodeAlignmentContext, isHiddenBatchChild, sameStringSet, type NodeAlignmentContext } from "@/lib/canvas/canvas-project-domain";
 import { applyFrameDrop, findFrameDropTarget, getFrameChildIds, isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
 import type { CanvasNodeData, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
 
 type UseCanvasSelectionControllerOptions = {
+    containerRef: RefObject<HTMLDivElement | null>;
     nodesRef: { current: CanvasNodeData[] };
     viewportRef: { current: ViewportTransform };
     selectedNodeIdsRef: { current: Set<string> };
@@ -41,6 +43,7 @@ const EMPTY_DRAG_STATE: DragState = {
 };
 
 export function useCanvasSelectionController({
+    containerRef,
     nodesRef,
     viewportRef,
     selectedNodeIdsRef,
@@ -61,7 +64,6 @@ export function useCanvasSelectionController({
     const alignmentContextRef = useRef<NodeAlignmentContext | null>(null);
     const lastFrameDropCheckRef = useRef(0);
     const selectionFrameRef = useRef<number | null>(null);
-    const selectionBoxElementRef = useRef<HTMLDivElement>(null);
     const selectionBoundsElementRef = useRef<HTMLDivElement>(null);
     const selectionCandidatesRef = useRef<Array<{ id: string; left: number; top: number; right: number; bottom: number }>>([]);
     const pendingSelectionPointRef = useRef<Position | null>(null);
@@ -274,13 +276,9 @@ export function useCanvasSelectionController({
             const rectY = Math.min(selection.startWorldY, world.y);
             const rectW = Math.abs(world.x - selection.startWorldX);
             const rectH = Math.abs(world.y - selection.startWorldY);
-            const element = selectionBoxElementRef.current;
-            if (element) {
-                element.style.setProperty("--selection-x", `${rectX}px`);
-                element.style.setProperty("--selection-y", `${rectY}px`);
-                element.style.setProperty("--selection-width", `${rectW}px`);
-                element.style.setProperty("--selection-height", `${rectH}px`);
-            }
+            selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
+            selectionBoxRef.current = selection;
+            applyCanvasSelectionPreview(containerRef.current, selection);
             const nextSelected = new Set<string>(selection.additive || selection.subtractive ? selection.initialSelectedNodeIds : []);
             selectionCandidatesRef.current.forEach((node) => {
                 if (rectX >= node.right || rectX + rectW <= node.left || rectY >= node.bottom || rectY + rectH <= node.top) return;
@@ -291,7 +289,7 @@ export function useCanvasSelectionController({
             selectedNodeIdsRef.current = nextSelected;
             setSelectedNodeIds(nextSelected);
         });
-    }, [cancelSelectionBox, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+    }, [cancelSelectionBox, containerRef, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
 
     const finishSelection = useCallback(() => {
         const hadPendingSelection = Boolean(selectionBoxRef.current);
@@ -337,6 +335,5 @@ export function useCanvasSelectionController({
         nodeDraggingRef,
         selectionBoundsElementRef,
         selectionBox,
-        selectionBoxElementRef,
     };
 }

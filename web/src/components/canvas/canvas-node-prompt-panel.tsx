@@ -15,6 +15,7 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
+import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 
@@ -62,6 +63,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
     const isSubmitDisabled = !isRunning && !prompt.trim();
     const canExpandPrompt = mode === "image" || mode === "video";
+    const isPortraitTexture = mode === "image" && Boolean(node.metadata?.portraitTexture);
     const updatePromptContentHeight = useCallback((height: number) => {
         setPromptContentHeight((current) => Math.abs(current - height) < 1 ? current : height);
     }, []);
@@ -121,12 +123,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     const renderComposerHeader = (expanded: boolean) => (
         <div className="flex min-w-0 items-center gap-1 px-0.5">
-            <div className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5" style={{ background: theme.toolbar.itemHover }}>
-                <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: theme.accent.primary }}>
-                    <GenerationModeIcon mode={mode} />
-                </span>
-                <span className="truncate text-[10px] font-medium">{modeDisplayName(mode)}创作</span>
-            </div>
+            {isPortraitTexture ? (
+                <CanvasPortraitTexturePopover
+                    value={node.metadata?.portraitTexture}
+                    placement={expanded ? "topRight" : "topLeft"}
+                    onChange={(portraitTexture) => onConfigChange(node.id, { portraitTexture })}
+                />
+            ) : (
+                <div className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5" style={{ background: theme.toolbar.itemHover }}>
+                    <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: theme.accent.primary }}>
+                        <GenerationModeIcon mode={mode} />
+                    </span>
+                    <span className="truncate text-[10px] font-medium">{modeDisplayName(mode)}创作</span>
+                </div>
+            )}
             {!simpleMode ? (
                 <CanvasPresetPicker
                     mode={mode}

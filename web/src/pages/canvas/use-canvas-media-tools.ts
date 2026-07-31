@@ -21,6 +21,7 @@ import {
 } from "@/lib/canvas/canvas-project-generation";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage, emotionGenerationSize } from "@/lib/canvas/canvas-emotion";
+import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { captureVideoLastFrame } from "@/lib/canvas/canvas-video-frame";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -128,6 +129,42 @@ export function useCanvasMediaTools({
         setDialogNodeId(resultNode.id);
         setContextMenu(null);
     }, [effectiveConfig.model, effectiveConfig.textModel, message, setConnections, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
+
+    const createPortraitTextureNode = useCallback((node: CanvasNodeData) => {
+        if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
+            message.warning("图片节点为空，无法调节人物质感");
+            return;
+        }
+        const imageSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+        const composerContent = `@[node:${node.id}]`;
+        const child = createCanvasNode(
+            CanvasNodeType.Image,
+            {
+                x: node.position.x + node.width + 96 + imageSpec.width / 2,
+                y: node.position.y + node.height / 2,
+            },
+            {
+                generationMode: "image",
+                model: effectiveConfig.imageModel || effectiveConfig.model,
+                size: node.metadata.size || effectiveConfig.size,
+                quality: node.metadata.quality || effectiveConfig.quality,
+                transparentBackground: node.metadata.transparentBackground || effectiveConfig.transparentBackground,
+                count: 1,
+                prompt: composerContent,
+                composerContent,
+                portraitTexture: { ...DEFAULT_PORTRAIT_TEXTURE_SETTINGS },
+            },
+        );
+        child.title = "人物质感调节";
+        setNodes((current) => [...current, child]);
+        setConnections((current) => [...current, { id: nanoid(), fromNodeId: node.id, toNodeId: child.id }]);
+        setSelectedNodeIds(new Set([child.id]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(child.id);
+        setContextMenu(null);
+        setHoveredNodeId(null);
+        setToolbarNodeId(null);
+    }, [effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.quality, effectiveConfig.size, effectiveConfig.transparentBackground, message, setConnections, setContextMenu, setDialogNodeId, setHoveredNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId]);
 
     const cropImageNode = useCallback(async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
         if (!node.metadata?.content) return;
@@ -431,6 +468,7 @@ export function useCanvasMediaTools({
         emotionNodeId,
         annotationNodeId,
         createImageReversePromptNodes,
+        createPortraitTextureNode,
         cropImageNode,
         cropNodeId,
         extractVideoLastFrame,

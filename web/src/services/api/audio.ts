@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
+import { channelRequest } from "@/services/api/custom-channel-relay";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { buildApiUrl, isSystemProxyBaseUrl, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
@@ -26,8 +27,9 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
     const instructions = config.audioInstructions.trim();
 
     try {
+        const request = channelRequest(requestConfig, aiApiUrl(requestConfig, "/audio/speech"), aiHeaders(requestConfig));
         const response = await axios.post<Blob>(
-            aiApiUrl(requestConfig, "/audio/speech"),
+            request.url,
             {
                 model,
                 input: prompt,
@@ -36,7 +38,7 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
                 speed: Number(normalizeAudioSpeedValue(config.audioSpeed)),
                 ...(instructions ? { instructions } : {}),
             },
-            { headers: aiHeaders(requestConfig), responseType: "blob", signal: options?.signal },
+            { headers: request.headers, withCredentials: request.credentials === "include", responseType: "blob", signal: options?.signal },
         );
         await assertAudioBlob(response.data);
         return response.data.type.startsWith("audio/") ? response.data : new Blob([response.data], { type: audioMimeType(format) });

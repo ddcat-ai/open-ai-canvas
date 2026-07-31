@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
@@ -12,7 +15,18 @@ import (
 	"time"
 )
 
-const maxOutboundRedirects = 5
+const (
+	maxOutboundRedirects     = 5
+	maxOutboundHeaderCount   = 32
+	maxOutboundHeaderBytes   = 16 << 10
+	CustomRelayHeadersHeader = "X-Canvas-Upstream-Headers"
+	DefaultOutboundUserAgent = "InfiniteCanvas/1.0 (+https://github.com/ddcat-ai/open-ai-canvas)"
+)
+
+type OutboundHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
 
 var (
 	outboundTransport          = newOutboundTransport(resolveOutboundHost)
@@ -95,6 +109,136 @@ func CustomRelayHTTPClient(timeout time.Duration) *http.Client {
 			return errors.New("自定义渠道中转不允许重定向")
 		},
 	}
+}
+
+// ApplyDefaultOutboundHeaders 为所有服务端出网请求提供可识别的产品标识，
+// 避免 Go 默认 User-Agent 被部分 WAF 或中转网关拦截。
+func ApplyDefaultOutboundHeaders(req *http.Request) {
+	if req != nil && strings.TrimSpace(req.Header.Get("User-Agent")) == "" {
+		req.Header.Set("User-Agent", DefaultOutboundUserAgent)
+	}
+}
+
+// NormalizeOutboundHeaders 是自定义 Header 的安全边界：允许业务/WAF 校验头和 User-Agent，
+// 但禁止覆盖鉴权、请求体协议、代理内部头及 hop-by-hop 头。
+func NormalizeOutboundHeaders(headers []OutboundHeader) ([]OutboundHeader, error) {
+	if len(headers) > maxOutboundHeaderCount {
+		return nil, BadAuthRequest(fmt.Sprintf("自定义请求头最多支持 %d 项", maxOutboundHeaderCount))
+	}
+	seen := make(map[string]struct{}, len(headers))
+	normalized := make([]OutboundHeader, 0, len(headers))
+	totalBytes := 0
+	for _, item := range headers {
+		name := strings.TrimSpace(item.Name)
+		value := strings.TrimSpace(item.Value)
+		if name == "" && value == "" {
+			continue
+		}
+		if name == "" || !validOutboundHeaderName(name) {
+			return nil, BadAuthRequest("自定义请求头名称无效，请使用标准 HTTP Header 名称")
+		}
+		name = http.CanonicalHeaderKey(name)
+		lowerName := strings.ToLower(name)
+		if blockedOutboundHeader(lowerName) {
+			return nil, BadAuthRequest("请求头 " + name + " 由系统管理，不允许自定义")
+		}
+		if _, exists := seen[lowerName]; exists {
+			return nil, BadAuthRequest("自定义请求头不能重复：" + name)
+		}
+		if !validOutboundHeaderValue(value) {
+			return nil, BadAuthRequest("请求头 " + name + " 的值包含非法控制字符")
+		}
+		if len(name) > 128 || len(value) > 4096 {
+			return nil, BadAuthRequest("单个自定义请求头名称或值过长")
+		}
+		totalBytes += len(name) + len(value)
+		if totalBytes > maxOutboundHeaderBytes {
+			return nil, BadAuthRequest("自定义请求头总大小不能超过 16KB")
+		}
+		seen[lowerName] = struct{}{}
+		normalized = append(normalized, OutboundHeader{Name: name, Value: value})
+	}
+	return normalized, nil
+}
+
+func ApplyOutboundHeaders(req *http.Request, headers []OutboundHeader) {
+	if req == nil {
+		return
+	}
+	for _, item := range headers {
+		req.Header.Set(item.Name, item.Value)
+	}
+}
+
+func EncodeOutboundHeadersJSON(headers []OutboundHeader) (string, error) {
+	normalized, err := NormalizeOutboundHeaders(headers)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(normalized)
+	return string(data), err
+}
+
+func ParseOutboundHeadersJSON(raw string) ([]OutboundHeader, error) {
+	if strings.TrimSpace(raw) == "" {
+		return []OutboundHeader{}, nil
+	}
+	var headers []OutboundHeader
+	if err := json.Unmarshal([]byte(raw), &headers); err != nil {
+		return nil, errors.New("渠道自定义请求头配置损坏")
+	}
+	return NormalizeOutboundHeaders(headers)
+}
+
+func DecodeRelayOutboundHeaders(encoded string) ([]OutboundHeader, error) {
+	if strings.TrimSpace(encoded) == "" {
+		return []OutboundHeader{}, nil
+	}
+	if len(encoded) > (maxOutboundHeaderBytes*2)+1024 {
+		return nil, BadAuthRequest("自定义请求头配置过大")
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, BadAuthRequest("自定义请求头编码无效")
+	}
+	var headers []OutboundHeader
+	if err := json.Unmarshal(data, &headers); err != nil {
+		return nil, BadAuthRequest("自定义请求头格式无效")
+	}
+	return NormalizeOutboundHeaders(headers)
+}
+
+func validOutboundHeaderName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index := 0; index < len(name); index++ {
+		char := name[index]
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || strings.ContainsRune("!#$%&'*+-.^_`|~", rune(char)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validOutboundHeaderValue(value string) bool {
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if char == '\t' || char >= 32 && char != 127 {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func blockedOutboundHeader(name string) bool {
+	switch name {
+	case "authorization", "proxy-authorization", "cookie", "set-cookie", "host", "content-length", "content-type", "accept", "connection", "proxy-connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "forwarded", "x-goog-api-key":
+		return true
+	}
+	return strings.HasPrefix(name, "x-canvas-") || strings.HasPrefix(name, "x-forwarded-")
 }
 
 func newOutboundTransport(resolveHost func(context.Context, string) ([]net.IP, error)) *http.Transport {

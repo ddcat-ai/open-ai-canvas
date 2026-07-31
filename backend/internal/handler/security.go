@@ -28,6 +28,7 @@ var (
 	customGeminiRelayPath     = regexp.MustCompile(`(?:^|/)models/[^/:]+:(generateContent|streamGenerateContent|predictLongRunning)$`)
 	customVideoTaskPath       = regexp.MustCompile(`(?:^|/)video/generations/[^/]+$`)
 	customXAIVideoTaskPath    = regexp.MustCompile(`(?:^|/)videos/[^/]+$`)
+	customVideoContentPath    = regexp.MustCompile(`(?:^|/)videos/[^/]+/content$`)
 	customArkVideoTaskPath    = regexp.MustCompile(`(?:^|/)contents/generations/tasks/[^/]+$`)
 	customGeminiOperationPath = regexp.MustCompile(`(?:^|/)(?:models/[^/]+/)?operations/[^/]+$`)
 	openAIPostEndpoints       = map[string]bool{
@@ -63,7 +64,7 @@ func authorizeCustomRelay(method string, target *url.URL, apiFormat string, cont
 	if method == http.MethodGet {
 		allowed := requestPath == "/models" || strings.HasSuffix(requestPath, "/models")
 		if apiFormat == "openai" {
-			allowed = allowed || customVideoTaskPath.MatchString(requestPath) || customXAIVideoTaskPath.MatchString(requestPath) || customArkVideoTaskPath.MatchString(requestPath)
+			allowed = allowed || customVideoTaskPath.MatchString(requestPath) || customXAIVideoTaskPath.MatchString(requestPath) || customVideoContentPath.MatchString(requestPath) || customArkVideoTaskPath.MatchString(requestPath)
 		} else {
 			allowed = allowed || customGeminiOperationPath.MatchString(requestPath)
 		}
@@ -72,18 +73,23 @@ func authorizeCustomRelay(method string, target *url.URL, apiFormat string, cont
 		}
 		return nil
 	}
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil || mediaType != "application/json" {
-		return errors.New("自定义渠道生成请求必须使用 application/json")
-	}
 	if method != http.MethodPost {
 		return errors.New("自定义渠道不允许使用该请求方法")
 	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return errors.New("自定义渠道生成请求类型无效")
+	}
 	if apiFormat == "openai" {
-		if len(query) != 0 || (!strings.HasSuffix(requestPath, "/responses") && !strings.HasSuffix(requestPath, "/chat/completions") && !strings.HasSuffix(requestPath, "/images/generations") && !strings.HasSuffix(requestPath, "/video/generations") && !strings.HasSuffix(requestPath, "/videos/generations") && !strings.HasSuffix(requestPath, "/contents/generations/tasks")) {
+		multipartAllowed := mediaType == "multipart/form-data" && (strings.HasSuffix(requestPath, "/images/edits") || strings.HasSuffix(requestPath, "/videos"))
+		jsonAllowed := mediaType == "application/json" && (strings.HasSuffix(requestPath, "/responses") || strings.HasSuffix(requestPath, "/chat/completions") || strings.HasSuffix(requestPath, "/images/generations") || strings.HasSuffix(requestPath, "/audio/speech") || strings.HasSuffix(requestPath, "/video/generations") || strings.HasSuffix(requestPath, "/videos/generations") || strings.HasSuffix(requestPath, "/videos") || strings.HasSuffix(requestPath, "/contents/generations/tasks"))
+		if len(query) != 0 || (!multipartAllowed && !jsonAllowed) {
 			return errors.New("自定义渠道不允许访问该上游接口")
 		}
 		return nil
+	}
+	if mediaType != "application/json" {
+		return errors.New("Gemini 自定义渠道生成请求必须使用 application/json")
 	}
 	if !customGeminiRelayPath.MatchString(requestPath) {
 		return errors.New("自定义渠道不允许访问该上游接口")

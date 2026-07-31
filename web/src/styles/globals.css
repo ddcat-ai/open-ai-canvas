@@ -1278,6 +1278,21 @@
         transition: none !important;
     }
 
+    /* 静止期用最终倍率重新排版 DOM，避免 Windows Chromium 复用交互期的低分辨率合成纹理。 */
+    .canvas-world-layer {
+        transform: translate(var(--canvas-live-x), var(--canvas-live-y)) scale(var(--canvas-live-scale-ratio));
+        transform-origin: 0 0;
+    }
+
+    .canvas-world-raster-layer {
+        zoom: var(--canvas-committed-scale);
+    }
+
+    [data-canvas-viewport-interacting="true"] .canvas-world-layer {
+        transform: translate3d(var(--canvas-live-x), var(--canvas-live-y), 0) scale(var(--canvas-live-scale-ratio));
+        will-change: transform;
+    }
+
     [data-canvas-viewport-interacting="true"] .canvas-node-shell.aceternity-comet-card,
     [data-canvas-viewport-interacting="true"] .canvas-node-shell.aceternity-comet-card:hover {
         box-shadow: none !important;

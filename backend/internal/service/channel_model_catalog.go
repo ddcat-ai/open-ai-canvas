@@ -13,9 +13,10 @@ import (
 )
 
 type ChannelModelsRequest struct {
-	BaseURL   string `json:"baseUrl"`
-	APIKey    string `json:"apiKey"`
-	APIFormat string `json:"apiFormat"`
+	BaseURL   string           `json:"baseUrl"`
+	APIKey    string           `json:"apiKey"`
+	APIFormat string           `json:"apiFormat"`
+	Headers   []OutboundHeader `json:"headers"`
 }
 
 type channelModelsPayload struct {
@@ -50,6 +51,10 @@ func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, inp
 	if apiFormat != "openai" && apiFormat != "gemini" {
 		return nil, BadAuthRequest("接口协议不支持拉取模型")
 	}
+	headers, err := NormalizeOutboundHeaders(input.Headers)
+	if err != nil {
+		return nil, err
+	}
 
 	target := apiURL(baseURL, "/models")
 	if apiFormat == "gemini" {
@@ -71,6 +76,7 @@ func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, inp
 	} else {
 		request.Header.Set("Authorization", "Bearer "+apiKey)
 	}
+	ApplyOutboundHeaders(request, headers)
 
 	// 只代理固定的模型目录 GET；用户密钥仅用于本次请求，不写入数据库或日志。
 	data, _, err := doBinary(request)

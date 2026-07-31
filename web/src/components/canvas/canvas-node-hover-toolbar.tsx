@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { App, Button, Input, Modal, Segmented, Tag } from "antd";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { App, Button, Dropdown, Input, Modal, Segmented, Tag } from "antd";
 import { Download, Ellipsis, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -33,6 +33,7 @@ type CanvasNodeHoverToolbarProps = {
     onSaveAsset: (node: CanvasNodeData) => void;
     onMaskEdit: (node: CanvasNodeData) => void;
     onEmotion: (node: CanvasNodeData) => void;
+    onPortraitTexture: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onSplit: (node: CanvasNodeData) => void;
     onUpscale: (node: CanvasNodeData) => void;
@@ -93,6 +94,7 @@ export function CanvasNodeHoverToolbar({
     onSaveAsset,
     onMaskEdit,
     onEmotion,
+    onPortraitTexture,
     onCrop,
     onSplit,
     onUpscale,
@@ -113,6 +115,7 @@ export function CanvasNodeHoverToolbar({
     const [showDockLabels, setShowDockLabels] = useState(true);
     const [draftShowDockLabels, setDraftShowDockLabels] = useState(true);
     const [imageToolSettingsOpen, setImageToolSettingsOpen] = useState(false);
+    const [imageToolMenuOpen, setImageToolMenuOpen] = useState(false);
     const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
     const { message } = App.useApp();
@@ -137,6 +140,7 @@ export function CanvasNodeHoverToolbar({
 
     useEffect(() => {
         setImageToolSettingsOpen(false);
+        setImageToolMenuOpen(false);
     }, [node?.id]);
 
     useLayoutEffect(() => {
@@ -209,10 +213,11 @@ export function CanvasNodeHoverToolbar({
         }
         copyText(prompt, "提示词已复制");
     };
-    const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onAnnotate, onMaskEdit, onEmotion, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt });
+    const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onAnnotate, onMaskEdit, onEmotion, onPortraitTexture, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt });
 
     function openImageToolSettings() {
         onKeep(activeNode.id);
+        setImageToolMenuOpen(false);
         setDraftImageToolIds(quickImageToolIds);
         setDraftShowDockLabels(showDockLabels);
         setImageToolSettingsOpen(true);
@@ -240,16 +245,27 @@ export function CanvasNodeHoverToolbar({
     ];
     const toolbarTools = hasImage ? [...baseToolbarTools, ...nodeToolbarTools].filter((tool) => quickImageToolIdSet.has(tool.id as ImageQuickToolId)) : [...baseToolbarTools, ...nodeToolbarTools];
     const selectableImageToolbarTools = [...baseToolbarTools, ...nodeToolbarTools].filter((tool): tool is ToolbarTool & { id: ImageQuickToolId } => isImageQuickToolId(tool.id));
+    const temporaryImageToolbarTools = selectableImageToolbarTools.filter((tool) => !quickImageToolIdSet.has(tool.id));
     const dockItems: FloatingDockEntry[] = [
         ...toolbarTools.map((tool) => ({ id: tool.id, label: tool.title, displayLabel: tool.label, icon: tool.icon, active: tool.active, danger: tool.danger, disabled: tool.disabled, onClick: () => tool.onClick() })),
         { kind: "separator", id: "node-state-separator" },
         { id: "node-lock", label: node.metadata?.locked ? "解锁节点" : "锁定位置和尺寸", displayLabel: node.metadata?.locked ? "解锁" : "锁定", icon: node.metadata?.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />, active: Boolean(node.metadata?.locked), onClick: () => onToggleLocked(node) },
-        ...(hasImage && !simpleMode ? [{ id: "image-tools-settings", label: "自定义节点工具", displayLabel: "更多", icon: <Ellipsis className="size-3.5" />, onClick: openImageToolSettings }] : []),
     ];
 
     const closeImageToolSettings = () => {
         setImageToolSettingsOpen(false);
         onLeave();
+    };
+
+    const runTemporaryImageTool = (tool: ToolbarTool) => {
+        setImageToolMenuOpen(false);
+        tool.onClick();
+    };
+
+    const handleImageToolMenuOpenChange = (open: boolean) => {
+        setImageToolMenuOpen(open);
+        if (open) onKeep(activeNode.id);
+        else if (!imageToolSettingsOpen) onLeave();
     };
 
     const setDraftImageToolVisible = (id: ImageQuickToolId, visible: boolean) => {
@@ -284,13 +300,39 @@ export function CanvasNodeHoverToolbar({
                 style={{ left: anchor.left, top: anchor.top, width: "max-content", maxWidth: `min(calc(100% - 20px), ${showDockLabels ? 840 : 560}px)`, color: theme.node.text }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {
-                    if (!imageToolSettingsOpen) onLeave();
+                    if (!imageToolSettingsOpen && !imageToolMenuOpen) onLeave();
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[14px] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? { ...dockShellStyle, boxShadow: `0 18px 52px ${theme.spatial.shadow}` } : dockShellStyle}>
                     {dockItems.length ? <FloatingDock embedded items={dockItems} size="compact" showLabels={showDockLabels} ariaLabel="节点快捷工具" className={`pointer-events-auto shrink-0 ${showDockLabels ? "" : "max-w-[min(calc(100vw-20px),400px)]"}`} style={embeddedDockStyle} /> : null}
+                    {hasImage && !simpleMode ? (
+                        <Dropdown
+                            open={imageToolMenuOpen}
+                            trigger={["click"]}
+                            placement="topRight"
+                            onOpenChange={handleImageToolMenuOpenChange}
+                            menu={{
+                                items: [
+                                    ...temporaryImageToolbarTools.map((tool) => ({ key: tool.id, icon: tool.icon, label: tool.label, danger: tool.danger, onClick: () => runTemporaryImageTool(tool) })),
+                                    ...(temporaryImageToolbarTools.length ? [{ type: "divider" as const }] : []),
+                                    { key: "manage-image-quick-tools", icon: <Settings2 className="size-3.5" />, label: "管理快捷工具", onClick: openImageToolSettings },
+                                ],
+                            }}
+                        >
+                            <button
+                                type="button"
+                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
+                                style={{ color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                                aria-label="更多图片工具"
+                                title="更多图片工具"
+                            >
+                                <Ellipsis className="size-3.5" />
+                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">更多</span> : null}
+                            </button>
+                        </Dropdown>
+                    ) : null}
                 </div>
             </div>
             {hasImage ? (

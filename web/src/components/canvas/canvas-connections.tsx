@@ -13,6 +13,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop = 0,
     toScrollTop = 0,
     active,
+    visualMode = "full",
     onSelect,
     onContextMenu,
 }: {
@@ -22,19 +23,15 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop?: number;
     toScrollTop?: number;
     active: boolean;
+    visualMode?: "full" | "hover-only";
     onSelect: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [hovered, setHovered] = useState(false);
-    const startX = from.position.x + from.width;
-    const startY = connectionHandleY(from, connection.fromHandleId, fromScrollTop);
-    const endX = to.position.x;
-    const endY = connectionHandleY(to, connection.toHandleId, toScrollTop);
-    const dx = Math.abs(endX - startX);
-    const curvature = Math.max(dx * 0.5, 50);
-    const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
+    const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop);
     const emphasized = active || hovered;
+    const showVisual = visualMode === "full" || hovered;
     const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
     return (
@@ -66,7 +63,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                     onContextMenu?.(event);
                 }}
             />
-            <path
+            {showVisual ? <path
                 d={pathD}
                 stroke={emphasized ? theme.accent.primary : theme.node.muted}
                 strokeWidth={emphasized ? 1.6 : 1}
@@ -75,8 +72,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 fill="none"
                 strokeLinecap="round"
                 style={{ pointerEvents: "none" }}
-            />
-            {emphasized ? <path
+            /> : null}
+            {showVisual && emphasized ? <path
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
@@ -90,12 +87,20 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
         </g>
     );
-}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
+}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
 
-export function ActiveConnectionPath({ node, handle, mouseWorld, target, nodeScrollTop = 0 }: { node?: CanvasNodeData; handle: ConnectionHandle; mouseWorld: Position; target?: CanvasNodeData; nodeScrollTop?: number }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    if (!node) return null;
+export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0) {
+    const startX = from.position.x + from.width;
+    const startY = connectionHandleY(from, connection.fromHandleId, fromScrollTop);
+    const endX = to.position.x;
+    const endY = connectionHandleY(to, connection.toHandleId, toScrollTop);
+    const dx = Math.abs(endX - startX);
+    const curvature = Math.max(dx * 0.5, 50);
+    return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
+}
 
+export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0) {
+    if (!node) return "";
     const startX = handle.handleType === "source" ? node.position.x + node.width : mouseWorld.x;
     const startY = handle.handleType === "source" ? connectionHandleY(node, handle.handleId, nodeScrollTop) : mouseWorld.y;
     const endX = handle.handleType === "source" ? mouseWorld.x : node.position.x;
@@ -105,12 +110,10 @@ export function ActiveConnectionPath({ node, handle, mouseWorld, target, nodeScr
     const snappedEndX = handle.handleType === "source" && target ? target.position.x : endX;
     const snappedEndY = handle.handleType === "source" && target ? target.position.y + target.height / 2 : endY;
     const distance = Math.abs(snappedEndX - snappedStartX);
-    const pathD = `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
-
-    return <path className="canvas-connection-draft" d={pathD} stroke={theme.accent.primary} strokeWidth="1.4" strokeOpacity="0.72" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="8,8" strokeLinecap="round" />;
+    return `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
 }
 
-function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {
+export function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {
     if (handleId === "storyboard:context") return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
     if (!handleId?.startsWith("row:")) return node.position.y + node.height / 2;
     const rowId = handleId.slice(4);

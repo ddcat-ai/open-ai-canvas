@@ -1,27 +1,20 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 
-import { ActiveConnectionPath, ConnectionPath } from "@/components/canvas/canvas-connections";
+import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
-import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
+import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
 
-type CanvasTheme = {
-    accent: { primary: string };
-    canvas: { selectionFill: string };
-};
-
-type DisplayConnection = { connection: CanvasConnection; from: CanvasNodeData; to: CanvasNodeData };
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 type NodeBounds = { left: number; top: number; width: number; height: number; count: number } | null;
 
 type CanvasProjectWorldLayersProps = {
     projectId: string;
-    theme: CanvasTheme;
     viewportScale: number;
     connectionLayerBounds: { left: number; top: number; width: number; height: number };
-    displayConnections: DisplayConnection[];
+    displayConnections: CanvasDisplayConnection[];
     selectedConnectionId: string | null;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
@@ -49,7 +42,6 @@ type CanvasProjectWorldLayersProps = {
     selectedNodeBounds: NodeBounds;
     isNodeDragging: boolean;
     selectionBoundsElementRef: RefObject<HTMLDivElement | null>;
-    selectionBoxElementRef: RefObject<HTMLDivElement | null>;
     renderCanvasNodeContent: (node: CanvasNodeData) => ReactNode;
     onConnectionSelect: (connectionId: string) => void;
     onConnectionContextMenu: (event: ReactMouseEvent<SVGPathElement>, connectionId: string) => void;
@@ -79,7 +71,7 @@ const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
 const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 
 export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
-    const { theme, viewportScale } = props;
+    const { viewportScale } = props;
     return (
         <>
             <svg
@@ -96,11 +88,11 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         fromScrollTop={props.scriptScrollTopById[from.id] || 0}
                         toScrollTop={props.scriptScrollTopById[to.id] || 0}
                         active={props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
+                        visualMode="hover-only"
                         onSelect={() => props.onConnectionSelect(connection.id)}
                         onContextMenu={(event) => props.onConnectionContextMenu(event, connection.id)}
                     />
                 ))}
-                {props.connectingParams ? <ActiveConnectionPath node={props.nodeById.get(props.connectingParams.nodeId)} handle={props.connectingParams} mouseWorld={props.mouseWorld} target={props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined} nodeScrollTop={props.scriptScrollTopById[props.connectingParams.nodeId] || 0} /> : null}
             </svg>
 
             {props.visibleNodes.map((node) =>
@@ -167,29 +159,12 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
             {props.selectedNodeBounds && !props.selectionBox && !props.isNodeDragging ? (
                 <div
                     ref={props.selectionBoundsElementRef}
-                    className="pointer-events-none absolute z-[65] rounded-xl border"
+                    className="pointer-events-none absolute z-[65] rounded-xl"
                     style={{
                         left: props.selectedNodeBounds.left - 12 / viewportScale,
                         top: props.selectedNodeBounds.top - 12 / viewportScale,
                         width: props.selectedNodeBounds.width + 24 / viewportScale,
                         height: props.selectedNodeBounds.height + 24 / viewportScale,
-                        borderColor: theme.accent.primary,
-                        borderWidth: 1 / viewportScale,
-                    }}
-                />
-            ) : null}
-
-            {props.selectionBox ? (
-                <div
-                    ref={props.selectionBoxElementRef}
-                    className="pointer-events-none absolute z-[100] border"
-                    style={{
-                        transform: `translate3d(var(--selection-x, ${Math.min(props.selectionBox.startWorldX, props.selectionBox.currentWorldX)}px), var(--selection-y, ${Math.min(props.selectionBox.startWorldY, props.selectionBox.currentWorldY)}px), 0)`,
-                        width: `var(--selection-width, ${Math.abs(props.selectionBox.currentWorldX - props.selectionBox.startWorldX)}px)`,
-                        height: `var(--selection-height, ${Math.abs(props.selectionBox.currentWorldY - props.selectionBox.startWorldY)}px)`,
-                        borderColor: theme.accent.primary,
-                        background: theme.canvas.selectionFill,
-                        willChange: "transform,width,height",
                     }}
                 />
             ) : null}

@@ -180,29 +180,6 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
     );
 }
 
-export function CanvasAlignmentGuides({ guides, viewport, containerRef, color }: { guides: { vertical: number | null; horizontal: number | null }; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; color: string }) {
-    const verticalRef = useRef<HTMLDivElement>(null);
-    const horizontalRef = useRef<HTMLDivElement>(null);
-
-    useLayoutEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-        const update = (nextViewport: ViewportTransform) => {
-            if (verticalRef.current && typeof guides.vertical === "number") verticalRef.current.style.left = `${nextViewport.x + guides.vertical * nextViewport.k}px`;
-            if (horizontalRef.current && typeof guides.horizontal === "number") horizontalRef.current.style.top = `${nextViewport.y + guides.horizontal * nextViewport.k}px`;
-        };
-        update(viewport);
-        return subscribeCanvasViewportPreview(container, update);
-    }, [containerRef, guides.horizontal, guides.vertical, viewport]);
-
-    return (
-        <>
-            {typeof guides.vertical === "number" ? <div ref={verticalRef} className="pointer-events-none absolute bottom-0 top-0 z-[55] border-l border-dashed" style={{ left: viewport.x + guides.vertical * viewport.k, borderColor: color }} /> : null}
-            {typeof guides.horizontal === "number" ? <div ref={horizontalRef} className="pointer-events-none absolute left-0 right-0 z-[55] border-t border-dashed" style={{ top: viewport.y + guides.horizontal * viewport.k, borderColor: color }} /> : null}
-        </>
-    );
-}
-
 function ConnectionCreateOption({ motionEnabled, icon, title, description, onClick }: { motionEnabled: boolean; icon: ReactNode; title: string; description?: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (

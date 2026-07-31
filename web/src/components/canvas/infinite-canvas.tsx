@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { applyCanvasLiveViewport, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
@@ -20,11 +20,12 @@ type InfiniteCanvasProps = {
     onFileDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void;
     onFileDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
+    graphicsLayer?: React.ReactNode;
 };
 
 const CANVAS_WHEEL_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-canvas-wheel-scroll],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
-const WHEEL_ZOOM_DELTA = 100;
-const TRACKPAD_PINCH_ZOOM_DELTA = 36;
+const WHEEL_ZOOM_DELTA = 72;
+const TRACKPAD_PINCH_ZOOM_DELTA = 24;
 
 type TouchPoint = { x: number; y: number };
 
@@ -37,7 +38,7 @@ type PinchState = {
     initialScale: number;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -61,7 +62,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (interactingRef.current) return;
         viewportRef.current = viewport;
         scaleRef.current = viewport.k;
@@ -373,6 +374,8 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
                 "--canvas-live-x": `${viewport.x}px`,
                 "--canvas-live-y": `${viewport.y}px`,
                 "--canvas-live-scale": viewport.k,
+                "--canvas-committed-scale": viewport.k,
+                "--canvas-live-scale-ratio": 1,
                 "--canvas-grid-size": `${48 * viewport.k}px`,
                 "--canvas-grid-x": `${viewport.x % (48 * viewport.k)}px`,
                 "--canvas-grid-y": `${viewport.y % (48 * viewport.k)}px`,
@@ -393,15 +396,14 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             onDrop={onDrop}
         >
             <CanvasGrid mode={backgroundMode} />
+            {graphicsLayer}
             <div
                 data-canvas-world-layer
-                className="absolute origin-top-left"
-                style={{
-                    transform: "translate3d(var(--canvas-live-x), var(--canvas-live-y), 0) scale(var(--canvas-live-scale))",
-                    willChange: "transform",
-                }}
+                className="canvas-world-layer absolute origin-top-left"
             >
-                {children}
+                <div data-canvas-world-raster-layer className="canvas-world-raster-layer absolute origin-top-left">
+                    {children}
+                </div>
             </div>
         </div>
     );

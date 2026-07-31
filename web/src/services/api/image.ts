@@ -755,13 +755,14 @@ async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referen
     for (const image of references) {
         parts.push(toGeminiImagePart(await imageToDataUrl(image)));
     }
+    const request = channelRequest(config, geminiApiUrl(config, "generateContent"), geminiHeaders(config));
     const response = await axios.post<GeminiPayload>(
-        geminiApiUrl(config, "generateContent"),
+        request.url,
         {
             ...toGeminiBody(config, [{ role: "user", content: prompt }], { generationConfig: { responseModalities: ["TEXT", "IMAGE"] } }),
             contents: [{ role: "user", parts }],
         },
-        { headers: geminiHeaders(config), signal: options?.signal },
+        { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal },
     );
     return parseGeminiImagePayload(response.data);
 }
@@ -817,17 +818,23 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
               };
         const responseData = isVolcengineArk
             ? await postVolcengineArkImage(requestConfig, payload, options)
-            : (
-                  await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/generations"), payload, {
-                      headers: aiHeaders(requestConfig, "application/json"),
-                      signal: options?.signal,
-                  })
-              ).data;
+            : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
         const images = parseImagePayload(responseData);
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
     }
+}
+
+async function postChannelJSON<T>(config: ReturnType<typeof resolveModelRequestConfig>, upstreamUrl: string, body: unknown, options?: RequestOptions) {
+    const request = channelRequest(config, upstreamUrl, aiHeaders(config, "application/json"));
+    return (
+        await axios.post<T>(request.url, body, {
+            headers: request.headers,
+            withCredentials: request.credentials === "include",
+            signal: options?.signal,
+        })
+    ).data;
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
@@ -887,7 +894,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
-        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig), signal: options?.signal });
+        const request = channelRequest(requestConfig, aiApiUrl(requestConfig, "/images/edits"), aiHeaders(requestConfig));
+        const response = await axios.post<ImageApiResponse>(request.url, formData, { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal });
         const images = parseImagePayload(response.data);
         return images;
     } catch (error) {
@@ -984,6 +992,7 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
                 baseUrl: channel.baseUrl,
                 apiKey: channel.apiKey,
                 apiFormat: channel.apiFormat,
+                headers: channel.headers,
             },
             { withCredentials: true },
         );

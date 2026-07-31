@@ -33,26 +33,27 @@ type canvasGenerationInput struct {
 }
 
 type providerConfig struct {
-	ChannelID             string `json:"channelId"`
-	APIFormat             string `json:"apiFormat"`
-	InterfaceType         string `json:"interfaceType"`
-	BaseURL               string `json:"baseUrl"`
-	APIKey                string `json:"apiKey"`
-	SecretKey             string `json:"secretKey"`
-	Model                 string `json:"model"`
-	Size                  string `json:"size"`
-	Quality               string `json:"quality"`
-	TransparentBackground string `json:"transparentBackground"`
-	Count                 string `json:"count"`
-	VideoSeconds          string `json:"videoSeconds"`
-	VQuality              string `json:"vquality"`
-	VideoGenerateAudio    string `json:"videoGenerateAudio"`
-	VideoWatermark        string `json:"videoWatermark"`
-	AudioVoice            string `json:"audioVoice"`
-	AudioFormat           string `json:"audioFormat"`
-	AudioSpeed            string `json:"audioSpeed"`
-	AudioInstructions     string `json:"audioInstructions"`
-	SystemPrompt          string `json:"systemPrompt"`
+	ChannelID             string           `json:"channelId"`
+	APIFormat             string           `json:"apiFormat"`
+	InterfaceType         string           `json:"interfaceType"`
+	BaseURL               string           `json:"baseUrl"`
+	APIKey                string           `json:"apiKey"`
+	SecretKey             string           `json:"secretKey"`
+	Headers               []OutboundHeader `json:"headers"`
+	Model                 string           `json:"model"`
+	Size                  string           `json:"size"`
+	Quality               string           `json:"quality"`
+	TransparentBackground string           `json:"transparentBackground"`
+	Count                 string           `json:"count"`
+	VideoSeconds          string           `json:"videoSeconds"`
+	VQuality              string           `json:"vquality"`
+	VideoGenerateAudio    string           `json:"videoGenerateAudio"`
+	VideoWatermark        string           `json:"videoWatermark"`
+	AudioVoice            string           `json:"audioVoice"`
+	AudioFormat           string           `json:"audioFormat"`
+	AudioSpeed            string           `json:"audioSpeed"`
+	AudioInstructions     string           `json:"audioInstructions"`
+	SystemPrompt          string           `json:"systemPrompt"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -278,6 +279,11 @@ func normalizedMediaMimeType(declared string, data []byte) string {
 }
 
 func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, error) {
+	headers, err := NormalizeOutboundHeaders(config.Headers)
+	if err != nil {
+		return providerConfig{}, err
+	}
+	config.Headers = headers
 	channelID := strings.TrimSpace(config.ChannelID)
 	if channelID == "" {
 		channelID = systemChannelIDFromBaseURL(config.BaseURL)
@@ -319,6 +325,10 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	config.BaseURL = channel.BaseURL
 	config.APIKey = channel.APIKey
 	config.SecretKey = channel.SecretKey
+	config.Headers, err = ParseOutboundHeadersJSON(channel.HeadersJSON)
+	if err != nil {
+		return providerConfig{}, err
+	}
 	config.Model = modelName
 	return config, nil
 }
@@ -864,6 +874,7 @@ func postGeminiJSON(ctx context.Context, config providerConfig, path string, bod
 	}
 	req.Header.Set("x-goog-api-key", config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
 }
 
@@ -873,6 +884,7 @@ func getGeminiJSON(ctx context.Context, config providerConfig, path string, targ
 		return err
 	}
 	req.Header.Set("x-goog-api-key", config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
 }
 
@@ -882,6 +894,7 @@ func getGeminiBinary(ctx context.Context, config providerConfig, rawURL string) 
 		return nil, "", err
 	}
 	req.Header.Set("x-goog-api-key", config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
 	return doBinary(req)
 }
 
@@ -1469,6 +1482,7 @@ func postJSON(ctx context.Context, config providerConfig, path string, body inte
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
 }
 
@@ -1479,6 +1493,7 @@ func postForm(ctx context.Context, config providerConfig, path string, contentTy
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 	req.Header.Set("Content-Type", contentType)
+	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
 }
 
@@ -1488,6 +1503,7 @@ func getJSON(ctx context.Context, config providerConfig, path string, target int
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
 }
 
@@ -1499,6 +1515,7 @@ func postBinary(ctx context.Context, config providerConfig, path string, body in
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	ApplyOutboundHeaders(req, config.Headers)
 	return doBinary(req)
 }
 
@@ -1508,6 +1525,7 @@ func getBinary(ctx context.Context, config providerConfig, path string) ([]byte,
 		return nil, "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
 	return doBinary(req)
 }
 
@@ -1596,6 +1614,7 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
+	ApplyDefaultOutboundHeaders(req)
 	client := OutboundHTTPClient(requestTimeout)
 	resp, err := client.Do(req)
 	if err != nil {

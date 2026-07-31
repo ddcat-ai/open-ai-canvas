@@ -22,6 +22,7 @@ import {
     supportsVideoReferenceAudio,
 } from "@/lib/canvas/canvas-project-generation";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
+import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { storeGeneratedAudio } from "@/services/api/audio";
@@ -77,13 +78,16 @@ export function useCanvasGenerationRetry({ projectId, domainProjectId, activated
             }
 
             const retryPromptSource = sourceNode.metadata?.composerContent || sourceNode.metadata?.prompt || node.metadata?.prompt || "";
+            const retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture
+                ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture)
+                : retryPromptSource;
             if (unchangedModeratedPrompt(node.metadata, retryPromptSource)) {
                 message.warning("该提示词未通过内容审核，请先修改提示词再重新生成");
                 return;
             }
             let rawContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>> | null;
             try {
-                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryPromptSource);
+                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt);
                 rawContext = hasSavedImageMetadata && !baseContext.characterReferences.length ? null : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig));
             } catch (error) {
                 const failure = generationFailureMetadata(error, retryPromptSource);

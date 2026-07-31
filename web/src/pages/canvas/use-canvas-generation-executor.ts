@@ -5,6 +5,7 @@ import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/comp
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudio } from "@/lib/canvas/canvas-project-generation";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
+import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -80,6 +81,9 @@ export function useCanvasGenerationExecutor({
             const controller = startGenerationRequest(nodeId, nodeId, nodeId, options?.controller);
             const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
+            const generationPrompt = mode === "image" && sourceNode?.metadata?.portraitTexture
+                ? buildPortraitTexturePrompt(prompt, sourceNode.metadata.portraitTexture)
+                : prompt;
             const isPreparingEmptyImage = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content;
             if (isPreparingEmptyImage) {
                 setNodes((current) =>
@@ -107,7 +111,7 @@ export function useCanvasGenerationExecutor({
             let rawGenerationContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>>;
             try {
                 rawGenerationContext = await hydrateNodeGenerationContext(
-                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
+                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt),
                     projectId,
                     domainProjectId,
                     mode,
@@ -164,6 +168,7 @@ export function useCanvasGenerationExecutor({
                 projectId,
                 nodeId,
                 sourceNode,
+                canvasNodes: nodesRef.current,
                 prompt,
                 effectivePrompt,
                 generationConfig,

@@ -1,12 +1,70 @@
 package service
 
 import (
+	"encoding/base64"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+func TestNormalizeOutboundHeadersAllowsCustomUserAgent(t *testing.T) {
+	headers, err := NormalizeOutboundHeaders([]OutboundHeader{{Name: "user-agent", Value: "Custom Gateway/2.0"}, {Name: "X-Gateway-Tenant", Value: "tenant-a"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	ApplyOutboundHeaders(request, headers)
+	ApplyDefaultOutboundHeaders(request)
+	if got := request.Header.Get("User-Agent"); got != "Custom Gateway/2.0" {
+		t.Fatalf("User-Agent = %q", got)
+	}
+	if got := request.Header.Get("X-Gateway-Tenant"); got != "tenant-a" {
+		t.Fatalf("X-Gateway-Tenant = %q", got)
+	}
+}
+
+func TestNormalizeOutboundHeadersRejectsUnsafeAndDuplicateValues(t *testing.T) {
+	tests := [][]OutboundHeader{
+		{{Name: "Authorization", Value: "Bearer attacker"}},
+		{{Name: "X-Test", Value: "safe\r\ninjected: true"}},
+		{{Name: "X-Test", Value: "one"}, {Name: "x-test", Value: "two"}},
+	}
+	for _, headers := range tests {
+		if _, err := NormalizeOutboundHeaders(headers); err == nil {
+			t.Fatalf("NormalizeOutboundHeaders(%#v) should fail", headers)
+		}
+	}
+}
+
+func TestDecodeRelayOutboundHeaders(t *testing.T) {
+	raw := base64.StdEncoding.EncodeToString([]byte(`[{"name":"User-Agent","value":"Relay Agent"}]`))
+	headers, err := DecodeRelayOutboundHeaders(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(headers) != 1 || headers[0].Name != "User-Agent" || headers[0].Value != "Relay Agent" {
+		t.Fatalf("DecodeRelayOutboundHeaders() = %#v", headers)
+	}
+}
+
+func TestApplyDefaultOutboundHeaders(t *testing.T) {
+	request, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ApplyDefaultOutboundHeaders(request)
+	if got := request.Header.Get("User-Agent"); got != DefaultOutboundUserAgent {
+		t.Fatalf("User-Agent = %q, want %q", got, DefaultOutboundUserAgent)
+	}
+
+	request.Header.Set("User-Agent", "custom-agent")
+	ApplyDefaultOutboundHeaders(request)
+	if got := request.Header.Get("User-Agent"); got != "custom-agent" {
+		t.Fatalf("custom User-Agent = %q", got)
+	}
+}
 
 func TestValidateOutboundURLRejectsPrivateHosts(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")

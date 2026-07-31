@@ -64,6 +64,11 @@ func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy
 		fail(c, http.StatusUnauthorized, err)
 		return
 	}
+	headers, err := service.DecodeRelayOutboundHeaders(c.GetHeader(service.CustomRelayHeadersHeader))
+	if err != nil {
+		failService(c, err)
+		return
+	}
 	requestLimit := policy.CustomRelayRequestMB << 20
 	if c.Request.ContentLength > requestLimit {
 		fail(c, http.StatusRequestEntityTooLarge, errors.New("自定义渠道请求超过配置上限"))
@@ -97,7 +102,8 @@ func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy
 	} else {
 		upstreamReq.Header.Set("Accept", "application/json")
 	}
-	upstreamReq.Header.Set("User-Agent", "InfiniteCanvas/custom-channel-relay")
+	service.ApplyOutboundHeaders(upstreamReq, headers)
+	service.ApplyDefaultOutboundHeaders(upstreamReq)
 	if apiFormat == "gemini" {
 		upstreamReq.Header.Set("x-goog-api-key", apiKey)
 	} else {
@@ -110,10 +116,11 @@ func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy
 		return
 	}
 	defer resp.Body.Close()
-	writeCustomRelayResponse(c, resp, apiKey, policy.CustomRelayResponseMB<<20)
+	allowBinary := customVideoContentPath.MatchString(target.EscapedPath()) || strings.HasSuffix(target.Path, "/audio/speech")
+	writeCustomRelayResponse(c, resp, apiKey, policy.CustomRelayResponseMB<<20, allowBinary)
 }
 
-func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string, responseLimit int64) {
+func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string, responseLimit int64, allowBinary bool) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("X-Content-Type-Options", "nosniff")
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
@@ -127,6 +134,15 @@ func writeCustomRelayResponse(c *gin.Context, resp *http.Response, apiKey string
 		c.Status(resp.StatusCode)
 		c.Writer.WriteHeaderNow()
 		copyCustomRelayStream(c, resp.Body, apiKey, responseLimit)
+		return
+	}
+	if allowBinary && (strings.HasPrefix(mediaType, "video/") || strings.HasPrefix(mediaType, "audio/") || mediaType == "application/octet-stream") {
+		body, err := readLimitedRelayBody(resp.Body, responseLimit)
+		if err != nil {
+			fail(c, http.StatusBadGateway, errors.New("自定义渠道上游返回了过大的媒体文件"))
+			return
+		}
+		c.Data(resp.StatusCode, mediaType, body)
 		return
 	}
 	if mediaType != "application/json" && !strings.HasSuffix(mediaType, "+json") {

@@ -1,9 +1,9 @@
 import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
+import { canGenerateImageInPlace, findAvailableGenerationGroupPosition, imageGenerationChildPosition, imageGenerationGroupSize } from "@/lib/canvas/canvas-generation-layout";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { fitNodeSize, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
-import { prepareInPlaceMediaVersion } from "@/lib/canvas/canvas-media-versions";
 import { buildImageGenerationMetadata, getGenerationCount, isGenerationCanceled, runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, generationFailureMetadata, type GenerationFailureMetadata } from "@/lib/generation-error";
 import { uploadImage } from "@/services/image-storage";
@@ -19,6 +19,7 @@ const NODE_STATUS_IDLE = "idle" as const;
 export async function executeImageGeneration({
     nodeId,
     sourceNode,
+    canvasNodes,
     prompt,
     effectivePrompt,
     generationConfig,
@@ -39,8 +40,8 @@ export async function executeImageGeneration({
     const count = getGenerationCount(generationConfig.count);
     const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
     const isImageNode = sourceNode?.type === CanvasNodeType.Image;
-    const isEmptyImageNode = isImageNode && !sourceNode?.metadata?.content;
-    // 当前图片节点的直接生成是原位重生成；参考图只来自入边，避免把旧结果误当成自身输入。
+    const reuseSourceNode = canGenerateImageInPlace(sourceNode);
+    // 已有图片生成新结果并保留旧版本；参考图只来自入边，避免把旧结果误当成自身输入。
     const referenceImages = generationContext.referenceImages;
     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
     const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
@@ -49,24 +50,23 @@ export async function executeImageGeneration({
     // 生成中占位框按设置比例显示，避免 16:9 任务显示成默认 340x240。
     const imageConfig = nodeSizeFromRatio(generationConfig.size || "auto", imageDefaults.width, imageDefaults.height) || imageDefaults;
     const parentPosition = sourceNode?.position || { x: 0, y: 0 };
-    const rootId = isImageNode ? nodeId : nanoid();
+    const rootId = reuseSourceNode ? nodeId : nanoid();
     const childIds = count > 1 ? Array.from({ length: count }, () => nanoid()) : [];
     const targetIds = count > 1 ? childIds : [rootId];
-    registerPendingNodeIds(isEmptyImageNode ? childIds : [rootId, ...childIds]);
-    // 空节点可直接按目标比例改尺寸；已有内容的原位重生保留原尺寸，避免布局跳动。
-    const rootWidth = isImageNode && !isEmptyImageNode ? sourceNode?.width || imageConfig.width : imageConfig.width;
-    const rootHeight = isImageNode && !isEmptyImageNode ? sourceNode?.height || imageConfig.height : imageConfig.height;
+    registerPendingNodeIds(reuseSourceNode ? childIds : [rootId, ...childIds]);
+    const rootWidth = imageConfig.width;
+    const rootHeight = imageConfig.height;
+    const preferredPosition = {
+        x: parentPosition.x + parentConfig.width + 96,
+        y: parentPosition.y + parentConfig.height / 2 - rootHeight / 2,
+    };
+    const rootPosition = reuseSourceNode ? parentPosition : findAvailableGenerationGroupPosition(canvasNodes, preferredPosition, imageGenerationGroupSize({ width: rootWidth, height: rootHeight }, imageConfig, childIds.length));
 
     const rootNode: CanvasNodeData = {
         id: rootId,
         type: CanvasNodeType.Image,
         title: effectivePrompt.slice(0, 32) || "Generated Image",
-        position: isImageNode
-            ? parentPosition
-            : {
-                  x: parentPosition.x + parentConfig.width + 96,
-                  y: parentPosition.y + parentConfig.height / 2 - rootHeight / 2,
-              },
+        position: rootPosition,
         width: rootWidth,
         height: rootHeight,
         metadata: {
@@ -87,29 +87,32 @@ export async function executeImageGeneration({
         id,
         type: CanvasNodeType.Image,
         title: effectivePrompt.slice(0, 32) || "Generated Image",
-        position: {
-            x: rootNode.position.x + rootNode.width + 120 + (index % 2) * (imageConfig.width + 36),
-            y: rootNode.position.y + Math.floor(index / 2) * (imageConfig.height + 36),
-        },
+        position: imageGenerationChildPosition(rootNode.position, rootNode.width, imageConfig, index),
         width: imageConfig.width,
         height: imageConfig.height,
         metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 ? rootId : undefined, ...generationMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
     }));
-    const batchConnections = [...(isImageNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]), ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))];
+    const batchConnections = [...(reuseSourceNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]), ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))];
 
     setNodes((current) => {
-        const versioned = isImageNode && !isEmptyImageNode ? prepareInPlaceMediaVersion(current, nodeId) : current;
         return [
-        ...versioned.map((node) => {
-            if (node.id !== nodeId) return node;
-            if (isConfigNode) return { ...node, metadata: { ...node.metadata, prompt: effectivePrompt, status: NODE_STATUS_LOADING, errorDetails: undefined } };
-            if (isEmptyImageNode) return { ...node, position: rootNode.position, width: rootNode.width, height: rootNode.height, title: rootNode.title, metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined } };
-            if (isImageNode) return { ...node, title: rootNode.title, metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined } };
-            return { ...node, type: CanvasNodeType.Text, title: prompt.slice(0, 32) || "Prompt", width: parentConfig.width, height: parentConfig.height, metadata: { ...node.metadata, content: prompt, richText: undefined, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined } };
-        }),
-        ...(isImageNode ? [] : [rootNode]),
-        ...childNodes,
-    ];
+            ...current.map((node) => {
+                if (node.id !== nodeId) return node;
+                if (isConfigNode) return { ...node, metadata: { ...node.metadata, prompt: effectivePrompt, status: NODE_STATUS_LOADING, errorDetails: undefined } };
+                if (reuseSourceNode) return { ...node, position: rootNode.position, width: rootNode.width, height: rootNode.height, title: rootNode.title, metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined } };
+                if (isImageNode) return node;
+                return {
+                    ...node,
+                    type: CanvasNodeType.Text,
+                    title: prompt.slice(0, 32) || "Prompt",
+                    width: parentConfig.width,
+                    height: parentConfig.height,
+                    metadata: { ...node.metadata, content: prompt, richText: undefined, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
+                };
+            }),
+            ...(reuseSourceNode ? [] : [rootNode]),
+            ...childNodes,
+        ];
     });
     setConnections((current) => [...current, ...batchConnections]);
     setSelectedNodeIds(new Set([nodeId]));
@@ -124,7 +127,17 @@ export async function executeImageGeneration({
     await Promise.all(
         targetIds.map(async (targetId) => {
             try {
-                const result = await runBackendCanvasGenerationTask({ projectId, nodeId: targetId, mode: "image", prompt: effectivePrompt, config: { ...generationConfig, count: "1" }, referenceImages, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions }, onTaskCreated: (task) => bindGenerationTask(targetId, task) });
+                const result = await runBackendCanvasGenerationTask({
+                    projectId,
+                    nodeId: targetId,
+                    mode: "image",
+                    prompt: effectivePrompt,
+                    config: { ...generationConfig, count: "1" },
+                    referenceImages,
+                    signal: controller.signal,
+                    metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions },
+                    onTaskCreated: (task) => bindGenerationTask(targetId, task),
+                });
                 const image = result.images?.[0];
                 if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
                 const uploaded = await uploadImage(image.dataUrl);
@@ -163,8 +176,15 @@ export async function executeImageGeneration({
     if (hasFailure) showError(hasSuccess ? "部分图片生成失败" : "全部图片生成失败");
     setNodes((current) =>
         current.map((node) =>
-            node.id === nodeId && (isConfigNode || isEmptyImageNode)
-                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, ...(hasSuccess ? { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } : representativeFailure || { errorDetails: "全部图片生成失败" }) } }
+            node.id === nodeId && (isConfigNode || reuseSourceNode)
+                ? {
+                      ...node,
+                      metadata: {
+                          ...node.metadata,
+                          status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
+                          ...(hasSuccess ? { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } : representativeFailure || { errorDetails: "全部图片生成失败" }),
+                      },
+                  }
                 : node.id === rootId && !hasSuccess
                   ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, ...(representativeFailure || { errorDetails: "全部图片生成失败" }) } }
                   : node,

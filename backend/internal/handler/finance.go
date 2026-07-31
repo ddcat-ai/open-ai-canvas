@@ -222,6 +222,28 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+	r.POST("/admin/channels/:id/models/test", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if !enforceRateLimit(c, "admin-channel-model-test:"+user.ID+":"+c.Param("id"), 5, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.ChannelModelRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.TestAdminChannelModel(c.Request.Context(), user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.POST("/admin/channels/:id/models", func(c *gin.Context) {
 		saveChannelModel(c, svc, "")
 	})

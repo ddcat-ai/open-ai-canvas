@@ -9,6 +9,7 @@ import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-ge
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ChannelInterfaceType = ModelProtocol;
+export type ChannelHeader = { name: string; value: string };
 
 export type ModelChannel = {
     id: string;
@@ -16,6 +17,7 @@ export type ModelChannel = {
     baseUrl: string;
     apiKey: string;
     secretKey?: string;
+    headers?: ChannelHeader[];
     apiFormat: ApiCallFormat;
     interfaceType?: ChannelInterfaceType;
     models: string[];
@@ -298,6 +300,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : defaultBaseUrlForApiFormat(apiFormat)),
         apiKey: channel?.apiKey || "",
         secretKey: channel?.secretKey || "",
+        headers: Array.isArray(channel?.headers) ? channel.headers.map((header) => ({ name: String(header.name || ""), value: String(header.value || "") })) : [],
         apiFormat,
         interfaceType,
         models: uniqueRawModels(channel?.models || []),
@@ -388,6 +391,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         baseUrl: channel.baseUrl,
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
+        headers: channel.headers,
         apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? "gemini" as const : "openai" as const) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",

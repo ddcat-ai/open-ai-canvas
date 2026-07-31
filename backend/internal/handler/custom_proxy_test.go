@@ -3,6 +3,7 @@ package handler
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,12 @@ func TestCustomRelayForwardsOpenAIRequestWithoutBrowserHeaders(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer "+apiKey {
 			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
 		}
+		if r.Header.Get("User-Agent") != "Custom Relay Agent" {
+			t.Errorf("User-Agent = %q", r.Header.Get("User-Agent"))
+		}
+		if r.Header.Get("X-Gateway-Tenant") != "tenant-a" {
+			t.Errorf("X-Gateway-Tenant = %q", r.Header.Get("X-Gateway-Tenant"))
+		}
 		for _, name := range []string{"Cookie", "Origin", "Referer", "X-Canvas-Upstream-URL", "X-Forwarded-For"} {
 			if value := r.Header.Get(name); value != "" {
 				t.Errorf("upstream received %s = %q", name, value)
@@ -40,6 +47,7 @@ func TestCustomRelayForwardsOpenAIRequestWithoutBrowserHeaders(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("X-Canvas-Upstream-URL", upstream.URL+"/v1/models")
 	request.Header.Set("X-Canvas-Upstream-Format", "openai")
+	request.Header.Set(service.CustomRelayHeadersHeader, base64.StdEncoding.EncodeToString([]byte(`[{"name":"User-Agent","value":"Custom Relay Agent"},{"name":"X-Gateway-Tenant","value":"tenant-a"}]`)))
 	request.Header.Set("Cookie", "browser=session")
 	request.Header.Set("Origin", "https://canvas.example.com")
 	response := httptest.NewRecorder()
@@ -55,6 +63,30 @@ func TestCustomRelayForwardsOpenAIRequestWithoutBrowserHeaders(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), apiKey) {
 		t.Fatal("response leaked API key")
+	}
+}
+
+func TestCustomRelayReturnsVideoContent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("video-content"))
+	}))
+	defer upstream.Close()
+	useCustomRelayTestClient(t, upstream.Client())
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/ai/custom", nil)
+	request.Header.Set("Authorization", "Bearer test-key")
+	request.Header.Set("X-Canvas-Upstream-URL", upstream.URL+"/v1/videos/task-1/content")
+	request.Header.Set("X-Canvas-Upstream-Format", "openai")
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = request
+
+	proxyCustomRelayRequest(context, defaultCustomRelayTestPolicy())
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "video/mp4" || response.Body.String() != "video-content" {
+		t.Fatalf("status = %d, content-type = %q, body = %q", response.Code, response.Header().Get("Content-Type"), response.Body.String())
 	}
 }
 

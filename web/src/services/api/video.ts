@@ -322,13 +322,23 @@ function geminiVeoHeaders(config: ResolvedAiConfig, contentType?: string) {
 }
 
 async function channelPost<T>(config: ResolvedAiConfig, upstreamUrl: string, body: unknown, options?: RequestOptions) {
-    const request = channelRequest(config, upstreamUrl, { "Content-Type": "application/json" });
+    const request = channelRequest(config, upstreamUrl, aiHeaders(config, "application/json"));
+    return (await axios.post<T>(request.url, body, { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal })).data;
+}
+
+async function channelPostForm<T>(config: ResolvedAiConfig, upstreamUrl: string, body: FormData, options?: RequestOptions) {
+    const request = channelRequest(config, upstreamUrl, aiHeaders(config));
     return (await axios.post<T>(request.url, body, { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal })).data;
 }
 
 async function channelGet<T>(config: ResolvedAiConfig, upstreamUrl: string, options?: RequestOptions) {
     const request = channelRequest(config, upstreamUrl);
     return (await axios.get<T>(request.url, { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal })).data;
+}
+
+async function channelGetBlob(config: ResolvedAiConfig, upstreamUrl: string, options?: RequestOptions) {
+    const request = channelRequest(config, upstreamUrl);
+    return (await axios.get<Blob>(request.url, { headers: request.headers, withCredentials: request.credentials === "include", responseType: "blob", signal: options?.signal })).data;
 }
 
 function findGeminiVideoURL(value: unknown): string {
@@ -377,7 +387,7 @@ async function createOpenAIVideoTask(config: ResolvedAiConfig, model: string, pr
         };
         try {
             const createPath = config.interfaceType === "xai-video" ? "/videos/generations" : "/videos";
-            const created = unwrapVideoResponse(config.interfaceType === "xai-video" ? await channelPost<ApiVideoResponse>(config, aiApiUrl(config, createPath), payload, options) : (await axios.post<ApiVideoResponse>(aiApiUrl(config, createPath), payload, { headers: aiHeaders(config, "application/json"), signal: options?.signal })).data);
+            const created = unwrapVideoResponse(await channelPost<ApiVideoResponse>(config, aiApiUrl(config, createPath), payload, options));
             const id = videoTaskId(created);
             if (!id) throw new Error("视频接口没有返回任务 ID");
             return { id, provider: "openai", model };
@@ -395,7 +405,7 @@ async function createOpenAIVideoTask(config: ResolvedAiConfig, model: string, pr
     const files = await Promise.all(references.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => body.append("input_reference[]", file));
     try {
-        const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), body, { headers: aiHeaders(config), signal: options?.signal })).data);
+        const created = unwrapVideoResponse(await channelPostForm<ApiVideoResponse>(config, aiApiUrl(config, "/videos"), body, options));
         if (!created.id) throw new Error("视频接口没有返回任务 ID");
         return { id: created.id, provider: "openai", model };
     } catch (error) {
@@ -405,13 +415,13 @@ async function createOpenAIVideoTask(config: ResolvedAiConfig, model: string, pr
 
 async function pollOpenAIVideoTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     try {
-        const video = unwrapVideoResponse(config.interfaceType === "xai-video" ? await channelGet<ApiVideoResponse>(config, aiApiUrl(config, `/videos/${task.id}`), options) : (await axios.get<ApiVideoResponse>(aiApiUrl(config, `/videos/${task.id}`), { headers: aiHeaders(config), signal: options?.signal })).data);
+        const video = unwrapVideoResponse(await channelGet<ApiVideoResponse>(config, aiApiUrl(config, `/videos/${task.id}`), options));
         if (video.status === "completed" || video.status === "succeeded" || video.status === "success" || video.status === "done") {
             const resultUrl = video.video?.url || video.video_url || video.result_url;
             if (resultUrl) return { status: "completed", result: await videoResultFromUrl(resultUrl, options) };
-            const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${task.id}/content`), { headers: aiHeaders(config), responseType: "blob", signal: options?.signal });
-            await assertVideoBlob(content.data);
-            return { status: "completed", result: { blob: content.data } };
+            const content = await channelGetBlob(config, aiApiUrl(config, `/videos/${task.id}/content`), options);
+            await assertVideoBlob(content);
+            return { status: "completed", result: { blob: content } };
         }
         if (video.status === "failed" || video.status === "cancelled") return { status: "failed", error: video.error?.message || "视频生成失败" };
         return { status: "pending" };
@@ -430,9 +440,7 @@ async function createSeedanceTask(config: ResolvedAiConfig, model: string, promp
             : await buildSeedanceVideosPayload(config, model, prompt, references, videoReferences, audioReferences);
 
     try {
-        const raw = isVolcengineArk
-            ? await channelPost<ApiEnvelope<SeedanceTask>>(config, seedanceApiUrl(config), payload, options)
-            : (await axios.post<ApiEnvelope<SeedanceTask>>(seedanceApiUrl(config), payload, { headers: aiHeaders(config, "application/json"), signal: options?.signal })).data;
+        const raw = await channelPost<ApiEnvelope<SeedanceTask>>(config, seedanceApiUrl(config), payload, options);
         const created = unwrapSeedanceTask(raw);
         const id = created.id || created.task_id;
         if (!id) throw new Error("Seedance 接口没有返回任务 ID");
@@ -444,18 +452,15 @@ async function createSeedanceTask(config: ResolvedAiConfig, model: string, promp
 
 async function pollSeedanceTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     try {
-        const raw =
-            config.interfaceType === "volcengine-ark-video"
-                ? await channelGet<ApiEnvelope<SeedanceTask>>(config, seedanceApiUrl(config, task.id), options)
-                : (await axios.get<ApiEnvelope<SeedanceTask>>(seedanceApiUrl(config, task.id), { headers: aiHeaders(config), signal: options?.signal })).data;
+        const raw = await channelGet<ApiEnvelope<SeedanceTask>>(config, seedanceApiUrl(config, task.id), options);
         const state = unwrapSeedanceTask(raw);
         if (state.status === "succeeded" || state.status === "completed") {
             const url = state.video_url || state.content?.video_url;
             if (url) return { status: "completed", result: await videoResultFromUrl(url, options) };
             if (isArkPlanBaseUrl(config.baseUrl)) return { status: "failed", error: "Seedance 任务成功但没有返回视频 URL" };
-            const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${task.id}/content`), { headers: aiHeaders(config), responseType: "blob", signal: options?.signal });
-            await assertVideoBlob(content.data);
-            return { status: "completed", result: { blob: content.data } };
+            const content = await channelGetBlob(config, aiApiUrl(config, `/videos/${task.id}/content`), options);
+            await assertVideoBlob(content);
+            return { status: "completed", result: { blob: content } };
         }
         if (state.status === "failed" || state.status === "cancelled" || state.status === "expired") return { status: "failed", error: seedanceErrorMessage(state) || `Seedance 视频生成${state.status === "expired" ? "超时" : "失败"}` };
         return { status: "pending" };

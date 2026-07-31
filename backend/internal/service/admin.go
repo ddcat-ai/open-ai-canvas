@@ -75,14 +75,15 @@ type AdminReferenceData struct {
 }
 
 type ChannelRequest struct {
-	Name                 string   `json:"name"`
-	BaseURL              string   `json:"baseUrl"`
-	APIKey               string   `json:"apiKey"`
-	SecretKey            string   `json:"secretKey"`
-	ConcurrencyLimit     *int     `json:"concurrencyLimit"`
-	UseGlobalConcurrency *bool    `json:"useGlobalConcurrency"`
-	Models               []string `json:"models"`
-	Enabled              *bool    `json:"enabled"`
+	Name                 string           `json:"name"`
+	BaseURL              string           `json:"baseUrl"`
+	APIKey               string           `json:"apiKey"`
+	SecretKey            string           `json:"secretKey"`
+	ConcurrencyLimit     *int             `json:"concurrencyLimit"`
+	UseGlobalConcurrency *bool            `json:"useGlobalConcurrency"`
+	Models               []string         `json:"models"`
+	Headers              []OutboundHeader `json:"headers"`
+	Enabled              *bool            `json:"enabled"`
 }
 
 type PublicModelChannel struct {
@@ -97,6 +98,7 @@ type PublicModelChannel struct {
 	ConcurrencyLimit int                       `json:"concurrencyLimit"`
 	Models           []string                  `json:"models"`
 	ModelCosts       []PublicChannelModelPrice `json:"modelCosts"`
+	Headers          []OutboundHeader          `json:"headers,omitempty"`
 	HasAPIKey        bool                      `json:"hasApiKey"`
 	HasSecretKey     bool                      `json:"hasSecretKey"`
 	CreatedAt        time.Time                 `json:"createdAt"`
@@ -595,6 +597,10 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	}
 	models := uniqueNonEmpty(req.Models)
 	modelsJSON, _ := json.Marshal(models)
+	headersJSON, err := EncodeOutboundHeadersJSON(req.Headers)
+	if err != nil {
+		return channel, err
+	}
 	channel.Name = name
 	channel.BaseURL = strings.TrimRight(baseURL, "/")
 	if req.APIKey != "" {
@@ -616,6 +622,7 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 		return channel, BadAuthRequest("请填写渠道最大并发数")
 	}
 	channel.ModelsJSON = string(modelsJSON)
+	channel.HeadersJSON = headersJSON
 	if req.Enabled != nil {
 		channel.Enabled = *req.Enabled
 	}
@@ -631,6 +638,9 @@ func mergeChannelRequest(req ChannelRequest, channel model.ModelChannel) Channel
 	}
 	if req.Models == nil {
 		req.Models = channelModelNames(channel)
+	}
+	if req.Headers == nil {
+		req.Headers, _ = ParseOutboundHeadersJSON(channel.HeadersJSON)
 	}
 	return req
 }
@@ -661,10 +671,14 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 	}
 	apiKey := ""
 	baseURL := channel.BaseURL
+	var headers []OutboundHeader
 	if channel.Scope == model.ChannelScopeSystem {
 		if !admin {
 			apiKey = "system"
 			baseURL = "/api/ai/system/" + channel.ID
+		}
+		if admin {
+			headers, _ = ParseOutboundHeadersJSON(channel.HeadersJSON)
 		}
 	} else if admin {
 		apiKey = channel.APIKey
@@ -681,6 +695,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		ConcurrencyLimit: channel.ConcurrencyLimit,
 		Models:           models,
 		ModelCosts:       modelCosts,
+		Headers:          headers,
 		HasAPIKey:        strings.TrimSpace(channel.APIKey) != "",
 		HasSecretKey:     strings.TrimSpace(channel.SecretKey) != "",
 		CreatedAt:        channel.CreatedAt,

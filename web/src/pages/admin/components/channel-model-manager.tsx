@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Switch, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { FlaskConical, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
 import { SYSTEM_MODEL_PROTOCOL_OPTIONS, modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSummary, type ModelProtocol } from "@/lib/model-protocols";
-import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
+import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { AdminPageFrame } from "./admin-shell";
 
@@ -26,6 +26,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
     const [capability, setCapability] = useState<ChannelModel["capability"] | "all">("all");
@@ -113,6 +114,23 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             message.error(error instanceof Error ? error.message : "保存模型失败");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const testModel = async () => {
+        const values = await form.validateFields(["modelKey", "capability", "protocol"]);
+        setTesting(true);
+        try {
+            const result = await testAdminChannelModel(channel.id, {
+                modelKey: values.modelKey.trim(),
+                capability: values.capability,
+                protocol: values.protocol,
+            });
+            message.success(`模型测试通过，耗时 ${(result.durationMs / 1000).toFixed(2)} 秒`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "模型测试失败");
+        } finally {
+            setTesting(false);
         }
     };
 
@@ -216,7 +234,13 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     <Form.Item name="enabled" label="启用" valuePropName="checked">
                         <Switch />
                     </Form.Item>
-                    <Button type="primary" block loading={saving} onClick={() => void save()}>{editing ? "保存修改" : "添加模型"}</Button>
+                    <div className="mb-2 text-xs text-foreground/45">
+                        测试会向上游发起真实请求并可能产生供应商费用{modelCapability === "video" ? "，视频测试可能需要数分钟" : ""}。
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button icon={<FlaskConical className="size-4" />} loading={testing} disabled={saving} onClick={() => void testModel()}>测试模型</Button>
+                        <Button type="primary" loading={saving} disabled={testing} onClick={() => void save()}>{editing ? "保存修改" : "添加模型"}</Button>
+                    </div>
                 </Form>
             </Drawer>
         </AdminPageFrame>

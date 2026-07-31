@@ -211,6 +211,7 @@ type ModelChannel struct {
 	APIFormat        string         `json:"apiFormat" gorm:"size:24"`
 	ConcurrencyLimit int            `json:"concurrencyLimit"`
 	ModelsJSON       string         `json:"modelsJson" gorm:"type:text"`
+	HeadersJSON      string         `json:"-" gorm:"type:text"`
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`

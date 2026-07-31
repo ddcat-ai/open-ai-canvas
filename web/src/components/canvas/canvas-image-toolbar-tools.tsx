@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Scissors, Smile, Sparkles, Upload, ZoomIn } from "lucide-react";
+import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Scissors, SlidersHorizontal, Smile, Sparkles, Upload, ZoomIn } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 
-export type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
+export type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
 export type ImageQuickToolId = "info" | "delete" | "saveAsset" | "download" | "edit" | ImageNodeActionToolId;
 
 export type ImageToolHandlers = {
@@ -12,6 +12,7 @@ export type ImageToolHandlers = {
     onAnnotate: (node: CanvasNodeData) => void;
     onMaskEdit: (node: CanvasNodeData) => void;
     onEmotion: (node: CanvasNodeData) => void;
+    onPortraitTexture: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onSplit: (node: CanvasNodeData) => void;
     onUpscale: (node: CanvasNodeData) => void;
@@ -33,7 +34,7 @@ export type ImageToolDefinition = {
     run: (node: CanvasNodeData, handlers: ImageToolHandlers) => void;
 };
 
-export const IMAGE_QUICK_TOOLS_STORAGE_KEY = "canvas-image-quick-tools-v12";
+export const IMAGE_QUICK_TOOLS_STORAGE_KEY = "canvas-image-quick-tools-v13";
 
 const defaultBaseToolIds: ImageQuickToolId[] = ["info", "delete", "saveAsset", "download", "edit"];
 
@@ -103,6 +104,15 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
         run: (node, handlers) => handlers.onEmotion(node),
     },
     {
+        id: "portraitTexture",
+        defaultVisible: true,
+        panelLabel: "人物质感调节",
+        label: "人物质感",
+        title: "调节人景融合、光影、皮肤、纹理与锐度",
+        icon: () => <SlidersHorizontal className="size-3.5" />,
+        run: (node, handlers) => handlers.onPortraitTexture(node),
+    },
+    {
         id: "crop",
         defaultVisible: true,
         panelLabel: "剪裁",
@@ -158,7 +168,7 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
     },
 ];
 
-export const defaultImageQuickToolIds: ImageQuickToolId[] = ["info", "download", "maskEdit", "emotion", "crop", "angle"];
+export const defaultImageQuickToolIds: ImageQuickToolId[] = ["info", "download", "maskEdit", "emotion", "portraitTexture", "crop", "angle"];
 
 export function isImageQuickToolId(value: string): value is ImageQuickToolId {
     return defaultBaseToolIds.some((id) => id === value) || imageToolDefinitions.some((tool) => tool.id === value);
