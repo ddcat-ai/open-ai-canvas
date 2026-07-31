@@ -547,7 +547,7 @@ async function buildSeedanceVideosPayload(config: AiConfig, model: string, promp
         model: modelOptionName(model),
         prompt: buildSeedanceVideosPromptText(prompt, imageUrls.length, videoUrls.length, audioUrls.length),
         aspect_ratio: ratio === "adaptive" ? "16:9" : ratio,
-        duration: duration < 4 ? 5 : duration,
+        duration,
         generate_audio: boolConfig(config.videoGenerateAudio, true),
         ...(imageUrls[0] ? { image_url: imageUrls[0] } : {}),
         ...(imageUrls.length > 1 ? { reference_image_urls: imageUrls.slice(1) } : {}),
@@ -644,7 +644,7 @@ function assertVideoConfig(config: ResolvedAiConfig, model: string) {
 
 function normalizeVideoSeconds(value: string) {
     const seconds = Math.floor(Number(value) || 6);
-    return String(Math.max(1, Math.min(20, seconds)));
+    return String(Math.max(1, seconds));
 }
 
 function normalizeVideoSize(value: string) {

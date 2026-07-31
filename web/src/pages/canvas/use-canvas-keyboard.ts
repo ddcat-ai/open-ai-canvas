@@ -28,6 +28,8 @@ type UseCanvasKeyboardOptions = {
     deleteNodes: (ids: Set<string>) => void;
     deleteConnection: (connectionId: string) => void;
     deselectCanvas: () => void;
+    zoomCanvasIn: () => void;
+    zoomCanvasOut: () => void;
 };
 
 export function useCanvasKeyboard({
@@ -56,12 +58,31 @@ export function useCanvasKeyboard({
     deleteNodes,
     deleteConnection,
     deselectCanvas,
+    zoomCanvasIn,
+    zoomCanvasOut,
 }: UseCanvasKeyboardOptions) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             const target = event.target instanceof Element ? event.target : null;
             const key = event.key.toLowerCase();
             const isModifierShortcut = event.metaKey || event.ctrlKey;
+            const isTextEditingTarget = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || Boolean(target?.closest("[contenteditable='true']"));
+
+            if (isModifierShortcut && !event.altKey && (key === "+" || key === "=" || event.code === "NumpadAdd")) {
+                event.preventDefault();
+                if (!isTextEditingTarget) zoomCanvasIn();
+                return;
+            }
+            if (isModifierShortcut && !event.altKey && (key === "-" || key === "_" || event.code === "NumpadSubtract")) {
+                event.preventDefault();
+                if (!isTextEditingTarget) zoomCanvasOut();
+                return;
+            }
+            if (isModifierShortcut && !event.altKey && (key === "0" || event.code === "Numpad0")) {
+                event.preventDefault();
+                if (!isTextEditingTarget) zoomToActualSize();
+                return;
+            }
 
             if (isModifierShortcut && !event.altKey && key === "s") {
                 event.preventDefault();
@@ -69,7 +90,7 @@ export function useCanvasKeyboard({
                 if (!event.repeat) void saveCanvasProject();
                 return;
             }
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || target?.closest("[contenteditable='true'],[data-canvas-no-zoom]")) return;
+            if (isTextEditingTarget || target?.closest("[data-canvas-no-zoom]")) return;
             if (event.key === "?" && !isModifierShortcut && !event.altKey) {
                 event.preventDefault();
                 setShortcutRequestNonce((value) => value + 1);
@@ -142,5 +163,5 @@ export function useCanvasKeyboard({
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("paste", handlePaste, true);
         };
-    }, [cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, fitCanvasContent, fitCanvasSelection, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, undoCanvas, zoomToActualSize]);
+    }, [cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, fitCanvasContent, fitCanvasSelection, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
 }

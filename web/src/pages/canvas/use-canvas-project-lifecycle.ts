@@ -92,7 +92,7 @@ export function useCanvasProjectLifecycle({
                 connections: project.connections,
                 chatSessions: restoredSessions,
                 activeChatId: project.activeChatId || null,
-                backgroundMode: project.backgroundMode,
+                backgroundMode: project.backgroundMode || "dots",
                 showImageInfo: project.showImageInfo || false,
             };
             nodesRef.current = snapshot.nodes;

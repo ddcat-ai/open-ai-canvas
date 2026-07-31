@@ -202,7 +202,7 @@ function InfiniteCanvasPage() {
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
-    const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("lines");
+    const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("dots");
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [mediaPerformanceMode, setMediaPerformanceMode] = useState<CanvasMediaPerformanceMode>(readCanvasMediaPerformanceMode);
     const [projectLoaded, setProjectLoaded] = useState(false);
@@ -412,6 +412,8 @@ function InfiniteCanvasPage() {
         resetViewport,
         screenToCanvas,
         setZoomScale,
+        zoomCanvasIn,
+        zoomCanvasOut,
         zoomToActualSize,
     } = useCanvasViewportController({
         containerRef,
@@ -614,6 +616,7 @@ function InfiniteCanvasPage() {
     const {
         cancelPendingConnectionCreate,
         closeConnectionCreateMenu,
+        connectionTargetAnchorRatio,
         connectionTargetNodeId,
         connectingParams,
         createConnectedNode,
@@ -962,6 +965,8 @@ function InfiniteCanvasPage() {
         deleteNodes,
         deleteConnection,
         deselectCanvas,
+        zoomCanvasIn,
+        zoomCanvasOut,
     });
 
     const handleAssistantSessionsChange = useCallback((sessions: CanvasAssistantSession[], activeId: string | null) => {
@@ -1413,6 +1418,7 @@ function InfiniteCanvasPage() {
                             connectingParams={connectingParams}
                             mouseWorld={mouseWorld}
                             connectionTargetNodeId={connectionTargetNodeId}
+                            connectionTargetAnchorRatio={connectionTargetAnchorRatio}
                             nodeById={nodeById}
                             selectionBox={selectionBox}
                             selectedNodeBounds={selectedNodeBounds}

@@ -117,12 +117,15 @@ func TestDoBinaryRejectsOversizedProviderResponse(t *testing.T) {
 	}
 }
 
-func TestTextResponseInputIncludesReferenceImages(t *testing.T) {
+func TestTextResponseInputIncludesReferenceMedia(t *testing.T) {
 	input := canvasGenerationInput{
 		Prompt: "describe this image",
 		Config: providerConfig{SystemPrompt: "answer in Chinese"},
 		ReferenceImages: []providerMedia{
 			{ID: "image-1", Name: "image.png", Type: "image/png", DataURL: testReferenceImageDataURL},
+		},
+		ReferenceVideos: []providerMedia{
+			{ID: "video-1", Name: "video.mp4", Type: "video/mp4", URL: "https://example.com/reference.mp4"},
 		},
 	}
 
@@ -144,8 +147,8 @@ func TestTextResponseInputIncludesReferenceImages(t *testing.T) {
 	if !ok {
 		t.Fatalf("user content = %T, want []map[string]interface{}", messages[1]["content"])
 	}
-	if len(content) != 2 {
-		t.Fatalf("len(content) = %d, want 2", len(content))
+	if len(content) != 3 {
+		t.Fatalf("len(content) = %d, want 3", len(content))
 	}
 	if content[0]["type"] != "input_text" || content[0]["text"] != "describe this image" {
 		t.Fatalf("text content = %#v", content[0])
@@ -153,13 +156,19 @@ func TestTextResponseInputIncludesReferenceImages(t *testing.T) {
 	if content[1]["type"] != "input_image" || content[1]["image_url"] != testReferenceImageDataURL {
 		t.Fatalf("image content = %#v", content[1])
 	}
+	if content[2]["type"] != "input_video" || content[2]["video_url"] != "https://example.com/reference.mp4" {
+		t.Fatalf("video content = %#v", content[2])
+	}
 }
 
-func TestTextChatContentIncludesReferenceImages(t *testing.T) {
+func TestTextChatContentIncludesReferenceMedia(t *testing.T) {
 	input := canvasGenerationInput{
 		Prompt: "describe this image",
 		ReferenceImages: []providerMedia{
 			{ID: "image-1", Name: "image.png", Type: "image/png", DataURL: testReferenceImageDataURL},
+		},
+		ReferenceVideos: []providerMedia{
+			{ID: "video-1", Name: "video.mp4", Type: "video/mp4", URL: "https://example.com/reference.mp4"},
 		},
 	}
 
@@ -171,8 +180,8 @@ func TestTextChatContentIncludesReferenceImages(t *testing.T) {
 	if !ok {
 		t.Fatalf("textChatContent() = %T, want []map[string]interface{}", value)
 	}
-	if len(content) != 2 {
-		t.Fatalf("len(content) = %d, want 2", len(content))
+	if len(content) != 3 {
+		t.Fatalf("len(content) = %d, want 3", len(content))
 	}
 	if content[0]["type"] != "text" || content[0]["text"] != "describe this image" {
 		t.Fatalf("text content = %#v", content[0])
@@ -183,6 +192,13 @@ func TestTextChatContentIncludesReferenceImages(t *testing.T) {
 	}
 	if content[1]["type"] != "image_url" || imageURL["url"] != testReferenceImageDataURL {
 		t.Fatalf("image content = %#v", content[1])
+	}
+	videoURL, ok := content[2]["video_url"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("video_url = %T, want map[string]interface{}", content[2]["video_url"])
+	}
+	if content[2]["type"] != "video_url" || videoURL["url"] != "https://example.com/reference.mp4" {
+		t.Fatalf("video content = %#v", content[2])
 	}
 }
 
@@ -527,7 +543,7 @@ func TestXAIVideoBodyUsesOfficialImageShapeAndNormalizesSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grokVideoBody() error = %v", err)
 	}
-	if body["duration"] != 15 || body["aspect_ratio"] != "9:16" || body["resolution"] != "1080p" {
+	if body["duration"] != 20 || body["aspect_ratio"] != "9:16" || body["resolution"] != "1080p" {
 		t.Fatalf("xAI settings = %#v", body)
 	}
 	image, ok := body["image"].(map[string]interface{})
@@ -782,7 +798,7 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Fatalf("decode request: %v", err)
 			}
-			if body["model"] != "grok-image-video" || body["seconds"] != float64(10) || body["aspect_ratio"] != "9:16" || body["resolution"] != "720p" {
+			if body["model"] != "grok-image-video" || body["seconds"] != "10" || body["aspect_ratio"] != "9:16" || body["resolution"] != "720p" {
 				t.Errorf("body = %#v", body)
 			}
 			images, ok := body["image_urls"].([]interface{})

@@ -17,6 +17,8 @@ type CreateAnnouncementRequest struct {
 	Level   model.AnnouncementLevel `json:"level"`
 }
 
+type UpdateAnnouncementRequest = CreateAnnouncementRequest
+
 type AnnouncementPage struct {
 	Announcements []model.Announcement `json:"announcements"`
 	Total         int64                `json:"total"`
@@ -45,20 +47,9 @@ func (s *Service) CreateAnnouncement(actor *model.User, req CreateAnnouncementRe
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	title := strings.TrimSpace(req.Title)
-	content := strings.TrimSpace(req.Content)
-	if title == "" || content == "" {
-		return nil, BadAuthRequest("请填写公告标题和正文")
-	}
-	if utf8.RuneCountInString(title) > 120 {
-		return nil, BadAuthRequest("公告标题不能超过 120 个字符")
-	}
-	if utf8.RuneCountInString(content) > 4000 {
-		return nil, BadAuthRequest("公告正文不能超过 4000 个字符")
-	}
-	level := req.Level
-	if !validAnnouncementLevel(level) {
-		return nil, BadAuthRequest("公告级别无效")
+	title, content, level, err := normalizeAnnouncementInput(req)
+	if err != nil {
+		return nil, err
 	}
 	now := time.Now()
 	announcement := &model.Announcement{
@@ -76,6 +67,38 @@ func (s *Service) CreateAnnouncement(actor *model.User, req CreateAnnouncementRe
 		return nil, err
 	}
 	return announcement, nil
+}
+
+func (s *Service) UpdateAnnouncement(actor *model.User, id string, req UpdateAnnouncementRequest) (*model.Announcement, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	announcement, err := s.repo.Announcement(strings.TrimSpace(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, BadAuthRequest("公告不存在")
+		}
+		return nil, err
+	}
+	title, content, level, err := normalizeAnnouncementInput(req)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	announcement.Title = title
+	announcement.Content = content
+	announcement.Level = level
+	announcement.Status = model.AnnouncementStatusActive
+	announcement.ClosedAt = nil
+	announcement.PublishedAt = now
+	announcement.UpdatedAt = now
+	if err := s.repo.UpdateAnnouncement(announcement); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, BadAuthRequest("公告状态已变化，请刷新后重试")
+		}
+		return nil, err
+	}
+	return s.repo.Announcement(announcement.ID)
 }
 
 func (s *Service) CloseAnnouncement(actor *model.User, id string) (*model.Announcement, error) {
@@ -135,4 +158,22 @@ func (s *Service) MarkAnnouncementsRead(user *model.User, announcementIDs []stri
 
 func validAnnouncementLevel(level model.AnnouncementLevel) bool {
 	return level == model.AnnouncementLevelInfo || level == model.AnnouncementLevelSuccess || level == model.AnnouncementLevelWarning || level == model.AnnouncementLevelCritical
+}
+
+func normalizeAnnouncementInput(req CreateAnnouncementRequest) (string, string, model.AnnouncementLevel, error) {
+	title := strings.TrimSpace(req.Title)
+	content := strings.TrimSpace(req.Content)
+	if title == "" || content == "" {
+		return "", "", "", BadAuthRequest("请填写公告标题和正文")
+	}
+	if utf8.RuneCountInString(title) > 120 {
+		return "", "", "", BadAuthRequest("公告标题不能超过 120 个字符")
+	}
+	if utf8.RuneCountInString(content) > 4000 {
+		return "", "", "", BadAuthRequest("公告正文不能超过 4000 个字符")
+	}
+	if !validAnnouncementLevel(req.Level) {
+		return "", "", "", BadAuthRequest("公告级别无效")
+	}
+	return title, content, req.Level, nil
 }

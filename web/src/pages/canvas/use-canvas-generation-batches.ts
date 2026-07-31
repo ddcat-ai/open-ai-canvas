@@ -140,15 +140,26 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
         });
     }, [projectId, setNodes]);
 
-    // 调度只补齐后台返回的用户级活跃任务空位，最终并发仍由后端原子校验。
+    // 仅查询当前画布的活跃任务来安排批次，跨画布并发仍由后端创建任务时原子校验。
     const scheduleWaitingItems = useCallback(async () => {
         if (!projectLoaded || schedulingRef.current) return;
         schedulingRef.current = true;
         try {
-            const tasks = await listGenerationTasks(100).catch(() => null);
+            const currentNodes = nodesRef.current;
+            // 没有当前画布的等待项时无需查询任务中心，避免空画布持续轮询。
+            const hasWaitingItems = currentNodes.some((sourceNode) =>
+                (sourceNode.metadata?.generationBatches || []).some((batch) =>
+                    batch.projectId === projectId &&
+                    batch.status !== "completed" &&
+                    batch.status !== "cancelled" &&
+                    batch.items.some((item) => item.status === "waiting"),
+                ),
+            );
+            if (!hasWaitingItems) return;
+
+            const tasks = await listGenerationTasks(100, { projectId, activeOnly: true }).catch(() => null);
             if (!tasks) return;
             const activeTaskCount = tasks.filter((task) => task.status === "queued" || task.status === "running").length;
-            const currentNodes = nodesRef.current;
             const nodeById = new Map(currentNodes.map((node) => [node.id, node]));
             const pendingReservations = [...controllersRef.current.keys()].filter((key) => {
                 const [, itemId] = key.split(":");

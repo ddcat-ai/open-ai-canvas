@@ -171,11 +171,11 @@ async function hydrateAssets(assets: Asset[]): Promise<Asset[]> {
             }
             if (asset.kind === "video" && asset.data.storageKey) {
                 const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);
-                return { ...asset, coverUrl: shouldReplaceEphemeralUrl(asset.coverUrl) ? url : asset.coverUrl, data: { ...asset.data, url } };
+                return { ...asset, data: { ...asset.data, url } };
             }
             if (asset.kind === "audio" && asset.data.storageKey) {
                 const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);
-                return { ...asset, coverUrl: shouldReplaceEphemeralUrl(asset.coverUrl) ? url : asset.coverUrl, data: { ...asset.data, url } };
+                return { ...asset, data: { ...asset.data, url } };
             }
             if (asset.kind === "model" && asset.data.storageKey) {
                 const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);

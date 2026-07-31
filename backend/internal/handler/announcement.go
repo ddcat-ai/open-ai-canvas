@@ -80,6 +80,25 @@ func RegisterAnnouncementRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"announcement": announcement})
 	})
 
+	r.PATCH("/admin/announcements/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateAnnouncementRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		announcement, err := svc.UpdateAnnouncement(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"announcement": announcement})
+	})
+
 	r.POST("/admin/announcements/:id/close", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

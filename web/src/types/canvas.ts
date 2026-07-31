@@ -276,6 +276,8 @@ export type CanvasConnection = {
     toNodeId: string;
     fromHandleId?: string;
     toHandleId?: string;
+    fromAnchorRatio?: number;
+    toAnchorRatio?: number;
 };
 
 export type CanvasDisplayConnection = {
@@ -331,6 +333,7 @@ export type ConnectionHandle = {
     nodeId: string;
     handleType: "source" | "target";
     handleId?: string;
+    anchorRatio?: number;
 };
 
 export type SelectionBox = {

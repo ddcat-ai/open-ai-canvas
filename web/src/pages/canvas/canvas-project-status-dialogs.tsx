@@ -3,6 +3,7 @@ import { Button, Image, Modal } from "antd";
 import { TaskDetailItem, taskStatusText } from "./canvas-project-feedback";
 import type { GenerationTask, TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { VideoPlayer } from "@/components/video-player";
 
 type CanvasProjectStatusDialogsProps = {
     theme: { node: { stroke: string; panel: string; muted: string; fill: string } };
@@ -48,7 +49,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
             </Modal>
 
             <Modal title="视频预览" open={Boolean(previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video)} centered onCancel={onClosePreview} footer={null} width="min(1200px, calc(100vw - 32px))" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "84vh", overflow: "hidden", background: "#090909" } }}>
-                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? <video src={previewNode.metadata.content} controls className="max-h-[84vh] max-w-full bg-black object-contain" /> : null}
+                {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Video ? <VideoPlayer src={previewNode.metadata.content} mimeType={previewNode.metadata.mimeType} title={previewNode.title || "视频预览"} className="max-h-[84vh] max-w-full bg-black" /> : null}
             </Modal>
 
             {previewNode?.metadata?.content && previewNode.type === CanvasNodeType.Image ? (

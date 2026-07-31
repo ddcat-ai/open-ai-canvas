@@ -1,0 +1,17 @@
+.canvas-video-player [data-media-provider] {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+}
+
+.canvas-video-player [data-media-provider] video {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: contain;
+}
+
+/* 画布节点顶部还有标题和存储状态，隐藏 Vidstack 小布局的顶部控制组避免互相遮挡。 */
+.canvas-video-player-compact .vds-video-layout[data-sm] .vds-controls-group:first-child {
+    display: none;
+}

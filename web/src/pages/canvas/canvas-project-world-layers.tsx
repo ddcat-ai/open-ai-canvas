@@ -48,7 +48,7 @@ type CanvasProjectWorldLayersProps = {
     onNodeMouseDown: (event: ReactMouseEvent, nodeId: string) => void;
     onNodeHoverStart: (nodeId: string) => void;
     onNodeHoverEnd: (nodeId: string) => void;
-    onConnectStart: (event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string) => void;
+    onConnectStart: (event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => void;
     onNodeResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onToggleFrame: (nodeId: string) => void;
     onNodeTitleChange: (nodeId: string, title: string) => void;
@@ -139,6 +139,7 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         onHoverEnd={props.onNodeHoverEnd}
                         onConnectStart={props.onConnectStart}
                         onResize={props.onNodeResize}
+                        onTitleChange={props.onNodeTitleChange}
                         onContentChange={props.onNodeContentChange}
                         onToggleBatch={props.onToggleBatch}
                         onSetBatchPrimary={props.onSetBatchPrimary}

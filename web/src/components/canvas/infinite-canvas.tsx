@@ -38,7 +38,7 @@ type PinchState = {
     initialScale: number;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -145,12 +145,13 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             const absX = Math.abs(deltaX);
             const absY = Math.abs(deltaY);
             const isPinchZoom = event.ctrlKey || event.metaKey;
-            if (target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR)) {
+            if (target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
                 // 内部区域保留纵向滚动，但横向手势不能泄漏为 macOS 浏览器前进/后退。
-                if (!isPinchZoom && (event.shiftKey || absX > absY)) event.preventDefault();
+                if (event.shiftKey || absX > absY) event.preventDefault();
                 return;
             }
 
+            // Ctrl/Meta + 滚轮在画布内始终由画布接管，避免浮层区域触发浏览器页面缩放。
             event.preventDefault();
             interactingRef.current = true;
             const current = viewportRef.current;
@@ -417,12 +418,13 @@ function CanvasGrid({ mode }: { mode: CanvasBackgroundMode }) {
     return (
         <div
             data-canvas-grid-layer
-            className="pointer-events-none absolute opacity-40"
+            className="pointer-events-none absolute"
             style={{
                 inset: "calc(-1 * var(--canvas-grid-size))",
                 backgroundImage,
                 backgroundSize: "var(--canvas-grid-size) var(--canvas-grid-size)",
                 transform: "translate3d(var(--canvas-grid-x), var(--canvas-grid-y), 0)",
+                opacity: mode === "dots" ? 0.52 : 0.36,
                 willChange: "transform",
             }}
         />

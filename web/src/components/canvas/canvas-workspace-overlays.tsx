@@ -12,6 +12,7 @@ import { CanvasNodeType, type CanvasNodeData, type ConnectionHandle, type Positi
 export type PendingConnectionCreate = {
     connection: ConnectionHandle;
     position: Position;
+    quick?: boolean;
 };
 
 export function CanvasSelectionToolbar({ anchorRef, containerRef, count, children }: { anchorRef: RefObject<HTMLDivElement | null>; containerRef: RefObject<HTMLDivElement | null>; count: number; children: ReactNode }) {

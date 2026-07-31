@@ -57,7 +57,17 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const videoFrameOptions = mentionReferences
         .filter((item) => item.active && item.kind === "image")
         .map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
-    const composerSurface = theme.spatial.dropzone;
+    const darkSurface = themeName === "dark";
+    const monochromeAccent = theme.node.activeStroke;
+    const shellBorder = darkSurface ? "rgba(255,255,255,.08)" : "rgba(17,24,39,.12)";
+    const insetBorder = darkSurface ? "rgba(255,255,255,.06)" : "rgba(17,24,39,.10)";
+    const shellSurface = darkSurface
+        ? theme.canvas.background
+        : `linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,252,.86)), ${theme.spatial.elevated}`;
+    const composerSurface = darkSurface
+        ? theme.canvas.background
+        : `linear-gradient(180deg, rgba(255,255,255,.7), rgba(248,250,252,.72)), ${theme.spatial.dropzone}`;
+    const controlSurface = darkSurface ? theme.canvas.background : "rgba(17,24,39,.045)";
     const referenceShelfHeight = activeReferenceCount ? 42 : 0;
     const composerMinHeight = activeReferenceCount ? 82 : 58;
     const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
@@ -130,8 +140,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     onChange={(portraitTexture) => onConfigChange(node.id, { portraitTexture })}
                 />
             ) : (
-                <div className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5" style={{ background: theme.toolbar.itemHover }}>
-                    <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: theme.accent.primary }}>
+                <div className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 transition-colors hover:bg-white/[.04]" style={{ background: controlSurface }}>
+                    <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
                     <span className="truncate text-[10px] font-medium">{modeDisplayName(mode)}创作</span>
@@ -148,13 +158,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 />
             ) : null}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-                {activeReferenceCount ? <ComposerPill theme={theme} icon={<Boxes className="size-2.5" />} label={`已连接 ${activeReferenceCount} 个`} active /> : null}
+                {activeReferenceCount ? <ComposerPill theme={theme} borderColor={insetBorder} icon={<Boxes className="size-2.5" />} label={`已连接 ${activeReferenceCount} 个`} /> : null}
                 {!expanded && canExpandPrompt ? (
                     <Tooltip title="放大编辑">
                         <button
                             type="button"
-                            className="grid size-6 shrink-0 place-items-center rounded-md transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
-                            style={{ background: theme.toolbar.itemHover, color: theme.node.muted, outlineColor: theme.accent.primary }}
+                            className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-white/[.06] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
+                            style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
                             onClick={() => setExpandedPromptOpen(true)}
                             aria-label="放大编辑提示词"
                         >
@@ -167,7 +177,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     );
 
     const renderComposerControls = (expanded: boolean) => simpleMode ? (
-        <div className="flex min-w-0 items-center justify-between gap-2 px-0.5">
+        <div className="flex min-w-0 items-center justify-between gap-2 p-1" style={{ background: controlSurface }}>
             <span className="min-w-0 truncate px-2 text-[10px]" style={{ color: theme.node.muted }}>
                 {activeReferenceCount ? `已连接 ${activeReferenceCount} 个素材` : "将使用默认模型与参数"}
             </span>
@@ -176,7 +186,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 className="!inline-flex !h-8 shrink-0 !items-center !gap-1 !rounded-md !px-2.5 !text-[10px] !font-medium"
                 danger={isRunning}
                 disabled={isSubmitDisabled}
-                style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : theme.node.activeStroke, color: isSubmitDisabled ? theme.node.faint : isRunning ? "#ffffff" : theme.canvas.background }}
+                style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : monochromeAccent, color: isSubmitDisabled ? theme.node.faint : isRunning ? "#ffffff" : theme.canvas.background, boxShadow: isSubmitDisabled ? "none" : `0 8px 20px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.18)` }}
                 onClick={() => (isRunning ? onStop(node.id) : expanded ? submitExpandedPrompt() : submit())}
                 aria-label={isRunning ? "停止生成" : "生成"}
             >
@@ -185,7 +195,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             </Button>
         </div>
     ) : (
-        <div className="flex min-w-0 items-center justify-between gap-0.5 px-0.5">
+        <div className="flex min-w-0 items-center justify-between gap-0.5 p-1" style={{ background: controlSurface }}>
             <div className={`${expanded ? "max-w-[320px]" : mode === "image" || mode === "video" ? "max-w-[240px]" : "max-w-[174px]"} min-w-[104px] flex-1`}>
                 <ModelPicker className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} showSelectedPrice={false} />
             </div>
@@ -207,10 +217,10 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 <GenerationCostBadge credits={credits} theme={theme} />
                 <Button
                     type="text"
-                    className="!inline-flex !h-8 !w-8 shrink-0 !items-center !justify-center !rounded-md !border-0 !p-0 !shadow-none"
+                    className="!inline-flex !h-8 !w-8 shrink-0 !items-center !justify-center !rounded-md !border !p-0 transition hover:!-translate-y-px hover:!brightness-110 motion-reduce:hover:!translate-y-0"
                     danger={isRunning}
                     disabled={isSubmitDisabled}
-                    style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : theme.accent.primary, borderColor: "transparent", color: isSubmitDisabled ? theme.node.faint : "#ffffff" }}
+                    style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : monochromeAccent, borderColor: isSubmitDisabled ? insetBorder : monochromeAccent, color: isSubmitDisabled ? theme.node.faint : theme.canvas.background, boxShadow: isSubmitDisabled ? "none" : `0 8px 20px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.18)` }}
                     onClick={() => (isRunning ? onStop(node.id) : expanded ? submitExpandedPrompt() : submit())}
                     aria-label={isRunning ? "停止生成" : "生成"}
                 >
@@ -222,8 +232,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     return (
         <div
-            className="aceternity-floating-panel overflow-hidden rounded-lg p-1.5 backdrop-blur-2xl"
-            style={{ background: theme.spatial.elevated, color: theme.node.text, boxShadow: `0 20px 64px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.07)` }}
+            className="aceternity-floating-panel relative overflow-hidden rounded-lg border p-2"
+            style={{ background: shellSurface, borderColor: shellBorder, color: theme.node.text, boxShadow: `0 22px 60px ${theme.spatial.shadow}, 0 2px 8px rgba(0,0,0,.22)` }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
@@ -231,8 +241,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             {renderComposerHeader(false)}
 
             <div
-                className="relative mt-1.5 flex max-h-36 flex-col overflow-hidden rounded-lg transition-[height,outline-color] duration-150 focus-within:outline focus-within:outline-1 motion-reduce:transition-none"
-                style={{ height: composerHeight, background: composerSurface, outlineColor: theme.accent.primary }}
+                className="relative mt-2 flex max-h-36 flex-col overflow-hidden rounded-lg outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
+                style={{ height: composerHeight, background: composerSurface, boxShadow: "inset 0 1px 4px rgba(0,0,0,.22)" }}
             >
                 <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                 <CanvasResourceMentionTextarea
@@ -240,15 +250,15 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     references={mentionReferences}
                     onChange={updatePrompt}
                     containerClassName="min-h-0 flex-1"
-                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2 text-[13px] leading-5 outline-none placeholder:text-current placeholder:opacity-35"
-                    style={{ color: theme.node.text }}
+                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2 text-[13px] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                    style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                     onContentSizeChange={updatePromptContentHeight}
                 />
             </div>
 
             {mode === "video" && !simpleMode ? (
-                <div className="mt-1.5 rounded-md p-0.5" style={{ background: composerSurface }}>
+                <div className="mt-1.5 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
                     <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                 </div>
             ) : null}
@@ -264,13 +274,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 width={760}
                 destroyOnHidden
                 onCancel={() => { setExpandedPresetOpen(false); setExpandedPromptOpen(false); }}
-                styles={{ container: { display: "flex", height: "min(440px, calc(100vh - 40px))", flexDirection: "column", borderRadius: 12, padding: 0, overflow: "hidden" }, body: { minHeight: 0, flex: 1, padding: 0 } }}
+                styles={{ container: { display: "flex", height: "min(440px, calc(100vh - 40px))", flexDirection: "column", borderRadius: 12, border: `1px solid ${shellBorder}`, padding: 0, overflow: "hidden", background: shellSurface, boxShadow: `0 30px 90px ${theme.spatial.shadow}` }, body: { minHeight: 0, flex: 1, padding: 0 } }}
             >
                 <div className="flex h-full min-h-0 flex-col gap-2.5 p-3" style={{ color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     <div
-                        className="flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg border focus-within:outline focus-within:outline-1"
-                        style={{ borderColor: theme.toolbar.border, outlineColor: theme.accent.primary }}
+                        className="flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg outline-none ring-0 focus-within:outline-none focus-within:ring-0"
+                        style={{ background: composerSurface, boxShadow: "inset 0 1px 4px rgba(0,0,0,.22)" }}
                     >
                         <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                         <CanvasResourceMentionTextarea
@@ -278,14 +288,14 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                             references={mentionReferences}
                             onChange={updatePrompt}
                             containerClassName="min-h-0 flex-1"
-                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[15px] leading-6 outline-none placeholder:text-current placeholder:opacity-35"
-                            style={{ color: theme.node.text }}
+                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[15px] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                            style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                             placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                             aria-label={`${modeDisplayName(mode)}提示词`}
                         />
                     </div>
                     {mode === "video" && !simpleMode ? (
-                        <div className="shrink-0 rounded-md p-0.5">
+                        <div className="shrink-0 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
                             <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                         </div>
                     ) : null}
@@ -296,11 +306,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     );
 }
 
-function ComposerPill({ theme, icon, label, active = false }: { theme: CanvasTheme; icon: ReactNode; label: string; active?: boolean }) {
+function ComposerPill({ theme, borderColor, icon, label }: { theme: CanvasTheme; borderColor: string; icon: ReactNode; label: string }) {
     return (
         <span
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[9px] font-medium"
-            style={{ background: active ? theme.accent.primarySoft : theme.toolbar.itemHover, color: active ? theme.accent.primary : theme.node.muted }}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[9px] font-medium transition hover:brightness-125"
+            style={{ background: theme.canvas.background, borderColor, color: theme.node.activeStroke }}
         >
             {icon}
             {label}
@@ -333,7 +343,7 @@ function ConnectedReferenceShelf({ references, theme, onInsert }: { references: 
                     key={reference.id}
                     type="button"
                     className="group relative size-[34px] shrink-0 overflow-hidden rounded-md text-left transition hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.accent.primary }}
+                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
                     title={`插入 @${reference.label}`}
                     aria-label={`插入 @${reference.label}`}
                     onClick={() => onInsert(reference)}

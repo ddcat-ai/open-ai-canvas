@@ -165,7 +165,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         const taskIds = Array.from(new Set(recoveryNodes.map((node) => node.metadata?.taskId).filter((id): id is string => Boolean(id))));
         const tasks = (await Promise.all(taskIds.map((id) => queryGenerationTask(id).catch(() => undefined)))).filter((task): task is GenerationTask => Boolean(task));
         if (recoveryNodes.some((node) => !node.metadata?.taskId)) {
-            const recentTasks = await listGenerationTasks(30).catch(() => []);
+            const recentTasks = await listGenerationTasks(30, { projectId }).catch(() => []);
             tasks.push(...recentTasks.filter((task) => !tasks.some((item) => item.id === task.id)));
         }
         const projectTasks = tasks.filter((task) => task.projectId === projectId && (task.type.startsWith("canvas_") || task.type === "agent_storyboard_rows"));

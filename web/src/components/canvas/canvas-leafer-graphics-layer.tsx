@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
-import { subscribeCanvasSelectionPreview, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
@@ -20,6 +20,7 @@ type CanvasLeaferGraphicsLayerProps = {
     connectingParams: ConnectionHandle | null;
     mouseWorld: Position;
     connectionTargetNodeId: string | null;
+    connectionTargetAnchorRatio?: number;
     nodeById: Map<string, CanvasNodeData>;
     selectionBox: SelectionBox | null;
     selectedNodeBounds: NodeBounds;
@@ -71,17 +72,17 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             underlay.leafer.resize(size);
             overlay.leafer.resize(size);
             syncViewport(rasterViewportRef.current, size.width, size.height, underlay, overlay, propsRef.current);
-            if (isZoomPreview(container, viewportRef.current, rasterViewportRef.current)) {
+            if (isViewportPreview(container, viewportRef.current, rasterViewportRef.current)) {
                 applyScenePreview(viewportRef.current, rasterViewportRef.current, underlay, overlay);
             }
         };
         const resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(container);
         window.addEventListener("resize", resize);
-        const unsubscribe = subscribeCanvasViewportPreview(container, (next) => {
+        const unsubscribe = subscribeCanvasGraphicsViewportPreview(container, (next) => {
             viewportRef.current = next;
             const rect = container.getBoundingClientRect();
-            if (isZoomPreview(container, next, rasterViewportRef.current)) {
+            if (isViewportPreview(container, next, rasterViewportRef.current)) {
                 if (shouldRebaseCanvasRaster(next, rasterViewportRef.current)) {
                     syncViewport(next, rect.width, rect.height, underlay, overlay, propsRef.current);
                     rasterViewportRef.current = next;
@@ -124,7 +125,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const overlay = overlayRef.current;
         if (!overlay) return;
         syncOverlayContent(overlay, props, viewportRef.current.k);
-    }, [props.connectingParams, props.connectionTargetNodeId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.selectedNodeBounds, props.selectionBox, props.theme]);
+    }, [props.connectingParams, props.connectionTargetAnchorRatio, props.connectionTargetNodeId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.selectedNodeBounds, props.selectionBox, props.theme]);
 
     useLayoutEffect(() => {
         const underlay = underlayRef.current;
@@ -150,7 +151,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         if (!underlay || !overlay || !container) return;
         const rect = container.getBoundingClientRect();
         syncViewport(rasterViewportRef.current, rect.width, rect.height, underlay, overlay, props);
-        if (isZoomPreview(container, viewportRef.current, rasterViewportRef.current)) {
+        if (isViewportPreview(container, viewportRef.current, rasterViewportRef.current)) {
             applyScenePreview(viewportRef.current, rasterViewportRef.current, underlay, overlay);
         }
     }, [props.alignmentGuides, props.containerRef, props.theme]);
@@ -228,6 +229,7 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
                 props.mouseWorld,
                 props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined,
                 props.scriptScrollTopById[connecting.nodeId] || 0,
+                props.connectionTargetAnchorRatio,
             ),
             stroke: props.theme.accent.primary,
             strokeCap: "round",
@@ -266,8 +268,8 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
     });
 }
 
-function isZoomPreview(container: HTMLDivElement, viewport: ViewportTransform, rasterViewport: ViewportTransform) {
-    return container.dataset.canvasViewportInteracting === "true" && Math.abs(viewport.k - rasterViewport.k) > 0.0001;
+function isViewportPreview(container: HTMLDivElement, viewport: ViewportTransform, rasterViewport: ViewportTransform) {
+    return container.dataset.canvasViewportInteracting === "true" && !sameCanvasViewport(viewport, rasterViewport);
 }
 
 function applyScenePreview(viewport: ViewportTransform, rasterViewport: ViewportTransform, ...scenes: LeaferScene[]) {

@@ -465,17 +465,17 @@ function editorRow(shotNumber: number): StoryboardRow {
 
 function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { side: "left" | "right"; top: number; scale: number; tone?: StoryboardRow["status"]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; title?: string; onPointerDown: (event: ReactPointerEvent) => void }) {
     const color = tone === "loading" ? theme.accent.primary : tone === "error" ? theme.accent.danger : tone === "success" ? theme.node.activeStroke : theme.node.muted;
-    const inverseScale = 1 / Math.max(scale, 0.05);
+    const inverseHitScale = 1 / Math.max(scale, 0.05);
     return (
         <button
             type="button"
             aria-label={title || `${side === "left" ? "输入" : "输出"}连接点`}
             title={title || `${side === "left" ? "引入参考" : "连接到图片、视频或生成节点"}`}
             className={`canvas-connection-handle absolute z-50 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 ${side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"}`}
-            style={{ top, width: 32 * inverseScale, height: 32 * inverseScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+            style={{ top, width: 32 * inverseHitScale, height: 32 * inverseHitScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
             onPointerDown={onPointerDown}
         >
-            <span className="block rounded-full shadow-sm transition-transform hover:scale-110" style={{ width: 14 * inverseScale, height: 14 * inverseScale, border: `${2 * inverseScale}px solid ${theme.node.panel}`, background: color }} />
+            <span className="block size-2.5 rounded-full border-2 shadow-sm transition-transform hover:scale-110" style={{ boxSizing: "border-box", borderColor: theme.node.panel, background: color }} />
         </button>
     );
 }

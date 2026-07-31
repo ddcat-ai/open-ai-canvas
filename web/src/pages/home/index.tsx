@@ -1,13 +1,13 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button } from "antd";
-import { ArrowRight, Bot, CheckCircle2, CircleAlert, Clapperboard, Clock3, FolderKanban, Images, LayoutGrid, ListChecks, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpenText, Bot, CheckCircle2, CircleAlert, Clapperboard, Clock3, FolderKanban, Images, LayoutGrid, ListChecks, Plus, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
 import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
-import { projectContinueTarget, projectDetailStage, projectNextActions, projectSummaryCompletion } from "@/lib/project-workbench";
+import { projectAttentionCount, projectContinueTarget, projectDetailStage, projectNextActions, projectSummaryCompletion } from "@/lib/project-workbench";
 import { getProject, listProjects, type ProjectSummary } from "@/services/api/projects";
 import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -58,7 +58,7 @@ export default function IndexPage() {
     const loadingUserWorkspace = !userHydrated || (Boolean(user) && domainProjectsQuery.isLoading);
     return (
         <main className="app-user-content app-workspace-canvas h-full overflow-y-auto text-foreground">
-            <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
+            <div className="app-home-workbench mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
                 {loadingUserWorkspace ? (
                     <WorkspaceLoadingState className="mt-3 max-w-[980px]" label="正在恢复工作台" detail="读取项目、章节和最近画布" rows={5} />
                 ) : user && domainProjectsQuery.isError ? (
@@ -99,9 +99,10 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
     const continueTarget = detail ? projectContinueTarget(detail) : { href: `/projects/${summary.project.id}/overview`, title: summary.project.name, context: "打开项目概览", updatedAt: summary.project.updatedAt };
     const nextActions = detail ? projectNextActions(detail, 3) : [];
     const completion = projectSummaryCompletion(summary);
+    const attentionCount = detail ? projectAttentionCount(detail) : 0;
     return (
         <>
-            <header className="flex flex-col gap-4 border-b border-border/80 pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <header className="app-home-header flex flex-col gap-4 border-b border-border/80 pb-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
                     <WorkspaceSignalIcon variant="home" />
                     <div className="min-w-0">
@@ -115,8 +116,15 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
                 </div>
             </header>
 
-            <section className="grid gap-0 border-b border-border/80 py-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]">
-                <div className="min-w-0 py-2 lg:pr-8">
+            <section className="app-home-metrics grid grid-cols-2 gap-3 py-5 xl:grid-cols-4" aria-label="项目状态概览">
+                <WorkspaceMetric icon={<BookOpenText />} label="剧情章节" value={summary.unitCount} detail={`${summary.completedUnitCount} 章已完成`} />
+                <WorkspaceMetric icon={<LayoutGrid />} label="项目画布" value={summary.canvasCount} detail="已关联制作空间" />
+                <WorkspaceMetric icon={<Images />} label="项目资产" value={summary.assetCount} detail="角色、场景与媒体" />
+                <WorkspaceMetric icon={<CircleAlert />} label="需要处理" value={attentionCount} detail={attentionCount ? "建议优先处理" : "当前流程顺畅"} attention={attentionCount > 0} />
+            </section>
+
+            <section className="app-home-focus-panel grid overflow-hidden rounded-lg border border-border/80 lg:grid-cols-[minmax(260px,.8fr)_minmax(320px,1fr)_minmax(280px,.72fr)]">
+                <div className="min-w-0 p-5 sm:p-6 lg:p-7">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/50">
                         <span className="font-medium text-[var(--workspace-accent)]">{stage.label}</span>
                         <span aria-hidden>·</span>
@@ -138,7 +146,9 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
                     </Link>
                 </div>
 
-                <div className="mt-5 border-t border-border/75 pt-5 lg:mt-0 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-1">
+                <SpatialChapterStack detail={detail} loading={detailLoading} projectId={summary.project.id} />
+
+                <div className="border-t border-border/75 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-7">
                     <div className="flex items-center justify-between gap-3">
                         <h2 className="text-sm font-semibold">下一步</h2>
                         <Link to={`/projects/${summary.project.id}/overview`} className="text-xs text-foreground/48 hover:text-foreground">查看项目</Link>
@@ -153,7 +163,7 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
                 </div>
             </section>
 
-            <section className="grid gap-8 py-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
+            <section className="grid gap-8 py-7 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
                 <div className="min-w-0">
                     <div className="mb-3 flex items-center justify-between gap-4">
                         <div><h2 className="text-base font-semibold">最近项目</h2><p className="mt-1 text-xs text-foreground/45">按最近更新时间排列</p></div>
@@ -193,7 +203,7 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
     const projectHref = authenticated ? "/projects?create=1" : `/login?next=${encodeURIComponent("/projects?create=1")}`;
     return (
         <>
-            <section className="border-b border-border/80 pb-8 pt-3 sm:pb-10 sm:pt-6">
+            <section className="app-first-project-intro border-b border-border/80 pb-8 pt-3 sm:pb-10 sm:pt-6">
                 <div className="inline-flex items-center gap-2 text-xs font-semibold text-foreground/48"><WorkspaceSignalIcon variant="home" size="sm" />影策</div>
                 <h1 className="mt-5 max-w-[780px] text-3xl font-semibold leading-[1.08] sm:text-4xl lg:text-5xl">把一个故事推进到可交付的镜头</h1>
                 <p className="mt-5 max-w-[680px] text-sm leading-7 text-foreground/58 sm:text-base">从章节、角色和参考图开始，逐步生成分镜、视频和可复用资产。需要自由探索时，也可以先打开一张自由画布。</p>
@@ -205,9 +215,9 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
 
             <section className="border-b border-border/80 py-7">
                 <div className="mb-5"><h2 className="text-lg font-semibold">从故事到结果</h2><p className="mt-1 text-xs leading-5 text-foreground/48">每一步都保留输入、版本和生成记录，可以随时返回调整。</p></div>
-                <div className="grid border-t border-border/75 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="app-workflow-rail grid border-t border-border/75 sm:grid-cols-2 xl:grid-cols-4">
                     {workflow.map((item, index) => (
-                        <div key={item.title} className={`min-w-0 border-b border-border/75 py-4 sm:px-4 xl:border-b-0 xl:border-r ${index % 2 === 0 ? "sm:pl-0" : "sm:border-l"} ${index === workflow.length - 1 ? "xl:border-r-0" : ""}`}>
+                        <div key={item.title} className={`app-workflow-step min-w-0 border-b border-border/75 py-4 sm:px-4 xl:border-b-0 xl:border-r ${index % 2 === 0 ? "sm:pl-0" : "sm:border-l"} ${index === workflow.length - 1 ? "xl:border-r-0" : ""}`}>
                             <span className="text-[11px] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
                             <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
                             <p className="mt-1 text-xs leading-5 text-foreground/48">{item.description}</p>
@@ -244,11 +254,54 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
     );
 }
 
+function WorkspaceMetric({ icon, label, value, detail, attention = false }: { icon: ReactNode; label: string; value: number; detail: string; attention?: boolean }) {
+    return (
+        <article className="app-home-metric min-w-0 rounded-lg border p-4">
+            <div className="flex items-start justify-between gap-3">
+                <span className={attention ? "text-foreground/75" : "text-[var(--workspace-accent)]"}>{icon}</span>
+                <span className={`size-1.5 rounded-full ${attention ? "bg-foreground/75" : "bg-[var(--workspace-accent)]"}`} />
+            </div>
+            <div className="mt-5 text-[11px] text-foreground/45">{label}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+            <div className="mt-1 truncate text-[10px] text-foreground/38">{detail}</div>
+        </article>
+    );
+}
+
+function SpatialChapterStack({ detail, loading, projectId }: { detail?: Awaited<ReturnType<typeof getProject>>; loading: boolean; projectId: string }) {
+    const units = detail?.units.slice().sort((left, right) => left.position - right.position).slice(0, 6) || [];
+    const activeUnitId = units.find((unit) => unit.status !== "completed")?.id || units.at(-1)?.id;
+    return (
+        <div className="spatial-chapter-panel min-w-0 border-t border-border/75 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-7">
+            <div className="flex items-center justify-between gap-3">
+                <div><div className="text-[10px] font-medium text-foreground/38">制作层级</div><h2 className="mt-1 text-sm font-semibold">章节轨道</h2></div>
+                <span className="text-[10px] tabular-nums text-foreground/35">{units.length ? `${units.length} 章` : "待建立"}</span>
+            </div>
+            <div className="spatial-chapter-deck mt-4" aria-label="项目章节制作层级">
+                {loading ? Array.from({ length: 4 }, (_, index) => <span key={index} className="spatial-chapter-card is-loading" style={{ "--deck-x": `${index * 12}px`, "--deck-y": `${index * 28}px`, "--deck-z": `${-index * 18}px`, zIndex: 8 - index } as CSSProperties} />) : null}
+                {!loading && units.length ? units.map((unit, index) => (
+                    <Link
+                        key={unit.id}
+                        to={`/projects/${projectId}/chapters/${unit.id}`}
+                        className={`spatial-chapter-card ${unit.id === activeUnitId ? "is-active" : ""}`}
+                        style={{ "--deck-x": `${index * 12}px`, "--deck-y": `${index * 28}px`, "--deck-z": `${-index * 18}px`, zIndex: 8 - index } as CSSProperties}
+                    >
+                        <span className="text-[9px] font-semibold tabular-nums opacity-55">{String(unit.position + 1).padStart(2, "0")}</span>
+                        <span className="mt-2 block truncate text-xs font-semibold">{unit.title}</span>
+                        <span className="mt-1 block text-[9px] opacity-50">{unit.status === "completed" ? "已完成" : unit.id === activeUnitId ? "当前制作" : "等待推进"}</span>
+                    </Link>
+                )) : null}
+                {!loading && !units.length ? <div className="grid min-h-52 place-items-center text-center text-xs leading-5 text-foreground/42">创建剧情章节后<br />这里会形成制作层级</div> : null}
+            </div>
+        </div>
+    );
+}
+
 function WorkbenchActionLink({ action }: { action: ReturnType<typeof projectNextActions>[number] }) {
     const Icon = action.tone === "danger" ? CircleAlert : action.tone === "attention" ? Clock3 : CheckCircle2;
     return (
         <Link to={action.href} className="group grid grid-cols-[20px_minmax(0,1fr)_auto] gap-2 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20">
-            <Icon className={`mt-0.5 size-4 ${action.tone === "danger" ? "text-red-500" : action.tone === "attention" ? "text-amber-500" : "text-foreground/35"}`} />
+            <Icon className={`mt-0.5 size-4 ${action.tone === "danger" ? "text-foreground/80" : action.tone === "attention" ? "text-foreground/60" : "text-foreground/35"}`} />
             <span className="min-w-0"><span className="block text-xs font-medium">{action.title}</span><span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-foreground/45">{action.description}</span></span>
             <span className="self-center text-[11px] font-medium text-foreground/45 transition-colors group-hover:text-foreground">{action.actionLabel}</span>
         </Link>

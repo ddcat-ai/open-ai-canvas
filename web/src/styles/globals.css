@@ -178,6 +178,474 @@
 }
 
 @layer utilities {
+    .app-spatial-workspace {
+        --workspace-canvas: #f5f5f5;
+        --workspace-surface: rgba(255, 255, 255, 0.74);
+        --workspace-surface-strong: rgba(255, 255, 255, 0.94);
+        --workspace-border: rgba(17, 17, 17, 0.1);
+        --workspace-border-strong: rgba(17, 17, 17, 0.2);
+        --workspace-grid-line: rgba(17, 17, 17, 0.035);
+        --workspace-nav: rgba(250, 250, 250, 0.86);
+        --workspace-sidebar: rgba(250, 250, 250, 0.72);
+        --workspace-accent: #171717;
+        --workspace-accent-soft: rgba(17, 17, 17, 0.065);
+        background-color: var(--workspace-canvas);
+        background-image:
+            linear-gradient(var(--workspace-grid-line) 1px, transparent 1px),
+            linear-gradient(90deg, var(--workspace-grid-line) 1px, transparent 1px);
+        background-size: 34px 34px;
+    }
+
+    .dark .app-spatial-workspace {
+        --workspace-canvas: #080808;
+        --workspace-surface: rgba(18, 18, 18, 0.76);
+        --workspace-surface-strong: rgba(22, 22, 22, 0.94);
+        --workspace-border: rgba(255, 255, 255, 0.09);
+        --workspace-border-strong: rgba(255, 255, 255, 0.18);
+        --workspace-grid-line: rgba(255, 255, 255, 0.026);
+        --workspace-nav: rgba(10, 10, 10, 0.88);
+        --workspace-sidebar: rgba(12, 12, 13, 0.72);
+        --workspace-accent: #f5f5f5;
+        --workspace-accent-soft: rgba(255, 255, 255, 0.08);
+    }
+
+    .app-workspace-shell.is-spatial {
+        position: relative;
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .app-workspace-sidebar-scrim {
+        position: absolute;
+        z-index: 30;
+        inset: 0;
+        border: 0;
+        background: rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(2px);
+    }
+
+    .app-workspace-shell.is-spatial .app-workspace-sidebar {
+        border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+        border-radius: 8px;
+        background:
+            linear-gradient(145deg, color-mix(in srgb, white 10%, transparent), transparent 24%, transparent 76%, color-mix(in srgb, var(--foreground) 3%, transparent)),
+            var(--workspace-sidebar);
+        box-shadow:
+            0 26px 70px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 color-mix(in srgb, white 24%, transparent),
+            inset 1px 0 0 color-mix(in srgb, white 7%, transparent);
+        backdrop-filter: blur(28px) saturate(132%);
+        -webkit-backdrop-filter: blur(28px) saturate(132%);
+    }
+
+    .dark .app-workspace-shell.is-spatial .app-workspace-sidebar {
+        box-shadow:
+            0 28px 80px rgba(0, 0, 0, 0.46),
+            inset 0 1px 0 rgba(255, 255, 255, 0.18),
+            inset 1px 0 0 rgba(255, 255, 255, 0.055);
+    }
+
+    body.app-spatial-overlays {
+        --workspace-overlay-bg: rgba(244, 244, 245, 0.78);
+        --workspace-overlay-bg-strong: rgba(250, 250, 250, 0.88);
+        --workspace-overlay-border: rgba(17, 17, 17, 0.22);
+        --workspace-overlay-divider: rgba(17, 17, 17, 0.1);
+        --workspace-overlay-highlight: rgba(255, 255, 255, 0.86);
+        --workspace-overlay-hover: rgba(17, 17, 17, 0.065);
+        --workspace-overlay-selected: rgba(17, 17, 17, 0.1);
+        --workspace-overlay-shadow: 0 26px 72px rgba(15, 23, 42, 0.18), 0 4px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .dark body.app-spatial-overlays {
+        --workspace-overlay-bg: rgba(10, 10, 11, 0.78);
+        --workspace-overlay-bg-strong: rgba(15, 15, 16, 0.88);
+        --workspace-overlay-border: rgba(255, 255, 255, 0.22);
+        --workspace-overlay-divider: rgba(255, 255, 255, 0.105);
+        --workspace-overlay-highlight: rgba(255, 255, 255, 0.2);
+        --workspace-overlay-hover: rgba(255, 255, 255, 0.075);
+        --workspace-overlay-selected: rgba(255, 255, 255, 0.115);
+        --workspace-overlay-shadow: 0 30px 84px rgba(0, 0, 0, 0.62), 0 8px 24px rgba(0, 0, 0, 0.34);
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu,
+        .ant-select-dropdown,
+        .ant-popover-inner,
+        .ant-picker-dropdown .ant-picker-panel-container,
+        .ant-cascader-menus,
+        .ant-mentions-dropdown,
+        .ant-tooltip-inner,
+        .ant-modal-content,
+        .ant-drawer-content,
+        .ant-message-notice-content,
+        .ant-notification-notice
+    ) {
+        border: 1px solid var(--workspace-overlay-border) !important;
+        background:
+            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 24%, transparent 76%, rgba(158, 178, 214, 0.055)),
+            var(--workspace-overlay-bg) !important;
+        box-shadow:
+            var(--workspace-overlay-shadow),
+            inset 0 1px 0 var(--workspace-overlay-highlight),
+            inset 1px 0 0 color-mix(in srgb, var(--workspace-overlay-highlight) 36%, transparent) !important;
+        backdrop-filter: blur(30px) saturate(138%) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(138%) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-modal-content, .ant-drawer-content, .ant-notification-notice) {
+        background:
+            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 20%, transparent 82%, rgba(158, 178, 214, 0.05)),
+            var(--workspace-overlay-bg-strong) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+        border-radius: 8px !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled),
+        .ant-dropdown-menu-submenu-title:not(.ant-dropdown-menu-item-disabled),
+        .ant-select-item-option:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item:not(.ant-cascader-menu-item-disabled),
+        .ant-mentions-dropdown-menu-item
+    ) {
+        border-radius: 5px;
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover,
+        .ant-dropdown-menu-submenu-title:not(.ant-dropdown-menu-item-disabled):hover,
+        .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
+        .ant-mentions-dropdown-menu-item-active
+    ) {
+        background: var(--workspace-overlay-hover) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item-selected,
+        .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item-active
+    ) {
+        background: var(--workspace-overlay-selected) !important;
+        color: var(--foreground) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item-divider,
+        .ant-popover-inner-content > .border-b,
+        .ant-popover-inner-content > .border-y,
+        .ant-modal-header,
+        .ant-modal-footer,
+        .ant-drawer-header
+    ) {
+        border-color: var(--workspace-overlay-divider) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-popover-arrow::before, .ant-tooltip-arrow::before) {
+        border: 1px solid var(--workspace-overlay-border);
+        background: var(--workspace-overlay-bg-strong) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
+        background: rgba(0, 0, 0, 0.48) !important;
+        backdrop-filter: blur(7px);
+        -webkit-backdrop-filter: blur(7px);
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+        body.app-spatial-overlays :where(
+            .ant-dropdown-menu,
+            .ant-select-dropdown,
+            .ant-popover-inner,
+            .ant-picker-dropdown .ant-picker-panel-container,
+            .ant-cascader-menus,
+            .ant-mentions-dropdown,
+            .ant-tooltip-inner,
+            .ant-modal-content,
+            .ant-drawer-content,
+            .ant-message-notice-content,
+            .ant-notification-notice
+        ) {
+            background: var(--workspace-overlay-bg-strong) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+    }
+
+    .app-workspace-shell.is-spatial .app-workspace-brand-mark {
+        border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
+        background: var(--workspace-accent);
+        color: color-mix(in srgb, var(--workspace-canvas) 92%, black);
+        box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    }
+
+    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active {
+        background: var(--workspace-accent-soft);
+        color: var(--foreground);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+    }
+
+    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before {
+        left: -9px;
+        width: 3px;
+        height: 20px;
+        box-shadow: 0 0 18px color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+    }
+
+    .app-workspace-shell.is-spatial .app-workspace-stage {
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--workspace-canvas) 92%, transparent);
+    }
+
+    .app-spatial-workspace .app-user-content {
+        scrollbar-gutter: stable;
+    }
+
+    .app-spatial-workspace .app-page-header {
+        border-color: var(--workspace-border);
+    }
+
+    .app-spatial-workspace .app-page-header h1 {
+        letter-spacing: 0;
+        text-wrap: balance;
+    }
+
+    .app-spatial-workspace .app-workspace-surface,
+    .app-spatial-workspace .app-collection-card {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface);
+        box-shadow:
+            0 18px 50px color-mix(in srgb, var(--workspace-canvas) 54%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+        backdrop-filter: blur(18px) saturate(118%);
+    }
+
+    .app-spatial-workspace .app-collection-card:hover,
+    .app-spatial-workspace .app-collection-card:focus-within {
+        border-color: var(--workspace-border-strong);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 96%, var(--workspace-accent) 4%);
+        box-shadow: 0 18px 42px color-mix(in srgb, var(--workspace-accent) 7%, transparent);
+    }
+
+    .app-spatial-workspace .app-table-surface {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface-strong);
+        box-shadow:
+            0 20px 54px color-mix(in srgb, var(--workspace-canvas) 58%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
+    }
+
+    .app-spatial-workspace .app-data-table .ant-table,
+    .app-spatial-workspace .app-data-table .ant-table-container {
+        background: transparent;
+    }
+
+    .app-spatial-workspace .app-list-search:focus-within {
+        filter: drop-shadow(0 0 16px color-mix(in srgb, var(--workspace-accent) 10%, transparent));
+    }
+
+    .app-spatial-workspace .app-pagination-bar {
+        border-color: var(--workspace-border);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 92%, transparent);
+    }
+
+    .app-spatial-workspace .app-home-header {
+        border-color: var(--workspace-border);
+    }
+
+    .app-spatial-workspace .app-home-metric {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface);
+        box-shadow:
+            0 16px 42px color-mix(in srgb, var(--workspace-canvas) 56%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+        backdrop-filter: blur(18px) saturate(115%);
+    }
+
+    .app-spatial-workspace .app-home-metric svg {
+        width: 17px;
+        height: 17px;
+    }
+
+    .app-spatial-workspace .workspace-signal-icon path {
+        stroke: var(--workspace-accent) !important;
+    }
+
+    .app-spatial-workspace .workspace-signal-icon circle {
+        fill: color-mix(in srgb, var(--workspace-accent) 62%, transparent) !important;
+    }
+
+    .app-spatial-workspace .ant-switch.ant-switch-checked {
+        background: var(--workspace-accent);
+    }
+
+    .dark .app-spatial-workspace .ant-switch.ant-switch-checked .ant-switch-handle::before {
+        background: #171717;
+    }
+
+    .app-spatial-workspace .app-home-focus-panel,
+    .app-spatial-workspace .project-overview-focus,
+    .app-spatial-workspace .project-pipeline-surface {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface-strong);
+        box-shadow:
+            0 26px 72px color-mix(in srgb, var(--workspace-canvas) 64%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    }
+
+    .app-spatial-workspace .app-home-focus-panel {
+        min-height: 330px;
+    }
+
+    .app-spatial-workspace .spatial-chapter-panel,
+    .app-spatial-workspace .project-overview-status {
+        background: color-mix(in srgb, var(--workspace-surface) 82%, var(--workspace-accent) 3%);
+    }
+
+    .spatial-chapter-deck {
+        position: relative;
+        min-height: 242px;
+        perspective: 900px;
+        perspective-origin: 50% 34%;
+        transform-style: preserve-3d;
+    }
+
+    .spatial-chapter-card {
+        position: absolute;
+        top: 0;
+        left: 3%;
+        display: block;
+        width: min(82%, 290px);
+        height: 92px;
+        overflow: hidden;
+        border: 1px solid var(--workspace-border-strong);
+        border-radius: 7px;
+        background: color-mix(in srgb, var(--workspace-surface-strong) 95%, white 5%);
+        padding: 13px 15px;
+        color: color-mix(in srgb, var(--foreground) 76%, transparent);
+        box-shadow:
+            0 18px 28px rgba(0, 0, 0, 0.24),
+            inset 0 1px 0 color-mix(in srgb, white 13%, transparent);
+        transform: translate3d(var(--deck-x), var(--deck-y), var(--deck-z)) rotateX(46deg) rotateZ(-7deg);
+        transform-origin: center top;
+        transition:
+            border-color var(--motion-state) var(--ease-aceternity),
+            background-color var(--motion-state) var(--ease-aceternity),
+            color var(--motion-state) var(--ease-aceternity),
+            transform var(--motion-state) var(--ease-aceternity);
+    }
+
+    .spatial-chapter-card:hover,
+    .spatial-chapter-card:focus-visible {
+        z-index: 20 !important;
+        border-color: color-mix(in srgb, var(--workspace-accent) 58%, var(--workspace-border));
+        color: var(--foreground);
+        outline: none;
+        transform: translate3d(calc(var(--deck-x) + 8px), calc(var(--deck-y) - 5px), 18px) rotateX(34deg) rotateZ(-5deg);
+    }
+
+    .spatial-chapter-card.is-active {
+        border-color: color-mix(in srgb, var(--workspace-accent) 74%, white 8%);
+        background: var(--workspace-accent);
+        color: color-mix(in srgb, var(--workspace-canvas) 90%, black);
+        box-shadow:
+            0 22px 50px color-mix(in srgb, var(--workspace-accent) 23%, transparent),
+            inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    }
+
+    .spatial-chapter-card.is-loading {
+        border-color: var(--workspace-border);
+        background: color-mix(in srgb, var(--foreground) 4%, var(--workspace-surface-strong));
+    }
+
+    .app-spatial-workspace .app-workflow-rail {
+        border-color: var(--workspace-border);
+    }
+
+    .app-spatial-workspace .app-workflow-step {
+        border-color: var(--workspace-border);
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .app-spatial-workspace .app-workflow-step:hover {
+        background: var(--workspace-accent-soft);
+    }
+
+    .app-spatial-workspace .project-workbench-header {
+        border-color: var(--workspace-border);
+        background: color-mix(in srgb, var(--workspace-nav) 92%, transparent);
+        box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--workspace-accent) 4%, transparent);
+        backdrop-filter: blur(22px) saturate(120%);
+    }
+
+    .app-spatial-workspace .project-pipeline-surface > div > a:hover {
+        background: color-mix(in srgb, var(--workspace-accent) 5%, transparent);
+    }
+
+    @media (max-width: 639px) {
+        .app-workspace-shell.is-spatial {
+            gap: 6px;
+            padding: 6px;
+        }
+
+        .app-workspace-shell.is-spatial .app-workspace-sidebar,
+        .app-workspace-shell.is-spatial .app-workspace-stage {
+            border-radius: 6px;
+        }
+
+    }
+
+    @media (max-width: 1023px) {
+        .app-workspace-sidebar-scrim {
+            left: 202px;
+        }
+
+        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-mobile-expanded {
+            position: absolute;
+            z-index: 40;
+            inset: 6px auto 6px 6px;
+            width: min(196px, calc(100vw - 58px));
+            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .app-spatial-workspace .app-home-focus-panel {
+            min-height: 0;
+        }
+
+        .spatial-chapter-deck {
+            display: grid;
+            min-height: 0;
+            gap: 8px;
+            perspective: none;
+        }
+
+        .spatial-chapter-card {
+            position: relative;
+            left: auto;
+            top: auto;
+            width: 100%;
+            height: auto;
+            min-height: 68px;
+            transform: none;
+        }
+
+        .spatial-chapter-card:hover,
+        .spatial-chapter-card:focus-visible {
+            transform: translateX(3px);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .spatial-chapter-card,
+        .spatial-chapter-card:hover,
+        .spatial-chapter-card:focus-visible {
+            transition: none;
+            transform: none;
+        }
+    }
+
     .app-user-workspace {
         background-color: var(--workspace-canvas);
     }
@@ -1055,14 +1523,21 @@
     }
 
     .canvas-composer-model-picker.ant-select .ant-select-content {
-        background: color-mix(in srgb, var(--background) 96%, var(--foreground) 4%) !important;
-        border-color: color-mix(in srgb, var(--foreground) 16%, transparent) !important;
+        background: var(--background) !important;
+        border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
         box-shadow: none !important;
     }
 
+    .dark .canvas-composer-model-picker.ant-select,
+    .dark .canvas-composer-model-picker.ant-select .ant-select-content,
+    .dark .canvas-model-picker-popup.ant-select-dropdown {
+        background: #000 !important;
+    }
+
     .canvas-composer-model-picker.ant-select-focused .ant-select-content {
-        border-color: color-mix(in srgb, var(--foreground) 28%, transparent) !important;
+        border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
         box-shadow: none !important;
+        outline: none !important;
     }
 
     .canvas-model-picker-popup .ant-select-item-option-active:not(.ant-select-item-option-disabled),

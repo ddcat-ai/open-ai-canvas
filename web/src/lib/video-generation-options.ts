@@ -1,10 +1,10 @@
 export const VIDEO_DURATION_OPTIONS = [6, 9, 10, 15] as const;
 export const VIDEO_RESOLUTION_OPTIONS = [480, 720, 1080] as const;
-const NORMALIZED_VIDEO_DURATION_OPTIONS = [5, ...VIDEO_DURATION_OPTIONS] as const;
+export const VIDEO_DURATION_MIN = 1;
 
 export function normalizeVideoDuration(value: string | number | undefined) {
     const seconds = Math.floor(Number(value) || VIDEO_DURATION_OPTIONS[0]);
-    return String(nearestOption(seconds, NORMALIZED_VIDEO_DURATION_OPTIONS));
+    return String(Math.max(VIDEO_DURATION_MIN, seconds));
 }
 
 export function normalizeVideoResolution(value: string | number | undefined) {

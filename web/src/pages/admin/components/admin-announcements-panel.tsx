@@ -9,6 +9,7 @@ import {
     closeAdminAnnouncement,
     createAdminAnnouncement,
     listAdminAnnouncements,
+    updateAdminAnnouncement,
     type AnnouncementLevel,
     type AnnouncementStatus,
     type SystemAnnouncement,
@@ -46,6 +47,7 @@ export default function AdminAnnouncementsPanel() {
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncement | null>(null);
     const [publishing, setPublishing] = useState(false);
     const [closingId, setClosingId] = useState("");
 
@@ -67,7 +69,14 @@ export default function AdminAnnouncementsPanel() {
     }, [reload]);
 
     const openPublishModal = () => {
+        setEditingAnnouncement(null);
         form.setFieldsValue({ title: "", content: "", level: "info" });
+        setModalOpen(true);
+    };
+
+    const openEditModal = (announcement: SystemAnnouncement) => {
+        setEditingAnnouncement(announcement);
+        form.setFieldsValue({ title: announcement.title, content: announcement.content, level: announcement.level });
         setModalOpen(true);
     };
 
@@ -75,13 +84,16 @@ export default function AdminAnnouncementsPanel() {
         const values = await form.validateFields();
         setPublishing(true);
         try {
-            await createAdminAnnouncement({ title: values.title.trim(), content: values.content.trim(), level: values.level });
+            const input = { title: values.title.trim(), content: values.content.trim(), level: values.level };
+            if (editingAnnouncement) await updateAdminAnnouncement(editingAnnouncement.id, input);
+            else await createAdminAnnouncement(input);
             setModalOpen(false);
+            setEditingAnnouncement(null);
             setPage(1);
             await reload();
-            message.success("公告已发布");
+            message.success(editingAnnouncement ? "公告已更新并重新发布" : "公告已发布");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "发布公告失败");
+            message.error(error instanceof Error ? error.message : editingAnnouncement ? "更新公告失败" : "发布公告失败");
         } finally {
             setPublishing(false);
         }
@@ -144,12 +156,17 @@ export default function AdminAnnouncementsPanel() {
             title: "操作",
             key: "actions",
             fixed: "right",
-            width: 100,
-            render: (_, announcement) => announcement.status === "active" ? (
-                <Popconfirm title="关闭这条公告？" description="关闭后用户公告中心将不再展示，历史记录会保留。" okText="关闭公告" cancelText="取消" onConfirm={() => void closeAnnouncement(announcement)}>
-                    <Button type="text" danger size="small" loading={closingId === announcement.id}>关闭</Button>
-                </Popconfirm>
-            ) : <span className="text-xs text-foreground/35">已结束</span>,
+            width: 160,
+            render: (_, announcement) => (
+                <div className="flex items-center gap-1">
+                    <Button type="text" size="small" onClick={() => openEditModal(announcement)}>编辑</Button>
+                    {announcement.status === "active" ? (
+                        <Popconfirm title="关闭这条公告？" description="关闭后用户公告中心将不再展示，历史记录会保留。" okText="关闭公告" cancelText="取消" onConfirm={() => void closeAnnouncement(announcement)}>
+                            <Button type="text" danger size="small" loading={closingId === announcement.id}>关闭</Button>
+                        </Popconfirm>
+                    ) : null}
+                </div>
+            ),
         },
     ];
 
@@ -183,7 +200,7 @@ export default function AdminAnnouncementsPanel() {
                 />
             </TableSurface>
 
-            <Modal title="发布系统公告" open={modalOpen} width={680} centered okText="立即发布" cancelText="取消" confirmLoading={publishing} onOk={() => void publish()} onCancel={() => setModalOpen(false)} destroyOnHidden>
+            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={680} centered okText={editingAnnouncement ? "保存并重新发布" : "立即发布"} cancelText="取消" confirmLoading={publishing} onOk={() => void publish()} onCancel={() => { setModalOpen(false); setEditingAnnouncement(null); }} destroyOnHidden>
                 <Form form={form} layout="vertical" className="pt-3" requiredMark={false}>
                     <Form.Item name="title" label="公告标题" rules={[{ required: true, whitespace: true, message: "请填写公告标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
                         <Input maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />

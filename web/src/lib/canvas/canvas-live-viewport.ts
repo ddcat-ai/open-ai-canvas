@@ -1,6 +1,7 @@
 import type { SelectionBox, ViewportTransform } from "@/types/canvas";
 
 export const CANVAS_VIEWPORT_PREVIEW_EVENT = "canvas:viewport-preview";
+export const CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT = "canvas:graphics-viewport-preview";
 export const CANVAS_SELECTION_PREVIEW_EVENT = "canvas:selection-preview";
 
 export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewport: ViewportTransform, notify = true) {
@@ -15,11 +16,19 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
     container.style.setProperty("--canvas-grid-x", `${viewport.x % gridSize}px`);
     container.style.setProperty("--canvas-grid-y", `${viewport.y % gridSize}px`);
     container.style.setProperty("--canvas-dot-size", viewport.k < 0.12 ? "0.8px" : "1.15px");
+    // 图形层必须逐帧跟随 DOM 世界层；浮层和滚动通知仍可按原频率节流。
+    container.dispatchEvent(new CustomEvent<ViewportTransform>(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, { detail: viewport }));
     if (notify) {
         container.dispatchEvent(new CustomEvent<ViewportTransform>(CANVAS_VIEWPORT_PREVIEW_EVENT, { detail: viewport }));
         // Ant Design overlays watch scrollable ancestors, but CSS transforms do not emit layout events.
         container.dispatchEvent(new Event("scroll"));
     }
+}
+
+export function subscribeCanvasGraphicsViewportPreview(container: HTMLDivElement, listener: (viewport: ViewportTransform) => void) {
+    const handlePreview = (event: Event) => listener((event as CustomEvent<ViewportTransform>).detail);
+    container.addEventListener(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, handlePreview);
+    return () => container.removeEventListener(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, handlePreview);
 }
 
 export function subscribeCanvasViewportPreview(container: HTMLDivElement, listener: (viewport: ViewportTransform) => void) {

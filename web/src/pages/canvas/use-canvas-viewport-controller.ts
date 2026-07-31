@@ -136,6 +136,9 @@ export function useCanvasViewportController({
         setContextMenu(null);
     }, [cancelViewportTransition, commitViewport, previewViewport, setContextMenu, size, viewportRef]);
 
+    const zoomCanvasIn = useCallback(() => setZoomScale(viewportRef.current.k + 0.1), [setZoomScale, viewportRef]);
+    const zoomCanvasOut = useCallback(() => setZoomScale(viewportRef.current.k - 0.1), [setZoomScale, viewportRef]);
+
     const zoomToActualSize = useCallback(() => {
         transitionViewportTo(viewportAtScale(viewportRef.current, size, 1));
     }, [size, transitionViewportTo, viewportRef]);
@@ -164,6 +167,8 @@ export function useCanvasViewportController({
         resetViewport,
         screenToCanvas,
         setZoomScale,
+        zoomCanvasIn,
+        zoomCanvasOut,
         zoomToActualSize,
     };
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { BookOpenCheck, ChevronRight, Clock3, FileText, Image as ImageIcon, LoaderCircle, Lock, Maximize2, Music2, Pencil, Play, RefreshCw, Replace, Square, Star, Video } from "lucide-react";
+import { BookOpenCheck, ChevronRight, Clapperboard, Clock3, FileText, Image as ImageIcon, LoaderCircle, Lock, Maximize2, Music2, Pencil, Play, Plus, RefreshCw, Replace, Settings2, Square, Star, Type, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CometCard } from "@/components/ui/aceternity/comet-card";
@@ -16,6 +16,8 @@ import { storyboardMinNodeHeight } from "./canvas-script-node";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
+import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
+import { VideoPlayer } from "@/components/video-player";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -45,8 +47,9 @@ type CanvasNodeProps = {
     onMouseDown: (event: React.MouseEvent, nodeId: string) => void;
     onHoverStart: (nodeId: string) => void;
     onHoverEnd: (nodeId: string) => void;
-    onConnectStart: (event: React.PointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string) => void;
+    onConnectStart: (event: React.PointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
+    onTitleChange?: (nodeId: string, title: string) => void;
     onContentChange: (nodeId: string, content: string) => void;
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
@@ -93,7 +96,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     isRelated,
     isFocusRelated,
     isConnectionTarget,
-    isConnecting,
     showImageInfo,
     reduceMediaEffects = false,
     readOnly = false,
@@ -112,6 +114,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onHoverEnd,
     onConnectStart,
     onResize,
+    onTitleChange,
     onContentChange,
     onToggleBatch,
     onSetBatchPrimary,
@@ -129,6 +132,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [titleDraft, setTitleDraft] = useState(data.title);
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
@@ -144,7 +149,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const cometDepth = hasMediaContent ? 6.8 : data.type === CanvasNodeType.Script ? 2.8 : 4.6;
     const cometTranslate = hasMediaContent ? 6 : data.type === CanvasNodeType.Script ? 2.5 : 4;
-    const cometDisabled = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
+    const cometDisabled = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -176,6 +181,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     }, [isEditingContent]);
 
     useEffect(() => {
+        if (!isEditingTitle) setTitleDraft(data.title);
+    }, [data.title, isEditingTitle]);
+
+    useEffect(() => {
         if (!isEditingContent) return;
 
         const handleOutsidePointerDown = (event: PointerEvent) => {
@@ -196,8 +205,9 @@ export const CanvasNode = React.memo(function CanvasNode({
 
             const dx = (event.clientX - resizeRef.current.startX) / scale;
             const dy = (event.clientY - resizeRef.current.startY) / scale;
-            const minWidth = data.type === CanvasNodeType.Script ? 800 : 220;
-            const minHeight = scriptMinHeight || 160;
+            const isMediaNode = data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video;
+            const minWidth = data.type === CanvasNodeType.Script ? 800 : isMediaNode ? MEDIA_NODE_MIN_SIZE.width : 220;
+            const minHeight = scriptMinHeight || (isMediaNode ? MEDIA_NODE_MIN_SIZE.height : 160);
             const startRight = resizeRef.current.startLeft + resizeRef.current.startWidth;
             const startBottom = resizeRef.current.startTop + resizeRef.current.startHeight;
             const fromLeft = resizeRef.current.corner.includes("left");
@@ -263,6 +273,16 @@ export const CanvasNode = React.memo(function CanvasNode({
         };
     }, [handleResizeMove, handleResizeUp]);
 
+    const commitTitle = () => {
+        const next = titleDraft.trim();
+        setIsEditingTitle(false);
+        if (!next) {
+            setTitleDraft(data.title);
+            return;
+        }
+        if (next !== data.title) onTitleChange?.(data.id, next);
+    };
+
     return (
         <div
             data-node-id={data.id}
@@ -283,6 +303,19 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
+            <NodeExternalHeader
+                node={data}
+                scale={scale}
+                active={hovered || isSelected || isFocusRelated}
+                editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
+                editing={isEditingTitle}
+                draft={titleDraft}
+                theme={theme}
+                onDraftChange={setTitleDraft}
+                onEdit={() => setIsEditingTitle(true)}
+                onCommit={commitTitle}
+                onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
+            />
             <CometCard
                 containerClassName="overflow-visible"
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-[18px] ${flushMediaContent ? "border-0" : "border"} ${isGeneratingNode ? "canvas-node-shell-generating" : ""}`}
@@ -449,8 +482,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </> : null}
             </CometCard>
 
-            {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionHandleDot side="left" scale={scale} visible={hovered || isSelected || isConnecting} theme={theme} onPointerDown={(event) => onConnectStart(event, data.id, "target")} /> : null}
-            {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionHandleDot side="right" scale={scale} visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} theme={theme} onPointerDown={(event) => onConnectStart(event, data.id, "source")} /> : null}
+            {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionSideRail side="left" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
+            {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config ? <ConnectionSideRail side="right" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
 
         </div>
     );
@@ -851,14 +884,8 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
 }
 
 function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRendererProps) {
-    const videoRef = useRef<HTMLVideoElement>(null);
     const playWhenReadyRef = useRef(false);
     const { url, loading, load } = useNodeResourceUrl(node, false);
-    useEffect(() => {
-        if (!url || !playWhenReadyRef.current) return;
-        playWhenReadyRef.current = false;
-        void videoRef.current?.play().catch(() => undefined);
-    }, [url]);
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
@@ -869,7 +896,7 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRender
     if (!url) {
         return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存视频" : "加载并缓存视频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;
     }
-    return <video ref={videoRef} src={url} controls preload={reduceMediaEffects ? "none" : "metadata"} className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-no-zoom />;
+    return <VideoPlayer src={url} mimeType={node.metadata?.mimeType} title={node.title || "视频"} preload={reduceMediaEffects ? "none" : "metadata"} autoPlay={playWhenReadyRef.current} onCanPlay={() => { playWhenReadyRef.current = false; }} brandColor={theme.accent.primary} className="h-full w-full rounded-[18px] bg-black" dataCanvasNoZoom compactControls />;
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
@@ -1089,20 +1116,124 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
     return <div className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
 }
 
-function ConnectionHandleDot({ side, scale, visible, theme, onPointerDown }: { side: "left" | "right"; scale: number; visible: boolean; theme: CanvasTheme; onPointerDown: (event: React.PointerEvent) => void }) {
+const NODE_EXTERNAL_HEADER_MIN_SCALE = 0.35;
+
+function NodeExternalHeader({ node, scale, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
+    node: CanvasNodeData;
+    scale: number;
+    active: boolean;
+    editable: boolean;
+    editing: boolean;
+    draft: string;
+    theme: CanvasTheme;
+    onDraftChange: (value: string) => void;
+    onEdit: () => void;
+    onCommit: () => void;
+    onCancel: () => void;
+}) {
+    // 标题保持屏幕尺寸只适用于近景；远景继续反向缩放会遮住节点和连线。
+    if (scale < NODE_EXTERNAL_HEADER_MIN_SCALE && !editing) return null;
     const inverseScale = 1 / Math.max(scale, 0.05);
+    const Icon = nodeTypeIcon(node.type);
 
     return (
         <div
-            className={`canvas-connection-handle absolute top-1/2 z-30 flex -translate-y-1/2 cursor-pointer items-center justify-center transition-opacity duration-150 ${
-                side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"
-            } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
-            style={{ width: 40 * inverseScale, height: 40 * inverseScale }}
-            onPointerDown={onPointerDown}
+            className="absolute left-0 z-40 flex h-6 max-w-[240px] items-center gap-1"
+            style={{ top: -24 * inverseScale, color: active ? theme.node.text : theme.node.label, transform: `scale(${inverseScale})`, transformOrigin: "left top" }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
         >
-            <div className="canvas-node-tool-button grid place-items-center rounded-full border" style={{ width: 16 * inverseScale, height: 16 * inverseScale, borderWidth: inverseScale, background: theme.node.panel, borderColor: theme.accent.primary }}>
-                <span className="block rounded-full" style={{ width: 6 * inverseScale, height: 6 * inverseScale, background: theme.accent.primary }} />
-            </div>
+            <Icon className="size-3 shrink-0" strokeWidth={1.8} />
+            {editing ? (
+                <input
+                    autoFocus
+                    value={draft}
+                    className="h-6 min-w-20 max-w-[190px] rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
+                    style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 10px 28px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.06)` }}
+                    onChange={(event) => onDraftChange(event.target.value)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onBlur={onCommit}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                        if (event.key === "Escape") onCancel();
+                    }}
+                    aria-label="节点名称"
+                />
+            ) : editable ? (
+                <button type="button" className="group flex min-w-0 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                    <span className="max-w-[190px] truncate">{node.title}</span>
+                    <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
+                </button>
+            ) : (
+                <span className="max-w-[210px] truncate text-xs font-medium" style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+            )}
         </div>
+    );
+}
+
+function nodeTypeIcon(type: CanvasNodeType) {
+    if (type === CanvasNodeType.Image) return ImageIcon;
+    if (type === CanvasNodeType.Video) return Video;
+    if (type === CanvasNodeType.Audio) return Music2;
+    if (type === CanvasNodeType.Drawing) return Pencil;
+    if (type === CanvasNodeType.Script) return Clapperboard;
+    if (type === CanvasNodeType.Config) return Settings2;
+    if (type === CanvasNodeType.Skill) return BookOpenCheck;
+    return Type;
+}
+
+function ConnectionSideRail({ side, scale, visible, theme, onPointerDown }: { side: "left" | "right"; scale: number; visible: boolean; theme: CanvasTheme; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
+    const handleRef = useRef<HTMLSpanElement>(null);
+    const anchorRatioRef = useRef(0.5);
+    const inverseScale = 1 / Math.max(scale, 0.05);
+
+    const resetAnchor = useCallback(() => {
+        anchorRatioRef.current = 0.5;
+        if (handleRef.current) handleRef.current.style.top = "50%";
+    }, []);
+
+    useEffect(() => {
+        if (!visible) resetAnchor();
+    }, [resetAnchor, visible]);
+
+    const updateAnchor = (event: React.PointerEvent<HTMLButtonElement>) => {
+        const railBounds = event.currentTarget.getBoundingClientRect();
+        const nodeBounds = event.currentTarget.parentElement?.getBoundingClientRect() || railBounds;
+        const screenPadding = Math.min(railBounds.height * 0.35, 12);
+        const railRatio = Math.min(1 - screenPadding / Math.max(railBounds.height, 1), Math.max(screenPadding / Math.max(railBounds.height, 1), (event.clientY - railBounds.top) / Math.max(railBounds.height, 1)));
+        const anchorY = railBounds.top + railBounds.height * railRatio;
+        anchorRatioRef.current = Math.min(1, Math.max(0, (anchorY - nodeBounds.top) / Math.max(nodeBounds.height, 1)));
+        if (handleRef.current) handleRef.current.style.top = `${railRatio * 100}%`;
+    };
+
+    return (
+        <button
+            type="button"
+            className={`group absolute top-1/2 z-30 touch-none -translate-y-1/2 outline-none transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+            style={{ width: 56 * inverseScale, height: `min(100%, ${72 * inverseScale}px)`, ...(side === "left" ? { right: "100%" } : { left: "100%" }) }}
+            onPointerEnter={updateAnchor}
+            onPointerMove={updateAnchor}
+            onPointerLeave={resetAnchor}
+            onPointerDown={(event) => onPointerDown(event, anchorRatioRef.current)}
+            aria-label={`${side === "left" ? "输入" : "输出"}连接点，单击创建节点或拖动连线`}
+        >
+            <span
+                ref={handleRef}
+                className="absolute grid -translate-y-1/2 place-items-center rounded-full border transition-[background-color,box-shadow] duration-150 group-hover:brightness-125 group-focus-visible:brightness-125"
+                style={{
+                    top: "50%",
+                    width: 18 * inverseScale,
+                    height: 18 * inverseScale,
+                    ...(side === "left" ? { right: 6 * inverseScale } : { left: 6 * inverseScale }),
+                    borderWidth: inverseScale,
+                    background: theme.spatial.elevated,
+                    borderColor: theme.node.activeStroke,
+                    color: theme.node.activeStroke,
+                    boxShadow: `0 4px 12px ${theme.spatial.shadow}`,
+                }}
+            >
+                <Plus style={{ width: 10 * inverseScale, height: 10 * inverseScale }} strokeWidth={2} />
+            </span>
+        </button>
     );
 }

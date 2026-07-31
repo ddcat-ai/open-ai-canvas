@@ -116,7 +116,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
 
     return (
         <Popover open={actualOpen} onOpenChange={setOpen} trigger="click" placement="topLeft" content={content} styles={{ content: { padding: 8, background: theme.toolbar.panel, border: `1px solid ${theme.toolbar.border}` } }}>
-            <button type="button" className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md transition hover:brightness-110 ${compact ? "size-6" : dense ? "h-6 px-1.5" : "h-7 px-2"}`} style={{ background: theme.toolbar.itemHover, color: theme.node.muted }} title="预设（输入 / 也可打开）" aria-label="打开预设">
+            <button type="button" className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md transition hover:brightness-125 ${compact ? "size-6" : dense ? "h-6 px-1.5" : "h-7 px-2"}`} style={{ background: dense ? theme.canvas.background : theme.toolbar.itemHover, color: dense ? theme.node.text : theme.node.muted }} title="预设（输入 / 也可打开）" aria-label="打开预设">
                 <WandSparkles className={dense ? "size-3" : "size-3.5"} />
                 {compact ? null : <span className="text-[10px] font-medium">预设</span>}
             </button>

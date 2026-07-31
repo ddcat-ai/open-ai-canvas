@@ -69,6 +69,50 @@ func TestAnnouncementPublishReadAndCloseLifecycle(t *testing.T) {
 	}
 }
 
+func TestAnnouncementUpdateRepublishesAndResetsReads(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&model.User{}, &model.Announcement{}, &model.UserAnnouncementRead{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir())
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := &model.User{ID: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
+
+	announcement, err := svc.CreateAnnouncement(admin, CreateAnnouncementRequest{Title: "旧标题", Content: "旧正文", Level: model.AnnouncementLevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.MarkAnnouncementsRead(user, []string{announcement.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CloseAnnouncement(admin, announcement.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := svc.UpdateAnnouncement(admin, announcement.ID, UpdateAnnouncementRequest{Title: "新标题", Content: "新正文", Level: model.AnnouncementLevelWarning})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != model.AnnouncementStatusActive || updated.ClosedAt != nil || updated.Title != "新标题" || updated.Content != "新正文" || updated.Level != model.AnnouncementLevelWarning {
+		t.Fatalf("updated announcement = %+v", updated)
+	}
+	feed, err := svc.UserAnnouncements(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Announcements) != 1 || feed.UnreadCount != 1 || feed.Announcements[0].Content != "新正文" {
+		t.Fatalf("feed after republish = %+v, want one unread updated announcement", feed)
+	}
+}
+
 func TestAnnouncementPublishRejectsInvalidInput(t *testing.T) {
 	svc := &Service{}
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}

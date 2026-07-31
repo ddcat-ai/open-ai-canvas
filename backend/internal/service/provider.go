@@ -593,7 +593,7 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 
 func textResponseInput(input canvasGenerationInput) (interface{}, error) {
 	systemPrompt := strings.TrimSpace(input.Config.SystemPrompt)
-	if len(input.ReferenceImages) == 0 {
+	if len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
 		return withSystemPrompt(input.Config, input.Prompt), nil
 	}
 	messages := make([]map[string]interface{}, 0, 2)
@@ -617,11 +617,18 @@ func textResponseContent(input canvasGenerationInput) ([]map[string]interface{},
 		}
 		content = append(content, map[string]interface{}{"type": "input_image", "image_url": url})
 	}
+	for _, video := range input.ReferenceVideos {
+		url, err := openAIVideoInputURL(video)
+		if err != nil {
+			return nil, err
+		}
+		content = append(content, map[string]interface{}{"type": "input_video", "video_url": url})
+	}
 	return content, nil
 }
 
 func textChatContent(input canvasGenerationInput) (interface{}, error) {
-	if len(input.ReferenceImages) == 0 {
+	if len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
 		return input.Prompt, nil
 	}
 	content := []map[string]interface{}{{"type": "text", "text": input.Prompt}}
@@ -631,6 +638,13 @@ func textChatContent(input canvasGenerationInput) (interface{}, error) {
 			return nil, err
 		}
 		content = append(content, map[string]interface{}{"type": "image_url", "image_url": map[string]interface{}{"url": url}})
+	}
+	for _, video := range input.ReferenceVideos {
+		url, err := openAIVideoInputURL(video)
+		if err != nil {
+			return nil, err
+		}
+		content = append(content, map[string]interface{}{"type": "video_url", "video_url": map[string]interface{}{"url": url}})
 	}
 	return content, nil
 }
@@ -651,6 +665,24 @@ func openAIImageInputURL(media providerMedia) (string, error) {
 		return "", errors.New("参考图片 MIME 类型无效，请重新读取或上传图片")
 	}
 	return "", errors.New("OpenAI 文本多模态参考图片需要公网 URL 或 base64 data URL")
+}
+
+func openAIVideoInputURL(media providerMedia) (string, error) {
+	value := strings.TrimSpace(media.DataURL)
+	if strings.HasPrefix(value, "data:video/") {
+		return value, nil
+	}
+	if strings.HasPrefix(value, "data:") {
+		return "", errors.New("参考视频 MIME 类型无效，请重新读取或上传视频")
+	}
+	value = strings.TrimSpace(media.URL)
+	if strings.HasPrefix(value, "data:video/") || isPublicMediaURL(value) {
+		return value, nil
+	}
+	if strings.HasPrefix(value, "data:") {
+		return "", errors.New("参考视频 MIME 类型无效，请重新读取或上传视频")
+	}
+	return "", errors.New("文本多模态参考视频需要公网 URL 或 base64 data URL")
 }
 
 func shouldFallbackTextToChat(err error) bool {
@@ -1047,17 +1079,12 @@ func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{
 	if secondsErr != nil || seconds < 1 {
 		seconds = 6
 	}
-	if len(images) > 1 && seconds > 10 {
-		seconds = 10
-	} else if seconds > 15 {
-		seconds = 15
-	}
 	ratio := normalizeNewAPIChannel2Ratio(input.Config.Size, modelName)
 	resolution := normalizeNewAPIChannel2Resolution(input.Config.VQuality, modelName)
 	body := map[string]interface{}{
 		"model":          input.Config.Model,
 		"prompt":         strings.TrimSpace(input.Prompt),
-		"seconds":        seconds,
+		"seconds":        strconv.Itoa(seconds),
 		"aspect_ratio":   ratio,
 		"resolution":     resolution,
 		"generate_audio": parseBool(input.Config.VideoGenerateAudio, true),
@@ -2173,9 +2200,6 @@ func normalizeXAIVideoDuration(value string) int {
 	if err != nil || duration <= 0 {
 		return 6
 	}
-	if duration > 15 {
-		return 15
-	}
 	return duration
 }
 
@@ -2241,24 +2265,14 @@ func normalizeSeedanceDuration(value string) int {
 		return -1
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || seconds == 0 {
-		seconds = 5
-	}
-	if seconds < 4 {
-		return 4
-	}
-	if seconds > 15 {
-		return 15
+	if err != nil || seconds <= 0 {
+		return 5
 	}
 	return seconds
 }
 
 func normalizeSeedanceVideosDuration(value string) int {
-	seconds := normalizeSeedanceDuration(value)
-	if seconds < 4 {
-		return 5
-	}
-	return seconds
+	return normalizeSeedanceDuration(value)
 }
 
 func normalizeSeedanceRatio(value string) string {

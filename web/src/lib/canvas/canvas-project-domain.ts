@@ -104,11 +104,15 @@ export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<Canvas
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
 }
 
-export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0) {
+export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0, anchorRatio?: number) {
     return {
         x: current.handleType === "source" ? node.position.x : node.position.x + node.width,
-        y: storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
+        y: storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height * normalizeAnchorRatio(anchorRatio),
     };
+}
+
+function normalizeAnchorRatio(value?: number) {
+    return typeof value === "number" && Number.isFinite(value) ? clamp(value, 0.06, 0.94) : 0.5;
 }
 
 export function storyboardHandleAtY(node: CanvasNodeData, worldY: number, scrollTop = 0) {

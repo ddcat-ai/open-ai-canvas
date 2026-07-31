@@ -54,6 +54,10 @@ export function createAdminAnnouncement(input: { title: string; content: string;
     return request<{ announcement: SystemAnnouncement }>(api.post("/admin/announcements", input));
 }
 
+export function updateAdminAnnouncement(id: string, input: { title: string; content: string; level: AnnouncementLevel }) {
+    return request<{ announcement: SystemAnnouncement }>(api.patch(`/admin/announcements/${encodeURIComponent(id)}`, input));
+}
+
 export function closeAdminAnnouncement(id: string) {
     return request<{ announcement: SystemAnnouncement }>(api.post(`/admin/announcements/${encodeURIComponent(id)}/close`));
 }
