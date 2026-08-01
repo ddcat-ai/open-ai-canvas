@@ -24,6 +24,7 @@ const encryptedSettingPrefix = "enc:v1:"
 
 type OSSSettingRequest struct {
 	Enabled         bool   `json:"enabled"`
+	DefaultUpload   *bool  `json:"defaultUpload"`
 	Provider        string `json:"provider"`
 	Region          string `json:"region"`
 	Endpoint        string `json:"endpoint"`
@@ -36,6 +37,7 @@ type OSSSettingRequest struct {
 
 type PublicOSSSetting struct {
 	Enabled            bool      `json:"enabled"`
+	DefaultUpload      bool      `json:"defaultUpload"`
 	Provider           string    `json:"provider"`
 	Region             string    `json:"region"`
 	Endpoint           string    `json:"endpoint"`
@@ -51,6 +53,7 @@ type PublicOSSSetting struct {
 
 type ossSettingValue struct {
 	Enabled         bool   `json:"enabled"`
+	DefaultUpload   *bool  `json:"defaultUpload,omitempty"`
 	Provider        string `json:"provider"`
 	Region          string `json:"region"`
 	Endpoint        string `json:"endpoint"`
@@ -401,10 +404,19 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		PathPrefix:      strings.Trim(strings.TrimSpace(req.PathPrefix), "/"),
 	}
 	if next.Provider == "" {
-		next.Provider = "aliyun"
+		next.Provider = ossProviderAliyun
 	}
-	if next.Provider != "aliyun" {
-		return next, BadAuthRequest("暂时只支持阿里云 OSS")
+	if !isSupportedOSSProvider(next.Provider) {
+		return next, BadAuthRequest("目前仅支持阿里云 OSS 或通用 S3 兼容存储（含 Cloudflare R2）")
+	}
+	if req.DefaultUpload != nil {
+		next.DefaultUpload = boolPtr(*req.DefaultUpload)
+	} else if current.DefaultUpload != nil {
+		next.DefaultUpload = boolPtr(*current.DefaultUpload)
+	} else if next.Provider == ossProviderS3 {
+		next.DefaultUpload = boolPtr(false)
+	} else {
+		next.DefaultUpload = boolPtr(true)
 	}
 	if next.AccessKeySecret == "" {
 		next.AccessKeySecret = current.AccessKeySecret
@@ -425,6 +437,9 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		if next.AccessKeySecret == "" {
 			return next, BadAuthRequest("请填写 AccessKey Secret")
 		}
+		if next.Provider == ossProviderS3 && strings.TrimSpace(next.Region) == "" {
+			next.Region = "auto"
+		}
 	}
 	return next, nil
 }
@@ -432,7 +447,7 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 func normalizeOSSSetting(value ossSettingValue) ossSettingValue {
 	value.Provider = strings.TrimSpace(value.Provider)
 	if value.Provider == "" {
-		value.Provider = "aliyun"
+		value.Provider = ossProviderAliyun
 	}
 	value.Region = strings.TrimSpace(value.Region)
 	value.Endpoint = strings.TrimRight(strings.TrimSpace(value.Endpoint), "/")
@@ -441,16 +456,37 @@ func normalizeOSSSetting(value ossSettingValue) ossSettingValue {
 	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
 	value.PublicBaseURL = strings.TrimRight(strings.TrimSpace(value.PublicBaseURL), "/")
 	value.PathPrefix = strings.Trim(strings.TrimSpace(value.PathPrefix), "/")
+	if value.DefaultUpload == nil {
+		if value.Provider == ossProviderS3 {
+			value.DefaultUpload = boolPtr(false)
+		} else {
+			value.DefaultUpload = boolPtr(true)
+		}
+	}
+	if value.Provider == ossProviderS3 && value.Region == "" {
+		value.Region = "auto"
+	}
 	return value
 }
 
 func defaultOSSSetting() ossSettingValue {
-	return ossSettingValue{Provider: "aliyun"}
+	return ossSettingValue{Provider: ossProviderAliyun, DefaultUpload: boolPtr(true)}
+}
+
+func ossDefaultUploadEnabled(value ossSettingValue) bool {
+	value = normalizeOSSSetting(value)
+	return value.DefaultUpload == nil || *value.DefaultUpload
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func publicOSSSetting(setting *model.SystemSetting, value ossSettingValue) PublicOSSSetting {
+	value = normalizeOSSSetting(value)
 	result := PublicOSSSetting{
 		Enabled:            value.Enabled,
+		DefaultUpload:      ossDefaultUploadEnabled(value),
 		Provider:           value.Provider,
 		Region:             value.Region,
 		Endpoint:           value.Endpoint,
@@ -469,8 +505,10 @@ func publicOSSSetting(setting *model.SystemSetting, value ossSettingValue) Publi
 }
 
 func publicUserOSSSetting(setting *model.UserOSSSetting, value ossSettingValue) PublicOSSSetting {
+	value = normalizeOSSSetting(value)
 	result := PublicOSSSetting{
 		Enabled:            value.Enabled,
+		DefaultUpload:      ossDefaultUploadEnabled(value),
 		Provider:           value.Provider,
 		Region:             value.Region,
 		Endpoint:           value.Endpoint,

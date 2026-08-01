@@ -121,6 +121,102 @@ func TestHydrateNewAPIChannel1ResourceRejectsLocalStorage(t *testing.T) {
 	}
 }
 
+func TestSignedS3ObjectURLUsesSigV4Query(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	value, err := signedOSSObjectURL(ossSettingValue{
+		Provider: "s3", Endpoint: "https://example.r2.cloudflarestorage.com", Bucket: "assets",
+		Region: "auto", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}, "users/u-1/image/test.png", expiresAt)
+	if err != nil {
+		t.Fatalf("signedOSSObjectURL() error = %v", err)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	if parsed.Host != "example.r2.cloudflarestorage.com" || !strings.HasPrefix(parsed.Path, "/assets/") {
+		t.Fatalf("signed URL host/path = %s%s", parsed.Host, parsed.Path)
+	}
+	if query.Get("X-Amz-Algorithm") != "AWS4-HMAC-SHA256" || query.Get("X-Amz-Signature") == "" || query.Get("X-Amz-Credential") == "" {
+		t.Fatalf("signed URL query = %#v", query)
+	}
+	if strings.Contains(value, "secret-value") {
+		t.Fatalf("signed URL leaked access key secret: %q", value)
+	}
+}
+
+func TestStoreResourceKeepsLocalWhenDefaultUploadDisabled(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	svc := newResourceTestService(t)
+	disabled := false
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, DefaultUpload: &disabled, Provider: "s3",
+		Endpoint: "https://example.r2.cloudflarestorage.com", Bucket: "assets",
+		Region: "auto", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource, err := svc.storeResource("user-1", "image", "demo.png", "image/png", 5, 1, 1, 0, strings.NewReader("hello"))
+	if err != nil {
+		t.Fatalf("storeResource() error = %v", err)
+	}
+	if resource.Provider != "local" || resource.Bucket != "" {
+		t.Fatalf("resource = %#v, want local storage", resource)
+	}
+}
+
+func TestHydratePromotesLocalResourceWhenOSSEnabled(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	var putCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			putCount++
+			w.Header().Set("ETag", `"etag-1"`)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	svc := newResourceTestService(t)
+	disabled := false
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, DefaultUpload: &disabled, Provider: "s3",
+		Endpoint: server.URL, Bucket: "assets", Region: "auto",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource, err := svc.storeResource("user-1", "image", "demo.png", "image/png", 5, 1, 1, 0, strings.NewReader("hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resource.Provider != "local" {
+		t.Fatalf("initial provider = %q", resource.Provider)
+	}
+	media := providerMedia{StorageKey: "resource:" + resource.ID}
+	if err := svc.hydrateProviderMedia("user-1", &media, true); err != nil {
+		t.Fatalf("hydrateProviderMedia() error = %v", err)
+	}
+	if putCount != 1 {
+		t.Fatalf("putCount = %d, want 1", putCount)
+	}
+	if media.URL == "" || !strings.Contains(media.URL, "X-Amz-Signature=") {
+		t.Fatalf("media.URL = %q", media.URL)
+	}
+	updated, err := svc.repo.ResourceForUser("user-1", resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Provider != "s3" || updated.Bucket != "assets" || updated.ObjectKey == resource.ObjectKey {
+		t.Fatalf("updated resource = %#v", updated)
+	}
+}
+
 func TestActiveResourceOSSSettingPrefersUserVersion(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))

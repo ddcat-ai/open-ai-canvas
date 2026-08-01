@@ -203,10 +203,12 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	if err != nil {
 		return nil, err
 	}
+	// 默认上传关闭时，素材先落本地；需要公网 URL 时再 promote 到 OSS/S3。
+	useRemoteStorage := useOSS && ossDefaultUploadEnabled(setting)
 	provider := "local"
 	objectKey := localObjectKey(userID, kind, fileName, now)
 	resource := model.Resource{ID: newID(), UserID: userID, Kind: kind, Status: model.ResourceStatusPending, Provider: provider, ObjectKey: objectKey, MimeType: mimeType, Size: size, Width: width, Height: height, DurationMs: durationMs, CreatedAt: now, UpdatedAt: now}
-	if useOSS {
+	if useRemoteStorage {
 		provider = setting.Provider
 		objectKey = ossObjectKey(setting, userID, kind, fileName, now)
 		resource.Provider = provider
@@ -532,6 +534,54 @@ func (s *Service) activeResourceOSSSetting(userID string) (ossSettingValue, stri
 	return systemValue, "", true, err
 }
 
+// promoteLocalResourceToRemote 在需要公网 URL 时，把本地素材按需上传到已启用的 OSS/S3。
+func (s *Service) promoteLocalResourceToRemote(userID string, resource *model.Resource) (*model.Resource, error) {
+	if resource == nil {
+		return nil, errors.New("资源不存在")
+	}
+	if resource.Provider != "local" {
+		return resource, nil
+	}
+	if resource.Status != model.ResourceStatusReady {
+		return nil, errors.New("任务参考资源尚未上传完成")
+	}
+	setting, storageSettingID, useOSS, err := s.activeResourceOSSSetting(userID)
+	if err != nil {
+		return nil, err
+	}
+	if !useOSS {
+		return nil, errors.New("当前 JSON 视频协议的参考素材需要公网可访问地址，请启用 OSS 后重新上传该素材")
+	}
+	localPath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+	file, err := os.Open(localPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取本地参考素材失败：%w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("读取本地参考素材失败：%w", err)
+	}
+	objectKey := ossObjectKey(setting, userID, resource.Kind, filepath.Base(resource.ObjectKey), time.Now())
+	etag, err := putOSSObject(setting, objectKey, resource.MimeType, info.Size(), file)
+	if err != nil {
+		return nil, fmt.Errorf("按需上传参考素材到对象存储失败：%w", err)
+	}
+	resource.Provider = setting.Provider
+	resource.Endpoint = setting.Endpoint
+	resource.Bucket = setting.Bucket
+	resource.StorageSettingID = storageSettingID
+	resource.ObjectKey = objectKey
+	resource.ETag = etag
+	resource.Size = info.Size()
+	resource.UpdatedAt = time.Now()
+	if err := s.repo.SaveResource(resource); err != nil {
+		return nil, err
+	}
+	// 本地副本可保留，避免 promote 后旧画布引用突然失效；对象存储作为公网出口。
+	return resource, nil
+}
+
 func (s *Service) ossSettingForResource(userID string, resource *model.Resource) (ossSettingValue, error) {
 	var setting ossSettingValue
 	var err error
@@ -557,8 +607,8 @@ func validateActiveOSSSetting(setting ossSettingValue, disabledMessage string, i
 	if !setting.Enabled {
 		return ossSettingValue{}, BadAuthRequest(disabledMessage)
 	}
-	if setting.Provider != "aliyun" {
-		return ossSettingValue{}, BadAuthRequest("暂时只支持阿里云 OSS")
+	if !isSupportedOSSProvider(setting.Provider) {
+		return ossSettingValue{}, BadAuthRequest("目前仅支持阿里云 OSS 或通用 S3 兼容存储（含 Cloudflare R2）")
 	}
 	if setting.Bucket == "" || setting.Endpoint == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return ossSettingValue{}, BadAuthRequest(incompleteMessage)
@@ -592,6 +642,10 @@ func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName 
 }
 
 func putOSSObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	setting = normalizeOSSSetting(setting)
+	if setting.Provider == ossProviderS3 {
+		return putS3Object(setting, objectKey, mimeType, size, body)
+	}
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
@@ -623,6 +677,10 @@ type ossObjectStream struct {
 }
 
 func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
+	setting = normalizeOSSSetting(setting)
+	if setting.Provider == ossProviderS3 {
+		return getS3ObjectRange(setting, objectKey, rangeHeader)
+	}
 	req, err := newOSSRequest(http.MethodGet, setting, objectKey, "", nil)
 	if err != nil {
 		return nil, err
@@ -664,6 +722,10 @@ func decimalDigits(value string) bool {
 }
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
+	setting = normalizeOSSSetting(setting)
+	if setting.Provider == ossProviderS3 {
+		return signedS3ObjectURL(setting, objectKey, expiresAt)
+	}
 	baseURL, err := ossBucketBaseURL(setting)
 	if err != nil {
 		return "", err

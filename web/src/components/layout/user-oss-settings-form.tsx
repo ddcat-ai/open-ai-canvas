@@ -7,7 +7,8 @@ import { useUserStore } from "@/stores/use-user-store";
 
 type OSSFormValues = {
     enabled?: boolean;
-    provider: "aliyun";
+    defaultUpload?: boolean;
+    provider: "aliyun" | "s3";
     region?: string;
     endpoint?: string;
     bucket?: string;
@@ -23,6 +24,7 @@ export function UserOSSSettingsForm() {
     const [setting, setSetting] = useState<UserOSSSetting | null>(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const provider = Form.useWatch("provider", form) || setting?.provider || "aliyun";
     const savedAt = formatSavedAt(setting?.updatedAt);
 
     useEffect(() => {
@@ -52,6 +54,7 @@ export function UserOSSSettingsForm() {
         try {
             const data = await updateUserOSSSetting({
                 enabled: values.enabled === true,
+                defaultUpload: values.defaultUpload === true,
                 provider: values.provider || "aliyun",
                 region: values.region?.trim() || "",
                 endpoint: values.endpoint?.trim() || "",
@@ -62,7 +65,7 @@ export function UserOSSSettingsForm() {
             });
             setSetting(data.setting);
             form.setFieldsValue(toFormValues(data.setting));
-            message.success(data.setting.enabled ? "个人 OSS 已启用，后续上传将优先使用该存储" : "个人 OSS 已停用，后续上传将使用平台存储");
+            message.success(data.setting.enabled ? "个人对象存储已启用" : "个人对象存储已停用，后续上传将使用平台存储");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存个人 OSS 配置失败");
         } finally {
@@ -76,12 +79,15 @@ export function UserOSSSettingsForm() {
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                         <Cloud className="size-4" />
-                        我的 OSS
+                        我的对象存储
                     </div>
-                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">启用后，新上传和新生成的媒体优先写入你的 OSS；停用时回退到平台存储。历史资源固定使用创建时的配置版本。</p>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">
+                        支持阿里云 OSS 与通用 S3（含 Cloudflare R2）。关闭“默认上传素材”时，新素材先存本机；仅在 APIMart 等需要公网 URL 的协议生成时再按需上传。
+                    </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                     <Tag color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>
+                    <Tag color={setting?.defaultUpload ? "processing" : "default"}>{setting?.defaultUpload ? "默认上传" : "按需上传"}</Tag>
                     <Tag color={setting?.hasAccessKeySecret ? "processing" : "warning"} icon={<ShieldCheck className="size-3" />}>
                         {setting?.hasAccessKeySecret ? "密钥已加密" : "未保存密钥"}
                     </Tag>
@@ -89,17 +95,35 @@ export function UserOSSSettingsForm() {
             </div>
 
             <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2 xl:grid-cols-3">
-                <Form.Item name="enabled" label="启用个人 OSS" valuePropName="checked" className="mb-3">
+                <Form.Item name="enabled" label="启用个人对象存储" valuePropName="checked" className="mb-3">
                     <Switch checkedChildren="启用" unCheckedChildren="停用" />
                 </Form.Item>
-                <Form.Item name="provider" label="存储服务" rules={[{ required: true, message: "请选择存储服务" }]} className="mb-3">
-                    <Select options={[{ label: "阿里云 OSS", value: "aliyun" }]} />
+                <Form.Item
+                    name="defaultUpload"
+                    label="默认上传素材"
+                    valuePropName="checked"
+                    className="mb-3"
+                    extra="关闭后，日常上传/生成先存本机；只有需要公网链接时才上传到对象存储。"
+                >
+                    <Switch checkedChildren="默认上传" unCheckedChildren="按需上传" />
                 </Form.Item>
-                <Form.Item name="region" label="Region" className="mb-3">
-                    <Input spellCheck={false} placeholder="oss-cn-hangzhou" />
+                <Form.Item name="provider" label="存储服务" rules={[{ required: true, message: "请选择存储服务" }]} className="mb-3">
+                    <Select
+                        options={[
+                            { label: "阿里云 OSS", value: "aliyun" },
+                            { label: "通用 S3 / Cloudflare R2", value: "s3" },
+                        ]}
+                    />
+                </Form.Item>
+                <Form.Item name="region" label="Region" className="mb-3" extra={provider === "s3" ? "R2 可填 auto" : undefined}>
+                    <Input spellCheck={false} placeholder={provider === "s3" ? "auto" : "oss-cn-hangzhou"} />
                 </Form.Item>
                 <Form.Item name="endpoint" label="Endpoint" className="mb-3">
-                    <Input inputMode="url" spellCheck={false} placeholder="https://oss-cn-hangzhou.aliyuncs.com" />
+                    <Input
+                        inputMode="url"
+                        spellCheck={false}
+                        placeholder={provider === "s3" ? "https://<accountid>.r2.cloudflarestorage.com" : "https://oss-cn-hangzhou.aliyuncs.com"}
+                    />
                 </Form.Item>
                 <Form.Item name="bucket" label="Bucket" className="mb-3">
                     <Input spellCheck={false} placeholder="my-canvas-assets" />
@@ -108,17 +132,21 @@ export function UserOSSSettingsForm() {
                     <Input spellCheck={false} placeholder="infinite-canvas" />
                 </Form.Item>
                 <Form.Item name="accessKeyId" label="AccessKey ID" className="mb-3 xl:col-span-1">
-                    <Input autoComplete="off" spellCheck={false} placeholder="阿里云 AccessKey ID" />
+                    <Input autoComplete="off" spellCheck={false} placeholder={provider === "s3" ? "R2 / S3 Access Key ID" : "阿里云 AccessKey ID"} />
                 </Form.Item>
                 <Form.Item name="accessKeySecret" label={setting?.hasAccessKeySecret ? "AccessKey Secret（留空保留）" : "AccessKey Secret"} className="mb-3 xl:col-span-2">
-                    <Input.Password autoComplete="new-password" spellCheck={false} placeholder={setting?.hasAccessKeySecret ? "留空保留已加密密钥" : "阿里云 AccessKey Secret"} />
+                    <Input.Password
+                        autoComplete="new-password"
+                        spellCheck={false}
+                        placeholder={setting?.hasAccessKeySecret ? "留空保留已加密密钥" : provider === "s3" ? "R2 / S3 Secret Access Key" : "阿里云 AccessKey Secret"}
+                    />
                 </Form.Item>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                <span className="text-xs text-foreground/50">{savedAt ? `上次保存：${savedAt}` : "尚未保存个人 OSS 配置"}</span>
+                <span className="text-xs text-foreground/50">{savedAt ? `上次保存：${savedAt}` : "尚未保存个人对象存储配置"}</span>
                 <Button type="primary" loading={saving} onClick={() => void save()}>
-                    保存个人 OSS
+                    保存个人对象存储
                 </Button>
             </div>
         </Form>
@@ -135,6 +163,7 @@ function formatSavedAt(value?: string) {
 function toFormValues(setting: UserOSSSetting): OSSFormValues {
     return {
         enabled: setting.enabled,
+        defaultUpload: setting.defaultUpload ?? setting.provider !== "s3",
         provider: setting.provider || "aliyun",
         region: setting.region,
         endpoint: setting.endpoint,

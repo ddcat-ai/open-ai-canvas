@@ -225,14 +225,17 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 			return errors.New("任务参考资源尚未上传完成")
 		}
 		if resource.Provider == "local" {
-			return errors.New("当前 JSON 视频协议的参考素材需要公网可访问地址，请启用 OSS 后重新上传该素材")
+			resource, err = s.promoteLocalResourceToRemote(userID, resource)
+			if err != nil {
+				return err
+			}
 		}
 		setting, err := s.ossSettingForResource(userID, resource)
 		if err != nil {
 			return err
 		}
-		if setting.Provider != "aliyun" {
-			return errors.New("当前 JSON 视频协议的私有参考素材暂时只支持阿里云 OSS 签名地址")
+		if !isSupportedOSSProvider(setting.Provider) {
+			return errors.New("当前 JSON 视频协议的私有参考素材仅支持阿里云 OSS 或通用 S3 兼容存储签名地址")
 		}
 		signedURL, err := signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(providerResourceURLTTL))
 		if err != nil {

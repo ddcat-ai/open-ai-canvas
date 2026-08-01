@@ -207,7 +207,8 @@ export type StoryboardPromptVariable = {
 
 export type AdminOSSSetting = {
     enabled: boolean;
-    provider: "aliyun";
+    defaultUpload: boolean;
+    provider: "aliyun" | "s3";
     region: string;
     endpoint: string;
     bucket: string;

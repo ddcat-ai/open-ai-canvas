@@ -26,7 +26,8 @@ export type RemoteResource = {
 
 export type UserOSSSetting = {
     enabled: boolean;
-    provider: "aliyun";
+    defaultUpload: boolean;
+    provider: "aliyun" | "s3";
     region: string;
     endpoint: string;
     bucket: string;
@@ -37,7 +38,7 @@ export type UserOSSSetting = {
     updatedAt?: string;
 };
 
-export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "bucket" | "accessKeyId" | "pathPrefix"> & {
+export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "defaultUpload" | "provider" | "region" | "endpoint" | "bucket" | "accessKeyId" | "pathPrefix"> & {
     accessKeySecret?: string;
 };
 
