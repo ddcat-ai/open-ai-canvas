@@ -81,7 +81,10 @@ export function AuthScene() {
                         className="absolute inset-x-0 bottom-0 max-w-2xl p-5 sm:p-7 lg:p-10"
                     >
                         <p className="text-xs font-semibold tracking-[0.18em] text-white/58">YINGCE STUDIO</p>
-                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">让一个故事，从文字走向银幕。</h1>
+                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+                            让一个故事，<br className="hidden sm:inline" />
+                            从文字走向银幕。
+                        </h1>
                     </motion.div>
                 </section>
 
