@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/web/public/logo.svg" width="88" alt="影策 logo">
+  <img src="web/public/logo.svg" width="88" alt="影策 logo">
 </p>
 
 <h1 align="center">影策</h1>
@@ -40,21 +40,21 @@
 <table>
   <tr>
     <td width="33%" valign="top">
-      <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/assets/login.png" alt="登录与注册" width="100%">
+      <img src="assets/login.png" alt="登录与注册" width="100%">
       <br><sub><b>登录与注册</b></sub>
     </td>
     <td width="33%" valign="top">
-      <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/assets/huabu.png" alt="画布项目管理" width="100%">
+      <img src="assets/huabu.png" alt="画布项目管理" width="100%">
       <br><sub><b>画布项目管理</b></sub>
     </td>
     <td width="33%" valign="top">
-      <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/assets/huabu-info.png" alt="画布创作工作台" width="100%">
+      <img src="assets/huabu-info.png" alt="画布创作工作台" width="100%">
       <br><sub><b>画布创作工作台</b></sub>
     </td>
   </tr>
   <tr>
     <td width="33%" valign="top">
-      <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/assets/backend.png" alt="运维管理后台" width="100%">
+      <img src="assets/backend.png" alt="运维管理后台" width="100%">
       <br><sub><b>运维管理后台</b></sub>
     </td>
     <td width="33%"></td>
@@ -69,7 +69,7 @@
 Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/assets/qq.jpg" alt="影策 QQ 交流群" width="360">
+  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="360">
 </p>
 
 ## 新服务器一键部署（推荐）
