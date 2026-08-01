@@ -13,7 +13,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const [now, setNow] = useState(() => Date.now());
-    const [open, setOpen] = useState(true);
+    const [open, setOpen] = useState(false);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
     useEffect(() => {
