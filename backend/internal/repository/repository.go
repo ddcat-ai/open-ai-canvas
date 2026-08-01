@@ -14,6 +14,8 @@ import (
 
 var ErrDailyUploadLimitExceeded = errors.New("daily upload limit exceeded")
 
+var ErrTaskProviderRecoveryConflict = errors.New("task provider recovery is already running")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -342,6 +344,36 @@ func (r *Repository) UpdateTaskProviderState(id string, providerRequestID string
 		updates["provider_request_id"] = strings.TrimSpace(providerRequestID)
 	}
 	return r.db.Model(&model.Task{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// 人工恢复仅锁定失败任务；旧 worker 的租约可覆盖，但未过期的人工恢复租约不能并发抢占。
+func (r *Repository) ClaimFailedTaskProviderRecovery(id string, userID string, owner string, leaseDuration time.Duration) error {
+	now := time.Now()
+	query := r.db.Model(&model.Task{}).Where(
+		"id = ? AND status = ? AND (lease_owner = '' OR lease_owner NOT LIKE ? OR lease_expires_at IS NULL OR lease_expires_at <= ?)",
+		id, model.TaskStatusFailed, "manual-recovery:%", now,
+	)
+	if strings.TrimSpace(userID) != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	result := query.Updates(map[string]any{
+		"lease_owner":      owner,
+		"lease_expires_at": now.Add(leaseDuration),
+		"updated_at":       now,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrTaskProviderRecoveryConflict
+	}
+	return nil
+}
+
+func (r *Repository) ReleaseTaskProviderRecovery(id string, owner string) error {
+	return r.db.Model(&model.Task{}).
+		Where("id = ? AND lease_owner = ?", id, owner).
+		Updates(map[string]any{"lease_owner": "", "lease_expires_at": nil, "updated_at": time.Now()}).Error
 }
 
 func (r *Repository) UpdateTaskProgress(id string, stage string, progress int) error {

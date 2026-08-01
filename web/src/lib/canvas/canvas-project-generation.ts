@@ -276,8 +276,9 @@ export function buildVideoGenerationMetadata(
     },
 ): CanvasNodeMetadata {
     const metadata = node?.metadata;
-    const startFrame = metadata?.videoStartFrameNodeId && context?.referenceImages.some((image) => image.id === metadata.videoStartFrameNodeId) ? metadata.videoStartFrameNodeId : undefined;
-    const endFrame = metadata?.videoEndFrameNodeId && context?.referenceImages.some((image) => image.id === metadata.videoEndFrameNodeId) ? metadata.videoEndFrameNodeId : undefined;
+    const referenceImageIds = new Set((context?.referenceImages || []).map((image) => image.id));
+    const startFrame = requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds);
+    const endFrame = requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds);
     return {
         videoEditOperation: resolveVideoEditOperation(node, context),
         videoCameraMoveId: metadata?.videoCameraMoveId,
@@ -285,6 +286,12 @@ export function buildVideoGenerationMetadata(
         videoStartFrameNodeId: startFrame,
         videoEndFrameNodeId: endFrame,
     };
+}
+
+function requireConnectedVideoFrame(frameNodeId: string | undefined, label: string, referenceImageIds: Set<string>) {
+    if (!frameNodeId) return undefined;
+    if (referenceImageIds.has(frameNodeId)) return frameNodeId;
+    throw new Error(`已配置的${label}参考图未连接或不可用，请重新选择后再生成`);
 }
 
 export async function resolveMetadataReferences(metadata: CanvasNodeMetadata) {

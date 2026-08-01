@@ -242,6 +242,7 @@ type ApiCallLog struct {
 	ChannelID           string        `json:"channelId" gorm:"index;size:36;index:idx_api_logs_channel_created,priority:1"`
 	ChannelName         string        `json:"channelName" gorm:"-"`
 	TaskID              string        `json:"taskId,omitempty" gorm:"index;size:36"`
+	TaskStatus          TaskStatus    `json:"taskStatus,omitempty" gorm:"-"`
 	BillingOrderID      string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	Source              string        `json:"source" gorm:"index;size:64"`
 	Capability          string        `json:"capability" gorm:"index;size:32"`

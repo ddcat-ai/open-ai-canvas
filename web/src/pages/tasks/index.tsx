@@ -9,7 +9,7 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-task-display";
 
-import { cancelGenerationTask, createAgentSession, createGenerationTask, listGenerationTasks, listTaskLogs, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog, type TaskStatus } from "@/services/api/task-center";
+import { cancelGenerationTask, createAgentSession, createGenerationTask, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog, type TaskStatus } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -186,6 +186,30 @@ export default function TasksPage() {
             message.success(action === "retry" ? "任务已重新入队" : "任务已取消");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败");
+        } finally {
+            setActingId("");
+        }
+    };
+
+    const queryProviderTask = async (task: GenerationTask) => {
+        setActingId(task.id);
+        try {
+            const result = await queryFailedVideoProviderTask(task.id);
+            if (!result.recovered) {
+                setTaskLogs(await listTaskLogs(task.id));
+                message.info(`上游任务仍在处理中${result.providerStatus ? `（${result.providerStatus}）` : ""}`);
+                return;
+            }
+            setDetailTask(result.task);
+            setTasks((items) => items.map((item) => (item.id === task.id ? { ...item, ...result.task } : item)));
+            setTaskLogs(await listTaskLogs(task.id));
+            await syncGenerationTaskToCanvasStore(result.task);
+            window.dispatchEvent(new CustomEvent("wallet:updated"));
+            void loadTasks(false);
+            if (result.billingSettled) message.success("已获取上游视频，任务已恢复并完成结算");
+            else message.warning("已获取上游视频，任务已恢复，计费状态待管理员核对");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "查询上游任务失败");
         } finally {
             setActingId("");
         }
@@ -422,6 +446,7 @@ export default function TasksPage() {
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
                         </div>
+                        {canQueryProviderTask(detailTask) ? <div className="flex justify-end"><Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button></div> : null}
                         {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
                         <DetailBlock title="输入" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.inputJson)} />
@@ -451,6 +476,10 @@ export default function TasksPage() {
             </Modal>
         </>
     );
+}
+
+function canQueryProviderTask(task: GenerationTask) {
+    return task.status === "failed" && (task.type.startsWith("canvas_video") || task.type.startsWith("video_")) && Boolean(task.providerRequestId);
 }
 
 function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[]) {

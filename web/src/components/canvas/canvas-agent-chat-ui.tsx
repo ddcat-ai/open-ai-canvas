@@ -37,16 +37,16 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
     if (item.role === "tool") {
         if (objectField(item.detail, "status") === "pending") return <AgentPendingToolCard summary={item.text} detail={item.detail} theme={theme} onReject={() => onRejectTool?.(item.id)} onApprove={() => onApproveTool?.(item.id)} />;
         return (
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2.5">
                 <AgentAvatar theme={theme} />
                 <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} />
             </div>
         );
     }
     return (
-        <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+        <div className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
             {!isUser ? <AgentAvatar theme={theme} /> : null}
-            <div className={`min-w-0 max-w-[82%] text-sm leading-6 ${isUser ? "rounded-lg border px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong } : {}) }}>
+            <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
                 <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[11px] opacity-45">{item.meta}</div> : null}
@@ -59,23 +59,23 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
 export function AgentPendingToolCard({ summary, detail, theme, onReject, onApprove }: { summary: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onReject?: () => void; onApprove?: () => void }) {
     const impact = agentImpactFromDetail(detail);
     return (
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
             <AgentAvatar theme={theme} />
-            <div className="aceternity-floating-panel min-w-0 flex-1 rounded-lg border p-4" style={{ borderColor: "rgba(217,119,6,.24)", background: theme.spatial.surface, color: theme.node.text }}>
+            <div className="min-w-0 flex-1 rounded-md p-3.5" style={{ background: "rgba(217,119,6,.07)", color: theme.node.text }}>
                 <div className="flex items-start gap-3">
-                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: "rgba(217,119,6,.24)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>
+                    <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>
                         <CircleAlert className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
                             <span>确认工具调用</span>
-                            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: "rgba(217,119,6,.22)", color: "#d97706", background: "rgba(217,119,6,.04)" }}>等待确认</span>
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
                     </div>
                 </div>
                 {impact?.operationCount ? (
-                    <div className="mt-3 border-t pt-3" style={{ borderColor: theme.node.stroke }}>
+                    <div className="mt-3 pt-1">
                         <div className="grid grid-cols-2 gap-2">
                             <ImpactMetric label="操作" value={impact.operationCount} theme={theme} />
                             <ImpactMetric label="涉及节点" value={impact.affectedNodeCount} theme={theme} />
@@ -83,10 +83,10 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                             <ImpactMetric label="生成" value={impact.generationCount} attention={impact.generationCount > 0} theme={theme} />
                         </div>
                         {impact.items.length ? <div className="mt-3 space-y-1.5">{impact.items.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}><span className="mt-2 size-1 shrink-0 rounded-full bg-current" /><span>{item}</span></div>)}</div> : null}
-                        {impact.warning ? <div className="mt-3 border-l-2 border-amber-500/70 bg-amber-500/[.05] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
+                        {impact.warning ? <div className="mt-3 rounded-md bg-amber-500/[.08] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
                     </div>
                 ) : null}
-                {detail ? <details className="mt-3 border-t pt-2" style={{ borderColor: theme.node.stroke }}><summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>技术详情</summary><AgentDetailBlock detail={detail} theme={theme} /></details> : null}
+                {detail ? <details className="mt-3 pt-1"><summary className="cursor-pointer text-xs" style={{ color: theme.node.muted }}>技术详情</summary><AgentDetailBlock detail={detail} theme={theme} /></details> : null}
                 {onReject || onApprove ? (
                     <div className="mt-4 grid grid-cols-2 gap-2">
                         <Button danger className="!h-9" icon={<XCircle className="size-4" />} onClick={() => onReject?.()}>
@@ -103,7 +103,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
 }
 
 function ImpactMetric({ label, value, attention = false, theme }: { label: string; value: number; attention?: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    return <div className="rounded-md border px-2 py-1.5" style={{ borderColor: attention ? "rgba(217,119,6,.24)" : theme.node.stroke, background: attention ? "rgba(217,119,6,.04)" : theme.spatial.elevated }}><div className="text-[10px]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
+    return <div className="px-1 py-1"><div className="text-[10px]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
 }
 
 function agentImpactFromDetail(detail: unknown) {
@@ -123,16 +123,16 @@ function agentImpactFromDetail(detail: unknown) {
 export function AgentToolCard({ title, text, detail, theme }: { title: string; text: string; detail?: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const state = toolCardState(title, text, detail);
     return (
-        <details className="min-w-0 flex-1 rounded-lg border px-4 py-3.5 text-left backdrop-blur-xl" style={{ borderColor: state.softBorder, background: theme.spatial.surface, color: theme.node.text, boxShadow: `0 14px 34px ${theme.spatial.shadow}` }}>
+        <details className="min-w-0 flex-1 rounded-md px-3 py-3 text-left" style={{ background: theme.spatial.surface, color: theme.node.text }}>
             <summary className="cursor-pointer list-none">
                 <div className="flex items-start gap-3">
-                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border" style={{ borderColor: state.softBorder, color: state.color, background: state.softBg }}>
+                    <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md" style={{ color: state.color, background: state.softBg }}>
                         {state.icon}
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
                             <span className="min-w-0 truncate">{title}</span>
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: state.softBorder, color: state.color, background: state.softBg }}>
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: state.color, background: state.softBg }}>
                                 {state.label}
                             </span>
                             {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
@@ -194,12 +194,12 @@ export function AgentChatComposer({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
     return (
-        <div className="px-2 pb-2 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
-            <div className="aceternity-floating-panel rounded-lg border px-3 pb-2.5 pt-3" style={{ background: theme.spatial.elevated, borderColor: theme.node.stroke }}>
+        <div className="px-3 pb-3 pt-1" onWheelCapture={(event) => event.stopPropagation()}>
+            <div className="rounded-lg border px-3 pb-2.5 pt-3 transition-[border-color,box-shadow] duration-150 focus-within:border-current" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.accent.primary, boxShadow: `0 10px 30px ${theme.spatial.shadow}` }}>
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
                         {attachments.map((item) => (
-                            <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: theme.node.stroke }} title={item.name}>
+                            <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-md" title={item.name}>
                                 <img src={item.url} alt={item.name} className="size-full object-cover" />
                                 {onRemoveAttachment ? (
                                     <button type="button" className="absolute right-1 top-1 grid size-5 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover:opacity-100" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }} onClick={() => onRemoveAttachment(item.id)} aria-label="移除图片">
@@ -225,11 +225,11 @@ export function AgentChatComposer({
                         event.preventDefault();
                         void onSubmit();
                     }}
-                    className="thin-scrollbar max-h-32 min-h-[72px] w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
+                    className="thin-scrollbar max-h-40 min-h-[60px] w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
                     style={{ color: theme.node.text }}
                     placeholder={placeholder}
                 />
-                <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2" style={{ borderColor: theme.toolbar.border }}>
+                <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-1">
                         {onAddFiles ? (
                             <>
@@ -238,44 +238,33 @@ export function AgentChatComposer({
                                     event.target.value = "";
                                 }} />
                                 <Tooltip title="上传图片">
-                                    <Button type="text" shape="circle" className="!h-9 !w-9 !min-w-9" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
+                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
                                 </Tooltip>
                             </>
                         ) : null}
                         {left}
                     </div>
-                    <Button type="primary" className="!h-9 !w-9 !min-w-9 !rounded-lg !p-0" disabled={!canSubmit} icon={sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />} onClick={() => void onSubmit()} aria-label="发送" />
+                    <Button type="primary" className="!h-8 !w-8 !min-w-8 !rounded-md !p-0" disabled={!canSubmit} icon={sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />} onClick={() => void onSubmit()} aria-label="发送" />
                 </div>
             </div>
         </div>
     );
 }
 
-export function AgentModeSwitch({ value, theme, onChange }: { value: CanvasAgentMode; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (value: CanvasAgentMode) => void }) {
-    return (
-        <div className="inline-flex shrink-0 rounded-md border p-0.5 text-xs" style={{ borderColor: theme.node.stroke, background: theme.spatial.surface }}>
-            {(["online", "local"] as const).map((item) => (
-                <button key={item} type="button" className="rounded-md px-2 py-1 transition" style={{ background: value === item ? theme.node.fill : "transparent", color: value === item ? theme.node.text : theme.node.muted }} onClick={() => onChange(item)}>
-                    {item === "online" ? "网站" : "本机"}
-                </button>
-            ))}
-        </div>
-    );
-}
-
 export function AgentPanelTabs<T extends string>({ value, items, theme, right, onChange }: { value: T; items: { value: T; label: string; icon?: ReactNode; count?: number }[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; right?: ReactNode; onChange: (value: T) => void }) {
     return (
-        <div className="border-b px-3" style={{ borderColor: theme.node.stroke }}>
-            <div className="flex min-h-11 items-center justify-between gap-3">
-                <nav className="thin-scrollbar flex min-w-0 flex-1 items-center gap-3 overflow-x-auto text-sm" role="tablist" aria-label="Agent 面板">
+        <div className="shrink-0 px-3 pb-2">
+            <div className="flex min-h-9 items-center justify-between gap-2 rounded-md p-1" style={{ background: theme.spatial.surface }}>
+                <nav className="grid min-w-0 flex-1 grid-flow-col auto-cols-fr items-center gap-0.5 text-xs" role="tablist" aria-label="Agent 面板">
                     {items.map((item) => (
-                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-11 shrink-0 items-center gap-1.5 border-b-2 px-0.5 transition ${value === item.value ? "font-medium" : "font-normal"}`} style={{ borderColor: value === item.value ? theme.node.text : "transparent", color: value === item.value ? theme.node.text : theme.node.muted }} onClick={() => onChange(item.value)}>
-                            {item.icon}
-                            {item.label}{item.count ? ` ${item.count}` : ""}
+                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-8 min-w-0 items-center justify-center gap-1 rounded-[5px] px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`} style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item.value)}>
+                            <span className="shrink-0">{item.icon}</span>
+                            <span className="min-w-0 truncate">{item.label}</span>
+                            {item.count ? <span className="shrink-0 tabular-nums opacity-60">{item.count}</span> : null}
                         </button>
                     ))}
                 </nav>
-                {right ? <div className="flex shrink-0 items-center gap-2">{right}</div> : null}
+                {right ? <div className="flex shrink-0 items-center gap-1">{right}</div> : null}
             </div>
         </div>
     );
@@ -283,7 +272,7 @@ export function AgentPanelTabs<T extends string>({ value, items, theme, right, o
 
 function AgentDetailBlock({ detail, theme }: { detail: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
-        <pre className="thin-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.muted }}>
+        <pre className="thin-scrollbar mt-3 max-h-64 overflow-auto rounded-md p-3 text-[11px] leading-4" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
             {JSON.stringify(detail, null, 2)}
         </pre>
     );
@@ -291,8 +280,8 @@ function AgentDetailBlock({ detail, theme }: { detail: unknown; theme: (typeof c
 
 function AgentAvatar({ theme }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
-        <span className="grid size-8 shrink-0 place-items-center" role="img" aria-label="OpenAI">
-            <span className="size-5 opacity-80" style={{ background: theme.node.text, WebkitMask: "url(/icons/openai.svg) center / contain no-repeat", mask: "url(/icons/openai.svg) center / contain no-repeat" }} />
+        <span className="grid size-7 shrink-0 place-items-center" role="img" aria-label="OpenAI">
+            <span className="size-4 opacity-80" style={{ background: theme.node.text, WebkitMask: "url(/icons/openai.svg) center / contain no-repeat", mask: "url(/icons/openai.svg) center / contain no-repeat" }} />
         </span>
     );
 }
@@ -300,7 +289,7 @@ function AgentAvatar({ theme }: { theme: (typeof canvasThemes)[keyof typeof canv
 function AgentUserAvatar({ user, theme }: { user: LocalUser | null; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const avatarUrl = user?.avatarUrl?.trim();
     return (
-        <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full" style={{ color: theme.node.text }}>
+        <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full" style={{ color: theme.node.text }}>
             {avatarUrl ? <img src={avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : <UserRound className="size-4" />}
         </span>
     );
@@ -320,11 +309,11 @@ function toolCardState(title: string, text: string, detail?: unknown) {
     const raw = `${title} ${text} ${normalizeText(objectField(detail, "error"))}`;
     const lower = raw.toLowerCase();
     const tool = String(objectField(detail, "name") || objectField(detail, "tool") || "");
-    if (objectField(detail, "status") === "noop" || /未生效|无需|没有找到|没有.*可|已存在/.test(raw)) return { label: "未生效", color: "#d97706", softBorder: "rgba(217,119,6,.22)", softBg: "rgba(217,119,6,.04)", icon: <CircleAlert className="size-4" />, isError: false };
-    if (/拒绝|取消/.test(raw) || lower.includes("rejected")) return { label: "拒绝执行", color: "#dc2626", softBorder: "rgba(220,38,38,.20)", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
-    if (/失败|错误/.test(raw) || lower.includes("failed") || lower.includes("error")) return { label: "执行失败", color: "#dc2626", softBorder: "rgba(220,38,38,.20)", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
-    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded")) return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBorder: "rgba(22,163,74,.20)", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
-    return { label: "工具调用", color: "#2563eb", softBorder: "rgba(37,99,235,.20)", softBg: "rgba(37,99,235,.04)", icon: <Wrench className="size-4" />, isError: false };
+    if (objectField(detail, "status") === "noop" || /未生效|无需|没有找到|没有.*可|已存在/.test(raw)) return { label: "未生效", color: "#d97706", softBg: "rgba(217,119,6,.04)", icon: <CircleAlert className="size-4" />, isError: false };
+    if (/拒绝|取消/.test(raw) || lower.includes("rejected")) return { label: "拒绝执行", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
+    if (/失败|错误/.test(raw) || lower.includes("failed") || lower.includes("error")) return { label: "执行失败", color: "#dc2626", softBg: "rgba(220,38,38,.04)", icon: <XCircle className="size-4" />, isError: true };
+    if (/完成|成功/.test(raw) || lower.includes("completed") || lower.includes("succeeded")) return { label: tool === "canvas_apply_ops" || /画布操作/.test(title) ? "已批准执行" : "执行完成", color: "#16a34a", softBg: "rgba(22,163,74,.04)", icon: <CheckCircle2 className="size-4" />, isError: false };
+    return { label: "工具调用", color: "#2563eb", softBg: "rgba(37,99,235,.04)", icon: <Wrench className="size-4" />, isError: false };
 }
 
 function normalizeText(value: unknown) {

@@ -5,7 +5,7 @@ import { saveAs } from "file-saver";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { FRAME_COLLAPSED_HEIGHT, FRAME_COLLAPSED_WIDTH, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
-import { applyNodeConfigPatch } from "@/lib/canvas/canvas-project-domain";
+import { applyBatchPrimaryImage, applyNodeConfigPatch } from "@/lib/canvas/canvas-project-domain";
 import { audioExtension, imageExtension, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
@@ -117,7 +117,7 @@ export function useCanvasNodeEditor({
         setNodes((current) =>
             current.map((node) =>
                 node.id === rootId
-                    ? { ...node, width: child.width, height: child.height, metadata: { ...node.metadata, content: child.metadata?.content, primaryImageId: child.id, naturalWidth: child.metadata?.naturalWidth, naturalHeight: child.metadata?.naturalHeight, freeResize: child.metadata?.freeResize } }
+                    ? applyBatchPrimaryImage(node, child)
                     : node,
             ),
         );

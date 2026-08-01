@@ -577,6 +577,19 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"log": log})
 	})
+	r.POST("/admin/api-logs/:id/query-task", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.AdminQueryFailedVideoTask(c.Request.Context(), user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.GET("/admin/api-logs-export.csv", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

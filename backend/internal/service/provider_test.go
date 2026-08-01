@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -912,6 +913,37 @@ func TestNewAPIChannel2SingleImageModelUsesReferenceForStaleTextToVideoMetadata(
 	images, ok := body["image_urls"].([]string)
 	if !ok || len(images) != 1 || images[0] != testReferenceImageDataURL {
 		t.Fatalf("image_urls = %#v", body["image_urls"])
+	}
+}
+
+func TestNewAPIChannel2OrdersFramesBeforeReferenceImages(t *testing.T) {
+	body, err := newAPIChannel2VideoBody(canvasGenerationInput{
+		Config: providerConfig{Model: "Seedance 2 Mini", VideoSeconds: "10"},
+		ReferenceImages: []providerMedia{
+			{ID: "character", DataURL: "data:image/png;base64,Y2hhcmFjdGVy"},
+			{ID: "last-frame", DataURL: "data:image/png;base64,bGFzdA=="},
+			{ID: "first-frame", DataURL: "data:image/png;base64,Zmlyc3Q="},
+		},
+		Metadata: map[string]interface{}{"videoStartFrameNodeId": "first-frame", "videoEndFrameNodeId": "last-frame", "videoEditOperation": "image_to_video"},
+	})
+	if err != nil {
+		t.Fatalf("newAPIChannel2VideoBody() error = %v", err)
+	}
+	images, ok := body["image_urls"].([]string)
+	want := []string{"data:image/png;base64,Zmlyc3Q=", "data:image/png;base64,bGFzdA==", "data:image/png;base64,Y2hhcmFjdGVy"}
+	if !ok || !reflect.DeepEqual(images, want) {
+		t.Fatalf("image_urls = %#v, want %#v", body["image_urls"], want)
+	}
+}
+
+func TestNewAPIChannel2RejectsMissingConfiguredFrame(t *testing.T) {
+	_, err := newAPIChannel2VideoBody(canvasGenerationInput{
+		Config:          providerConfig{Model: "Seedance 2 Mini", VideoSeconds: "10"},
+		ReferenceImages: []providerMedia{{ID: "character", DataURL: testReferenceImageDataURL}},
+		Metadata:        map[string]interface{}{"videoStartFrameNodeId": "missing-frame", "videoEditOperation": "image_to_video"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "首帧参考图未包含") {
+		t.Fatalf("newAPIChannel2VideoBody() error = %v", err)
 	}
 }
 

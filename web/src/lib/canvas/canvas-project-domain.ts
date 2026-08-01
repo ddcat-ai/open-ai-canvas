@@ -296,6 +296,30 @@ export function sameNodeSemanticData(left: CanvasNodeData, right: CanvasNodeData
     return left.id === right.id && left.type === right.type && left.title === right.title && left.parentId === right.parentId && left.width === right.width && left.height === right.height && left.metadata === right.metadata;
 }
 
+export function applyBatchPrimaryImage(root: CanvasNodeData, primary: CanvasNodeData): CanvasNodeData {
+    // 主图是根节点对媒体的完整代理；可选字段也必须显式覆盖，避免残留上一张图的存储身份。
+    return {
+        ...root,
+        width: primary.width,
+        height: primary.height,
+        metadata: {
+            ...root.metadata,
+            primaryImageId: primary.id,
+            content: primary.metadata?.content,
+            storageKey: primary.metadata?.storageKey,
+            status: primary.metadata?.status,
+            naturalWidth: primary.metadata?.naturalWidth,
+            naturalHeight: primary.metadata?.naturalHeight,
+            bytes: primary.metadata?.bytes,
+            mimeType: primary.metadata?.mimeType,
+            errorDetails: primary.metadata?.errorDetails,
+            generationErrorCode: primary.metadata?.generationErrorCode,
+            failedPromptFingerprint: primary.metadata?.failedPromptFingerprint,
+            freeResize: primary.metadata?.freeResize,
+        },
+    };
+}
+
 export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<string>) {
     const removedIds = new Set(requestedIds);
     nodes.forEach((node) => {
@@ -327,17 +351,8 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
         if (!cleaned.metadata?.isBatchRoot || childIds?.length === cleaned.metadata.batchChildIds?.length) return cleaned;
         const primaryImageId = childIds?.includes(cleaned.metadata.primaryImageId || "") ? cleaned.metadata.primaryImageId : childIds?.[0];
         const primaryNode = remainingNodes.find((item) => item.id === primaryImageId);
-        return {
-            ...cleaned,
-            metadata: {
-                ...cleaned.metadata,
-                batchChildIds: childIds,
-                primaryImageId,
-                content: primaryNode?.metadata?.content || cleaned.metadata?.content,
-                naturalWidth: primaryNode?.metadata?.naturalWidth || cleaned.metadata?.naturalWidth,
-                naturalHeight: primaryNode?.metadata?.naturalHeight || cleaned.metadata?.naturalHeight,
-            },
-        };
+        const batchRoot = { ...cleaned, metadata: { ...cleaned.metadata, batchChildIds: childIds, primaryImageId } };
+        return primaryNode ? applyBatchPrimaryImage(batchRoot, primaryNode) : batchRoot;
     });
     return { removedIds, nodes: nextNodes };
 }

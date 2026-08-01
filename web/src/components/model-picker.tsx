@@ -1,9 +1,11 @@
-import { useEffect, useId, useMemo, useState } from "react";
-import { Coins, Cpu } from "lucide-react";
-import { Select } from "antd";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Check, ChevronDown, Coins, Cpu } from "lucide-react";
+import { Popover } from "antd";
 
+import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { useThemeStore } from "@/stores/use-theme-store";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -19,7 +21,10 @@ type ModelPickerProps = {
 
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true }: ModelPickerProps) {
     const pickerId = useId();
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [open, setOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
     const options = useMemo(
         () => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))),
         [capability, config, value],
@@ -39,10 +44,6 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     }, [config, options]);
     const current = value || "";
     const currentPrice = modelMenuPrice(config, current);
-    const selectOptions = useMemo(() => optionGroups.map((group) => ({
-        label: <span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{group.label}</span><span className="shrink-0 text-[10px] font-normal text-foreground/38">{group.scope}</span></span>,
-        options: group.models.map((model) => ({ value: model, label: modelOptionLabel(config, model) })),
-    })), [config, optionGroups]);
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {
@@ -52,41 +53,118 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         return () => window.removeEventListener("model-picker-open", closeOtherPicker);
     }, [pickerId]);
 
-    return (
+    const setPickerOpen = (nextOpen: boolean) => {
+        if (nextOpen && !options.length && config.channelMode === "local") onMissingConfig?.();
+        if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+        setOpen(nextOpen);
+    };
+    const focusMenuOption = (last = false) => {
+        window.requestAnimationFrame(() => {
+            const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]');
+            const target = last ? buttons?.item((buttons?.length || 1) - 1) : buttons?.item(0);
+            target?.focus();
+        });
+    };
+    const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+        event.preventDefault();
+        setPickerOpen(true);
+        focusMenuOption(event.key === "ArrowUp");
+    };
+    const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            setOpen(false);
+            triggerRef.current?.focus();
+            return;
+        }
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+        if (!buttons.length) return;
+        event.preventDefault();
+        const activeIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : event.key === "ArrowUp" ? Math.max(0, activeIndex - 1) : Math.min(buttons.length - 1, activeIndex + 1);
+        buttons[nextIndex]?.focus();
+    };
+    const content = (
         <div
-            className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full", className)}
+            ref={menuRef}
+            data-canvas-no-zoom
+            className="canvas-model-picker-menu w-[320px] max-w-[calc(100vw-24px)]"
+            style={{ background: theme.node.panel, color: theme.node.text }}
+            role="listbox"
+            aria-label={placeholder}
+            onKeyDown={handleMenuKeyDown}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <Select<string>
-                size="small"
+            {optionGroups.length ? optionGroups.map((group) => (
+                <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
+                    <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
+                        <span className="truncate">{group.label}</span>
+                        <span className="shrink-0" style={{ color: theme.node.muted }}>{group.scope}</span>
+                    </div>
+                    <div className="grid min-w-0 gap-1">
+                        {group.models.map((model) => {
+                            const selected = model === current;
+                            return (
+                                <button
+                                    key={model}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selected}
+                                    className="canvas-model-picker-option"
+                                    style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
+                                    onClick={() => {
+                                        onChange(model);
+                                        setOpen(false);
+                                        window.requestAnimationFrame(() => triggerRef.current?.focus());
+                                    }}
+                                >
+                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} />
+                                    {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+            )) : <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>{emptyModelLabel(config, capability)}</div>}
+        </div>
+    );
+
+    return (
+        <div
+            className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full")}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+        >
+            <Popover
                 open={open}
-                value={current || undefined}
-                options={selectOptions}
-                showSearch
-                filterOption={(input, option) => String(option?.label || "").toLocaleLowerCase().includes(input.toLocaleLowerCase())}
-                notFoundContent={<span className="block px-2 py-3 text-center text-xs text-foreground/48">{emptyModelLabel(config, capability)}</span>}
-                popupMatchSelectWidth={capability === "image" || capability === "video" ? 320 : 280}
+                onOpenChange={setPickerOpen}
+                trigger="click"
                 placement="bottomLeft"
-                className={cn("canvas-composer-model-picker", fullWidth ? "w-full" : "min-w-36 max-w-full")}
-                classNames={{ popup: { root: "canvas-model-picker-popup" } }}
-                onOpenChange={(nextOpen) => {
-                    if (nextOpen && !options.length && config.channelMode === "local") onMissingConfig?.();
-                    if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
-                    setOpen(nextOpen);
-                }}
-                onChange={onChange}
-                optionRender={(option) => <ModelLabel config={config} model={String(option.value)} capability={capability} />}
-                labelRender={() => (
-                    <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5 text-[11px]">
-                        <ModelIcon model={current} />
+                arrow={false}
+                content={content}
+                classNames={{ root: "canvas-model-picker-popover", container: "canvas-composer-popover-surface", content: "canvas-composer-popover-content" }}
+            >
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    className={cn("canvas-composer-model-picker", fullWidth ? "w-full" : "min-w-36 max-w-full", className)}
+                    aria-haspopup="listbox"
+                    aria-expanded={open}
+                    aria-label={placeholder}
+                    title={current ? modelOptionLabel(config, current) : placeholder}
+                    onKeyDown={handleTriggerKeyDown}
+                >
+                    <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5">
+                        <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}><ModelIcon model={current} /></span>
                         <span className="min-w-0 flex-1 truncate">{current ? modelOptionLabel(config, current) : placeholder}</span>
                         {showSelectedPrice ? <ModelPrice price={currentPrice} compact /> : null}
                     </span>
-                )}
-                aria-label={placeholder}
-                title={current ? modelOptionLabel(config, current) : placeholder}
-            />
+                    <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
+                </button>
+            </Popover>
         </div>
     );
 }
@@ -97,19 +175,19 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
-function ModelLabel({ config, model, capability }: { config: AiConfig; model: string; capability?: ModelCapability }) {
+function ModelLabel({ config, model, capability, theme }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const meta = modelMenuMeta(model, capability);
     return (
-        <span className="flex min-w-0 items-center gap-1.5 py-0">
-            <span className="grid size-6 shrink-0 place-items-center rounded-md bg-black/5 dark:bg-white/10">
+        <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
+            <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>
                 <ModelIcon model={model} />
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelDisplayName(config, model)}</span>
-                <span className="mt-0.5 block truncate text-[10px] opacity-55">{modelOptionName(model)} · {meta.description}</span>
+                <span className="mt-1 block truncate text-[10px]" style={{ color: theme.node.muted }} title={`${modelOptionName(model)} · ${meta.description}`}>{modelOptionName(model)} · {meta.description}</span>
             </span>
             <ModelPrice price={modelMenuPrice(config, model)} />
-            {meta.time ? <span className="shrink-0 rounded-full bg-black/5 px-1 py-0.5 text-[10px] tabular-nums opacity-60 dark:bg-white/10">{meta.time}</span> : null}
+            {meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
         </span>
     );
 }
@@ -126,7 +204,7 @@ function ModelPrice({ price, compact = false }: { price: { value: number; unit: 
     if (price === undefined) return null;
     if (price === null) return compact ? null : <span className="shrink-0 text-[10px] text-foreground/40">未配置</span>;
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded border border-foreground/10 bg-foreground/[.045] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground/55" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
             <Coins className="size-3" />
             {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>

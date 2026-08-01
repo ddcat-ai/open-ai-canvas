@@ -78,6 +78,19 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, task)
 	})
+	r.POST("/tasks/:id/query-provider", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.QueryFailedVideoTask(c.Request.Context(), user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.POST("/tasks/:id/cancel", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

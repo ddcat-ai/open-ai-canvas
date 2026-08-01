@@ -78,7 +78,7 @@ export default function LogsPage() {
             <TableSurface>
                 {loading && logs.length === 0 ? <AdminTableSkeleton rows={8} columns={11} /> : <Table className="app-data-table" size="middle" rowKey="id" loading={loading} rowSelection={{ selectedRowKeys: selectedIds, preserveSelectedRowKeys: false, onChange: (keys) => setSelectedIds(keys.map(String)) }} columns={columns} dataSource={logs} locale={{ emptyText: <AdminTableEmpty filtered={hasFilters} /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 条`, onChange: (nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize }) }} scroll={{ x: 1700 }} />}
             </TableSurface>
-            <ApiLogDetailDrawer logId={detailLogId} onClose={() => setDetailLogId(null)} />
+            <ApiLogDetailDrawer logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => item.id === next.id ? next : item))} />
             <Modal title={mediaPreview?.title || "媒体预览"} open={Boolean(mediaPreview)} width={880} onCancel={() => setMediaPreview(null)} footer={mediaPreview ? <Button icon={<Download className="size-4" />} onClick={() => downloadMedia(mediaPreview.url, mediaPreview.kind)}>下载原文件</Button> : null} destroyOnHidden>
                 {mediaPreview?.kind === "video" ? <video src={mediaPreview.url} controls playsInline preload="metadata" className="max-h-[72vh] w-full bg-black object-contain" /> : mediaPreview ? <img src={mediaPreview.url} alt={mediaPreview.title} className="max-h-[72vh] w-full bg-black object-contain" /> : null}
             </Modal>

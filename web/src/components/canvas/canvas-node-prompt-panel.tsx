@@ -59,15 +59,19 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         .map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
     const darkSurface = themeName === "dark";
     const monochromeAccent = theme.node.activeStroke;
-    const shellBorder = darkSurface ? "rgba(255,255,255,.08)" : "rgba(17,24,39,.12)";
-    const insetBorder = darkSurface ? "rgba(255,255,255,.06)" : "rgba(17,24,39,.10)";
+    const shellBorder = darkSurface ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)";
+    const insetBorder = darkSurface ? "rgba(255,255,255,.06)" : "rgba(15,23,42,.07)";
     const shellSurface = darkSurface
         ? theme.canvas.background
-        : `linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,252,.86)), ${theme.spatial.elevated}`;
+        : "rgba(250,251,252,.97)";
     const composerSurface = darkSurface
         ? theme.canvas.background
-        : `linear-gradient(180deg, rgba(255,255,255,.7), rgba(248,250,252,.72)), ${theme.spatial.dropzone}`;
-    const controlSurface = darkSurface ? theme.canvas.background : "rgba(17,24,39,.045)";
+        : "rgba(15,23,42,.025)";
+    const controlSurface = darkSurface ? theme.canvas.background : "rgba(15,23,42,.045)";
+    const controlsSurface = darkSurface ? controlSurface : "transparent";
+    const shellShadow = darkSurface ? `0 22px 60px ${theme.spatial.shadow}, 0 2px 8px rgba(0,0,0,.22)` : "0 12px 32px rgba(15,23,42,.10), 0 1px 2px rgba(15,23,42,.06)";
+    const composerShadow = darkSurface ? "inset 0 1px 4px rgba(0,0,0,.22)" : "inset 0 0 0 1px rgba(15,23,42,.045)";
+    const modalShadow = darkSurface ? `0 30px 90px ${theme.spatial.shadow}` : "0 24px 72px rgba(15,23,42,.16)";
     const referenceShelfHeight = activeReferenceCount ? 42 : 0;
     const composerMinHeight = activeReferenceCount ? 82 : 58;
     const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
@@ -177,13 +181,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     );
 
     const renderComposerControls = (expanded: boolean) => simpleMode ? (
-        <div className="flex min-w-0 items-center justify-between gap-2 p-1" style={{ background: controlSurface }}>
+        <div className="flex min-w-0 items-center justify-between gap-2 p-1" style={{ background: controlsSurface }}>
             <span className="min-w-0 truncate px-2 text-[10px]" style={{ color: theme.node.muted }}>
                 {activeReferenceCount ? `已连接 ${activeReferenceCount} 个素材` : "将使用默认模型与参数"}
             </span>
             <Button
                 type="text"
-                className="!inline-flex !h-8 shrink-0 !items-center !gap-1 !rounded-md !px-2.5 !text-[10px] !font-medium"
+                className="!inline-flex !h-8 shrink-0 !items-center !gap-1 !rounded-full !px-2.5 !text-[10px] !font-medium"
                 danger={isRunning}
                 disabled={isSubmitDisabled}
                 style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : monochromeAccent, color: isSubmitDisabled ? theme.node.faint : isRunning ? "#ffffff" : theme.canvas.background, boxShadow: isSubmitDisabled ? "none" : `0 8px 20px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.18)` }}
@@ -195,29 +199,29 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             </Button>
         </div>
     ) : (
-        <div className="flex min-w-0 items-center justify-between gap-0.5 p-1" style={{ background: controlSurface }}>
+        <div className="flex min-w-0 items-center justify-between gap-0.5 p-1" style={{ background: controlsSurface }}>
             <div className={`${expanded ? "max-w-[320px]" : mode === "image" || mode === "video" ? "max-w-[240px]" : "max-w-[174px]"} min-w-[104px] flex-1`}>
                 <ModelPicker className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} showSelectedPrice={false} />
             </div>
-            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5">
+            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
                 {mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
                         placement={expanded ? "topRight" : "topLeft"}
-                        buttonClassName="!h-7 !w-[138px] !justify-start !rounded-md !border-0 !bg-transparent !px-1.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3"
+                        buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3"
                         onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         onOpenChange={expanded ? undefined : onImageSettingsOpenChange}
                     />
                 ) : mode === "video" ? (
-                    <CanvasVideoSettingsPopover config={config} buttonClassName="!h-7 !w-[136px] !justify-start !rounded-md !border-0 !bg-transparent !px-1.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                    <CanvasVideoSettingsPopover config={config} buttonClassName="!h-7 !w-[144px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                 ) : mode === "audio" ? (
-                    <CanvasAudioSettingsPopover config={config} buttonClassName="!h-7 !w-[138px] !justify-start !rounded-md !border-0 !bg-transparent !px-1.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                    <CanvasAudioSettingsPopover config={config} buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                 ) : null}
                 <GenerationCostBadge credits={credits} theme={theme} />
                 <Button
                     type="text"
-                    className="!inline-flex !h-8 !w-8 shrink-0 !items-center !justify-center !rounded-md !border !p-0 transition hover:!-translate-y-px hover:!brightness-110 motion-reduce:hover:!translate-y-0"
+                    className="!inline-flex !h-8 !w-8 shrink-0 !items-center !justify-center !rounded-full !border !p-0 transition hover:!-translate-y-px hover:!brightness-110 motion-reduce:hover:!translate-y-0"
                     danger={isRunning}
                     disabled={isSubmitDisabled}
                     style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : monochromeAccent, borderColor: isSubmitDisabled ? insetBorder : monochromeAccent, color: isSubmitDisabled ? theme.node.faint : theme.canvas.background, boxShadow: isSubmitDisabled ? "none" : `0 8px 20px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.18)` }}
@@ -232,8 +236,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     return (
         <div
-            className="aceternity-floating-panel relative overflow-hidden rounded-lg border p-2"
-            style={{ background: shellSurface, borderColor: shellBorder, color: theme.node.text, boxShadow: `0 22px 60px ${theme.spatial.shadow}, 0 2px 8px rgba(0,0,0,.22)` }}
+            className="aceternity-floating-panel relative overflow-hidden rounded-xl border p-2"
+            style={{ background: shellSurface, borderColor: shellBorder, color: theme.node.text, boxShadow: shellShadow }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
@@ -241,8 +245,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             {renderComposerHeader(false)}
 
             <div
-                className="relative mt-2 flex max-h-36 flex-col overflow-hidden rounded-lg outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
-                style={{ height: composerHeight, background: composerSurface, boxShadow: "inset 0 1px 4px rgba(0,0,0,.22)" }}
+                className="relative mt-2 flex max-h-36 flex-col overflow-hidden rounded-xl outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
+                style={{ height: composerHeight, background: composerSurface, boxShadow: composerShadow }}
             >
                 <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                 <CanvasResourceMentionTextarea
@@ -274,13 +278,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 width={760}
                 destroyOnHidden
                 onCancel={() => { setExpandedPresetOpen(false); setExpandedPromptOpen(false); }}
-                styles={{ container: { display: "flex", height: "min(440px, calc(100vh - 40px))", flexDirection: "column", borderRadius: 12, border: `1px solid ${shellBorder}`, padding: 0, overflow: "hidden", background: shellSurface, boxShadow: `0 30px 90px ${theme.spatial.shadow}` }, body: { minHeight: 0, flex: 1, padding: 0 } }}
+                styles={{ container: { display: "flex", height: "min(440px, calc(100vh - 40px))", flexDirection: "column", borderRadius: 12, border: `1px solid ${shellBorder}`, padding: 0, overflow: "hidden", background: shellSurface, boxShadow: modalShadow }, body: { minHeight: 0, flex: 1, padding: 0 } }}
             >
                 <div className="flex h-full min-h-0 flex-col gap-2.5 p-3" style={{ color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     <div
-                        className="flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg outline-none ring-0 focus-within:outline-none focus-within:ring-0"
-                        style={{ background: composerSurface, boxShadow: "inset 0 1px 4px rgba(0,0,0,.22)" }}
+                        className="flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-xl outline-none ring-0 focus-within:outline-none focus-within:ring-0"
+                        style={{ background: composerSurface, boxShadow: composerShadow }}
                     >
                         <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                         <CanvasResourceMentionTextarea
@@ -375,8 +379,8 @@ function ReferenceThumbnail({ reference }: { reference: CanvasResourceReference 
 function GenerationCostBadge({ credits, theme }: { credits: number | null; theme: CanvasTheme }) {
     if (credits === null) return null;
     return (
-        <span className="inline-flex h-6 shrink-0 items-center gap-0.5 px-1 text-[9px] font-medium tabular-nums" style={{ color: theme.node.muted }} title="本次生成消耗">
-            <CreditSymbol />
+        <span className="canvas-generation-cost-badge inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-[9px] font-semibold tabular-nums" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }} title={`预计消耗 ${credits.toLocaleString()} 积分`} aria-label={`预计消耗 ${credits.toLocaleString()} 积分`}>
+            <CreditSymbol className="text-[11px]" />
             {credits.toLocaleString()}
         </span>
     );

@@ -125,12 +125,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
 
     const syncMention = (nextValue: string, cursor: number) => {
         const prefix = nextValue.slice(0, cursor);
-        const match = /(^|\s)@([^\s@]*)$/.exec(prefix);
+        const match = /@([^\s@,.;:!?，。；：！？、)\]}】）]*)$/.exec(prefix);
         if (!match || !references.some((item) => item.active)) {
             closeMention();
             return;
         }
-        const nextMention = { start: cursor - match[2].length - 1, query: match[2] };
+        const nextMention = { start: match.index, query: match[1] };
         const isSameMention = mention?.start === nextMention.start && mention.query === nextMention.query;
         if (!isSameMention) {
             setMention(nextMention);
@@ -353,7 +353,7 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     const chip = document.createElement("span");
     chip.contentEditable = "false";
     chip.dataset.mentionToken = token;
-    chip.className = "mx-[0.06em] inline-flex h-[1.55em] translate-y-[0.18em] select-none items-center gap-[0.18em] rounded-[0.38em] bg-black/[0.06] px-[0.22em] text-[0.92em] font-medium leading-none text-current align-baseline dark:bg-white/[0.1]";
+    chip.className = "mx-[0.06em] inline-flex h-[1.68em] translate-y-[0.08em] select-none items-center gap-[0.18em] rounded-[0.38em] bg-black/[0.06] px-[0.22em] text-[0.92em] font-medium leading-none text-current align-baseline dark:bg-white/[0.1]";
 
     const at = document.createElement("span");
     at.className = "shrink-0 opacity-90";

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import copyToClipboard from "copy-to-clipboard";
-import { Bot, BookOpenText, Copy, Cpu, Focus, History, PanelRightClose, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
-import { Button, Modal, Segmented, Select, Switch, Tooltip } from "antd";
+import { Copy, Cpu, History, MessageSquareText, Plus, ScrollText, Settings2, Trash2, X } from "lucide-react";
+import { Button, Modal, Segmented, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
 import { modelDisplayName, modelOptionName, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -16,7 +16,8 @@ import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessionPollingAbort, resumeCinematicAgentSession } from "@/lib/canvas/canvas-agent-session";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
-import { AgentChatComposer, AgentChatMessage, AgentModeSwitch, AgentPanelTabs, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
+import { AgentChatEmptyState, AgentPanelChrome } from "./canvas-agent-panel-chrome";
 import { CanvasLocalAgentPanel } from "./canvas-local-agent-panel";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendingBackendSession, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "@/types/canvas";
@@ -702,10 +703,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                 value={view}
                 theme={theme}
                 items={[
-                    { value: "setup", label: "连接配置", icon: <Settings2 className="size-3.5" /> },
-                    { value: "chat", label: "对话" },
+                    { value: "setup", label: "配置", icon: <Settings2 className="size-3.5" /> },
+                    { value: "chat", label: "对话", icon: <MessageSquareText className="size-3.5" /> },
                     { value: "history", label: "历史", icon: <History className="size-3.5" />, count: historySessions.length },
-                    { value: "log", label: "日志", count: onlineLogs.length },
+                    { value: "log", label: "记录", icon: <ScrollText className="size-3.5" />, count: onlineLogs.length },
                 ]}
                 onChange={setView}
                 right={
@@ -728,9 +729,6 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                                     setView("chat");
                                 }}
                             />
-                        </Tooltip>
-                        <Tooltip title="配置">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={() => navigateToSettings()} />
                         </Tooltip>
                     </>
                 }
@@ -763,15 +761,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                             {agentBusy ? <AgentWorkingMessage theme={theme} /> : null}
                         </>
                     ) : (
-                        <div className="flex h-full flex-col items-center justify-center px-3 text-center">
-                            <span className="grid size-11 place-items-center rounded-lg border" style={{ background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong, color: theme.accent.primary }}><Bot className="size-5" /></span>
-                            <div className="mt-3 text-sm font-semibold" style={{ color: theme.node.text }}>Agent</div>
-                            <div className="mt-5 grid w-full max-w-[360px] grid-cols-2 gap-2">
-                                {["搭建短剧工作流", "整理当前画布", "生成镜头分镜", "检查节点连线"].map((suggestion) => (
-                                    <button key={suggestion} type="button" className="h-9 rounded-md border px-2 text-xs font-medium transition hover:-translate-y-0.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.text }} onClick={() => setPrompt(suggestion)}>{suggestion}</button>
-                                ))}
-                            </div>
-                        </div>
+                        <AgentChatEmptyState theme={theme} nodeCount={contextSummary.nodeCount} onSelect={setPrompt} />
                     )}
                 </div>
             )}
@@ -804,7 +794,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                         left={
                             <>
                                 <AgentTextModelPicker config={effectiveConfig} value={effectiveConfig.textModel} onChange={(model) => updateConfig("textModel", model)} />
-                                {cinematicEntryActive ? <span className="ml-2 inline-flex h-6 items-center rounded-md border px-2 text-[10px] font-medium" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>影视项目</span> : null}
+                                {cinematicEntryActive ? <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[10px] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>影视项目</span> : null}
                             </>
                         }
                     />
@@ -846,45 +836,26 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             style={{ overflow: "clip", pointerEvents: closing ? "none" : undefined }}
         >
             <motion.aside
-                className="relative my-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-lg border"
+                className="relative my-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-lg"
                 initial={{ x: 48 }}
                 animate={{ x: closing ? 28 : 0 }}
                 transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-                style={{ width, background: theme.spatial.elevated, borderColor: theme.node.stroke, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
+                style={{ width, background: theme.spatial.elevated, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
             >
                 <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" />
-                <header className="flex h-14 items-center justify-between border-b px-4" style={{ borderColor: theme.node.stroke }}>
-                    <div className="flex min-w-0 items-center gap-2">
-                        <span className="grid size-8 place-items-center rounded-md" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
-                            <Bot className="size-4" />
-                        </span>
-                        <div className="min-w-0">
-                            <div className="text-base font-semibold leading-5">Agent</div>
-                            <div className="truncate text-xs" style={{ color: theme.node.muted }}>
-                                画布助手
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                        {agentMode === "online" ? <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={!canUndoOps} icon={<RotateCcw className="size-3.5" />} onClick={undoLastOnlineBatch} aria-label="撤销最近一批 Agent 写回" title={undoOpsCount ? `可撤销最近 ${undoOpsCount} 批` : "没有可撤销的 Agent 写回"} /> : null}
-                        <AgentModeSwitch value={agentMode} theme={theme} onChange={onAgentModeChange} />
-                        <label className="flex items-center gap-1.5 text-xs" style={{ color: theme.node.muted }}>
-                            <Switch size="small" checked={confirmTools} onChange={(confirmTools) => setAgentState({ confirmTools })} />
-                            工具确认
-                        </label>
-                        <Tooltip title="收起对话">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
-                        </Tooltip>
-                    </div>
-                </header>
-                <div className="mx-3 mt-2 flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-2.5 py-1.5 text-[10px]" style={{ borderColor: theme.node.stroke, background: theme.spatial.surface, color: theme.node.muted }}>
-                    <span className="font-semibold" style={{ color: theme.node.text }}>将读取</span>
-                    <span>当前画布 {contextSummary.nodeCount} 个节点</span>
-                    {contextSummary.selectedCount ? <span className="inline-flex items-center gap-1"><Focus className="size-3" />选区 {contextSummary.selectedCount} 个</span> : null}
-                    {contextSummary.chapterLabel ? <span className="inline-flex min-w-0 items-center gap-1"><BookOpenText className="size-3 shrink-0" /><span className="max-w-32 truncate">{contextSummary.chapterLabel}</span>{contextSummary.shotLabel ? ` · ${contextSummary.shotLabel}` : ""}</span> : null}
-                    {selectedReferences.length ? <span>{selectedReferences.length} 个参考节点</span> : null}
-                    {undoOpsCount ? <span className="ml-auto tabular-nums">可撤销 {undoOpsCount} 批</span> : null}
-                </div>
+                <AgentPanelChrome
+                    theme={theme}
+                    mode={agentMode}
+                    context={contextSummary}
+                    referenceCount={selectedReferences.length}
+                    confirmTools={confirmTools}
+                    canUndo={agentMode === "online" && canUndoOps}
+                    undoCount={agentMode === "online" ? undoOpsCount : 0}
+                    onModeChange={onAgentModeChange}
+                    onConfirmToolsChange={(confirmTools) => setAgentState({ confirmTools })}
+                    onUndo={undoLastOnlineBatch}
+                    onCollapse={collapse}
+                />
                 {agentMode === "local" ? (
                     <CanvasLocalAgentPanel
                         embedded
@@ -976,7 +947,7 @@ function AssistantHistory({
                 {sessions.length ? `${sessions.length} 条历史` : "暂无历史"}
             </div>
             {sessions.map((session) => (
-                <div key={session.id} className="rounded-lg border px-2.5 py-1.5 transition" style={{ borderColor: session.id === activeSession?.id ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}>
+                <div key={session.id} className="rounded-md px-2.5 py-2 transition-colors" style={{ background: session.id === activeSession?.id ? theme.accent.primarySoft : "transparent", color: theme.node.text }}>
                     <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 items-center gap-1.5">
@@ -1016,7 +987,7 @@ function OnlineAgentSetupView({ theme, activeModel, onOpenConfig }: { theme: (ty
                         网站 Agent 直接使用当前网页配置的文本模型和 API。
                     </div>
                 </div>
-                <div className="rounded-lg border p-3" style={{ borderColor: theme.node.stroke }}>
+                <div className="rounded-md p-3" style={{ background: theme.spatial.surface }}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium leading-5">文本模型</div>
@@ -1059,8 +1030,8 @@ function OnlineAgentLogView({ logs, theme, context, onClear }: { logs: OnlineAge
                 ref={textareaRef}
                 readOnly
                 value={content}
-                className="thin-scrollbar min-h-[360px] flex-1 resize-none rounded-lg border bg-transparent p-3 font-mono text-xs leading-5 outline-none"
-                style={{ borderColor: theme.node.stroke, color: theme.node.text }}
+                className="thin-scrollbar min-h-[360px] flex-1 resize-none rounded-md border-0 p-3 font-mono text-xs leading-5 outline-none"
+                style={{ background: theme.spatial.surface, color: theme.node.text }}
                 onFocus={(event) => event.currentTarget.select()}
             />
         </div>
@@ -1088,7 +1059,7 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
                     {label ? <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 py-0.5 text-[8px] font-medium leading-none text-white">{label}</span> : null}
                 </span>
             ) : (
-                <span className="grid size-8 place-items-center rounded-lg border text-sm font-medium" style={{ background: theme.node.panel, borderColor: theme.node.activeStroke }}>
+                <span className="grid size-8 place-items-center rounded-md text-sm font-medium" style={{ background: theme.spatial.surface }}>
                     {text}
                 </span>
             )}

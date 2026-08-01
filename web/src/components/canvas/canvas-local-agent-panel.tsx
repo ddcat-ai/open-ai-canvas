@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEv
 import { useSearchParams } from "react-router";
 import { App, Button, Input, Segmented, Tooltip } from "antd";
 import copyToClipboard from "copy-to-clipboard";
-import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Terminal, Trash2 } from "lucide-react";
+import { Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, MessageSquareText, PlugZap, Plus, RefreshCw, RotateCcw, Terminal, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -12,6 +12,7 @@ import { useCanvasAgentStore, type AgentAttachment, type AgentChatItem, type Age
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isProjectAgentReadTool, isProjectAgentToolName, runProjectAgentTool } from "@/services/api/project-agent-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
+import { AgentChatEmptyState } from "./canvas-agent-panel-chrome";
 
 const PANEL_MOTION_SECONDS = 0.5;
 const MAX_ATTACHMENTS = 6;
@@ -487,7 +488,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
                 theme={theme}
                 items={[
                     { value: "setup", label: "连接", icon: <PlugZap className="size-3.5" /> },
-                    { value: "chat", label: "对话" },
+                    { value: "chat", label: "对话", icon: <MessageSquareText className="size-3.5" /> },
                     { value: "history", label: "历史", icon: <History className="size-3.5" />, count: threads.length },
                     { value: "log", label: "日志", icon: <Terminal className="size-3.5" />, count: eventLogs.length },
                 ]}
@@ -497,9 +498,9 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
                 }}
                 right={
                     <>
-                        <Button size="small" type="text" disabled={!canUndoOps} icon={<RotateCcw className="size-3.5" />} onClick={undoLastTool}>
-                            撤销{undoOpsCount ? ` ${undoOpsCount}` : ""}
-                        </Button>
+                        <Tooltip title={undoOpsCount ? `撤销最近一批 Agent 写回，可撤销 ${undoOpsCount} 批` : "没有可撤销的 Agent 写回"}>
+                            <Button size="small" type="text" className="!h-8 !w-8 !min-w-8" disabled={!canUndoOps} icon={<RotateCcw className="size-3.5" />} onClick={undoLastTool} aria-label="撤销最近一批 Agent 写回" />
+                        </Tooltip>
                     </>
                 }
             />
@@ -542,6 +543,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
             ) : (
                 <>
                     <div ref={listRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                        {!messages.length && !pendingTool && !waiting ? <AgentChatEmptyState theme={theme} nodeCount={snapshot.nodes.length} onSelect={(prompt) => setAgentState({ prompt })} /> : null}
                         {messages.map((item) => (
                             <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} />
                         ))}
@@ -624,8 +626,8 @@ function AgentLogView({ logs, theme, context, onClear, onCopied, onCopyBlocked }
                     ref={textareaRef}
                     readOnly
                     value={content}
-                    className="thin-scrollbar min-h-[360px] flex-1 resize-none rounded-lg border bg-transparent p-3 font-mono text-xs leading-5 outline-none"
-                    style={{ borderColor: theme.node.stroke, color: theme.node.text }}
+                    className="thin-scrollbar min-h-[360px] flex-1 resize-none rounded-md border-0 p-3 font-mono text-xs leading-5 outline-none"
+                    style={{ background: theme.spatial.surface, color: theme.node.text }}
                     onFocus={(event) => event.currentTarget.select()}
                 />
             </div>
@@ -654,12 +656,12 @@ function AgentConnectView({ theme, url, token, enabled, connected, activity, con
                         </div>
                     ))}
                 </div>
-                <div className="rounded-lg border p-3" style={{ borderColor: theme.node.stroke }}>
+                <div className="rounded-md p-3" style={{ background: theme.spatial.surface }}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 items-center gap-2">
                                 <span className="shrink-0 text-sm font-medium leading-5">网页连接</span>
-                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: connected || enabled || connectError ? statusColor : theme.node.stroke, color: statusColor }}>
+                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] leading-4" style={{ background: theme.node.fill, color: statusColor }}>
                                     <span className="size-1.5 shrink-0 rounded-full" style={{ background: statusColor }} />
                                     <span className="truncate">{statusText}</span>
                                 </span>
@@ -690,7 +692,7 @@ function AgentConnectView({ theme, url, token, enabled, connected, activity, con
                             <Input.Password size="large" prefix={<KeyRound className="mr-1 size-4" style={{ color: theme.node.faint }} />} value={token} onChange={(event) => onTokenChange(event.target.value)} placeholder="自动发现，或手动填入 Connect token" />
                         </label>
                         {connectError ? (
-                            <div className="rounded-md border px-2.5 py-2 text-xs leading-5" style={{ borderColor: "rgba(220,38,38,.35)", color: "#dc2626" }}>
+                            <div className="rounded-md px-2.5 py-2 text-xs leading-5" style={{ background: "rgba(220,38,38,.08)", color: "#dc2626" }}>
                                 {connectError}
                             </div>
                         ) : null}
@@ -727,7 +729,7 @@ function AgentHistoryView({ theme, threads, activeThreadId, workspacePath, loadi
                     {threads.map((thread) => {
                         const active = thread.id === activeThreadId;
                         return (
-                            <div key={thread.id} className="rounded-lg border px-2.5 py-1.5 transition" style={{ borderColor: active ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}>
+                            <div key={thread.id} className="rounded-md px-2.5 py-2 transition-colors" style={{ background: active ? theme.accent.primarySoft : "transparent", color: theme.node.text }}>
                                 <div className="flex items-center gap-2">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex min-w-0 items-center gap-1.5">

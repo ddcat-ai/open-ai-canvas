@@ -24,6 +24,7 @@ export type GenerationTask = {
     operation?: string;
     provider?: string;
     model?: string;
+    providerRequestId?: string;
     errorCode?: string;
     previewUrl?: string;
     previewKind?: "image" | "video";
@@ -41,6 +42,13 @@ export type GenerationTask = {
     };
     created_at?: string;
     updated_at?: string;
+};
+
+export type ProviderTaskQueryResult = {
+    task: GenerationTask;
+    providerStatus: string;
+    recovered: boolean;
+    billingSettled: boolean;
 };
 
 export type AgentSession = {
@@ -183,6 +191,10 @@ export function queryGenerationTask(id: string) {
 
 export function retryGenerationTask(id: string) {
     return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/retry`));
+}
+
+export function queryFailedVideoProviderTask(id: string) {
+    return request<ProviderTaskQueryResult>(api.post(`/tasks/${encodeURIComponent(id)}/query-provider`));
 }
 
 export function cancelGenerationTask(id: string) {

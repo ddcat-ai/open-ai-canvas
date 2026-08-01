@@ -118,9 +118,13 @@ export function CanvasNodeHoverToolbar({
     const [imageToolMenuOpen, setImageToolMenuOpen] = useState(false);
     const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
+    // Dropdown 关闭与菜单点击处于同一事件批次，ref 用来同步守住即将打开的 Modal，避免工具栏先被卸载。
+    const imageToolSettingsOpenRef = useRef(false);
+    const imageToolMenuOpenRef = useRef(false);
     const { message } = App.useApp();
     const copyText = useCopyText();
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const themeName = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[themeName];
     const simpleMode = workspaceMode === "simple";
 
     useEffect(() => {
@@ -139,6 +143,8 @@ export function CanvasNodeHoverToolbar({
     }, []);
 
     useEffect(() => {
+        imageToolSettingsOpenRef.current = false;
+        imageToolMenuOpenRef.current = false;
         setImageToolSettingsOpen(false);
         setImageToolMenuOpen(false);
     }, [node?.id]);
@@ -162,8 +168,8 @@ export function CanvasNodeHoverToolbar({
             const halfToolbar = toolbarWidth / 2;
             const canClamp = toolbarWidth > 0 && toolbarWidth <= containerRect.width - 20;
             const left = canClamp ? Math.min(Math.max(preferredLeft, halfToolbar + 10), containerRect.width - halfToolbar - 10) : preferredLeft;
-            // 外置节点标题占用节点上方一行，工具 Dock 再向上错开，避免遮挡名称编辑入口。
-            const top = nodeRect.top - containerRect.top - 42;
+            // 外置标题固定占 24px，额外保留 6px 即可兼顾层级和名称编辑入口。
+            const top = nodeRect.top - containerRect.top - 30;
             if (toolbarRef.current) {
                 toolbarRef.current.style.left = `${left}px`;
                 toolbarRef.current.style.top = `${top}px`;
@@ -217,6 +223,8 @@ export function CanvasNodeHoverToolbar({
     const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onAnnotate, onMaskEdit, onEmotion, onPortraitTexture, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt });
 
     function openImageToolSettings() {
+        imageToolSettingsOpenRef.current = true;
+        imageToolMenuOpenRef.current = false;
         onKeep(activeNode.id);
         setImageToolMenuOpen(false);
         setDraftImageToolIds(quickImageToolIds);
@@ -254,19 +262,22 @@ export function CanvasNodeHoverToolbar({
     ];
 
     const closeImageToolSettings = () => {
+        imageToolSettingsOpenRef.current = false;
         setImageToolSettingsOpen(false);
         onLeave();
     };
 
     const runTemporaryImageTool = (tool: ToolbarTool) => {
+        imageToolMenuOpenRef.current = false;
         setImageToolMenuOpen(false);
         tool.onClick();
     };
 
     const handleImageToolMenuOpenChange = (open: boolean) => {
+        imageToolMenuOpenRef.current = open;
         setImageToolMenuOpen(open);
         if (open) onKeep(activeNode.id);
-        else if (!imageToolSettingsOpen) onLeave();
+        else if (!imageToolSettingsOpenRef.current) onLeave();
     };
 
     const setDraftImageToolVisible = (id: ImageQuickToolId, visible: boolean) => {
@@ -292,6 +303,12 @@ export function CanvasNodeHoverToolbar({
 
     const dockShellStyle = canvasDockStyle(theme, theme.node.text);
     const embeddedDockStyle = { ...dockShellStyle, background: "transparent", borderColor: "transparent", boxShadow: "none" };
+    const labeledDockStyle = {
+        ...dockShellStyle,
+        boxShadow: themeName === "dark"
+            ? `0 18px 52px ${theme.spatial.shadow}`
+            : "0 10px 30px rgba(15,23,42,.12), 0 1px 2px rgba(15,23,42,.05), inset 0 1px 0 rgba(255,255,255,.7)",
+    };
 
     return (
         <>
@@ -301,12 +318,12 @@ export function CanvasNodeHoverToolbar({
                 style={{ left: anchor.left, top: anchor.top, width: "max-content", maxWidth: `min(calc(100% - 20px), ${showDockLabels ? 840 : 560}px)`, color: theme.node.text }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {
-                    if (!imageToolSettingsOpen && !imageToolMenuOpen) onLeave();
+                    if (!imageToolSettingsOpenRef.current && !imageToolMenuOpenRef.current) onLeave();
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[14px] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? { ...dockShellStyle, boxShadow: `0 18px 52px ${theme.spatial.shadow}` } : dockShellStyle}>
+                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[14px] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? labeledDockStyle : dockShellStyle}>
                     {dockItems.length ? <FloatingDock embedded items={dockItems} size="compact" showLabels={showDockLabels} ariaLabel="节点快捷工具" className={`pointer-events-auto shrink-0 ${showDockLabels ? "" : "max-w-[min(calc(100vw-20px),400px)]"}`} style={embeddedDockStyle} /> : null}
                     {hasImage && !simpleMode ? (
                         <Dropdown
@@ -324,7 +341,7 @@ export function CanvasNodeHoverToolbar({
                         >
                             <button
                                 type="button"
-                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
+                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "is-labeled inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
                                 style={{ color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties}
                                 aria-label="更多图片工具"
                                 title="更多图片工具"

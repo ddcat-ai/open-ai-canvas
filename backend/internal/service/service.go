@@ -68,26 +68,27 @@ type SessionDetail struct {
 }
 
 type TaskSummary struct {
-	ID          string              `json:"id"`
-	SessionID   string              `json:"sessionId,omitempty"`
-	ProjectID   string              `json:"projectId,omitempty"`
-	Type        string              `json:"type"`
-	Status      model.TaskStatus    `json:"status"`
-	Stage       string              `json:"stage"`
-	Progress    int                 `json:"progress"`
-	Prompt      string              `json:"prompt"`
-	Operation   string              `json:"operation,omitempty"`
-	Provider    string              `json:"provider,omitempty"`
-	Model       string              `json:"model,omitempty"`
-	ErrorCode   string              `json:"errorCode,omitempty"`
-	PreviewURL  string              `json:"previewUrl,omitempty"`
-	PreviewKind string              `json:"previewKind,omitempty"`
-	Attempts    int                 `json:"attempts"`
-	StartedAt   *time.Time          `json:"startedAt"`
-	CompletedAt *time.Time          `json:"completedAt"`
-	CreatedAt   time.Time           `json:"createdAt"`
-	UpdatedAt   time.Time           `json:"updatedAt"`
-	Billing     *TaskBillingSummary `json:"billing,omitempty"`
+	ID                string              `json:"id"`
+	SessionID         string              `json:"sessionId,omitempty"`
+	ProjectID         string              `json:"projectId,omitempty"`
+	Type              string              `json:"type"`
+	Status            model.TaskStatus    `json:"status"`
+	Stage             string              `json:"stage"`
+	Progress          int                 `json:"progress"`
+	Prompt            string              `json:"prompt"`
+	Operation         string              `json:"operation,omitempty"`
+	Provider          string              `json:"provider,omitempty"`
+	Model             string              `json:"model,omitempty"`
+	ProviderRequestID string              `json:"providerRequestId,omitempty"`
+	ErrorCode         string              `json:"errorCode,omitempty"`
+	PreviewURL        string              `json:"previewUrl,omitempty"`
+	PreviewKind       string              `json:"previewKind,omitempty"`
+	Attempts          int                 `json:"attempts"`
+	StartedAt         *time.Time          `json:"startedAt"`
+	CompletedAt       *time.Time          `json:"completedAt"`
+	CreatedAt         time.Time           `json:"createdAt"`
+	UpdatedAt         time.Time           `json:"updatedAt"`
+	Billing           *TaskBillingSummary `json:"billing,omitempty"`
 }
 
 type TaskBillingSummary struct {
@@ -386,7 +387,41 @@ func (s *Service) Task(userID string, id string) (*model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.hydrateTaskProviderRequestID(task)
 	return taskForOutput(*task), nil
+}
+
+func (s *Service) hydrateTaskProviderRequestID(task *model.Task) {
+	if task == nil || task.ProviderRequestID != "" {
+		return
+	}
+	if task.BillingOrderID != "" {
+		if order, err := s.repo.BillingOrder(task.BillingOrderID); err == nil {
+			task.ProviderRequestID = strings.TrimSpace(order.ProviderRequestID)
+		}
+	}
+	if task.ProviderRequestID == "" {
+		if providerRequestID, err := s.repo.LatestProviderRequestIDForTask(task.ID); err == nil {
+			task.ProviderRequestID = providerRequestID
+		}
+	}
+}
+
+// 上游请求日志会在任务执行期间更新 provider 状态，终态保存前必须重新合并，避免旧任务对象覆盖可恢复 ID。
+func (s *Service) refreshTaskProviderState(task *model.Task) error {
+	if task == nil || task.ID == "" {
+		return errors.New("任务状态无效")
+	}
+	latest, err := s.repo.Task(task.ID)
+	if err != nil {
+		return fmt.Errorf("刷新任务上游状态失败：%w", err)
+	}
+	if latest.ProviderRequestID != "" {
+		task.ProviderRequestID = latest.ProviderRequestID
+	}
+	task.PollStage = latest.PollStage
+	task.NextPollAt = latest.NextPollAt
+	return nil
 }
 
 func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
@@ -521,6 +556,9 @@ func taskSummariesForOutputWithBilling(tasks []model.Task, orders map[string]mod
 		summary := taskSummaryForOutput(task)
 		if order, ok := orders[task.ID]; ok {
 			summary.Billing = &TaskBillingSummary{AmountMicrocredits: order.AmountMicrocredits, Status: order.Status}
+			if summary.ProviderRequestID == "" {
+				summary.ProviderRequestID = order.ProviderRequestID
+			}
 		}
 		result = append(result, summary)
 	}
@@ -550,25 +588,26 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 	previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 	return TaskSummary{
-		ID:          task.ID,
-		SessionID:   task.SessionID,
-		ProjectID:   task.ProjectID,
-		Type:        task.Type,
-		Status:      task.Status,
-		Stage:       task.Stage,
-		Progress:    task.Progress,
-		Prompt:      truncateRunes(task.Prompt, 500),
-		Operation:   task.Operation,
-		Provider:    task.Provider,
-		Model:       task.Model,
-		ErrorCode:   errorCode,
-		PreviewURL:  previewURL,
-		PreviewKind: previewKind,
-		Attempts:    task.Attempts,
-		StartedAt:   task.StartedAt,
-		CompletedAt: task.CompletedAt,
-		CreatedAt:   task.CreatedAt,
-		UpdatedAt:   task.UpdatedAt,
+		ID:                task.ID,
+		SessionID:         task.SessionID,
+		ProjectID:         task.ProjectID,
+		Type:              task.Type,
+		Status:            task.Status,
+		Stage:             task.Stage,
+		Progress:          task.Progress,
+		Prompt:            truncateRunes(task.Prompt, 500),
+		Operation:         task.Operation,
+		Provider:          task.Provider,
+		Model:             task.Model,
+		ProviderRequestID: task.ProviderRequestID,
+		ErrorCode:         errorCode,
+		PreviewURL:        previewURL,
+		PreviewKind:       previewKind,
+		Attempts:          task.Attempts,
+		StartedAt:         task.StartedAt,
+		CompletedAt:       task.CompletedAt,
+		CreatedAt:         task.CreatedAt,
+		UpdatedAt:         task.UpdatedAt,
 	}
 }
 
@@ -778,6 +817,9 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		return err
 	}
 	result, canvasOps, err := s.processTask(ctx, *task)
+	if stateErr := s.refreshTaskProviderState(task); stateErr != nil {
+		return stateErr
+	}
 	providerSucceeded := err == nil
 	if err == nil {
 		result, err = s.persistGeneratedMediaResult(task.UserID, result)

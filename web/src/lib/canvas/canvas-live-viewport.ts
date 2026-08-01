@@ -11,6 +11,8 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
     container.style.setProperty("--canvas-live-x", `${viewport.x}px`);
     container.style.setProperty("--canvas-live-y", `${viewport.y}px`);
     container.style.setProperty("--canvas-live-scale", String(viewport.k));
+    // 外置节点标题用同一帧逆倍率抵消世界层缩放，避免等待 React 提交后再校正尺寸。
+    container.style.setProperty("--canvas-live-inverse-scale", String(1 / Math.max(viewport.k, 0.05)));
     container.style.setProperty("--canvas-live-scale-ratio", String(viewport.k / committedScale));
     container.style.setProperty("--canvas-grid-size", `${gridSize}px`);
     container.style.setProperty("--canvas-grid-x", `${viewport.x % gridSize}px`);

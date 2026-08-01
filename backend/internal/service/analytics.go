@@ -264,6 +264,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 			logs[index].UserAccount = user.Username
 		}
 		if task, exists := taskByID[logs[index].TaskID]; exists && task.UserID == logs[index].UserID {
+			logs[index].TaskStatus = task.Status
 			previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 			if canvasResourceID(previewURL) != "" {
 				logs[index].MediaPreviewURL = "/api/admin/api-logs/" + logs[index].ID + "/media"

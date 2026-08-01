@@ -159,8 +159,17 @@ func (r *Repository) APICallLogTasks(ids []string) ([]model.Task, error) {
 		return []model.Task{}, nil
 	}
 	var tasks []model.Task
-	err := r.db.Select("id", "user_id", "type", "result_json").Where("id IN ?", ids).Find(&tasks).Error
+	err := r.db.Select("id", "user_id", "type", "status", "result_json").Where("id IN ?", ids).Find(&tasks).Error
 	return tasks, err
+}
+
+func (r *Repository) LatestProviderRequestIDForTask(taskID string) (string, error) {
+	var log model.ApiCallLog
+	err := r.db.Select("provider_request_id").
+		Where("task_id = ? AND provider_request_id <> ''", taskID).
+		Order("created_at desc").
+		First(&log).Error
+	return strings.TrimSpace(log.ProviderRequestID), err
 }
 
 func visibleAPICallLogQuery(query *gorm.DB) *gorm.DB {

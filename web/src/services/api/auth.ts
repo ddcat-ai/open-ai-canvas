@@ -2,6 +2,7 @@ import axios from "axios";
 
 import type { ModelChannel } from "@/stores/use-config-store";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
+import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 
 const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
 
@@ -46,6 +47,7 @@ export type ApiCallLog = {
     channelId: string;
     channelName: string;
     taskId?: string;
+    taskStatus?: TaskStatus;
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
     operation?: string;
@@ -81,6 +83,13 @@ export type ApiCallLog = {
     responseBody?: string;
     startedAt?: string;
     createdAt: string;
+};
+
+export type AdminProviderTaskQueryResult = {
+    task: GenerationTask;
+    providerStatus: string;
+    recovered: boolean;
+    billingSettled: boolean;
 };
 
 export type AdminAuditEvent = {
@@ -429,6 +438,10 @@ export function listAdminApiLogs(params: AdminListParams = {}) {
 
 export function getAdminApiLog(id: string) {
     return request<{ log: ApiCallLog }>(api.get(`/admin/api-logs/${encodeURIComponent(id)}`));
+}
+
+export function queryAdminApiLogTask(id: string) {
+    return request<AdminProviderTaskQueryResult>(api.post(`/admin/api-logs/${encodeURIComponent(id)}/query-task`));
 }
 
 export async function exportAdminApiLogs(params: AdminListParams & { ids?: string[] } = {}) {

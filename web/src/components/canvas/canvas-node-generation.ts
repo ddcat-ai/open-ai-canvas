@@ -61,7 +61,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
     const hasExplicitNodeMention = /@\[node:[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
     if ((sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitNodeMention) {
-        return buildComposerGenerationContext(inputs, prompt);
+        return buildComposerGenerationContext(inputs, prompt, [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id)));
     }
 
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
@@ -109,7 +109,7 @@ function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]
     return next;
 }
 
-function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string): NodeGenerationContext {
+function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string, videoFrameNodeIds: string[] = []): NodeGenerationContext {
     const normalizedPrompt = normalizeLegacyNodeMentions(prompt, inputs);
     const inputByNodeId = new Map(inputs.map((input) => [input.nodeId, input]));
     const selectedInputs: NodeGenerationInput[] = [];
@@ -141,12 +141,20 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 
     nextPrompt += normalizedPrompt.slice(lastIndex);
     if (textBlocks.length) nextPrompt = `${nextPrompt.trim()}\n\n${textBlocks.join("\n\n")}`;
+    // 首尾帧是结构化生成参数，不受提示词中的 @ 引用筛选影响。
+    const selectedNodeIds = new Set(selectedInputs.map((input) => input.nodeId));
+    videoFrameNodeIds.forEach((nodeId) => {
+        const input = inputByNodeId.get(nodeId);
+        if (!input?.image || selectedNodeIds.has(nodeId)) return;
+        selectedInputs.push(input);
+        selectedNodeIds.add(nodeId);
+    });
     const referenceImages = selectedInputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = selectedInputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
     const referenceAudios = selectedInputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
     const characterReferences = selectedInputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
 
-    if (!hasToken && !textBlocks.length) {
+    if (!hasToken && !textBlocks.length && !selectedInputs.length) {
         return {
             prompt,
             referenceImages: [],

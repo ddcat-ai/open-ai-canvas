@@ -375,6 +375,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots"
                 "--canvas-live-x": `${viewport.x}px`,
                 "--canvas-live-y": `${viewport.y}px`,
                 "--canvas-live-scale": viewport.k,
+                "--canvas-live-inverse-scale": 1 / Math.max(viewport.k, 0.05),
                 "--canvas-committed-scale": viewport.k,
                 "--canvas-live-scale-ratio": 1,
                 "--canvas-grid-size": `${48 * viewport.k}px`,
