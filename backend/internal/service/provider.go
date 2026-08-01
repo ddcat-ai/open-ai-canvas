@@ -225,8 +225,41 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 		if resource.Status != "ready" {
 			return errors.New("任务参考资源尚未上传完成")
 		}
+		// 本地素材自动迁移到 OSS
 		if resource.Provider == "local" {
-			return errors.New("当前 JSON 视频协议的参考素材需要公网可访问地址，请启用 OSS 后重新上传该素材")
+			setting, storageSettingID, useOSS, ossErr := s.activeResourceOSSSetting(userID)
+			if ossErr != nil || !useOSS || setting.Provider != "aliyun" {
+				return errors.New("当前 JSON 视频协议的参考素材需要公网可访问地址，请启用 OSS 后重新上传该素材")
+			}
+			// 读取本地文件并上传到 OSS
+			_, body, readErr := s.OpenResource(userID, resourceID)
+			if readErr != nil {
+				return fmt.Errorf("读取本地素材失败：%w", readErr)
+			}
+			ossKey := ossObjectKey(setting, userID, resource.Kind, filepath.Base(resource.ObjectKey), time.Now())
+			if _, uploadErr := putOSSObject(setting, ossKey, resource.MimeType, resource.Size, body); uploadErr != nil {
+				body.Close()
+				return fmt.Errorf("素材迁移到 OSS 失败：%w", uploadErr)
+			}
+			body.Close()
+			// 更新资源记录
+			resource.Provider = "aliyun"
+			resource.ObjectKey = ossKey
+			resource.Endpoint = setting.Endpoint
+			resource.Bucket = setting.Bucket
+			resource.StorageSettingID = storageSettingID
+			if saveErr := s.repo.SaveResource(resource); saveErr != nil {
+				return fmt.Errorf("更新资源记录失败：%w", saveErr)
+			}
+			// 生成签名 URL
+			signedURL, signErr := signedOSSObjectURL(setting, ossKey, time.Now().Add(providerResourceURLTTL))
+			if signErr != nil {
+				return fmt.Errorf("生成 OSS 签名地址失败：%w", signErr)
+			}
+			media.URL = signedURL
+			media.DataURL = ""
+			media.MimeType = firstNonEmpty(media.MimeType, resource.MimeType)
+			return nil
 		}
 		setting, err := s.ossSettingForResource(userID, resource)
 		if err != nil {
