@@ -65,8 +65,8 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                             }}
                                             className={cn(
                                                 "app-workspace-nav-link relative mb-1 flex shrink-0 items-center rounded-md text-[13px] transition-colors",
-                                                spatialWorkbench ? "h-11" : "h-9",
-                                                mobileSidebarExpanded ? "gap-3 px-2.5" : "justify-center px-0",
+                                                "h-11",
+                                                mobileSidebarExpanded ? "gap-2 px-2" : "justify-center px-0",
                                                 "lg:justify-center lg:px-0",
                                                 active ? "is-active font-medium" : "text-foreground/55 hover:bg-foreground/[0.045] hover:text-foreground/85",
                                             )}

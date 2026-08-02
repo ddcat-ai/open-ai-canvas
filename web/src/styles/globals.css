@@ -663,12 +663,14 @@
 
     .app-workspace-nav-link.is-active::before {
         position: absolute;
-        left: -8px;
+        left: 0;
+        top: 50%;
         width: 2px;
         height: 18px;
         border-radius: 0 2px 2px 0;
         background: var(--workspace-accent);
         content: "";
+        transform: translateY(-50%);
     }
 
     .app-workspace-icon-button {
@@ -2302,7 +2304,6 @@
             color: var(--foreground);
             font-size: 10px;
         }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link > svg { width: 20px; height: 20px; }
         .app-workspace-shell.is-spatial .app-workspace-nav-link > span { display: block !important; font-size: 10px; line-height: 1.1; }
         .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active { background: transparent; color: var(--foreground); box-shadow: none; }
         .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before { display: none; }

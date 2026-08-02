@@ -51,7 +51,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
             {user ? (
                 <SystemAnnouncementCenter
                     userId={user.id}
-                    className={cn("relative mb-1 flex h-9 w-full items-center rounded-md text-xs text-foreground/55 transition-colors hover:bg-foreground/[.05] hover:text-foreground", collapsedClassName)}
+                    className={cn("relative mb-1 flex h-11 w-full items-center rounded-md text-xs text-foreground/55 transition-colors hover:bg-foreground/[.05] hover:text-foreground", collapsedClassName)}
                     showLabel
                     labelClassName={expandedClassName}
                     staticMotion
@@ -92,7 +92,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                         </div>
                     )}
                 >
-                    <button type="button" className={cn("flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-foreground/[.045]", accountClassName)} title={`${user.displayName || user.username} · ${balance} 积分`}>
+                    <button type="button" className={cn("flex h-11 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-foreground/[.045]", accountClassName)} title={`${user.displayName || user.username} · ${balance} 积分`}>
                         <UserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
                             <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
@@ -102,7 +102,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     </button>
                 </Popover>
             ) : (
-                <Link to="/login" className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-foreground/[.05] hover:text-foreground", collapsedClassName)} title="登录">
+                <Link to="/login" className={cn("flex h-11 items-center rounded-md text-xs text-foreground/65 hover:bg-foreground/[.05] hover:text-foreground", collapsedClassName)} title="登录">
                     <LogIn className="size-4 shrink-0" /><span className={expandedClassName}>登录</span>
                 </Link>
             )}
