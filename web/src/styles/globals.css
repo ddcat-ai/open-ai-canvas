@@ -2842,16 +2842,81 @@
         margin: 0;
     }
 
+    .auth-card-tabs .ant-tabs-nav::before {
+        display: none;
+    }
+
     .auth-card-tabs .ant-tabs-nav-list {
         width: 100%;
     }
 
     .auth-card-tabs .ant-tabs-tab {
+        position: relative;
         flex: 1;
         justify-content: center;
         margin: 0 !important;
-        padding: 12px 0;
-        font-weight: 600;
+        padding: 8px 0 12px !important;
+        color: rgba(255, 255, 255, 0.38);
+        font-weight: 500;
+        transition: color var(--motion-instant) ease-out;
+    }
+
+    .auth-card-tabs .ant-tabs-tab:hover {
+        color: rgba(255, 255, 255, 0.68);
+    }
+
+    .auth-card-tabs .ant-tabs-tab-active::after {
+        position: absolute;
+        bottom: 3px;
+        left: 50%;
+        width: 20px;
+        height: 2px;
+        border-radius: 1px;
+        background: rgba(255, 255, 255, 0.82);
+        content: "";
+        transform: translateX(-50%);
+    }
+
+    .auth-card-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+        color: rgba(255, 255, 255, 0.94) !important;
+        text-shadow: none;
+    }
+
+    .auth-card-tabs .ant-tabs-tab-btn:focus-visible {
+        border-radius: 3px;
+        outline: 1px solid rgba(255, 255, 255, 0.48);
+        outline-offset: 3px;
+    }
+
+    .auth-card-tabs .ant-tabs-ink-bar {
+        display: none;
+    }
+
+    .auth-card-dark :where(.ant-input, .ant-input-affix-wrapper) {
+        border-color: transparent !important;
+        background: rgba(255, 255, 255, 0.055) !important;
+        box-shadow: none !important;
+        transition: border-color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out !important;
+    }
+
+    .auth-card-dark .ant-input-affix-wrapper > .ant-input {
+        background: transparent !important;
+    }
+
+    .auth-card-dark :where(.ant-input:hover, .ant-input-affix-wrapper:hover) {
+        border-color: rgba(255, 255, 255, 0.08) !important;
+        background: rgba(255, 255, 255, 0.07) !important;
+    }
+
+    .auth-card-dark :where(.ant-input:focus, .ant-input-focused, .ant-input-affix-wrapper-focused) {
+        border-color: transparent !important;
+        background: rgba(255, 255, 255, 0.085) !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    .auth-card-dark .ant-input-affix-wrapper-focused .ant-input-prefix svg {
+        color: rgba(255, 255, 255, 0.62) !important;
     }
 
     .auth-card-dark input:-webkit-autofill,

@@ -28,6 +28,7 @@ func Models() []any {
 		&model.SystemSetting{},
 		&model.UserOSSSetting{},
 		&model.UserDailyUploadUsage{},
+		&model.Skill{},
 		&model.UserSkillState{},
 		&model.Resource{},
 		&model.Asset{},
@@ -61,6 +62,12 @@ func Models() []any {
 }
 
 func MigrateSchema(db *gorm.DB) error {
+	// 旧表只保存 Updream 目录状态，与本地技能主键没有可迁移关系；首次升级时按产品要求清空重建。
+	if db.Migrator().HasColumn(&model.UserSkillState{}, "skill_dir") && !db.Migrator().HasColumn(&model.UserSkillState{}, "skill_id") {
+		if err := db.Migrator().DropTable(&model.UserSkillState{}); err != nil {
+			return err
+		}
+	}
 	if err := db.AutoMigrate(Models()...); err != nil {
 		return err
 	}

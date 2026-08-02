@@ -1467,29 +1467,3 @@ func (r *Repository) SaveStoryboardPromptTemplate(template *model.StoryboardProm
 func (r *Repository) DeleteStoryboardPromptTemplate(id string) error {
 	return r.db.Delete(&model.StoryboardPromptTemplate{}, "id = ?", id).Error
 }
-
-func (r *Repository) UserSkillState(userID string, skillDir string) (*model.UserSkillState, error) {
-	var state model.UserSkillState
-	if err := r.db.First(&state, "user_id = ? AND skill_dir = ?", userID, skillDir).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &state, nil
-}
-
-func (r *Repository) UserSkillStates(userID string) ([]model.UserSkillState, error) {
-	var states []model.UserSkillState
-	err := r.db.Order("updated_at desc").Find(&states, "user_id = ?", userID).Error
-	return states, err
-}
-
-func (r *Repository) UserSkillStatesByDirs(userID string, skillDirs []string) ([]model.UserSkillState, error) {
-	if len(skillDirs) == 0 {
-		return nil, nil
-	}
-	var states []model.UserSkillState
-	err := r.db.Find(&states, "user_id = ? AND skill_dir IN ?", userID, skillDirs).Error
-	return states, err
-}

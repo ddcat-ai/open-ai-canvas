@@ -3,113 +3,124 @@ import axios from "axios";
 import { compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
 import type { BackendEnvelope } from "@/services/api/task-center";
 
-const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
-const api = axios.create({ baseURL: apiBaseURL, withCredentials: true });
+const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
 
-export type UpdreamSkillSort = "hot" | "top_rated" | "new";
+export type SkillSort = "popular" | "new" | "updated";
+export type SkillScope = "public" | "mine" | "created" | "favorites";
+export type SkillMediaType = "image" | "video";
 
-export type UpdreamSkill = {
-    dir: string;
-    name: string;
-    description: string;
-    icon_url: string;
-    cover_url: string;
-    detail_content: string;
-    detail_text: string;
-    categories: string[];
-    version: number;
-    uploader_id: number;
-    uploader_name: string;
-    uploader_avatar: string;
-    is_private: boolean;
-    review_status: string;
-    ctime: string;
-    mtime: string;
-    featured_label?: string;
-    activation_count: number;
-    like_count: number;
-    usage_count: number;
-    comment_count: number;
-    rating_count: number;
-    avg_rating: number | null;
-    hot_score?: number;
-    liked: boolean;
-    activated: boolean;
-    user_rating?: number | null;
-    share_scope?: string;
-    share_team_id?: unknown;
+export type SkillShowcaseMedia = {
+    type: SkillMediaType;
+    showcase_uri: string;
+    showcase_url: string;
 };
 
-export type CommunitySkillList = {
-    skills: UpdreamSkill[];
-    total: number;
+export type Skill = {
+    skill_id: string;
+    skill_name: string;
+    description: string;
+    instruction?: string;
+    status: number;
+    markdown_url: string;
+    create_time: number;
+    update_time: number;
+    source: number;
+    tag: string;
+    sort_weight: number;
+    is_private: boolean;
+    like_count: number;
+    is_like: boolean;
+    owner_uid: string;
+    effective_user: { name: string; avatar_url: string; uid: string };
+    original_skill_id: string | null;
+    showcase_media: SkillShowcaseMedia[];
+    added_count: number;
+    is_test: boolean;
+    extra_info: string;
+    is_added: boolean;
+    is_owner: boolean;
+};
+
+export type SkillCategory = { value: string; label: string };
+
+export type SkillList = {
+    skills: Skill[];
+    total_count: number;
+    has_more: boolean;
+    next_offset: number;
     page: number;
     page_size: number;
-    categories: string[];
+    categories: SkillCategory[];
 };
 
-export type SkillIntegrationCapabilities = {
-    provider: "updream";
-    publicCommunity: boolean;
-    categoryFilter: boolean;
-    publicRankings: boolean;
-    privateAuthorization: "not_configured" | "configured";
-    upload: boolean;
-    comments: boolean;
-};
-
-export type ListCommunitySkillsInput = {
+export type ListSkillsInput = {
     page?: number;
     page_size?: number;
-    sort?: UpdreamSkillSort;
+    scope?: SkillScope;
+    sort?: SkillSort;
     search?: string;
-    categories?: string[];
+    tag?: string;
+};
+
+export type SkillMutationInput = {
+    skill_name: string;
+    description: string;
+    instruction: string;
+    tag: string;
+    is_private: boolean;
+    markdown_url: string;
+    showcase_media: SkillShowcaseMedia[];
+    extra_info: string;
 };
 
 async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    const response = await promise;
-    if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-    return response.data.data;
+    try {
+        const response = await promise;
+        if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
+        return response.data.data;
+    } catch (error) {
+        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data?.msg || error.message || "请求失败");
+        throw error;
+    }
 }
 
-export function listCommunitySkills(input: ListCommunitySkillsInput = {}) {
+export function listSkills(input: ListSkillsInput = {}) {
     const params = serializeApiParams(compactApiParams(input as ApiParams));
-    return request<CommunitySkillList>(api.get(`/skills/community?${params.toString()}`));
+    return request<SkillList>(api.get(`/skills?${params.toString()}`));
 }
 
-export function getSkillIntegrationCapabilities() {
-    return request<{ capabilities: SkillIntegrationCapabilities }>(api.get("/skills/capabilities"));
+export function getSkill(id: string) {
+    return request<{ skill: Skill }>(api.get(`/skills/${encodeURIComponent(id)}`));
 }
 
-export function getCommunitySkill(dir: string) {
-    return request<{ skill: UpdreamSkill }>(api.get(`/skills/community/${encodeURIComponent(dir)}`));
+export function listAddedSkills() {
+    return request<{ skills: Skill[] }>(api.get("/skills/added"));
 }
 
-export function listActivatedSkills() {
-    return request<{ skills: UpdreamSkill[] }>(api.get("/skills/activated"));
+export function createSkill(input: SkillMutationInput) {
+    return request<{ skill: Skill }>(api.post("/skills", input));
 }
 
-export function listFavoriteSkills() {
-    return request<{ skills: UpdreamSkill[] }>(api.get("/skills/favorites"));
+export function updateSkill(id: string, input: SkillMutationInput) {
+    return request<{ skill: Skill }>(api.put(`/skills/${encodeURIComponent(id)}`, input));
 }
 
-export function activateSkill(dir: string) {
-    return request<{ skill: UpdreamSkill }>(api.post(`/skills/${encodeURIComponent(dir)}/activate`));
+export function deleteSkill(id: string) {
+    return request<{ deleted: boolean }>(api.delete(`/skills/${encodeURIComponent(id)}`));
 }
 
-export function deactivateSkill(dir: string) {
-    return request<{ skill: UpdreamSkill }>(api.delete(`/skills/${encodeURIComponent(dir)}/activate`));
+export function addSkill(id: string) {
+    return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/add`));
 }
 
-export function favoriteSkill(dir: string) {
-    return request<{ skill: UpdreamSkill }>(api.post(`/skills/${encodeURIComponent(dir)}/favorite`));
+export function removeSkill(id: string) {
+    return request<{ skill: Skill }>(api.delete(`/skills/${encodeURIComponent(id)}/add`));
 }
 
-export function unfavoriteSkill(dir: string) {
-    return request<{ skill: UpdreamSkill }>(api.delete(`/skills/${encodeURIComponent(dir)}/favorite`));
+export function likeSkill(id: string) {
+    return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/like`));
 }
 
-export function skillImageUrl(value?: string) {
-    if (!value || !/^https?:\/\//i.test(value)) return value || "";
-    return `${apiBaseURL.replace(/\/$/, "")}/skills/image?url=${encodeURIComponent(value)}`;
+export function unlikeSkill(id: string) {
+    return request<{ skill: Skill }>(api.delete(`/skills/${encodeURIComponent(id)}/like`));
 }

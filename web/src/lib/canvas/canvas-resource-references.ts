@@ -1,6 +1,6 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
-import type { UpdreamSkill } from "@/services/api/skills";
+import type { Skill } from "@/services/api/skills";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 export type CanvasResourceKind = "image" | "video" | "audio" | "text" | "skill" | "character";
@@ -16,11 +16,11 @@ export type CanvasResourceReference = {
     text?: string;
     active: boolean;
     sourceType?: CanvasNodeType;
-    skill?: UpdreamSkill;
+    skill?: Skill;
 };
 
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
-    if (reference.kind === "skill" && reference.skill?.dir) return `@[skill:${reference.skill.dir}]`;
+    if (reference.kind === "skill" && reference.skill?.skill_id) return `@[skill:${reference.skill.skill_id}]`;
     return `@[node:${reference.nodeId}]`;
 }
 
