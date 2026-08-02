@@ -124,7 +124,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                         window.requestAnimationFrame(() => triggerRef.current?.focus());
                                     }}
                                 >
-                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} />
+                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} />
                                     {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                 </button>
                             );
@@ -182,7 +182,7 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
-function ModelLabel({ config, model, capability, theme }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+function ModelLabel({ config, model, capability, theme, creationVariant }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; creationVariant: boolean }) {
     const meta = modelMenuMeta(model, capability);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
