@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Tag, Tooltip } from "antd";
-import { ArrowLeft, Boxes, CircleCheck, Cloud, Info, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -55,6 +55,7 @@ export default function SettingsPage() {
     const requestedSection = searchParams.get("section");
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isConfigSection(requestedSection) ? requestedSection : "channels");
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
+    const [collapsedChannelIds, setCollapsedChannelIds] = useState<Set<string>>(new Set());
     const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
@@ -144,6 +145,15 @@ export default function SettingsPage() {
 
     const setChannelLoading = (id: string, loading: boolean) => {
         setLoadingChannelIds((items) => (loading ? Array.from(new Set([...items, id])) : items.filter((item) => item !== id)));
+    };
+
+    const toggleChannelCollapsed = (id: string) => {
+        setCollapsedChannelIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
     };
 
     const refreshChannelModels = async (channel: ModelChannel) => {
@@ -327,6 +337,17 @@ export default function SettingsPage() {
                                                             >
                                                                 拉取模型
                                                             </Button>
+                                                            <Tooltip title={collapsedChannelIds.has(channel.id) ? "\u5c55\u5f00\u6e20\u9053\u914d\u7f6e" : "\u6536\u8d77\u6e20\u9053\u914d\u7f6e"}>
+                                                                <Button
+                                                                    className="size-10 p-0 sm:size-8"
+                                                                    size="small"
+                                                                    aria-label={`${collapsedChannelIds.has(channel.id) ? "\u5c55\u5f00" : "\u6536\u8d77"}\u6e20\u9053\u914d\u7f6e ${channel.name || "\u672a\u547d\u540d\u6e20\u9053"}`}
+                                                                    aria-expanded={!collapsedChannelIds.has(channel.id)}
+                                                                    aria-controls={`channel-${channel.id}-details`}
+                                                                    icon={collapsedChannelIds.has(channel.id) ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                                                                    onClick={() => toggleChannelCollapsed(channel.id)}
+                                                                />
+                                                            </Tooltip>
                                                             <Popconfirm title="删除自定义渠道？" description="该渠道关联的模型选择会同时移除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
                                                                 <Tooltip title="删除渠道">
                                                                     <Button
@@ -341,6 +362,7 @@ export default function SettingsPage() {
                                                             </Popconfirm>
                                                         </div>
                                                     </div>
+                                                    <div id={`channel-${channel.id}-details`} hidden={collapsedChannelIds.has(channel.id)}>
                                                     <div className="grid gap-x-3 gap-y-2 lg:grid-cols-12">
                                                         <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 lg:col-span-3">
                                                             <Input
@@ -397,6 +419,7 @@ export default function SettingsPage() {
                                                         </div>
                                                     </div>
                                                     <ChannelModelSettings channel={channel} onChange={(modelCosts) => updateChannel(channel.id, { modelCosts })} />
+                                                    </div>
                                                 </section>
                                             ))}
                                         </div>
