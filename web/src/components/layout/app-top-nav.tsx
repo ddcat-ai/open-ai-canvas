@@ -1,5 +1,5 @@
 import { Infinity as InfinityIcon } from "lucide-react";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
@@ -12,12 +12,27 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
+    const scrollRef = useRef<HTMLElement>(null);
+    const [scrollState, setScrollState] = useState({
+        hasTopFade: false,
+        hasBottomFade: false,
+    });
     const hideChrome = pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname);
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
     const creationWorkspace = pathname === "/create";
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
     const visibleNavigationTools = spatialWorkbench ? navigationTools : navigationTools.filter((tool) => tool.section === "创作空间");
+
+    const handleScroll = () => {
+        const element = scrollRef.current;
+        if (!element) return;
+        const { scrollTop, scrollHeight, clientHeight } = element;
+        setScrollState({
+            hasTopFade: scrollTop > 0,
+            hasBottomFade: scrollTop + clientHeight < scrollHeight - 1,
+        });
+    };
 
     useEffect(() => {
         const handleWorkspaceNavigation = (rawEvent: Event) => {
@@ -29,6 +44,11 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
         window.addEventListener("workspace:navigate", handleWorkspaceNavigation);
         return () => window.removeEventListener("workspace:navigate", handleWorkspaceNavigation);
     }, [navigate]);
+
+    useEffect(() => {
+        // 初始化滚动状态
+        handleScroll();
+    }, [visibleNavigationTools.length, mobileSidebarExpanded]);
 
     return (
         <>
@@ -49,7 +69,15 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                             </Link>
                         </div>
 
-                        <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-3">
+                        <nav
+                            ref={scrollRef}
+                            onScroll={handleScroll}
+                            className={cn(
+                                "app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col px-2 py-3",
+                                scrollState.hasTopFade && "has-top-fade",
+                                scrollState.hasBottomFade && "has-bottom-fade",
+                            )}
+                        >
                             {visibleNavigationTools.map((tool, index) => {
                                 const Icon = tool.icon;
                                 const active = tool.slug === activeToolSlug;
