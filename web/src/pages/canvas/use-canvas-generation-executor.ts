@@ -183,6 +183,7 @@ export function useCanvasGenerationExecutor({
                 nodeId,
                 sourceNode,
                 canvasNodes: nodesRef.current,
+                canvasConnections: connectionsRef.current,
                 prompt,
                 effectivePrompt,
                 generationConfig,
