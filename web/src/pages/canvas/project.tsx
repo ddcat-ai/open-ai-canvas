@@ -106,6 +106,7 @@ import {
     type StoryboardShotDuration,
     type CanvasWorkflowKind,
     type CanvasWorkspaceMode,
+    type CanvasToolMode,
     type ContextMenuState,
     type Position,
     type ViewportTransform,
@@ -204,6 +205,7 @@ function InfiniteCanvasPage() {
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("dots");
     const [showImageInfo, setShowImageInfo] = useState(false);
+    const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("move");
     const [mediaPerformanceMode, setMediaPerformanceMode] = useState<CanvasMediaPerformanceMode>(readCanvasMediaPerformanceMode);
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [workspaceMode, setWorkspaceMode] = useState<CanvasWorkspaceMode>(readCanvasWorkspaceMode);
@@ -700,6 +702,7 @@ function InfiniteCanvasPage() {
         onNodeInteractionStart: handleNodeInteractionStart,
         onNodeClick: handleSelectedNodeClick,
         onDeselect: handleCanvasDeselect,
+        onSelectionBoxEnd: () => setCanvasTool((tool) => (tool === "box-select" ? "move" : tool)),
     });
 
     const keepNodeToolbar = useCallback(
@@ -1430,6 +1433,7 @@ function InfiniteCanvasPage() {
                     onViewportChange={handleViewportChange}
                     onViewportPreviewChange={handleViewportPreviewChange}
                     onCanvasMouseDown={handleCanvasMouseDown}
+                    boxSelectEnabled={canvasTool === "box-select"}
                     onCanvasDoubleClick={handleCanvasDoubleClick}
                     onCanvasDeselect={deselectCanvas}
                     onContextMenu={handleCanvasContextMenu}
@@ -1568,6 +1572,8 @@ function InfiniteCanvasPage() {
                 <CanvasToolbar
                     selectedCount={selectedNodeIds.size}
                     workspaceMode={workspaceMode}
+                    canvasTool={canvasTool}
+                    onToolChange={setCanvasTool}
                     isProjectLinked={Boolean(currentProject?.projectId)}
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}

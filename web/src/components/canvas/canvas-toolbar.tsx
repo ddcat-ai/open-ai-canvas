@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Segmented, Switch } from "antd";
-import { CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Pencil, Plus, Redo2, Square, Sun, Trash2, Type, Undo2, UploadCloud, UserRound, Video, X } from "lucide-react";
+import { CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Pencil, Plus, Redo2, Square, SquareDashedMousePointer, Sun, Trash2, Type, Undo2, UploadCloud, UserRound, Video, X } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
@@ -11,11 +11,13 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasWorkspaceMode } from "@/types/canvas";
+import type { CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
     selectedCount,
     workspaceMode,
+    canvasTool,
+    onToolChange,
     isProjectLinked,
     canUndo,
     canRedo,
@@ -43,6 +45,8 @@ export function CanvasToolbar({
 }: {
     selectedCount: number;
     workspaceMode: CanvasWorkspaceMode;
+    canvasTool: CanvasToolMode;
+    onToolChange: (tool: CanvasToolMode) => void;
     isProjectLinked: boolean;
     canUndo: boolean;
     canRedo: boolean;
@@ -96,7 +100,8 @@ export function CanvasToolbar({
     }, [addOpen, appearanceOpen]);
 
     const items: FloatingDockEntry[] = [
-        { id: selectedCount ? "tool-close-selection" : "tool-hand", label: selectedCount ? `取消选择${selectedCount > 1 ? ` ${selectedCount} 个节点` : ""}` : "移动与选择", icon: selectedCount ? <X /> : <Hand />, active: !selectedCount, onClick: () => onDeselect() },
+        { id: canvasTool === "box-select" ? "tool-move" : selectedCount ? "tool-close-selection" : "tool-move", label: canvasTool === "box-select" ? "移动与选择" : selectedCount ? `取消选择${selectedCount > 1 ? ` ${selectedCount} 个节点` : ""}` : "移动与选择", icon: canvasTool === "box-select" ? <Hand /> : selectedCount ? <X /> : <Hand />, active: canvasTool === "move", onClick: () => { if (canvasTool !== "move") onToolChange("move"); else onDeselect(); } },
+        { id: "tool-box-select", label: "框选", icon: <SquareDashedMousePointer />, active: canvasTool === "box-select", onClick: () => onToolChange(canvasTool === "box-select" ? "move" : "box-select") },
         { kind: "separator", id: "history-separator" },
         { id: "tool-undo", label: "撤销", icon: <Undo2 />, disabled: !canUndo, onClick: () => onUndo() },
         { id: "tool-redo", label: "重做", icon: <Redo2 />, disabled: !canRedo, onClick: () => onRedo() },

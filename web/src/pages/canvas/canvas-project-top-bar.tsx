@@ -218,6 +218,7 @@ export function CanvasTopBar({
                     <Shortcut keys={["滚轮"]} value="缩放画布" />
                     <Shortcut keys={["缩放滑杆"]} value="精确调整缩放" />
                     <Shortcut keys={["Shift / Ctrl / Cmd + 左键拖动"]} value="框选多个节点" />
+                    <Shortcut keys={["工具栏「框选」", "左键拖动"]} value="框选多个节点，完成后自动回到「移动与选择」" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
                     <Shortcut keys={["Alt", "点击 / 框选"]} value="移除选择节点" />
                     <Shortcut keys={["Ctrl / Cmd", "1 / 2 / 3"]} value="100% / 适应全部 / 适应选择" />
