@@ -333,7 +333,9 @@ export function modelOptionName(value: string) {
 export function modelDisplayName(config: AiConfig, value: string) {
     const model = modelOptionName(value);
     const channel = resolveModelChannel(config, value);
-    return channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim() || model;
+    const displayName = channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim();
+    if (displayName) return displayName;
+    return channel.scope === "system" ? "系统模型" : model;
 }
 
 export function modelOptionLabel(config: AiConfig, value: string) {

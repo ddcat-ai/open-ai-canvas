@@ -124,7 +124,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                         window.requestAnimationFrame(() => triggerRef.current?.focus());
                                     }}
                                 >
-                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} />
+                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} />
                                     {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                 </button>
                             );
@@ -182,7 +182,7 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
-function ModelLabel({ config, model, capability, theme, creationVariant }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; creationVariant: boolean }) {
+function ModelLabel({ config, model, capability, theme }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const meta = modelMenuMeta(model, capability);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
@@ -191,7 +191,7 @@ function ModelLabel({ config, model, capability, theme, creationVariant }: { con
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelDisplayName(config, model)}</span>
-                <span className="mt-1 block truncate text-[10px]" style={{ color: theme.node.muted }} title={`${modelOptionName(model)} · ${meta.description}`}>{creationVariant ? meta.description : `${modelOptionName(model)} · ${meta.description}`}</span>
+                <span className="mt-1 block truncate text-[10px]" style={{ color: theme.node.muted }} title={meta.description}>{meta.description}</span>
             </span>
             <ModelPrice price={modelMenuPrice(config, model)} />
             {!creationVariant && meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}

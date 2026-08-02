@@ -154,11 +154,12 @@ export default function CanvasPage() {
                 />
 
                 <ListToolbar
+                    className="canvas-library-toolbar"
                     active={Boolean(keyword || projectFilter !== "all" || sort !== "updated")}
                     trailing={<span className="text-xs tabular-nums text-foreground/42">显示 {visibleProjects.length} / {filteredProjects.length}</span>}
                     onReset={() => { setKeyword(""); setProjectFilter("all"); setSort("updated"); setPage(1); }}
                 >
-                    <div className="min-w-[220px] flex-1 sm:max-w-[380px]">
+                    <div className="canvas-library-search min-w-[220px] flex-[1_1_420px]">
                         <Input allowClear className="w-full" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索画布" aria-label="搜索画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
                     </div>
                     <Select aria-label="按所属项目筛选" className="w-[168px]" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部项目", value: "all" }, { label: "自由画布", value: "independent" }, ...(projectQuery.data?.projects || []).map(({ project }) => ({ label: project.name, value: project.id }))]} />
@@ -178,7 +179,7 @@ export default function CanvasPage() {
                 {!hydrated ? (
                     <WorkspaceLoadingState label="正在恢复画布" detail="读取本地缓存与账号同步状态" />
                 ) : visibleProjects.length ? (
-                    <CollectionGrid className="sm:grid-cols-[repeat(auto-fill,minmax(272px,320px))] sm:justify-start">
+                    <CollectionGrid className="canvas-library-grid">
                         {visibleProjects.map((project) => (
                             <CanvasProjectCard key={project.id} project={project} projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined} />
                         ))}

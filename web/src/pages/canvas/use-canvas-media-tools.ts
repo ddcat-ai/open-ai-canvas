@@ -24,6 +24,7 @@ import { compositeEmotionImage, emotionGenerationSize } from "@/lib/canvas/canva
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { captureVideoLastFrame } from "@/lib/canvas/canvas-video-frame";
 import { mergeVideos, type MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { getMediaBlob } from "@/services/file-storage";
@@ -349,7 +350,7 @@ export function useCanvasMediaTools({
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item));
         } catch (error) {
             if (isGenerationCanceled(error)) return;
-            const details = error instanceof Error ? error.message : "局部修改失败";
+            const details = generationErrorMessage(error);
             message.error(details);
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
         } finally {
@@ -402,7 +403,7 @@ export function useCanvasMediaTools({
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item));
         } catch (error) {
             if (isGenerationCanceled(error)) return;
-            const details = error instanceof Error ? error.message : "生成失败";
+            const details = generationErrorMessage(error);
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
         } finally {
             finishGenerationRequest(childId, controller);
@@ -455,7 +456,7 @@ export function useCanvasMediaTools({
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt: payload.prompt, ...generationMetadata, emotionEdit } } : item));
         } catch (error) {
             if (isGenerationCanceled(error)) return;
-            const details = error instanceof Error ? error.message : "表情生成失败";
+            const details = generationErrorMessage(error);
             message.error(details);
             setNodes((current) => current.map((item) => item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : item));
         } finally { finishGenerationRequest(childId, controller); setRunningNodeId(null); }

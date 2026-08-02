@@ -11,6 +11,7 @@ import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal
 import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { checkinCredits, getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
+import { modelDisplayName, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 
 type LedgerFilter = "all" | "income" | "consume" | "refund";
 
@@ -25,6 +26,7 @@ export default function WalletPage() {
     const { message } = App.useApp();
     const screens = Grid.useBreakpoint();
     const reducedMotion = useReducedMotion();
+    const config = useEffectiveConfig();
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
     const [code, setCode] = useState("");
     const [filter, setFilter] = useState<LedgerFilter>("all");
@@ -99,8 +101,8 @@ export default function WalletPage() {
             width: 400,
             ellipsis: true,
             render: (_, entry) => (
-                <div className="min-w-0 max-w-full overflow-hidden" title={[entry.model || ledgerTitle(entry), [sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}>
-                    <div className="truncate font-medium">{entry.model || ledgerTitle(entry)}</div>
+                <div className="min-w-0 max-w-full overflow-hidden" title={[ledgerModelName(config, entry), [sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}>
+                    <div className="truncate font-medium">{ledgerModelName(config, entry)}</div>
                     <div className="mt-1 truncate text-xs text-foreground/50">{[sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ") || "无补充说明"}</div>
                 </div>
             ),
@@ -206,7 +208,7 @@ export default function WalletPage() {
                             <Table className="app-data-table wallet-ledger-table" rowKey="id" size="middle" loading={loading} columns={columns} dataSource={entries} pagination={false} tableLayout="fixed" scroll={{ x: 990 }} />
                         </TableSurface>
                     ) : (
-                        <div className="overflow-hidden rounded-md border border-border/70 bg-background">{entries.length ? entries.map((entry) => <LedgerMobileRow key={entry.id} entry={entry} />) : <WorkspaceState compact icon="wallet" title="没有匹配的积分记录" description="切换流水类型，或完成一次生成后再回来查看。" />}</div>
+                        <div className="overflow-hidden rounded-md border border-border/70 bg-background">{entries.length ? entries.map((entry) => <LedgerMobileRow key={entry.id} config={config} entry={entry} />) : <WorkspaceState compact icon="wallet" title="没有匹配的积分记录" description="切换流水类型，或完成一次生成后再回来查看。" />}</div>
                     )}
                     <PaginationBar
                         current={page}
@@ -237,7 +239,7 @@ function BalanceMetric({ label, description, value, icon }: { label: string; des
     );
 }
 
-function LedgerMobileRow({ entry }: { entry: CreditLedgerEntry }) {
+function LedgerMobileRow({ config, entry }: { config: AiConfig; entry: CreditLedgerEntry }) {
     const meta = ledgerTypeMeta(entry.type);
     return (
         <article className="flex items-start gap-3 border-b border-border px-4 py-4 last:border-b-0">
@@ -245,7 +247,7 @@ function LedgerMobileRow({ entry }: { entry: CreditLedgerEntry }) {
             <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{entry.model || ledgerTitle(entry)}</div>
+                        <div className="truncate text-sm font-medium">{ledgerModelName(config, entry)}</div>
                         <div className="mt-1 text-xs text-foreground/45">{formatTime(entry.createdAt)}</div>
                     </div>
                     <CreditDelta value={entry.amountMicrocredits} />
@@ -296,6 +298,10 @@ function ledgerTitle(entry: CreditLedgerEntry) {
     if (entry.type === "signup_bonus") return "新用户注册奖励";
     if (entry.type === "checkin_bonus") return "每日签到奖励";
     return entry.note || "积分调整";
+}
+
+function ledgerModelName(config: AiConfig, entry: CreditLedgerEntry) {
+    return entry.model ? modelDisplayName(config, entry.model) : ledgerTitle(entry);
 }
 
 function sceneLabel(scene?: string) {
