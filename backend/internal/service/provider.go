@@ -1278,6 +1278,10 @@ func normalizeNewAPIChannel2Resolution(value string, modelName string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "480", "480p", "low":
 		return "480p"
+	case "1080", "1080p":
+		return "1080p"
+	case "2160", "2160p", "4k":
+		return "2160p"
 	default:
 		return "720p"
 	}
@@ -2313,6 +2317,9 @@ func normalizeVideoResolution(value string) string {
 	if value == "low" {
 		return "480p"
 	}
+	if strings.EqualFold(value, "4k") {
+		return "2160p"
+	}
 	if strings.HasSuffix(value, "p") {
 		return value
 	}
@@ -2333,6 +2340,8 @@ func normalizeXAIVideoResolution(value string) string {
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "2160", "2160p", "4k":
+		return "2160p"
 	default:
 		return "720p"
 	}
@@ -2422,8 +2431,11 @@ func normalizeSeedanceVideosRatio(value string) string {
 
 func normalizeSeedanceResolution(value string, model string) string {
 	resolution := strings.TrimSuffix(strings.TrimSpace(value), "p")
+	if strings.EqualFold(resolution, "4k") {
+		resolution = "2160"
+	}
 	switch resolution {
-	case "480", "720", "1080":
+	case "480", "720", "1080", "2160":
 	default:
 		if value == "low" {
 			resolution = "480"
@@ -2431,7 +2443,7 @@ func normalizeSeedanceResolution(value string, model string) string {
 			resolution = "720"
 		}
 	}
-	if strings.Contains(strings.ToLower(model), "fast") && resolution == "1080" {
+	if strings.Contains(strings.ToLower(model), "fast") && (resolution == "1080" || resolution == "2160") {
 		resolution = "720"
 	}
 	return resolution + "p"

@@ -18,6 +18,7 @@ import RegisterPage from "@/pages/auth/register";
 import CanvasPage from "@/pages/canvas";
 import CanvasProjectPage from "@/pages/canvas/project";
 import SharedCanvasPage from "@/pages/canvas/shared";
+import CreatePage from "@/pages/create";
 import HomePage from "@/pages/home";
 import NotFound from "@/pages/not-found";
 import RouteErrorPage from "@/pages/route-error";
@@ -46,7 +47,9 @@ export const router = createBrowserRouter([
         ),
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/", element: <HomePage /> },
+            { path: "/", element: <Navigate to="/create" replace /> },
+            { path: "/create", element: <RequireAuth><CreatePage /></RequireAuth> },
+            { path: "/home", element: <HomePage /> },
             { path: "/tasks", element: <RequireAuth><TasksPage /></RequireAuth> },
             { path: "/assets", element: <RequireAuth><AssetsPage /></RequireAuth> },
             { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
