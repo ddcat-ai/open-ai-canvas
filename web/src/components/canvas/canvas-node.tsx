@@ -559,7 +559,7 @@ function DrawingContent({ node, theme, drawingProjectId }: NodeContentRendererPr
             )}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 px-4 pb-3 pt-12" style={{ background: `linear-gradient(to top, ${theme.node.fill}, ${theme.node.fill}e6 55%, transparent)` }}>
                 <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold">{node.title || "绘图"}</div>
+                    <div className="truncate text-xs font-semibold" title={node.title || "绘图"}>{node.title || "绘图"}</div>
                     <div className="mt-0.5 text-[10px]" style={{ color: theme.node.muted }}>{shapeCount} 个图形 · {pageCount} 个页面</div>
                 </div>
                 <Pencil className="size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
@@ -723,7 +723,7 @@ function SkillContent({ node, theme }: NodeContentRendererProps) {
                             <BookOpenCheck className="size-4" />
                         </span>
                         <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold">{skill?.name || node.title || "技能"}</div>
+                            <div className="truncate text-sm font-semibold" title={skill?.name || node.title || "技能"}>{skill?.name || node.title || "技能"}</div>
                             <div className="mt-0.5 flex items-center gap-1.5 text-[11px]" style={{ color: theme.node.muted }}>
                                 <span>{skillCategoryLabel(skill?.category)}</span>
                                 <span>·</span>
@@ -870,7 +870,7 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
             </div>
             {isCharacterReference ? (
                 <div className="max-w-[80%] text-center">
-                    <div className="truncate text-xs font-medium" style={{ color: theme.node.muted }}>{node.metadata?.characterName || node.title}</div>
+                    <div className="truncate text-xs font-medium" title={node.metadata?.characterName || node.title} style={{ color: theme.node.muted }}>{node.metadata?.characterName || node.title}</div>
                     <div className="mt-1 text-[10px] tracking-[0.12em] opacity-50">多视角参考 · 待生成</div>
                 </div>
             ) : <span className="text-[10px] tracking-[0.18em] opacity-50">空图片节点</span>}
@@ -924,7 +924,7 @@ function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
         <div className="flex h-full w-full flex-col justify-center gap-3 px-4" style={{ background: theme.node.fill, color: theme.node.text }}>
             <div className="flex min-w-0 items-center gap-2 text-sm opacity-70">
                 <Music2 className="size-4 shrink-0" />
-                <span className="truncate">{node.title || "音频"}</span>
+                <span className="min-w-0 truncate" title={node.title || "音频"}>{node.title || "音频"}</span>
             </div>
             <audio ref={audioRef} src={url} controls preload="metadata" className="w-full" data-canvas-no-zoom />
         </div>
@@ -1140,7 +1140,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
 
     return (
         <div
-            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 max-w-[240px] items-center gap-1"
+            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 max-w-[240px] max-w-full items-center gap-1"
             style={{ color: active ? theme.node.text : theme.node.label, transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`, transformOrigin: "left bottom" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1163,11 +1163,11 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                 />
             ) : editable ? (
                 <button type="button" className="group flex min-w-0 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
-                    <span className="max-w-[190px] truncate">{node.title}</span>
+                    <span className="max-w-[190px] min-w-0 truncate" title={node.title}>{node.title}</span>
                     <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
                 </button>
             ) : (
-                <span className="max-w-[210px] truncate text-xs font-medium" style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+                <span className="max-w-[210px] min-w-0 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
             )}
         </div>
     );
