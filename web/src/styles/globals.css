@@ -3127,6 +3127,12 @@
         box-shadow: 0 30px 90px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     }
 
+    /* 统一画布浮层内 lucide 图标的描边粗细，与 FloatingDock 按钮保持一致，避免面板内图标比 dock 更粗 */
+    .aceternity-floating-panel svg,
+    .canvas-floating-panel svg {
+        stroke-width: 1.8;
+    }
+
     .app-workspace-canvas {
         background: transparent;
     }

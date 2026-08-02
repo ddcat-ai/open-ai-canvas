@@ -78,6 +78,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
             label: "精确缩放",
             icon: <span className="flex items-baseline text-[9px] font-bold tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[7px] opacity-55">%</span></span>,
             active: precisionOpen,
+            expanded: precisionOpen,
             onClick: () => setPrecisionOpen((value) => !value),
         },
         { id: "zoom-in", label: "放大画布", icon: <Plus />, onClick: () => commitScale(liveScaleRef.current + 0.1) },
@@ -90,10 +91,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
             <AnimatePresence>
                 {precisionOpen ? (
                     <motion.div
-                        initial={{ opacity: 0, y: 14, scale: 0.92 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 9, scale: 0.96 }}
-                        transition={aceternityMotion.spring.panel}
+                        {...aceternityMotion.panelEnter}
                         className="aceternity-floating-panel absolute bottom-[50px] left-0 w-[220px] overflow-hidden rounded-3xl border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                     >

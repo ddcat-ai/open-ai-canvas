@@ -151,9 +151,9 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
         <SpotlightSurface
             spotlightColor={theme.toolbar.itemHover}
             ref={menuRef}
-            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97, rotateX: 2 }}
-            animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-            transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
+            initial={reducedMotion ? { opacity: 0 } : aceternityMotion.panelEnter.initial}
+            animate={aceternityMotion.panelEnter.animate}
+            transition={aceternityMotion.panelEnter.transition}
             className="aceternity-floating-panel absolute z-overlay w-[248px] origin-top-left overflow-hidden rounded-2xl border p-2 backdrop-blur-2xl"
             data-canvas-no-zoom
             data-connection-create-menu
@@ -184,8 +184,8 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
 function ConnectionCreateOption({ motionEnabled, icon, title, description, onClick }: { motionEnabled: boolean; icon: ReactNode; title: string; description?: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <motion.button type="button" whileHover={motionEnabled ? { x: 2 } : undefined} whileTap={motionEnabled ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
+        <motion.button type="button" whileTap={motionEnabled ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
+            <span className="grid size-7 shrink-0 place-items-center rounded-xl opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
             <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-[10px] font-semibold leading-4">{title}</span>
                 {description ? <span className="mt-0.5 block truncate text-[8px]" style={{ color: theme.node.muted }}>{description}</span> : null}

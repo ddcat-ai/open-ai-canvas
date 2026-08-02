@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Segmented, Switch } from "antd";
+import { App, Segmented, Switch } from "antd";
 import { CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Pencil, Plus, Redo2, Square, SquareDashedMousePointer, Sun, Trash2, Type, Undo2, UploadCloud, UserRound, Video, X } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
@@ -80,8 +80,20 @@ export function CanvasToolbar({
     const [addOpen, setAddOpen] = useState(false);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
     const [panelX, setPanelX] = useState(0);
+    const { modal } = App.useApp();
 
     const placePanel = (event: ReactMouseEvent<HTMLElement>) => setPanelX(getPanelX(dockRef.current, event.currentTarget));
+
+    const confirmClear = () => {
+        modal.confirm({
+            title: "清空画布",
+            content: "将移除画布上的所有节点与连线，请确认是否继续。",
+            okText: "清空画布",
+            okType: "danger",
+            cancelText: "取消",
+            onOk: () => onClear(),
+        });
+    };
     const runAddAction = (action: () => void) => {
         action();
         setAddOpen(false);
@@ -106,11 +118,11 @@ export function CanvasToolbar({
         { id: "tool-undo", label: "撤销", icon: <Undo2 />, disabled: !canUndo, onClick: () => onUndo() },
         { id: "tool-redo", label: "重做", icon: <Redo2 />, disabled: !canRedo, onClick: () => onRedo() },
         { kind: "separator", id: "create-separator" },
-        { id: "tool-add", label: "添加节点", icon: <Plus />, active: addOpen, onClick: (event) => { placePanel(event); setAppearanceOpen(false); setAddOpen((value) => !value); } },
+        { id: "tool-add", label: "添加节点", icon: <Plus />, active: addOpen, expanded: addOpen, onClick: (event) => { placePanel(event); setAppearanceOpen(false); setAddOpen((value) => !value); } },
         ...(!isProjectLinked ? [{ id: "tool-assets", label: "素材库", icon: <FolderOpen />, onClick: () => onOpenMyAssets() }] : []),
-        { id: "tool-style", label: "画布外观", icon: <Palette />, active: appearanceOpen, onClick: (event) => { placePanel(event); setAddOpen(false); setAppearanceOpen((value) => !value); } },
+        { id: "tool-style", label: "画布外观", icon: <Palette />, active: appearanceOpen, expanded: appearanceOpen, onClick: (event) => { placePanel(event); setAddOpen(false); setAppearanceOpen((value) => !value); } },
         ...(selectedCount ? [{ kind: "separator" as const, id: "selection-separator" }, { id: "tool-delete", label: selectedCount > 1 ? `删除 ${selectedCount} 个节点` : "删除选中节点", icon: <Trash2 />, danger: true, onClick: () => onDelete() }] : []),
-        { id: "tool-clear", label: "清空画布", icon: <Eraser />, danger: true, onClick: () => onClear() },
+        { id: "tool-clear", label: "清空画布", icon: <Eraser />, danger: true, onClick: confirmClear },
     ];
 
     return (
@@ -143,7 +155,7 @@ export function CanvasToolbar({
             <AnimatePresence>
                 {appearanceOpen ? (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-30 w-[224px] -translate-x-1/2" style={{ left: panelX || "50%" }}>
-                        <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-3xl border p-2.5 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
+                        <SpotlightSurface spotlightColor={theme.toolbar.itemHover} {...aceternityMotion.panelEnter} className="aceternity-floating-panel overflow-hidden rounded-3xl border p-2.5 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
                             <PanelHeading icon={<Palette className="size-4" />} title="画布外观" subtitle="调整整个创作空间" theme={theme} />
                             <div className="mt-3 text-[9px] font-semibold uppercase opacity-45">主题模式</div>
                             <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border p-1" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
@@ -214,7 +226,7 @@ function AddNodeMenu({ x, theme, workspaceMode, isProjectLinked, onAddText, onCh
     ];
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-40 w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>
-            <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-2xl border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
+            <SpotlightSurface spotlightColor={theme.toolbar.itemHover} {...aceternityMotion.panelEnter} className="aceternity-floating-panel overflow-hidden rounded-2xl border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
                 <PanelHeading icon={<Plus className="size-4" />} title="创建内容" subtitle="选择节点类型" theme={theme} />
                 <MenuSection title="创作节点" />
                 <CanvasCreateCommandGrid commands={nodeCommands} />

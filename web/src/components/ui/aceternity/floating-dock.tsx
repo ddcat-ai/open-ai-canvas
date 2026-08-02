@@ -12,6 +12,7 @@ export type FloatingDockCommand = {
     icon: ReactNode;
     onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
     active?: boolean;
+    expanded?: boolean;
     disabled?: boolean;
     danger?: boolean;
 };
@@ -116,7 +117,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 <motion.button
                     type="button"
                     aria-label={command.label}
-                    aria-pressed={command.active || undefined}
+                    aria-expanded={command.expanded !== undefined ? command.expanded : undefined}
+                    aria-pressed={command.expanded === undefined ? command.active || undefined : undefined}
                     disabled={command.disabled}
                     className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
                     whileTap={!command.disabled ? { scale: 0.96 } : undefined}
@@ -140,7 +142,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
             <motion.button
                 type="button"
                 aria-label={command.label}
-                aria-pressed={command.active || undefined}
+                aria-expanded={command.expanded !== undefined ? command.expanded : undefined}
+                aria-pressed={command.expanded === undefined ? command.active || undefined : undefined}
                 disabled={command.disabled}
                 className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
