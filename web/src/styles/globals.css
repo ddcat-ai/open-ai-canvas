@@ -688,6 +688,74 @@
         color: var(--foreground);
     }
 
+    /* Sidebar custom scrollbar - 隐身融入设计 */
+    .app-workspace-sidebar-scroll-area {
+        position: relative; /* 为渐变遮罩定位 */
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent; /* 默认完全隐藏 */
+        transition: scrollbar-color var(--motion-state) ease-in-out;
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
+        width: 4px;
+        background: transparent; /* 默认轨道透明 */
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb {
+        background: transparent; /* 默认滑块透明 */
+        border-radius: 9999px;
+        transition: background-color var(--motion-state) ease-in-out;
+    }
+
+    /* Hover state - 显示滚动条 */
+    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
+    .app-workspace-sidebar-scroll-area:hover {
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
+    .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Dark mode scrollbar */
+    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
+    .dark .app-workspace-sidebar-scroll-area:hover {
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
+    .dark .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Scroll fade gradients - 光影提示设计 */
+    .app-workspace-sidebar-scroll-area.has-top-fade::before,
+    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 12px;
+        pointer-events: none; /* 不阻塞点击事件 */
+        z-index: 10;
+    }
+
+    .app-workspace-sidebar-scroll-area.has-top-fade::before {
+        top: 0;
+        background: linear-gradient(to bottom, var(--workspace-surface-strong) 0%, transparent 100%);
+    }
+
+    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
+        bottom: 0;
+        background: linear-gradient(to top, var(--workspace-surface-strong) 0%, transparent 100%);
+    }
+
     .workspace-signal-icon {
         filter: drop-shadow(0 7px 16px color-mix(in srgb, var(--workspace-accent) 14%, transparent));
     }
