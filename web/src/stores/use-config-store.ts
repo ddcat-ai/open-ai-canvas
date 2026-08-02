@@ -141,7 +141,17 @@ function isVideoModelName(model: string) {
         || value.includes("gen-3")
         || value.includes("gen3")
         || value.includes("hunyuan-video")
-        || value.includes("hunyuanvideo");
+        || value.includes("hunyuanvideo")
+        || value.includes("cogvideo")
+        || value.includes("mochi")
+        || value.includes("latte")
+        || value.includes("stable-video")
+        || value.includes("svd")
+        || value.includes("animatediff")
+        || value.includes("ltx-video")
+        || value.includes("ltxvideo")
+        || value.includes("minimax-video")
+        || value.includes("abab-video");
 }
 
 function isImageModelName(model: string) {
@@ -158,7 +168,13 @@ function isImageModelName(model: string) {
             value.includes("flux") ||
             value.includes("sdxl") ||
             value.includes("stable-diffusion") ||
-            value.includes("midjourney"))
+            value.includes("midjourney") ||
+            value.includes("nano-banana") ||
+            value.includes("nanobanana") ||
+            value.includes("ideogram") ||
+            value.includes("recraft") ||
+            value.includes("playground") ||
+            value.includes("leonardo"))
     );
 }
 
@@ -186,12 +202,17 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
         const modelName = decoded?.model || modelOptionName(model);
         const costEntry = channel?.modelCosts?.find((item) => item.model === modelName);
-        const configuredCapability = costEntry?.capability;
-        if (configuredCapability) return configuredCapability === capability;
-        const channelCapability = capabilityForChannelInterface(channel?.interfaceType);
-        if (channelCapability) return channelCapability === capability;
+        // 协议层优先级最高：协议决定 API 端点，明确属于其他能力时直接排除，
+        // 防止用户将 video/image/audio 协议的模型误标为 text 后混入文本下拉。
         const protocolCapability = modelProtocolCapability(costEntry?.protocol);
         if (protocolCapability) return protocolCapability === capability;
+        // 渠道接口层：渠道级协议推断能力
+        const channelCapability = capabilityForChannelInterface(channel?.interfaceType);
+        if (channelCapability) return channelCapability === capability;
+        // 配置能力层：用户显式标记的 capability
+        const configuredCapability = costEntry?.capability;
+        if (configuredCapability) return configuredCapability === capability;
+        // 模型名启发式：最后回退
         return modelMatchesCapability(model, capability);
     });
 }
