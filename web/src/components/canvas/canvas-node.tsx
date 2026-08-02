@@ -1137,7 +1137,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
     if (scale < NODE_EXTERNAL_HEADER_MIN_SCALE && !editing) return null;
     const inverseScale = 1 / Math.max(scale, 0.05);
     const Icon = nodeTypeIcon(node.type);
-    const maxHeaderWidth = Math.min(240, node.width);
+    const maxHeaderWidth = Math.min(240, node.width * scale);
 
     return (
         <div
