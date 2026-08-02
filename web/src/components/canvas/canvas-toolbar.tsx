@@ -157,14 +157,14 @@ export function CanvasToolbar({
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-30 w-[224px] -translate-x-1/2" style={{ left: panelX || "50%" }}>
                         <SpotlightSurface spotlightColor={theme.toolbar.itemHover} {...aceternityMotion.panelEnter} className="aceternity-floating-panel overflow-hidden rounded-3xl border p-2.5 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
                             <PanelHeading icon={<Palette className="size-4" />} title="画布外观" subtitle="调整整个创作空间" theme={theme} />
-                            <div className="mt-3 text-[9px] font-semibold uppercase opacity-45">主题模式</div>
+                            <div className="mt-3 text-canvas-caption font-semibold uppercase opacity-45">主题模式</div>
                             <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border p-1" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                                 <CanvasThemeButton colorTheme={colorTheme} targetTheme="light" onThemeChange={setTheme}><Sun className="size-3.5" />浅色</CanvasThemeButton>
                                 <CanvasThemeButton colorTheme={colorTheme} targetTheme="dark" onThemeChange={setTheme}><Moon className="size-3.5" />深色</CanvasThemeButton>
                             </div>
-                            <div className="mt-3 text-[9px] font-semibold uppercase opacity-45">空间网格</div>
+                            <div className="mt-3 text-canvas-caption font-semibold uppercase opacity-45">空间网格</div>
                             <Segmented
-                                className="mt-1 w-full !rounded-xl !p-0.5 [&_.ant-segmented-group]:!flex [&_.ant-segmented-item]:!min-h-7 [&_.ant-segmented-item]:!flex-1 [&_.ant-segmented-item-label]:!min-h-7 [&_.ant-segmented-item-label]:!text-[10px] [&_.ant-segmented-item-label]:!leading-7"
+                                className="mt-1 w-full !rounded-xl !p-0.5 [&_.ant-segmented-group]:!flex [&_.ant-segmented-item]:!min-h-7 [&_.ant-segmented-item]:!flex-1 [&_.ant-segmented-item-label]:!min-h-7 [&_.ant-segmented-item-label]:!text-[var(--canvas-font-tooltip)] [&_.ant-segmented-item-label]:!leading-7"
                                 value={backgroundMode}
                                 onChange={(value) => onBackgroundModeChange(value as CanvasBackgroundMode)}
                                 options={[
@@ -174,7 +174,7 @@ export function CanvasToolbar({
                                 ]}
                             />
                             <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                                <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-semibold"><Info className="size-3" />图片信息</span>
+                                <span className="inline-flex min-w-0 items-center gap-1.5 text-canvas-tooltip font-semibold"><Info className="size-3" />图片信息</span>
                                 <Switch size="small" checked={showImageInfo} onChange={onShowImageInfoChange} />
                             </div>
                         </SpotlightSurface>
@@ -241,13 +241,13 @@ function PanelHeading({ icon, title, subtitle, theme }: { icon: ReactNode; title
     return (
         <div className="flex items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-xl border opacity-75 [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>{icon}</span>
-            <span className="min-w-0"><span className="block text-xs font-semibold">{title}</span><span className="mt-0.5 block text-[9px]" style={{ color: theme.node.muted }}>{subtitle}</span></span>
+            <span className="min-w-0"><span className="block text-xs font-semibold">{title}</span><span className="mt-0.5 block text-canvas-micro" style={{ color: theme.node.muted }}>{subtitle}</span></span>
         </div>
     );
 }
 
 function MenuSection({ title }: { title: string }) {
-    return <div className="mb-1 mt-3 px-1 text-[9px] font-semibold uppercase opacity-42">{title}</div>;
+    return <div className="mb-1 mt-3 px-1 text-canvas-caption font-semibold uppercase opacity-42">{title}</div>;
 }
 
 function CanvasThemeButton({ colorTheme, targetTheme, onThemeChange, children }: { colorTheme: CanvasColorTheme; targetTheme: CanvasColorTheme; onThemeChange: (theme: CanvasColorTheme) => void; children: ReactNode }) {

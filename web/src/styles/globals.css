@@ -56,6 +56,10 @@
 @utility z-menu { z-index: 180; }
 @utility z-modal { z-index: 500; }
 @utility z-toast { z-index: 1300; }
+@utility text-canvas-label { font-size: var(--canvas-font-label); }
+@utility text-canvas-tooltip { font-size: var(--canvas-font-tooltip); }
+@utility text-canvas-caption { font-size: var(--canvas-font-caption); }
+@utility text-canvas-micro { font-size: var(--canvas-font-micro); }
 
 :root {
     --radius: 0.5rem;
@@ -64,6 +68,11 @@
     --motion-panel: 240ms;
     --ease-aceternity: cubic-bezier(0.2, 0.85, 0.18, 1);
     --ease-product-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    /* 画布浮层字号体系——统一 dock label、tooltip、面板副标题、数字 */
+    --canvas-font-label: 11px;
+    --canvas-font-tooltip: 10px;
+    --canvas-font-caption: 9px;
+    --canvas-font-micro: 8px;
     --workspace-canvas: #ffffff;
     --workspace-surface: rgba(255, 255, 255, 0.82);
     --workspace-surface-strong: #ffffff;
@@ -3087,18 +3096,87 @@
         opacity: 1;
     }
 
+    /* P1-4: 分组间距 —— 用 margin 区分功能组，不用背景色块，保持 dock 整体感 */
+    .aceternity-dock-group {
+        margin: 0 3px;
+    }
+
+    .aceternity-floating-dock .aceternity-dock-group:first-child {
+        margin-left: 0;
+    }
+
+    .aceternity-floating-dock .aceternity-dock-group:last-child {
+        margin-right: 0;
+    }
+
+    /* 分组间极淡 separator，hover dock 时才微微显现 */
+    .aceternity-dock-group + .aceternity-dock-group {
+        position: relative;
+    }
+
+    .aceternity-dock-group + .aceternity-dock-group::before {
+        content: "";
+        position: absolute;
+        left: -3px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 60%;
+        background: color-mix(in srgb, currentColor 10%, transparent);
+        opacity: 0.6;
+        transition: opacity 0.2s ease-out;
+    }
+
+    .aceternity-floating-dock:hover .aceternity-dock-group + .aceternity-dock-group::before {
+        opacity: 1;
+    }
+
+    /* P2-5: 禁用态强化 —— 降不透明度 + desaturate + 禁止 cursor，hover 时不响应 */
+    .aceternity-dock-command:disabled {
+        cursor: not-allowed;
+        opacity: 0.32;
+        box-shadow: none;
+        filter: saturate(0);
+        pointer-events: auto;
+    }
+
+    .aceternity-dock-command:disabled:hover {
+        background: var(--dock-command-bg);
+        border-color: color-mix(in srgb, currentColor 11%, transparent);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 5px 15px rgba(15, 23, 42, 0.08);
+        transform: none;
+    }
+
+    .aceternity-dock-command.is-labeled:disabled:hover {
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    /* P1-3: 危险操作隔离 —— 虚线描边 + 淡红底色 + 警告色 */
     .aceternity-dock-command.is-danger {
         color: var(--dock-command-danger);
     }
 
-    .aceternity-dock-command:focus-visible {
-        box-shadow: 0 0 0 2px var(--dock-command-bg), 0 0 0 4px var(--dock-command-active);
+    .aceternity-dock-command.is-danger:not(.is-labeled) {
+        border-style: dashed;
+        border-color: color-mix(in srgb, var(--dock-command-danger) 32%, transparent);
+        background: color-mix(in srgb, var(--dock-command-danger) 8%, var(--dock-command-bg));
     }
 
-    .aceternity-dock-command:disabled {
-        cursor: not-allowed;
-        opacity: 0.3;
-        box-shadow: none;
+    .aceternity-dock-command.is-danger:hover:not(:disabled):not(.is-active) {
+        border-color: color-mix(in srgb, var(--dock-command-danger) 55%, transparent);
+        background: color-mix(in srgb, var(--dock-command-danger) 14%, var(--dock-command-hover));
+        box-shadow: 0 12px 30px color-mix(in srgb, var(--dock-command-danger) 18%, transparent);
+    }
+
+    .aceternity-dock-command.is-labeled.is-danger {
+        color: var(--dock-command-danger);
+        border-color: transparent;
+    }
+
+    .aceternity-dock-command:focus-visible {
+        box-shadow: 0 0 0 2px var(--dock-command-bg), 0 0 0 4px var(--dock-command-active);
     }
 
     .canvas-image-tool-checkbox .ant-checkbox-inner {
@@ -3110,10 +3188,6 @@
     .canvas-image-tool-checkbox .ant-checkbox-checked .ant-checkbox-inner {
         border-color: var(--tool-accent) !important;
         background: var(--tool-accent) !important;
-    }
-
-    .aceternity-dock-separator {
-        background: color-mix(in srgb, currentColor 13%, transparent);
     }
 
     .aceternity-dock-tooltip {

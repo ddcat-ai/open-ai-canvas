@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Compass, Focus, HelpCircle, Minus, Plus } from "lucide-react";
+import { Compass, Focus, HelpCircle, Minus, Percent, Plus } from "lucide-react";
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -26,9 +26,9 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
     const rangeRef = useRef<HTMLInputElement>(null);
-    const dockLabelRef = useRef<HTMLSpanElement>(null);
     const panelLabelRef = useRef<HTMLSpanElement>(null);
     const [precisionOpen, setPrecisionOpen] = useState(false);
+    const percent = Math.round(scale * 100);
 
     useEffect(() => updateScaleDisplay(scale), [scale]);
 
@@ -56,10 +56,9 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
 
     function updateScaleDisplay(nextScale: number) {
         liveScaleRef.current = nextScale;
-        const percent = String(Math.round(nextScale * 100));
-        if (rangeRef.current) rangeRef.current.value = percent;
-        if (dockLabelRef.current) dockLabelRef.current.textContent = percent;
-        if (panelLabelRef.current) panelLabelRef.current.textContent = `${percent}%`;
+        const pct = String(Math.round(nextScale * 100));
+        if (rangeRef.current) rangeRef.current.value = pct;
+        if (panelLabelRef.current) panelLabelRef.current.textContent = `${pct}%`;
     }
 
     function commitScale(nextScale: number) {
@@ -76,7 +75,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
         {
             id: "zoom-precision",
             label: "精确缩放",
-            icon: <span className="flex items-baseline text-[9px] font-bold tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[7px] opacity-55">%</span></span>,
+            icon: <Percent />,
             active: precisionOpen,
             expanded: precisionOpen,
             onClick: () => setPrecisionOpen((value) => !value),
@@ -98,11 +97,11 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
                         <div className="flex items-center justify-between gap-3">
                             <span>
-                                <span className="block text-[10px] font-semibold">画布尺度</span>
-                                <span className="mt-0.5 block text-[9px]" style={{ color: theme.node.muted }}>精确控制视野密度</span>
+                                <span className="block text-canvas-caption font-semibold">画布尺度</span>
+                                <span className="mt-0.5 block text-canvas-micro" style={{ color: theme.node.muted }}>精确控制视野密度</span>
                             </span>
-                            <span ref={panelLabelRef} className="rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
-                                {Math.round(scale * 100)}%
+                            <span ref={panelLabelRef} className="rounded-full border px-2 py-0.5 text-canvas-tooltip font-semibold tabular-nums" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
+                                {percent}%
                             </span>
                         </div>
                         <input
@@ -111,7 +110,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                             min="5"
                             max="200"
                             step="1"
-                            defaultValue={Math.round(scale * 100)}
+                            defaultValue={percent}
                             className="aceternity-zoom-range mt-3 h-4 w-full"
                             style={{ accentColor: theme.accent.primary }}
                             onChange={(event) => commitScale(Number(event.target.value) / 100)}
@@ -125,7 +124,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                                     whileHover={{ y: -1 }}
                                     whileTap={{ scale: 0.95 }}
                                     transition={aceternityMotion.spring.dock}
-                                    className="h-7 rounded-lg border text-[9px] font-semibold tabular-nums outline-none focus-visible:ring-2"
+                                    className="h-7 rounded-lg border text-canvas-caption font-semibold tabular-nums outline-none focus-visible:ring-2"
                                     style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }}
                                     onClick={() => commitScale(level)}
                                 >

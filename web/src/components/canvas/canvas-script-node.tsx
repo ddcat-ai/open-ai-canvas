@@ -127,15 +127,15 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
             <div className="relative flex h-10 shrink-0 items-center gap-2 rounded-t-[17px] border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <Clapperboard className="size-4" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title || "分镜脚本"}</span>
-                {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[11px] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[11px] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
+                {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-canvas-tooltip font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-canvas-tooltip font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
                 <span className="text-xs font-medium" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
                 {batch ? <>
-                    {hasFailedBatchItems ? <Tooltip title="重试失败项"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRetryBatch(batch.id); }} aria-label="重试失败项"><RefreshCw className="size-3.5" /></button></Tooltip> : null}
-                    {hasWaitingBatchItems ? <Tooltip title="停止剩余任务"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onStopBatch(batch.id); }} aria-label="停止剩余任务"><Square className="size-3.5" /></button></Tooltip> : null}
-                    <Popover placement="bottomRight" trigger="click" content={<GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />}><Tooltip title="查看详情"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label="查看批次详情"><ListTree className="size-3.5" /></button></Tooltip></Popover>
+                    {hasFailedBatchItems ? <Tooltip title="重试失败项"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRetryBatch(batch.id); }} aria-label="重试失败项"><RefreshCw className="size-3.5" /></button></Tooltip> : null}
+                    {hasWaitingBatchItems ? <Tooltip title="停止剩余任务"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onStopBatch(batch.id); }} aria-label="停止剩余任务"><Square className="size-3.5" /></button></Tooltip> : null}
+                    <Popover placement="bottomRight" trigger="click" content={<GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />}><Tooltip title="查看详情"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label="查看批次详情"><ListTree className="size-3.5" /></button></Tooltip></Popover>
                 </> : null}
-                {simpleMode ? null : <Tooltip title="生成动作拆分 12 宫格"><button type="button" disabled={!rows.length || hasActiveBatchItems} className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCreateActionBoards(); }}><Grid3X3 className="size-3.5" /></button></Tooltip>}
-                {simpleMode ? null : <Tooltip title="全屏编辑"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(); }}><Expand className="size-3.5" /></button></Tooltip>}
+                {simpleMode ? null : <Tooltip title="生成动作拆分 12 宫格"><button type="button" disabled={!rows.length || hasActiveBatchItems} className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCreateActionBoards(); }}><Grid3X3 className="size-3.5" /></button></Tooltip>}
+                {simpleMode ? null : <Tooltip title="全屏编辑"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(); }}><Expand className="size-3.5" /></button></Tooltip>}
             </div>
             <StoryboardPipelineBar
                 pipeline={pipeline}
@@ -148,7 +148,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 onGenerateVideos={onGenerateVideos}
                 onMergeVideos={onMergeVideos}
             />
-            <div className="grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+            <div className="grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE, background: "color-mix(in srgb, currentColor 4%, transparent)" }}>
                 <HeaderCell borderColor={theme.node.stroke} align="center">序号</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke} align="center">时长</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>画面描述</HeaderCell>
@@ -166,8 +166,8 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 onWheel={(event) => event.stopPropagation()}
             >
                 {rows.length ? rows.map((row) => (
-                    <div key={row.id} className="relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
-                        <div className="flex flex-col items-center justify-center border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}><span className="text-sm">{row.shotNumber}</span>{batchItemByRowId.get(row.id) ? <span className="max-w-16 truncate text-[9px] leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>{generationBatchItemLabel(batchItemByRowId.get(row.id)!)}</span> : null}</div>
+                    <div key={row.id} className="storyboard-row group relative grid border-b transition-colors hover:bg-black/[0.015] dark:hover:bg-white/[0.02]" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+                        <div className="flex flex-col items-center justify-center border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}><span className="text-sm">{row.shotNumber}</span>{batchItemByRowId.get(row.id) ? <span className="max-w-16 truncate text-canvas-micro leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>{generationBatchItemLabel(batchItemByRowId.get(row.id)!)}</span> : null}</div>
                         <div className="grid grid-cols-[32px_1fr_32px] items-center border-r px-2" style={{ borderColor: theme.node.stroke }}>
                             <SmallButton title="减少 1 秒" onClick={() => onUpdateRow(row.id, { durationSeconds: Math.max(1, row.durationSeconds - 1) })}><Minus className="size-3" /></SmallButton>
                             <span className="text-center text-sm font-medium tabular-nums">{row.durationSeconds}s</span>
@@ -176,10 +176,15 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                         <CompactInput value={row.plotDescription} placeholder="描述画面内容" onChange={(value) => onUpdateRow(row.id, { plotDescription: value })} borderColor={theme.node.stroke} />
                         <CompactInput value={row.dialogue} placeholder="台词或旁白" onChange={(value) => onUpdateRow(row.id, { dialogue: value })} borderColor={theme.node.stroke} />
                         <div className="grid h-full place-items-center">
-                            <button type="button" disabled={rows.length <= 1} className="grid size-7 place-items-center rounded outline-none opacity-55 transition enabled:hover:bg-red-500/10 enabled:hover:opacity-100 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-20" style={{ color: theme.accent.danger, "--tw-ring-color": theme.accent.danger } as CSSProperties} title={rows.length <= 1 ? "至少保留一个镜头" : "删除镜头"} aria-label={`删除镜头 ${row.shotNumber}`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemoveRow(row.id); }}><Trash2 className="size-3.5" /></button>
+                            <button type="button" disabled={rows.length <= 1} className="storyboard-row-delete grid size-7 place-items-center rounded outline-none opacity-0 transition enabled:hover:bg-red-500/10 focus-visible:ring-2 disabled:cursor-not-allowed group-hover:opacity-55 enabled:group-hover:opacity-100" style={{ color: theme.accent.danger, "--tw-ring-color": theme.accent.danger } as CSSProperties} title={rows.length <= 1 ? "至少保留一个镜头" : "删除镜头"} aria-label={`删除镜头 ${row.shotNumber}`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemoveRow(row.id); }}><Trash2 className="size-3.5" /></button>
                         </div>
                     </div>
-                )) : <button type="button" className="grid h-full min-h-24 w-full place-items-center text-sm" style={{ color: theme.node.muted }} onClick={(event) => { event.stopPropagation(); onAddRow(); }}>+ 添加第一个镜头</button>}
+                )) : <button type="button" className="group grid h-full min-h-24 w-full place-items-center text-sm outline-none" style={{ color: theme.node.muted }} onClick={(event) => { event.stopPropagation(); onAddRow(); }}>
+                    <span className="flex flex-col items-center gap-2 transition group-hover:opacity-70">
+                        <Clapperboard className="size-6 opacity-30" />
+                        <span>添加第一个镜头</span>
+                    </span>
+                </button>}
             </div>
             <div className="flex h-9 shrink-0 items-center justify-center border-b" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <button type="button" className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onAddRow(); }}><Plus className="size-3.5" />添加行</button>
@@ -212,7 +217,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 <div className="flex min-w-0 items-center justify-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     <div className="mr-auto min-w-36 max-w-56 flex-1">
                         <ModelPicker
-                            className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
+                            className="!h-7 !w-full !min-w-0 !text-canvas-caption !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
                             fullWidth
                             config={generationConfig}
                             value={generationConfig.model}
@@ -223,7 +228,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         />
                     </div>
-                    {simpleMode ? <span className="text-[11px]" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
+                    {simpleMode ? <span className="text-canvas-tooltip" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
                         className="min-w-32"
                         size="small"
                         value={shotCount}
@@ -326,10 +331,10 @@ function PipelineStageCell({ label, stage, theme, children, last = false }: { la
     return (
         <div className={`flex min-w-0 items-center gap-2 px-3 ${last ? "" : "border-r"}`} style={{ borderColor: theme.node.stroke }}>
             <div className="min-w-[64px] shrink-0">
-                <div className="text-[11px] font-semibold">{label}</div>
-                <div className="text-[9px] leading-3" style={{ color: stage.failed ? theme.accent.danger : theme.node.muted }}>{pipelineStatusLabel(stage)}</div>
+                <div className="text-canvas-tooltip font-semibold">{label}</div>
+                <div className="text-canvas-micro leading-3" style={{ color: stage.failed ? theme.accent.danger : theme.node.muted }}>{pipelineStatusLabel(stage)}</div>
             </div>
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden [&_.ant-btn]:!h-7 [&_.ant-btn]:!px-2 [&_.ant-btn]:!text-[10px]">{children}</div>
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden [&_.ant-btn]:!h-7 [&_.ant-btn]:!px-2 [&_.ant-btn]:!text-canvas-caption">{children}</div>
         </div>
     );
 }
@@ -448,7 +453,7 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
 }
 
 function CompactInput({ value, placeholder, borderColor, onChange }: { value: string; placeholder: string; borderColor: string; onChange: (value: string) => void }) {
-    return <textarea className="h-full resize-none border-r bg-transparent px-4 py-2.5 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:bg-black/[0.02] dark:focus:bg-white/[0.025]" style={{ borderColor }} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
+    return <textarea className="storyboard-cell-input h-full resize-none border-r bg-transparent px-4 py-2.5 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:ring-1 focus:ring-inset" style={{ borderColor, "--tw-ring-color": "color-mix(in srgb, currentColor 22%, transparent)" } as CSSProperties} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
 }
 
 function HeaderCell({ children, borderColor, align = "left" }: { children: ReactNode; borderColor: string; align?: "left" | "center" }) {
@@ -456,7 +461,7 @@ function HeaderCell({ children, borderColor, align = "left" }: { children: React
 }
 
 function SmallButton({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
-    return <button type="button" className="grid size-7 shrink-0 place-items-center rounded opacity-65 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10" title={title} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClick(); }}>{children}</button>;
+    return <button type="button" className="grid size-7 shrink-0 place-items-center rounded opacity-50 transition hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10 active:scale-90" title={title} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClick(); }}>{children}</button>;
 }
 
 function editorRow(shotNumber: number): StoryboardRow {

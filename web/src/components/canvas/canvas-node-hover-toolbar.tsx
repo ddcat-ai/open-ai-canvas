@@ -347,7 +347,7 @@ export function CanvasNodeHoverToolbar({
                                 title="更多图片工具"
                             >
                                 <Ellipsis className="size-3.5" />
-                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">更多</span> : null}
+                                {showDockLabels ? <span className="inline-flex h-4 items-center text-canvas-label font-medium leading-none">更多</span> : null}
                             </button>
                         </Dropdown>
                     ) : null}
