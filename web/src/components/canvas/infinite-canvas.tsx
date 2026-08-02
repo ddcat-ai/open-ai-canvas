@@ -12,6 +12,7 @@ type InfiniteCanvasProps = {
     onViewportChange: (viewport: ViewportTransform) => void;
     onViewportPreviewChange?: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+    boxSelectEnabled?: boolean;
     onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
@@ -38,7 +39,7 @@ type PinchState = {
     initialScale: number;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots", onViewportChange, onViewportPreviewChange, onCanvasMouseDown, boxSelectEnabled = false, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onFileDragEnter, onFileDragLeave, onFileDragOver, graphicsLayer, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -196,7 +197,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots"
         const isTouch = event.pointerType === "touch";
 
         const hasSelectionModifier = event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
-        if (event.button === 0 && !isSpacePressed && !isTouch && isBackgroundClick && hasSelectionModifier) {
+        if (event.button === 0 && !isSpacePressed && !isTouch && isBackgroundClick && (hasSelectionModifier || boxSelectEnabled)) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             onCanvasMouseDown?.(event);
@@ -368,7 +369,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "dots"
     return (
         <div
             ref={containerRef}
-            className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+            className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : boxSelectEnabled ? "cursor-crosshair" : "cursor-grab"}`}
             style={{
                 background: theme.canvas.background,
                 overscrollBehavior: "none",

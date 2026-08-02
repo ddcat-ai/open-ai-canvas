@@ -20,6 +20,7 @@ type UseCanvasSelectionControllerOptions = {
     onNodeInteractionStart: (selectionModifier: boolean) => void;
     onNodeClick: (node: CanvasNodeData) => void;
     onDeselect: () => void;
+    onSelectionBoxEnd?: () => void;
 };
 
 type DragState = {
@@ -57,6 +58,7 @@ export function useCanvasSelectionController({
     onNodeInteractionStart,
     onNodeClick,
     onDeselect,
+    onSelectionBoxEnd,
 }: UseCanvasSelectionControllerOptions) {
     const dragFrameRef = useRef<number | null>(null);
     const pendingNodeDragRef = useRef<Position>({ x: 0, y: 0 });
@@ -296,7 +298,8 @@ export function useCanvasSelectionController({
         const wasSelection = selectionActivatedRef.current;
         cancelSelectionBox();
         if (hadPendingSelection && !wasSelection) deselectCanvas();
-    }, [cancelSelectionBox, deselectCanvas]);
+        if (hadPendingSelection) onSelectionBoxEnd?.();
+    }, [cancelSelectionBox, deselectCanvas, onSelectionBoxEnd]);
 
     useEffect(() => {
         const handleMouseUp = (event: MouseEvent) => {
