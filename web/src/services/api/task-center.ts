@@ -177,6 +177,8 @@ export function uploadAgentFile(sessionId: string, file: File) {
 export function createGenerationTask(input: CreateTaskInput) {
     return request<GenerationTask>(api.post("/tasks", input)).then((task) => {
         notifyCanvasTaskCreated(task);
+        // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
+        window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
     });
 }
@@ -210,31 +212,37 @@ export async function waitForGenerationTask(id: string, options?: { signal?: Abo
     const intervalMs = options?.intervalMs || 2000;
     let lastTask = options?.initialTask;
     let lastQueryError: unknown;
-    while (Date.now() - startedAt < (options?.timeoutMs || taskWaitTimeoutMs(lastTask))) {
+    try {
+        while (Date.now() - startedAt < (options?.timeoutMs || taskWaitTimeoutMs(lastTask))) {
+            if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+            let task: GenerationTask;
+            try {
+                task = await queryGenerationTask(id);
+                lastTask = task;
+                lastQueryError = undefined;
+                options?.onTaskUpdate?.(task);
+            } catch (error) {
+                lastQueryError = error;
+                await delay(intervalMs, options?.signal);
+                continue;
+            }
+            if (task.status === "succeeded") {
+                window.dispatchEvent(new CustomEvent("wallet:updated"));
+                return task;
+            }
+            if (task.status === "failed" || task.status === "cancelled") {
+                window.dispatchEvent(new CustomEvent("wallet:updated"));
+                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? "已取消" : "失败"}`);
+            }
+            await delay(intervalMs, options?.signal);
+        }
+    } catch (error) {
         if (options?.signal?.aborted) {
             await cancelGenerationTask(id).catch(() => undefined);
+            window.dispatchEvent(new CustomEvent("wallet:updated"));
             throw new DOMException("Aborted", "AbortError");
         }
-        let task: GenerationTask;
-        try {
-            task = await queryGenerationTask(id);
-            lastTask = task;
-            lastQueryError = undefined;
-            options?.onTaskUpdate?.(task);
-        } catch (error) {
-            lastQueryError = error;
-            await delay(intervalMs, options?.signal);
-            continue;
-        }
-        if (task.status === "succeeded") {
-            window.dispatchEvent(new CustomEvent("wallet:updated"));
-            return task;
-        }
-        if (task.status === "failed" || task.status === "cancelled") {
-            window.dispatchEvent(new CustomEvent("wallet:updated"));
-            throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? "已取消" : "失败"}`);
-        }
-        await delay(intervalMs, options?.signal);
+        throw error;
     }
     throw new Error(lastQueryError instanceof Error ? `任务状态同步失败：${lastQueryError.message}` : "任务执行超时，请稍后重试");
 }

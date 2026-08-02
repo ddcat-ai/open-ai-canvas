@@ -4156,6 +4156,28 @@ html[data-theme-switching="true"] :where(.canvas-node-shell, .aceternity-comet-c
     color: var(--creation-text);
 }
 
+.creation-scrollbar {
+    scrollbar-color: rgba(255, 255, 255, .22) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+}
+
+.creation-scrollbar::-webkit-scrollbar { width: 10px; }
+.creation-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.creation-scrollbar::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .22);
+    background-clip: content-box;
+}
+.creation-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, .34); }
+
+html:not(.dark) .creation-scrollbar {
+    scrollbar-color: rgba(35, 41, 49, .24) transparent;
+}
+html:not(.dark) .creation-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(35, 41, 49, .24); }
+html:not(.dark) .creation-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(35, 41, 49, .38); }
+
 html:not(.dark) .creation-home {
     --creation-bg: #f7f7f5;
     --creation-surface: #ffffff;

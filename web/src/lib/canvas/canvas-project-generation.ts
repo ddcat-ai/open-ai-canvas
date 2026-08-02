@@ -1,12 +1,13 @@
-import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
-import { configuredModelMatchesCapability, defaultConfig, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
-import { getImageBlob, resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { getMediaBlob, resolveMediaUrl } from "@/services/file-storage";
-import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { type GenerationTask } from "@/services/api/task-center";
+import { backendProviderConfig, runBackendGenerationTask } from "@/services/api/generation-task";
+import { configuredModelMatchesCapability, defaultConfig, type AiConfig } from "@/stores/use-config-store";
+import { resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { resolveMediaUrl } from "@/services/file-storage";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
-import { imageMetadata, parseBackendGenerationResult } from "@/lib/canvas/canvas-generation-task-sync";
+import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasImageGenerationType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
@@ -40,89 +41,22 @@ export async function runBackendCanvasGenerationTask({
     metadata?: Record<string, unknown>;
     onTaskCreated?: (task: GenerationTask) => void;
 }) {
-    const taskReferenceImages = await Promise.all(referenceImages.map(prepareBackendImageReference));
-    const taskReferenceVideos = await Promise.all(referenceVideos.map((video) => mediaToBackendReference(video)));
-    const taskReferenceAudios = await Promise.all(referenceAudios.map((audio) => mediaToBackendReference(audio)));
-    const taskMask = mask ? await prepareBackendImageReference(mask) : undefined;
-    const task = await createGenerationTask({
+    return runBackendGenerationTask({
         projectId,
-        type: `canvas_${mode}`,
-        operation: mode === "video" ? String(metadata?.videoEditOperation || "image_to_video") : mode,
+        mode,
         prompt,
-        model: config.model,
-        input: {
-            mode,
-            prompt,
-            config: backendProviderConfig(config),
-            referenceImages: taskReferenceImages,
-            referenceVideos: taskReferenceVideos,
-            referenceAudios: taskReferenceAudios,
-            mask: taskMask,
-            metadata: { nodeId, ...metadata },
-        },
+        config,
+        referenceImages,
+        referenceVideos,
+        referenceAudios,
+        mask,
+        signal,
+        metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+        onTaskUpdate: onTaskCreated,
     });
-    onTaskCreated?.(task);
-    const completed = await waitForGenerationTask(task.id, { signal, initialTask: task, onTaskUpdate: onTaskCreated });
-    return parseBackendGenerationResult(completed);
 }
 
-async function mediaToBackendReference(media: ReferenceVideo | ReferenceAudio) {
-    if (resourceIdFromStorageKey(media.storageKey)) return { ...media, dataUrl: "" };
-    const url = media.url || "";
-    if (/^https?:\/\//i.test(url)) return media;
-    let blob: Blob | null = null;
-    if (media.storageKey) blob = await getMediaBlob(media.storageKey);
-    if (!blob && (url.startsWith("blob:") || url.startsWith("data:"))) blob = await (await fetch(url)).blob();
-    if (!blob) throw new Error("参考媒体尚未保存，请重新上传后再生成");
-    try {
-        const kind: "video" | "audio" | "file" = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
-        const resource = await uploadResourceFile(blob, kind, { fileName: media.name, width: "width" in media ? media.width : undefined, height: "height" in media ? media.height : undefined, durationMs: media.durationMs });
-        return { ...media, url: resource.publicUrl || `/api/resources/${resource.id}/file`, storageKey: resourceStorageKey(resource.id), dataUrl: "", type: resource.mimeType || media.type || blob.type };
-    } catch (error) {
-        throw new Error(error instanceof Error ? `参考媒体上传失败：${error.message}` : "参考媒体上传失败");
-    }
-}
-
-async function prepareBackendImageReference(image: ReferenceImage) {
-    if (resourceIdFromStorageKey(image.storageKey)) return { ...image, dataUrl: "" };
-    if (/^https?:\/\//i.test(image.dataUrl)) return { ...image, url: image.url || image.dataUrl, dataUrl: "" };
-    const blob = image.storageKey ? await getImageBlob(image.storageKey) : image.dataUrl ? await (await fetch(image.dataUrl)).blob() : null;
-    if (blob) {
-        try {
-            const resource = await uploadResourceFile(blob, "image", { fileName: image.name });
-            return { ...image, dataUrl: "", url: resource.publicUrl || `/api/resources/${resource.id}/file`, storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type };
-        } catch (error) {
-            throw new Error(error instanceof Error ? `参考图片上传失败：${error.message}` : "参考图片上传失败");
-        }
-    }
-    throw new Error("参考图片尚未保存，请重新上传后再生成");
-}
-
-export function backendProviderConfig(config: AiConfig) {
-    const requestConfig = resolveModelRequestConfig(config, config.model);
-    return {
-        channelId: requestConfig.channelId,
-        apiFormat: requestConfig.apiFormat,
-        interfaceType: requestConfig.interfaceType,
-        baseUrl: requestConfig.baseUrl,
-        apiKey: requestConfig.apiKey,
-        secretKey: requestConfig.secretKey,
-        model: requestConfig.model,
-        size: config.size,
-        quality: config.quality,
-        transparentBackground: config.transparentBackground,
-        count: config.count,
-        videoSeconds: config.videoSeconds,
-        vquality: config.vquality,
-        videoGenerateAudio: config.videoGenerateAudio,
-        videoWatermark: config.videoWatermark,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
-        audioSpeed: config.audioSpeed,
-        audioInstructions: config.audioInstructions,
-        systemPrompt: config.systemPrompt,
-    };
-}
+export { backendProviderConfig };
 
 export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata {
     const progress = normalizeTaskProgress(task.progress, task.status);

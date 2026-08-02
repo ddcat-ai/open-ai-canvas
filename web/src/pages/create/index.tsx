@@ -7,8 +7,8 @@ import { Link } from "react-router";
 
 import { ModelPicker } from "@/components/model-picker";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
-import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
-import { requestVideoGeneration } from "@/services/api/video";
+import { runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
+import { requestImageQuestion } from "@/services/api/image";
 import { modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 
@@ -78,6 +78,8 @@ export default function CreatePage() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const threadScrollRef = useRef<HTMLElement>(null);
+    const followLatestMessageRef = useRef(true);
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const historyConversations = useMemo(
@@ -105,6 +107,15 @@ export default function CreatePage() {
     useEffect(() => {
         if (hydrated) void localforage.setItem(STORAGE_KEY, conversations);
     }, [conversations, hydrated]);
+
+    useEffect(() => {
+        if (!followLatestMessageRef.current) return;
+        const frame = window.requestAnimationFrame(() => {
+            const container = threadScrollRef.current;
+            if (container) container.scrollTop = container.scrollHeight;
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [activeConversation?.id, activeConversation?.messages]);
 
     const updateActive = useCallback((updater: (conversation: CreationConversation) => CreationConversation) => {
         setConversations((current) => current.map((item) => item.id === activeId ? updater(item) : item));
@@ -149,6 +160,7 @@ export default function CreatePage() {
             return;
         }
         const settings = { ratio, seconds, quality, videoQuality, count };
+        followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
         updateActive((conversation) => ({
@@ -173,12 +185,37 @@ export default function CreatePage() {
                 }));
                 await requestImageQuestion(requestConfig, history, (delta) => updateAssistant(assistantMessage.id, (item) => ({ ...item, content: item.content + delta })), { signal: controller.signal });
             } else if (mode === "image") {
-                const result = attachments.length ? await requestEdit(requestConfig, text, attachments, undefined, { signal: controller.signal }) : await requestGeneration(requestConfig, text, { signal: controller.signal });
-                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "图片已生成", resultUrls: result.map((entry) => entry.dataUrl) }));
+                const taskCount = Math.max(1, Math.min(15, Math.floor(Number(count) || 1)));
+                const settled = await runBackendGenerationTaskBatch({
+                    mode: "image",
+                    prompt: text,
+                    config: { ...requestConfig, count: "1" },
+                    referenceImages: attachments,
+                    signal: controller.signal,
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id },
+                    count: taskCount,
+                });
+                if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+                const resultUrls = settled.flatMap((entry) => entry.status === "fulfilled" ? (entry.value.images || []).map((image) => image.dataUrl).filter(Boolean) : []);
+                const failed = settled.filter((entry): entry is PromiseRejectedResult => entry.status === "rejected");
+                if (!resultUrls.length) {
+                    const reason = failed[0]?.reason;
+                    throw reason instanceof Error ? reason : new Error("后端任务没有返回图片");
+                }
+                if (failed.length) toast.warning(`${resultUrls.length} 张图片已生成，${failed.length} 张生成失败`);
+                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: failed.length ? `${resultUrls.length} 张图片已生成，${failed.length} 张失败` : "图片已生成", resultUrls }));
             } else {
-                const result = await requestVideoGeneration(requestConfig, text, attachments, [], [], { signal: controller.signal });
-                const resultUrl = result.url || (result.blob ? URL.createObjectURL(result.blob) : "");
-                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: resultUrl ? [resultUrl] : [] }));
+                const result = await runBackendGenerationTask({
+                    mode: "video",
+                    prompt: text,
+                    config: requestConfig,
+                    referenceImages: attachments,
+                    signal: controller.signal,
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length ? "image_to_video" : "text_to_video" },
+                });
+                if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
+                const videoUrl = result.video.dataUrl;
+                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: [videoUrl] }));
             }
             updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done" }));
         } catch (error) {
@@ -196,6 +233,7 @@ export default function CreatePage() {
 
     const startNewConversation = () => {
         const next = newConversation();
+        followLatestMessageRef.current = true;
         setConversations((current) => [next, ...current]);
         setActiveId(next.id);
         setPrompt("");
@@ -204,6 +242,7 @@ export default function CreatePage() {
     };
 
     const selectConversation = (conversation: CreationConversation) => {
+        followLatestMessageRef.current = true;
         setActiveId(conversation.id);
         setPrompt("");
         setAttachments([]);
@@ -219,6 +258,12 @@ export default function CreatePage() {
     };
 
     if (!hydrated || !activeConversation) return <div className="grid h-full place-items-center"><Spin /></div>;
+
+    const handleThreadScroll = () => {
+        const container = threadScrollRef.current;
+        if (!container) return;
+        followLatestMessageRef.current = container.scrollHeight - container.scrollTop - container.clientHeight <= 160;
+    };
 
     const composerProps = {
         mode,
@@ -244,11 +289,11 @@ export default function CreatePage() {
         count,
         setCount,
         onSubmit: submit,
-        onStop: () => { abortRef.current?.abort(); setBusy(false); },
+        onStop: () => abortRef.current?.abort(),
     };
 
     return <>
-        <main className="creation-home relative flex h-full min-h-0 flex-col overflow-y-auto">
+        <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-home creation-scrollbar relative flex h-full min-h-0 flex-col overflow-y-scroll overscroll-contain">
             <div className="creation-top-actions">
                 {!isEmpty ? <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="creation-top-action" onClick={startNewConversation}><Plus /></button></Tooltip> : null}
                 <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip>
