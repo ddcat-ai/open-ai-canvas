@@ -80,7 +80,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
     const presets = useMemo(() => {
         const skills = skillReferences.flatMap((reference): CanvasPromptPreset[] => {
             if (!reference.skill) return [];
-            return [{ id: `skill:${reference.skill.dir}`, name: reference.skill.name, description: reference.skill.description || reference.skill.detail_text || "已激活技能", prompt: `@${reference.skill.name} `, modes: ["text", "image", "video", "audio"], source: "skill" }];
+            return [{ id: `skill:${reference.skill.skill_id}`, name: reference.skill.skill_name, description: reference.skill.description || reference.skill.instruction || "已加入技能", prompt: `@${reference.skill.skill_name} `, modes: ["text", "image", "video", "audio"], source: "skill" }];
         });
         const normalized = query.trim().toLowerCase();
         return [...BUILTIN_PRESETS.filter((preset) => preset.modes.includes(mode)), ...skills].filter((preset) => !normalized || `${preset.name} ${preset.description}`.toLowerCase().includes(normalized));
@@ -88,7 +88,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
 
     const content = (
         <div data-canvas-no-zoom className="canvas-preset-picker-menu w-[320px] max-w-[calc(100vw-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <Input className="canvas-preset-picker-search" variant="borderless" autoFocus allowClear size="small" prefix={<Search className="size-3.5" />} placeholder="搜索预设或已激活技能" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input className="canvas-preset-picker-search" variant="borderless" autoFocus allowClear size="small" prefix={<Search className="size-3.5" />} placeholder="搜索预设或已加入技能" value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="thin-scrollbar mt-1 max-h-72 space-y-0.5 overflow-y-auto">
                 {presets.length ? presets.map((preset) => (
                     <button

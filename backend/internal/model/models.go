@@ -425,11 +425,33 @@ type UserDailyUploadUsage struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type Skill struct {
+	ID                string    `json:"id" gorm:"primaryKey;size:36"`
+	OwnerID           string    `json:"ownerId" gorm:"index;size:36"`
+	AuthorName        string    `json:"authorName" gorm:"size:120;index"`
+	AuthorAvatarURL   string    `json:"authorAvatarUrl" gorm:"size:1000"`
+	Name              string    `json:"name" gorm:"size:80;index"`
+	Description       string    `json:"description" gorm:"size:500"`
+	Instruction       string    `json:"instruction" gorm:"type:text"`
+	Status            int       `json:"status" gorm:"index"`
+	Source            int       `json:"source" gorm:"index"`
+	Tag               string    `json:"tag" gorm:"size:32;index"`
+	SortWeight        int       `json:"sortWeight" gorm:"index"`
+	IsPrivate         bool      `json:"isPrivate" gorm:"index"`
+	MarkdownURL       string    `json:"markdownUrl" gorm:"size:500"`
+	ShowcaseMediaJSON string    `json:"-" gorm:"type:text"`
+	ExtraInfo         string    `json:"extraInfo" gorm:"type:text"`
+	InitialLikeCount  int64     `json:"initialLikeCount"`
+	InitialAddedCount int64     `json:"initialAddedCount"`
+	CreatedAt         time.Time `json:"createdAt" gorm:"index"`
+	UpdatedAt         time.Time `json:"updatedAt" gorm:"index"`
+}
+
 type UserSkillState struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	UserID    string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_dir,priority:1"`
-	SkillDir  string    `json:"skillDir" gorm:"size:180;index;uniqueIndex:idx_user_skill_state_user_dir,priority:2"`
-	Activated bool      `json:"activated" gorm:"index"`
+	UserID    string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
+	SkillID   string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
+	Added     bool      `json:"added" gorm:"index"`
 	Liked     bool      `json:"liked" gorm:"index"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

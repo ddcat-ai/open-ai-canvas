@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { hydrateAssistantImages, hydrateCanvasImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
-import { listActivatedSkills, type UpdreamSkill } from "@/services/api/skills";
+import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, CanvasNodeMetadata, ViewportTransform } from "@/types/canvas";
@@ -72,7 +72,7 @@ export function useCanvasProjectLifecycle({
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
-    const [activatedSkills, setActivatedSkills] = useState<UpdreamSkill[]>([]);
+    const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -130,12 +130,12 @@ export function useCanvasProjectLifecycle({
     useEffect(() => {
         if (!projectLoaded) return;
         let cancelled = false;
-        listActivatedSkills()
+        listAddedSkills()
             .then(({ skills }) => {
-                if (!cancelled) setActivatedSkills(skills);
+                if (!cancelled) setAddedSkills(skills);
             })
             .catch(() => {
-                if (!cancelled) setActivatedSkills([]);
+                if (!cancelled) setAddedSkills([]);
             });
         return () => {
             cancelled = true;
@@ -218,7 +218,7 @@ export function useCanvasProjectLifecycle({
     }, [cleanupCanvasFiles, projectId]);
 
     return {
-        activatedSkills,
+        addedSkills,
         clearCanvasFiles,
         createAndOpenProject,
         currentProject,

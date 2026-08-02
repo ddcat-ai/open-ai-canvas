@@ -295,7 +295,7 @@ function InfiniteCanvasPage() {
     );
 
     const {
-        activatedSkills,
+        addedSkills,
         clearCanvasFiles,
         createAndOpenProject,
         currentProject,
@@ -798,7 +798,7 @@ function InfiniteCanvasPage() {
         hoveredNodeId,
         dragPreview,
         collapsingBatchIds,
-        activatedSkills,
+        addedSkills,
         directorScenes: currentProject?.directorScenes,
         toolbarNodeId,
         infoNodeId,
@@ -1089,7 +1089,7 @@ function InfiniteCanvasPage() {
     const handleGenerateNode = useCanvasGenerationExecutor({
         projectId,
         domainProjectId: currentProject?.projectId,
-        activatedSkills,
+        addedSkills,
         nodesRef,
         connectionsRef,
         setNodes,
@@ -1145,7 +1145,7 @@ function InfiniteCanvasPage() {
     const handleRetryNode = useCanvasGenerationRetry({
         projectId,
         domainProjectId: currentProject?.projectId,
-        activatedSkills,
+        addedSkills,
         nodesRef,
         connectionsRef,
         setNodes,

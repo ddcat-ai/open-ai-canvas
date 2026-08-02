@@ -42,7 +42,7 @@ export default function LoginPage() {
         <form onSubmit={submit} className="space-y-5">
             <AuthField label="用户名 / 邮箱"><Input size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required /></AuthField>
             <AuthField label="密码"><Input.Password size="large" prefix={<LockKeyhole className="size-4 text-white/35" />} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" autoComplete="current-password" required /></AuthField>
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPosition="end">登录</Button>
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">登录</Button>
             {linuxdoEnabled ? <><Divider plain className="!border-white/10 !text-white/30">或</Divider><Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>使用 Linux.do 登录</Button></> : null}
         </form>
     );
@@ -53,6 +53,6 @@ function AuthField({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/projects";
+    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/create";
     return value;
 }

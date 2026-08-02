@@ -6,7 +6,7 @@ import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
-import type { UpdreamSkill } from "@/services/api/skills";
+import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
 import type { DirectorScene } from "@/types/director";
 import { CanvasNodeType, type CanvasConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
@@ -24,7 +24,7 @@ type UseCanvasRenderModelOptions = {
     hoveredNodeId: string | null;
     dragPreview: DragPreview;
     collapsingBatchIds: Set<string>;
-    activatedSkills: UpdreamSkill[];
+    addedSkills: Skill[];
     directorScenes?: DirectorScene[];
     toolbarNodeId: string | null;
     infoNodeId: string | null;
@@ -55,7 +55,7 @@ export function useCanvasRenderModel({
     hoveredNodeId,
     dragPreview,
     collapsingBatchIds,
-    activatedSkills,
+    addedSkills,
     directorScenes,
     toolbarNodeId,
     infoNodeId,
@@ -245,7 +245,7 @@ export function useCanvasRenderModel({
     const activeDirectorScene = useMemo(() => directorScenes?.find((scene) => scene.id === activeDirectorNode?.metadata?.directorSceneId) || null, [activeDirectorNode?.metadata?.directorSceneId, directorScenes]);
     const canvasResourceReferences = useMemo(() => buildCanvasResourceReferences(semanticNodes, connections, dialogNodeId || activeNodeId), [activeNodeId, connections, dialogNodeId, semanticNodes]);
     const resourceReferenceByNodeId = useMemo(() => new Map(canvasResourceReferences.map((reference) => [reference.nodeId, reference])), [canvasResourceReferences]);
-    const skillMentionReferences = useMemo(() => buildSkillMentionReferences(activatedSkills), [activatedSkills]);
+    const skillMentionReferences = useMemo(() => buildSkillMentionReferences(addedSkills), [addedSkills]);
     const mentionReferencesByNodeId = useMemo(() => {
         const map = new Map<string, ReturnType<typeof buildNodeMentionReferences>>();
         semanticNodes.forEach((node) => map.set(node.id, [...buildNodeMentionReferences(node, semanticNodes, connections), ...skillMentionReferences]));

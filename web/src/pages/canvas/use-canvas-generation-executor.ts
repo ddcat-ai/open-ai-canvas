@@ -9,7 +9,7 @@ import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
-import type { UpdreamSkill } from "@/services/api/skills";
+import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -21,7 +21,7 @@ import { executeTextGeneration } from "./canvas-text-generation-executor";
 type UseCanvasGenerationExecutorOptions = {
     projectId: string;
     domainProjectId?: string;
-    activatedSkills: UpdreamSkill[];
+    addedSkills: Skill[];
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -47,7 +47,7 @@ export type CanvasNodeGenerationOptions = {
 export function useCanvasGenerationExecutor({
     projectId,
     domainProjectId,
-    activatedSkills,
+    addedSkills,
     nodesRef,
     connectionsRef,
     setNodes,
@@ -142,7 +142,7 @@ export function useCanvasGenerationExecutor({
                 return;
             }
 
-            const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, activatedSkills);
+            const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, addedSkills);
             const effectivePrompt = expandedPrompt.trim();
             const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
             if (mode === "audio" && generationContext.characterReferences.length) {
@@ -233,6 +233,6 @@ export function useCanvasGenerationExecutor({
                 setRunningNodeId(null);
             }
         },
-        [activatedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
+        [addedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
 }
