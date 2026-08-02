@@ -29,12 +29,12 @@ export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploa
             initial={{ opacity: 0, x: 22, scale: 0.94 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             transition={aceternityMotion.spring.panel}
-            className="pointer-events-none absolute right-4 top-20 z-[90] w-[320px] overflow-hidden rounded-[22px] border px-4 py-4 backdrop-blur-2xl"
+            className="pointer-events-none absolute right-4 top-20 z-panel w-[320px] overflow-hidden rounded-4xl border px-4 py-4 backdrop-blur-2xl"
             style={{ background: theme.spatial.elevated, borderColor: status.error ? `${theme.accent.danger}66` : status.done ? "rgba(34,197,94,.4)" : theme.spatial.glowStrong, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.14)` }}
         >
             <div className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
             <div className="flex items-start gap-3">
-                <motion.span animate={status.done || status.error ? { scale: [0.8, 1.08, 1] } : { y: [0, -2, 0] }} transition={status.done || status.error ? { duration: 0.3 } : { duration: 1.5, repeat: Number.POSITIVE_INFINITY }} className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[14px] border" style={{ background: theme.spatial.surface, borderColor: `${accent}44`, color: accent }}>
+                <motion.span animate={status.done || status.error ? { scale: [0.8, 1.08, 1] } : { y: [0, -2, 0] }} transition={status.done || status.error ? { duration: 0.3 } : { duration: 1.5, repeat: Number.POSITIVE_INFINITY }} className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-2xl border" style={{ background: theme.spatial.surface, borderColor: `${accent}44`, color: accent }}>
                     {status.error ? <TriangleAlert className="size-4" /> : status.done ? <CheckCircle2 className="size-4" /> : <CloudUpload className="size-4" />}
                 </motion.span>
                 <span className="min-w-0 flex-1">
@@ -61,7 +61,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
     const detail = progress.phase === "loading" ? "加载视频工具" : progress.phase === "reading" ? "读取选中视频" : "正在编码合并成片";
     const percent = Math.max(0, Math.min(100, Math.round(progress.progress)));
     return (
-        <div data-canvas-no-zoom aria-live="polite" className="pointer-events-none absolute right-4 top-[164px] z-[90] w-[292px] overflow-hidden rounded-2xl border px-3 py-3 shadow-lg backdrop-blur-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <div data-canvas-no-zoom aria-live="polite" className="pointer-events-none absolute right-4 top-[164px] z-panel w-[292px] overflow-hidden rounded-2xl border px-3 py-3 shadow-lg backdrop-blur-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <div className="flex items-start gap-2.5">
                 <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-xl" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}>
                     <LoaderCircle className="size-4 animate-spin" />
@@ -81,7 +81,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
 
 export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose }: { change: CanvasAgentChange; theme: CanvasTheme; onView: () => void; onUndo: () => void; onClose: () => void }) {
     return (
-        <div data-canvas-no-zoom aria-live="polite" className="absolute bottom-20 right-4 z-[90] w-[320px] rounded-lg border p-3 shadow-lg backdrop-blur-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <div data-canvas-no-zoom aria-live="polite" className="absolute bottom-20 right-4 z-panel w-[320px] rounded-lg border p-3 shadow-lg backdrop-blur-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <div className="flex items-start gap-2.5">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}><span className="size-2 rounded-full bg-current" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-xs font-semibold">Agent 已写回画布</span><span className="mt-0.5 block truncate text-[11px]" style={{ color: theme.node.muted }}>{change.summary} · 可撤销最近 {change.undoCount} 批</span></span>

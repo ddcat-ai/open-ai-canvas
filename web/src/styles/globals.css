@@ -13,8 +13,9 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
+    --font-sans: "Geist", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-heading: "Instrument Serif", "Songti SC", "STSong", serif;
+    --font-mono: "Geist Mono", "SF Mono", "Menlo", monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,6 +47,15 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 }
+
+@utility z-canvas { z-index: 0; }
+@utility z-dock { z-index: 50; }
+@utility z-toolbar { z-index: 70; }
+@utility z-panel { z-index: 90; }
+@utility z-overlay { z-index: 120; }
+@utility z-menu { z-index: 180; }
+@utility z-modal { z-index: 500; }
+@utility z-toast { z-index: 1300; }
 
 :root {
     --radius: 0.5rem;
@@ -397,6 +407,66 @@
     .app-workspace-shell.is-spatial .app-workspace-stage {
         border-radius: 8px;
         background: color-mix(in srgb, var(--workspace-canvas) 92%, transparent);
+    }
+
+    .canvas-noise-overlay {
+        position: relative;
+        isolation: isolate;
+    }
+
+    .canvas-noise-overlay::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        opacity: 0.035;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+        mix-blend-mode: overlay;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-noise-overlay::before { opacity: 0.02; }
+    }
+
+    @keyframes canvas-toolbar-enter {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -100%) scale(0.92);
+        }
+        to {
+            opacity: 1;
+            transform: translate(-50%, -100%) scale(1);
+        }
+    }
+
+    .canvas-node-toolbar {
+        animation: canvas-toolbar-enter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-node-toolbar { animation: none; }
+    }
+
+    @keyframes canvas-overlay-enter {
+        from {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+
+    .canvas-overlay-enter {
+        animation: canvas-overlay-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+        transform-origin: top center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-overlay-enter { animation: none; }
     }
 
     .app-spatial-workspace .app-user-content {

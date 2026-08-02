@@ -72,7 +72,7 @@ function AgentModeSwitch({ value, theme, onChange }: { value: CanvasAgentMode; t
                 const active = value === item;
                 const Icon = item === "online" ? Globe2 : Laptop;
                 return (
-                    <button key={item} type="button" className="inline-flex h-7 items-center gap-1 rounded-[5px] px-2 transition-colors" style={{ background: active ? theme.node.fill : "transparent", color: active ? theme.node.text : theme.node.muted, boxShadow: active ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item)} aria-pressed={active}>
+                    <button key={item} type="button" className="inline-flex h-7 items-center gap-1 rounded-sm px-2 transition-colors" style={{ background: active ? theme.node.fill : "transparent", color: active ? theme.node.text : theme.node.muted, boxShadow: active ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item)} aria-pressed={active}>
                         <Icon className="size-3" />
                         {item === "online" ? "网站" : "本机"}
                     </button>

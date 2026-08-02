@@ -1346,7 +1346,7 @@ function InfiniteCanvasPage() {
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
-        <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <main className="canvas-noise-overlay flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             {currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} /> : null}
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
@@ -1661,7 +1661,7 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                {drawingNode ? <Suspense fallback={<div className="fixed inset-0 z-[500] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
+                {drawingNode ? <Suspense fallback={<div className="fixed inset-0 z-modal grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
                     <CanvasDrawingEditorModal
                         node={drawingNode}
                         projectId={projectId}
@@ -1688,7 +1688,7 @@ function InfiniteCanvasPage() {
                 />
 
                 {directorNodeId && activeDirectorScene ? (
-                    <Suspense fallback={<div className="fixed inset-0 z-[500] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载 3D 导演台" description="准备场景、镜头与空间控制。" /></div>}>
+                    <Suspense fallback={<div className="fixed inset-0 z-modal grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载 3D 导演台" description="准备场景、镜头与空间控制。" /></div>}>
                         <CanvasDirectorWorkbench
                             open
                             scene={activeDirectorScene}

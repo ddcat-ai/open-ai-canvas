@@ -158,7 +158,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
         >
             <CometCard
                 containerClassName="h-full w-full"
-                className="canvas-frame-shell overflow-hidden rounded-[14px] border"
+                className="canvas-frame-shell overflow-hidden rounded-2xl border"
                 rotateDepth={2.4}
                 translateDepth={2}
                 disabled={Boolean(dragOffset) || !collapsed || editing || scale < 0.32}

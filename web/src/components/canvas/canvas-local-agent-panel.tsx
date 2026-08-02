@@ -573,7 +573,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
 
     return (
         <motion.div
-            className="relative z-[70] flex h-full shrink-0"
+            className="relative z-toolbar flex h-full shrink-0"
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: collapsed ? 0 : width + 1, opacity: collapsed ? 0 : 1 }}
             transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}

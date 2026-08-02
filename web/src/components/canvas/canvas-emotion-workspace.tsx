@@ -207,7 +207,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
         <div
             ref={overlayRef}
             data-canvas-no-zoom
-            className={`absolute z-[105] overflow-hidden rounded-[16px] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
+            className={`absolute z-panel overflow-hidden rounded-2xl ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
             style={{ left: 0, top: 0, width: node.width * viewport.k, height: node.height * viewport.k }}
             onPointerDown={status === "manual" ? (event) => {
                 event.preventDefault();
@@ -255,7 +255,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                         key={face.id}
                         type="button"
                         aria-label={selected ? `选择${selected.name}` : "选择此人脸"}
-                        className={`absolute rounded-[7px] border-2 ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
+                        className={`absolute rounded-md border-2 ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
                         style={{ left: `${(face.x / imageWidth) * 100}%`, top: `${(face.y / imageHeight) * 100}%`, width: `${(face.width / imageWidth) * 100}%`, height: `${(face.height / imageHeight) * 100}%`, borderColor: active ? theme.accent.primary : "rgba(255,255,255,.94)", boxShadow: active ? `0 0 0 3px ${theme.accent.primarySoft}, 0 8px 24px rgba(0,0,0,.24)` : "0 8px 20px rgba(0,0,0,.18)" }}
                         whileHover={{ scale: 1.025 }}
                         whileTap={{ scale: 0.985 }}
@@ -267,7 +267,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                     </motion.button>
                 );
             })}
-            {manualDraft ? <div className="pointer-events-none absolute rounded-[7px] border-2 border-dashed border-white" style={{ left: `${(manualDraft.x / imageWidth) * 100}%`, top: `${(manualDraft.y / imageHeight) * 100}%`, width: `${(manualDraft.width / imageWidth) * 100}%`, height: `${(manualDraft.height / imageHeight) * 100}%`, boxShadow: "0 0 0 3px rgba(255,255,255,.16)" }} /> : null}
+            {manualDraft ? <div className="pointer-events-none absolute rounded-md border-2 border-dashed border-white" style={{ left: `${(manualDraft.x / imageWidth) * 100}%`, top: `${(manualDraft.y / imageHeight) * 100}%`, width: `${(manualDraft.width / imageWidth) * 100}%`, height: `${(manualDraft.height / imageHeight) * 100}%`, boxShadow: "0 0 0 3px rgba(255,255,255,.16)" }} /> : null}
         </div>
     );
 }
@@ -287,7 +287,7 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -5, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="aceternity-floating-panel absolute z-[125] flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-[15px] border px-2 backdrop-blur-2xl"
+            className="aceternity-floating-panel absolute z-overlay flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-2xl border px-2 backdrop-blur-2xl"
             style={{ left: 12, top: 76, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 22px 60px ${theme.spatial.shadow}` }}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -296,7 +296,7 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
                 <span className="mx-2 h-5 w-px" style={{ background: theme.toolbar.border }} />
                 <span className="grid size-8 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>{status === "detecting" ? <LoaderCircle className="size-4 animate-spin" /> : <ScanFace className="size-4" />}</span>
                 <span className="min-w-0 flex-1 truncate px-2 text-[11px] font-medium leading-none">{label}</span>
-                {status !== "detecting" ? <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] px-2 text-[11px] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}><SquareDashedMousePointer className="size-3.5" />手动框选</button> : null}
+                {status !== "detecting" ? <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}><SquareDashedMousePointer className="size-3.5" />手动框选</button> : null}
             </div>
         </SpotlightSurface>
     );
@@ -305,7 +305,7 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
 function EmotionPanelOverlay({ node, viewport, containerRef, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
     useScreenAnchor(panelRef, node, viewport, containerRef, (next, container) => panelScreenRect(node, next, container, panelRef.current));
-    return <div ref={panelRef} data-canvas-no-zoom className="absolute z-[120] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>{children}</div>;
+    return <div ref={panelRef} data-canvas-no-zoom className="absolute z-overlay w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>{children}</div>;
 }
 
 function useScreenAnchor(ref: RefObject<HTMLElement | null>, node: CanvasNodeData, viewport: ViewportTransform, containerRef: RefObject<HTMLDivElement | null>, resolve: (viewport: ViewportTransform, container: HTMLDivElement) => { left: number; top: number; width?: number; height?: number }) {

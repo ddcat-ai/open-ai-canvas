@@ -303,7 +303,7 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.95 }}
                             transition={aceternityMotion.spring.panel}
-                            className="aceternity-floating-panel w-full overflow-hidden rounded-[17px] border p-1.5 backdrop-blur-2xl"
+                            className="aceternity-floating-panel w-full overflow-hidden rounded-3xl border p-1.5 backdrop-blur-2xl"
                             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                         >
                             <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
@@ -328,11 +328,11 @@ function ModeOption({ active, motionEnabled, icon, title, description, theme, on
             whileHover={motionEnabled ? { x: 3 } : undefined}
             whileTap={motionEnabled ? { scale: 0.98 } : undefined}
             transition={aceternityMotion.spring.dock}
-            className="group flex min-h-11 w-full items-center gap-2 rounded-[12px] border px-2 py-1.5 text-left outline-none focus-visible:ring-2"
+            className="group flex min-h-11 w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left outline-none focus-visible:ring-2"
             style={{ background: active ? theme.accent.primarySoft : "transparent", borderColor: active ? theme.spatial.glowStrong : "transparent", color: theme.node.text }}
             onClick={onClick}
         >
-            <span className="grid size-8 shrink-0 place-items-center rounded-[10px] border [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-xl border [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
             <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold">{title}</span><span className="mt-0.5 block text-[8px]" style={{ color: theme.node.muted }}>{description}</span></span>
             <span className="grid size-5 shrink-0 place-items-center rounded-full border transition-opacity" style={{ background: active ? theme.accent.primary : theme.spatial.surface, borderColor: active ? theme.accent.primary : theme.toolbar.border, color: active ? "white" : theme.node.muted, opacity: active ? 1 : 0.28 }}><Check className="size-3" /></span>
         </motion.button>

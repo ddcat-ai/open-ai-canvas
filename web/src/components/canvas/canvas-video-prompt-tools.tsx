@@ -161,7 +161,7 @@ function CompactMenuButton({
                   <div
                       ref={menuRef}
                       data-canvas-no-zoom
-                      className="fixed z-[1500] overflow-hidden rounded-[12px] border p-1 backdrop-blur-xl"
+                      className="fixed z-toast overflow-hidden rounded-xl border p-1 backdrop-blur-xl"
                       style={menuStyle}
                       onMouseDown={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
@@ -204,7 +204,7 @@ function CompactMenuButton({
             <button
                 ref={triggerRef}
                 type="button"
-                className="inline-flex h-6 w-full min-w-0 items-center gap-1 rounded-[10px] border-0 bg-transparent px-1.5 shadow-none transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1"
+                className="inline-flex h-6 w-full min-w-0 items-center gap-1 rounded-xl border-0 bg-transparent px-1.5 shadow-none transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1"
                 style={buttonStyle}
                 title={title}
                 onClick={() => setOpen((value) => !value)}

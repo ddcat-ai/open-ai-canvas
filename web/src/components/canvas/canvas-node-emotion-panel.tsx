@@ -64,7 +64,7 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 5, scale: 0.98 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="aceternity-floating-panel w-[580px] max-w-full overflow-hidden rounded-[16px] border backdrop-blur-2xl"
+            className="aceternity-floating-panel w-[580px] max-w-full overflow-hidden rounded-2xl border backdrop-blur-2xl"
             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
         >
             <div className="flex h-11 items-center gap-1.5 border-b px-2.5" style={{ borderColor: theme.toolbar.border }}>
@@ -75,16 +75,16 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                             type="button"
                             layout
                             whileTap={reducedMotion ? undefined : { scale: 0.96 }}
-                            className="relative flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] border px-1.5 pr-2 text-[11px] font-medium outline-none"
+                            className="relative flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-1.5 pr-2 text-[11px] font-medium outline-none"
                             style={{ background: activeCharacterId === character.id ? theme.toolbar.activeBg : theme.spatial.surface, borderColor: activeCharacterId === character.id ? theme.spatial.glowStrong : theme.toolbar.border }}
                             onClick={() => onSelectCharacter(character.id)}
                         >
-                            {activeCharacterId === character.id ? <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-[8px]" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} /> : null}
+                            {activeCharacterId === character.id ? <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-lg" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} /> : null}
                             <FaceThumbnail dataUrl={dataUrl} imageWidth={imageWidth} imageHeight={imageHeight} box={character.faceBox} />
                             <span>{character.name}</span>
                         </motion.button>
                     ))}
-                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] border px-2 text-[11px] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
+                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
                         <ScanFace className="size-3.5" />手动框选
                     </button>
                 </div>
@@ -107,7 +107,7 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                     disabled={generating}
                     whileHover={reducedMotion || generating ? undefined : { y: -1 }}
                     whileTap={reducedMotion || generating ? undefined : { scale: 0.97 }}
-                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[11px] font-semibold disabled:cursor-wait disabled:opacity-55"
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold disabled:cursor-wait disabled:opacity-55"
                     style={{ background: theme.node.activeStroke, color: theme.node.panel }}
                     onClick={onConfirm}
                 >
@@ -122,7 +122,7 @@ function FaceThumbnail({ dataUrl, imageWidth, imageHeight, box }: { dataUrl: str
     const scaleX = imageWidth / Math.max(1, box.width);
     const scaleY = imageHeight / Math.max(1, box.height);
     return (
-        <span className="relative block size-6 shrink-0 overflow-hidden rounded-[6px] bg-black/20">
+        <span className="relative block size-6 shrink-0 overflow-hidden rounded-md bg-black/20">
             <img src={dataUrl} alt="" draggable={false} className="pointer-events-none absolute max-w-none" style={{ width: `${scaleX * 100}%`, height: `${scaleY * 100}%`, left: `${-(box.x / Math.max(1, box.width)) * 100}%`, top: `${-(box.y / Math.max(1, box.height)) * 100}%` }} />
         </span>
     );
@@ -144,7 +144,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
     const selectedColumn = 2 - preset.intimacy;
     const selectedRow = 2 - preset.arousal;
     return (
-        <div className="relative rounded-[12px] border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
+        <div className="relative rounded-xl border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
             <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[9px]" style={{ color: theme.node.muted }}>激动</span>
             <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[9px]" style={{ color: theme.node.muted }}>平静</span>
             <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[9px] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>亲近</span>
@@ -192,7 +192,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
 function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <div className="relative overflow-hidden rounded-[12px] border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
+        <div className="relative overflow-hidden rounded-xl border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
             <Canvas frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 38, near: 0.1, far: 20, position: [0, 0, 4.15] }} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}>
                 <color attach="background" args={["#26272a"]} />
                 <ambientLight intensity={0.82} />

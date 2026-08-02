@@ -39,12 +39,12 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={motionTransition}
-                className="pointer-events-none absolute right-3 top-[72px] z-[120] w-[min(332px,calc(100vw-24px))]"
+                className="pointer-events-none absolute right-3 top-[72px] z-overlay w-[min(332px,calc(100vw-24px))]"
             >
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section
                         layout
-                        className="pointer-events-auto overflow-hidden rounded-[17px] border backdrop-blur-2xl"
+                        className="pointer-events-auto overflow-hidden rounded-3xl border backdrop-blur-2xl"
                         style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
                         aria-label="当前画布生成任务"
                     >
@@ -57,7 +57,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                             aria-controls="canvas-active-task-list"
                         >
                             <span className="flex min-w-0 items-center gap-2">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-[10px]" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
+                                <span className="grid size-8 shrink-0 place-items-center rounded-xl" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                                     <ListTodo className="size-4" />
                                 </span>
                                 <span className="min-w-0">

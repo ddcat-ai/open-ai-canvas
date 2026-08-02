@@ -94,7 +94,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 9, scale: 0.96 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[50px] left-0 w-[220px] overflow-hidden rounded-[17px] border p-2.5 backdrop-blur-2xl"
+                        className="aceternity-floating-panel absolute bottom-[50px] left-0 w-[220px] overflow-hidden rounded-3xl border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
@@ -127,7 +127,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                                     whileHover={{ y: -1 }}
                                     whileTap={{ scale: 0.95 }}
                                     transition={aceternityMotion.spring.dock}
-                                    className="h-7 rounded-[9px] border text-[9px] font-semibold tabular-nums outline-none focus-visible:ring-2"
+                                    className="h-7 rounded-lg border text-[9px] font-semibold tabular-nums outline-none focus-visible:ring-2"
                                     style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }}
                                     onClick={() => commitScale(level)}
                                 >

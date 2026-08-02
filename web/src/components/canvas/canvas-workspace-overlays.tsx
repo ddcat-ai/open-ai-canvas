@@ -73,7 +73,7 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
         <div
             ref={toolbarRef}
             data-canvas-no-zoom
-            className={`absolute z-[70] max-w-[calc(100%_-_24px)] -translate-x-1/2 ${anchor.placement === "above" ? "-translate-y-full" : ""}`}
+            className={`absolute z-toolbar max-w-[calc(100%_-_24px)] -translate-x-1/2 ${anchor.placement === "above" ? "-translate-y-full" : ""}`}
             style={{ left: anchor.left, top: anchor.top, color: theme.node.text, transformOrigin: anchor.placement === "above" ? "bottom center" : "top center" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -114,7 +114,7 @@ export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidt
         <div
             ref={panelRef}
             data-canvas-no-zoom
-            className="thin-scrollbar absolute z-[120] max-w-[calc(100%_-_24px)] overflow-y-auto"
+            className="canvas-overlay-enter thin-scrollbar absolute z-overlay max-w-[calc(100%_-_24px)] overflow-y-auto"
             style={{ left: initialPosition.left, top: initialPosition.top, width: panelWidth, maxHeight: "calc(100% - 84px)" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -154,7 +154,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.97, rotateX: 2 }}
             animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel absolute z-[120] w-[248px] origin-top-left overflow-hidden rounded-[16px] border p-2 backdrop-blur-2xl"
+            className="aceternity-floating-panel absolute z-overlay w-[248px] origin-top-left overflow-hidden rounded-2xl border p-2 backdrop-blur-2xl"
             data-canvas-no-zoom
             data-connection-create-menu
             style={{ left: initialPosition.left, top: initialPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 30px 90px ${theme.spatial.shadow}` }}
@@ -164,7 +164,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1 py-0.5">
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-[10px] border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}><WandSparkles className="size-3.5" /></span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-xl border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}><WandSparkles className="size-3.5" /></span>
                     <span className="min-w-0"><span className="block truncate text-[11px] font-semibold">创建下一步</span><span className="mt-0.5 block truncate text-[8px]" style={{ color: theme.node.muted }}>引用当前节点</span></span>
                 </span>
                 <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onClose} aria-label="关闭连线创建菜单"><X className="size-3" /></button>
@@ -184,8 +184,8 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
 function ConnectionCreateOption({ motionEnabled, icon, title, description, onClick }: { motionEnabled: boolean; icon: ReactNode; title: string; description?: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <motion.button type="button" whileHover={motionEnabled ? { x: 2 } : undefined} whileTap={motionEnabled ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
-            <span className="grid size-7 shrink-0 place-items-center rounded-[8px] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
+        <motion.button type="button" whileHover={motionEnabled ? { x: 2 } : undefined} whileTap={motionEnabled ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
+            <span className="grid size-7 shrink-0 place-items-center rounded-lg opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
             <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-[10px] font-semibold leading-4">{title}</span>
                 {description ? <span className="mt-0.5 block truncate text-[8px]" style={{ color: theme.node.muted }}>{description}</span> : null}
