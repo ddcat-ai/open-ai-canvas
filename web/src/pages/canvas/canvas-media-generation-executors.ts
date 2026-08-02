@@ -22,6 +22,7 @@ export async function executeVideoGeneration({
     generationContext,
     controller,
     projectId,
+    canvasConnections,
     setNodes,
     setConnections,
     startGenerationRequest,
@@ -73,7 +74,13 @@ export async function executeVideoGeneration({
             { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: true } },
         ];
     });
-    if (!isEmptyVideoNode) setConnections((current) => [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }]);
+    // 重新生成已有视频时，新节点继承源视频的上游连接，与源视频保持并行关系，而不是作为其下游子节点。
+    if (!isEmptyVideoNode) {
+        setConnections((current) => {
+            if (!isExistingVideoNode) return [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }];
+            return [...current, ...canvasConnections.filter((connection) => connection.toNodeId === nodeId).map((connection) => ({ ...connection, id: nanoid(), toNodeId: videoId }))];
+        });
+    }
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
     try {
