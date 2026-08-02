@@ -22,6 +22,7 @@ export type CanvasGenerationExecution = CanvasGenerationExecutorDependencies & {
     nodeId: string;
     sourceNode: CanvasNodeData | undefined;
     canvasNodes: CanvasNodeData[];
+    canvasConnections: CanvasConnection[];
     prompt: string;
     effectivePrompt: string;
     generationConfig: AiConfig;
