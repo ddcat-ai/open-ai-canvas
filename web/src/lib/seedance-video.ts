@@ -78,13 +78,14 @@ export function isArkPlanBaseUrl(baseUrl: string) {
 
 export function normalizeSeedanceResolution(value: string, model = "") {
     const normalized = normalizeResolutionToken(value);
-    if (isSeedanceFastModel(model) && normalized === "1080p") return "720p";
-    return seedanceResolutionOptions.some((item) => item.value === normalized) ? normalized : "720p";
+    if (isSeedanceFastModel(model) && (normalized === "1080p" || normalized === "2160p")) return "720p";
+    return normalized === "2160p" || seedanceResolutionOptions.some((item) => item.value === normalized) ? normalized : "720p";
 }
 
 export function normalizeResolutionToken(value: string) {
     if (value === "low") return "480p";
     if (value === "auto" || value === "high" || value === "medium") return "720p";
+    if (value.toLowerCase() === "4k") return "2160p";
     const resolution = String(value || "").replace(/p$/i, "") || "720";
     return `${resolution}p`;
 }

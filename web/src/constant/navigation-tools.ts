@@ -1,6 +1,12 @@
-import { BookOpenCheck, Coins, FolderKanban, Images, ListChecks, Maximize2, Settings2 } from "lucide-react";
+import { BookOpenCheck, Coins, FolderKanban, Images, ListChecks, Maximize2, MessageSquarePlus, Settings2 } from "lucide-react";
 
 export const navigationTools = [
+    {
+        slug: "create",
+        label: "创作",
+        icon: MessageSquarePlus,
+        section: "创作空间",
+    },
     {
         slug: "projects",
         label: "短剧创作",
