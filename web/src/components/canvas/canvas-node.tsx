@@ -294,6 +294,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 width: data.width,
                 height: data.height,
                 contain: "layout style",
+                transition: !dragOffset && data.type === CanvasNodeType.Script ? "height 200ms cubic-bezier(0.4, 0, 0.2, 1)" : undefined,
             }}
             onMouseEnter={() => {
                 setHovered(true);
@@ -305,19 +306,21 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <NodeExternalHeader
-                node={data}
-                scale={scale}
-                active={hovered || isSelected || isFocusRelated}
-                editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
-                editing={isEditingTitle}
-                draft={titleDraft}
-                theme={theme}
-                onDraftChange={setTitleDraft}
-                onEdit={() => setIsEditingTitle(true)}
-                onCommit={commitTitle}
-                onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
-            />
+            {!(data.type === CanvasNodeType.Script && data.metadata?.storyboardCollapsed) ? (
+                <NodeExternalHeader
+                    node={data}
+                    scale={scale}
+                    active={hovered || isSelected || isFocusRelated}
+                    editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
+                    editing={isEditingTitle}
+                    draft={titleDraft}
+                    theme={theme}
+                    onDraftChange={setTitleDraft}
+                    onEdit={() => setIsEditingTitle(true)}
+                    onCommit={commitTitle}
+                    onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
+                />
+            ) : null}
             <CometCard
                 containerClassName="overflow-visible"
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-3xl ${flushMediaContent ? "border-0" : "border"} ${isGeneratingNode ? "canvas-node-shell-generating" : ""}`}
@@ -484,8 +487,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </> : null}
             </CometCard>
 
-            {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionSideRail side="left" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
-            {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config ? <ConnectionSideRail side="right" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
+            {!readOnly && (data.type !== CanvasNodeType.Script || data.metadata?.storyboardCollapsed) ? <ConnectionSideRail side="left" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
+            {!readOnly && (data.type !== CanvasNodeType.Script || data.metadata?.storyboardCollapsed) && data.type !== CanvasNodeType.Config ? <ConnectionSideRail side="right" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
 
         </div>
     );
@@ -1140,7 +1143,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
 
     return (
         <div
-            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 max-w-[240px] items-center gap-1"
+            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 max-w-full items-center gap-1"
             style={{ color: active ? theme.node.text : theme.node.label, transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`, transformOrigin: "left bottom" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1150,7 +1153,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                 <input
                     autoFocus
                     value={draft}
-                    className="h-6 min-w-20 max-w-[190px] rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
+                    className="h-6 min-w-0 flex-1 rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
                     style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 10px 28px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.06)` }}
                     onChange={(event) => onDraftChange(event.target.value)}
                     onFocus={(event) => event.currentTarget.select()}
@@ -1162,12 +1165,12 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                     aria-label="节点名称"
                 />
             ) : editable ? (
-                <button type="button" className="group flex min-w-0 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
-                    <span className="max-w-[190px] truncate">{node.title}</span>
+                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                    <span className="min-w-0 flex-1 truncate">{node.title}</span>
                     <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
                 </button>
             ) : (
-                <span className="max-w-[210px] truncate text-xs font-medium" style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
             )}
         </div>
     );

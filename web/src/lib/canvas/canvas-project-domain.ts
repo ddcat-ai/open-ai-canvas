@@ -1,5 +1,5 @@
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "@/constant/canvas";
-import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
+import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, STORYBOARD_SKELETON_HEIGHT, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import type { NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
@@ -33,6 +33,8 @@ export function persistCanvasWorkspaceMode(mode: CanvasWorkspaceMode) {
 export function createCanvasNode(type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata): CanvasNodeData {
     const spec = getNodeSpec(type);
     const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const isScript = type === CanvasNodeType.Script;
+    const scriptCollapsed = isScript && metadata?.storyboardCollapsed !== false;
 
     return {
         id,
@@ -40,12 +42,12 @@ export function createCanvasNode(type: CanvasNodeType, position: Position, metad
         title: spec.title,
         position: {
             x: position.x - spec.width / 2,
-            y: position.y - spec.height / 2,
+            y: position.y - (scriptCollapsed ? STORYBOARD_SKELETON_HEIGHT / 2 : spec.height / 2),
         },
         width: spec.width,
-        height: spec.height,
-        metadata: type === CanvasNodeType.Script
-            ? { ...spec.metadata, ...metadata, storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "durationSeconds", "plotDescription", "dialogue"], referenceNodeIds: [] } }
+        height: scriptCollapsed ? STORYBOARD_SKELETON_HEIGHT : spec.height,
+        metadata: isScript
+            ? { ...spec.metadata, ...metadata, storyboardCollapsed: scriptCollapsed, storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "durationSeconds", "plotDescription", "dialogue"], referenceNodeIds: [] } }
             : { ...spec.metadata, ...metadata, ...(type === CanvasNodeType.Drawing ? { drawingId: metadata?.drawingId || `${id}-document` } : {}) },
     };
 }

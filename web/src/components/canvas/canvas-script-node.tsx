@@ -17,6 +17,7 @@ import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGeneration
 
 export const STORYBOARD_ROW_HEIGHT = 48;
 export const STORYBOARD_HEADER_HEIGHT = 124;
+export const STORYBOARD_SKELETON_HEIGHT = 72;
 const STORYBOARD_ADD_ROW_HEIGHT = 36;
 const STORYBOARD_COMPOSER_MIN_HEIGHT = 104;
 const STORYBOARD_COMPOSER_MAX_HEIGHT = 180;
@@ -55,13 +56,14 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "负面要求", value: "negativePrompt" },
 ];
 
-export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
+export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCollapse, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
     node: CanvasNodeData;
     batch?: CanvasGenerationBatch;
     pipeline: CanvasStoryboardPipelineProgress;
     scale: number;
     mentionReferences: CanvasResourceReference[];
     onOpen: () => void;
+    onCollapse?: () => void;
     onCreateImageNodes: () => void;
     onCreateVideoNodes: () => void;
     onGenerateImages: () => void;
@@ -136,6 +138,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 </> : null}
                 {simpleMode ? null : <Tooltip title="生成动作拆分 12 宫格"><button type="button" disabled={!rows.length || hasActiveBatchItems} className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCreateActionBoards(); }}><Grid3X3 className="size-3.5" /></button></Tooltip>}
                 {simpleMode ? null : <Tooltip title="全屏编辑"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(); }}><Expand className="size-3.5" /></button></Tooltip>}
+                {onCollapse ? <Tooltip title="收起为骨架"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 active:scale-90 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCollapse(); }}><ChevronDown className="size-3.5" /></button></Tooltip> : null}
             </div>
             <StoryboardPipelineBar
                 pipeline={pipeline}
@@ -468,7 +471,9 @@ function editorRow(shotNumber: number): StoryboardRow {
     return { id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, shotNumber, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", negativePrompt: "", referenceNodeIds: [], status: "idle" };
 }
 
-function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { side: "left" | "right"; top: number; scale: number; tone?: StoryboardRow["status"]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; title?: string; onPointerDown: (event: ReactPointerEvent) => void }) {
+export { CanvasScriptSkeleton } from "@/components/canvas/canvas-script-skeleton";
+
+function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { side: "left" | "right"; top: number | string; scale: number; tone?: StoryboardRow["status"]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; title?: string; onPointerDown: (event: ReactPointerEvent) => void }) {
     const color = tone === "loading" ? theme.accent.primary : tone === "error" ? theme.accent.danger : tone === "success" ? theme.node.activeStroke : theme.node.muted;
     const inverseHitScale = 1 / Math.max(scale, 0.05);
     return (

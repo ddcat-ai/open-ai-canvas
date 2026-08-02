@@ -218,6 +218,7 @@ export type CanvasNodeMetadata = {
     storyboardShotDuration?: StoryboardShotDuration;
     storyboardShotCount?: StoryboardShotCount;
     storyboardComposerHeight?: number;
+    storyboardCollapsed?: boolean;
     generationBatches?: CanvasGenerationBatch[];
     frame?: {
         collapsed: boolean;

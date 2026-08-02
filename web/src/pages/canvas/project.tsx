@@ -40,7 +40,7 @@ import { AssetPickerModal } from "@/components/canvas/asset-picker-modal";
 import { getProject } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
-import { CanvasScriptEditor, CanvasScriptNodeContent, STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardMinNodeHeight, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
+import { CanvasScriptEditor, CanvasScriptNodeContent, CanvasScriptSkeleton, STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, STORYBOARD_SKELETON_HEIGHT, storyboardMinNodeHeight, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
 import { CanvasDirectorNodePanel } from "@/components/canvas/director/canvas-director-node-panel";
 import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-compare-modal";
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
@@ -1138,6 +1138,20 @@ function InfiniteCanvasPage() {
         enqueueGenerationBatch,
     });
 
+    const toggleScriptCollapsed = useCallback((nodeId: string) => {
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node || node.type !== CanvasNodeType.Script) return;
+        const nextCollapsed = !node.metadata?.storyboardCollapsed;
+        handleConfigNodeChange(nodeId, { storyboardCollapsed: nextCollapsed });
+        if (nextCollapsed) {
+            handleNodeResize(nodeId, node.width, STORYBOARD_SKELETON_HEIGHT);
+        } else {
+            const composerHeight = node.metadata?.storyboardComposerHeight;
+            const targetHeight = storyboardMinNodeHeight(composerHeight);
+            if (node.height < targetHeight) handleNodeResize(nodeId, node.width, targetHeight);
+        }
+    }, [handleConfigNodeChange, handleNodeResize, nodesRef]);
+
     const handleRetryNode = useCanvasGenerationRetry({
         projectId,
         domainProjectId: currentProject?.projectId,
@@ -1240,6 +1254,19 @@ function InfiniteCanvasPage() {
         if (contentNode.type === CanvasNodeType.Script) {
             const pipeline = deriveStoryboardPipelineProgress(contentNode, nodesRef.current, connectionsRef.current);
             const rowIds = pipeline.rows.map((item) => item.row.id);
+            if (contentNode.metadata?.storyboardCollapsed) {
+                return (
+                    <CanvasScriptSkeleton
+                        node={contentNode}
+                        pipeline={pipeline}
+                        batch={visibleGenerationBatch(contentNode)}
+                        onExpand={() => toggleScriptCollapsed(contentNode.id)}
+                        onGenerateImages={() => void generateScriptImages(contentNode.id, rowIds)}
+                        onGenerateVideos={() => workspaceMode === "simple" ? void createAndGenerateScriptVideos(contentNode.id) : void generateScriptVideos(contentNode.id, rowIds)}
+                        workspaceMode={workspaceMode}
+                    />
+                );
+            }
             return (
                 <CanvasScriptNodeContent
                     node={contentNode}
@@ -1248,6 +1275,7 @@ function InfiniteCanvasPage() {
                     scale={viewport.k}
                     mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || EMPTY_RESOURCE_REFERENCES}
                     onOpen={() => setScriptEditorNodeId(contentNode.id)}
+                    onCollapse={() => toggleScriptCollapsed(contentNode.id)}
                     onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
                     onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
                     onGenerateImages={() => void generateScriptImages(contentNode.id, rowIds)}
@@ -1304,7 +1332,7 @@ function InfiniteCanvasPage() {
                 workspaceMode={workspaceMode}
             />
         );
-    }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, updateScriptRow, viewport.k, workspaceMode]);
+    }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, toggleScriptCollapsed, updateScriptRow, viewport.k, workspaceMode]);
 
     const handleCanvasNodeHoverStart = useCallback((nodeId: string) => {
         if (nodeDraggingRef.current) return;
