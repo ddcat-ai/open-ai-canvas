@@ -27,7 +27,12 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const options = useMemo(
-        () => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))),
+        () => {
+            const filtered = selectableModelsByCapability(config, capability);
+            const current = value?.trim();
+            const currentIncluded = current ? filtered.includes(current) : true;
+            return Array.from(new Set([...filtered, ...(!currentIncluded && current ? [current] : [])].filter((model): model is string => Boolean(model))));
+        },
         [capability, config, value],
     );
     const optionGroups = useMemo(() => {

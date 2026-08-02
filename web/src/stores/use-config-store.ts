@@ -129,7 +129,19 @@ export type ConfigStoreSnapshot = {
 
 function isVideoModelName(model: string) {
     const value = modelOptionName(model).toLowerCase();
-    return value.includes("seedance") || value.includes("video") || value.includes("sora") || value.includes("veo") || value.includes("kling") || value.includes("wan") || value.includes("hailuo");
+    return value.includes("seedance")
+        || value.includes("video")
+        || value.includes("sora")
+        || value.includes("veo")
+        || value.includes("kling")
+        || value.includes("wan")
+        || value.includes("hailuo")
+        || value.includes("pika")
+        || value.includes("runway")
+        || value.includes("gen-3")
+        || value.includes("gen3")
+        || value.includes("hunyuan-video")
+        || value.includes("hunyuanvideo");
 }
 
 function isImageModelName(model: string) {
@@ -172,10 +184,15 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
     return models.filter((model) => {
         const decoded = decodeChannelModel(model);
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
-        const configuredCapability = channel?.modelCosts?.find((item) => item.model === decoded?.model)?.capability;
+        const modelName = decoded?.model || modelOptionName(model);
+        const costEntry = channel?.modelCosts?.find((item) => item.model === modelName);
+        const configuredCapability = costEntry?.capability;
         if (configuredCapability) return configuredCapability === capability;
         const channelCapability = capabilityForChannelInterface(channel?.interfaceType);
-        return channelCapability ? channelCapability === capability : modelMatchesCapability(model, capability);
+        if (channelCapability) return channelCapability === capability;
+        const protocolCapability = modelProtocolCapability(costEntry?.protocol);
+        if (protocolCapability) return protocolCapability === capability;
+        return modelMatchesCapability(model, capability);
     });
 }
 
