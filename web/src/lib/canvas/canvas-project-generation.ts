@@ -1,6 +1,6 @@
 import { type GenerationTask } from "@/services/api/task-center";
 import { backendProviderConfig, runBackendGenerationTask } from "@/services/api/generation-task";
-import { configuredModelMatchesCapability, defaultConfig, type AiConfig } from "@/stores/use-config-store";
+import { configuredModelMatchesCapability, defaultConfig, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
