@@ -1137,11 +1137,12 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
     if (scale < NODE_EXTERNAL_HEADER_MIN_SCALE && !editing) return null;
     const inverseScale = 1 / Math.max(scale, 0.05);
     const Icon = nodeTypeIcon(node.type);
+    const maxHeaderWidth = Math.min(240, node.width);
 
     return (
         <div
-            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 max-w-[240px] max-w-full items-center gap-1"
-            style={{ color: active ? theme.node.text : theme.node.label, transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`, transformOrigin: "left bottom" }}
+            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 items-center gap-1 overflow-hidden"
+            style={{ maxWidth: maxHeaderWidth, color: active ? theme.node.text : theme.node.label, transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`, transformOrigin: "left bottom" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -1150,7 +1151,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                 <input
                     autoFocus
                     value={draft}
-                    className="h-6 min-w-20 max-w-[190px] rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
+                    className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
                     style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 10px 28px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.06)` }}
                     onChange={(event) => onDraftChange(event.target.value)}
                     onFocus={(event) => event.currentTarget.select()}
@@ -1162,12 +1163,12 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                     aria-label="节点名称"
                 />
             ) : editable ? (
-                <button type="button" className="group flex min-w-0 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
-                    <span className="max-w-[190px] min-w-0 truncate" title={node.title}>{node.title}</span>
+                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                    <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
                     <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
                 </button>
             ) : (
-                <span className="max-w-[210px] min-w-0 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium" title={node.title} style={{ opacity: active ? 1 : 0.78 }}>{node.title}</span>
             )}
         </div>
     );
