@@ -105,9 +105,9 @@ async function createAndWaitGenerationTask({ projectId, mode, prompt, config, re
 }
 
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {
-    if (resourceIdFromStorageKey(media.storageKey)) return { ...media, dataUrl: "" };
+    if (resourceIdFromStorageKey(media.storageKey)) return backendMediaReference(media, { storageKey: media.storageKey });
     const url = media.url || "";
-    if (/^https?:\/\//i.test(url)) return media;
+    if (/^https?:\/\//i.test(url)) return backendMediaReference(media, { url });
     let blob: Blob | null = null;
     if (media.storageKey) blob = await getMediaBlob(media.storageKey);
     if (!blob && (url.startsWith("blob:") || url.startsWith("data:"))) blob = await (await fetch(url)).blob();
@@ -115,23 +115,50 @@ async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAud
     try {
         const kind: "video" | "audio" | "file" = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
         const resource = await uploadResourceFile(blob, kind, { fileName: media.name, width: "width" in media ? media.width : undefined, height: "height" in media ? media.height : undefined, durationMs: media.durationMs });
-        return { ...media, url: resource.publicUrl || `/api/resources/${resource.id}/file`, storageKey: resourceStorageKey(resource.id), dataUrl: "", type: resource.mimeType || media.type || blob.type };
+        return backendMediaReference(media, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || media.type || blob.type });
     } catch (error) {
         throw new Error(error instanceof Error ? `参考媒体上传失败：${error.message}` : "参考媒体上传失败");
     }
 }
 
 async function prepareBackendImageReference(image: ReferenceImage) {
-    if (resourceIdFromStorageKey(image.storageKey)) return { ...image, dataUrl: "" };
-    if (/^https?:\/\//i.test(image.dataUrl)) return { ...image, url: image.url || image.dataUrl, dataUrl: "" };
-    const blob = image.storageKey ? await getImageBlob(image.storageKey) : image.dataUrl ? await (await fetch(image.dataUrl)).blob() : null;
+    if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
+    const sourceUrl = image.url || image.dataUrl;
+    if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
+    const blob = image.storageKey ? await getImageBlob(image.storageKey) : sourceUrl ? await (await fetch(sourceUrl)).blob() : null;
     if (!blob) throw new Error("参考图片尚未保存，请重新上传后再生成");
     try {
         const resource = await uploadResourceFile(blob, "image", { fileName: image.name });
-        return { ...image, dataUrl: "", url: resource.publicUrl || `/api/resources/${resource.id}/file`, storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type };
+        return backendImageReference(image, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type });
     } catch (error) {
         throw new Error(error instanceof Error ? `参考图片上传失败：${error.message}` : "参考图片上传失败");
     }
+}
+
+// 任务输入只允许后端协议字段，避免把 previewUrl 等页面态 Data URL 带入强校验写路径。
+function backendImageReference(image: ReferenceImage, override: Partial<ReferenceImage>): ReferenceImage {
+    return {
+        id: image.id,
+        name: image.name,
+        type: override.type || image.type,
+        dataUrl: "",
+        url: override.url,
+        storageKey: override.storageKey,
+    };
+}
+
+function backendMediaReference<T extends ReferenceVideo | ReferenceAudio>(media: T, override: Partial<T>): T {
+    return {
+        id: media.id,
+        name: media.name,
+        type: override.type || media.type,
+        url: override.url || "",
+        storageKey: override.storageKey,
+        ...("bytes" in media && media.bytes ? { bytes: media.bytes } : {}),
+        ...("width" in media && media.width ? { width: media.width } : {}),
+        ...("height" in media && media.height ? { height: media.height } : {}),
+        ...(media.durationMs ? { durationMs: media.durationMs } : {}),
+    } as T;
 }
 
 export function backendProviderConfig(config: AiConfig) {

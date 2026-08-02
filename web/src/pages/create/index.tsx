@@ -13,10 +13,9 @@ import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
 import { requestImageQuestion } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { useAssetStore } from "@/stores/use-asset-store";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
-import { buildCreationMentionReferences, creationReferenceAudios, creationReferenceImages, creationReferenceMetadata, creationReferenceVideos, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
 
 type CreationMode = "text" | "image" | "video";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
@@ -70,7 +69,6 @@ export default function CreatePage() {
     const { message: toast } = App.useApp();
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
-    const assets = useAssetStore((state) => state.assets);
     const [conversations, setConversations] = useState<CreationConversation[]>([]);
     const [activeId, setActiveId] = useState("");
     const [hydrated, setHydrated] = useState(false);
@@ -97,7 +95,7 @@ export default function CreatePage() {
         [activeId, conversations],
     );
     const selectedModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
-    const mentionReferences = useMemo(() => buildCreationMentionReferences(assets, addedSkills, mode, attachments, draftReferences), [addedSkills, assets, attachments, draftReferences, mode]);
+    const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
 
     useEffect(() => {
@@ -153,10 +151,6 @@ export default function CreatePage() {
     }, [updateActive]);
 
     const selectMode = (next: CreationMode) => {
-        if (next !== "video") {
-            const unsupported = mentionReferences.filter((reference) => reference.kind === "video" || reference.kind === "audio");
-            if (unsupported.length) setPrompt((current) => removeReferenceTokens(current, unsupported));
-        }
         setMode(next);
         const nextModels = selectableModelsByCapability(config, next);
         const current = next === "text" ? config.textModel : next === "image" ? config.imageModel : config.videoModel;
@@ -195,9 +189,6 @@ export default function CreatePage() {
         const settings = { ratio, seconds, quality, videoQuality, count };
         const references = selectedCreationReferences(text, mentionReferences);
         const expandedPrompt = expandCreationPrompt(text, references, attachments);
-        const referencedImages = creationReferenceImages(references);
-        const referencedVideos = creationReferenceVideos(references);
-        const referencedAudios = creationReferenceAudios(references);
         const referenceMetadata = creationReferenceMetadata(references);
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
@@ -230,7 +221,7 @@ export default function CreatePage() {
                     mode: "image",
                     prompt: expandedPrompt,
                     config: { ...requestConfig, count: "1" },
-                    referenceImages: [...attachments, ...referencedImages],
+                    referenceImages: attachments,
                     signal: controller.signal,
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
                     count: taskCount,
@@ -249,11 +240,9 @@ export default function CreatePage() {
                     mode: "video",
                     prompt: expandedPrompt,
                     config: requestConfig,
-                    referenceImages: [...attachments, ...referencedImages],
-                    referenceVideos: referencedVideos,
-                    referenceAudios: referencedAudios,
+                    referenceImages: attachments,
                     signal: controller.signal,
-                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length || referencedImages.length ? "image_to_video" : "text_to_video", ...referenceMetadata },
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length ? "image_to_video" : "text_to_video", ...referenceMetadata },
                 });
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
                 const videoUrl = result.video.dataUrl;
@@ -476,7 +465,7 @@ function CreationComposer(props: ComposerProps) {
             <input ref={props.fileInputRef} type="file" hidden accept="image/*" multiple onChange={props.onFileChange} />
             <Tooltip title="添加参考图片"><button type="button" className="creation-chat-reference is-paper" onClick={() => props.fileInputRef.current?.click()} disabled={props.busy} aria-label="添加参考图片"><Plus /><span>参考内容</span></button></Tooltip>
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用资源或技能" spellCheck disabled={props.busy} />
+                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} mentionMenuWidth={400} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
                 {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => <div key={item.id} className="creation-chat-attachment"><img src={item.previewUrl} alt={item.name} /><button type="button" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>)}</div> : null}
             </div>
         </div>
@@ -564,7 +553,7 @@ function conversationPreviewMessage(conversation: CreationConversation) {
 
 function buildTextMessageContent(item: CreationMessage) {
     const content = expandCreationPrompt(item.content, item.references || [], item.attachments || []);
-    const images = [...(item.attachments || []), ...creationReferenceImages(item.references || [])];
+    const images = item.attachments || [];
     if (!images.length) return content;
     return [{ type: "text" as const, text: content }, ...images.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl || image.url || "" } }))];
 }
