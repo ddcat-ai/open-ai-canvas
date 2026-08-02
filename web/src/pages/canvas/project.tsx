@@ -184,7 +184,6 @@ function InfiniteCanvasPage() {
     const localAgentEnabled = useCanvasAgentStore((state) => state.enabled);
     const containerRef = useRef<HTMLDivElement>(null);
     const didInitialCenterRef = useRef(false);
-    const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
@@ -708,22 +707,20 @@ function InfiniteCanvasPage() {
     const keepNodeToolbar = useCallback(
         (nodeId: string) => {
             if (nodeDraggingRef.current || nodeImageSettingsOpen) return;
-            if (toolbarHideTimerRef.current) {
-                clearTimeout(toolbarHideTimerRef.current);
-                toolbarHideTimerRef.current = null;
-            }
             setToolbarNodeId(nodeId);
         },
         [nodeImageSettingsOpen],
     );
 
     const hideNodeToolbar = useCallback(() => {
-        if (toolbarHideTimerRef.current) clearTimeout(toolbarHideTimerRef.current);
-        toolbarHideTimerRef.current = setTimeout(() => {
-            setToolbarNodeId(null);
-            toolbarHideTimerRef.current = null;
-        }, 120);
+        // 工具栏跟随选中节点，不再因鼠标离开而隐藏
     }, []);
+
+    // 工具栏跟随选中节点：单选时显示该节点工具栏，多选/未选时隐藏；拖拽与文本/绘图编辑器打开时让位
+    useEffect(() => {
+        if (isNodeDragging || textEditorNodeId || drawingNodeId) return;
+        setToolbarNodeId(selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
+    }, [selectedNodeIds, isNodeDragging, textEditorNodeId, drawingNodeId]);
 
     const {
         collapsingBatchIds,
@@ -1313,12 +1310,10 @@ function InfiniteCanvasPage() {
     const handleCanvasNodeHoverStart = useCallback((nodeId: string) => {
         if (nodeDraggingRef.current) return;
         setHoveredNodeId(nodeId);
-        keepNodeToolbar(nodeId);
-    }, [keepNodeToolbar]);
+    }, []);
     const handleCanvasNodeHoverEnd = useCallback((nodeId: string) => {
         setHoveredNodeId((current) => (current === nodeId ? null : current));
-        hideNodeToolbar();
-    }, [hideNodeToolbar]);
+    }, []);
     const retryCanvasNode = useCallback((node: CanvasNodeData) => {
         if (node.type === CanvasNodeType.Script) {
             const prompt = (node.metadata?.composerContent || node.metadata?.prompt || "").trim();

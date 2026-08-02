@@ -46,8 +46,8 @@ type CanvasNodeProps = {
     batchPrimary?: boolean;
     batchMotion?: { x: number; y: number; index: number };
     onMouseDown: (event: React.MouseEvent, nodeId: string) => void;
-    onHoverStart: (nodeId: string) => void;
-    onHoverEnd: (nodeId: string) => void;
+    onHoverStart?: (nodeId: string) => void;
+    onHoverEnd?: (nodeId: string) => void;
     onConnectStart: (event: React.PointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onTitleChange?: (nodeId: string, title: string) => void;
@@ -297,11 +297,11 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onMouseEnter={() => {
                 setHovered(true);
-                onHoverStart(data.id);
+                onHoverStart?.(data.id);
             }}
             onMouseLeave={() => {
                 setHovered(false);
-                onHoverEnd(data.id);
+                onHoverEnd?.(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
