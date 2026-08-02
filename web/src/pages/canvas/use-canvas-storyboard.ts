@@ -17,9 +17,10 @@ import {
     storyboardRowsFromTask,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
-import { modelOptionName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { modelDisplayName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import {
     CanvasNodeType,
     type CanvasConnection,
@@ -60,14 +61,14 @@ export function useCanvasStoryboard({
         if (!count) return resolve(false);
         modal.confirm({
             title: `确认提交 ${count} 个${taskLabel}任务`,
-            content: `任务数：${count}；模型：${modelOptionName(model) || model}。当前没有可用价格数据，将提交 ${count} 个外部模型任务。`,
+            content: `任务数：${count}；模型：${modelDisplayName(effectiveConfig, model)}。当前没有可用价格数据，将提交 ${count} 个外部模型任务。`,
             okText: "确认生成",
             cancelText: "取消",
             centered: true,
             onOk: () => resolve(true),
             onCancel: () => resolve(false),
         });
-    }), [modal]);
+    }), [effectiveConfig, modal]);
 
     const updateScriptRows = useCallback((nodeId: string, updater: (rows: StoryboardRow[]) => StoryboardRow[]) => {
         setNodes((current) => current.map((node) => node.id === nodeId ? {
@@ -159,7 +160,7 @@ export function useCanvasStoryboard({
             message.success(`已生成 ${result.rows.length} 个镜头`);
             return true;
         } catch (error) {
-            const details = error instanceof Error ? error.message : "脚本生成失败";
+            const details = generationErrorMessage(error);
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : node));
             message.error(details);
             return false;

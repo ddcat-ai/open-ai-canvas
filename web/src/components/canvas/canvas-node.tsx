@@ -7,7 +7,7 @@ import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { formatBytes } from "@/lib/image-utils";
-import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
+import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/resource-blob-cache";
@@ -633,7 +633,7 @@ function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "
     const moderationFailure = node.metadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(node.metadata?.errorDetails);
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
-            <div className="text-xs leading-5" style={{ color: theme.accent.danger }}>{node.metadata?.errorDetails || "生成失败"}</div>
+            <div className="text-xs leading-5" style={{ color: theme.accent.danger }}>{generationErrorMessage(node.metadata?.errorDetails)}</div>
             {moderationFailure ? (
                 <div className="rounded-md border px-3 py-2 text-[11px] leading-4" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.node.muted }}>
                     修改节点提示词后，可重新点击生成。

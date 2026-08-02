@@ -12,7 +12,7 @@ import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-
 import { cancelGenerationTask, createAgentSession, createGenerationTask, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog, type TaskStatus } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelDisplayName, resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { formatCredits } from "@/constant/credits";
 import { listProjects, type ProjectSummary } from "@/services/api/projects";
 
@@ -287,7 +287,7 @@ export default function TasksPage() {
                 title: "类型｜模型",
                 width: 180,
                 responsive: ["md"],
-                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[10px] text-foreground/42" title={formatModelName(task)}>{formatModelName(task)}</div></div>,
+                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[10px] text-foreground/42" title={formatModelName(effectiveConfig, task)}>{formatModelName(effectiveConfig, task)}</div></div>,
             },
             {
                 title: "任务名称",
@@ -303,7 +303,7 @@ export default function TasksPage() {
                                 {task.status === "failed" || task.status === "cancelled" ? taskAttentionReason(task) : task.stage || statusLabel[task.status]}
                             </div>
                             <div className="mt-2 space-y-2 md:hidden">
-                                <div className="truncate text-[10px] text-foreground/45">{formatTaskKind(task)} · {formatModelName(task)}</div>
+                                <div className="truncate text-[10px] text-foreground/45">{formatTaskKind(task)} · {formatModelName(effectiveConfig, task)}</div>
                                 <div className="truncate text-[10px] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex min-w-0 items-center gap-2 text-[11px]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span><TaskBilling billing={task.billing} /></div>
@@ -369,7 +369,7 @@ export default function TasksPage() {
                 ),
             },
         ],
-        [actingId, canvasById, domainProjectNameById, openTaskDetail],
+        [actingId, canvasById, domainProjectNameById, effectiveConfig, openTaskDetail],
     );
 
     return (
@@ -442,7 +442,7 @@ export default function TasksPage() {
                             <InfoItem label="状态" value={statusLabel[detailTask.status]} />
                             <InfoItem label="画布名称" value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
                             <InfoItem label="任务类型" value={formatTaskKind(detailTask)} />
-                            <InfoItem label="模型" value={formatModelName(detailTask)} />
+                            <InfoItem label="模型" value={formatModelName(effectiveConfig, detailTask)} />
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
                         </div>
@@ -601,7 +601,7 @@ function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }) {
     return <div className="text-right"><div className="text-xs font-medium tabular-nums text-foreground/78">{amount}</div><div className={`mt-1 text-[10px] ${billing.status === "uncertain" ? "text-amber-600 dark:text-amber-300" : "text-foreground/38"}`}>{note}</div></div>;
 }
 
-function formatModelName(task: GenerationTask) {
+function formatModelName(config: AiConfig, task: GenerationTask) {
     const raw = (task.model || task.provider || "").trim();
     const model = raw.includes("::") ? raw.split("::").pop()?.trim() || raw : raw;
 
@@ -610,7 +610,7 @@ function formatModelName(task: GenerationTask) {
     if (model === "workflow-router") return "工作流路由";
     if (model === "internal-agent") return "内置工作流";
     if (model === "openai-compatible") return "OpenAI 兼容接口";
-    return model;
+    return modelDisplayName(config, raw);
 }
 
 function formatDate(value?: string) {

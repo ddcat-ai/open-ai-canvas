@@ -31,9 +31,9 @@ export function PageHeader({ title, description, meta, actions, icon }: { title:
     );
 }
 
-export function ListToolbar({ children, trailing, active, onReset }: { children: ReactNode; trailing?: ReactNode; active?: boolean; onReset?: () => void }) {
+export function ListToolbar({ children, trailing, active, onReset, className }: { children: ReactNode; trailing?: ReactNode; active?: boolean; onReset?: () => void; className?: string }) {
     return (
-        <div className="mt-3 flex min-h-12 flex-col gap-2 border-b border-border/75 pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className={cn("mt-3 flex min-h-12 flex-col gap-2 border-b border-border/75 pb-3 lg:flex-row lg:items-center lg:justify-between", className)}>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">{children}</div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {active && onReset ? <Button type="text" icon={<RotateCcw className="size-3.5" />} onClick={onReset}>重置</Button> : null}

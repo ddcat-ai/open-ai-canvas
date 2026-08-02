@@ -2627,13 +2627,80 @@
         box-shadow: none;
     }
 
-    /* 画布文件采用“缩略图 + 元信息”结构，避免整张卡片形成笨重的白色容器。 */
+    .canvas-library-search {
+        max-width: 680px;
+    }
+
+    .canvas-library-page .app-page-header {
+        border-bottom: 0;
+        padding-bottom: 8px;
+    }
+
+    .canvas-library-toolbar {
+        min-height: 56px;
+        border: 0;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--workspace-surface-strong) 66%, transparent);
+        padding: 8px;
+    }
+
+    .canvas-library-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+        align-items: start;
+        gap: 20px 16px;
+    }
+
+    .canvas-library-page .app-pagination-bar {
+        position: static;
+        margin-top: 28px;
+        border-color: var(--workspace-border);
+        background: transparent;
+        padding: 16px 0 8px;
+        backdrop-filter: none;
+    }
+
+    /* 画布文件是单个可点击对象，缩略图与元信息共用一个容器，避免视觉割裂。 */
     .app-canvas-project-card {
         min-width: 0;
         color: var(--foreground);
     }
 
-    .app-canvas-project-preview {
+    .app-canvas-project-card.is-library {
+        border-color: var(--workspace-border);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 76%, transparent);
+        content-visibility: auto;
+        contain-intrinsic-size: 0 260px;
+        transition:
+            border-color var(--motion-instant) ease-out,
+            background-color var(--motion-instant) ease-out,
+            box-shadow var(--motion-instant) ease-out,
+            transform var(--motion-instant) ease-out;
+    }
+
+    .app-canvas-project-card.is-library .app-canvas-project-preview {
+        overflow: hidden;
+        border-bottom: 1px solid var(--workspace-border);
+        background: var(--workspace-surface-strong);
+    }
+
+    .app-canvas-project-card.is-library:hover,
+    .app-canvas-project-card.is-library:focus-within {
+        border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
+        background: color-mix(in srgb, var(--workspace-surface-strong) 90%, transparent);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+        transform: translateY(-1px);
+    }
+
+    .app-canvas-project-card.is-library.is-selected {
+        border-color: var(--workspace-accent);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--workspace-accent) 22%, transparent);
+    }
+
+    .app-canvas-project-card.is-library .app-canvas-project-body {
+        min-height: 82px;
+    }
+
+    .app-canvas-project-card.is-recent .app-canvas-project-preview {
         overflow: hidden;
         border: 1px solid var(--workspace-border);
         border-radius: 8px;
@@ -2644,15 +2711,10 @@
             box-shadow var(--motion-instant) ease-out;
     }
 
-    .app-canvas-project-card:hover .app-canvas-project-preview,
-    .app-canvas-project-card:focus-within .app-canvas-project-preview {
+    .app-canvas-project-card.is-recent:hover .app-canvas-project-preview,
+    .app-canvas-project-card.is-recent:focus-within .app-canvas-project-preview {
         border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-    }
-
-    .app-canvas-project-card.is-selected .app-canvas-project-preview {
-        border-color: var(--workspace-accent);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--workspace-accent) 22%, transparent);
     }
 
     .app-canvas-project-checkbox {
@@ -2665,13 +2727,28 @@
         color: color-mix(in srgb, var(--workspace-accent) 48%, var(--foreground));
     }
 
-    .dark .app-canvas-project-preview {
+    .dark .app-canvas-project-card.is-library:hover,
+    .dark .app-canvas-project-card.is-library:focus-within {
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+    }
+
+    .dark .app-canvas-project-card.is-recent .app-canvas-project-preview {
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
     }
 
-    .dark .app-canvas-project-card:hover .app-canvas-project-preview,
-    .dark .app-canvas-project-card:focus-within .app-canvas-project-preview {
+    .dark .app-canvas-project-card.is-recent:hover .app-canvas-project-preview,
+    .dark .app-canvas-project-card.is-recent:focus-within .app-canvas-project-preview {
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+    }
+
+    @media (max-width: 639px) {
+        .canvas-library-search {
+            max-width: none;
+        }
+
+        .canvas-library-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     .app-data-table .ant-table-pagination {
@@ -4261,6 +4338,26 @@ html:not(.dark) .creation-chat-reference:hover:not(:disabled) { background: rgba
 
 .creation-chat-editor textarea::placeholder { color: var(--creation-muted); opacity: .72; }
 
+.creation-chat-mention-container { min-height: 76px; }
+.creation-chat-mention-editor {
+    display: block;
+    width: 100%;
+    min-height: 76px;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--creation-text);
+    font-size: 14px;
+    line-height: 1.65;
+    resize: none;
+}
+
+.creation-chat-mention-editor:empty::before { color: var(--creation-muted); opacity: .72; }
+.creation-chat-mention-editor[aria-disabled="true"],
+.creation-chat-mention-editor:disabled { cursor: wait; opacity: .55; }
+
 .creation-chat-dock {
     display: flex;
     min-height: 46px;
@@ -4523,22 +4620,27 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 }
 
 .creation-chat-reference.is-paper {
-    width: 56px;
-    height: 72px;
+    display: flex;
+    width: 58px;
+    height: 74px;
     flex-direction: column;
     align-items: center;
     align-self: start;
     justify-content: center;
-    gap: 5px;
+    gap: 7px;
+    border: 1px dashed rgba(255, 255, 255, .09);
     border-radius: 4px;
     background: #242730;
-    color: #c7ccd4;
+    color: #9097a1;
     transform: rotate(-7deg);
 }
 
-.creation-chat-reference.is-paper span { display: block; font-size: 9px; font-weight: 600; }
+.creation-chat-reference.is-paper svg { width: 21px; height: 21px; }
+.creation-chat-reference.is-paper span { display: block; font-size: 10px; font-weight: 520; line-height: 1; white-space: nowrap; }
 .creation-chat-reference.is-paper:hover:not(:disabled) { background: #2b2e37; color: #f1f3f5; transform: rotate(-4deg) translateY(-2px); }
-.creation-chat-composer.is-empty .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
+.creation-chat-reference.is-paper:active:not(:disabled) { transform: rotate(-4deg) translateY(0) scale(.97); }
+.creation-chat-reference.is-paper:focus-visible { outline: 2px solid color-mix(in srgb, #83d6ec 68%, transparent); outline-offset: 3px; }
+.creation-chat-composer .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
 
 .creation-custom-value {
     display: flex;
@@ -4586,7 +4688,7 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-duration-choices button.is-selected { background: rgba(255, 255, 255, .11); color: #fff; }
 .creation-custom-value.is-duration { grid-column: 2; width: 100%; margin-top: 0; }
 
-html:not(.dark) .creation-chat-reference.is-paper { background: #e9ebed; color: #626b75; }
+html:not(.dark) .creation-chat-reference.is-paper { border-color: rgba(28, 32, 37, .10); background: #e9ebed; color: #626b75; }
 html:not(.dark) .creation-chat-reference.is-paper:hover:not(:disabled) { background: #dfe3e6; color: #1c2025; }
 html:not(.dark) .creation-custom-value { background: rgba(28, 32, 37, .055); }
 html:not(.dark) .creation-custom-value input,
@@ -4618,10 +4720,12 @@ html:not(.dark) .creation-duration-choices button.is-selected { background: rgba
     padding: 18px 20px 8px;
 }
 
-.creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
-.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+.creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
+.creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
 .creation-home .creation-chat-editor textarea,
-.creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea { min-height: 76px; }
+.creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
+.creation-home .creation-chat-mention-container,
+.creation-home .creation-chat-mention-editor { min-height: 76px; }
 .creation-home .creation-chat-dock { min-height: 48px; padding: 4px 12px 12px 16px; }
 
 .creation-home .creation-chat-control,
@@ -4675,6 +4779,13 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     font-size: 14px;
     line-height: 1.7;
 }
+
+.creation-user-message-references { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.creation-user-message-reference { display: inline-flex; min-width: 0; max-width: 180px; height: 25px; align-items: center; gap: 5px; border-radius: 6px; background: rgba(255, 255, 255, .075); padding: 0 7px; color: var(--creation-muted); font-size: 10px; line-height: 1; }
+.creation-user-message-reference img { width: 17px; height: 17px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; }
+.creation-user-message-reference svg { width: 12px; height: 12px; flex: 0 0 auto; }
+.creation-user-message-reference span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, .07); }
 
 .creation-assistant-message { max-width: 900px; margin: 0 0 48px; }
 .creation-message-heading { gap: 7px; color: var(--creation-faint); font-size: 11px; }
@@ -4743,7 +4854,9 @@ html:not(.dark) .creation-message-content code { background: rgba(28, 32, 37, .0
     .creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
     .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { min-height: 96px; padding: 14px 13px 6px; }
     .creation-home .creation-chat-editor textarea,
-    .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea { min-height: 64px; }
+    .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
+    .creation-home .creation-chat-mention-container,
+    .creation-home .creation-chat-mention-editor { min-height: 64px; }
     .creation-thread-stage, .creation-thread-composer { width: calc(100% - 28px); }
     .creation-thread-stage { padding-top: 36px; }
     .creation-user-message { max-width: 78%; }

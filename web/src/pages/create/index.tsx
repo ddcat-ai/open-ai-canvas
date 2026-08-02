@@ -1,16 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from "react";
 import localforage from "localforage";
 import { App, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowUp, Check, ChevronDown, Clock3, Download, Film, History, Image as ImageIcon, Maximize2, MessageSquareText, Plus, RefreshCw, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Download, FileText, Film, History, Image as ImageIcon, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Link } from "react-router";
 
+import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
+import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
 import { requestImageQuestion } from "@/services/api/image";
-import { modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { listAddedSkills, type Skill } from "@/services/api/skills";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
+import { buildCreationMentionReferences, creationReferenceAudios, creationReferenceImages, creationReferenceMetadata, creationReferenceVideos, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
 
 type CreationMode = "text" | "image" | "video";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
@@ -27,6 +33,7 @@ type CreationMessage = {
     resultUrls?: string[];
     error?: string;
     attachments?: CreationAttachment[];
+    references?: CreationReference[];
     settings?: CreationSettings;
 };
 type CreationConversation = { id: string; title: string; updatedAt: string; messages: CreationMessage[] };
@@ -63,12 +70,15 @@ export default function CreatePage() {
     const { message: toast } = App.useApp();
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const assets = useAssetStore((state) => state.assets);
     const [conversations, setConversations] = useState<CreationConversation[]>([]);
     const [activeId, setActiveId] = useState("");
     const [hydrated, setHydrated] = useState(false);
     const [mode, setMode] = useState<CreationMode>("video");
     const [prompt, setPrompt] = useState("");
     const [attachments, setAttachments] = useState<CreationAttachment[]>([]);
+    const [draftReferences, setDraftReferences] = useState<CreationReference[]>([]);
+    const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
     const [ratio, setRatio] = useState("16:9");
     const [seconds, setSeconds] = useState("6");
     const [quality, setQuality] = useState("auto");
@@ -87,6 +97,7 @@ export default function CreatePage() {
         [activeId, conversations],
     );
     const selectedModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
+    const mentionReferences = useMemo(() => buildCreationMentionReferences(assets, addedSkills, mode, attachments, draftReferences), [addedSkills, assets, attachments, draftReferences, mode]);
     const isEmpty = !activeConversation?.messages.length;
 
     useEffect(() => {
@@ -107,6 +118,18 @@ export default function CreatePage() {
     useEffect(() => {
         if (hydrated) void localforage.setItem(STORAGE_KEY, conversations);
     }, [conversations, hydrated]);
+
+    useEffect(() => {
+        let cancelled = false;
+        listAddedSkills().then(({ skills }) => {
+            if (!cancelled) setAddedSkills(skills);
+        }).catch(() => {
+            if (!cancelled) setAddedSkills([]);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (!followLatestMessageRef.current) return;
@@ -130,6 +153,10 @@ export default function CreatePage() {
     }, [updateActive]);
 
     const selectMode = (next: CreationMode) => {
+        if (next !== "video") {
+            const unsupported = mentionReferences.filter((reference) => reference.kind === "video" || reference.kind === "audio");
+            if (unsupported.length) setPrompt((current) => removeReferenceTokens(current, unsupported));
+        }
         setMode(next);
         const nextModels = selectableModelsByCapability(config, next);
         const current = next === "text" ? config.textModel : next === "image" ? config.imageModel : config.videoModel;
@@ -152,6 +179,12 @@ export default function CreatePage() {
         event.target.value = "";
     };
 
+    const removeAttachment = (id: string) => {
+        const reference = mentionReferences.find((item) => item.attachmentId === id);
+        setAttachments((current) => current.filter((item) => item.id !== id));
+        if (reference) setPrompt((current) => removeReferenceTokens(current, [reference]));
+    };
+
     const submit = async () => {
         const text = prompt.trim();
         if (!text || busy || !activeConversation) return;
@@ -160,8 +193,14 @@ export default function CreatePage() {
             return;
         }
         const settings = { ratio, seconds, quality, videoQuality, count };
+        const references = selectedCreationReferences(text, mentionReferences);
+        const expandedPrompt = expandCreationPrompt(text, references, attachments);
+        const referencedImages = creationReferenceImages(references);
+        const referencedVideos = creationReferenceVideos(references);
+        const referencedAudios = creationReferenceAudios(references);
+        const referenceMetadata = creationReferenceMetadata(references);
         followLatestMessageRef.current = true;
-        const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, settings });
+        const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
         updateActive((conversation) => ({
             ...conversation,
@@ -171,6 +210,7 @@ export default function CreatePage() {
         }));
         setPrompt("");
         setAttachments([]);
+        setDraftReferences([]);
         setBusy(true);
         const controller = new AbortController();
         abortRef.current = controller;
@@ -179,8 +219,8 @@ export default function CreatePage() {
             if (mode === "text") {
                 const history = [...(activeConversation.messages || []), userMessage].map((item) => ({
                     role: item.role,
-                    content: item.role === "user" && item.attachments?.length
-                        ? [{ type: "text" as const, text: item.content }, ...item.attachments.map((attachment) => ({ type: "image_url" as const, image_url: { url: attachment.dataUrl || attachment.url || attachment.previewUrl } }))]
+                    content: item.role === "user"
+                        ? buildTextMessageContent(item)
                         : item.content,
                 }));
                 await requestImageQuestion(requestConfig, history, (delta) => updateAssistant(assistantMessage.id, (item) => ({ ...item, content: item.content + delta })), { signal: controller.signal });
@@ -188,11 +228,11 @@ export default function CreatePage() {
                 const taskCount = Math.max(1, Math.min(15, Math.floor(Number(count) || 1)));
                 const settled = await runBackendGenerationTaskBatch({
                     mode: "image",
-                    prompt: text,
+                    prompt: expandedPrompt,
                     config: { ...requestConfig, count: "1" },
-                    referenceImages: attachments,
+                    referenceImages: [...attachments, ...referencedImages],
                     signal: controller.signal,
-                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id },
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
                     count: taskCount,
                 });
                 if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -207,11 +247,13 @@ export default function CreatePage() {
             } else {
                 const result = await runBackendGenerationTask({
                     mode: "video",
-                    prompt: text,
+                    prompt: expandedPrompt,
                     config: requestConfig,
-                    referenceImages: attachments,
+                    referenceImages: [...attachments, ...referencedImages],
+                    referenceVideos: referencedVideos,
+                    referenceAudios: referencedAudios,
                     signal: controller.signal,
-                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length ? "image_to_video" : "text_to_video" },
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length || referencedImages.length ? "image_to_video" : "text_to_video", ...referenceMetadata },
                 });
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
                 const videoUrl = result.video.dataUrl;
@@ -223,7 +265,7 @@ export default function CreatePage() {
                 updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "cancelled", content: "已停止" }));
                 return;
             }
-            const message = error instanceof Error ? error.message : "生成失败，请重试";
+            const message = generationErrorMessage(error);
             updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "error", error: message, content: "生成失败" }));
         } finally {
             abortRef.current = null;
@@ -238,6 +280,7 @@ export default function CreatePage() {
         setActiveId(next.id);
         setPrompt("");
         setAttachments([]);
+        setDraftReferences([]);
         setHistoryOpen(false);
     };
 
@@ -246,15 +289,48 @@ export default function CreatePage() {
         setActiveId(conversation.id);
         setPrompt("");
         setAttachments([]);
+        setDraftReferences([]);
         setHistoryOpen(false);
     };
 
-    const retryMessage = (item: CreationMessage, index: number) => {
+    const restoreMessageDraft = (item: CreationMessage) => {
+        const nextMode = item.mode || "text";
+        const nextSettings = item.settings;
+        setMode(nextMode);
+        setPrompt(item.content);
+        setAttachments(item.attachments ? [...item.attachments] : []);
+        setDraftReferences(item.references ? [...item.references] : []);
+        if (item.model) updateConfig(nextMode === "text" ? "textModel" : nextMode === "image" ? "imageModel" : "videoModel", item.model);
+        if (!nextSettings) return;
+        setRatio(nextSettings.ratio);
+        setSeconds(nextSettings.seconds);
+        setQuality(nextSettings.quality);
+        setVideoQuality(nextSettings.videoQuality);
+        setCount(nextSettings.count);
+    };
+
+    const retryFailedMessage = (item: CreationMessage, index: number) => {
         const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
-        if (!previous?.content) return;
-        setMode(previous.mode || "text");
-        setPrompt(previous.content);
-        setAttachments(previous.attachments || []);
+        if (!previous?.content || busy) return;
+        followLatestMessageRef.current = true;
+        restoreMessageDraft(previous);
+        const removedIds = new Set([item.id, previous.id]);
+        updateActive((conversation) => {
+            const messages = conversation.messages.filter((message) => !removedIds.has(message.id));
+            const firstPrompt = messages.find((message) => message.role === "user")?.content.trim();
+            return {
+                ...conversation,
+                title: firstPrompt ? firstPrompt.slice(0, 24) : "新创作",
+                updatedAt: new Date().toISOString(),
+                messages,
+            };
+        });
+    };
+
+    const createVariant = (item: CreationMessage, index: number) => {
+        const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
+        if (!previous?.content || busy) return;
+        restoreMessageDraft(previous);
     };
 
     if (!hydrated || !activeConversation) return <div className="grid h-full place-items-center"><Spin /></div>;
@@ -271,7 +347,8 @@ export default function CreatePage() {
         setPrompt,
         busy,
         attachments,
-        onRemoveAttachment: (id: string) => setAttachments((current) => current.filter((item) => item.id !== id)),
+        references: mentionReferences,
+        onRemoveAttachment: removeAttachment,
         fileInputRef,
         onFileChange: handleFileChange,
         onModeChange: selectMode,
@@ -293,21 +370,23 @@ export default function CreatePage() {
     };
 
     return <>
-        <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-home creation-scrollbar relative flex h-full min-h-0 flex-col overflow-y-scroll overscroll-contain">
+        <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
             <div className="creation-top-actions">
                 {!isEmpty ? <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="creation-top-action" onClick={startNewConversation}><Plus /></button></Tooltip> : null}
                 <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip>
             </div>
-            {isEmpty ? <section className="creation-empty-workspace">
-                <CreationIntro mode={mode} />
-                <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>
-            </section> : <>
-                <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <CreationMessageView key={item.id} item={item} onRetry={() => retryMessage(item, index)} />)}</div></section>
-                <section className="creation-thread-composer">
-                    <CreationComposer {...composerProps} variant="thread" />
-                </section>
-            </>}
-        </main>
+            <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-scrollbar flex h-full min-h-0 flex-col overflow-y-scroll overscroll-contain">
+                {isEmpty ? <section className="creation-empty-workspace">
+                    <CreationIntro mode={mode} />
+                    <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>
+                </section> : <>
+                    <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <CreationMessageView key={item.id} item={item} modelName={item.model ? modelDisplayName(config, item.model) : ""} onRetryFailure={() => retryFailedMessage(item, index)} onCreateVariant={() => createVariant(item, index)} />)}</div></section>
+                    <section className="creation-thread-composer">
+                        <CreationComposer {...composerProps} variant="thread" />
+                    </section>
+                </>}
+            </main>
+        </div>
         <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} />
     </>;
 }
@@ -323,7 +402,7 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
                     <button type="button" aria-current={active ? "page" : undefined} onClick={() => onSelect(conversation)}>
                         <span className="creation-history-time"><time dateTime={conversation.updatedAt}>{formatConversationTime(conversation.updatedAt)}</time><em>{latest?.mode ? modeLabels[latest.mode] : "创作"}</em></span>
                         <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
-                        <span className="creation-history-snippet">{latest?.content.trim() || "还没有开始创作"}</span>
+                        <span className="creation-history-snippet">{latest ? displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作" : "还没有开始创作"}</span>
                     </button>
                 </li>;
             })}
@@ -331,21 +410,28 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
     </Drawer>;
 }
 
-function CreationMessageView({ item, onRetry }: { item: CreationMessage; onRetry: () => void }) {
-    if (item.role === "user") return <div className="creation-user-message"><div>{item.content}</div>{item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => <img key={attachment.id} src={attachment.previewUrl} alt={attachment.name} />)}</div> : null}</div>;
+function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void }) {
+    if (item.role === "user") return <div className="creation-user-message"><div>{displayCreationPrompt(item.content, item.references || [])}</div>{item.references?.length ? <CreationMessageReferences references={item.references} /> : null}{item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => <img key={attachment.id} src={attachment.previewUrl} alt={attachment.name} />)}</div> : null}</div>;
     const mode = item.mode || "text";
     const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : "";
-    return <article className="creation-assistant-message"><div className="creation-message-heading"><span className="creation-message-mark"><Sparkles /></span><span>{modeLabels[mode]}</span>{item.model ? <span className="creation-message-model">{modelOptionName(item.model)}</span> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>{mode === "text" ? <div className="creation-message-content">{item.content ? <ReactMarkdown>{item.content}</ReactMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetry={onRetry} />}{item.error ? <div className="creation-message-error"><span>{item.error}</span><button type="button" onClick={onRetry}><RefreshCw />重新生成</button></div> : null}</article>;
+    return <article className="creation-assistant-message"><div className="creation-message-heading"><span className="creation-message-mark"><Sparkles /></span><span>{modeLabels[mode]}</span>{modelName ? <span className="creation-message-model">{modelName}</span> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>{mode === "text" ? <div className="creation-message-content">{item.content ? <ReactMarkdown>{item.content}</ReactMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} />}{item.error ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}</article>;
 }
 
-function MediaResult({ item, onRetry }: { item: CreationMessage; onRetry: () => void }) {
+function CreationMessageReferences({ references }: { references: CreationReference[] }) {
+    return <div className="creation-user-message-references" aria-label="本次引用">{references.map((reference) => {
+        const Icon = reference.kind === "skill" ? Sparkles : reference.kind === "image" ? ImageIcon : reference.kind === "video" ? Film : reference.kind === "audio" ? Music2 : FileText;
+        return <span key={reference.id} className="creation-user-message-reference">{reference.previewUrl && (reference.kind === "image" || reference.kind === "video") ? <img src={reference.previewUrl} alt="" /> : <Icon />}<span>{reference.label}</span></span>;
+    })}</div>;
+}
+
+function MediaResult({ item, onRetryFailure, onCreateVariant }: { item: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void }) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const resultUrls = item.resultUrls;
     const openPreview = (url: string, type: "image" | "video") => { setPreviewType(type); setPreviewUrl(url); };
     if (item.status === "pending") return <div className="creation-media-pending"><Spin size="small" />正在生成{item.mode === "video" ? "视频" : "图片"}…</div>;
-    if (!resultUrls?.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetry}>重试</button></div>;
-    return <div className="creation-media-result">{item.mode === "video" ? <button type="button" className="creation-video-result" onClick={() => openPreview(resultUrls[0], "video")} aria-label="预览生成视频"><video muted preload="metadata" className="size-full object-cover" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => openPreview(url, "image")} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}<div className="creation-media-actions"><span>{item.mode === "video" ? "视频结果" : `${resultUrls.length} 张图片`}</span><button type="button" onClick={onRetry}><RefreshCw />生成变体</button><Link to="/canvas">添加到画布</Link>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div><Modal open={Boolean(previewUrl)} title={null} footer={null} centered destroyOnHidden width={previewType === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={() => setPreviewUrl("")} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{previewUrl ? previewType === "video" ? <video controls autoPlay className="creation-media-preview-video" src={previewUrl} /> : <img className="creation-media-preview-image" src={previewUrl} alt="生成图片预览" /> : null}</Modal></div>;
+    if (!resultUrls?.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
+    return <div className="creation-media-result">{item.mode === "video" ? <button type="button" className="creation-video-result" onClick={() => openPreview(resultUrls[0], "video")} aria-label="预览生成视频"><video muted preload="metadata" className="size-full object-cover" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => openPreview(url, "image")} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}<div className="creation-media-actions"><span>{item.mode === "video" ? "视频结果" : `${resultUrls.length} 张图片`}</span><button type="button" onClick={onCreateVariant}><RefreshCw />生成变体</button><Link to="/canvas">添加到画布</Link>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div><Modal open={Boolean(previewUrl)} title={null} footer={null} centered destroyOnHidden width={previewType === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={() => setPreviewUrl("")} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{previewUrl ? previewType === "video" ? <video controls autoPlay className="creation-media-preview-video" src={previewUrl} /> : <img className="creation-media-preview-image" src={previewUrl} alt="生成图片预览" /> : null}</Modal></div>;
 }
 
 type ComposerProps = {
@@ -355,6 +441,7 @@ type ComposerProps = {
     setPrompt: (value: string) => void;
     busy: boolean;
     attachments: CreationAttachment[];
+    references: CreationReference[];
     onRemoveAttachment: (id: string) => void;
     fileInputRef: RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -387,9 +474,9 @@ function CreationComposer(props: ComposerProps) {
     return <section className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
             <input ref={props.fileInputRef} type="file" hidden accept="image/*" multiple onChange={props.onFileChange} />
-            <Tooltip title="添加参考图片"><button type="button" className={`creation-chat-reference ${props.variant === "empty" ? "is-paper" : ""}`} onClick={() => props.fileInputRef.current?.click()} disabled={props.busy} aria-label="添加参考图片"><Plus />{props.variant === "empty" ? <span>参考内容</span> : null}</button></Tooltip>
+            <Tooltip title="添加参考图片"><button type="button" className="creation-chat-reference is-paper" onClick={() => props.fileInputRef.current?.click()} disabled={props.busy} aria-label="添加参考图片"><Plus /><span>参考内容</span></button></Tooltip>
             <div className="creation-chat-editor">
-                <textarea value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); props.onSubmit(); } }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} disabled={props.busy} />
+                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用资源或技能" spellCheck disabled={props.busy} />
                 {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => <div key={item.id} className="creation-chat-attachment"><img src={item.previewUrl} alt={item.name} /><button type="button" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>)}</div> : null}
             </div>
         </div>
@@ -473,6 +560,17 @@ function conversationPreviewMessage(conversation: CreationConversation) {
         if (message.role === "user") return message;
     }
     return fallback;
+}
+
+function buildTextMessageContent(item: CreationMessage) {
+    const content = expandCreationPrompt(item.content, item.references || [], item.attachments || []);
+    const images = [...(item.attachments || []), ...creationReferenceImages(item.references || [])];
+    if (!images.length) return content;
+    return [{ type: "text" as const, text: content }, ...images.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl || image.url || "" } }))];
+}
+
+function removeReferenceTokens(value: string, references: CreationReference[]) {
+    return references.reduce((current, reference) => current.split(canvasResourceMentionToken(reference)).join(""), value);
 }
 
 function conversationTimestamp(value: string) {

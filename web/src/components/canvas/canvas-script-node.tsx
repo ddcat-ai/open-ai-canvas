@@ -8,7 +8,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { pipelineStatusLabel, type CanvasStoryboardPipelineProgress, type StoryboardPipelineStage } from "@/lib/canvas/canvas-storyboard-progress";
-import { isContentModerationError } from "@/lib/generation-error";
+import { generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -106,7 +106,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const hasActiveBatchItems = Boolean(batch?.items.some((item) => item.status === "waiting" || item.status === "submitting" || item.status === "queued" || item.status === "running"));
     const taskFeedback = node.metadata?.status === "loading"
         ? `${node.metadata.taskStage || "正在创建任务"}${typeof node.metadata.taskProgress === "number" ? ` · ${node.metadata.taskProgress}%` : ""}`
-        : node.metadata?.status === "error" ? node.metadata.errorDetails : "";
+        : node.metadata?.status === "error" ? generationErrorMessage(node.metadata.errorDetails) : "";
     const submitPrompt = () => {
         const value = prompt.trim();
         if (value && node.metadata?.status !== "loading") onGenerateScript(value);
@@ -344,7 +344,7 @@ function GenerationBatchDetails({ batch, rows, onRetryItem, onCancelItem }: { ba
                 const requiresPromptChange = isContentModerationError(item.errorDetails);
                 return <div key={item.id} className="flex min-h-9 items-center gap-2 border-t border-foreground/10 py-1.5 first:border-t-0">
                     <span className="w-14 shrink-0 text-xs font-medium">镜头 {shotByRowId.get(item.rowId) || "--"}</span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-foreground/60" title={item.errorDetails}>{generationBatchItemLabel(item)}{item.retryCount ? ` · 重试 ${item.retryCount}` : ""}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-foreground/60" title={item.errorDetails ? generationErrorMessage(item.errorDetails) : undefined}>{generationBatchItemLabel(item)}{item.retryCount ? ` · 重试 ${item.retryCount}` : ""}</span>
                     {item.status === "failed" ? <Tooltip title={requiresPromptChange ? "请先修改提示词，再重试这个镜头" : "只重试这个镜头"}><button type="button" className="grid size-7 shrink-0 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" onClick={() => onRetryItem(item.id)} aria-label={`重试镜头 ${shotByRowId.get(item.rowId) || ""}`}><RefreshCw className="size-3.5" /></button></Tooltip> : null}
                     {cancellable ? <Tooltip title="取消这个后台任务"><button type="button" className="grid size-7 shrink-0 place-items-center rounded outline-none transition hover:bg-red-500/10 focus-visible:ring-2" onClick={() => onCancelItem(item.id)} aria-label={`取消镜头 ${shotByRowId.get(item.rowId) || ""} 任务`}><X className="size-3.5" /></button></Tooltip> : null}
                 </div>;

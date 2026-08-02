@@ -7,7 +7,7 @@ import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudi
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
-import { generationFailureMetadata } from "@/lib/generation-error";
+import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -132,7 +132,7 @@ export function useCanvasGenerationExecutor({
                     mode === "video" && supportsVideoReferenceAudio(generationConfig),
                 );
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "生成任务准备失败";
+                const errorDetails = generationErrorMessage(error);
                 if (isPreparingEmptyImage) {
                     setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: controller.signal.aborted ? NODE_STATUS_IDLE : NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, errorDetails: controller.signal.aborted ? undefined : errorDetails } } : node)));
                 }

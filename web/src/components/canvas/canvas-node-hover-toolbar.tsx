@@ -7,7 +7,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
-import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
+import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
@@ -546,7 +546,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
 
                             {node.metadata?.errorDetails ? (
                                 <div className="rounded-2xl border p-3 text-red-500" style={{ borderColor: theme.node.stroke }}>
-                                    {node.metadata.errorDetails}
+                                    {generationErrorMessage(node.metadata.errorDetails)}
                                 </div>
                             ) : null}
                         </div>
