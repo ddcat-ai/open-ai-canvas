@@ -26,6 +26,13 @@
 - 测试环境：[https://ai.ddcat.pro/login](https://ai.ddcat.pro/login)
 - 代码仓库：[ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)
 
+## 赞助商
+
+| 赞助商 | 网站 | 说明 |
+| --- | --- | --- |
+| <img src="assets/artdance.png" alt="ArtDance" width="160"> | [ArtDance](https://artbox.top) | 本项目 Seedance 模型的天使投资人。 |
+
+
 ## 主要功能
 
 - **自由画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
