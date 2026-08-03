@@ -252,7 +252,7 @@ export default function CreatePage() {
                         ? buildTextMessageContent(item)
                         : item.content,
                 }));
-                await requestImageQuestion(requestConfig, history, (delta) => updateAssistant(assistantMessage.id, (item) => ({ ...item, content: item.content + delta })), { signal: controller.signal });
+                await requestImageQuestion(requestConfig, history, (text) => updateAssistant(assistantMessage.id, (item) => ({ ...item, content: text })), { signal: controller.signal });
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(15, Math.floor(Number(count) || 1)));
                 const settled = await runBackendGenerationTaskBatch({
