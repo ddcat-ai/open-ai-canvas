@@ -272,7 +272,7 @@ function MentionMenu({ candidates, allInputs, activeIndex, theme, onSelect }: { 
     };
 
     return (
-        <div className="aceternity-floating-panel absolute left-2 top-[calc(100%+6px)] z-[90] max-h-56 w-64 overflow-y-auto rounded-lg border p-1" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border }}>
+        <div className="aceternity-floating-panel absolute left-2 top-[calc(100%+6px)] z-[var(--z-modal)] max-h-56 w-64 overflow-y-auto rounded-lg border p-1" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border }}>
             {candidates.map((candidate, index) => (
                 <button
                     key={candidate.kind === "skill" ? candidate.reference.id : candidate.input.nodeId}

@@ -125,7 +125,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-[62]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-panel)]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {open ? (
                     <motion.aside

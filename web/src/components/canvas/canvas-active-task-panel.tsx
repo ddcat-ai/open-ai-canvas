@@ -39,7 +39,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={motionTransition}
-                className="pointer-events-none absolute right-3 top-[72px] z-[120] w-[min(332px,calc(100vw-24px))]"
+                className="pointer-events-none absolute right-3 top-[72px] z-[var(--z-modal-overlay)] w-[min(332px,calc(100vw-24px))]"
             >
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section
@@ -134,14 +134,47 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion }:
                     {expanded ? <ChevronUp className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} /> : <ChevronDown className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} />}
                 </div>
 
-                <div className="mt-3 h-1 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
-                    <motion.div className="h-full rounded-full" animate={{ width: `${progress ?? 8}%` }} transition={reducedMotion ? { duration: 0 } : { duration: 0.3 }} style={{ background: statusTone }} />
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
+                    {progress !== undefined ? (
+                        <motion.div
+                            className="relative h-full rounded-full overflow-hidden"
+                            animate={{ width: `${progress}%` }}
+                            transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: "easeOut" }}
+                            style={{ background: statusTone }}
+                        >
+                            {/* 进度条 shimmer 扫描动画（对应 #98 决策3）*/}
+                            {task.status === "running" && !reducedMotion ? (
+                                <span
+                                    className="absolute inset-0 canvas-task-progress-shimmer"
+                                    style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent)" }}
+                                    aria-hidden
+                                />
+                            ) : null}
+                        </motion.div>
+                    ) : (
+                        // indeterminate 模式（无具体百分比，从左到右循环扫描）
+                        <motion.div
+                            className="h-full rounded-full"
+                            initial={{ width: "20%", x: "-100%" }}
+                            animate={{ width: "20%", x: "400%" }}
+                            transition={reducedMotion ? { duration: 0 } : { duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                            style={{ background: statusTone }}
+                        />
+                    )}
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
-                    <span className="inline-flex min-w-0 items-center gap-1 truncate" title={durationLabel}><Clock3 className="size-3 shrink-0" />{durationLabel}</span>
-                    <span className="inline-flex min-w-0 items-center justify-end gap-1 truncate" title={billingLabel}><Coins className="size-3 shrink-0" />{billingLabel}</span>
-                </div>
+                {/* 进度百分比显示（对应 #98 决策3：列表视图）*/}
+                {progress !== undefined && task.status === "running" ? (
+                    <div className="mt-1 flex items-center justify-between text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                        <span>{durationLabel}</span>
+                        <span className="font-medium tabular-nums" style={{ color: statusTone }}>{progress}%</span>
+                    </div>
+                ) : (
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                        <span className="inline-flex min-w-0 items-center gap-1 truncate" title={durationLabel}><Clock3 className="size-3 shrink-0" />{durationLabel}</span>
+                        <span className="inline-flex min-w-0 items-center justify-end gap-1 truncate" title={billingLabel}><Coins className="size-3 shrink-0" />{billingLabel}</span>
+                    </div>
+                )}
             </button>
 
             <AnimatePresence initial={false}>

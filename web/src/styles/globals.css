@@ -4369,6 +4369,15 @@
         100% { opacity: 0; transform: scale(0.9); }
     }
 
+    /* 任务进度条 shimmer 扫描动画（对应 #98 决策3）*/
+    @keyframes canvas-task-progress-shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(200%); }
+    }
+    .canvas-task-progress-shimmer {
+        animation: canvas-task-progress-shimmer 1.4s linear infinite;
+    }
+
     .canvas-node-shell-generating::before {
         position: absolute;
         z-index: 45;
