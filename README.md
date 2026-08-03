@@ -39,26 +39,24 @@
 
 <table>
   <tr>
-    <td width="33%" valign="top">
+    <td width="50%" valign="top">
       <img src="assets/login.png" alt="登录与注册" width="100%">
       <br><sub><b>登录与注册</b></sub>
     </td>
-    <td width="33%" valign="top">
-      <img src="assets/huabu.png" alt="画布项目管理" width="100%">
-      <br><sub><b>画布项目管理</b></sub>
-    </td>
-    <td width="33%" valign="top">
-      <img src="assets/huabu-info.png" alt="画布创作工作台" width="100%">
-      <br><sub><b>画布创作工作台</b></sub>
+    <td width="50%" valign="top">
+      <img src="assets/create.png" alt="AI 创作工作台" width="100%">
+      <br><sub><b>AI 创作工作台</b></sub>
     </td>
   </tr>
   <tr>
-    <td width="33%" valign="top">
-      <img src="assets/backend.png" alt="运维管理后台" width="100%">
-      <br><sub><b>运维管理后台</b></sub>
+    <td width="50%" valign="top">
+      <img src="assets/project-detail.png" alt="短剧项目制作概览" width="100%">
+      <br><sub><b>短剧项目制作概览</b></sub>
     </td>
-    <td width="33%"></td>
-    <td width="33%"></td>
+    <td width="50%" valign="top">
+      <img src="assets/canvas.png" alt="自由画布创作工作台" width="100%">
+      <br><sub><b>自由画布创作工作台</b></sub>
+    </td>
   </tr>
 </table>
 
