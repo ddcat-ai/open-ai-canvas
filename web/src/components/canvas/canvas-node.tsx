@@ -385,12 +385,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                         } as React.CSSProperties
                     }
                 >
-                    {/* 节点类型色带（对应 #97 决策1：左侧3px色条，远距离最强信号）*/}
-                    <div
-                        className="pointer-events-none absolute left-0 top-0 z-10 h-full"
-                        style={{ width: "var(--node-type-strip-width)", background: nodeTypeColorVar(data.type, data.metadata?.workflowKind === "character"), borderRadius: "var(--node-radius) 0 0 var(--node-radius)" }}
-                        aria-hidden
-                    />
                     {/* 节点状态徽章（对应 #97 决策2：左上角 loading/success/error，近距离确认信号）*/}
                     {data.metadata?.status && data.metadata.status !== "idle" && data.type !== CanvasNodeType.Frame ? (
                         <NodeStatusBadge status={data.metadata.status} />
@@ -1202,20 +1196,6 @@ function nodeTypeIcon(type: CanvasNodeType) {
     if (type === CanvasNodeType.Config) return Settings2;
     if (type === CanvasNodeType.Skill) return BookOpenCheck;
     return Type;
-}
-
-// 节点类型色带色（对应 #97 决策1 色带方案，引用 --cn-type-* token）
-function nodeTypeColorVar(type: CanvasNodeType, isCharacter?: boolean): string {
-    if (isCharacter) return "var(--cn-type-character)";
-    if (type === CanvasNodeType.Image) return "var(--cn-type-image)";
-    if (type === CanvasNodeType.Video) return "var(--cn-type-video)";
-    if (type === CanvasNodeType.Audio) return "var(--cn-type-audio)";
-    if (type === CanvasNodeType.Drawing) return "var(--cn-type-drawing)";
-    if (type === CanvasNodeType.Script) return "var(--cn-type-script)";
-    if (type === CanvasNodeType.Config) return "var(--cn-type-config)";
-    if (type === CanvasNodeType.Skill) return "var(--cn-type-skill)";
-    if (type === CanvasNodeType.Frame) return "var(--cn-type-frame)";
-    return "var(--cn-type-text)";
 }
 
 // 节点状态徽章（对应 #97 决策2：左上角状态指示，loading/success/error）
