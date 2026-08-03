@@ -4778,6 +4778,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     color: var(--creation-text);
     font-size: 14px;
     line-height: 1.7;
+    white-space: pre-wrap;
 }
 
 .creation-user-message-references { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
@@ -4786,6 +4787,12 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-user-message-reference svg { width: 12px; height: 12px; flex: 0 0 auto; }
 .creation-user-message-reference span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, .07); }
+.creation-user-message-attachments button { position: relative; width: 44px; height: 44px; flex: 0 0 auto; overflow: hidden; border: 0; border-radius: 7px; background: transparent; padding: 0; }
+.creation-user-message-attachments button:focus-visible { outline: 2px solid var(--creation-text); outline-offset: 2px; }
+.creation-user-message-attachments button > span { position: absolute; right: 3px; bottom: 3px; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: rgba(0, 0, 0, .68); color: #fff; opacity: 0; transition: opacity 140ms ease; }
+.creation-user-message-attachments button:hover > span,
+.creation-user-message-attachments button:focus-visible > span { opacity: 1; }
+.creation-user-message-attachments button > span svg { width: 10px; height: 10px; }
 
 .creation-assistant-message { max-width: 900px; margin: 0 0 48px; }
 .creation-message-heading { gap: 7px; color: var(--creation-faint); font-size: 11px; }

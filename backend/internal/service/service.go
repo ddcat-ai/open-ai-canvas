@@ -89,6 +89,14 @@ type TaskSummary struct {
 	CreatedAt         time.Time           `json:"createdAt"`
 	UpdatedAt         time.Time           `json:"updatedAt"`
 	Billing           *TaskBillingSummary `json:"billing,omitempty"`
+	ClientContext     *TaskClientContext  `json:"clientContext,omitempty"`
+}
+
+type TaskClientContext struct {
+	ConversationID string `json:"conversationId"`
+	MessageID      string `json:"messageId"`
+	BatchIndex     int    `json:"batchIndex,omitempty"`
+	BatchCount     int    `json:"batchCount,omitempty"`
 }
 
 type TaskBillingSummary struct {
@@ -608,6 +616,29 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		CompletedAt:       task.CompletedAt,
 		CreatedAt:         task.CreatedAt,
 		UpdatedAt:         task.UpdatedAt,
+		ClientContext:     taskClientContext(task.InputJSON),
+	}
+}
+
+// 列表只暴露创作页恢复所需的关联 ID，不下发完整任务输入或其他 metadata。
+func taskClientContext(raw string) *TaskClientContext {
+	var input struct {
+		Metadata struct {
+			Source         string `json:"source"`
+			ConversationID string `json:"conversationId"`
+			MessageID      string `json:"messageId"`
+			BatchIndex     int    `json:"batchIndex"`
+			BatchCount     int    `json:"batchCount"`
+		} `json:"metadata"`
+	}
+	if json.Unmarshal([]byte(raw), &input) != nil || input.Metadata.Source != "create-page" || input.Metadata.ConversationID == "" || input.Metadata.MessageID == "" {
+		return nil
+	}
+	return &TaskClientContext{
+		ConversationID: input.Metadata.ConversationID,
+		MessageID:      input.Metadata.MessageID,
+		BatchIndex:     input.Metadata.BatchIndex,
+		BatchCount:     input.Metadata.BatchCount,
 	}
 }
 
