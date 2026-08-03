@@ -225,6 +225,7 @@ export type CanvasNodeMetadata = {
         expandedHeight: number;
     };
     drawingId?: string;
+    drawingEngine?: "tldraw" | "excalidraw";
     drawingRevision?: number;
     drawingUpdatedAt?: string;
     drawingPreviewStorageKey?: string;

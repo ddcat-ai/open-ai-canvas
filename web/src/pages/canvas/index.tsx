@@ -91,7 +91,13 @@ export default function CanvasPage() {
                 ),
             );
             await Promise.all(data.projects.map(async (item) => {
-                const importedProjectId = importProject(item.project);
+                const drawingEngineById = new Map((item.drawingDocuments || []).map((document) => [document.drawingId, document.engine || "tldraw"]));
+                const importedProjectId = importProject({
+                    ...item.project,
+                    nodes: item.project.nodes.map((node) => node.type === "drawing" && node.metadata?.drawingId
+                        ? { ...node, metadata: { ...node.metadata, drawingEngine: drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" } }
+                        : node),
+                });
                 await Promise.all((item.drawingDocuments || []).map((document) => {
                     const previewFile = document.previewPath ? zip.get(document.previewPath) : undefined;
                     const preview = previewFile && !previewFile.type ? previewFile.slice(0, previewFile.size, "image/png") : previewFile;
@@ -107,7 +113,16 @@ export default function CanvasPage() {
                               background: document.generationRender.background,
                           } satisfies CanvasDrawingRenderDraft
                         : undefined;
-                    return saveCanvasDrawing(importedProjectId, document.drawingId, document.snapshot, { ...document, version: 1, revision: Math.max(0, document.revision - 1) }, preview, render);
+                    const engine = document.engine || "tldraw";
+                    return saveCanvasDrawing(importedProjectId, document.drawingId, engine, document.snapshot, {
+                        version: 2,
+                        engine,
+                        snapshot: document.snapshot,
+                        revision: Math.max(0, document.revision - 1),
+                        updatedAt: document.updatedAt,
+                        shapeCount: document.shapeCount,
+                        pageCount: document.pageCount,
+                    }, preview, render);
                 }));
             }));
             message.success(`已导入 ${data.projects.length} 个画布`);

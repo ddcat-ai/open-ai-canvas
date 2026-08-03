@@ -13,6 +13,7 @@ import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { refreshCanvasCharacterReferenceNodes } from "@/lib/canvas/canvas-character-reference";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { App } from "antd";
 import { getNodeSpec } from "@/constant/canvas";
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
@@ -192,6 +193,7 @@ function InfiniteCanvasPage() {
     const assets = useAssetStore((state) => state.assets);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const defaultDrawingEngine = useUserStore((state) => state.drawingEngine.defaultEngine);
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
@@ -603,6 +605,7 @@ function InfiniteCanvasPage() {
         toggleNodeLocked,
     } = useCanvasNodeOperations({
         projectId,
+        defaultDrawingEngine,
         nodesRef,
         connectionsRef,
         selectedNodeIdsRef,
@@ -629,6 +632,7 @@ function InfiniteCanvasPage() {
         setConnecting,
     } = useCanvasConnectionController({
         projectId,
+        defaultDrawingEngine,
         nodesRef,
         connectionsRef,
         viewportRef,
@@ -1668,7 +1672,7 @@ function InfiniteCanvasPage() {
                         open={Boolean(drawingNode)}
                         onClose={() => setDrawingNodeId(null)}
                         onSaved={(nodeId, summary) => {
-                            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, drawingRevision: summary.revision, drawingUpdatedAt: summary.updatedAt, drawingShapeCount: summary.shapeCount, drawingPageCount: summary.pageCount } } : node));
+                            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, drawingEngine: summary.engine, drawingRevision: summary.revision, drawingUpdatedAt: summary.updatedAt, drawingShapeCount: summary.shapeCount, drawingPageCount: summary.pageCount } } : node));
                             message.success("绘图已保存");
                         }}
                     />

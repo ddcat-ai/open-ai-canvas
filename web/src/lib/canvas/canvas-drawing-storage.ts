@@ -1,12 +1,13 @@
 import localforage from "localforage";
-import { AssetRecordType, createShapeId, createTLStore, type TLImageShape } from "tldraw";
 
+import type { CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { imageToDataUrl } from "@/services/image-storage";
 
 export type CanvasDrawingSnapshot = {
-    version: 1;
+    version: 2;
+    engine: CanvasDrawingEngine;
     snapshot: unknown;
     revision: number;
     updatedAt: string;
@@ -36,7 +37,8 @@ const drawingPreviewStore = localforage.createInstance({ name: "infinite-canvas"
 const drawingRenderStore = localforage.createInstance({ name: "infinite-canvas", storeName: "drawing_generation_renders" });
 const INITIAL_DRAWING_RENDER_MAX_DIMENSION = 2048;
 const INITIAL_DRAWING_RENDER_PADDING = 24;
-const INITIAL_DRAWING_SHAPE_MAX_DIMENSION = 1200;
+
+type LegacyCanvasDrawingSnapshot = Omit<CanvasDrawingSnapshot, "version" | "engine"> & { version: 1 };
 
 function drawingKey(projectId: string, drawingId: string) {
     return `${getActiveUserScope()}:${projectId}:${drawingId}`;
@@ -44,22 +46,25 @@ function drawingKey(projectId: string, drawingId: string) {
 
 export async function loadCanvasDrawing(projectId: string, drawingId: string) {
     if (!projectId || !drawingId) return null;
-    return drawingStore.getItem<CanvasDrawingSnapshot>(drawingKey(projectId, drawingId));
+    const saved = await drawingStore.getItem<CanvasDrawingSnapshot | LegacyCanvasDrawingSnapshot>(drawingKey(projectId, drawingId));
+    return normalizeCanvasDrawingSnapshot(saved);
 }
 
 export async function saveCanvasDrawing(
     projectId: string,
     drawingId: string,
+    engine: CanvasDrawingEngine,
     snapshot: unknown,
     previous?: CanvasDrawingSnapshot | null,
     preview?: Blob | null,
     render?: CanvasDrawingRenderDraft | null,
 ) {
-    const summary = summarizeCanvasDrawing(snapshot);
+    const summary = summarizeCanvasDrawing(engine, snapshot);
     const revision = (previous?.revision || 0) + 1;
     const updatedAt = new Date().toISOString();
     const next: CanvasDrawingSnapshot = {
-        version: 1,
+        version: 2,
+        engine,
         snapshot,
         revision,
         updatedAt,
@@ -83,66 +88,22 @@ export async function saveCanvasDrawing(
 export async function createCanvasDrawingFromImage(
     projectId: string,
     drawingId: string,
+    engine: CanvasDrawingEngine,
     image: { url: string; storageKey?: string; name: string; mimeType?: string },
 ) {
     const dataUrl = await imageToDataUrl({ url: image.url, storageKey: image.storageKey, name: image.name, mimeType: image.mimeType });
     if (!dataUrl?.startsWith("data:image/")) throw new Error("无法读取来源图片");
 
-    const [{ width, height, mimeType }, sourceBlob] = await Promise.all([
-        readImageMeta(dataUrl),
-        fetch(dataUrl).then((response) => response.blob()),
-    ]);
-    const store = createTLStore();
-    const page = store.allRecords().find((record) => record.typeName === "page");
-    if (!page) throw new Error("无法初始化绘图页面");
-
-    const assetId = AssetRecordType.createId();
-    const shapeScale = Math.min(1, INITIAL_DRAWING_SHAPE_MAX_DIMENSION / Math.max(width, height));
-    const shapeWidth = Math.max(1, Math.round(width * shapeScale));
-    const shapeHeight = Math.max(1, Math.round(height * shapeScale));
-    const asset = AssetRecordType.create({
-        id: assetId,
-        type: "image",
-        props: {
-            w: width,
-            h: height,
-            name: image.name || "来源图片",
-            isAnimated: false,
-            mimeType: mimeType || sourceBlob.type || image.mimeType || "image/png",
-            src: dataUrl,
-            ...(sourceBlob.size > 0 ? { fileSize: sourceBlob.size } : {}),
-        },
-    });
-    const shape: TLImageShape = {
-        id: createShapeId(),
-        typeName: "shape",
-        type: "image",
-        parentId: page.id,
-        index: "a1" as TLImageShape["index"],
-        x: -shapeWidth / 2,
-        y: -shapeHeight / 2,
-        rotation: 0,
-        isLocked: false,
-        opacity: 1,
-        props: {
-            w: shapeWidth,
-            h: shapeHeight,
-            playing: false,
-            url: "",
-            assetId,
-            crop: null,
-            flipX: false,
-            flipY: false,
-            altText: image.name || "来源图片",
-        },
-        meta: {},
-    };
-    store.put([asset, shape]);
+    const { width, height, mimeType } = await readImageMeta(dataUrl);
+    const source = { dataUrl, width, height, mimeType: mimeType || image.mimeType || "image/png", name: image.name || "来源图片" };
+    const document = engine === "excalidraw"
+        ? (await import("@/lib/canvas/canvas-drawing-excalidraw-document")).createExcalidrawDrawingFromImage(source)
+        : await (await import("@/lib/canvas/canvas-drawing-tldraw-document")).createTldrawDrawingFromImage(source);
 
     // 来源图必须进入绘图快照本身，不能继续依赖可能被替换或清理的原节点 URL。
     try {
-        const render = await createInitialDrawingRender(dataUrl, width, height, page.id);
-        return await saveCanvasDrawing(projectId, drawingId, store.getStoreSnapshot(), null, render.blob, render);
+        const render = await createInitialDrawingRender(dataUrl, width, height, document.pageId);
+        return await saveCanvasDrawing(projectId, drawingId, engine, document.snapshot, null, render.blob, render);
     } catch (error) {
         await removeCanvasDrawing(projectId, drawingId).catch((cleanupError) => console.warn("清理失败的绘图初始化数据失败", cleanupError));
         throw error;
@@ -195,10 +156,15 @@ export async function cloneCanvasDrawing(projectId: string, sourceDrawingId: str
               url: render.url,
           } satisfies CanvasDrawingRenderDraft
         : undefined;
-    return saveCanvasDrawing(projectId, targetDrawingId, source.snapshot, null, preview || undefined, renderDraft);
+    return saveCanvasDrawing(projectId, targetDrawingId, source.engine, source.snapshot, null, preview || undefined, renderDraft);
 }
 
-export function summarizeCanvasDrawing(snapshot: unknown) {
+export function summarizeCanvasDrawing(engine: CanvasDrawingEngine, snapshot: unknown) {
+    if (engine === "excalidraw") {
+        const root = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
+        const elements = Array.isArray(root.elements) ? root.elements : [];
+        return { shapeCount: elements.filter((element) => Boolean(element) && typeof element === "object" && !(element as { isDeleted?: boolean }).isDeleted).length, pageCount: 1 };
+    }
     const root = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
     const document = root.document && typeof root.document === "object" ? root.document as Record<string, unknown> : root;
     const pages = pagesFromSnapshot(document);
@@ -206,6 +172,13 @@ export function summarizeCanvasDrawing(snapshot: unknown) {
     const shapeCount = countRecords(document.shapes, "shape:") || countRecords(store, "shape:");
     const pageCount = pages || countRecords(store, "page:");
     return { shapeCount, pageCount: Math.max(pageCount, 1) };
+}
+
+function normalizeCanvasDrawingSnapshot(saved: CanvasDrawingSnapshot | LegacyCanvasDrawingSnapshot | null) {
+    if (!saved) return null;
+    if (saved.version === 1) return { ...saved, version: 2, engine: "tldraw" } satisfies CanvasDrawingSnapshot;
+    if (saved.version === 2 && (saved.engine === "tldraw" || saved.engine === "excalidraw")) return saved;
+    throw new Error("绘图文档版本或引擎无效");
 }
 
 function pagesFromSnapshot(document: Record<string, unknown>) {
