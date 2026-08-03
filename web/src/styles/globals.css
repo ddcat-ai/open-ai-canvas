@@ -4464,7 +4464,7 @@
 
     @keyframes canvas-connection-flow {
         to {
-            stroke-dashoffset: -44;
+            stroke-dashoffset: -30;
         }
     }
 

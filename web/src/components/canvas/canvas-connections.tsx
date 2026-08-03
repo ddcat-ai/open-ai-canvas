@@ -36,13 +36,13 @@ export const ConnectionPath = React.memo(function ConnectionPath({
 
     return (
         <g>
-            {emphasized ? <defs>
+            <defs>
                 <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
-                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
-                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
+                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={emphasized ? 0.18 : 0.12} />
+                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={emphasized ? 0.58 : 0.35} />
+                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={emphasized ? 0.34 : 0.2} />
                 </linearGradient>
-            </defs> : null}
+            </defs>
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -73,17 +73,21 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 strokeLinecap="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
-            {showVisual && emphasized ? <path
+            {showVisual ? <path
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
-                strokeWidth="1.8"
+                strokeWidth={emphasized ? 1.8 : 1.2}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="1"
-                strokeDasharray="18 26"
+                strokeOpacity={emphasized ? 1 : 0.4}
+                strokeDasharray={emphasized ? "12 18" : "8 22"}
                 fill="none"
                 strokeLinecap="round"
-                style={{ filter: `drop-shadow(0 0 3px ${theme.accent.primary}35)`, pointerEvents: "none" }}
+                style={{
+                    filter: emphasized ? `drop-shadow(0 0 3px ${theme.accent.primary}35)` : "none",
+                    pointerEvents: "none",
+                    animationDuration: emphasized ? "0.9s" : "1.5s",
+                }}
             /> : null}
         </g>
     );

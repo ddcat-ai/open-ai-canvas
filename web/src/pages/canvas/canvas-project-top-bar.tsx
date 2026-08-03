@@ -89,7 +89,7 @@ export function CanvasTopBar({
     return (
         <>
             <div className="pointer-events-none absolute left-0 right-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between px-[var(--canvas-inset-x)]">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+                <div className="pointer-events-auto flex min-w-0 items-center gap-2 self-center">
                     <Link
                         to="/canvas"
                         className="grid size-9 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10"
@@ -179,7 +179,7 @@ export function CanvasTopBar({
 
                 <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={onWorkspaceModeChange} />
 
-                <div className="pointer-events-auto flex items-center gap-1.5">
+                <div className="pointer-events-auto flex items-center gap-1.5 self-center">
                     <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
                     <Dropdown
                         trigger={["click"]}
@@ -200,7 +200,7 @@ export function CanvasTopBar({
                     {user ? (
                         <Link
                             to="/wallet"
-                            className="inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10"
+                            className="inline-flex h-10 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-medium tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10"
                             style={{ color: theme.node.text }}
                             title="查看积分明细"
                         >
@@ -209,7 +209,7 @@ export function CanvasTopBar({
                         </Link>
                     ) : null}
                     <Button type="text" className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
-                    <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
+                    <span className="h-5 w-px shrink-0 self-center" style={{ background: theme.toolbar.border }} />
                     <Button
                         type="text"
                         className="!h-10 !rounded-xl !px-3 !font-medium"
