@@ -4,12 +4,15 @@ import type { Editor } from "tldraw";
 import "tldraw/tldraw.css";
 
 import type { CanvasDrawingEditorHandle, CanvasDrawingEditorProps } from "@/components/canvas/canvas-drawing-editor-types";
+import { resolveTldrawLicenseKey } from "@/lib/canvas/canvas-drawing-engine";
+import { useUserStore } from "@/stores/use-user-store";
 
 const SINGLE_PAGE_OPTIONS = { maxPages: 1 } as const;
 const DRAWING_RENDER_MAX_DIMENSION = 2048;
 const DRAWING_RENDER_PADDING = 24;
 
 export const CanvasDrawingTldrawEditor = forwardRef<CanvasDrawingEditorHandle, CanvasDrawingEditorProps>(function CanvasDrawingTldrawEditor({ snapshot, colorScheme, onReady }, ref) {
+    const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const store = useMemo(() => {
         const next = createTLStore();
         if (snapshot) loadSnapshot(next, snapshot as never);
@@ -46,7 +49,7 @@ export const CanvasDrawingTldrawEditor = forwardRef<CanvasDrawingEditorHandle, C
             locale="zh-cn"
             colorScheme={colorScheme}
             options={SINGLE_PAGE_OPTIONS}
-            licenseKey={import.meta.env.VITE_TLDRAW_LICENSE_KEY || undefined}
+            licenseKey={resolveTldrawLicenseKey(tldrawLicenseKey)}
             onMount={(editor) => {
                 editorRef.current = editor;
                 // 绘图节点只保留单页，避免预览和生成引用出现页选择歧义。

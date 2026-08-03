@@ -437,8 +437,8 @@ export function getAdminDrawingEngineSetting() {
     return request<{ setting: CanvasDrawingEngineSetting }>(api.get("/admin/settings/drawing-engine"));
 }
 
-export function updateAdminDrawingEngineSetting(defaultEngine: CanvasDrawingEngineSetting["defaultEngine"]) {
-    return request<{ setting: CanvasDrawingEngineSetting }>(api.patch("/admin/settings/drawing-engine", { defaultEngine }));
+export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineSetting, "defaultEngine" | "tldrawLicenseKey">) {
+    return request<{ setting: CanvasDrawingEngineSetting }>(api.patch("/admin/settings/drawing-engine", input));
 }
 
 export function listAdminApiLogs(params: AdminListParams = {}) {
