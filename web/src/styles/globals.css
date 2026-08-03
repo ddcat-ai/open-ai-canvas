@@ -599,10 +599,10 @@
 
     @media (max-width: 1023px) {
         .app-workspace-sidebar-scrim {
-            left: 202px;
+            left: 0;
         }
 
-        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-mobile-expanded {
+        .app-workspace-shell .app-workspace-sidebar.is-mobile-expanded {
             position: absolute;
             z-index: 40;
             inset: 6px auto 6px 6px;
