@@ -28,33 +28,34 @@
     --color-neutral-900: oklch(0.205 0 0);
     --color-neutral-950: oklch(0.145 0 0);
 
-    /* 节点类型语义色板（对应 #97 色带+图标徽章方案）*/
-    --color-node-image: oklch(0.75 0.15 75);        /* 琥珀 300 — 图片 */
-    --color-node-video: oklch(0.65 0.22 350);        /* 品红 400 — 视频 */
-    --color-node-text: oklch(0.45 0.02 250);         /* 中性蓝灰 700 — 文本 */
-    --color-node-audio: oklch(0.7 0.13 220);         /* 青蓝 400 — 音频 */
-    --color-node-config: oklch(0.55 0.04 250);       /* 灰蓝 500 — 配置 */
-    --color-node-script: oklch(0.6 0.18 300);        /* 紫色 400 — 脚本 */
-    --color-node-drawing: oklch(0.65 0.12 55);       /* 赭石 400 — 绘图 */
-    --color-node-frame: oklch(0.7 0.15 155);         /* 翠绿 400 — 帧 */
-    --color-node-character: oklch(0.78 0.13 20);     /* 桃红 300 — 角色引用 */
-    --color-node-skill: oklch(0.7 0.17 55);          /* 橙色 400 — 技能 */
+    /* 节点类型语义色板（对应 #97 色带+图标徽章方案）
+       注意：用 --palette- 前缀避免与 @theme 的 --color-* 命名空间冲突导致循环引用 */
+    --palette-node-image: oklch(0.75 0.15 75);        /* 琥珀 300 — 图片 */
+    --palette-node-video: oklch(0.65 0.22 350);        /* 品红 400 — 视频 */
+    --palette-node-text: oklch(0.45 0.02 250);         /* 中性蓝灰 700 — 文本 */
+    --palette-node-audio: oklch(0.7 0.13 220);         /* 青蓝 400 — 音频 */
+    --palette-node-config: oklch(0.55 0.04 250);       /* 灰蓝 500 — 配置 */
+    --palette-node-script: oklch(0.6 0.18 300);        /* 紫色 400 — 脚本 */
+    --palette-node-drawing: oklch(0.65 0.12 55);       /* 赭石 400 — 绘图 */
+    --palette-node-frame: oklch(0.7 0.15 155);         /* 翠绿 400 — 帧 */
+    --palette-node-character: oklch(0.78 0.13 20);     /* 桃红 300 — 角色引用 */
+    --palette-node-skill: oklch(0.7 0.17 55);          /* 橙色 400 — 技能 */
 
-    /* 状态色 */
-    --color-status-success: oklch(0.7 0.17 155);
-    --color-status-error: oklch(0.65 0.22 25);
-    --color-status-loading: oklch(0.62 0.18 250);
-    --color-status-warning: oklch(0.75 0.15 85);
+    /* 状态色（用 --palette- 前缀避免循环引用）*/
+    --palette-status-success: oklch(0.7 0.17 155);
+    --palette-status-error: oklch(0.65 0.22 25);
+    --palette-status-loading: oklch(0.62 0.18 250);
+    --palette-status-warning: oklch(0.75 0.15 85);
 
     /* --- 2. 间距（4px 栅格 + 半距）--- */
     --space-0: 0px;
-    --space-0.5: 2px;
+    --space-half: 2px;
     --space-1: 4px;
-    --space-1.5: 6px;
+    --space-1-half: 6px;
     --space-2: 8px;
-    --space-2.5: 10px;
+    --space-2-half: 10px;
     --space-3: 12px;
-    --space-3.5: 14px;
+    --space-3-half: 14px;
     --space-4: 16px;
     --space-5: 20px;
     --space-6: 24px;
@@ -299,22 +300,22 @@
     --cn-spatial-toolbar-border: var(--color-neutral-200);
 
     /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
-    --cn-type-image: var(--color-node-image);
-    --cn-type-video: var(--color-node-video);
-    --cn-type-text: var(--color-node-text);
-    --cn-type-audio: var(--color-node-audio);
-    --cn-type-config: var(--color-node-config);
-    --cn-type-script: var(--color-node-script);
-    --cn-type-drawing: var(--color-node-drawing);
-    --cn-type-frame: var(--color-node-frame);
-    --cn-type-character: var(--color-node-character);
-    --cn-type-skill: var(--color-node-skill);
+    --cn-type-image: var(--palette-node-image);
+    --cn-type-video: var(--palette-node-video);
+    --cn-type-text: var(--palette-node-text);
+    --cn-type-audio: var(--palette-node-audio);
+    --cn-type-config: var(--palette-node-config);
+    --cn-type-script: var(--palette-node-script);
+    --cn-type-drawing: var(--palette-node-drawing);
+    --cn-type-frame: var(--palette-node-frame);
+    --cn-type-character: var(--palette-node-character);
+    --cn-type-skill: var(--palette-node-skill);
 
     /* 状态语义色 */
-    --status-success: var(--color-status-success);
-    --status-error: var(--color-status-error);
-    --status-loading: var(--color-status-loading);
-    --status-warning: var(--color-status-warning);
+    --status-success: var(--palette-status-success);
+    --status-error: var(--palette-status-error);
+    --status-loading: var(--palette-status-loading);
+    --status-warning: var(--palette-status-warning);
 
     --border: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
