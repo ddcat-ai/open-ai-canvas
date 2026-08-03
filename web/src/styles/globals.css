@@ -3475,6 +3475,10 @@
         color: var(--dock-command-danger);
     }
 
+    .aceternity-dock-danger-group {
+        background: color-mix(in srgb, var(--dock-command-danger) 8%, transparent);
+    }
+
     .aceternity-dock-command:focus-visible {
         box-shadow: 0 0 0 2px var(--dock-command-bg), 0 0 0 4px var(--dock-command-active);
     }

@@ -14,6 +14,8 @@ export type FloatingDockCommand = {
     active?: boolean;
     disabled?: boolean;
     danger?: boolean;
+    /** 面板展开型工具——使用 aria-expanded 而非 aria-pressed */
+    expands?: boolean;
 };
 
 export type FloatingDockEntry = FloatingDockCommand | { kind: "separator"; id: string };
@@ -90,10 +92,59 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             }}
             onPointerLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         >
-            {items.map((item) => item.kind === "separator" ? <DockSeparator key={item.id} compact={size === "compact"} labeled={showLabels} /> : <DockCommandButton key={item.id} command={item} mouseX={mouseX} metrics={metrics} motionEnabled={motionEnabled && !showLabels} compact={size === "compact"} showLabel={showLabels} />)}
+            {renderDockItems(items, { mouseX, metrics, motionEnabled: motionEnabled && !showLabels, compact: size === "compact", showLabel: showLabels })}
         </motion.div>
     );
 });
+
+type DockItemRenderProps = {
+    mouseX: MotionValue<number>;
+    metrics: DockMetrics;
+    motionEnabled: boolean;
+    compact: boolean;
+    showLabel: boolean;
+};
+
+/**
+ * 渲染 Dock 条目，将连续的 danger 命令包裹在 is-danger-group 容器中实现视觉隔离。
+ * 满足"危险操作必须与常规按钮隔离"的硬约束。
+ */
+function renderDockItems(items: FloatingDockEntry[], props: DockItemRenderProps) {
+    const result: ReactNode[] = [];
+    let dangerGroup: FloatingDockCommand[] = [];
+    let index = 0;
+
+    const flushDangerGroup = () => {
+        if (!dangerGroup.length) return;
+        const groupKey = `danger-group-${index}`;
+        result.push(
+            <span key={groupKey} className="aceternity-dock-danger-group flex shrink-0 items-end gap-0.5 rounded-[calc(var(--dock-item-radius)+2px)] px-0.5">
+                {dangerGroup.map((command) => (
+                    <DockCommandButton key={command.id} command={command} mouseX={props.mouseX} metrics={props.metrics} motionEnabled={props.motionEnabled} compact={props.compact} showLabel={props.showLabel} />
+                ))}
+            </span>,
+        );
+        dangerGroup = [];
+    };
+
+    for (const item of items) {
+        if (item.kind === "separator") {
+            flushDangerGroup();
+            result.push(<DockSeparator key={item.id} compact={props.compact} labeled={props.showLabel} />);
+            continue;
+        }
+        if (item.danger) {
+            dangerGroup.push(item);
+            index += 1;
+            continue;
+        }
+        flushDangerGroup();
+        result.push(<DockCommandButton key={item.id} command={item} mouseX={props.mouseX} metrics={props.metrics} motionEnabled={props.motionEnabled} compact={props.compact} showLabel={props.showLabel} />);
+        index += 1;
+    }
+    flushDangerGroup();
+    return result;
+}
 
 function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, showLabel }: { command: FloatingDockCommand; mouseX: MotionValue<number>; metrics: DockMetrics; motionEnabled: boolean; compact: boolean; showLabel: boolean }) {
     const ref = useRef<HTMLSpanElement>(null);
@@ -116,7 +167,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 <motion.button
                     type="button"
                     aria-label={command.label}
-                    aria-pressed={command.active || undefined}
+                    aria-expanded={command.expands ? command.active || undefined : undefined}
+                    aria-pressed={command.expands ? undefined : command.active || undefined}
                     disabled={command.disabled}
                     className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
                     whileTap={!command.disabled ? { scale: 0.96 } : undefined}
@@ -140,7 +192,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
             <motion.button
                 type="button"
                 aria-label={command.label}
-                aria-pressed={command.active || undefined}
+                aria-expanded={command.expands ? command.active || undefined : undefined}
+                aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
                 className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
