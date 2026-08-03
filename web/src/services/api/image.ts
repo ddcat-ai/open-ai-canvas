@@ -4,6 +4,7 @@ import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRe
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
+import { createClientId } from "@/lib/client-id";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
@@ -262,7 +263,7 @@ function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         ...(contentType ? { "Content-Type": contentType } : {}),
-        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "image", "X-Idempotency-Key": crypto.randomUUID() } : {}),
+        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "image", "X-Idempotency-Key": createClientId() } : {}),
     };
 }
 

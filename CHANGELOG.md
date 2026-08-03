@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 修复 HTTP 内网 IP 访问时 `crypto.randomUUID` 不可用导致创造页卡死，并统一画布、Agent 与生成请求的客户端 ID 生成方式。
 - 画布绘图节点支持 tldraw 与 Excalidraw 双引擎，管理员可配置新建默认工具，并保持历史绘图和导入导出兼容。
 
 ## v1.0.32
