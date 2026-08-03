@@ -31,7 +31,7 @@ export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandl
                 files,
                 mimeType: "image/png",
                 exportPadding: DRAWING_RENDER_PADDING,
-                getDimensions: (width, height) => {
+                getDimensions: (width: number, height: number) => {
                     const scale = Math.min(4, DRAWING_RENDER_MAX_DIMENSION / Math.max(1, width, height));
                     outputWidth = Math.max(1, Math.round(width * scale));
                     outputHeight = Math.max(1, Math.round(height * scale));
