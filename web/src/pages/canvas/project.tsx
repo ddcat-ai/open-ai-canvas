@@ -1608,7 +1608,7 @@ function InfiniteCanvasPage() {
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} canvasContainerRef={containerRef} onViewportPreviewChange={previewViewport} onViewportChange={handleViewportChange} /> : null}
 
-                <div data-canvas-no-zoom className="absolute bottom-4 left-4 z-50 flex items-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+                <div data-canvas-no-zoom className="absolute bottom-4 left-4 z-[var(--z-panel)] flex items-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
                     <CanvasZoomControls scale={viewport.k} containerRef={containerRef} onScaleChange={setZoomScale} onReset={resetViewport} isMiniMapOpen={isMiniMapOpen} onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)} onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)} />
                     <CanvasAssetTray assetImages={imageAssets} canvasImages={canvasImageNodes} showLibrary={!currentProject?.projectId} activeNodeId={selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null} onInsertAssetImage={(asset) => void createImageAssetNode(asset)} onFocusCanvasImage={focusCanvasImageNode} />
                 </div>
@@ -1665,7 +1665,7 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                {drawingNode ? <Suspense fallback={<div className="fixed inset-0 z-[500] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
+                {drawingNode ? <Suspense fallback={<div className="fixed inset-0 z-[var(--z-toast)] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
                     <CanvasDrawingEditorModal
                         node={drawingNode}
                         projectId={projectId}
@@ -1692,7 +1692,7 @@ function InfiniteCanvasPage() {
                 />
 
                 {directorNodeId && activeDirectorScene ? (
-                    <Suspense fallback={<div className="fixed inset-0 z-[500] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载 3D 导演台" description="准备场景、镜头与空间控制。" /></div>}>
+                    <Suspense fallback={<div className="fixed inset-0 z-[var(--z-toast)] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载 3D 导演台" description="准备场景、镜头与空间控制。" /></div>}>
                         <CanvasDirectorWorkbench
                             open
                             scene={activeDirectorScene}

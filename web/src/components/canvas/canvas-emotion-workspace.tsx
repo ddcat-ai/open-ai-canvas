@@ -207,7 +207,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
         <div
             ref={overlayRef}
             data-canvas-no-zoom
-            className={`absolute z-[105] overflow-hidden rounded-[var(--r-2xl)] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
+            className={`absolute z-[var(--z-modal)] overflow-hidden rounded-[var(--r-2xl)] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
             style={{ left: 0, top: 0, width: node.width * viewport.k, height: node.height * viewport.k }}
             onPointerDown={status === "manual" ? (event) => {
                 event.preventDefault();
@@ -287,7 +287,7 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -5, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="aceternity-floating-panel absolute z-[125] flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-[15px] border px-2 backdrop-blur-2xl"
+            className="aceternity-floating-panel absolute z-[var(--z-modal-overlay)] flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-[15px] border px-2 backdrop-blur-2xl"
             style={{ left: 12, top: 76, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 22px 60px ${theme.spatial.shadow}` }}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -305,7 +305,7 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
 function EmotionPanelOverlay({ node, viewport, containerRef, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
     useScreenAnchor(panelRef, node, viewport, containerRef, (next, container) => panelScreenRect(node, next, container, panelRef.current));
-    return <div ref={panelRef} data-canvas-no-zoom className="absolute z-[120] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>{children}</div>;
+    return <div ref={panelRef} data-canvas-no-zoom className="absolute z-[var(--z-modal-overlay)] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>{children}</div>;
 }
 
 function useScreenAnchor(ref: RefObject<HTMLElement | null>, node: CanvasNodeData, viewport: ViewportTransform, containerRef: RefObject<HTMLDivElement | null>, resolve: (viewport: ViewportTransform, container: HTMLDivElement) => { left: number; top: number; width?: number; height?: number }) {

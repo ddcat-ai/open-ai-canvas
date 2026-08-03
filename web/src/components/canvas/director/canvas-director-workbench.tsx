@@ -195,7 +195,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     if (!open || !draft || !activeShot) return null;
 
     return (
-        <div data-canvas-no-zoom className="fixed inset-0 z-[500] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <div data-canvas-no-zoom className="fixed inset-0 z-[var(--z-toast)] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
                 <IconButton label="关闭导演台" onClick={onClose}><X className="size-4" /></IconButton>
                 <Input variant="borderless" value={draft.title} className="max-w-56 font-medium" onChange={(event) => replaceWithoutHistory((current) => ({ ...current, title: event.target.value }))} />
