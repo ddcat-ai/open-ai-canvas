@@ -126,7 +126,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
         <div className="relative flex h-full w-full flex-col overflow-visible" style={{ color: theme.node.text }} onDoubleClick={(event) => event.stopPropagation()}>
             <div className="relative flex h-10 shrink-0 items-center gap-2 rounded-t-[17px] border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <Clapperboard className="size-4" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title || "分镜脚本"}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>{node.title || "分镜脚本"}</span>
                 {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[11px] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[11px] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
                 <span className="text-xs font-medium" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
                 {batch ? <>
@@ -210,19 +210,21 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     onWheel={(event) => event.stopPropagation()}
                 />
                 <div className="flex min-w-0 items-center justify-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                    <div className="mr-auto min-w-36 max-w-56 flex-1">
-                        <ModelPicker
-                            className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
-                            fullWidth
-                            config={generationConfig}
-                            value={generationConfig.model}
-                            capability="text"
-                            placeholder="选择文本模型"
-                            showSelectedPrice={false}
-                            onChange={onModelChange}
-                            onMissingConfig={() => navigateToSettings({ continueCreation: true })}
-                        />
-                    </div>
+                    <Tooltip title="脚本生成需要文本理解与结构化输出能力，仅展示文本模型；视频/图片模型无法生成分镜表" placement="topLeft">
+                        <div className="mr-auto min-w-36 max-w-56 flex-1">
+                            <ModelPicker
+                                className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
+                                fullWidth
+                                config={generationConfig}
+                                value={generationConfig.model}
+                                capability="text"
+                                placeholder="选择文本模型"
+                                showSelectedPrice={false}
+                                onChange={onModelChange}
+                                onMissingConfig={() => navigateToSettings({ continueCreation: true })}
+                            />
+                        </div>
+                    </Tooltip>
                     {simpleMode ? <span className="text-[11px]" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
                         className="min-w-32"
                         size="small"
@@ -448,7 +450,7 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
 }
 
 function CompactInput({ value, placeholder, borderColor, onChange }: { value: string; placeholder: string; borderColor: string; onChange: (value: string) => void }) {
-    return <textarea className="h-full resize-none border-r bg-transparent px-4 py-2.5 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:bg-black/[0.02] dark:focus:bg-white/[0.025]" style={{ borderColor }} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
+    return <textarea className="thin-scrollbar h-full w-full resize-none overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words border-r bg-transparent px-4 py-2.5 text-xs leading-5 outline-none transition placeholder:opacity-35 focus:bg-black/[0.02] dark:focus:bg-white/[0.025]" style={{ borderColor }} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
 }
 
 function HeaderCell({ children, borderColor, align = "left" }: { children: ReactNode; borderColor: string; align?: "left" | "center" }) {
