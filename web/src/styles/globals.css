@@ -4362,6 +4362,13 @@
         animation: none !important;
     }
 
+    /* 节点状态徽章 success 淡出动画（对应 #97 决策2）*/
+    @keyframes canvas-status-success-fade {
+        0% { opacity: 1; transform: scale(1); }
+        70% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(0.9); }
+    }
+
     .canvas-node-shell-generating::before {
         position: absolute;
         z-index: 45;

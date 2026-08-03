@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { BookOpenCheck, ChevronRight, Clapperboard, Clock3, FileText, Image as ImageIcon, LoaderCircle, Lock, Maximize2, Music2, Pencil, Play, Plus, RefreshCw, Replace, Settings2, Square, Star, Type, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Clock3, FileText, Image as ImageIcon, LoaderCircle, Lock, Maximize2, Music2, Pencil, Play, Plus, RefreshCw, Replace, Settings2, Square, Star, Type, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CometCard } from "@/components/ui/aceternity/comet-card";
@@ -328,8 +328,17 @@ export const CanvasNode = React.memo(function CanvasNode({
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
-                    borderColor: flushMediaContent ? undefined : isActive ? theme.accent.primary : isRelated ? theme.accent.primary : theme.node.stroke,
-                    boxShadow: isActive ? `0 0 0 1px ${theme.accent.primary}66, 0 28px 80px ${theme.spatial.shadow}` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.accent.primary}35, 0 22px 60px ${theme.spatial.shadow}` : undefined,
+                    borderColor: flushMediaContent ? undefined : isActive ? theme.accent.primary : isRelated ? theme.accent.primary : hovered ? "color-mix(in oklch, var(--workspace-border) 80%, var(--workspace-fg) 12%)" : theme.node.stroke,
+                    boxShadow: isFocusRelated
+                        ? `0 0 0 1px ${theme.accent.primary}66, 0 0 0 6px ${theme.accent.primary}1a, 0 28px 80px ${theme.spatial.shadow}` // active：最强强调（外发光环6px + inner glow）
+                        : isConnectionTarget
+                            ? `0 0 0 1px ${theme.accent.primary}66, 0 0 0 4px ${theme.accent.primary}1a, 0 24px 72px ${theme.spatial.shadow}` // selected-primary：4px软色环 + resize handle
+                            : isSelected || (isRelated && !isBatchChild)
+                                ? `0 0 0 2px ${theme.accent.primary}40, 0 22px 60px ${theme.spatial.shadow}` // selected：2px边框环
+                                : hovered
+                                    ? `0 16px 48px ${theme.spatial.shadow}` // hover：轻微抬升阴影
+                                    : undefined, // idle：无额外阴影
+                    transition: "border-color 120ms ease-out, box-shadow 150ms ease-out",
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -376,6 +385,16 @@ export const CanvasNode = React.memo(function CanvasNode({
                         } as React.CSSProperties
                     }
                 >
+                    {/* 节点类型色带（对应 #97 决策1：左侧3px色条，远距离最强信号）*/}
+                    <div
+                        className="pointer-events-none absolute left-0 top-0 z-10 h-full"
+                        style={{ width: "var(--node-type-strip-width)", background: nodeTypeColorVar(data.type, data.metadata?.workflowKind === "character"), borderRadius: "var(--node-radius) 0 0 var(--node-radius)" }}
+                        aria-hidden
+                    />
+                    {/* 节点状态徽章（对应 #97 决策2：左上角 loading/success/error，近距离确认信号）*/}
+                    {data.metadata?.status && data.metadata.status !== "idle" && data.type !== CanvasNodeType.Frame ? (
+                        <NodeStatusBadge status={data.metadata.status} />
+                    ) : null}
                     <NodeContent
                         node={data}
                         theme={theme}
@@ -1183,6 +1202,59 @@ function nodeTypeIcon(type: CanvasNodeType) {
     if (type === CanvasNodeType.Config) return Settings2;
     if (type === CanvasNodeType.Skill) return BookOpenCheck;
     return Type;
+}
+
+// 节点类型色带色（对应 #97 决策1 色带方案，引用 --cn-type-* token）
+function nodeTypeColorVar(type: CanvasNodeType, isCharacter?: boolean): string {
+    if (isCharacter) return "var(--cn-type-character)";
+    if (type === CanvasNodeType.Image) return "var(--cn-type-image)";
+    if (type === CanvasNodeType.Video) return "var(--cn-type-video)";
+    if (type === CanvasNodeType.Audio) return "var(--cn-type-audio)";
+    if (type === CanvasNodeType.Drawing) return "var(--cn-type-drawing)";
+    if (type === CanvasNodeType.Script) return "var(--cn-type-script)";
+    if (type === CanvasNodeType.Config) return "var(--cn-type-config)";
+    if (type === CanvasNodeType.Skill) return "var(--cn-type-skill)";
+    if (type === CanvasNodeType.Frame) return "var(--cn-type-frame)";
+    return "var(--cn-type-text)";
+}
+
+// 节点状态徽章（对应 #97 决策2：左上角状态指示，loading/success/error）
+function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }) {
+    if (status === "loading") {
+        return (
+            <div
+                className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm"
+                style={{ background: "color-mix(in oklch, var(--status-loading) 20%, transparent)", color: "var(--status-loading)" }}
+                aria-label="生成中"
+            >
+                <span className="size-1.5 animate-pulse rounded-full" style={{ background: "var(--status-loading)" }} />
+                <span className="text-[var(--fs-micro)] font-medium leading-none">生成中</span>
+            </div>
+        );
+    }
+    if (status === "error") {
+        return (
+            <div
+                className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm"
+                style={{ background: "color-mix(in oklch, var(--status-error) 20%, transparent)", color: "var(--status-error)" }}
+                aria-label="生成失败"
+            >
+                <AlertCircle className="size-3" strokeWidth={2} />
+                <span className="text-[var(--fs-micro)] font-medium leading-none">失败</span>
+            </div>
+        );
+    }
+    // success：短暂闪现后淡出（由 CSS animation 控制，2s 后消失）
+    return (
+        <div
+            className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm"
+            style={{ background: "color-mix(in oklch, var(--status-success) 20%, transparent)", color: "var(--status-success)", animation: "canvas-status-success-fade 2s ease-out forwards" }}
+            aria-label="生成完成"
+        >
+            <CheckCircle2 className="size-3" strokeWidth={2} />
+            <span className="text-[var(--fs-micro)] font-medium leading-none">完成</span>
+        </div>
+    );
 }
 
 function ConnectionSideRail({ side, scale, visible, theme, onPointerDown }: { side: "left" | "right"; scale: number; visible: boolean; theme: CanvasTheme; onPointerDown: (event: React.PointerEvent, anchorRatio: number) => void }) {
