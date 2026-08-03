@@ -1,15 +1,17 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Segmented, Switch } from "antd";
-import { CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Layers3, Moon, Music2, Palette, PanelTop, Pencil, Plus, Redo2, Square, SquareDashedMousePointer, Sun, Trash2, Type, Undo2, UploadCloud, UserRound, Video, X } from "lucide-react";
+import { CircleDot, Grid2x2, Moon, Plus, Palette, Sun, Square, Info } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
+import { FloatingDock } from "@/components/ui/aceternity/floating-dock";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { CanvasCreateCommandGrid, type CanvasCreateCommand } from "@/components/canvas/canvas-create-command-grid";
+import { ToolbarSettingsModal } from "@/components/canvas/toolbars/toolbar-settings-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
+import { defaultToolbarPrefs, readToolbarPrefs, resolveAddNodeMenuCommands, resolveToolbarEntries, type AddNodeMenuCommand, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
@@ -79,7 +81,14 @@ export function CanvasToolbar({
     const theme = canvasThemes[colorTheme];
     const [addOpen, setAddOpen] = useState(false);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [panelX, setPanelX] = useState(0);
+    const [prefs, setPrefs] = useState<ToolbarPrefs | null>(() => readToolbarPrefs("main"));
+
+    // 设置面板关闭后重新读取偏好（用户可能调整了排序/显隐）
+    useEffect(() => {
+        if (!settingsOpen) setPrefs(readToolbarPrefs("main"));
+    }, [settingsOpen]);
 
     const placePanel = (event: ReactMouseEvent<HTMLElement>) => setPanelX(getPanelX(dockRef.current, event.currentTarget));
     const runAddAction = (action: () => void) => {
@@ -87,6 +96,7 @@ export function CanvasToolbar({
         setAddOpen(false);
     };
 
+    // 点击外部关闭浮层面板
     useEffect(() => {
         if (!addOpen && !appearanceOpen) return;
         const closeFloatingPanels = (event: PointerEvent) => {
@@ -99,19 +109,70 @@ export function CanvasToolbar({
         return () => document.removeEventListener("pointerdown", closeFloatingPanels, true);
     }, [addOpen, appearanceOpen]);
 
-    const items: FloatingDockEntry[] = [
-        { id: canvasTool === "box-select" ? "tool-move" : selectedCount ? "tool-close-selection" : "tool-move", label: canvasTool === "box-select" ? "移动与选择" : selectedCount ? `取消选择${selectedCount > 1 ? ` ${selectedCount} 个节点` : ""}` : "移动与选择", icon: canvasTool === "box-select" ? <Hand /> : selectedCount ? <X /> : <Hand />, active: canvasTool === "move", onClick: () => { if (canvasTool !== "move") onToolChange("move"); else onDeselect(); } },
-        { id: "tool-box-select", label: "框选", icon: <SquareDashedMousePointer />, active: canvasTool === "box-select", onClick: () => onToolChange(canvasTool === "box-select" ? "move" : "box-select") },
-        { kind: "separator", id: "history-separator" },
-        { id: "tool-undo", label: "撤销", icon: <Undo2 />, disabled: !canUndo, onClick: () => onUndo() },
-        { id: "tool-redo", label: "重做", icon: <Redo2 />, disabled: !canRedo, onClick: () => onRedo() },
-        { kind: "separator", id: "create-separator" },
-        { id: "tool-add", label: "添加节点", icon: <Plus />, active: addOpen, onClick: (event) => { placePanel(event); setAppearanceOpen(false); setAddOpen((value) => !value); } },
-        ...(!isProjectLinked ? [{ id: "tool-assets", label: "素材库", icon: <FolderOpen />, onClick: () => onOpenMyAssets() }] : []),
-        { id: "tool-style", label: "画布外观", icon: <Palette />, active: appearanceOpen, onClick: (event) => { placePanel(event); setAddOpen(false); setAppearanceOpen((value) => !value); } },
-        ...(selectedCount ? [{ kind: "separator" as const, id: "selection-separator" }, { id: "tool-delete", label: selectedCount > 1 ? `删除 ${selectedCount} 个节点` : "删除选中节点", icon: <Trash2 />, danger: true, onClick: () => onDelete() }] : []),
-        { id: "tool-clear", label: "清空画布", icon: <Eraser />, danger: true, onClick: () => onClear() },
-    ];
+    // 构建 handlers（主工具栏只需要部分回调，其余用 no-op 占位满足类型）
+    const handlers: ToolbarHandlers = {
+        onToolChange,
+        onDeselect,
+        onUndo,
+        onRedo,
+        onClear,
+        onAddText,
+        onAddImage,
+        onAddVideo,
+        onAddAudio,
+        onAddScript,
+        onAddFrame,
+        onAddDrawing,
+        onChooseStyle,
+        onOpenDirector,
+        onUpload,
+        onOpenMyAssets,
+        onOpenProjectCharacters,
+        onBackgroundModeChange,
+        onShowImageInfoChange,
+        onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => { placePanel(event); setAppearanceOpen(false); setSettingsOpen(false); setAddOpen((value) => !value); },
+        onToggleAppearancePanel: (event: ReactMouseEvent<HTMLElement>) => { placePanel(event); setAddOpen(false); setSettingsOpen(false); setAppearanceOpen((value) => !value); },
+        onToggleSettingsPanel: () => { setAddOpen(false); setAppearanceOpen(false); setSettingsOpen((value) => !value); },
+        onDeleteSelected: onDelete,
+        // 以下为多选/节点悬停工具栏回调，主工具栏不使用，用 no-op 占位
+        onAlign: () => {}, onArrange: () => {}, onCreateStoryboard: () => {}, onCreateReferenceGroup: () => {}, onMergeVideos: () => {},
+        onNodeInfo: () => {}, onNodeDelete: () => {}, onNodeRetry: () => {}, onNodeEditText: () => {}, onNodeDecreaseFont: () => {}, onNodeIncreaseFont: () => {},
+        onNodeToggleDialog: () => {}, onNodeAnnotate: () => {}, onNodeGenerateImage: () => {}, onNodeUpload: () => {}, onNodeDownload: () => {}, onNodeSaveAsset: () => {},
+        onNodeMaskEdit: () => {}, onNodeEmotion: () => {}, onNodePortraitTexture: () => {}, onNodeCrop: () => {}, onNodeSplit: () => {}, onNodeUpscale: () => {},
+        onNodeSuperResolve: () => {}, onNodeAngle: () => {}, onNodeViewImage: () => {}, onNodeExtractVideoLastFrame: () => {}, onNodeReversePrompt: () => {},
+        onNodeToggleFreeResize: () => {}, onNodeToggleLocked: () => {}, onNodeCopyPrompt: () => {},
+    } as ToolbarHandlers;
+
+    const ctx: ToolContext = {
+        selectedCount,
+        selectedNodeTypes: new Set(),
+        selectedVideoCount: 0,
+        canvasTool,
+        workspaceMode,
+        isProjectLinked,
+        canUndo,
+        canRedo,
+        extractingVideoFrame: false,
+        mergingVideos: false,
+        addPanelOpen: addOpen,
+        appearancePanelOpen: appearanceOpen,
+        settingsPanelOpen: settingsOpen,
+        handlers,
+    };
+
+    const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
+
+    // 解析添加节点菜单命令——onClick 绑定到 runAddAction 以在执行后关闭面板
+    const addNodeCommands = resolveAddNodeMenuCommands(ctx);
+    const toCommand = (cmd: AddNodeMenuCommand): CanvasCreateCommand => ({
+        id: cmd.id,
+        label: cmd.label,
+        icon: cmd.icon,
+        badge: cmd.badge,
+        onClick: () => runAddAction(() => cmd.run(ctx)),
+    });
+    const nodeCommands = addNodeCommands.filter((cmd) => cmd.section === "node").map(toCommand);
+    const resourceCommands = addNodeCommands.filter((cmd) => cmd.section === "resource").map(toCommand);
 
     return (
         <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-4 bottom-4 z-50 flex justify-center">
@@ -120,20 +181,8 @@ export function CanvasToolbar({
                     <AddNodeMenu
                         x={panelX}
                         theme={theme}
-                        workspaceMode={workspaceMode}
-                        isProjectLinked={isProjectLinked}
-                        onAddText={() => runAddAction(onAddText)}
-                        onChooseStyle={() => runAddAction(onChooseStyle)}
-                        onAddScript={() => runAddAction(onAddScript)}
-                        onAddFrame={() => runAddAction(onAddFrame)}
-                        onAddDrawing={() => runAddAction(onAddDrawing)}
-                        onAddImage={() => runAddAction(onAddImage)}
-                        onAddVideo={() => runAddAction(onAddVideo)}
-                        onAddAudio={() => runAddAction(onAddAudio)}
-                        onOpenDirector={() => runAddAction(onOpenDirector)}
-                        onUpload={() => runAddAction(onUpload)}
-                        onOpenAssets={() => runAddAction(onOpenMyAssets)}
-                        onOpenProjectCharacters={() => runAddAction(onOpenProjectCharacters)}
+                        nodeCommands={nodeCommands}
+                        resourceCommands={resourceCommands}
                     />
                 ) : null}
             </AnimatePresence>
@@ -169,49 +218,18 @@ export function CanvasToolbar({
                     </motion.div>
                 ) : null}
             </AnimatePresence>
+
+            <ToolbarSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} toolbar="main" />
         </div>
     );
 }
 
-function AddNodeMenu({ x, theme, workspaceMode, isProjectLinked, onAddText, onChooseStyle, onAddScript, onAddFrame, onAddDrawing, onAddImage, onAddVideo, onAddAudio, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: {
+function AddNodeMenu({ x, theme, nodeCommands, resourceCommands }: {
     x: number;
     theme: CanvasTheme;
-    workspaceMode: CanvasWorkspaceMode;
-    isProjectLinked: boolean;
-    onAddText: () => void;
-    onChooseStyle: () => void;
-    onAddScript: () => void;
-    onAddFrame: () => void;
-    onAddDrawing: () => void;
-    onAddImage: () => void;
-    onAddVideo: () => void;
-    onAddAudio: () => void;
-    onOpenDirector: () => void;
-    onUpload: () => void;
-    onOpenAssets: () => void;
-    onOpenProjectCharacters: () => void;
+    nodeCommands: CanvasCreateCommand[];
+    resourceCommands: CanvasCreateCommand[];
 }) {
-    const simpleMode = workspaceMode === "simple";
-    const nodeCommands: CanvasCreateCommand[] = [
-        { id: "text", label: "文本", icon: <Type />, onClick: onAddText },
-        ...(!isProjectLinked ? [
-            { id: "style", label: "项目画风", icon: <Palette />, onClick: onChooseStyle },
-        ] : []),
-        { id: "script", label: "分镜脚本", icon: <Clapperboard />, badge: "核心", onClick: onAddScript },
-        ...(!simpleMode ? [{ id: "frame", label: "背板", icon: <PanelTop />, onClick: onAddFrame }] : []),
-        { id: "drawing", label: "绘图", icon: <Pencil />, onClick: onAddDrawing },
-        { id: "image", label: "图片", icon: <ImageIcon />, onClick: onAddImage },
-        { id: "video", label: "视频", icon: <Video />, onClick: onAddVideo },
-        ...(!simpleMode ? [
-            { id: "director", label: "导演台", icon: <Layers3 />, badge: "3D", onClick: onOpenDirector },
-            { id: "audio", label: "音频", icon: <Music2 />, onClick: onAddAudio },
-        ] : []),
-    ];
-    const resourceCommands: CanvasCreateCommand[] = [
-        { id: "upload", label: "上传文件", icon: <UploadCloud />, onClick: onUpload },
-        ...(isProjectLinked ? [{ id: "project-character", label: "添加角色卡", icon: <UserRound />, onClick: onOpenProjectCharacters }] : []),
-        ...(!isProjectLinked ? [{ id: "assets", label: "素材库", icon: <FolderOpen />, onClick: onOpenAssets }] : []),
-    ];
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-40 w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>
             <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
