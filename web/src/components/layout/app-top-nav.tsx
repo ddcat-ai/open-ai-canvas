@@ -1,4 +1,4 @@
-import { Infinity as InfinityIcon } from "lucide-react";
+import { Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 
@@ -46,16 +46,15 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     }, [navigate]);
 
     useEffect(() => {
-        // 初始化滚动状态
         handleScroll();
     }, [visibleNavigationTools.length, mobileSidebarExpanded]);
 
     return (
         <>
             <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
-                {spatialWorkbench && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
+                {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
                 {!hideChrome ? (
-                    <aside className={cn("app-workspace-sidebar flex shrink-0 flex-col overflow-hidden", mobileSidebarExpanded ? "is-mobile-expanded w-[196px]" : "w-[52px]", "lg:w-[88px]")}>
+                    <aside className={cn("app-workspace-sidebar flex shrink-0 flex-col overflow-hidden transition-all duration-200", mobileSidebarExpanded ? "is-mobile-expanded w-[196px]" : "w-0 lg:w-[88px] lg:shrink-0")}>
                         <div
                             className={cn(
                                 "flex h-14 shrink-0 items-center border-b border-border/55 text-foreground",
@@ -122,7 +121,14 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                     </aside>
                 ) : null}
 
-                <div className="app-workspace-stage relative min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
+                <div className="app-workspace-stage relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                    {!hideChrome ? (
+                        <button type="button" className="app-workspace-sidebar-toggle absolute left-2 top-2 z-30 grid size-8 place-items-center rounded-md border border-border/60 bg-background/75 text-foreground/80 backdrop-blur transition hover:bg-foreground/[0.06] lg:hidden" aria-label={mobileSidebarExpanded ? "收起侧栏" : "展开侧栏"} onClick={() => setMobileSidebarExpanded((current) => !current)}>
+                            {mobileSidebarExpanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                        </button>
+                    ) : null}
+                    {children}
+                </div>
             </div>
             <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
