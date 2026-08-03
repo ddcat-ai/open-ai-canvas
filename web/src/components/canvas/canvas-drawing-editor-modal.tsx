@@ -16,7 +16,7 @@ type CanvasDrawingEditorModalProps = {
     projectId: string;
     node: CanvasNodeData | null;
     onClose: () => void;
-    onSaved: (nodeId: string, summary: Pick<CanvasDrawingSnapshot, "revision" | "updatedAt" | "shapeCount" | "pageCount">) => void;
+    onSaved: (nodeId: string, summary: Pick<CanvasDrawingSnapshot, "engine" | "revision" | "updatedAt" | "shapeCount" | "pageCount">) => void;
 };
 
 export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSaved }: CanvasDrawingEditorModalProps) {
