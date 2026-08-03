@@ -48,8 +48,9 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	if filter.Tag != "" {
 		query = query.Where("skills.tag = ?", filter.Tag)
 	}
+	// 用户状态按用户和技能唯一，列表 JOIN 不会重复；不要设置 DISTINCT，避免 GORM 将其带入 PostgreSQL 的热门排序查询。
 	var total int64
-	if err := query.Distinct("skills.id").Count(&total).Error; err != nil {
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	order := "skills.sort_weight desc, skills.updated_at desc"
@@ -60,7 +61,6 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 		order = "(skills.initial_added_count + (SELECT COUNT(*) FROM user_skill_states metric_states WHERE metric_states.skill_id = skills.id AND metric_states.added = true)) desc, skills.updated_at desc"
 	}
 	var skills []model.Skill
-	// 用户状态按用户和技能唯一，列表 JOIN 不会重复；省略 DISTINCT 也避免 PostgreSQL 拒绝未出现在 SELECT 中的热门排序表达式。
 	err := query.Select("skills.*").Order(order).Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
 	return skills, total, err
 }
