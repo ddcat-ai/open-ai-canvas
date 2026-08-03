@@ -15,15 +15,15 @@ export function CanvasFileDropOverlay({ active, theme }: { active: boolean; them
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: aceternityMotion.duration.state }}
-                    className="pointer-events-none absolute inset-3 z-[110] grid place-items-center overflow-hidden rounded-[28px] border backdrop-blur-2xl"
+                    className="pointer-events-none absolute inset-3 z-[var(--z-modal-overlay)] grid place-items-center overflow-hidden rounded-[var(--r-5xl)] border backdrop-blur-2xl"
                     style={{ background: theme.spatial.dropzone, borderColor: theme.spatial.glowStrong, color: theme.node.text, boxShadow: `inset 0 0 0 1px ${theme.spatial.glow}, 0 30px 100px rgba(0,0,0,.22)` }}
                 >
                     <div className="aceternity-drop-grid absolute inset-0 opacity-70" style={{ color: theme.spatial.glowStrong }} />
                     <motion.div initial={{ y: 20, scale: 0.94 }} animate={{ y: 0, scale: 1 }} exit={{ y: 12, scale: 0.96 }} transition={aceternityMotion.spring.panel} className="relative flex w-[min(480px,calc(100vw-48px))] flex-col items-center px-8 py-10 text-center">
                         <div className="relative mb-8 h-32 w-44">
-                            <motion.div animate={{ x: -22, y: 10, rotate: -8 }} className="absolute inset-0 rounded-[20px] border backdrop-blur-xl" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} />
-                            <motion.div animate={{ x: 22, y: 10, rotate: 8 }} className="absolute inset-0 rounded-[20px] border backdrop-blur-xl" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} />
-                            <motion.div animate={{ y: -10, scale: 1.04 }} transition={aceternityMotion.spring.panel} className="absolute inset-0 grid place-items-center rounded-[20px] border" style={{ background: theme.node.panel, borderColor: theme.spatial.glowStrong, boxShadow: `0 24px 60px ${theme.spatial.shadow}` }}>
+                            <motion.div animate={{ x: -22, y: 10, rotate: -8 }} className="absolute inset-0 rounded-[var(--r-3xl)] border backdrop-blur-xl" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} />
+                            <motion.div animate={{ x: 22, y: 10, rotate: 8 }} className="absolute inset-0 rounded-[var(--r-3xl)] border backdrop-blur-xl" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} />
+                            <motion.div animate={{ y: -10, scale: 1.04 }} transition={aceternityMotion.spring.panel} className="absolute inset-0 grid place-items-center rounded-[var(--r-3xl)] border" style={{ background: theme.node.panel, borderColor: theme.spatial.glowStrong, boxShadow: `0 24px 60px ${theme.spatial.shadow}` }}>
                                 <UploadCloud className="size-10" style={{ color: theme.accent.primary }} />
                             </motion.div>
                         </div>
