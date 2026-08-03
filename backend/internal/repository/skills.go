@@ -60,7 +60,8 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 		order = "(skills.initial_added_count + (SELECT COUNT(*) FROM user_skill_states metric_states WHERE metric_states.skill_id = skills.id AND metric_states.added = true)) desc, skills.updated_at desc"
 	}
 	var skills []model.Skill
-	err := query.Select("skills.*").Distinct().Order(order).Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
+	// 用户状态按用户和技能唯一，列表 JOIN 不会重复；省略 DISTINCT 也避免 PostgreSQL 拒绝未出现在 SELECT 中的热门排序表达式。
+	err := query.Select("skills.*").Order(order).Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
 	return skills, total, err
 }
 
