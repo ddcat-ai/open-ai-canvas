@@ -114,7 +114,7 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
                 {showLabel ? (
                     <span className={`min-w-0 flex-1 items-center justify-between gap-2 whitespace-nowrap ${labelClassName || ""}`}>
                         <span>系统公告</span>
-                        <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-1.5 !text-center !text-[9px] !font-medium !leading-[18px] tabular-nums">{announcements.length}</Tag>
+                        <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-1.5 !text-center !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{announcements.length}</Tag>
                     </span>
                 ) : null}
             </motion.button>

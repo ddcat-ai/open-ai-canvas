@@ -69,7 +69,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                                 <UserAvatar user={user} className="size-8" />
                                 <div className="min-w-0 flex-1">
                                     <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
-                                    <div className="mt-0.5 truncate text-[11px] tabular-nums text-foreground/45">可用 {balance} 积分</div>
+                                    <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div>
                                 </div>
                             </div>
 
@@ -80,7 +80,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                             ) : null}
 
                             <div className="border-y border-border/65 py-2">
-                                <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[11px] text-foreground/58 hover:bg-foreground/[.055] hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[9px] tabular-nums text-foreground/32" />
+                                <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-foreground/[.055] hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32" />
                             </div>
 
                             <div className="flex h-10 items-center px-2">
@@ -96,7 +96,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                         <UserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
                             <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
-                            <span className="mt-0.5 block truncate text-[9px] tabular-nums text-foreground/42">{balance} 积分</span>
+                            <span className="mt-0.5 block truncate text-[var(--fs-micro)] tabular-nums text-foreground/42">{balance} 积分</span>
                         </span>
                         <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/30", expandedClassName)} />
                     </button>

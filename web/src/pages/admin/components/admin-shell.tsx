@@ -66,7 +66,7 @@ export function AdminShell() {
                     {!collapsed ? (
                         <Link to="/" className="flex min-w-0 flex-1 items-center gap-2" title="影策">
                             <span className="grid size-7 shrink-0 place-items-center rounded-md bg-foreground text-background"><InfinityIcon className="size-4" /></span>
-                            <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">影策</span><span className="block truncate text-[9px] text-foreground/42">管理后台</span></span>
+                            <span className="min-w-0"><span className="block truncate text-[var(--fs-body)] font-semibold">影策</span><span className="block truncate text-[var(--fs-micro)] text-foreground/42">管理后台</span></span>
                         </Link>
                     ) : null}
                     <Tooltip title={collapsed ? "展开侧栏" : "折叠侧栏"} placement="right">
@@ -78,10 +78,10 @@ export function AdminShell() {
                 <AdminNavigation collapsed={collapsed} />
                 <div className="shrink-0 border-t border-border/70 p-2">
                     <Tooltip title={collapsed ? "更新日志" : undefined} placement="right">
-                        <AppChangelogButton className={cn("flex h-8 w-full items-center rounded text-[11px] text-foreground/52 transition-colors hover:bg-foreground/[.055] hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2 px-2")} showVersion={!collapsed} />
+                        <AppChangelogButton className={cn("flex h-8 w-full items-center rounded text-[var(--fs-label)] text-foreground/52 transition-colors hover:bg-foreground/[.055] hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2 px-2")} showVersion={!collapsed} />
                     </Tooltip>
                     <Tooltip title={collapsed ? "返回创作台" : undefined} placement="right">
-                        <NavLink to="/canvas" className={cn("flex h-8 items-center rounded text-[11px] text-foreground/52 transition-colors hover:bg-foreground/[.055] hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2 px-2")}>
+                        <NavLink to="/canvas" className={cn("flex h-8 items-center rounded text-[var(--fs-label)] text-foreground/52 transition-colors hover:bg-foreground/[.055] hover:text-foreground", collapsed ? "justify-center px-0" : "gap-2 px-2")}>
                             <Home className="size-3.5" />
                             {!collapsed ? <span>返回创作台</span> : null}
                         </NavLink>
@@ -140,7 +140,7 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
         <nav className="thin-scrollbar flex-1 overflow-y-auto px-2 py-2" aria-label="管理后台菜单">
             {adminNavigation.map((group) => (
                 <div key={group.label} className="mb-3">
-                    {!collapsed ? <div className="mb-1 px-2.5 text-[10px] font-medium text-foreground/38">{group.label}</div> : <div className="mx-auto mb-1.5 h-px w-7 bg-border/80" />}
+                    {!collapsed ? <div className="mb-1 px-2.5 text-[var(--fs-tiny)] font-medium text-foreground/38">{group.label}</div> : <div className="mx-auto mb-1.5 h-px w-7 bg-border/80" />}
                     <div className="space-y-0.5">
                         {group.items.map((item) => (
                             <Tooltip key={item.path} title={collapsed ? item.label : undefined} placement="right">
@@ -148,7 +148,7 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                                     to={item.path}
                                     end={item.path === "/admin"}
                                     className={({ isActive }) => cn(
-                                        "app-workspace-nav-link flex h-9 items-center rounded-md text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                        "app-workspace-nav-link flex h-9 items-center rounded-md text-[var(--fs-body)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                                         collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
                                         isActive ? "is-active font-medium" : "text-foreground/62 hover:bg-foreground/[.05] hover:text-foreground",
                                     )}

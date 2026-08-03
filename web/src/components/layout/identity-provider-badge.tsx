@@ -12,7 +12,7 @@ export function IdentityProviderBadge({ user, compact = false, className }: { us
         <span
             className={cn(
                 "inline-flex shrink-0 items-center justify-center border border-border bg-background font-semibold text-foreground/65",
-                compact ? "size-3.5 rounded-full text-[8px] leading-none" : "h-4 rounded px-1 text-[9px] leading-none",
+                compact ? "size-3.5 rounded-full text-[var(--fs-micro)] leading-none" : "h-4 rounded px-1 text-[var(--fs-micro)] leading-none",
                 className,
             )}
             title={user.identityUsername ? `Linux.do · @${user.identityUsername}` : "Linux.do 用户"}

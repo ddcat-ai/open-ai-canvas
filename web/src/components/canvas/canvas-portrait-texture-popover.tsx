@@ -33,7 +33,7 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
             <div className="space-y-1">
                 {PORTRAIT_TEXTURE_GROUPS.map((group) => (
                     <div key={group.key} className="grid grid-cols-[60px_minmax(0,1fr)] items-center gap-2 py-1">
-                        <span className="text-[11px]" style={{ color: theme.node.muted }}>{group.label}</span>
+                        <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{group.label}</span>
                         <div className="grid min-w-0 grid-cols-3 gap-1" role="radiogroup" aria-label={group.label}>
                             {group.options.map((option) => {
                                 const selected = settings[group.key] === option.value;
@@ -43,7 +43,7 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
                                         type="button"
                                         role="radio"
                                         aria-checked={selected}
-                                        className="h-7 min-w-0 rounded-md border px-1 text-[10px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:transition-none"
+                                        className="h-7 min-w-0 rounded-md border px-1 text-[var(--fs-tiny)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:transition-none"
                                         style={{
                                             background: selected ? theme.accent.primarySoft : theme.toolbar.itemHover,
                                             borderColor: selected ? theme.accent.primary : "transparent",
@@ -78,7 +78,7 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
                 aria-label="打开人物质感调节面板"
             >
                 <SlidersHorizontal className="size-3 shrink-0" />
-                <span className="truncate text-[10px] font-medium">人物质感调节</span>
+                <span className="truncate text-[var(--fs-tiny)] font-medium">人物质感调节</span>
             </button>
         </Popover>
     );

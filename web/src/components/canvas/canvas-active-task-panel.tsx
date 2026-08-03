@@ -44,7 +44,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section
                         layout
-                        className="pointer-events-auto overflow-hidden rounded-[17px] border backdrop-blur-2xl"
+                        className="pointer-events-auto overflow-hidden rounded-[var(--panel-radius)] border backdrop-blur-2xl"
                         style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
                         aria-label="当前画布生成任务"
                     >
@@ -57,12 +57,12 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                             aria-controls="canvas-active-task-list"
                         >
                             <span className="flex min-w-0 items-center gap-2">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-[10px]" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
+                                <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)]" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
                                     <ListTodo className="size-4" />
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block text-sm font-semibold leading-5">生成任务</span>
-                                    <span className="block truncate text-[11px]" style={{ color: theme.node.muted }}>当前画布 · {tasks.length} 个进行中</span>
+                                    <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>当前画布 · {tasks.length} 个进行中</span>
                                 </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-2" style={{ color: theme.accent.primary }}>
@@ -127,9 +127,9 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion }:
                     <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
                             <span className="truncate text-xs font-semibold" title={formatTaskKind(task)}>{formatTaskKind(task)}</span>
-                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>{statusLabel[task.status]}</span>
+                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>{statusLabel[task.status]}</span>
                         </span>
-                        <span className="mt-1 block truncate text-[11px]" style={{ color: theme.node.muted }} title={task.stage || statusLabel[task.status]}>{task.stage || statusLabel[task.status]}</span>
+                        <span className="mt-1 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} title={task.stage || statusLabel[task.status]}>{task.stage || statusLabel[task.status]}</span>
                     </span>
                     {expanded ? <ChevronUp className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} /> : <ChevronDown className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} />}
                 </div>
@@ -138,7 +138,7 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion }:
                     <motion.div className="h-full rounded-full" animate={{ width: `${progress ?? 8}%` }} transition={reducedMotion ? { duration: 0 } : { duration: 0.3 }} style={{ background: statusTone }} />
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]" style={{ color: theme.node.muted }}>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                     <span className="inline-flex min-w-0 items-center gap-1 truncate" title={durationLabel}><Clock3 className="size-3 shrink-0" />{durationLabel}</span>
                     <span className="inline-flex min-w-0 items-center justify-end gap-1 truncate" title={billingLabel}><Coins className="size-3 shrink-0" />{billingLabel}</span>
                 </div>
@@ -151,7 +151,7 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion }:
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={transition}
-                        className="border-t px-3 pb-3 pt-2 text-[11px]"
+                        className="border-t px-3 pb-3 pt-2 text-[var(--fs-label)]"
                         style={{ borderColor: theme.toolbar.border, color: theme.node.muted }}
                     >
                         <div className="flex items-center justify-between gap-2">

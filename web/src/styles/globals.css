@@ -4,6 +4,175 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* =========================================================================
+   Design Token System — 三层架构 (Primitive → Semantic → Component)
+   详见 Wayfinder #96: https://github.com/ddcat-ai/open-ai-canvas/issues/96
+   规范：禁止在组件中新增裸 text-[Npx]/rounded-[Npx]/z-[N]，必须使用 token
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Layer 1: Primitive — 纯值，无语义，不随主题变（所有维度的基础）
+   ------------------------------------------------------------------------- */
+:root {
+    /* --- 1. 色彩（oklch 色板）--- */
+    --color-neutral-0: oklch(1 0 0);
+    --color-neutral-50: oklch(0.985 0 0);
+    --color-neutral-100: oklch(0.97 0 0);
+    --color-neutral-200: oklch(0.922 0 0);
+    --color-neutral-300: oklch(0.87 0 0);
+    --color-neutral-400: oklch(0.708 0 0);
+    --color-neutral-500: oklch(0.556 0 0);
+    --color-neutral-600: oklch(0.439 0 0);
+    --color-neutral-700: oklch(0.371 0 0);
+    --color-neutral-800: oklch(0.269 0 0);
+    --color-neutral-900: oklch(0.205 0 0);
+    --color-neutral-950: oklch(0.145 0 0);
+
+    /* 节点类型语义色板（对应 #97 色带+图标徽章方案）
+       注意：用 --palette- 前缀避免与 @theme 的 --color-* 命名空间冲突导致循环引用 */
+    --palette-node-image: oklch(0.75 0.15 75);        /* 琥珀 300 — 图片 */
+    --palette-node-video: oklch(0.65 0.22 350);        /* 品红 400 — 视频 */
+    --palette-node-text: oklch(0.45 0.02 250);         /* 中性蓝灰 700 — 文本 */
+    --palette-node-audio: oklch(0.7 0.13 220);         /* 青蓝 400 — 音频 */
+    --palette-node-config: oklch(0.55 0.04 250);       /* 灰蓝 500 — 配置 */
+    --palette-node-script: oklch(0.6 0.18 300);        /* 紫色 400 — 脚本 */
+    --palette-node-drawing: oklch(0.65 0.12 55);       /* 赭石 400 — 绘图 */
+    --palette-node-frame: oklch(0.7 0.15 155);         /* 翠绿 400 — 帧 */
+    --palette-node-character: oklch(0.78 0.13 20);     /* 桃红 300 — 角色引用 */
+    --palette-node-skill: oklch(0.7 0.17 55);          /* 橙色 400 — 技能 */
+
+    /* 状态色（用 --palette- 前缀避免循环引用）*/
+    --palette-status-success: oklch(0.7 0.17 155);
+    --palette-status-error: oklch(0.65 0.22 25);
+    --palette-status-loading: oklch(0.62 0.18 250);
+    --palette-status-warning: oklch(0.75 0.15 85);
+
+    /* --- 2. 间距（4px 栅格 + 半距）--- */
+    --space-0: 0px;
+    --space-half: 2px;
+    --space-1: 4px;
+    --space-1-half: 6px;
+    --space-2: 8px;
+    --space-2-half: 10px;
+    --space-3: 12px;
+    --space-3-half: 14px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --space-20: 80px;
+    --space-24: 96px;
+
+    /* --- 3. 字号（10 档）--- */
+    --fs-micro: 9px;        /* 极小标注（分镜行号辅助）*/
+    --fs-tiny: 10px;        /* 小标注（徽章、tag）*/
+    --fs-label: 11px;       /* 标签文字 */
+    --fs-caption: 12px;     /* 说明文字 */
+    --fs-body: 14px;        /* 正文（基准）*/
+    --fs-body-lg: 15px;     /* 大正文 */
+    --fs-heading: 16px;     /* 小标题 */
+    --fs-heading-lg: 18px;  /* 大标题 */
+    --fs-title: 22px;       /* 页面标题 */
+    --fs-display: 36px;     /* 展示标题 */
+
+    /* --- 4. 圆角（10 档）--- */
+    --r-xs: 4px;
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 14px;
+    --r-2xl: 16px;
+    --r-3xl: 20px;
+    --r-4xl: 24px;
+    --r-5xl: 32px;
+    --r-full: 9999px;
+
+    /* --- 5. 阴影（含 glow）--- */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.12);
+    --shadow-2xl: 0 24px 60px rgba(0, 0, 0, 0.16);
+    --shadow-glow-sm: 0 0 12px rgba(125, 162, 255, 0.2);
+    --shadow-glow-md: 0 0 24px rgba(125, 162, 255, 0.3);
+    --shadow-glow-lg: 0 0 40px rgba(125, 162, 255, 0.4);
+
+    /* --- 6. Elevation（z-index 12 档，对应 #98 五层体系）--- */
+    --z-canvas: 0;              /* L0 画布层 */
+    --z-canvas-overlay: 5;      /* L0 画布覆盖（网格、连线）*/
+    --z-toolbar: 10;            /* L1 浮动工具层 */
+    --z-toolbar-floating: 20;   /* L1 悬停工具栏 */
+    --z-panel: 50;              /* L2 侧边面板层 */
+    --z-panel-floating: 80;     /* L2 浮动面板 */
+    --z-modal: 100;             /* L3 对话框层 */
+    --z-modal-overlay: 110;     /* L3 遮罩 */
+    --z-popover: 200;           /* L3 popover */
+    --z-toast: 500;             /* L4 通知层 */
+    --z-tooltip: 1000;          /* L4 tooltip */
+    --z-max: 2000;              /* 最高层（紧急通知）*/
+
+    /* --- 7. 动效（对应 #99 动效 token）--- */
+    /* duration */
+    --motion-dur-instant: 80ms;
+    --motion-dur-fast: 150ms;
+    --motion-dur-base: 250ms;
+    --motion-dur-slow: 400ms;
+    --motion-dur-emphasize: 600ms;
+    /* easing */
+    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+    --motion-ease-in-out: cubic-bezier(0.64, 0, 0.36, 1);
+    --motion-ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --motion-ease-linear: linear;
+    /* delay */
+    --motion-delay-none: 0ms;
+    --motion-delay-xs: 30ms;
+    --motion-delay-sm: 60ms;
+    --motion-delay-md: 100ms;
+    --motion-delay-lg: 150ms;
+    /* motion-scale（联动 prefers-reduced-motion）*/
+    --motion-scale: 1;
+
+    /* --- 8. 描边宽度 --- */
+    --stroke-0: 0px;
+    --stroke-1: 1px;
+    --stroke-2: 2px;
+    --stroke-3: 3px;
+
+    /* --- 9. 不透明度（6 档）--- */
+    --opa-hide: 0.08;
+    --opa-faint: 0.2;
+    --opa-muted: 0.45;
+    --opa-subtle: 0.55;
+    --opa-medium: 0.72;
+    --opa-full: 1;
+}
+
+/* prefers-reduced-motion 降级（对应 #99 三级降级策略 L1）*/
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-scale: 0.3;
+    }
+}
+
+/* 用户在应用内选择"无动效"时，JS 添加 .no-motion 类（L2 禁用）*/
+.no-motion {
+    --motion-scale: 0;
+}
+
+/* 动效计算函数（实际 duration = base * motion-scale）*/
+:root {
+    --motion-dur-instant-calc: calc(var(--motion-dur-instant) * var(--motion-scale));
+    --motion-dur-fast-calc: calc(var(--motion-dur-fast) * var(--motion-scale));
+    --motion-dur-base-calc: calc(var(--motion-dur-base) * var(--motion-scale));
+    --motion-dur-slow-calc: calc(var(--motion-dur-slow) * var(--motion-scale));
+    --motion-dur-emphasize-calc: calc(var(--motion-dur-emphasize) * var(--motion-scale));
+}
+
 @theme inline {
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -45,6 +214,44 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* === Design Token System 映射（对应 #96 三层架构）=== */
+    /* 色彩 — 节点类型色（可用 text-node-image / bg-node-video 等）*/
+    --color-node-image: var(--cn-type-image);
+    --color-node-video: var(--cn-type-video);
+    --color-node-text: var(--cn-type-text);
+    --color-node-audio: var(--cn-type-audio);
+    --color-node-config: var(--cn-type-config);
+    --color-node-script: var(--cn-type-script);
+    --color-node-drawing: var(--cn-type-drawing);
+    --color-node-frame: var(--cn-type-frame);
+    --color-node-character: var(--cn-type-character);
+    --color-node-skill: var(--cn-type-skill);
+
+    /* 色彩 — 状态色（可用 text-status-success / bg-status-error 等）*/
+    --color-status-success: var(--status-success);
+    --color-status-error: var(--status-error);
+    --color-status-loading: var(--status-loading);
+    --color-status-warning: var(--status-warning);
+
+    /* 色彩 — Canvas 语义色 */
+    --color-cn-text: var(--cn-text);
+    --color-cn-muted: var(--cn-muted);
+    --color-cn-faint: var(--cn-faint);
+    --color-cn-stroke: var(--cn-stroke);
+    --color-cn-fill: var(--cn-fill);
+
+    /* 字号（可用 text-fs-body / text-fs-caption 等）*/
+    --font-size-micro: var(--fs-micro);
+    --font-size-tiny: var(--fs-tiny);
+    --font-size-label: var(--fs-label);
+    --font-size-caption: var(--fs-caption);
+    --font-size-body: var(--fs-body);
+    --font-size-body-lg: var(--fs-body-lg);
+    --font-size-heading: var(--fs-heading);
+    --font-size-heading-lg: var(--fs-heading-lg);
+    --font-size-title: var(--fs-title);
+    --font-size-display: var(--fs-display);
 }
 
 :root {
@@ -64,6 +271,52 @@
     --workspace-sidebar: #f5f6f8;
     --workspace-accent: #2563eb;
     --workspace-accent-soft: #eaf1ff;
+
+    /* --- Semantic 层（引用 Primitive，随主题切换）--- */
+    /* 通用语义色（引用 Primitive neutral 色板）*/
+    --bg: var(--color-neutral-0);
+    --fg: var(--color-neutral-950);
+    --border-semantic: var(--color-neutral-200);
+    --accent: var(--workspace-accent);
+    --accent-soft: var(--workspace-accent-soft);
+    --muted: var(--color-neutral-100);
+
+    /* Canvas Theme 语义（从 CSS 变量反序列化到 TS 主题对象，对应 #96 决策3）*/
+    --cn-text: var(--color-neutral-950);
+    --cn-muted: var(--color-neutral-500);
+    --cn-faint: var(--color-neutral-400);
+    --cn-stroke: var(--color-neutral-200);
+    --cn-fill: var(--color-neutral-50);
+    --cn-active-stroke: var(--workspace-accent);
+    --cn-active-stroke-soft: var(--workspace-accent-soft);
+
+    /* Aceternity spatial 语义（对应 #96 决策3：CSS→TS 单向同步）*/
+    --cn-spatial-surface: var(--workspace-surface);
+    --cn-spatial-surface-strong: var(--workspace-surface-strong);
+    --cn-spatial-shadow: rgba(0, 0, 0, 0.12);
+    --cn-spatial-glow: rgba(125, 162, 255, 0.2);
+    --cn-spatial-glow-strong: rgba(125, 162, 255, 0.35);
+    --cn-spatial-elevated: var(--color-neutral-0);
+    --cn-spatial-toolbar-border: var(--color-neutral-200);
+
+    /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
+    --cn-type-image: var(--palette-node-image);
+    --cn-type-video: var(--palette-node-video);
+    --cn-type-text: var(--palette-node-text);
+    --cn-type-audio: var(--palette-node-audio);
+    --cn-type-config: var(--palette-node-config);
+    --cn-type-script: var(--palette-node-script);
+    --cn-type-drawing: var(--palette-node-drawing);
+    --cn-type-frame: var(--palette-node-frame);
+    --cn-type-character: var(--palette-node-character);
+    --cn-type-skill: var(--palette-node-skill);
+
+    /* 状态语义色 */
+    --status-success: var(--palette-status-success);
+    --status-error: var(--palette-status-error);
+    --status-loading: var(--palette-status-loading);
+    --status-warning: var(--palette-status-warning);
+
     --border: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --background: oklch(1 0 0);
@@ -139,6 +392,98 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+
+    /* --- Semantic 层 dark 覆盖 --- */
+    --bg: var(--color-neutral-950);
+    --fg: var(--color-neutral-50);
+    --border-semantic: var(--color-neutral-800);
+    --muted: var(--color-neutral-900);
+
+    --cn-text: var(--color-neutral-50);
+    --cn-muted: var(--color-neutral-400);
+    --cn-faint: var(--color-neutral-500);
+    --cn-stroke: rgba(255, 255, 255, 0.1);
+    --cn-fill: rgba(255, 255, 255, 0.04);
+    --cn-active-stroke: var(--workspace-accent);
+    --cn-active-stroke-soft: var(--workspace-accent-soft);
+
+    --cn-spatial-surface: var(--workspace-surface);
+    --cn-spatial-surface-strong: var(--workspace-surface-strong);
+    --cn-spatial-shadow: rgba(0, 0, 0, 0.4);
+    --cn-spatial-glow: rgba(125, 162, 255, 0.15);
+    --cn-spatial-glow-strong: rgba(125, 162, 255, 0.25);
+    --cn-spatial-elevated: var(--color-neutral-900);
+    --cn-spatial-toolbar-border: rgba(255, 255, 255, 0.1);
+}
+
+/* -------------------------------------------------------------------------
+   Layer 3: Component — 引用 Semantic，某组件专属
+   ------------------------------------------------------------------------- */
+:root {
+    /* Dock 组件（FloatingDock、悬停工具栏，对应 #95 工具栏方案）*/
+    --dock-radius: var(--r-xl);            /* 14px */
+    --dock-padding: var(--space-2);       /* 8px */
+    --dock-icon-size: 32px;
+    --dock-icon-size-labeled: 36px;
+    --dock-label-fs: var(--fs-label);     /* 11px */
+    --dock-blur: 24px;
+    --dock-surface: var(--cn-spatial-surface);
+    --dock-border: var(--cn-spatial-toolbar-border);
+    --dock-shadow: var(--shadow-lg);
+    --dock-item-radius: var(--r-md);      /* 8px */
+    --dock-item-radius-labeled: var(--r-lg); /* 12px */
+
+    /* Node 组件（画布节点，对应 #97 节点视觉规范）*/
+    --node-radius: var(--r-2xl);          /* 16px */
+    --node-border-width: var(--stroke-1); /* 1px */
+    --node-border: var(--cn-stroke);
+    --node-active-border-width: var(--stroke-2); /* 2px */
+    --node-active-border: var(--cn-active-stroke);
+    --node-active-glow: 0 0 0 4px var(--cn-active-stroke-soft);
+    --node-active-glow-strong: 0 0 0 6px var(--cn-active-stroke-soft);
+    --node-shadow: var(--shadow-sm);
+    --node-shadow-hover: var(--shadow-md);
+    --node-shadow-selected: var(--shadow-lg);
+    --node-shadow-selected-primary: var(--shadow-xl);
+    --node-shadow-active: var(--shadow-2xl);
+    --node-header-height: 24px;
+    --node-title-fs: var(--fs-label);     /* 11px */
+    --node-badge-fs: var(--fs-tiny);      /* 10px */
+    --node-type-strip-width: 3px;         /* 色带宽度 */
+    --node-type-badge-size: 20px;         /* 图标徽章尺寸 */
+
+    /* Modal 组件（对话框，对应 #98 面板层级）*/
+    --modal-radius: var(--r-3xl);         /* 20px */
+    --modal-max-width: 480px;
+    --modal-overlay-opacity: 0.5;
+    --modal-shadow: var(--shadow-2xl);
+    --modal-padding: var(--space-5);      /* 20px */
+
+    /* Panel 组件（侧边面板，对应 #98 五层体系 L2）*/
+    --panel-radius: var(--r-2xl);         /* 16px */
+    --panel-padding: var(--space-4);      /* 16px */
+    --panel-shadow: var(--shadow-lg);
+    --panel-section-gap: var(--space-3);  /* 12px */
+
+    /* Prompt 面板（对应 #98 决策2 渐进式三区）*/
+    --prompt-panel-max-height: min(70vh, 640px);
+    --prompt-panel-input-min-height: 72px;
+    --prompt-panel-section-fs: var(--fs-body);     /* 14px A区 */
+    --prompt-panel-caption-fs: var(--fs-caption);  /* 12px B区 */
+    --prompt-panel-label-fs: var(--fs-label);      /* 11px 标签 */
+    --prompt-panel-heading-fs: var(--fs-heading);  /* 16px 区标题 */
+
+    /* 进度条（对应 #98 决策3 任务进度）*/
+    --progress-bar-height: 6px;
+    --progress-bar-radius: var(--r-xs);   /* 3px */
+    --progress-bar-fill: var(--status-loading);
+    --progress-bar-fill-success: var(--status-success);
+    --progress-bar-fill-error: var(--status-error);
+
+    /* 缩放控制（对应 #95 决策5）*/
+    --zoom-control-min: 0.05;
+    --zoom-control-max: 2;
+    --zoom-control-step: 0.1;
 }
 
 @layer base {
@@ -4015,6 +4360,13 @@
 
     [data-canvas-viewport-interacting="true"] :where(.canvas-node-shell-generating::before, .canvas-connection-flow, .canvas-connection-draft) {
         animation: none !important;
+    }
+
+    /* 节点状态徽章 success 淡出动画（对应 #97 决策2）*/
+    @keyframes canvas-status-success-fade {
+        0% { opacity: 1; transform: scale(1); }
+        70% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(0.9); }
     }
 
     .canvas-node-shell-generating::before {

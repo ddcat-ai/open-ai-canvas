@@ -207,7 +207,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
         <div
             ref={overlayRef}
             data-canvas-no-zoom
-            className={`absolute z-[105] overflow-hidden rounded-[16px] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
+            className={`absolute z-[105] overflow-hidden rounded-[var(--r-2xl)] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
             style={{ left: 0, top: 0, width: node.width * viewport.k, height: node.height * viewport.k }}
             onPointerDown={status === "manual" ? (event) => {
                 event.preventDefault();
@@ -263,7 +263,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => { event.stopPropagation(); onFaceSelect(face); }}
                     >
-                        {selected ? <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[8px] font-semibold text-white" style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)" }}>{selected.name}</span> : null}
+                        {selected ? <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold text-white" style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)" }}>{selected.name}</span> : null}
                     </motion.button>
                 );
             })}
@@ -295,8 +295,8 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
                 <button type="button" aria-label="关闭情绪调节" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}><X className="size-4" /></button>
                 <span className="mx-2 h-5 w-px" style={{ background: theme.toolbar.border }} />
                 <span className="grid size-8 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>{status === "detecting" ? <LoaderCircle className="size-4 animate-spin" /> : <ScanFace className="size-4" />}</span>
-                <span className="min-w-0 flex-1 truncate px-2 text-[11px] font-medium leading-none">{label}</span>
-                {status !== "detecting" ? <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] px-2 text-[11px] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}><SquareDashedMousePointer className="size-3.5" />手动框选</button> : null}
+                <span className="min-w-0 flex-1 truncate px-2 text-[var(--fs-label)] font-medium leading-none">{label}</span>
+                {status !== "detecting" ? <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-label)] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}><SquareDashedMousePointer className="size-3.5" />手动框选</button> : null}
             </div>
         </SpotlightSurface>
     );

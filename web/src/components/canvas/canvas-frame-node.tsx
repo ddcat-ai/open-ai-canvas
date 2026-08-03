@@ -158,7 +158,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
         >
             <CometCard
                 containerClassName="h-full w-full"
-                className="canvas-frame-shell overflow-hidden rounded-[14px] border"
+                className="canvas-frame-shell overflow-hidden rounded-[var(--dock-radius)] border"
                 rotateDepth={2.4}
                 translateDepth={2}
                 disabled={Boolean(dragOffset) || !collapsed || editing || scale < 0.32}
@@ -216,7 +216,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                             {data.title}
                         </button>
                     )}
-                    <span className="ml-auto shrink-0 pr-1 text-[11px] tabular-nums" style={{ color: theme.node.muted }}>
+                    <span className="ml-auto shrink-0 pr-1 text-[var(--fs-label)] tabular-nums" style={{ color: theme.node.muted }}>
                         {childNodes.length}
                     </span>
                 </div>
@@ -272,7 +272,7 @@ function FramePreview({ nodes, frame, theme }: { nodes: CanvasNodeData[]; frame:
                     </div>
                 ))
             ) : (
-                <div className="grid h-full place-items-center text-[11px]" style={{ color: theme.node.faint }}>空背板</div>
+                <div className="grid h-full place-items-center text-[var(--fs-label)]" style={{ color: theme.node.faint }}>空背板</div>
             )}
         </div>
     );

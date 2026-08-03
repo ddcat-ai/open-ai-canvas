@@ -20,7 +20,7 @@ export function PageHeader({ title, description, meta, actions, icon }: { title:
                 {icon ? <WorkspaceSignalIcon variant={icon} /> : null}
                 <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
-                        <h1 className="truncate text-[22px] font-semibold leading-7">{title}</h1>
+                        <h1 className="truncate text-[var(--fs-title)] font-semibold leading-7">{title}</h1>
                         {meta}
                     </div>
                     {description ? <p className="mt-1 text-xs leading-5 text-foreground/58">{description}</p> : null}

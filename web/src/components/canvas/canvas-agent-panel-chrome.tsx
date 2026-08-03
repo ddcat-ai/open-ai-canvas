@@ -38,7 +38,7 @@ export function AgentPanelChrome({
                 </span>
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold leading-5">Agent</div>
-                    <div className="truncate text-[11px] leading-4" style={{ color: theme.node.muted }}>画布协作</div>
+                    <div className="truncate text-[var(--fs-label)] leading-4" style={{ color: theme.node.muted }}>画布协作</div>
                 </div>
                 <AgentModeSwitch value={mode} theme={theme} onChange={onModeChange} />
                 <Tooltip title="收起 Agent">
@@ -46,7 +46,7 @@ export function AgentPanelChrome({
                 </Tooltip>
             </div>
 
-            <div className="mt-2 flex min-h-8 flex-wrap items-center gap-x-2.5 gap-y-1 px-0.5 text-[11px]" style={{ color: theme.node.muted }}>
+            <div className="mt-2 flex min-h-8 flex-wrap items-center gap-x-2.5 gap-y-1 px-0.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
                 <span className="font-medium" style={{ color: theme.node.text }}>{context.nodeCount} 个节点</span>
                 {context.selectedCount ? <span className="inline-flex items-center gap-1"><Focus className="size-3" />选中 {context.selectedCount}</span> : <span>未选择节点</span>}
                 {context.chapterLabel ? <span className="inline-flex min-w-0 items-center gap-1"><BookOpenText className="size-3 shrink-0" /><span className="max-w-32 truncate">{context.chapterLabel}{context.shotLabel ? ` · ${context.shotLabel}` : ""}</span></span> : null}
@@ -67,7 +67,7 @@ export function AgentPanelChrome({
 
 function AgentModeSwitch({ value, theme, onChange }: { value: CanvasAgentMode; theme: CanvasTheme; onChange: (value: CanvasAgentMode) => void }) {
     return (
-        <div className="inline-flex h-8 shrink-0 items-center rounded-md p-0.5 text-[11px]" style={{ background: theme.spatial.surface }} role="group" aria-label="Agent 运行位置">
+        <div className="inline-flex h-8 shrink-0 items-center rounded-md p-0.5 text-[var(--fs-label)]" style={{ background: theme.spatial.surface }} role="group" aria-label="Agent 运行位置">
             {(["online", "local"] as const).map((item) => {
                 const active = value === item;
                 const Icon = item === "online" ? Globe2 : Laptop;
@@ -95,7 +95,7 @@ export function AgentChatEmptyState({ theme, nodeCount, onSelect }: { theme: Can
             <div className="mx-auto w-full max-w-[380px]">
                 <div className="flex items-center gap-2">
                     <span className="grid size-7 place-items-center rounded-md" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}><Bot className="size-3.5" /></span>
-                    <span className="text-[11px] font-medium" style={{ color: theme.node.muted }}>{nodeCount} 个节点已就绪</span>
+                    <span className="text-[var(--fs-label)] font-medium" style={{ color: theme.node.muted }}>{nodeCount} 个节点已就绪</span>
                 </div>
                 <h2 className="mt-3 text-[19px] font-semibold leading-6" style={{ color: theme.node.text }}>从当前画布开始</h2>
                 <div className="mt-4 grid grid-cols-1 gap-1">

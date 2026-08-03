@@ -40,7 +40,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                         </div>
                         <div>
                             <div className="mb-2 text-xs font-semibold" style={{ color: theme.node.muted }}>任务日志</div>
-                            <pre className="max-h-64 overflow-auto rounded-lg bg-neutral-950 p-3 text-[11px] leading-5 text-neutral-100">{taskLoading ? "加载中..." : taskLogs.length ? taskLogs.map((log) => `[${new Date(log.createdAt).toLocaleString()}] ${log.level.toUpperCase()} ${log.message}`).join("\n") : "暂无日志"}</pre>
+                            <pre className="max-h-64 overflow-auto rounded-lg bg-neutral-950 p-3 text-[var(--fs-label)] leading-5 text-neutral-100">{taskLoading ? "加载中..." : taskLogs.length ? taskLogs.map((log) => `[${new Date(log.createdAt).toLocaleString()}] ${log.level.toUpperCase()} ${log.message}`).join("\n") : "暂无日志"}</pre>
                         </div>
                     </div>
                 ) : null}

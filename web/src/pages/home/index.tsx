@@ -106,7 +106,7 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
                 <div className="flex min-w-0 items-center gap-3">
                     <WorkspaceSignalIcon variant="home" />
                     <div className="min-w-0">
-                        <h1 className="text-[22px] font-semibold leading-7">继续创作</h1>
+                        <h1 className="text-[var(--fs-title)] font-semibold leading-7">继续创作</h1>
                         <p className="mt-1 text-xs leading-5 text-foreground/55">回到最近工作，或先处理阻塞制作的事项。</p>
                     </div>
                 </div>
@@ -218,7 +218,7 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
                 <div className="app-workflow-rail grid border-t border-border/75 sm:grid-cols-2 xl:grid-cols-4">
                     {workflow.map((item, index) => (
                         <div key={item.title} className={`app-workflow-step min-w-0 border-b border-border/75 py-4 sm:px-4 xl:border-b-0 xl:border-r ${index % 2 === 0 ? "sm:pl-0" : "sm:border-l"} ${index === workflow.length - 1 ? "xl:border-r-0" : ""}`}>
-                            <span className="text-[11px] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
+                            <span className="text-[var(--fs-label)] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
                             <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
                             <p className="mt-1 text-xs leading-5 text-foreground/48">{item.description}</p>
                         </div>
@@ -261,9 +261,9 @@ function WorkspaceMetric({ icon, label, value, detail, attention = false }: { ic
                 <span className={attention ? "text-foreground/75" : "text-[var(--workspace-accent)]"}>{icon}</span>
                 <span className={`size-1.5 rounded-full ${attention ? "bg-foreground/75" : "bg-[var(--workspace-accent)]"}`} />
             </div>
-            <div className="mt-5 text-[11px] text-foreground/45">{label}</div>
+            <div className="mt-5 text-[var(--fs-label)] text-foreground/45">{label}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-            <div className="mt-1 truncate text-[10px] text-foreground/38">{detail}</div>
+            <div className="mt-1 truncate text-[var(--fs-tiny)] text-foreground/38">{detail}</div>
         </article>
     );
 }
@@ -274,8 +274,8 @@ function SpatialChapterStack({ detail, loading, projectId }: { detail?: Awaited<
     return (
         <div className="spatial-chapter-panel min-w-0 border-t border-border/75 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-7">
             <div className="flex items-center justify-between gap-3">
-                <div><div className="text-[10px] font-medium text-foreground/38">制作层级</div><h2 className="mt-1 text-sm font-semibold">章节轨道</h2></div>
-                <span className="text-[10px] tabular-nums text-foreground/35">{units.length ? `${units.length} 章` : "待建立"}</span>
+                <div><div className="text-[var(--fs-tiny)] font-medium text-foreground/38">制作层级</div><h2 className="mt-1 text-sm font-semibold">章节轨道</h2></div>
+                <span className="text-[var(--fs-tiny)] tabular-nums text-foreground/35">{units.length ? `${units.length} 章` : "待建立"}</span>
             </div>
             <div className="spatial-chapter-deck mt-4" aria-label="项目章节制作层级">
                 {loading ? Array.from({ length: 4 }, (_, index) => <span key={index} className="spatial-chapter-card is-loading" style={{ "--deck-x": `${index * 12}px`, "--deck-y": `${index * 28}px`, "--deck-z": `${-index * 18}px`, zIndex: 8 - index } as CSSProperties} />) : null}
@@ -286,9 +286,9 @@ function SpatialChapterStack({ detail, loading, projectId }: { detail?: Awaited<
                         className={`spatial-chapter-card ${unit.id === activeUnitId ? "is-active" : ""}`}
                         style={{ "--deck-x": `${index * 12}px`, "--deck-y": `${index * 28}px`, "--deck-z": `${-index * 18}px`, zIndex: 8 - index } as CSSProperties}
                     >
-                        <span className="text-[9px] font-semibold tabular-nums opacity-55">{String(unit.position + 1).padStart(2, "0")}</span>
+                        <span className="text-[var(--fs-micro)] font-semibold tabular-nums opacity-55">{String(unit.position + 1).padStart(2, "0")}</span>
                         <span className="mt-2 block truncate text-xs font-semibold">{unit.title}</span>
-                        <span className="mt-1 block text-[9px] opacity-50">{unit.status === "completed" ? "已完成" : unit.id === activeUnitId ? "当前制作" : "等待推进"}</span>
+                        <span className="mt-1 block text-[var(--fs-micro)] opacity-50">{unit.status === "completed" ? "已完成" : unit.id === activeUnitId ? "当前制作" : "等待推进"}</span>
                     </Link>
                 )) : null}
                 {!loading && !units.length ? <div className="grid min-h-52 place-items-center text-center text-xs leading-5 text-foreground/42">创建剧情章节后<br />这里会形成制作层级</div> : null}
@@ -302,8 +302,8 @@ function WorkbenchActionLink({ action }: { action: ReturnType<typeof projectNext
     return (
         <Link to={action.href} className="group grid grid-cols-[20px_minmax(0,1fr)_auto] gap-2 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20">
             <Icon className={`mt-0.5 size-4 ${action.tone === "danger" ? "text-foreground/80" : action.tone === "attention" ? "text-foreground/60" : "text-foreground/35"}`} />
-            <span className="min-w-0"><span className="block text-xs font-medium">{action.title}</span><span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-foreground/45">{action.description}</span></span>
-            <span className="self-center text-[11px] font-medium text-foreground/45 transition-colors group-hover:text-foreground">{action.actionLabel}</span>
+            <span className="min-w-0"><span className="block text-xs font-medium">{action.title}</span><span className="mt-1 line-clamp-2 block text-[var(--fs-label)] leading-4 text-foreground/45">{action.description}</span></span>
+            <span className="self-center text-[var(--fs-label)] font-medium text-foreground/45 transition-colors group-hover:text-foreground">{action.actionLabel}</span>
         </Link>
     );
 }
@@ -312,9 +312,9 @@ function RecentProjectRow({ summary, divided }: { summary: ProjectSummary; divid
     const completion = projectSummaryCompletion(summary);
     return (
         <Link to={`/projects/${summary.project.id}/overview`} className={`group grid min-h-[68px] grid-cols-[minmax(0,1fr)_80px_20px] items-center gap-3 px-3 py-2.5 hover:bg-foreground/[.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:grid-cols-[minmax(0,1fr)_100px_120px_20px] ${divided ? "border-t border-border/65" : ""}`}>
-            <span className="min-w-0"><span className="block truncate text-sm font-medium">{summary.project.name}</span><span className="mt-1 block truncate text-[11px] text-foreground/42">{summary.unitCount} 章 · {summary.canvasCount} 张项目画布 · {summary.assetCount} 项资产</span></span>
-            <span className="hidden text-[11px] text-foreground/45 sm:block">更新于<br />{formatRelativeTime(summary.project.updatedAt)}</span>
-            <span className="min-w-0"><span className="flex items-center justify-between text-[10px] text-foreground/42"><span>章节</span><span>{completion}%</span></span><span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-foreground/[.08]"><span className="block h-full rounded-full bg-foreground/65" style={{ width: `${completion}%` }} /></span></span>
+            <span className="min-w-0"><span className="block truncate text-sm font-medium">{summary.project.name}</span><span className="mt-1 block truncate text-[var(--fs-label)] text-foreground/42">{summary.unitCount} 章 · {summary.canvasCount} 张项目画布 · {summary.assetCount} 项资产</span></span>
+            <span className="hidden text-[var(--fs-label)] text-foreground/45 sm:block">更新于<br />{formatRelativeTime(summary.project.updatedAt)}</span>
+            <span className="min-w-0"><span className="flex items-center justify-between text-[var(--fs-tiny)] text-foreground/42"><span>章节</span><span>{completion}%</span></span><span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-foreground/[.08]"><span className="block h-full rounded-full bg-foreground/65" style={{ width: `${completion}%` }} /></span></span>
             <ArrowRight className="size-4 text-foreground/25 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/60" />
         </Link>
     );

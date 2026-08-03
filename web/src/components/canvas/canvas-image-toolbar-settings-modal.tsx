@@ -57,7 +57,7 @@ export function ImageToolSettingsModal({ open, tools, selectedIds, showLabels, o
         >
             <div className="flex h-11 items-center justify-between gap-3 border-b px-4" style={{ borderColor: theme.toolbar.border }}>
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-[8px]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}><Type className="size-3.5" /></span>
+                    <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}><Type className="size-3.5" /></span>
                     <span className="flex h-5 items-center text-xs font-medium leading-none">显示功能名</span>
                 </span>
                 <Switch size="small" checked={showLabels} onChange={onShowLabelsChange} aria-label="显示节点 Dock 功能名" />
@@ -69,13 +69,13 @@ export function ImageToolSettingsModal({ open, tools, selectedIds, showLabels, o
                 </div>
             </div>
             <div className="px-4 py-3">
-                <div className="mb-2 flex h-5 items-center justify-between"><span className="text-xs font-semibold">快捷工具</span><Tag className="m-0 leading-5 text-[10px]" style={{ background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong, color: theme.accent.primary }}>{selectedTools.length}/{maxSelected}</Tag></div>
+                <div className="mb-2 flex h-5 items-center justify-between"><span className="text-xs font-semibold">快捷工具</span><Tag className="m-0 leading-5 text-[var(--fs-tiny)]" style={{ background: theme.accent.primarySoft, borderColor: theme.spatial.glowStrong, color: theme.accent.primary }}>{selectedTools.length}/{maxSelected}</Tag></div>
                 <Checkbox.Group value={selectedIds} className="grid w-full grid-cols-2 gap-1 sm:grid-cols-4" onChange={(values) => updateSelectedTools(values as ImageQuickToolId[])}>
                     {tools.map((tool) => (
                         <label key={tool.id} className="flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-[7px] border px-1.5 transition-colors" style={{ background: selected.has(tool.id) ? theme.accent.primarySoft : "transparent", borderColor: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.border, color: selected.has(tool.id) ? theme.accent.primary : theme.node.text }}>
                             <Checkbox className="canvas-image-tool-checkbox shrink-0" style={{ "--tool-accent": theme.accent.primary } as CSSProperties} value={tool.id} disabled={!selected.has(tool.id) && selectedTools.length >= maxSelected} />
                             <span className="grid size-5 shrink-0 place-items-center rounded-[5px] [&_svg]:size-3" style={{ background: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.itemHover, color: selected.has(tool.id) ? "#ffffff" : theme.node.muted }}>{tool.icon}</span>
-                            <span className="min-w-0 truncate text-[10px] font-medium leading-none">{tool.label}</span>
+                            <span className="min-w-0 truncate text-[var(--fs-tiny)] font-medium leading-none">{tool.label}</span>
                         </label>
                     ))}
                 </Checkbox.Group>

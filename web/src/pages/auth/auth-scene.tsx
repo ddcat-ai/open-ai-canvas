@@ -67,7 +67,7 @@ export function AuthScene() {
                             <span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />
                             影策
                         </Link>
-                        <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[11px] text-white/76 backdrop-blur-xl">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl">
                             <Play className="size-3 fill-current" />
                             创作正在发生
                         </span>

@@ -64,7 +64,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                         >
                             <Link to="/" className={cn("min-w-0 items-center gap-2", mobileSidebarExpanded || spatialWorkbench ? "flex" : "hidden", "lg:flex")} title="影策">
                                 <span className="app-workspace-brand-mark grid size-7 shrink-0 place-items-center rounded-md bg-foreground text-background"><InfinityIcon className="size-4" /></span>
-                                {spatialWorkbench ? <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">影策</span><span className="block truncate text-[9px] text-foreground/36">AI 叙事工作台</span></span> : <span className="truncate text-[13px] font-semibold">影策</span>}
+                                {spatialWorkbench ? <span className="min-w-0"><span className="block truncate text-[var(--fs-body)] font-semibold">影策</span><span className="block truncate text-[var(--fs-micro)] text-foreground/36">AI 叙事工作台</span></span> : <span className="truncate text-[var(--fs-body)] font-semibold">影策</span>}
                             </Link>
                         </div>
 
@@ -83,7 +83,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                 const showSection = index === 0 || tool.section !== visibleNavigationTools[index - 1]?.section;
                                 return (
                                     <Fragment key={tool.slug}>
-                                        {showSection ? <div className={cn("mb-2 px-2 text-[10px] font-medium text-foreground/34", index > 0 && "mt-4", mobileSidebarExpanded ? "block" : "hidden", "lg:hidden")}>{tool.section}</div> : null}
+                                        {showSection ? <div className={cn("mb-2 px-2 text-[var(--fs-tiny)] font-medium text-foreground/34", index > 0 && "mt-4", mobileSidebarExpanded ? "block" : "hidden", "lg:hidden")}>{tool.section}</div> : null}
                                         <Link
                                             to={`/${tool.slug}`}
                                             title={tool.label}
@@ -91,7 +91,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                                 if (window.innerWidth < 1024) setMobileSidebarExpanded(false);
                                             }}
                                             className={cn(
-                                                "app-workspace-nav-link relative mb-1 flex shrink-0 items-center rounded-md text-[13px] transition-colors",
+                                                "app-workspace-nav-link relative mb-1 flex shrink-0 items-center rounded-md text-[var(--fs-body)] transition-colors",
                                                 spatialWorkbench ? "h-11" : "h-9",
                                                 mobileSidebarExpanded ? "gap-3 px-2.5" : "justify-center px-0",
                                                 "lg:justify-center lg:px-0",
