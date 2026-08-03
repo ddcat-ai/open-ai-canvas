@@ -590,6 +590,17 @@ func (r *Repository) SaveSystemSetting(setting *model.SystemSetting) error {
 	return r.db.Save(setting).Error
 }
 
+func (r *Repository) SaveSystemSettings(settings ...*model.SystemSetting) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for _, setting := range settings {
+			if err := tx.Save(setting).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (r *Repository) DeleteSystemSetting(key string) error {
 	return r.db.Delete(&model.SystemSetting{}, "key = ?", key).Error
 }
