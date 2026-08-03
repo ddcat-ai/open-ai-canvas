@@ -84,7 +84,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                         <SettingTitle color={theme.node.muted}>透明背景</SettingTitle>
-                        <div className="mt-1 text-[11px]" style={{ color: theme.node.muted }}>
+                        <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
                             请求模型输出保留 Alpha 通道的 PNG
                         </div>
                     </div>
@@ -121,7 +121,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.value}
                                 type="button"
-                                className="flex h-[52px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg bg-transparent text-[11px] transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                                className="flex h-[52px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg bg-transparent text-[var(--fs-label)] transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                                 style={{ background: selectedAspect?.value === item.value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => selectAspect(item.value)}

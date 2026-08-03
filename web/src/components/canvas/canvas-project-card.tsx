@@ -45,7 +45,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                     <ProjectPreview project={project} />
                 </button>
                 {!compact ? <span className={`absolute left-2.5 top-2.5 grid size-6 place-items-center rounded-md border border-black/10 bg-white/90 shadow-sm backdrop-blur transition-opacity dark:border-white/10 dark:bg-stone-900/90 ${selected ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox size-3.5" aria-label={`选择 ${project.title}`} /></span> : null}
-                <span className="absolute bottom-2 right-2 rounded-md border border-white/15 bg-stone-950/80 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-xl">{project.nodes.length} 节点</span>
+                <span className="absolute bottom-2 right-2 rounded-md border border-white/15 bg-stone-950/80 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium text-white backdrop-blur-xl">{project.nodes.length} 节点</span>
             </div>
 
             <div className={cn("app-canvas-project-body", compact ? "px-1 pb-1 pt-2.5" : "px-3 py-2.5")}>
@@ -61,7 +61,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                             open();
                         }}
                     >
-                        <h2 className="truncate text-[13px] font-semibold leading-5 text-foreground">{project.title}</h2>
+                        <h2 className="truncate text-[var(--fs-body)] font-semibold leading-5 text-foreground">{project.title}</h2>
                     </button>
                 )}
                     {editing ? (
@@ -88,12 +88,12 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                         </div>
                     )}
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-foreground/52">
+                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-label)] leading-4 text-foreground/52">
                     <span className="truncate">{projectName || "自由画布"}</span>
                     <span className="shrink-0 text-foreground/28" aria-hidden="true">·</span>
                     <span className="shrink-0 tabular-nums">{project.connections.length} 条连线</span>
                 </div>
-                <p className="mt-1 text-[10px] leading-4 tabular-nums text-foreground/38">更新于 {formatProjectTime(project.updatedAt)}</p>
+                <p className="mt-1 text-[var(--fs-tiny)] leading-4 tabular-nums text-foreground/38">更新于 {formatProjectTime(project.updatedAt)}</p>
             </div>
         </article>
     );
@@ -128,7 +128,7 @@ function ProjectPreview({ project }: { project: CanvasProject }) {
                 return (
                     <span key={node.id} className="absolute flex min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-stone-300/90 bg-white/90 px-2 text-left shadow-sm backdrop-blur-sm dark:border-stone-700 dark:bg-stone-900/92" style={style}>
                         <span className="grid size-5 shrink-0 place-items-center text-stone-500 dark:text-stone-300">{presentation.icon}</span>
-                        <span className="min-w-0 truncate text-[8px] font-semibold text-stone-700 dark:text-stone-200">{node.title || presentation.label}</span>
+                        <span className="min-w-0 truncate text-[var(--fs-micro)] font-semibold text-stone-700 dark:text-stone-200">{node.title || presentation.label}</span>
                     </span>
                 );
             })}

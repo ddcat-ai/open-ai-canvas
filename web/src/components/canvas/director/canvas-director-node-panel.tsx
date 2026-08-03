@@ -17,10 +17,10 @@ export function CanvasDirectorNodePanel({ node, scene, previewUrl, onOpen, profe
                     <span className="grid size-7 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}><Clapperboard className="size-3.5" /></span>
                     <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{node.metadata?.workflowTitle || node.title}</div>
-                        <div className="truncate text-[10px]" style={{ color: theme.node.muted }}>{shot?.name || "未设置镜头"}</div>
+                        <div className="truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{shot?.name || "未设置镜头"}</div>
                     </div>
                 </div>
-                <span className="shrink-0 text-[10px] font-semibold" style={{ color: theme.accent.primary }}>3D</span>
+                <span className="shrink-0 text-[var(--fs-tiny)] font-semibold" style={{ color: theme.accent.primary }}>3D</span>
             </div>
 
             <button
@@ -38,7 +38,7 @@ export function CanvasDirectorNodePanel({ node, scene, previewUrl, onOpen, profe
                 <span className={`absolute inset-x-0 bottom-0 flex h-10 items-center justify-center gap-1.5 text-xs font-semibold backdrop-blur-sm transition-opacity ${professional ? "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" : "opacity-100"}`} style={{ background: `${theme.toolbar.panel}dd`, color: theme.node.text }}>{professional ? <><Move3d className="size-3.5" />进入导演台</> : <><LockKeyhole className="size-3.5" />专业模式可编辑</>}</span>
             </button>
 
-            <div className="mt-2 grid grid-cols-3 gap-1 text-[10px]" style={{ color: theme.node.muted }}>
+            <div className="mt-2 grid grid-cols-3 gap-1 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                 <Stat icon={<Box className="size-3" />} value={scene?.objects.length || 0} label="对象" />
                 <Stat icon={<Camera className="size-3" />} value={scene?.cameras.length || 0} label="机位" />
                 <Stat icon={<Lightbulb className="size-3" />} value={scene?.lights.length || 0} label="灯光" />
@@ -61,7 +61,7 @@ function SceneSchematic({ scene }: { scene: DirectorScene | null }) {
             })}
             <Camera className="absolute bottom-[14%] left-[12%] size-5 text-white/75" />
             <span className="absolute left-[18%] top-[18%] size-16 rounded-full bg-white/10 blur-xl" />
-            <span className="absolute inset-x-3 top-3 text-[10px] font-medium text-white/70">{scene ? "场景预览" : "正在准备场景"}</span>
+            <span className="absolute inset-x-3 top-3 text-[var(--fs-tiny)] font-medium text-white/70">{scene ? "场景预览" : "正在准备场景"}</span>
         </div>
     );
 }

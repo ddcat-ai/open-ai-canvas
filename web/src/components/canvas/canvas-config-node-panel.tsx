@@ -57,7 +57,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="shrink-0 text-sm font-semibold">{simpleMode ? "快速生成" : "生成配置"}</div>
-                {simpleMode ? <span className="rounded-md px-2 py-1 text-[10px]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
+                {simpleMode ? <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
                         className="canvas-config-mode !rounded-md !p-0.5"
@@ -110,7 +110,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 <InputChip label="参考图" value={`${inputSummary.imageCount} 张`} style={chipStyle} />
                 <InputChip label="参考视频" value={`${inputSummary.videoCount} 个`} style={chipStyle} />
                 <InputChip label="参考音频" value={`${inputSummary.audioCount} 个`} style={chipStyle} />
-                <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
+                <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[var(--fs-label)]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
                     {simpleMode ? <MessageSquare className="size-3.5" /> : <Settings2 className="size-3.5" />}
                     {simpleMode ? "编辑生成内容" : "组装提示词"}
                 </button>
@@ -137,7 +137,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             ) : null}
 
             {simpleMode ? (
-                <div className="mb-2 rounded-lg px-2 py-2 text-[11px]" style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
+                <div className="mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
             ) : (
                 <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
                     <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} fullWidth />
@@ -197,7 +197,7 @@ function defaultVideoOperation(inputSummary: CanvasConfigNodePanelProps["inputSu
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
     return (
-        <div className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px]" style={style}>
+        <div className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[var(--fs-label)]" style={style}>
             <span>{label}</span>
             <span className="font-medium">{value}</span>
         </div>

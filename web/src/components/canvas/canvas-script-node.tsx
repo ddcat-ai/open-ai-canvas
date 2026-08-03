@@ -127,7 +127,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
             <div className="relative flex h-10 shrink-0 items-center gap-2 rounded-t-[17px] border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <Clapperboard className="size-4" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>{node.title || "分镜脚本"}</span>
-                {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[11px] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[11px] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
+                {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[var(--fs-label)] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[var(--fs-label)] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
                 <span className="text-xs font-medium" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
                 {batch ? <>
                     {hasFailedBatchItems ? <Tooltip title="重试失败项"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRetryBatch(batch.id); }} aria-label="重试失败项"><RefreshCw className="size-3.5" /></button></Tooltip> : null}
@@ -167,7 +167,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
             >
                 {rows.length ? rows.map((row) => (
                     <div key={row.id} className="relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
-                        <div className="flex flex-col items-center justify-center border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}><span className="text-sm">{row.shotNumber}</span>{batchItemByRowId.get(row.id) ? <span className="max-w-16 truncate text-[9px] leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>{generationBatchItemLabel(batchItemByRowId.get(row.id)!)}</span> : null}</div>
+                        <div className="flex flex-col items-center justify-center border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}><span className="text-sm">{row.shotNumber}</span>{batchItemByRowId.get(row.id) ? <span className="max-w-16 truncate text-[var(--fs-micro)] leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>{generationBatchItemLabel(batchItemByRowId.get(row.id)!)}</span> : null}</div>
                         <div className="grid grid-cols-[32px_1fr_32px] items-center border-r px-2" style={{ borderColor: theme.node.stroke }}>
                             <SmallButton title="减少 1 秒" onClick={() => onUpdateRow(row.id, { durationSeconds: Math.max(1, row.durationSeconds - 1) })}><Minus className="size-3" /></SmallButton>
                             <span className="text-center text-sm font-medium tabular-nums">{row.durationSeconds}s</span>
@@ -213,7 +213,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     <Tooltip title="脚本生成需要文本理解与结构化输出能力，仅展示文本模型；视频/图片模型无法生成分镜表" placement="topLeft">
                         <div className="mr-auto min-w-36 max-w-56 flex-1">
                             <ModelPicker
-                                className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
+                                className="!h-7 !w-full !min-w-0 !text-[var(--fs-tiny)] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
                                 fullWidth
                                 config={generationConfig}
                                 value={generationConfig.model}
@@ -225,7 +225,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             />
                         </div>
                     </Tooltip>
-                    {simpleMode ? <span className="text-[11px]" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
+                    {simpleMode ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
                         className="min-w-32"
                         size="small"
                         value={shotCount}
@@ -328,10 +328,10 @@ function PipelineStageCell({ label, stage, theme, children, last = false }: { la
     return (
         <div className={`flex min-w-0 items-center gap-2 px-3 ${last ? "" : "border-r"}`} style={{ borderColor: theme.node.stroke }}>
             <div className="min-w-[64px] shrink-0">
-                <div className="text-[11px] font-semibold">{label}</div>
-                <div className="text-[9px] leading-3" style={{ color: stage.failed ? theme.accent.danger : theme.node.muted }}>{pipelineStatusLabel(stage)}</div>
+                <div className="text-[var(--fs-label)] font-semibold">{label}</div>
+                <div className="text-[var(--fs-micro)] leading-3" style={{ color: stage.failed ? theme.accent.danger : theme.node.muted }}>{pipelineStatusLabel(stage)}</div>
             </div>
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden [&_.ant-btn]:!h-7 [&_.ant-btn]:!px-2 [&_.ant-btn]:!text-[10px]">{children}</div>
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden [&_.ant-btn]:!h-7 [&_.ant-btn]:!px-2 [&_.ant-btn]:!text-[var(--fs-tiny)]">{children}</div>
         </div>
     );
 }

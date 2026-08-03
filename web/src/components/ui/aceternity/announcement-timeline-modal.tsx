@@ -106,10 +106,10 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
             </div>
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="text-[15px] font-semibold leading-6 tracking-normal text-foreground sm:text-base">{announcement.title}</h3>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
+                    <h3 className="text-[var(--fs-body-lg)] font-semibold leading-6 tracking-normal text-foreground sm:text-base">{announcement.title}</h3>
+                    <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
                 </div>
-                <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[15px]" />
+                <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[var(--fs-body-lg)]" />
                 <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">{relativeTime(announcement.publishedAt)} · {formatDateTime(announcement.publishedAt)}</time>
             </div>
         </motion.article>

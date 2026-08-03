@@ -71,7 +71,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.value}
                                 type="button"
-                                className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                                className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                                 style={{ background: size === item.value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", item.value)}
@@ -141,7 +141,7 @@ function SeedanceVideoSettingsPanel({ config, onConfigChange, theme, showTitle, 
                             );
                         })}
                     </div>
-                    {isSeedanceFastModel(model) ? <div className="text-[10px] leading-4 opacity-55">fast 模型自动使用 720P</div> : null}
+                    {isSeedanceFastModel(model) ? <div className="text-[var(--fs-tiny)] leading-4 opacity-55">fast 模型自动使用 720P</div> : null}
                 </SettingGroup>
                 <SettingGroup title="比例" color={theme.node.muted}>
                     <div className="grid grid-cols-4 gap-1.5">
@@ -149,7 +149,7 @@ function SeedanceVideoSettingsPanel({ config, onConfigChange, theme, showTitle, 
                             <button
                                 key={item.value}
                                 type="button"
-                                className="flex h-11 min-w-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[10px] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                                className="flex h-11 min-w-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[var(--fs-tiny)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                                 style={{ background: ratio === item.value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", item.value)}
@@ -211,7 +211,7 @@ export function normalizeVideoResolutionValue(value: string) {
 
 function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
     return (
-        <button type="button" disabled={disabled} className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[11px] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
+        <button type="button" disabled={disabled} className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
             {children}
         </button>
     );
@@ -220,7 +220,7 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
 function SettingGroup({ title, color, children }: { title: string; color: string; children: ReactNode }) {
     return (
         <div className="space-y-1.5">
-            <div className="text-[10px] font-semibold" style={{ color }}>
+            <div className="text-[var(--fs-tiny)] font-semibold" style={{ color }}>
                 {title}
             </div>
             {children}
@@ -230,7 +230,7 @@ function SettingGroup({ title, color, children }: { title: string; color: string
 
 function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: string; value: number; disabled: boolean; theme: CanvasTheme; onChange: (value: number | null) => void }) {
     return (
-        <label className="flex h-8 overflow-hidden rounded-md text-[11px]" style={{ background: theme.toolbar.itemHover, color: theme.node.text, opacity: disabled ? 0.55 : 1 }}>
+        <label className="flex h-8 overflow-hidden rounded-md text-[var(--fs-label)]" style={{ background: theme.toolbar.itemHover, color: theme.node.text, opacity: disabled ? 0.55 : 1 }}>
             <span className="grid w-7 place-items-center" style={{ color: theme.node.muted }}>
                 {prefix}
             </span>
@@ -247,7 +247,7 @@ function DurationInput({ value, min, theme, onChange }: { value: number; min: nu
     };
 
     return (
-        <label className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border text-[11px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <label className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border text-[var(--fs-label)]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <input
                 key={`${min}-${value}`}
                 type="number"
@@ -288,7 +288,7 @@ function ratioPreview(ratio: string) {
 function SwitchRow({ label, checked, theme, onChange }: { label: string; checked: boolean; theme: CanvasTheme; onChange: (checked: boolean) => void }) {
     return (
         <div className="flex h-8 items-center justify-between gap-2">
-            <span className="min-w-0 whitespace-nowrap text-[11px]" style={{ color: theme.node.text }}>
+            <span className="min-w-0 whitespace-nowrap text-[var(--fs-label)]" style={{ color: theme.node.text }}>
                 {label}
             </span>
             <span className="shrink-0" onMouseDown={(event) => event.stopPropagation()}>

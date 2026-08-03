@@ -195,11 +195,11 @@ function ModelLabel({ config, model, capability, theme, creationVariant }: { con
                 <ModelIcon model={model} />
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
-                <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelDisplayName(config, model)}</span>
-                <span className="mt-1 block truncate text-[10px]" style={{ color: theme.node.muted }} title={meta.description}>{meta.description}</span>
+                <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{modelDisplayName(config, model)}</span>
+                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={meta.description}>{meta.description}</span>
             </span>
             <ModelPrice price={modelMenuPrice(config, model)} />
-            {!creationVariant && meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
+            {!creationVariant && meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
         </span>
     );
 }
@@ -214,9 +214,9 @@ function modelMenuPrice(config: AiConfig, model: string): { value: number; unit:
 
 function ModelPrice({ price, compact = false }: { price: { value: number; unit: "次" | "秒" } | null | undefined; compact?: boolean }) {
     if (price === undefined) return null;
-    if (price === null) return compact ? null : <span className="shrink-0 text-[10px] text-foreground/40">未配置</span>;
+    if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
             <Coins className="size-3" />
             {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>

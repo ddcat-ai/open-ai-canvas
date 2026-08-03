@@ -55,6 +55,26 @@
 - 图片节点默认保持原始比例；批量生成、多图和助手面板不得长期遮挡主要画布空间。
 - 动效服务于状态变化和空间关系，并尊重 `prefers-reduced-motion`；不要添加持续干扰创作的装饰动画。
 
+## Design Token 系统
+
+画布页面使用三层设计 token 架构（Primitive → Semantic → Component），详见 `globals.css` 和 Wayfinder #96。
+
+### 三层结构
+
+- **Primitive 层**：纯值，无语义，不随主题变。包含 9 个维度：色彩（neutral 色板 + 节点类型色板 + 状态色）、间距（4px 栅格 `--space-0.5` ~ `--space-24`）、字号（10 档 `--fs-micro` ~ `--fs-display`）、圆角（10 档 `--r-xs` ~ `--r-full`）、阴影（`--shadow-xs` ~ `--shadow-2xl` + glow）、Elevation（12 档 `--z-canvas` ~ `--z-max`）、动效（duration 5 档 + easing 5 曲线 + delay 5 档 + motion-scale）、描边（4 档）、不透明度（6 档）。
+- **Semantic 层**：引用 Primitive，随主题切换。包含通用语义色（`--bg`/`--fg`/`--border-semantic`）、Canvas 语义（`--cn-text`/`--cn-muted`/`--cn-stroke` 等）、Aceternity spatial 语义（`--cn-spatial-*`）、节点类型语义（`--cn-type-*`）、状态语义（`--status-*`）。
+- **Component 层**：引用 Semantic，某组件专属。包含 Dock（`--dock-*`）、Node（`--node-*`）、Modal（`--modal-*`）、Panel（`--panel-*`）、Prompt 面板（`--prompt-panel-*`）、进度条（`--progress-bar-*`）、缩放控制（`--zoom-control-*`）。
+
+### 使用规则
+
+- **禁止新增裸值**：组件中不得新增 `text-[Npx]`、`rounded-[Npx]`、`z-[N]`、`p-[Npx]`、`gap-[Npx]` 等硬编码 Tailwind 任意值。必须使用对应 token。
+  - 反例：`className="text-[10px] rounded-[12px] z-[1500]"`
+  - 正例：`className="text-tiny rounded-[var(--r-lg)] z-[var(--z-modal)]"`
+- **CSS 变量优先**：在 inline style 中使用 `var(--token-name)` 引用 token，不写字面值。
+- **Ant Design 同步**：AntD ConfigProvider 从 CSS 变量反序列化初始化，改 token 则 AntD + shadcn 同步变化。
+- **Aceternity 风格**：`canvas-theme.ts` 和 `aceternity-motion.ts` 从 CSS 变量读取，CSS 是单一信源。
+- **新增 token**：如需新增 token，先加到 Primitive 层（纯值），再在 Semantic 层引用，最后在 Component 层定义组件专属值。
+
 ## 文档
 
 - README 只保留项目定位、核心功能、快速开始、数据说明和文档入口。
