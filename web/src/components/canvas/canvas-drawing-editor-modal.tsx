@@ -6,6 +6,7 @@ import type { CanvasDrawingEditorHandle } from "@/components/canvas/canvas-drawi
 import { drawingEngineForNode, drawingEngineLabel, isDrawingEngineAvailable } from "@/lib/canvas/canvas-drawing-engine";
 import { loadCanvasDrawing, saveCanvasDrawing, type CanvasDrawingSnapshot } from "@/lib/canvas/canvas-drawing-storage";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
 const CanvasDrawingTldrawEditor = lazy(() => import("@/components/canvas/canvas-drawing-tldraw-editor").then((module) => ({ default: module.CanvasDrawingTldrawEditor })));
@@ -22,6 +23,7 @@ type CanvasDrawingEditorModalProps = {
 export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSaved }: CanvasDrawingEditorModalProps) {
     const { message } = App.useApp();
     const colorScheme = useThemeStore((state) => state.theme);
+    const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const engine = drawingEngineForNode(node);
     const currentRef = useRef<CanvasDrawingSnapshot | null>(null);
     const editorRef = useRef<CanvasDrawingEditorHandle | null>(null);
@@ -76,7 +78,7 @@ export function CanvasDrawingEditorModal({ open, projectId, node, onClose, onSav
         onClose();
     };
 
-    const unavailable = !isDrawingEngineAvailable(engine);
+    const unavailable = !isDrawingEngineAvailable(engine, tldrawLicenseKey);
     return (
         <Modal open={open} onCancel={() => void handleClose()} footer={null} closable={false} destroyOnHidden width="100vw" centered styles={{ body: { padding: 0 }, container: { padding: 0, overflow: "hidden" } }} className="canvas-drawing-editor-modal">
             <div className="flex h-[min(92dvh,980px)] flex-col">
