@@ -509,7 +509,7 @@ function InfiniteCanvasPage() {
         emotionNodeId,
         annotationNodeId,
         createImageReversePromptNodes,
-        createPortraitTextureNode,
+        generatePortraitTextureNode,
         cropImageNode,
         cropNodeId,
         extractVideoLastFrame,
@@ -1557,7 +1557,7 @@ function InfiniteCanvasPage() {
                     onAnnotate={(node) => setAnnotationNodeId(node.id)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                     onEmotion={(node) => { setDialogNodeId(null); setEmotionNodeId((current) => current === node.id ? null : node.id); }}
-                    onPortraitTexture={createPortraitTextureNode}
+                    onPortraitTexture={generatePortraitTextureNode}
                     onCrop={(node) => setCropNodeId(node.id)}
                     onSplit={(node) => setSplitNodeId(node.id)}
                     onUpscale={(node) => setUpscaleNodeId(node.id)}
