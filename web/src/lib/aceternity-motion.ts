@@ -1,3 +1,18 @@
+/**
+ * 动效配置（对应 #99 动效系统）
+ *
+ * JS 侧 duration（秒）与 CSS token（毫秒）映射关系：
+ *   instant  0.12s ≈ --motion-dur-fast   (150ms)
+ *   state    0.20s ≈ --motion-dur-fast   (150ms)
+ *   panel    0.32s ≈ --motion-dur-base   (250ms)
+ *
+ * easing 与 CSS token 映射：
+ *   enter  [0.2, 0.85, 0.18, 1] ≈ --motion-ease-out
+ *   exit   [0.4, 0, 1, 1]       ≈ --motion-ease-in
+ *
+ * prefers-reduced-motion 由组件层 useReducedMotion() 控制，
+ * CSS 层由 --motion-scale 联动（L0=1 / L1=0.3 / L2=0）。
+ */
 export const aceternityMotion = {
     duration: {
         instant: 0.12,
