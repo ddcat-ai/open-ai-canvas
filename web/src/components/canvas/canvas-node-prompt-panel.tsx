@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, Square, UserRound, Video } from "lucide-react";
+import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, SlidersHorizontal, Square, UserRound, Video } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -50,6 +50,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
     const [promptContentHeight, setPromptContentHeight] = useState(0);
+    const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
     const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? generationCount : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
@@ -261,9 +262,26 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 />
             </div>
 
+            {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
             {mode === "video" && !simpleMode ? (
-                <div className="mt-1.5 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
-                    <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                <div className="mt-1.5 overflow-hidden rounded-md border" style={{ background: controlSurface, borderColor: insetBorder }}>
+                    <button
+                        type="button"
+                        className="flex w-full items-center gap-1.5 px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors hover:bg-white/[.04]"
+                        style={{ color: theme.node.muted }}
+                        onClick={() => setParamsExpanded(!paramsExpanded)}
+                        aria-expanded={paramsExpanded}
+                        aria-label={paramsExpanded ? "收起参数" : "展开参数"}
+                    >
+                        <SlidersHorizontal className="size-3" strokeWidth={1.8} />
+                        <span className="flex-1 text-left">参数</span>
+                        <ChevronDown className={`size-3 transition-transform duration-200 ${paramsExpanded ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                    </button>
+                    {paramsExpanded ? (
+                        <div className="border-t p-0.5" style={{ borderColor: insetBorder }}>
+                            <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 

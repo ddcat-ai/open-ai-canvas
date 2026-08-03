@@ -159,7 +159,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
     return (
         <>
             <div ref={underlayHostRef} data-canvas-leafer-underlay className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden />
-            <div ref={overlayHostRef} data-canvas-leafer-overlay className="pointer-events-none absolute inset-0 z-[55] overflow-hidden" aria-hidden />
+            <div ref={overlayHostRef} data-canvas-leafer-overlay className="pointer-events-none absolute inset-0 z-[var(--z-canvas-overlay)] overflow-hidden" aria-hidden />
         </>
     );
 }
