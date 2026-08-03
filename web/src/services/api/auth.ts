@@ -345,6 +345,10 @@ export function listAdminUsers(params: AdminListParams = {}) {
     return request<{ users: AdminUser[]; total: number; page: number; limit: number }>(api.get("/admin/users", { params }));
 }
 
+export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+    return request<{ user: AdminUser }>(api.post("/admin/users", input));
+}
+
 export function getAdminReferences() {
     return request<AdminReferenceData>(api.get("/admin/references"));
 }
