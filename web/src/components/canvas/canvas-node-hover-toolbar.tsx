@@ -314,7 +314,7 @@ export function CanvasNodeHoverToolbar({
         <>
             <div
                 ref={toolbarRef}
-                className="canvas-node-toolbar absolute z-[70] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
+                className="canvas-node-toolbar absolute z-[var(--z-panel-floating)] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
                 style={{ left: anchor.left, top: anchor.top, width: "max-content", maxWidth: `min(calc(100% - 20px), ${showDockLabels ? 840 : 560}px)`, color: theme.node.text }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {
@@ -323,7 +323,7 @@ export function CanvasNodeHoverToolbar({
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[14px] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? labeledDockStyle : dockShellStyle}>
+                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[var(--dock-radius)] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? labeledDockStyle : dockShellStyle}>
                     {dockItems.length ? <FloatingDock embedded items={dockItems} size="compact" showLabels={showDockLabels} ariaLabel="节点快捷工具" className={`pointer-events-auto shrink-0 ${showDockLabels ? "" : "max-w-[min(calc(100vw-20px),400px)]"}`} style={embeddedDockStyle} /> : null}
                     {hasImage && !simpleMode ? (
                         <Dropdown
@@ -341,13 +341,13 @@ export function CanvasNodeHoverToolbar({
                         >
                             <button
                                 type="button"
-                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "is-labeled inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
+                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "is-labeled inline-flex h-8 items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
                                 style={{ color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties}
                                 aria-label="更多图片工具"
                                 title="更多图片工具"
                             >
                                 <Ellipsis className="size-3.5" />
-                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">更多</span> : null}
+                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[var(--fs-label)] font-medium leading-none">更多</span> : null}
                             </button>
                         </Dropdown>
                     ) : null}
@@ -433,7 +433,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
     const title = (
         <div className="flex items-center justify-between gap-4 pr-10">
             <div className="min-w-0">
-                <div className="text-[17px] font-semibold tracking-[-0.02em]">节点信息</div>
+                <div className="text-[var(--fs-heading-lg)] font-semibold tracking-[-0.02em]">节点信息</div>
                 {node ? <div className="mt-0.5 truncate text-xs opacity-45">{node.id}</div> : null}
             </div>
             <Segmented
@@ -481,7 +481,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                                 return <button key={option.value} type="button" disabled={readOnly} onClick={() => saveAssetCategory(option.value)} className="h-7 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: active ? theme.accent.primary : theme.toolbar.border, background: active ? theme.accent.primarySoft : theme.toolbar.panel, color: active ? theme.accent.primary : theme.node.muted }}>{option.label}</button>;
                                             })}
                                         </div>
-                                        <div className="mt-2 text-[11px] leading-5 opacity-45">生成后会按此分类进入项目资产；角色、场景和画风工作流会自动预填。</div>
+                                        <div className="mt-2 text-[var(--fs-label)] leading-5 opacity-45">生成后会按此分类进入项目资产；角色、场景和画风工作流会自动预填。</div>
                                     </div>
                                 ) : null}
                                 {node.metadata?.prompt ? (
