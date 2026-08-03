@@ -62,7 +62,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block text-sm font-semibold leading-5">生成任务</span>
-                                    <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>当前画布 · {tasks.length} 个进行中</span>
+                                    <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} aria-live="polite">当前画布 · {tasks.length} 个进行中</span>
                                 </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-2" style={{ color: theme.accent.primary }}>
