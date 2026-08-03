@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 画布绘图节点支持 tldraw 与 Excalidraw 双引擎，管理员可配置新建默认工具，并保持历史绘图和导入导出兼容。
+
 ## v1.0.32
 
 - 修复 GORM 技能总数查询将 `DISTINCT` 状态带入后续列表查询，导致 PostgreSQL 热门排序仍返回 `SQLSTATE 42P10` 的问题。

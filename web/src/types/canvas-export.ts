@@ -1,8 +1,9 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
+import type { CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 
 export type CanvasExportFile = {
     app: "infinite-canvas";
-    version: 3;
+    version: 3 | 4;
     exportedAt: string;
     projects: CanvasProjectExportItem[];
 };
@@ -14,7 +15,8 @@ export type CanvasProjectExportItem = {
 };
 
 export type CanvasDrawingExport = {
-    version: 1;
+    version: 1 | 2;
+    engine?: CanvasDrawingEngine;
     drawingId: string;
     previewPath?: string;
     snapshot: unknown;

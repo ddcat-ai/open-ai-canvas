@@ -3,6 +3,7 @@ import axios from "axios";
 import type { ModelChannel } from "@/stores/use-config-store";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
+import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 
 const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
 
@@ -31,6 +32,7 @@ export type AuthSessionPayload = {
     user: LocalUser | null;
     systemChannels?: ModelChannel[];
     runtimeLimits?: RuntimeLimits;
+    drawingEngine?: CanvasDrawingEngineSetting;
 };
 
 export type RuntimeLimits = {
@@ -429,6 +431,14 @@ export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting
 
 export function resetAdminRuntimePolicySetting() {
     return request<{ setting: RuntimePolicySetting }>(api.delete("/admin/settings/runtime-policy"));
+}
+
+export function getAdminDrawingEngineSetting() {
+    return request<{ setting: CanvasDrawingEngineSetting }>(api.get("/admin/settings/drawing-engine"));
+}
+
+export function updateAdminDrawingEngineSetting(defaultEngine: CanvasDrawingEngineSetting["defaultEngine"]) {
+    return request<{ setting: CanvasDrawingEngineSetting }>(api.patch("/admin/settings/drawing-engine", { defaultEngine }));
 }
 
 export function listAdminApiLogs(params: AdminListParams = {}) {
