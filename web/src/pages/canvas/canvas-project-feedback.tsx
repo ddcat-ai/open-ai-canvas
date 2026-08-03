@@ -34,7 +34,7 @@ export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploa
         >
             <div className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
             <div className="flex items-start gap-3">
-                <motion.span animate={status.done || status.error ? { scale: [0.8, 1.08, 1] } : { y: [0, -2, 0] }} transition={status.done || status.error ? { duration: 0.3 } : { duration: 1.5, repeat: Number.POSITIVE_INFINITY }} className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[var(--dock-radius)] border" style={{ background: theme.spatial.surface, borderColor: `${accent}44`, color: accent }}>
+                <motion.span animate={status.done || status.error ? { scale: [0.8, 1.08, 1] } : { y: [0, -2, 0] }} transition={status.done || status.error ? { duration: aceternityMotion.duration.panel } : { duration: 1.5, repeat: Number.POSITIVE_INFINITY }} className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[var(--dock-radius)] border" style={{ background: theme.spatial.surface, borderColor: `${accent}44`, color: accent }}>
                     {status.error ? <TriangleAlert className="size-4" /> : status.done ? <CheckCircle2 className="size-4" /> : <CloudUpload className="size-4" />}
                 </motion.span>
                 <span className="min-w-0 flex-1">

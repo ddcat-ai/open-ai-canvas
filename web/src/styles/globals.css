@@ -164,6 +164,33 @@
     --motion-scale: 0;
 }
 
+/* infinite 装饰动画在 reduced-motion / no-motion 下降级（对应 #99 三级降级）*/
+@media (prefers-reduced-motion: reduce) {
+    .canvas-connection-flow,
+    .canvas-connection-draft,
+    .canvas-generation-border-flow,
+    .canvas-task-progress-shimmer,
+    .ai-title-aurora,
+    .creation-intro-mark,
+    .creation-intro-word,
+    .creation-intro-signal,
+    .creation-intro-emphasis {
+        animation-duration: 0.01ms;
+        animation-iteration-count: 1;
+    }
+}
+.no-motion .canvas-connection-flow,
+.no-motion .canvas-connection-draft,
+.no-motion .canvas-generation-border-flow,
+.no-motion .canvas-task-progress-shimmer,
+.no-motion .ai-title-aurora,
+.no-motion .creation-intro-mark,
+.no-motion .creation-intro-word,
+.no-motion .creation-intro-signal,
+.no-motion .creation-intro-emphasis {
+    animation: none;
+}
+
 /* 动效计算函数（实际 duration = base * motion-scale）*/
 :root {
     --motion-dur-instant-calc: calc(var(--motion-dur-instant) * var(--motion-scale));
@@ -174,6 +201,11 @@
 }
 
 @theme inline {
+    /* 响应式断点（对应 #99 四断点体系：mobile/tablet/desktop/wide）*/
+    --breakpoint-tablet: 768px;
+    --breakpoint-desktop: 1024px;
+    --breakpoint-wide: 1440px;
+
     --color-background: var(--background);
     --color-foreground: var(--foreground);
     --color-border: var(--border);
@@ -259,7 +291,7 @@
     --motion-instant: 120ms;
     --motion-state: 180ms;
     --motion-panel: 240ms;
-    --ease-aceternity: cubic-bezier(0.2, 0.85, 0.18, 1);
+    --ease-aceternity: var(--motion-ease-out);
     --ease-product-enter: cubic-bezier(0.16, 1, 0.3, 1);
     --workspace-canvas: #ffffff;
     --workspace-surface: rgba(255, 255, 255, 0.82);
@@ -1209,7 +1241,7 @@
 
     .creation-empty-composer {
         width: 100%;
-        animation: creation-workbench-enter 420ms cubic-bezier(.16, 1, .3, 1) both;
+        animation: creation-workbench-enter var(--motion-dur-slow-calc) var(--motion-ease-out) both;
     }
 
     .creation-composer {
@@ -1275,7 +1307,7 @@
         background: color-mix(in srgb, var(--creation-surface-muted) 80%, transparent);
         color: var(--creation-muted);
         transform: rotate(-7deg);
-        transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms cubic-bezier(.16, 1, .3, 1);
+        transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms var(--motion-ease-out);
     }
 
     .creation-reference-tile:hover:not(:disabled) {
@@ -1521,7 +1553,7 @@
         width: 13px;
         height: 13px;
         color: var(--creation-muted);
-        transition: transform 160ms cubic-bezier(.16, 1, .3, 1);
+        transition: transform 160ms var(--motion-ease-out);
     }
 
     .creation-chip > svg:last-child.is-open {
@@ -1634,7 +1666,7 @@
         box-shadow: inset 0 1px 0 color-mix(in srgb, white 52%, transparent);
         backdrop-filter: blur(18px) saturate(120%);
         -webkit-backdrop-filter: blur(18px) saturate(120%);
-        transition: border-color 160ms ease, background-color 160ms ease, transform 160ms cubic-bezier(.16, 1, .3, 1);
+        transition: border-color 160ms ease, background-color 160ms ease, transform 160ms var(--motion-ease-out);
     }
 
     .creation-inspiration-strip button:hover {
@@ -1680,7 +1712,7 @@
 
     .creation-results {
         width: 100%;
-        animation: creation-results-enter 280ms cubic-bezier(.16, 1, .3, 1) both;
+        animation: creation-results-enter var(--motion-dur-base-calc) var(--motion-ease-out) both;
     }
 
     .creation-thread-composer {
@@ -1728,7 +1760,7 @@
         padding: 0 !important;
         backdrop-filter: blur(28px) saturate(140%);
         -webkit-backdrop-filter: blur(28px) saturate(140%);
-        animation: creation-popover-enter 180ms cubic-bezier(.16, 1, .3, 1) both;
+        animation: creation-popover-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
     }
 
     .dark .creation-control-popover-surface,
@@ -2174,7 +2206,7 @@
         border-radius: 26px;
         background: var(--creation-surface);
         box-shadow: 0 28px 70px rgba(0, 0, 0, .18);
-        animation: creation-workbench-enter 360ms cubic-bezier(.16, 1, .3, 1) both;
+        animation: creation-workbench-enter var(--motion-dur-slow-calc) var(--motion-ease-out) both;
     }
 
     html:not(.dark) .creation-studio-composer {
@@ -2208,7 +2240,7 @@
         background: #1c1f25;
         color: #c8cdd5;
         transform: rotate(-7deg);
-        transition: transform 180ms cubic-bezier(.16, 1, .3, 1), border-color 180ms ease, background-color 180ms ease;
+        transition: transform 180ms var(--motion-ease-out), border-color 180ms ease, background-color 180ms ease;
     }
 
     html:not(.dark) .creation-studio-reference {
@@ -2316,7 +2348,7 @@
         font-weight: 600;
         white-space: nowrap;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
-        transition: transform 150ms cubic-bezier(.16, 1, .3, 1), border-color 150ms ease, background-color 150ms ease;
+        transition: transform 150ms var(--motion-ease-out), border-color 150ms ease, background-color 150ms ease;
     }
 
     html:not(.dark) .creation-studio-control,
@@ -2344,7 +2376,7 @@
     .creation-studio-control:active { transform: scale(.98); }
     .creation-studio-control.is-mode { border-color: rgba(6, 182, 212, .36) !important; background: rgba(4, 73, 89, .28) !important; color: #18c2e1 !important; }
     .creation-studio-control > svg { width: 19px; height: 19px; flex: 0 0 auto; }
-    .creation-studio-control > svg:last-child { width: 17px; height: 17px; color: var(--creation-muted); transition: transform 160ms cubic-bezier(.16, 1, .3, 1); }
+    .creation-studio-control > svg:last-child { width: 17px; height: 17px; color: var(--creation-muted); transition: transform 160ms var(--motion-ease-out); }
     .creation-studio-control > svg:last-child.is-open { transform: rotate(180deg); }
 
     .creation-model-picker.canvas-composer-model-picker {
@@ -2365,7 +2397,7 @@
         background: #383d47;
         color: #e5e8ec;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13);
-        transition: transform 150ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ease, color 150ms ease;
+        transition: transform 150ms var(--motion-ease-out), background-color 150ms ease, color 150ms ease;
     }
     .creation-studio-submit:hover:not(:disabled) { background: #f4f5f6; color: #111317; transform: translateY(-1px); }
     .creation-studio-submit:active:not(:disabled) { transform: scale(.96); }
@@ -2396,7 +2428,7 @@
         border-radius: 10px;
         background: rgba(255, 255, 255, .055);
         color: var(--creation-accent);
-        animation: creation-intro-mark 2.8s cubic-bezier(.16, 1, .3, 1) infinite;
+        animation: creation-intro-mark 2.8s var(--motion-ease-out) infinite;
     }
     .creation-chat-intro-mark svg { width: 16px; height: 16px; }
     .creation-chat-headline {
@@ -2407,7 +2439,7 @@
         line-height: 1.25;
         text-align: center;
     }
-    .creation-chat-headline span { display: inline-block; margin-left: 4px; color: var(--creation-accent); animation: creation-intro-word 2.8s cubic-bezier(.16, 1, .3, 1) infinite; }
+    .creation-chat-headline span { display: inline-block; margin-left: 4px; color: var(--creation-accent); animation: creation-intro-word 2.8s var(--motion-ease-out) infinite; }
     .creation-chat-intro p { margin: 8px 0 0; color: var(--creation-muted); font-size: 12px; }
 
     .creation-chat-composer {
@@ -2444,7 +2476,7 @@
         background: #242730;
         color: #eef1f4;
         box-shadow: none;
-        transition: transform 140ms cubic-bezier(.16, 1, .3, 1), background-color 140ms ease, border-color 140ms ease;
+        transition: transform 140ms var(--motion-ease-out), background-color 140ms ease, border-color 140ms ease;
     }
 
     .creation-chat-reference:hover:not(:disabled) {
@@ -2527,7 +2559,7 @@
         font-weight: 600;
         white-space: nowrap;
         box-shadow: none;
-        transition: border-color 140ms ease, background-color 140ms ease, transform 140ms cubic-bezier(.16, 1, .3, 1);
+        transition: border-color 140ms ease, background-color 140ms ease, transform 140ms var(--motion-ease-out);
     }
     .creation-chat-control:hover,
     .creation-chat-control[aria-expanded="true"],
@@ -2536,7 +2568,7 @@
     .creation-chat-control:active { transform: scale(.98); }
     .creation-chat-control.is-mode { border-color: rgba(6, 182, 212, .36) !important; background: rgba(5, 80, 98, .24) !important; color: #17c4e2 !important; }
     .creation-chat-control > svg { width: 15px; height: 15px; flex: 0 0 auto; }
-    .creation-chat-control > svg:last-child { width: 14px; height: 14px; color: var(--creation-muted); transition: transform 160ms cubic-bezier(.16, 1, .3, 1); }
+    .creation-chat-control > svg:last-child { width: 14px; height: 14px; color: var(--creation-muted); transition: transform 160ms var(--motion-ease-out); }
     .creation-chat-control > svg:last-child.is-open { transform: rotate(180deg); }
     .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: min(196px, 26vw) !important; justify-content: flex-start; }
     .creation-chat-composer .creation-model-picker .canvas-model-picker-trigger-icon { width: 19px; height: 19px; border-radius: 5px; }
@@ -2556,7 +2588,7 @@
         border-radius: 50%;
         background: #303540;
         color: #f1f3f5;
-        transition: background-color 140ms ease, color 140ms ease, transform 140ms cubic-bezier(.16, 1, .3, 1);
+        transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--motion-ease-out);
     }
     .creation-chat-submit:hover:not(:disabled) { background: #f3f4f6; color: #121417; transform: translateY(-1px); }
     .creation-chat-submit:active:not(:disabled) { transform: scale(.96); }
@@ -3590,7 +3622,7 @@
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
-        animation: ai-title-aurora 7s ease-in-out infinite;
+        animation: ai-title-aurora 7s var(--motion-ease-in-out) infinite;
     }
 
     .dark .ai-title-aurora {
@@ -4219,7 +4251,7 @@
     .canvas-floating-dock,
     .canvas-floating-panel,
     .canvas-node-toolbar {
-        animation: canvas-panel-in 180ms cubic-bezier(0.2, 0.85, 0.18, 1) both;
+        animation: canvas-panel-in var(--motion-dur-fast-calc) var(--motion-ease-out) both;
     }
 
     /* 覆盖工具栏与节点之间的视觉留白，避免鼠标途中被相邻节点抢走悬浮状态。 */
@@ -4271,7 +4303,7 @@
             color 140ms ease,
             opacity 140ms ease,
             box-shadow 140ms ease,
-            transform 160ms cubic-bezier(0.2, 0.85, 0.18, 1);
+            transform 160ms var(--motion-ease-out);
     }
 
     .canvas-connection-handle {
@@ -4307,7 +4339,7 @@
 
     .canvas-menu-item-icon,
     .canvas-node-tool-icon {
-        transition: transform 160ms cubic-bezier(0.2, 0.85, 0.18, 1);
+        transition: transform 160ms var(--motion-ease-out);
     }
 
     .canvas-node-shell {
@@ -4380,7 +4412,7 @@
         content: "";
         filter: drop-shadow(0 0 3px rgba(96, 165, 250, 0.2));
         pointer-events: none;
-        animation: canvas-generation-border-flow 2.4s linear infinite;
+        animation: canvas-generation-border-flow 2.4s var(--motion-ease-linear) infinite;
         -webkit-mask:
             linear-gradient(#000 0 0) content-box,
             linear-gradient(#000 0 0);
@@ -4393,11 +4425,11 @@
     }
 
     .canvas-connection-flow {
-        animation: canvas-connection-flow 1.25s linear infinite;
+        animation: canvas-connection-flow 1.25s var(--motion-ease-linear) infinite;
     }
 
     .canvas-connection-draft {
-        animation: canvas-connection-flow 0.9s linear infinite;
+        animation: canvas-connection-flow 0.9s var(--motion-ease-linear) infinite;
     }
 
     @keyframes canvas-panel-in {
@@ -4626,7 +4658,7 @@ html:not(.dark) .creation-home {
 .creation-empty-composer {
     width: 100%;
     margin: 0;
-    animation: creation-composer-arrive 360ms cubic-bezier(.16, 1, .3, 1) both;
+    animation: creation-composer-arrive var(--motion-dur-slow-calc) var(--motion-ease-out) both;
 }
 
 .creation-chat-composer {
@@ -4666,7 +4698,7 @@ html:not(.dark) .creation-chat-composer {
     color: var(--creation-muted);
     box-shadow: none;
     transform: none;
-    transition: color 140ms ease, background-color 140ms ease, transform 140ms cubic-bezier(.16, 1, .3, 1);
+    transition: color 140ms ease, background-color 140ms ease, transform 140ms var(--motion-ease-out);
 }
 
 .creation-chat-reference svg,
@@ -4742,7 +4774,7 @@ html:not(.dark) .creation-chat-reference:hover:not(:disabled) { background: rgba
     font-size: 11px;
     font-weight: 500;
     box-shadow: none !important;
-    transition: color 140ms ease, background-color 140ms ease, transform 140ms cubic-bezier(.16, 1, .3, 1);
+    transition: color 140ms ease, background-color 140ms ease, transform 140ms var(--motion-ease-out);
 }
 
 .creation-chat-control:hover,
@@ -4781,7 +4813,7 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
     border-radius: 9px;
     background: #f3f4f5;
     color: #1b1d21;
-    transition: transform 140ms cubic-bezier(.16, 1, .3, 1), background-color 140ms ease;
+    transition: transform 140ms var(--motion-ease-out), background-color 140ms ease;
 }
 
 .creation-chat-submit:hover:not(:disabled) { background: #fff; transform: translateY(-1px); }
@@ -4941,7 +4973,7 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
     align-items: center;
     margin: 0 0 24px;
     text-align: center;
-    animation: creation-intro-arrive 420ms cubic-bezier(.16, 1, .3, 1) both;
+    animation: creation-intro-arrive var(--motion-dur-slow-calc) var(--motion-ease-out) both;
 }
 
 .creation-chat-intro p {
@@ -4968,7 +5000,7 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
     width: 16px;
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(227, 231, 235, .88), transparent);
-    animation: creation-intro-signal 2.8s cubic-bezier(.16, 1, .3, 1) infinite;
+    animation: creation-intro-signal 2.8s var(--motion-ease-out) infinite;
 }
 
 .creation-chat-reference.is-paper {
@@ -5112,7 +5144,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     font-size: 1.25em;
     font-weight: 760;
     text-shadow: 0 0 24px rgba(89, 202, 232, .24);
-    animation: creation-intro-emphasis 2.6s cubic-bezier(.16, 1, .3, 1) infinite;
+    animation: creation-intro-emphasis 2.6s var(--motion-ease-out) infinite;
 }
 
 .creation-thread-stage,
@@ -5178,7 +5210,7 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 .creation-media-result { max-width: 860px; padding: 14px 0 0 34px; }
 .creation-image-result-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .creation-image-result { position: relative; aspect-ratio: 1; overflow: hidden; border: 0; border-radius: 9px; background: #181a1e; }
-.creation-image-result img { width: 100%; height: 100%; object-fit: cover; transition: transform 220ms cubic-bezier(.16, 1, .3, 1); }
+.creation-image-result img { width: 100%; height: 100%; object-fit: cover; transition: transform 220ms var(--motion-ease-out); }
 .creation-image-result span, .creation-video-result > span { position: absolute; right: 8px; bottom: 8px; display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; background: rgba(13, 14, 16, .62); color: #fff; opacity: 0; transition: opacity 160ms ease; backdrop-filter: blur(8px); }
 .creation-image-result span svg, .creation-video-result span svg { width: 14px; height: 14px; }
 .creation-image-result:hover img { transform: scale(1.025); }
@@ -5441,7 +5473,7 @@ html:not(.dark) .creation-message-content code { background: rgba(28, 32, 37, .0
     color: var(--creation-muted) !important;
     font-size: 11px !important;
     font-weight: 500;
-    transition: background-color 160ms cubic-bezier(.16, 1, .3, 1), color 160ms cubic-bezier(.16, 1, .3, 1), transform 160ms cubic-bezier(.16, 1, .3, 1) !important;
+    transition: background-color 160ms var(--motion-ease-out), color 160ms var(--motion-ease-out), transform 160ms var(--motion-ease-out) !important;
 }
 
 .creation-choice-grid button:hover {
@@ -5481,7 +5513,7 @@ html:not(.dark) .creation-message-content code { background: rgba(28, 32, 37, .0
     padding: 0 2px !important;
     color: var(--creation-muted) !important;
     font-size: 10px !important;
-    transition: color 160ms cubic-bezier(.16, 1, .3, 1), background-color 160ms cubic-bezier(.16, 1, .3, 1) !important;
+    transition: color 160ms var(--motion-ease-out), background-color 160ms var(--motion-ease-out) !important;
 }
 
 .creation-custom-trigger svg { width: 12px; height: 12px; }
@@ -5557,7 +5589,7 @@ html:not(.dark) .creation-message-content code { background: rgba(28, 32, 37, .0
     color: var(--creation-muted) !important;
     font-size: 11px !important;
     font-weight: 500;
-    transition: background-color 160ms cubic-bezier(.16, 1, .3, 1), color 160ms cubic-bezier(.16, 1, .3, 1) !important;
+    transition: background-color 160ms var(--motion-ease-out), color 160ms var(--motion-ease-out) !important;
 }
 
 .creation-duration-choices button:hover { background: rgba(255, 255, 255, .055) !important; color: var(--creation-text) !important; }
@@ -5591,7 +5623,7 @@ html:not(.dark) .creation-custom-value { background: rgba(28, 32, 37, .055) !imp
     border-radius: 8px;
     background: rgba(255, 255, 255, .06);
     color: var(--creation-muted);
-    transition: background-color 150ms ease, color 150ms ease, transform 150ms cubic-bezier(.16, 1, .3, 1);
+    transition: background-color 150ms ease, color 150ms ease, transform 150ms var(--motion-ease-out);
 }
 
 .creation-top-action svg { width: 16px; height: 16px; }
