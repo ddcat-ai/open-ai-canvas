@@ -118,7 +118,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
 
     if (collapsed) {
         return (
-            <aside className="relative z-30 hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
+            <aside className="relative z-[var(--z-panel)] hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
                 <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="展开项目侧栏" aria-label="展开项目侧栏" onClick={() => setCollapsed(false)}><ChevronRight className="size-4" /></button>
                 <Link to={`/projects/${projectId}/canvases`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="返回项目画布列表"><FolderKanban className="size-4" /></Link>
             </aside>
@@ -126,7 +126,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
     }
 
     return (
-        <aside className="relative z-30 hidden w-[232px] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
+        <aside className="relative z-[var(--z-panel)] hidden w-[232px] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
             <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
                 <Link to={`/projects/${projectId}/canvases`} className="flex min-w-0 items-center gap-2 text-xs font-semibold" title="返回项目画布列表"><FolderKanban className="size-3.5 shrink-0" /><span className="truncate">{projectDetail?.project.name || "项目空间"}</span></Link>
                 <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-foreground/45 hover:bg-foreground/[.06]" title="收起项目侧栏" aria-label="收起项目侧栏" onClick={() => setCollapsed(true)}><ChevronLeft className="size-4" /></button>
@@ -193,7 +193,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
 function ChapterPreview({ projectId, unit, chapterNumber, loading, loadError, adding, onAdd, onClose }: { projectId: string; unit: ProjectUnit; chapterNumber: number; loading: boolean; loadError: boolean; adding: boolean; onAdd: () => void | Promise<void>; onClose: () => void }) {
     const text = htmlToPlainText(unit.sourceText);
     return (
-        <section className="absolute bottom-20 left-[calc(100%+8px)] top-14 z-50 flex w-[320px] flex-col overflow-hidden rounded-lg border border-border/85 bg-background/[.96] shadow-[0_18px_48px_rgba(0,0,0,.22)] backdrop-blur-xl" aria-label={`第 ${chapterNumber} 章预览`}>
+        <section className="absolute bottom-20 left-[calc(100%+8px)] top-14 z-[var(--z-panel-floating)] flex w-[320px] flex-col overflow-hidden rounded-lg border border-border/85 bg-background/[.96] shadow-[0_18px_48px_rgba(0,0,0,.22)] backdrop-blur-xl" aria-label={`第 ${chapterNumber} 章预览`}>
             <header className="flex items-start gap-2 border-b border-border/70 px-3 py-2.5"><div className="min-w-0 flex-1"><div className="text-[var(--fs-tiny)] tabular-nums text-foreground/38">第 {chapterNumber.toLocaleString("zh-CN")} 章</div><h2 className="mt-0.5 truncate text-sm font-semibold">{unit.title}</h2></div><button type="button" onClick={onClose} className="grid size-6 shrink-0 place-items-center rounded text-foreground/38 hover:bg-foreground/[.06] hover:text-foreground" aria-label="关闭章节预览"><X className="size-3.5" /></button></header>
             <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3"><p className="whitespace-pre-wrap text-xs leading-5 text-foreground/58">{loading ? "正在读取本章正文…" : loadError ? "正文读取失败，请稍后重试" : text || "本章还没有正文"}</p>{!loading && !loadError ? <div className="mt-2 text-[var(--fs-tiny)] tabular-nums text-foreground/35">{text.length.toLocaleString("zh-CN")} 字</div> : null}</div>
             <footer className="flex shrink-0 items-center justify-between border-t border-border/70 px-2 py-2"><button type="button" disabled={adding} onClick={() => void onAdd()} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)] disabled:cursor-wait">{adding ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}添加到画布</button><Link to={`/projects/${projectId}/chapters/${unit.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-foreground/62 hover:bg-foreground/[.06] hover:text-foreground">打开编辑器<ArrowUpRight className="size-3.5" /></Link></footer>

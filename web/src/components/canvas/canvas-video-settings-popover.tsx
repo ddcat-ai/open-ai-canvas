@@ -86,7 +86,7 @@ function VideoSettingsPortal({
     const placeAbove = topPlacement ? topSpace >= estimatedHeight || topSpace >= bottomSpace : bottomSpace < estimatedHeight && topSpace > bottomSpace;
     const style = {
         position: "fixed",
-        zIndex: 1200,
+        zIndex: "var(--z-popover)",
         width,
         left: Math.max(margin, Math.min(window.innerWidth - width - margin, left)),
         ...(placeAbove ? { bottom: window.innerHeight - buttonRect.top + gap, maxHeight: Math.max(260, topSpace) } : { top: buttonRect.bottom + gap, maxHeight: Math.max(260, bottomSpace) }),
