@@ -175,7 +175,7 @@ export function CanvasToolbar({
     const resourceCommands = addNodeCommands.filter((cmd) => cmd.section === "resource").map(toCommand);
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-4 bottom-4 z-50 flex justify-center">
+        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute bottom-[var(--canvas-inset-y)] left-1/2 z-[var(--z-panel)] flex -translate-x-1/2 justify-center">
             <AnimatePresence>
                 {addOpen ? (
                     <AddNodeMenu

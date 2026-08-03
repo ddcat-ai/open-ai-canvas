@@ -516,6 +516,11 @@
     --zoom-control-min: 0.05;
     --zoom-control-max: 2;
     --zoom-control-step: 0.1;
+
+    /* Canvas 布局（对应 #116 整体布局优化 — 浮层统一内边距栅格）*/
+    --canvas-inset-x: var(--space-4);     /* 16px 浮层水平内边距 */
+    --canvas-inset-y: var(--space-4);     /* 16px 浮层垂直内边距 */
+    --canvas-topbar-h: 4rem;              /* 64px 顶部栏高度 */
 }
 
 @layer base {
