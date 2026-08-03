@@ -40,6 +40,12 @@ export type GenerationTask = {
         amountMicrocredits: number;
         status: TaskBillingStatus;
     };
+    clientContext?: {
+        conversationId: string;
+        messageId: string;
+        batchIndex?: number;
+        batchCount?: number;
+    };
     created_at?: string;
     updated_at?: string;
 };

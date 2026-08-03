@@ -10,9 +10,10 @@ import { ModelPicker } from "@/components/model-picker";
 import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
-import { runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
+import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
 import { requestImageQuestion } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
+import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
@@ -34,6 +35,7 @@ type CreationMessage = {
     attachments?: CreationAttachment[];
     references?: CreationReference[];
     settings?: CreationSettings;
+    taskIds?: string[];
 };
 type CreationConversation = { id: string; title: string; updatedAt: string; messages: CreationMessage[] };
 
@@ -88,6 +90,7 @@ export default function CreatePage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const threadScrollRef = useRef<HTMLElement>(null);
     const followLatestMessageRef = useRef(true);
+    const taskSyncWarningRef = useRef(false);
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const historyConversations = useMemo(
@@ -97,6 +100,7 @@ export default function CreatePage() {
     const selectedModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
+    const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
 
     useEffect(() => {
         let cancelled = false;
@@ -116,6 +120,33 @@ export default function CreatePage() {
     useEffect(() => {
         if (hydrated) void localforage.setItem(STORAGE_KEY, conversations);
     }, [conversations, hydrated]);
+
+    useEffect(() => {
+        if (!hydrated || !pendingMediaKey) return;
+        let cancelled = false;
+        const syncTasks = async () => {
+            try {
+                const summaries = await listGenerationTasks(100);
+                const tasks = await enrichCreationTaskSummaries(summaries);
+                if (cancelled) return;
+                taskSyncWarningRef.current = false;
+                setConversations((current) => reconcileCreationTaskMessages(current, tasks));
+            } catch (error) {
+                if (cancelled) return;
+                console.warn("创作任务状态同步失败", error);
+                if (!taskSyncWarningRef.current) {
+                    taskSyncWarningRef.current = true;
+                    toast.warning("任务状态暂时无法同步，请稍后刷新");
+                }
+            }
+        };
+        void syncTasks();
+        const timer = window.setInterval(() => void syncTasks(), 3000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [hydrated, pendingMediaKey, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -193,6 +224,12 @@ export default function CreatePage() {
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
+        const boundTaskIds = new Set<string>();
+        const bindTask = (task: GenerationTask) => {
+            if (boundTaskIds.has(task.id)) return;
+            boundTaskIds.add(task.id);
+            updateAssistant(assistantMessage.id, (item) => ({ ...item, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])) }));
+        };
         updateActive((conversation) => ({
             ...conversation,
             title: conversation.messages.length ? conversation.title : text.slice(0, 24),
@@ -224,6 +261,7 @@ export default function CreatePage() {
                     referenceImages: attachments,
                     signal: controller.signal,
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
+                    onTaskUpdate: bindTask,
                     count: taskCount,
                 });
                 if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -243,6 +281,7 @@ export default function CreatePage() {
                     referenceImages: attachments,
                     signal: controller.signal,
                     metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: attachments.length ? "image_to_video" : "text_to_video", ...referenceMetadata },
+                    onTaskUpdate: bindTask,
                 });
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
                 const videoUrl = result.video.dataUrl;
@@ -400,10 +439,18 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
 }
 
 function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void }) {
-    if (item.role === "user") return <div className="creation-user-message"><div>{displayCreationPrompt(item.content, item.references || [])}</div>{item.references?.length ? <CreationMessageReferences references={item.references} /> : null}{item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => <img key={attachment.id} src={attachment.previewUrl} alt={attachment.name} />)}</div> : null}</div>;
+    if (item.role === "user") return <CreationUserMessage item={item} />;
     const mode = item.mode || "text";
     const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : "";
     return <article className="creation-assistant-message"><div className="creation-message-heading"><span className="creation-message-mark"><Sparkles /></span><span>{modeLabels[mode]}</span>{modelName ? <span className="creation-message-model">{modelName}</span> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>{mode === "text" ? <div className="creation-message-content">{item.content ? <ReactMarkdown>{item.content}</ReactMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} />}{item.error ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}</article>;
+}
+
+function CreationUserMessage({ item }: { item: CreationMessage }) {
+    const [previewUrl, setPreviewUrl] = useState("");
+    return <div className="creation-user-message"><div>{displayCreationPrompt(item.content, item.references || [])}</div>{item.references?.length ? <CreationMessageReferences references={item.references} /> : null}{item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => {
+        const url = attachment.previewUrl || attachment.dataUrl || attachment.url || "";
+        return <button key={attachment.id} type="button" onClick={() => setPreviewUrl(url)} aria-label={`预览 ${attachment.name}`} disabled={!url}><img src={url} alt={attachment.name} width={44} height={44} loading="lazy" /><span aria-hidden="true"><Maximize2 /></span></button>;
+    })}</div> : null}<CreationMediaPreviewModal url={previewUrl} type="image" onClose={() => setPreviewUrl("")} /></div>;
 }
 
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
@@ -419,8 +466,13 @@ function MediaResult({ item, onRetryFailure, onCreateVariant }: { item: Creation
     const resultUrls = item.resultUrls;
     const openPreview = (url: string, type: "image" | "video") => { setPreviewType(type); setPreviewUrl(url); };
     if (item.status === "pending") return <div className="creation-media-pending"><Spin size="small" />正在生成{item.mode === "video" ? "视频" : "图片"}…</div>;
+    if ((item.status === "error" || item.status === "cancelled") && !resultUrls?.length) return null;
     if (!resultUrls?.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
-    return <div className="creation-media-result">{item.mode === "video" ? <button type="button" className="creation-video-result" onClick={() => openPreview(resultUrls[0], "video")} aria-label="预览生成视频"><video muted preload="metadata" className="size-full object-cover" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => openPreview(url, "image")} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}<div className="creation-media-actions"><span>{item.mode === "video" ? "视频结果" : `${resultUrls.length} 张图片`}</span><button type="button" onClick={onCreateVariant}><RefreshCw />生成变体</button><Link to="/canvas">添加到画布</Link>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div><Modal open={Boolean(previewUrl)} title={null} footer={null} centered destroyOnHidden width={previewType === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={() => setPreviewUrl("")} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{previewUrl ? previewType === "video" ? <video controls autoPlay className="creation-media-preview-video" src={previewUrl} /> : <img className="creation-media-preview-image" src={previewUrl} alt="生成图片预览" /> : null}</Modal></div>;
+    return <div className="creation-media-result">{item.mode === "video" ? <button type="button" className="creation-video-result" onClick={() => openPreview(resultUrls[0], "video")} aria-label="预览生成视频"><video muted preload="metadata" className="size-full object-cover" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => openPreview(url, "image")} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}<div className="creation-media-actions"><span>{item.mode === "video" ? "视频结果" : `${resultUrls.length} 张图片`}</span><button type="button" onClick={onCreateVariant}><RefreshCw />生成变体</button><Link to="/canvas">添加到画布</Link>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div><CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} /></div>;
+}
+
+function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
+    return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <img className="creation-media-preview-image" src={url} alt="媒体预览" /> : null}</Modal>;
 }
 
 type ComposerProps = {
@@ -465,7 +517,7 @@ function CreationComposer(props: ComposerProps) {
             <input ref={props.fileInputRef} type="file" hidden accept="image/*" multiple onChange={props.onFileChange} />
             <Tooltip title="添加参考图片"><button type="button" className="creation-chat-reference is-paper" onClick={() => props.fileInputRef.current?.click()} disabled={props.busy} aria-label="添加参考图片"><Plus /><span>参考内容</span></button></Tooltip>
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} mentionMenuWidth={400} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
+                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
                 {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => <div key={item.id} className="creation-chat-attachment"><img src={item.previewUrl} alt={item.name} /><button type="button" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>)}</div> : null}
             </div>
         </div>
@@ -560,6 +612,64 @@ function buildTextMessageContent(item: CreationMessage) {
 
 function removeReferenceTokens(value: string, references: CreationReference[]) {
     return references.reduce((current, reference) => current.split(canvasResourceMentionToken(reference)).join(""), value);
+}
+
+function pendingCreationMediaKey(conversations: CreationConversation[]) {
+    return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])).join("|");
+}
+
+async function enrichCreationTaskSummaries(tasks: GenerationTask[]) {
+    return Promise.all(tasks.map(async (task) => {
+        if (!task.clientContext || (task.status !== "failed" && (task.status !== "succeeded" || task.previewUrl))) return task;
+        const detail = await queryGenerationTask(task.id).catch(() => null);
+        return detail ? { ...task, ...detail, clientContext: task.clientContext } : task;
+    }));
+}
+
+function reconcileCreationTaskMessages(conversations: CreationConversation[], tasks: GenerationTask[]) {
+    let changed = false;
+    const next = conversations.map((conversation) => {
+        let conversationChanged = false;
+        let completedAt = conversation.updatedAt;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return message;
+            const taskIds = new Set(message.taskIds || []);
+            const matches = tasks
+                .filter((task) => taskIds.has(task.id) || (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id))
+                .sort((left, right) => (left.clientContext?.batchIndex || 0) - (right.clientContext?.batchIndex || 0));
+            const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
+            if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
+
+            const resultUrls = Array.from(new Set(matches.filter((task) => task.status === "succeeded").flatMap(creationTaskResultUrls)));
+            const succeededCount = matches.filter((task) => task.status === "succeeded").length;
+            const failedCount = matches.length - succeededCount;
+            const nextTaskIds = Array.from(new Set([...(message.taskIds || []), ...matches.map((task) => task.id)]));
+            completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
+            conversationChanged = true;
+            changed = true;
+
+            if (resultUrls.length) {
+                const content = message.mode === "video" ? "视频已生成" : failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成";
+                return { ...message, status: "done" as const, content, resultUrls, error: undefined, taskIds: nextTaskIds };
+            }
+            if (matches.every((task) => task.status === "cancelled")) return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };
+            const failed = matches.find((task) => task.status === "failed");
+            return { ...message, status: "error" as const, content: "生成失败", error: generationErrorMessage(failed?.error || "任务已结束，但生成结果暂时无法读取"), taskIds: nextTaskIds };
+        });
+        return conversationChanged ? { ...conversation, messages, updatedAt: completedAt } : conversation;
+    });
+    return changed ? next : conversations;
+}
+
+function creationTaskResultUrls(task: GenerationTask) {
+    if (task.previewUrl) return [task.previewUrl];
+    if (!task.resultJson) return [];
+    try {
+        const result = parseBackendGenerationResult(task);
+        return [...(result.images || []).map((image) => image.dataUrl), result.video?.dataUrl].filter((url): url is string => Boolean(url));
+    } catch {
+        return [];
+    }
 }
 
 function conversationTimestamp(value: string) {

@@ -37,11 +37,12 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     containerClassName?: string;
     highlightLabels?: boolean;
     mentionMenuWidth?: number;
+    sendOnEnter?: boolean;
     onContentSizeChange?: (height: number) => void;
 };
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 256, onContentSizeChange, ...props },
+    { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 256, sendOnEnter = true, onContentSizeChange, ...props },
     forwardedRef,
 ) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -244,7 +245,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         }
                         if (event.key === "Enter") {
                             event.preventDefault();
-                            if (onSubmit && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                            const shouldSubmit = sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey;
+                            if (onSubmit && shouldSubmit) {
                                 onSubmit();
                                 return;
                             }
@@ -322,7 +324,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                             return;
                         }
                     }
-                    if (event.key === "Enter" && onSubmit && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                    const shouldSubmit = event.key === "Enter" && (sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey);
+                    if (shouldSubmit && onSubmit) {
                         event.preventDefault();
                         onSubmit();
                         return;
