@@ -271,7 +271,7 @@ function SharedContextMenu({ menu, onAdd, onInfo, onUnauthorized }: { menu: Cont
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return <div data-canvas-no-zoom className="absolute z-[90] min-w-48 rounded-lg border p-1.5 shadow-xl" style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
         {menu.nodeId ? <><MenuButton icon={<Eye />} label="查看节点信息" onClick={onInfo} /><MenuButton icon={<LockKeyhole />} label="编辑或生成" onClick={onUnauthorized} /></> : <>
-            <div className="px-2 py-1.5 text-[11px]" style={{ color: theme.node.muted }}>添加临时节点</div>
+            <div className="px-2 py-1.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>添加临时节点</div>
             <MenuButton icon={<FileText />} label="文本节点" onClick={() => onAdd(CanvasNodeType.Text)} />
             <MenuButton icon={<ImageIcon />} label="图片节点" onClick={() => onAdd(CanvasNodeType.Image)} />
             <MenuButton icon={<Video />} label="视频节点" onClick={() => onAdd(CanvasNodeType.Video)} />
@@ -286,7 +286,7 @@ function MenuButton({ icon, label, onClick }: { icon: ReactNode; label: string; 
 
 function SharedConfigNode({ node, onUnauthorized }: { node: CanvasNodeData; onUnauthorized: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    return <div className="flex h-full w-full flex-col overflow-hidden rounded-[17px]">
+    return <div className="flex h-full w-full flex-col overflow-hidden rounded-[var(--panel-radius)]">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b px-4" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}><ImageIcon className="size-4" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title}</span></div>
         <div className="min-h-0 flex-1 whitespace-pre-wrap break-words p-4 text-sm leading-6" style={{ color: theme.node.muted }}>{node.metadata?.composerContent || node.metadata?.prompt || "未填写提示词"}</div>
         <div className="flex h-12 shrink-0 items-center justify-end border-t px-3" style={{ borderColor: theme.node.stroke }}><Button size="small" icon={<Send className="size-3.5" />} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onUnauthorized(); }}>生成</Button></div>
@@ -296,7 +296,7 @@ function SharedConfigNode({ node, onUnauthorized }: { node: CanvasNodeData; onUn
 function SharedScriptNode({ node, onUnauthorized }: { node: CanvasNodeData; onUnauthorized: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const rows = node.metadata?.storyboard?.rows || [];
-    return <div className="flex h-full w-full flex-col overflow-hidden rounded-[17px]">
+    return <div className="flex h-full w-full flex-col overflow-hidden rounded-[var(--panel-radius)]">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b px-4" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}><Clapperboard className="size-4" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title}</span><span className="text-xs" style={{ color: theme.node.muted }}>{rows.length} 镜</span><button type="button" className="grid size-7 place-items-center rounded hover:bg-black/5 dark:hover:bg-white/10" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onUnauthorized(); }} aria-label="一键创建视频节点"><Video className="size-3.5" /></button></div>
         <div data-canvas-wheel-scroll className="min-h-0 flex-1 overflow-y-auto" onWheel={(event) => event.stopPropagation()}>{rows.length ? rows.map((row) => <div key={row.id} className="grid grid-cols-[52px_72px_minmax(180px,1fr)_minmax(150px,.8fr)] border-b text-xs leading-5" style={{ minHeight: 48, borderColor: theme.node.stroke }}><span className="grid place-items-center border-r" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>#{row.shotNumber}</span><span className="grid place-items-center border-r" style={{ borderColor: theme.node.stroke }}>{row.durationSeconds}s</span><span className="border-r px-3 py-2" style={{ borderColor: theme.node.stroke }}>{row.plotDescription || "-"}</span><span className="px-3 py-2" style={{ color: theme.node.muted }}>{row.dialogue || "-"}</span></div>) : <div className="grid h-full place-items-center text-sm" style={{ color: theme.node.muted }}>暂无分镜</div>}</div>
         {node.metadata?.composerContent ? <div className="max-h-24 shrink-0 overflow-y-auto border-t px-3 py-2 text-xs leading-5" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>{node.metadata.composerContent}</div> : null}

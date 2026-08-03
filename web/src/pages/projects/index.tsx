@@ -69,7 +69,7 @@ export default function ProjectsPage() {
             {query.isLoading ? <WorkspaceLoadingState label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             {!query.isLoading && rows.length ? (
                 <TableSurface>
-                    <div className="hidden h-10 grid-cols-[minmax(240px,1.2fr)_minmax(150px,.75fr)_minmax(150px,.7fr)_minmax(180px,.8fr)_120px_28px] items-center gap-4 border-b border-border/70 bg-foreground/[.025] px-4 text-[11px] font-medium text-foreground/42 lg:grid">
+                    <div className="hidden h-10 grid-cols-[minmax(240px,1.2fr)_minmax(150px,.75fr)_minmax(150px,.7fr)_minmax(180px,.8fr)_120px_28px] items-center gap-4 border-b border-border/70 bg-foreground/[.025] px-4 text-[var(--fs-label)] font-medium text-foreground/42 lg:grid">
                         <span>项目</span><span>当前阶段</span><span>章节进度</span><span>内容</span><span>最近更新</span><span />
                     </div>
                     <div className="divide-y divide-border/65">
@@ -108,25 +108,25 @@ function ProjectRow({ row }: { row: ProjectSummary }) {
         <Link to={`/projects/${row.project.id}/overview`} className="group block min-w-0 px-3 py-3 transition-colors hover:bg-foreground/[.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:px-4 lg:grid lg:min-h-[76px] lg:grid-cols-[minmax(240px,1.2fr)_minmax(150px,.75fr)_minmax(150px,.7fr)_minmax(180px,.8fr)_120px_28px] lg:items-center lg:gap-4 lg:py-2.5">
             <span className="flex min-w-0 items-start gap-3">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.06] text-foreground/50"><FolderKanban className="size-4" /></span>
-                <span className="min-w-0"><span className="flex min-w-0 items-center gap-2"><strong className="truncate text-sm font-semibold">{row.project.name}</strong>{row.project.status === "archived" ? <span className="shrink-0 rounded bg-foreground/[.07] px-1.5 py-0.5 text-[10px] text-foreground/45">已归档</span> : null}</span><span className="mt-1 block truncate text-[11px] text-foreground/42">{row.project.stylePresetId || "未设置画风"} · {row.project.aspectRatio} · {sourceTypeLabel(row.project.sourceType)}</span></span>
+                <span className="min-w-0"><span className="flex min-w-0 items-center gap-2"><strong className="truncate text-sm font-semibold">{row.project.name}</strong>{row.project.status === "archived" ? <span className="shrink-0 rounded bg-foreground/[.07] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/45">已归档</span> : null}</span><span className="mt-1 block truncate text-[var(--fs-label)] text-foreground/42">{row.project.stylePresetId || "未设置画风"} · {row.project.aspectRatio} · {sourceTypeLabel(row.project.sourceType)}</span></span>
             </span>
 
             <span className="mt-3 grid grid-cols-[72px_minmax(0,1fr)] items-start gap-2 lg:mt-0 lg:block">
-                <span className="text-[10px] text-foreground/38 lg:hidden">当前阶段</span>
-                <span className="min-w-0"><span className="block text-xs font-medium text-foreground/78">{stage.label}</span><span className="mt-1 line-clamp-1 block text-[10px] text-foreground/40">{stage.detail}</span></span>
+                <span className="text-[var(--fs-tiny)] text-foreground/38 lg:hidden">当前阶段</span>
+                <span className="min-w-0"><span className="block text-xs font-medium text-foreground/78">{stage.label}</span><span className="mt-1 line-clamp-1 block text-[var(--fs-tiny)] text-foreground/40">{stage.detail}</span></span>
             </span>
 
             <span className="mt-3 grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 lg:mt-0 lg:block">
-                <span className="text-[10px] text-foreground/38 lg:hidden">章节进度</span>
-                <span className="min-w-0"><span className="flex items-center justify-between text-[10px] text-foreground/48"><span>{row.completedUnitCount}/{row.unitCount} 章</span><span>{completion}%</span></span><span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-foreground/[.08]"><span className="block h-full rounded-full bg-[var(--workspace-accent)] transition-[width]" style={{ width: `${completion}%` }} /></span></span>
+                <span className="text-[var(--fs-tiny)] text-foreground/38 lg:hidden">章节进度</span>
+                <span className="min-w-0"><span className="flex items-center justify-between text-[var(--fs-tiny)] text-foreground/48"><span>{row.completedUnitCount}/{row.unitCount} 章</span><span>{completion}%</span></span><span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-foreground/[.08]"><span className="block h-full rounded-full bg-[var(--workspace-accent)] transition-[width]" style={{ width: `${completion}%` }} /></span></span>
             </span>
 
-            <span className="mt-3 flex items-center gap-4 text-[11px] text-foreground/50 lg:mt-0">
+            <span className="mt-3 flex items-center gap-4 text-[var(--fs-label)] text-foreground/50 lg:mt-0">
                 <ProjectCount icon={<BookOpenText className="size-3.5" />} label="章节" value={row.unitCount} />
                 <ProjectCount icon={<LayoutGrid className="size-3.5" />} label="画布" value={row.canvasCount} />
                 <ProjectCount icon={<Images className="size-3.5" />} label="资产" value={row.assetCount} />
             </span>
-            <span className="mt-3 block text-[11px] tabular-nums text-foreground/42 lg:mt-0">{formatProjectTime(row.project.updatedAt)}</span>
+            <span className="mt-3 block text-[var(--fs-label)] tabular-nums text-foreground/42 lg:mt-0">{formatProjectTime(row.project.updatedAt)}</span>
             <ArrowRight className="hidden size-4 text-foreground/25 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/60 lg:block" />
         </Link>
     );

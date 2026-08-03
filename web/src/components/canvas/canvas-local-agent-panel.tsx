@@ -562,7 +562,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
                         onSubmit={sendPrompt}
                         onAddFiles={addAttachments}
                         onRemoveAttachment={removeAttachment}
-                        left={attachments.length ? <span className="text-[11px]" style={{ color: theme.node.muted }}>{formatBytes(attachmentPayloadBytes(attachments))} / 30MB</span> : null}
+                        left={attachments.length ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{formatBytes(attachmentPayloadBytes(attachments))} / 30MB</span> : null}
                     />
                 </>
             )}
@@ -662,7 +662,7 @@ function AgentConnectView({ theme, url, token, enabled, connected, activity, con
                         <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 items-center gap-2">
                                 <span className="shrink-0 text-sm font-medium leading-5">网页连接</span>
-                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] leading-4" style={{ background: theme.node.fill, color: statusColor }}>
+                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[var(--fs-label)] leading-4" style={{ background: theme.node.fill, color: statusColor }}>
                                     <span className="size-1.5 shrink-0 rounded-full" style={{ background: statusColor }} />
                                     <span className="truncate">{statusText}</span>
                                 </span>
@@ -734,13 +734,13 @@ function AgentHistoryView({ theme, threads, activeThreadId, workspacePath, loadi
                                 <div className="flex items-center gap-2">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex min-w-0 items-center gap-1.5">
-                                            {active ? <span className="shrink-0 text-[10px] font-medium" style={{ color: theme.node.text }}>当前</span> : null}
+                                            {active ? <span className="shrink-0 text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.text }}>当前</span> : null}
                                             <div className="truncate text-sm font-medium leading-5">{thread.name || thread.preview || "未命名对话"}</div>
                                         </div>
-                                        <div className="truncate text-[11px] leading-4 opacity-65">{thread.preview || thread.id}</div>
+                                        <div className="truncate text-[var(--fs-label)] leading-4 opacity-65">{thread.preview || thread.id}</div>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
-                                        <span className="text-[10px] opacity-55">{formatThreadTime(thread.updatedAt || thread.createdAt)}</span>
+                                        <span className="text-[var(--fs-tiny)] opacity-55">{formatThreadTime(thread.updatedAt || thread.createdAt)}</span>
                                         <Button size="small" className="!h-6 !px-2" disabled={loading} onClick={() => onResumeThread(thread.id)}>
                                             进入
                                         </Button>

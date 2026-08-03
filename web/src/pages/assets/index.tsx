@@ -444,19 +444,19 @@ function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownlo
                             </Typography.Text>
                         </div>
                         <span className="flex shrink-0 flex-wrap justify-end gap-1">
-                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{assetKindLabel(asset.kind)}</span>
-                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{assetCategoryLabel(asset.category)}</span>
+                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/55">{assetKindLabel(asset.kind)}</span>
+                            <span className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/55">{assetCategoryLabel(asset.category)}</span>
                         </span>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} className="!mb-0 !mt-2 !text-xs !leading-5">
                         {summary}
                     </Typography.Paragraph>
-                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-foreground/42"><span className="truncate">{assetProjectLabel(asset)}</span><span className="shrink-0">{formatAssetTime(asset.updatedAt)}</span></div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[var(--fs-tiny)] text-foreground/42"><span className="truncate">{assetProjectLabel(asset)}</span><span className="shrink-0">{formatAssetTime(asset.updatedAt)}</span></div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {(asset.tags || []).slice(0, 3).map((tag) => (
-                            <span key={tag} className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[10px] text-foreground/55">{tag}</span>
+                            <span key={tag} className="rounded bg-foreground/[.055] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/55">{tag}</span>
                         ))}
-                        {!asset.tags?.length ? <span className="text-[10px] text-foreground/35">无标签</span> : null}
+                        {!asset.tags?.length ? <span className="text-[var(--fs-tiny)] text-foreground/35">无标签</span> : null}
                     </div>
                 </div>
             </button>
@@ -484,11 +484,11 @@ function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownlo
 function AssetFilterGroup({ title, options, value, counts, onChange, className = "" }: { title: string; options: Array<{ label: string; value: string }>; value: string; counts: Map<string, number>; onChange: (value: string) => void; className?: string }) {
     return (
         <div className={className}>
-            <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/38">{title}</div>
+            <div className="mb-1.5 px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">{title}</div>
             <div className="flex gap-1 lg:block">
                 {options.map((option) => (
                     <button key={option.value} type="button" className={`flex h-8 shrink-0 items-center justify-between gap-3 rounded px-2 text-xs transition-colors lg:mb-0.5 lg:w-full ${value === option.value ? "bg-foreground/[.08] font-medium text-foreground" : "text-foreground/56 hover:bg-foreground/[.04] hover:text-foreground"}`} onClick={() => onChange(option.value)}>
-                        <span>{option.label}</span><span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[10px] tabular-nums text-foreground/45">{counts.get(option.value) || 0}</span>
+                        <span>{option.label}</span><span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums text-foreground/45">{counts.get(option.value) || 0}</span>
                     </button>
                 ))}
             </div>
@@ -574,7 +574,7 @@ function StorageTag({ asset }: { asset: LibraryAsset }) {
     const location = resourceStorageLocation(asset.data.storageKey);
     const color = location === "oss" ? "green" : location === "local" ? "gold" : "default";
     return (
-        <Tag color={color} className="m-0 text-[11px]" title={resourceStorageTitle(asset.data.storageKey)}>
+        <Tag color={color} className="m-0 text-[var(--fs-label)]" title={resourceStorageTitle(asset.data.storageKey)}>
             {resourceStorageLabel(asset.data.storageKey)}
         </Tag>
     );

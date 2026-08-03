@@ -204,7 +204,7 @@ export default function SkillsPage() {
                             <section key={group.value} aria-labelledby={`skill-category-${group.value}`}>
                                 <div className="mb-3 flex items-baseline justify-between px-0.5">
                                     <h2 id={`skill-category-${group.value}`} className="text-sm font-medium text-foreground/62">{group.label}</h2>
-                                    <span className="text-[11px] text-foreground/32">{group.skills.length} 个</span>
+                                    <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                                     {group.skills.map((skill) => <SkillCard key={skill.skill_id} skill={skill} loading={mutatingID === skill.skill_id} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
@@ -241,7 +241,7 @@ function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: 
         <article className="flex h-[178px] min-w-0 flex-col rounded-md border border-border/55 bg-[color:var(--workspace-surface-strong)] p-4 transition-[border-color,box-shadow,background-color] duration-200 hover:border-border hover:bg-[color:var(--workspace-surface)] hover:shadow-sm">
             <div className="flex min-h-8 items-start gap-3">
                 <button type="button" className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
-                    <h3 className="line-clamp-1 text-[15px] font-semibold leading-6">{skill.skill_name}</h3>
+                    <h3 className="line-clamp-1 text-[var(--fs-body-lg)] font-semibold leading-6">{skill.skill_name}</h3>
                 </button>
                 {skill.is_owner ? (
                     <Dropdown
@@ -269,7 +269,7 @@ function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: 
             <button type="button" className="mt-1 min-h-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
                 <p className="line-clamp-3 text-xs leading-5 text-foreground/52">{skill.description || "暂无技能简介"}</p>
             </button>
-            <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-border/45 pt-3 text-[11px] text-foreground/42">
+            <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-border/45 pt-3 text-[var(--fs-label)] text-foreground/42">
                 <button type="button" disabled={loading} className="inline-flex shrink-0 items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait" aria-label={skill.is_like ? "取消收藏" : "收藏"} onClick={onLike}>
                     <Heart className={`size-3.5 ${skill.is_like ? "fill-current text-rose-500" : ""}`} />
                     <span>{formatSkillCount(skill.like_count)}</span>

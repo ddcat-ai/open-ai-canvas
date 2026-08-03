@@ -270,7 +270,7 @@ export default function SettingsPage() {
                                     aria-current={selected ? "page" : undefined}
                                 >
                                     <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
-                                    <span className="min-w-0"><span className="block whitespace-nowrap text-sm font-medium">{item.label}</span><span className="mt-1 hidden text-[11px] leading-4 text-current opacity-65 md:block">{item.description}</span></span>
+                                    <span className="min-w-0"><span className="block whitespace-nowrap text-sm font-medium">{item.label}</span><span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{item.description}</span></span>
                                 </button>
                             );
                         })}

@@ -27,7 +27,7 @@ export function ImageGenerationPending({ className, label, compact = false }: { 
                     maskImage: "radial-gradient(ellipse at 38% 68%, black 0%, black 28%, transparent 60%)",
                 }}
             />
-            <div className="absolute left-4 top-4 flex items-center gap-2 text-[15px] font-medium text-stone-500 dark:text-stone-300">
+            <div className="absolute left-4 top-4 flex items-center gap-2 text-[var(--fs-body-lg)] font-medium text-stone-500 dark:text-stone-300">
                 <LoaderCircle className="size-4 animate-spin" />
                 <span>{label || pendingMessages[index]}</span>
             </div>

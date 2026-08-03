@@ -156,7 +156,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             ),
         },
         { title: "能力", dataIndex: "capability", width: 90, render: capabilityLabel },
-        { title: "请求协议", dataIndex: "protocol", width: 230, render: (value: ModelProtocol) => value ? <div><div className="text-xs font-medium">{modelProtocolLabel(value)}</div><div className="truncate text-[10px] text-foreground/45">{modelProtocolDefinition(value)?.create}</div></div> : <Tag color="orange">待配置</Tag> },
+        { title: "请求协议", dataIndex: "protocol", width: 230, render: (value: ModelProtocol) => value ? <div><div className="text-xs font-medium">{modelProtocolLabel(value)}</div><div className="truncate text-[var(--fs-tiny)] text-foreground/45">{modelProtocolDefinition(value)?.create}</div></div> : <Tag color="orange">待配置</Tag> },
         { title: "计费", width: 165, render: (_, item) => (item.priceConfigured ? `${formatCredits(item.unitPriceMicrocredits)} 积分 / ${item.billingMode === "per_second" ? "秒" : "次"}` : <Tag color="orange">未配置价格</Tag>) },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => (enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
@@ -223,7 +223,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     </Form.Item>
                     <div className="mb-5 rounded-md border border-border/70 bg-foreground/[.025] px-3 py-2.5">
                         <div className="text-xs font-semibold">实际请求预览</div>
-                        <div className="mt-1 font-mono text-[11px] leading-5 text-foreground/60">{modelProtocolSummary(modelProtocol)}</div>
+                        <div className="mt-1 font-mono text-[var(--fs-label)] leading-5 text-foreground/60">{modelProtocolSummary(modelProtocol)}</div>
                     </div>
                     <Form.Item name="billingMode" label="计费方式" rules={[{ required: true }]}>
                         <Segmented block options={[{ label: "按次计费", value: "fixed_request" }, { label: "按秒计费", value: "per_second", disabled: modelCapability !== "video" }]} />

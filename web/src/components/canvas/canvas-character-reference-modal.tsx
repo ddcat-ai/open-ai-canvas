@@ -27,7 +27,7 @@ export function CanvasCharacterReferenceModal({ node, open, onClose }: { node: C
             <div className="grid h-[min(720px,calc(100dvh-48px))] min-h-0 grid-rows-[minmax(240px,42vh)_minmax(0,1fr)] overflow-hidden bg-background text-foreground md:grid-cols-[minmax(0,1.55fr)_minmax(360px,.85fr)] md:grid-rows-1">
                 <section className="relative min-h-0 overflow-hidden border-b border-border bg-foreground/[.035] md:border-b-0 md:border-r" aria-label="角色三视图">
                     <div className="absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-between px-5 pr-14">
-                        <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/80 bg-background/80 px-2.5 text-[11px] font-medium shadow-sm backdrop-blur-xl">
+                        <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/80 bg-background/80 px-2.5 text-[var(--fs-label)] font-medium shadow-sm backdrop-blur-xl">
                             <ImageIcon className="size-3.5" />
                             人物三视图
                         </span>
@@ -60,7 +60,7 @@ export function CanvasCharacterReferenceModal({ node, open, onClose }: { node: C
                             </span>
                             <div className="min-w-0">
                                 <h2 className="truncate text-xl font-semibold leading-7">{name}</h2>
-                                <p className="mt-1 text-[11px] text-foreground/45">项目角色引用 · 当前版本</p>
+                                <p className="mt-1 text-[var(--fs-label)] text-foreground/45">项目角色引用 · 当前版本</p>
                             </div>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-1.5">
@@ -109,7 +109,7 @@ function DetailSection({ icon, title, children }: { icon: ReactNode; title: stri
 
 function DetailRow({ label, value, emphasis = false }: { label: string; value?: string; emphasis?: boolean }) {
     return (
-        <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3 text-[12px] leading-5">
+        <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3 text-[var(--fs-caption)] leading-5">
             <dt className="text-foreground/42">{label}</dt>
             <dd className={value ? (emphasis ? "font-medium text-emerald-600 dark:text-emerald-300" : "text-foreground/78") : "text-foreground/28"}>{value || "未设置"}</dd>
         </div>
@@ -118,7 +118,7 @@ function DetailRow({ label, value, emphasis = false }: { label: string; value?: 
 
 function StatusDot({ icon, ready, readyLabel, emptyLabel }: { icon: ReactNode; ready: boolean; readyLabel: string; emptyLabel: string }) {
     return (
-        <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-background/65 text-foreground/42"}`}>
+        <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[var(--fs-tiny)] font-medium ${ready ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-background/65 text-foreground/42"}`}>
             <span className="[&_svg]:size-3">{icon}</span>
             {ready ? readyLabel : emptyLabel}
         </span>

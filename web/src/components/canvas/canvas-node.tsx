@@ -975,7 +975,7 @@ function ImageContent({
 
 function DeferredMediaLoad({ icon, label, disabled, onClick }: { icon: ReactNode; label: string; disabled: boolean; onClick: () => void }) {
     return (
-        <button type="button" data-canvas-no-zoom className="flex size-full flex-col items-center justify-center gap-2 rounded-[16px] bg-black text-white/75 transition hover:text-white disabled:cursor-wait" disabled={disabled} onClick={(event) => { event.stopPropagation(); onClick(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" data-canvas-no-zoom className="flex size-full flex-col items-center justify-center gap-2 rounded-[var(--r-2xl)] bg-black text-white/75 transition hover:text-white disabled:cursor-wait" disabled={disabled} onClick={(event) => { event.stopPropagation(); onClick(); }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <span className="grid size-10 place-items-center rounded-full bg-white/10">{icon}</span>
             <span className="text-xs font-medium">{label}</span>
         </button>

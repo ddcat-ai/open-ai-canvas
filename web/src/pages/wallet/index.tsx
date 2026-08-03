@@ -124,7 +124,7 @@ export default function WalletPage() {
                     <div className="flex items-center gap-3">
                         <WorkspaceSignalIcon variant="wallet" />
                         <div>
-                            <h1 className="text-[22px] font-semibold leading-7">积分中心</h1>
+                            <h1 className="text-[var(--fs-title)] font-semibold leading-7">积分中心</h1>
                             <p className="mt-1 text-xs leading-5 text-foreground/58">模型调用、冻结与退款都在同一条可追溯流水中。</p>
                         </div>
                     </div>
@@ -150,7 +150,7 @@ export default function WalletPage() {
                                     <div className="mt-4 text-5xl font-semibold tabular-nums">{formatCredits(account?.availableMicrocredits || 0, 6)}</div>
                                     <div className="mt-2 text-xs opacity-45">最近更新 {formatTime(account?.updatedAt)}</div>
                                 </div>
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-current/10 px-2.5 py-1 text-[11px] font-medium opacity-70">
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-current/10 px-2.5 py-1 text-[var(--fs-label)] font-medium opacity-70">
                                     <ShieldCheck className="size-3.5" />
                                     账户正常
                                 </span>
@@ -230,9 +230,9 @@ function BalanceMetric({ label, description, value, icon }: { label: string; des
     return (
         <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-current/[0.055] px-3 py-2.5">
             <div className="min-w-0">
-                <div className="text-[10px] opacity-48">{label}</div>
+                <div className="text-[var(--fs-tiny)] opacity-48">{label}</div>
                 <div className="mt-0.5 truncate text-base font-semibold tabular-nums">{formatCredits(value, 6)}</div>
-                <div className="truncate text-[10px] opacity-35">{description}</div>
+                <div className="truncate text-[var(--fs-tiny)] opacity-35">{description}</div>
             </div>
             <span className="shrink-0 opacity-30">{icon}</span>
         </div>

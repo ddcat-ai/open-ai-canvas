@@ -51,7 +51,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
         content: emptyTextDocument(),
         editorProps: {
             attributes: {
-                class: "min-h-full px-8 py-7 text-[15px] leading-7 outline-none sm:px-12 lg:px-16",
+                class: "min-h-full px-8 py-7 text-[var(--fs-body-lg)] leading-7 outline-none sm:px-12 lg:px-16",
                 "aria-label": "文本节点富文本编辑区",
             },
         },
@@ -129,8 +129,8 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                         placeholder="文本节点标题"
                         aria-label="文本节点标题"
                     />
-                    <span className="hidden shrink-0 text-[11px] sm:inline" style={{ color: theme.node.muted }}>{characterCount.toLocaleString("zh-CN")} 字 · {wordCount.toLocaleString("zh-CN")} 词</span>
-                    <span className="ml-auto hidden text-[11px] sm:inline" style={{ color: dirty ? theme.accent.primary : theme.node.muted }}>{dirty ? "有未保存修改" : "已保存"}</span>
+                    <span className="hidden shrink-0 text-[var(--fs-label)] sm:inline" style={{ color: theme.node.muted }}>{characterCount.toLocaleString("zh-CN")} 字 · {wordCount.toLocaleString("zh-CN")} 词</span>
+                    <span className="ml-auto hidden text-[var(--fs-label)] sm:inline" style={{ color: dirty ? theme.accent.primary : theme.node.muted }}>{dirty ? "有未保存修改" : "已保存"}</span>
                     <Button size="small" type="primary" icon={<Save className="size-3.5" />} loading={saving} disabled={!dirty} onClick={() => void save()}>保存</Button>
                     <Tooltip title="关闭">
                         <Button size="small" type="text" icon={<X className="size-4" />} aria-label="关闭文本编辑器" onClick={close} />
@@ -147,7 +147,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                     </div>
                 </div>
 
-                <footer className="flex h-8 shrink-0 items-center gap-3 border-t px-3 text-[10px]" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
+                <footer className="flex h-8 shrink-0 items-center gap-3 border-t px-3 text-[var(--fs-tiny)]" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
                     <span className="hidden sm:inline">支持标题、列表、引用、链接、代码和颜色格式</span>
                     <span className="ml-auto">Ctrl/⌘S 保存</span>
                 </footer>
@@ -253,7 +253,7 @@ function TextEditorToolbar({ editor }: { editor: Editor | null }) {
                 menu={{
                     items: [
                         { key: "code", icon: <Code2 className="size-3.5" />, label: "行内代码" },
-                        { key: "codeBlock", icon: <span className="text-[10px] font-bold">{"<>"}</span>, label: "代码块" },
+                        { key: "codeBlock", icon: <span className="text-[var(--fs-tiny)] font-bold">{"<>"}</span>, label: "代码块" },
                         { key: "rule", icon: <Minus className="size-3.5" />, label: "插入分隔线" },
                         { type: "divider" },
                         { key: "clear", icon: <Eraser className="size-3.5" />, label: "清除格式" },
