@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { createClientId } from "@/lib/client-id";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { getResourceOSSUrl } from "@/services/api/resources";
@@ -37,7 +38,7 @@ function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         ...(contentType ? { "Content-Type": contentType } : {}),
-        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "video", "X-Idempotency-Key": crypto.randomUUID() } : {}),
+        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "video", "X-Idempotency-Key": createClientId() } : {}),
     };
 }
 

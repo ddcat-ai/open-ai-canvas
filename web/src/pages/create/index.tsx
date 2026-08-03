@@ -8,6 +8,7 @@ import { Link } from "react-router";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
 import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { createClientId } from "@/lib/client-id";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
@@ -60,11 +61,11 @@ const countOptions = ["1", "2", "3", "4"];
 const conversationTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
 function newConversation(): CreationConversation {
-    return { id: crypto.randomUUID(), title: "新创作", updatedAt: new Date().toISOString(), messages: [] };
+    return { id: createClientId(), title: "新创作", updatedAt: new Date().toISOString(), messages: [] };
 }
 
 function newMessage(role: CreationMessage["role"], content: string, extra: Partial<CreationMessage> = {}): CreationMessage {
-    return { id: crypto.randomUUID(), role, content, createdAt: new Date().toISOString(), ...extra };
+    return { id: createClientId(), role, content, createdAt: new Date().toISOString(), ...extra };
 }
 
 export default function CreatePage() {
@@ -195,7 +196,7 @@ export default function CreatePage() {
         if (!next.length) return;
         void Promise.all(next.slice(0, 6).map(async (file) => {
             const dataUrl = await readFileAsDataUrl(file);
-            return { id: crypto.randomUUID(), name: file.name, type: file.type, dataUrl, previewUrl: dataUrl } satisfies CreationAttachment;
+            return { id: createClientId(), name: file.name, type: file.type, dataUrl, previewUrl: dataUrl } satisfies CreationAttachment;
         })).then((items) => setAttachments((current) => [...current, ...items].slice(0, 6))).catch(() => toast.error("参考图读取失败，请重试"));
     };
 

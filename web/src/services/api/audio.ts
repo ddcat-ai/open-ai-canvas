@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
+import { createClientId } from "@/lib/client-id";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { buildApiUrl, isSystemProxyBaseUrl, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
@@ -15,7 +16,7 @@ function aiHeaders(config: AiConfig) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
-        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "audio", "X-Idempotency-Key": crypto.randomUUID() } : {}),
+        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "audio", "X-Idempotency-Key": createClientId() } : {}),
     };
 }
 

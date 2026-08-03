@@ -2,6 +2,8 @@ import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { FileId } from "@excalidraw/excalidraw/element/types";
 import type { BinaryFileData, BinaryFiles, DataURL } from "@excalidraw/excalidraw/types";
 
+import { createClientId } from "@/lib/client-id";
+
 const INITIAL_DRAWING_SHAPE_MAX_DIMENSION = 1200;
 
 type DrawingImageSource = {
@@ -14,7 +16,7 @@ type DrawingImageSource = {
 
 export function createExcalidrawDrawingFromImage(source: DrawingImageSource) {
     const now = Date.now();
-    const fileId = crypto.randomUUID() as FileId;
+    const fileId = createClientId() as FileId;
     const scale = Math.min(1, INITIAL_DRAWING_SHAPE_MAX_DIMENSION / Math.max(source.width, source.height));
     const width = Math.max(1, Math.round(source.width * scale));
     const height = Math.max(1, Math.round(source.height * scale));
