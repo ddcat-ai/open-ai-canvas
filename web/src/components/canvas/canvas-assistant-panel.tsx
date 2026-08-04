@@ -146,9 +146,12 @@ type CanvasAssistantPanelProps = {
     onCollapse: () => void;
     cinematicEntry?: boolean;
     onCinematicEntryConsumed?: () => void;
+    width: number;
+    onWidthChange: (width: number) => void;
+    focusMode: boolean;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, projectId, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onApplyOps, canUndoOps, undoOpsCount, onUndoOps, onPasteImage, agentMode, onAgentModeChange, autoConnectLocal, closing, onCollapse, cinematicEntry = false, onCinematicEntryConsumed }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, projectId, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onApplyOps, canUndoOps, undoOpsCount, onUndoOps, onPasteImage, agentMode, onAgentModeChange, autoConnectLocal, closing, onCollapse, cinematicEntry = false, onCinematicEntryConsumed, width, onWidthChange, focusMode }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
@@ -157,7 +160,6 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const confirmTools = useCanvasAgentStore((state) => state.confirmTools);
     const setAgentState = useCanvasAgentStore((state) => state.setAgentState);
-    const [width, setWidth] = useState(520);
     const [view, setView] = useState<OnlineAgentTab>("chat");
     const [prompt, setPrompt] = useState("");
     const [cinematicEntryActive, setCinematicEntryActive] = useState(cinematicEntry);
@@ -683,7 +685,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
     };
 
     const startResize = () => {
-        const move = (event: MouseEvent) => setWidth(Math.min(760, Math.max(320, window.innerWidth - event.clientX)));
+        const move = (event: MouseEvent) => onWidthChange(Math.min(760, Math.max(320, window.innerWidth - event.clientX)));
         const stop = () => {
             setResizing(false);
             document.body.style.cursor = "";
@@ -832,22 +834,42 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         </>
     );
 
+    // 垂直分槽：顶部 72px（顶栏）+ 200px（活动任务最大预估高）+ 16px（间距）= 288px，留给活动任务面板
+    const PANEL_SLOT_TOP_OFFSET = 288;
+    const panelOffsetRight = focusMode ? 0 : 12;
+    const panelOffsetBottom = focusMode ? 0 : 16;
+
     return (
         <motion.div
-            className="flex shrink-0"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: closing ? 0 : width + 9, opacity: closing ? 0 : 1 }}
+            className="pointer-events-none absolute z-[var(--z-panel-floating)]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: closing ? 0 : 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: "clip", pointerEvents: closing ? "none" : undefined }}
+            style={{
+                top: PANEL_SLOT_TOP_OFFSET,
+                right: panelOffsetRight,
+                bottom: panelOffsetBottom,
+                width: closing ? 0 : width,
+                overflow: "clip",
+                pointerEvents: closing ? "none" : undefined,
+            }}
         >
             <motion.aside
-                className="relative my-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-lg"
-                initial={{ x: 48 }}
-                animate={{ x: closing ? 28 : 0 }}
+                className="relative flex shrink-0 flex-col overflow-hidden rounded-[var(--panel-radius)] border"
+                initial={{ x: 48, opacity: 0 }}
+                animate={{ x: closing ? 28 : 0, opacity: closing ? 0 : 1 }}
                 transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-                style={{ width, background: theme.spatial.elevated, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
+                style={{
+                    width,
+                    height: "100%",
+                    borderColor: theme.toolbar.border,
+                    background: theme.spatial.elevated,
+                    color: theme.node.text,
+                    boxShadow: focusMode ? "none" : `0 24px 72px ${theme.spatial.shadow}`,
+                }}
             >
-                <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" />
+                <button type="button" className="absolute inset-y-0 left-0 z-[var(--node-z-overlay)] w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" />
                 <AgentPanelChrome
                     theme={theme}
                     mode={agentMode}

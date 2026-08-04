@@ -492,7 +492,7 @@ function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { si
             type="button"
             aria-label={title || `${side === "left" ? "输入" : "输出"}连接点`}
             title={title || `${side === "left" ? "引入参考" : "连接到图片、视频或生成节点"}`}
-            className={`canvas-connection-handle absolute z-50 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 ${side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"}`}
+            className={`canvas-connection-handle absolute z-[var(--node-z-handle)] flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 ${side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"}`}
             style={{ top, width: 32 * inverseHitScale, height: 32 * inverseHitScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
             onPointerDown={onPointerDown}
         >

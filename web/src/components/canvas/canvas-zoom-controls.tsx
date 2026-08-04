@@ -86,7 +86,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-50" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {precisionOpen ? (
                     <motion.div
