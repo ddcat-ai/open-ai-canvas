@@ -122,7 +122,7 @@ function FaceThumbnail({ dataUrl, imageWidth, imageHeight, box }: { dataUrl: str
     const scaleX = imageWidth / Math.max(1, box.width);
     const scaleY = imageHeight / Math.max(1, box.height);
     return (
-        <span className="relative block size-6 shrink-0 overflow-hidden rounded-[6px] bg-black/20">
+        <span className="relative block size-6 shrink-0 overflow-hidden rounded-[var(--r-sm)] bg-black/20">
             <img src={dataUrl} alt="" draggable={false} className="pointer-events-none absolute max-w-none" style={{ width: `${scaleX * 100}%`, height: `${scaleY * 100}%`, left: `${-(box.x / Math.max(1, box.width)) * 100}%`, top: `${-(box.y / Math.max(1, box.height)) * 100}%` }} />
         </span>
     );

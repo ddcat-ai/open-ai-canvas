@@ -73,7 +73,7 @@ function AgentModeSwitch({ value, theme, onChange }: { value: CanvasAgentMode; t
                 const active = value === item;
                 const Icon = item === "online" ? Globe2 : Laptop;
                 return (
-                    <button key={item} type="button" className="inline-flex h-7 items-center gap-1 rounded-[5px] px-2 transition-colors" style={{ background: active ? theme.node.fill : "transparent", color: active ? theme.node.text : theme.node.muted, boxShadow: active ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item)} aria-pressed={active}>
+                    <button key={item} type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 transition-colors" style={{ background: active ? theme.node.fill : "transparent", color: active ? theme.node.text : theme.node.muted, boxShadow: active ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item)} aria-pressed={active}>
                         <Icon className="size-3" />
                         {item === "online" ? "网站" : "本机"}
                     </button>
@@ -100,7 +100,7 @@ export function AgentChatEmptyState({ theme, nodeCount, onSelect }: { theme: Can
                     <span className="grid size-7 place-items-center rounded-md" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}><Bot className="size-3.5" /></span>
                     <span className="text-[var(--fs-label)] font-medium" style={{ color: theme.node.muted }}>{nodeCount} 个节点已就绪</span>
                 </div>
-                <h2 className="mt-3 text-[19px] font-semibold leading-6" style={{ color: theme.node.text }}>从当前画布开始</h2>
+                <h2 className="mt-3 text-[var(--fs-heading-lg)] font-semibold leading-6" style={{ color: theme.node.text }}>从当前画布开始</h2>
                 <div className="mt-4 grid grid-cols-1 gap-1">
                     {visibleStarterActions.map(({ label, icon: Icon }) => (
                         <button key={label} type="button" className="group flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-xs font-medium transition-colors" style={{ color: theme.node.text }} onMouseEnter={(event) => { event.currentTarget.style.background = theme.spatial.surface; }} onMouseLeave={(event) => { event.currentTarget.style.background = "transparent"; }} onFocus={(event) => { event.currentTarget.style.background = theme.spatial.surface; }} onBlur={(event) => { event.currentTarget.style.background = "transparent"; }} onClick={() => onSelect(label)}>
