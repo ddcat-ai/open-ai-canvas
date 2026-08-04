@@ -248,7 +248,8 @@ function modelMenuMeta(model: string, capability?: ModelCapability): { descripti
 
 export function ModelIcon({ model }: { model: string }) {
     const icon = resolveModelIcon(modelOptionName(model));
-    return icon ? <img src={icon} alt="" className="size-3.5 shrink-0 dark:invert" /> : <Cpu className="size-3.5 shrink-0 opacity-70" />;
+    const monochrome = icon === "/icons/openai.svg" || icon === "/icons/grok.svg";
+    return icon ? <img src={icon} alt="" className={cn("size-3.5 shrink-0", monochrome && "dark:invert")} /> : <Cpu className="size-3.5 shrink-0 opacity-70" />;
 }
 
 export function resolveModelIcon(model: string) {
