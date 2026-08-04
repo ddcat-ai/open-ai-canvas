@@ -261,6 +261,31 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.DataFromReader(stream.StatusCode, stream.ContentLength, resource.MimeType, stream.Body, nil)
 	})
+	r.GET("/public/resources/:id/file", func(c *gin.Context) {
+		stream, err := svc.OpenPublicResourceRange(c.Param("id"), c.Query("expires"), c.Query("signature"), c.GetHeader("Range"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		defer stream.Body.Close()
+		resource := stream.Resource
+		if resource.MimeType == "" {
+			resource.MimeType = "application/octet-stream"
+		}
+		c.Header("Cache-Control", "public, max-age=0, must-revalidate")
+		c.Header("Accept-Ranges", "bytes")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("X-Content-Type-Options", "nosniff")
+		if stream.ContentRange != "" {
+			c.Header("Content-Range", stream.ContentRange)
+		}
+		if seeker, ok := stream.Body.(io.ReadSeeker); ok {
+			c.Header("Content-Type", resource.MimeType)
+			http.ServeContent(c.Writer, c.Request, resource.ID, resource.UpdatedAt, seeker)
+			return
+		}
+		c.DataFromReader(stream.StatusCode, stream.ContentLength, resource.MimeType, stream.Body, nil)
+	})
 	r.GET("/assets", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
