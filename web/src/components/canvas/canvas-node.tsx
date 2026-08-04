@@ -288,7 +288,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     return (
         <div
             data-node-id={data.id}
-            className={`node-element absolute flex select-none flex-col ${dragOffset ? "cursor-grabbing" : data.type === CanvasNodeType.Drawing ? "cursor-pointer" : "cursor-default"} ${isSelected ? "z-50" : "z-10"}`}
+            className={`node-element absolute flex select-none flex-col ${dragOffset ? "cursor-grabbing" : data.type === CanvasNodeType.Drawing ? "cursor-pointer" : "cursor-default"} ${isSelected ? "z-[var(--z-node-active)]" : "z-[var(--z-node)]"}`}
             style={{
                 transform: `translate(${data.position.x + (dragOffset?.x || 0)}px, ${data.position.y + (dragOffset?.y || 0)}px)`,
                 width: data.width,
@@ -416,14 +416,14 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {flushMediaContent ? (
                     <div
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 z-30 rounded-[inherit]"
+                        className="pointer-events-none absolute inset-0 z-[var(--node-z-content)] rounded-[inherit]"
                         style={{ boxShadow: `inset 0 0 0 1px ${mediaBorderColor}` }}
                     />
                 ) : null}
 
                 {(hasImageContent || hasVideoContent) && !readOnly ? (
                     <div
-                        className={`absolute bottom-[10%] left-1/2 z-40 -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${hovered || isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
+                        className={`absolute bottom-[10%] left-1/2 z-[var(--node-z-overlay)] -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
                         onMouseDown={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -442,7 +442,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {data.type === CanvasNodeType.Text && data.metadata?.workflowKind !== "character" && !readOnly ? (
                     <div
-                        className={`absolute bottom-[10%] left-1/2 z-40 -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${hovered || isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
+                        className={`absolute bottom-[10%] left-1/2 z-[var(--node-z-overlay)] -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
                         onMouseDown={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -462,7 +462,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {data.metadata?.versionLabel ? (
                     <button
                         type="button"
-                        className="absolute left-3 top-3 z-40 inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-semibold backdrop-blur transition hover:brightness-110"
+                        className="absolute left-3 top-3 z-[var(--node-z-overlay)] inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[var(--fs-tiny)] font-semibold backdrop-blur transition hover:brightness-110"
                         style={{ background: theme.toolbar.panel, borderColor: data.metadata.versionPrimary ? theme.node.activeStroke : theme.toolbar.border, color: data.metadata.versionPrimary ? theme.node.activeStroke : theme.node.text }}
                         title="查看版本对比"
                         onMouseDown={(event) => event.stopPropagation()}
@@ -472,7 +472,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </button>
                 ) : null}
                 {showStatusTrack ? (
-                    <div className={`absolute right-3 top-3 z-40 flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
+                    <div className={`absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
                         {resourceLabel ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
                         {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
@@ -481,7 +481,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </div>
                 ) : null}
                 {assetTags.length || (showImageInfo && hasImageContent) ? (
-                    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex items-end justify-between gap-2">
+                    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[var(--node-z-overlay)] flex items-end justify-between gap-2">
                         {assetTags.length ? <AssetTagBadges tags={assetTags} theme={theme} /> : null}
                         {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
                     </div>
@@ -1128,7 +1128,7 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
         "bottom-right": "-bottom-[14px] -right-[14px] cursor-nwse-resize",
     }[corner];
 
-    return <div className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
+    return <div className={`absolute z-[var(--node-z-handle)] size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
 }
 
 const NODE_EXTERNAL_HEADER_MIN_SCALE = 0.35;
@@ -1154,7 +1154,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
 
     return (
         <div
-            className="canvas-node-external-header absolute bottom-full left-0 z-40 flex h-6 items-center gap-1 overflow-hidden"
+            className="canvas-node-external-header absolute bottom-full left-0 z-[var(--node-z-overlay)] flex h-6 items-center gap-1 overflow-hidden"
             style={{ maxWidth: maxHeaderWidth, color: active ? theme.node.text : theme.node.label, transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`, transformOrigin: "left bottom" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1264,7 +1264,7 @@ function ConnectionSideRail({ side, scale, visible, theme, onPointerDown }: { si
     return (
         <button
             type="button"
-            className={`group absolute top-1/2 z-30 touch-none -translate-y-1/2 outline-none transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+            className={`group absolute top-1/2 z-[var(--node-z-overlay)] touch-none -translate-y-1/2 outline-none transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             style={{ width: 56 * inverseScale, height: `min(100%, ${72 * inverseScale}px)`, ...(side === "left" ? { right: "100%" } : { left: "100%" }) }}
             onPointerEnter={updateAnchor}
             onPointerMove={updateAnchor}

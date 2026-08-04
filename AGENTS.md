@@ -61,7 +61,7 @@
 
 ### 三层结构
 
-- **Primitive 层**：纯值，无语义，不随主题变。包含 9 个维度：色彩（neutral 色板 + 节点类型色板 + 状态色）、间距（4px 栅格 `--space-0.5` ~ `--space-24`）、字号（10 档 `--fs-micro` ~ `--fs-display`）、圆角（10 档 `--r-xs` ~ `--r-full`）、阴影（`--shadow-xs` ~ `--shadow-2xl` + glow）、Elevation（12 档 `--z-canvas` ~ `--z-max`）、动效（duration 5 档 + easing 5 曲线 + delay 5 档 + motion-scale）、描边（4 档）、不透明度（6 档）。
+- **Primitive 层**：纯值，无语义，不随主题变。包含 9 个维度：色彩（neutral 色板 + 节点类型色板 + 状态色）、间距（4px 栅格 `--space-0.5` ~ `--space-24`）、字号（10 档 `--fs-micro` ~ `--fs-display`）、圆角（10 档 `--r-xs` ~ `--r-full`）、阴影（`--shadow-xs` ~ `--shadow-2xl` + glow）、Elevation（14 档 `--z-canvas` ~ `--z-max`）、动效（duration 5 档 + easing 5 曲线 + delay 5 档 + motion-scale）、描边（4 档）、不透明度（6 档）。
 - **Semantic 层**：引用 Primitive，随主题切换。包含通用语义色（`--bg`/`--fg`/`--border-semantic`）、Canvas 语义（`--cn-text`/`--cn-muted`/`--cn-stroke` 等）、Aceternity spatial 语义（`--cn-spatial-*`）、节点类型语义（`--cn-type-*`）、状态语义（`--status-*`）。
 - **Component 层**：引用 Semantic，某组件专属。包含 Dock（`--dock-*`）、Node（`--node-*`）、Modal（`--modal-*`）、Panel（`--panel-*`）、Prompt 面板（`--prompt-panel-*`）、进度条（`--progress-bar-*`）、缩放控制（`--zoom-control-*`）。
 

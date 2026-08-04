@@ -26,7 +26,6 @@ type UseCanvasRenderModelOptions = {
     collapsingBatchIds: Set<string>;
     addedSkills: Skill[];
     directorScenes?: DirectorScene[];
-    toolbarNodeId: string | null;
     infoNodeId: string | null;
     cropNodeId: string | null;
     maskEditNodeId: string | null;
@@ -57,7 +56,6 @@ export function useCanvasRenderModel({
     collapsingBatchIds,
     addedSkills,
     directorScenes,
-    toolbarNodeId,
     infoNodeId,
     cropNodeId,
     maskEditNodeId,
@@ -140,7 +138,8 @@ export function useCanvasRenderModel({
         return nodes.filter((node) => (node.metadata?.versionOfNodeId || node.id) === versionCompareRootId).sort((a, b) => (a.metadata?.versionLabel || "").localeCompare(b.metadata?.versionLabel || ""));
     }, [nodes, versionCompareRootId]);
 
-    const toolbarCandidate = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
+    const selectedNodeIdForToolbar = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
+    const toolbarCandidate = selectedNodeIdForToolbar ? nodeById.get(selectedNodeIdForToolbar) || null : null;
     const toolbarNode = isFrameNode(toolbarCandidate) ? null : toolbarCandidate;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
