@@ -13,6 +13,7 @@ import { cancelGenerationTask, createAgentSession, createGenerationTask, listGen
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { modelDisplayName, resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { formatCredits } from "@/constant/credits";
 import { listProjects, type ProjectSummary } from "@/services/api/projects";
 
@@ -29,6 +30,8 @@ export default function TasksPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const projects = useCanvasStore((state) => state.projects);
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const [form] = Form.useForm<CreateTaskInput & { operation: string }>();
     const [tasks, setTasks] = useState<GenerationTask[]>([]);
     const [domainProjects, setDomainProjects] = useState<ProjectSummary[]>([]);
@@ -74,6 +77,10 @@ export default function TasksPage() {
     }), [canvasById, domainProjectNameById, keyword, projectFilter, statusFilter, tasks]);
 
     useEffect(() => {
+        if (!shortDramaEnabled) {
+            setDomainProjects([]);
+            return;
+        }
         let cancelled = false;
         void listProjects().then((result) => {
             if (!cancelled) setDomainProjects(result.projects);
@@ -81,7 +88,7 @@ export default function TasksPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [shortDramaEnabled]);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
@@ -306,7 +313,7 @@ export default function TasksPage() {
                                 <div className="truncate text-[var(--fs-tiny)] text-foreground/45">{formatTaskKind(task)} · {formatModelName(effectiveConfig, task)}</div>
                                 <div className="truncate text-[var(--fs-tiny)] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
                                 <div className="flex items-center justify-between gap-3">
-                                    <div className="flex min-w-0 items-center gap-2 text-[var(--fs-label)]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span><TaskBilling billing={task.billing} /></div>
+                                    <div className="flex min-w-0 items-center gap-2 text-[var(--fs-label)]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span>{creditsEnabled ? <TaskBilling billing={task.billing} /> : null}</div>
                                     <Space size={0}>
                                         <Button type="text" size="small" aria-label="查看详情" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)} />
                                         {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")} /> : null}
@@ -348,13 +355,13 @@ export default function TasksPage() {
                 responsive: ["lg"],
                 render: (value) => <TaskDate value={value} />,
             },
-            {
+            ...(creditsEnabled ? [{
                 title: "消耗积分",
                 width: 130,
                 align: "right",
                 responsive: ["md"],
                 render: (_, task) => <TaskBilling billing={task.billing} />,
-            },
+            }] as ColumnsType<GenerationTask> : []),
             {
                 title: "操作",
                 width: 168,
@@ -369,7 +376,7 @@ export default function TasksPage() {
                 ),
             },
         ],
-        [actingId, canvasById, domainProjectNameById, effectiveConfig, openTaskDetail],
+        [actingId, canvasById, creditsEnabled, domainProjectNameById, effectiveConfig, openTaskDetail],
     );
 
     return (
@@ -575,7 +582,7 @@ function taskAttentionReason(task: GenerationTask) {
 function taskEmptyState(status: TaskStatusFilter) {
     if (status === "all") return { title: "还没有任务", description: "新提交的生成会在这里显示状态和实时进度。" };
     if (status === "active") return { title: "没有运行中的任务", description: "新提交的生成会在这里显示排队状态和实时进度。" };
-    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和积分消耗会保留在这里。" };
+    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和执行记录会保留在这里。" };
     return { title: "目前没有需要处理的任务", description: "失败或取消的生成会出现在这里，并提供原因和可用操作。" };
 }
 

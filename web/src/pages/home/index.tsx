@@ -27,7 +27,8 @@ export default function IndexPage() {
     const canvasProjects = useCanvasStore((state) => state.projects);
     const user = useUserStore((state) => state.user);
     const userHydrated = useUserStore((state) => state.hydrated);
-    const domainProjectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects, enabled: Boolean(user) });
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    const domainProjectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects, enabled: Boolean(user && shortDramaEnabled) });
     const domainProjects = useMemo(
         () => [...(domainProjectsQuery.data?.projects || [])].sort((left, right) => right.project.updatedAt.localeCompare(left.project.updatedAt)),
         [domainProjectsQuery.data],
@@ -36,7 +37,7 @@ export default function IndexPage() {
     const activeProjectQuery = useQuery({
         queryKey: ["project", activeProject?.project.id],
         queryFn: () => getProject(activeProject!.project.id),
-        enabled: Boolean(user && activeProject?.project.id),
+        enabled: Boolean(user && shortDramaEnabled && activeProject?.project.id),
     });
     const recentIndependentCanvases = useMemo(
         () => canvasProjects.filter((project) => !project.projectId).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, 3),
@@ -55,15 +56,15 @@ export default function IndexPage() {
         });
     };
 
-    const loadingUserWorkspace = !userHydrated || (Boolean(user) && domainProjectsQuery.isLoading);
+    const loadingUserWorkspace = !userHydrated || (Boolean(user && shortDramaEnabled) && domainProjectsQuery.isLoading);
     return (
         <main className="app-user-content app-workspace-canvas h-full overflow-y-auto text-foreground">
             <div className="app-home-workbench mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
                 {loadingUserWorkspace ? (
                     <WorkspaceLoadingState className="mt-3 max-w-[980px]" label="正在恢复工作台" detail="读取项目、章节和最近画布" rows={5} />
-                ) : user && domainProjectsQuery.isError ? (
+                ) : user && shortDramaEnabled && domainProjectsQuery.isError ? (
                     <WorkspaceErrorState title="项目工作台加载失败" description={domainProjectsQuery.error instanceof Error ? domainProjectsQuery.error.message : "暂时无法读取项目列表。"} onRetry={() => void domainProjectsQuery.refetch()} />
-                ) : activeProject ? (
+                ) : shortDramaEnabled && activeProject ? (
                     <ReturningWorkspace
                         summary={activeProject}
                         detail={activeProjectQuery.data}
@@ -79,6 +80,7 @@ export default function IndexPage() {
                         canvasHydrated={canvasHydrated}
                         recentIndependentCanvases={recentIndependentCanvases}
                         onCreateIndependentCanvas={createIndependentCanvas}
+                        shortDramaEnabled={shortDramaEnabled}
                     />
                 )}
             </div>
@@ -95,9 +97,10 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
     recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
     onCreateIndependentCanvas: () => void;
 }) {
+    const taskCenterEnabled = useUserStore((state) => state.features.taskCenterEnabled);
     const stage = detail ? projectDetailStage(detail) : { label: "进行中", detail: "读取项目进度" };
     const continueTarget = detail ? projectContinueTarget(detail) : { href: `/projects/${summary.project.id}/overview`, title: summary.project.name, context: "打开项目概览", updatedAt: summary.project.updatedAt };
-    const nextActions = detail ? projectNextActions(detail, 3) : [];
+    const nextActions = detail ? projectNextActions(detail, 4).filter((action) => taskCenterEnabled || !action.href.startsWith("/tasks")).slice(0, 3) : [];
     const completion = projectSummaryCompletion(summary);
     const attentionCount = detail ? projectAttentionCount(detail) : 0;
     return (
@@ -194,11 +197,12 @@ function ReturningWorkspace({ summary, detail, detailLoading, detailError, recen
     );
 }
 
-function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependentCanvases, onCreateIndependentCanvas }: {
+function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependentCanvases, onCreateIndependentCanvas, shortDramaEnabled }: {
     authenticated: boolean;
     canvasHydrated: boolean;
     recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
     onCreateIndependentCanvas: () => void;
+    shortDramaEnabled: boolean;
 }) {
     const projectHref = authenticated ? "/projects?create=1" : `/login?next=${encodeURIComponent("/projects?create=1")}`;
     return (
@@ -208,7 +212,7 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
                 <h1 className="mt-5 max-w-[780px] text-3xl font-semibold leading-[1.08] sm:text-4xl lg:text-5xl">把一个故事推进到可交付的镜头</h1>
                 <p className="mt-5 max-w-[680px] text-sm leading-7 text-foreground/58 sm:text-base">从章节、角色和参考图开始，逐步生成分镜、视频和可复用资产。需要自由探索时，也可以先打开一张自由画布。</p>
                 <div className="mt-7 flex flex-wrap items-center gap-3">
-                    <Link className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to={projectHref}><FolderKanban className="size-4" />创建项目</Link>
+                    {shortDramaEnabled ? <Link className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to={projectHref}><FolderKanban className="size-4" />创建项目</Link> : null}
                     <Button size="large" disabled={!canvasHydrated} icon={<LayoutGrid className="size-4" />} onClick={onCreateIndependentCanvas}>打开画布</Button>
                 </div>
             </section>
@@ -230,7 +234,7 @@ function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependen
                 <div>
                     <h2 className="text-base font-semibold">两种开始方式</h2>
                     <div className="mt-3 divide-y divide-border/75 border-y border-border/75">
-                        <StartMode icon={<Clapperboard className="size-4" />} title="项目" description="适合短剧、故事板和多章节制作。集中管理章节、资产、画布与进度。" action="创建项目" href={projectHref} />
+                        {shortDramaEnabled ? <StartMode icon={<Clapperboard className="size-4" />} title="项目" description="适合短剧、故事板和多章节制作。集中管理章节、资产、画布与进度。" action="创建项目" href={projectHref} /> : null}
                         <StartMode icon={<Sparkles className="size-4" />} title="自由画布" description="适合快速试图、提示词实验和不需要章节流程的自由创作。" action="打开画布" onClick={onCreateIndependentCanvas} />
                     </div>
                 </div>

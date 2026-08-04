@@ -46,8 +46,8 @@ export default function StorageSettingsPage() {
 
     return (
         <AdminPageFrame title="存储服务" description="OSS 与资源存储">
-            <div className="mx-auto max-w-5xl space-y-5">
-                <div className="rounded-lg border border-border bg-muted/25 p-4 text-foreground/75">
+            <div className="space-y-4 pt-4">
+                <div className="border-b border-border px-1 pb-4 text-foreground/75">
                     <div className="flex items-start gap-3"><span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-muted/60"><Info className="size-4" /></span><div><div className="text-sm font-semibold text-foreground">资源存储规则</div><p className="mt-1 text-xs leading-6 text-foreground/55">启用后，新上传和生成的媒体由后端写入 OSS；未启用时写入后端数据卷。资源统一通过登录鉴权接口读取，不直接暴露 OSS 对象地址。</p></div></div>
                 </div>
                 <SettingsSectionCard
@@ -70,7 +70,7 @@ export default function StorageSettingsPage() {
                         </div>
                     </Form>
                 </SettingsSectionCard>
-                <div className="grid gap-3 text-xs text-foreground/55 sm:grid-cols-3"><Notice icon={<Cloud className="size-3.5" />} text="新资源优先上传 OSS" /><Notice icon={<ShieldCheck className="size-3.5" />} text="AccessKey Secret 不回显" /><Notice icon={<KeyRound className="size-3.5" />} text="异常时自动本地降级" /></div>
+                <div className="grid border-y border-border text-xs text-foreground/55 sm:grid-cols-3 sm:divide-x sm:divide-border"><Notice icon={<Cloud className="size-3.5" />} text="新资源优先上传 OSS" /><Notice icon={<ShieldCheck className="size-3.5" />} text="AccessKey Secret 不回显" /><Notice icon={<KeyRound className="size-3.5" />} text="异常时自动本地降级" /></div>
             </div>
         </AdminPageFrame>
     );
@@ -78,4 +78,4 @@ export default function StorageSettingsPage() {
 
 function formValues(setting?: AdminOSSSetting | null): OSSFormValues { return { enabled: setting?.enabled || false, provider: setting?.provider || "aliyun", region: setting?.region || "", endpoint: setting?.endpoint || "", bucket: setting?.bucket || "", accessKeyId: setting?.accessKeyId || "", accessKeySecret: "", pathPrefix: setting?.pathPrefix || "" }; }
 function formatTime(value?: string) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--"; }
-function Notice({ icon, text }: { icon: ReactNode; text: string }) { return <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2"><span className="text-foreground/40">{icon}</span><span>{text}</span></div>; }
+function Notice({ icon, text }: { icon: ReactNode; text: string }) { return <div className="flex items-center gap-2 px-3 py-2.5"><span className="text-foreground/40">{icon}</span><span>{text}</span></div>; }

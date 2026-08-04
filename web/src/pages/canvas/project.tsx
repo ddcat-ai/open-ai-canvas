@@ -49,7 +49,7 @@ import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
-import { CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
+import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
 import {
     createCanvasNode,
     getInputSummary,
@@ -194,6 +194,7 @@ function InfiniteCanvasPage() {
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const defaultDrawingEngine = useUserStore((state) => state.drawingEngine.defaultEngine);
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
@@ -331,7 +332,7 @@ function InfiniteCanvasPage() {
         cleanupAssetImages,
         cleanupCanvasFiles,
     });
-    const linkedProjectId = currentProject?.projectId || "";
+    const linkedProjectId = shortDramaEnabled ? currentProject?.projectId || "" : "";
     const linkedProjectQuery = useQuery({ queryKey: ["project", linkedProjectId], queryFn: () => getProject(linkedProjectId), enabled: Boolean(linkedProjectId) });
     useEffect(() => {
         if (!projectLoaded || !linkedProjectQuery.data) return;
@@ -1348,13 +1349,35 @@ function InfiniteCanvasPage() {
         }
         focusCanvasNode(styleNode.id);
     }, [focusCanvasNode, message, nodesRef]);
+    const emptyCanvasState = nodes.length ? null : !shortDramaEnabled ? (
+        <CanvasFreeformEmptyState onUpload={() => handleUploadRequest()} onAddText={() => createNode(CanvasNodeType.Text)} />
+    ) : currentProject?.projectId ? (
+        <CanvasLinkedProjectEmptyState
+            projectName={linkedProjectQuery.data?.project.name || currentProject.title}
+            hasChapter={Boolean(linkedProjectQuery.data?.units.length)}
+            onAddFirstChapter={() => {
+                const first = linkedProjectQuery.data?.units.slice().sort((left, right) => left.position - right.position)[0];
+                if (first) void handleProjectChapterInsert({ id: first.id, projectId: currentProject.projectId!, title: first.title, position: first.position });
+            }}
+            onOpenAssets={() => openProjectAssets()}
+            onAddText={() => createNode(CanvasNodeType.Text)}
+        />
+    ) : (
+        <CanvasShortDramaEmptyState
+            onCreatePipeline={createShortDramaPipeline}
+            onOpenAgent={() => { setCinematicAgentEntry(true); setAgentMode("online"); openAgent("online"); }}
+            onUpload={() => handleUploadRequest()}
+            onAddText={() => createNode(CanvasNodeType.Text)}
+            onAddScript={() => createNode(CanvasNodeType.Script)}
+        />
+    );
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
         <>
         <a href="#canvas-main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[var(--z-toast)] focus:rounded-md focus:border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg">跳转到画布主内容</a>
         <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: theme.canvas.background, color: theme.node.text }}>
-            {currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} /> : null}
+            {shortDramaEnabled && currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} /> : null}
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}
@@ -1381,7 +1404,7 @@ function InfiniteCanvasPage() {
                     mediaPerformanceMode={mediaPerformanceMode}
                     onMediaPerformanceModeChange={setMediaPerformanceMode}
                     onOpenSearch={() => setNodeSearchOpen(true)}
-                    projectContext={currentProject?.projectId ? {
+                    projectContext={shortDramaEnabled && currentProject?.projectId ? {
                         ...canvasContext,
                         projectId: currentProject.projectId,
                         projectName: linkedProjectQuery.data?.project.name || currentProject.title,
@@ -1408,7 +1431,7 @@ function InfiniteCanvasPage() {
 
                 <CanvasActiveTaskPanel tasks={activeTasks} />
 
-                {!currentProject?.projectId ? <CanvasShortDramaGuide progress={shortDramaProgress} collapsed={shortDramaGuideCollapsed} onToggle={() => setShortDramaGuideCollapsed((value) => !value)} onSkip={skipShortDramaGuide} onStepClick={activateShortDramaStep} /> : null}
+                {shortDramaEnabled && !currentProject?.projectId ? <CanvasShortDramaGuide progress={shortDramaProgress} collapsed={shortDramaGuideCollapsed} onToggle={() => setShortDramaGuideCollapsed((value) => !value)} onSkip={skipShortDramaGuide} onStepClick={activateShortDramaStep} /> : null}
 
                 <CanvasShareModal projectId={projectId} open={shareModalOpen} onClose={() => setShareModalOpen(false)} beforeCreate={saveCanvasProject} />
 
@@ -1531,7 +1554,7 @@ function InfiniteCanvasPage() {
 
                 <CanvasFileDropOverlay active={fileDropActive} theme={theme} />
 
-                {!nodes.length ? currentProject?.projectId ? <CanvasLinkedProjectEmptyState projectName={linkedProjectQuery.data?.project.name || currentProject.title} hasChapter={Boolean(linkedProjectQuery.data?.units.length)} onAddFirstChapter={() => { const first = linkedProjectQuery.data?.units.slice().sort((left, right) => left.position - right.position)[0]; if (first) void handleProjectChapterInsert({ id: first.id, projectId: currentProject.projectId!, title: first.title, position: first.position }); }} onOpenAssets={() => openProjectAssets()} onAddText={() => createNode(CanvasNodeType.Text)} /> : <CanvasShortDramaEmptyState onCreatePipeline={createShortDramaPipeline} onOpenAgent={() => { setCinematicAgentEntry(true); setAgentMode("online"); openAgent("online"); }} onUpload={() => handleUploadRequest()} onAddText={() => createNode(CanvasNodeType.Text)} onAddScript={() => createNode(CanvasNodeType.Script)} /> : null}
+                {emptyCanvasState}
 
                 {pendingConnectionCreate ? <CanvasConnectionCreateMenu pending={pendingConnectionCreate} viewport={viewport} viewportSize={size} containerRef={containerRef} canCreateDrawing={canCreateDrawingFromConnection} onCreate={(type) => void createConnectedNode(type, pendingConnectionCreate)} onClose={cancelPendingConnectionCreate} /> : null}
 
@@ -1581,7 +1604,7 @@ function InfiniteCanvasPage() {
                     workspaceMode={workspaceMode}
                     canvasTool={canvasTool}
                     onToolChange={setCanvasTool}
-                    isProjectLinked={Boolean(currentProject?.projectId)}
+                    isProjectLinked={Boolean(shortDramaEnabled && currentProject?.projectId)}
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}
                     backgroundMode={backgroundMode}

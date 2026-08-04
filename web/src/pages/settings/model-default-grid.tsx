@@ -11,6 +11,7 @@ import {
     type AiConfig,
     type ModelCapability,
 } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 
 type DefaultModelKey = "imageModel" | "videoModel" | "textModel" | "audioModel";
 
@@ -28,6 +29,7 @@ const groups: Array<{
 ];
 
 export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onChange: (key: DefaultModelKey, model: string) => void }) {
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     return (
         <div className="divide-y divide-border/70">
             {groups.map((group) => {
@@ -72,7 +74,7 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                                     <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--fs-tiny)] text-foreground/45">
                                                         <span className="max-w-full truncate">{channel.name || "未命名渠道"}</span>
                                                         <span className="rounded border border-border/70 px-1 py-px text-[var(--fs-micro)]">{channel.scope === "system" ? "系统" : "自定义"}</span>
-                                                        {cost ? <Tag color="gold" className="!m-0 !px-1.5 !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{formatPrice(cost.unitPriceMicrocredits)} 积分/{cost.billingMode === "per_second" ? "秒" : "次"}</Tag> : null}
+                                                        {creditsEnabled && cost ? <Tag color="gold" className="!m-0 !px-1.5 !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{formatPrice(cost.unitPriceMicrocredits)} 积分/{cost.billingMode === "per_second" ? "秒" : "次"}</Tag> : null}
                                                     </span>
                                                 </span>
                                                 <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", selected ? "border-[var(--workspace-accent)] bg-[var(--workspace-accent)] text-white" : "border-border text-transparent group-hover:border-foreground/30")}>

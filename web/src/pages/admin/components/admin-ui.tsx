@@ -188,19 +188,21 @@ export function SettingsSectionCard({
     className?: string;
 }) {
     return (
-        <section className={cn("overflow-hidden rounded-lg border border-border bg-background", className)}>
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <section className={cn("border-y border-border bg-background lg:grid lg:grid-cols-4", className)}>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4 lg:col-span-1 lg:block lg:border-b-0 lg:border-r">
                 <div className="flex min-w-0 items-start gap-3">
                     {icon ? <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/40">{icon}</span> : null}
                     <div className="min-w-0">
-                        <h2 className="text-base font-semibold">{title}</h2>
+                        <h2 className="text-sm font-semibold leading-5">{title}</h2>
                         <p className="mt-1 text-xs leading-5 text-foreground/55">{description}</p>
                     </div>
                 </div>
-                {isStatusConfig(status) ? <Tag variant="filled" color={status.color}>{status.label}</Tag> : status}
+                {status ? <div className="shrink-0 lg:mt-4">{isStatusConfig(status) ? <Tag variant="filled" color={status.color}>{status.label}</Tag> : status}</div> : null}
             </div>
-            {children}
-            {footer ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">{footer}</div> : null}
+            <div className="min-w-0 lg:col-span-3">
+                {children}
+                {footer ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">{footer}</div> : null}
+            </div>
         </section>
     );
 }

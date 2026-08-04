@@ -16,7 +16,7 @@ func TestNormalizeTaskInputMakesTypedProviderConfigBillable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ChannelModel{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ChannelModel{}); err != nil {
 		t.Fatal(err)
 	}
 	channelModel := model.ChannelModel{

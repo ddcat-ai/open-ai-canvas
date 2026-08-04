@@ -127,7 +127,12 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits, "drawingEngine": drawingEngine})
+		features, err := svc.FeatureAvailability()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		if _, err := currentUser(c, svc); err != nil {
@@ -750,11 +755,13 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 			failService(c, err)
 			return
 		}
-		billingOrderID = order.ID
-		if err := svc.MarkBillingRunning(billingOrderID); err != nil {
-			_ = svc.RefundBilling(billingOrderID, "系统渠道请求尚未发出")
-			failService(c, err)
-			return
+		if order != nil {
+			billingOrderID = order.ID
+			if err := svc.MarkBillingRunning(billingOrderID); err != nil {
+				_ = svc.RefundBilling(billingOrderID, "系统渠道请求尚未发出")
+				failService(c, err)
+				return
+			}
 		}
 	}
 	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, bytes.NewReader(body))
