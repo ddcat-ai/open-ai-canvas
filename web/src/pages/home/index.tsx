@@ -58,7 +58,7 @@ export default function IndexPage() {
 
     const loadingUserWorkspace = !userHydrated || (Boolean(user && shortDramaEnabled) && domainProjectsQuery.isLoading);
     return (
-        <main className="app-user-content app-workspace-canvas h-full overflow-y-auto text-foreground">
+        <main className="app-user-content app-workspace-canvas app-workspace-scroll h-full overflow-y-auto text-foreground">
             <div className="app-home-workbench mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
                 {loadingUserWorkspace ? (
                     <WorkspaceLoadingState className="mt-3 max-w-[980px]" label="正在恢复工作台" detail="读取项目、章节和最近画布" rows={5} />
