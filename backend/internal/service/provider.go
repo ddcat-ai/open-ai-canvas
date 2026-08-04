@@ -152,6 +152,15 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		input.Prompt = fallbackPrompt
 	}
+	promptTemplateOperation := metadataString(input.Metadata, "promptTemplateOperation")
+	if promptTemplateOperation != "" {
+		values := metadataStringValues(input.Metadata["promptTemplateVariables"])
+		compiled, compileErr := s.compilePrompt(userID, promptTemplateOperation, values)
+		if compileErr != nil {
+			return nil, fmt.Errorf("编译用户提示词失败：%w", compileErr)
+		}
+		input.Prompt = compiled.Content
+	}
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("prompt is required")
 	}
@@ -185,7 +194,11 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	case "image":
 		return runImageTask(ctx, input)
 	case "text":
-		return runTextTask(ctx, input)
+		result, taskErr := runTextTask(ctx, input)
+		if taskErr == nil && promptTemplateOperation != "" {
+			taskErr = validatePromptTemplateResult(promptTemplateOperation, result)
+		}
+		return result, taskErr
 	case "video":
 		return runVideoTask(ctx, input)
 	case "audio":
@@ -193,6 +206,18 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+func metadataStringValues(value any) map[string]string {
+	values := map[string]string{}
+	raw, ok := value.(map[string]interface{})
+	if !ok {
+		return values
+	}
+	for key, item := range raw {
+		values[key] = strings.TrimSpace(fmt.Sprint(item))
+	}
+	return values
 }
 
 func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, requirePublicURL bool) error {

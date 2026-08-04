@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Button, Checkbox, Input, InputNumber, Modal, Popover, Select, Table, Tooltip } from "antd";
+import { Button, Checkbox, Input, InputNumber, Modal, Popover, Segmented, Select, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
 
@@ -13,7 +13,7 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchItemStatus, CanvasNodeData, CanvasNodeStatus, CanvasWorkspaceMode, StoryboardColumn, StoryboardRow, StoryboardShotCount, StoryboardShotDuration } from "@/types/canvas";
+import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchItemStatus, CanvasNodeData, CanvasNodeStatus, CanvasWorkspaceMode, StoryboardColumn, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
 
 export const STORYBOARD_ROW_HEIGHT = 48;
 export const STORYBOARD_HEADER_HEIGHT = 124;
@@ -43,6 +43,9 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "时长", value: "durationSeconds" },
     { label: "画面描述", value: "plotDescription" },
     { label: "台词/旁白", value: "dialogue" },
+    { label: "镜头意图", value: "narrativeIntent" },
+    { label: "观众视点", value: "viewerPOV" },
+    { label: "表演调度", value: "performanceBlocking" },
     { label: "景别", value: "shotSize" },
     { label: "情绪", value: "emotion" },
     { label: "光影氛围", value: "lightingAndAtmosphere" },
@@ -52,10 +55,11 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "时间节拍", value: "timeBeats" },
     { label: "图片提示词", value: "imageGenerationPrompt" },
     { label: "视频提示词", value: "videoMotionPrompt" },
+    { label: "连续性出口", value: "continuityOut" },
     { label: "负面要求", value: "negativePrompt" },
 ];
 
-export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
+export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
     node: CanvasNodeData;
     batch?: CanvasGenerationBatch;
     pipeline: CanvasStoryboardPipelineProgress;
@@ -66,6 +70,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     onCreateVideoNodes: () => void;
     onGenerateImages: () => void;
     onGenerateVideos: () => void;
+    onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
     onMergeVideos: () => void;
     onCreateActionBoards: () => void;
     onRetryBatch: (batchId: string) => void;
@@ -99,6 +104,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const totalDuration = rows.reduce((sum, row) => sum + (Number(row.durationSeconds) || 0), 0);
     const shotDuration = node.metadata?.storyboardShotDuration || "auto";
     const shotCount = node.metadata?.storyboardShotCount || "auto";
+    const videoInputMode = node.metadata?.storyboardVideoInputMode || "direct";
     const batchItemByRowId = useMemo(() => new Map((batch?.items || []).map((item) => [item.rowId, item])), [batch?.items]);
     const batchSummary = batch ? generationBatchSummary(batch) : null;
     const hasFailedBatchItems = Boolean(batch?.items.some((item) => item.status === "failed"));
@@ -146,6 +152,8 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 onCreateVideoNodes={onCreateVideoNodes}
                 onGenerateImages={onGenerateImages}
                 onGenerateVideos={onGenerateVideos}
+                videoInputMode={videoInputMode}
+                onVideoInputModeChange={onVideoInputModeChange}
                 onMergeVideos={onMergeVideos}
             />
             <div className="grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
@@ -275,15 +283,17 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     );
 }
 
-function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onMergeVideos }: {
+function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, videoInputMode, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos }: {
     pipeline: CanvasStoryboardPipelineProgress;
     simpleMode: boolean;
     disabled: boolean;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    videoInputMode: StoryboardVideoInputMode;
     onCreateImageNodes: () => void;
     onCreateVideoNodes: () => void;
     onGenerateImages: () => void;
     onGenerateVideos: () => void;
+    onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
     onMergeVideos: () => void;
 }) {
     const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
@@ -291,10 +301,10 @@ function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, onCreate
     const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
     return (
         <div className="grid h-12 shrink-0 grid-cols-3 border-b" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <PipelineStageCell label="分镜图" stage={pipeline.images} theme={theme}>
+            <PipelineStageCell label={videoInputMode === "keyframe" ? "首帧" : "分镜图（可选）"} stage={pipeline.images} theme={theme}>
                 {simpleMode ? (
                     <Button size="small" type="text" icon={<ImageIcon className="size-3" />} disabled={disabled || pipeline.images.incomplete === 0} onClick={onGenerateImages}>
-                        {pipeline.images.incomplete ? `生成 ${pipeline.images.incomplete} 张分镜图` : "分镜图已完成"}
+                        {pipeline.images.incomplete ? `生成 ${pipeline.images.incomplete} 张${videoInputMode === "keyframe" ? "首帧" : "分镜图"}` : `${videoInputMode === "keyframe" ? "首帧" : "分镜图"}已完成`}
                     </Button>
                 ) : (
                     <>
@@ -304,14 +314,20 @@ function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, onCreate
                 )}
             </PipelineStageCell>
             <PipelineStageCell label="镜头视频" stage={pipeline.videos} theme={theme}>
+                <Segmented<StoryboardVideoInputMode>
+                    size="small"
+                    value={videoInputMode}
+                    options={[{ value: "direct", label: "直接生成" }, { value: "keyframe", label: "先做首帧" }]}
+                    onChange={onVideoInputModeChange}
+                />
                 {simpleMode ? (
                     <Button size="small" type="text" icon={<Video className="size-3" />} disabled={disabled || pipeline.videos.incomplete === 0} onClick={onGenerateVideos}>
-                        {pipeline.videos.incomplete ? `生成 ${pipeline.videos.incomplete} 个镜头视频` : "镜头视频已完成"}
+                        {pipeline.videos.incomplete ? videoInputMode === "keyframe" ? "确认首帧并生成" : `生成 ${pipeline.videos.incomplete} 个镜头视频` : "镜头视频已完成"}
                     </Button>
                 ) : (
                     <>
                         <Button size="small" type="text" disabled={disabled || missingVideos === 0} onClick={onCreateVideoNodes}>{missingVideos ? `创建 ${missingVideos} 个视频节点` : "视频节点已创建"}</Button>
-                        <Button size="small" type="text" disabled={disabled || pipeline.videos.incomplete === 0} onClick={onGenerateVideos}>生成未完成的视频</Button>
+                        <Button size="small" type="text" disabled={disabled || pipeline.videos.incomplete === 0} onClick={onGenerateVideos}>{videoInputMode === "keyframe" ? "确认首帧并生成" : "生成未完成的视频"}</Button>
                     </>
                 )}
             </PipelineStageCell>
@@ -381,7 +397,7 @@ function batchItemTone(item?: CanvasGenerationBatchItem): CanvasNodeStatus | und
     return "loading";
 }
 
-export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibleColumnsChange, onGenerateImages, onGenerateVideos }: {
+export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibleColumnsChange, onGenerateImages, onGenerateVideos, onVideoInputModeChange }: {
     node: CanvasNodeData | null;
     open: boolean;
     onClose: () => void;
@@ -389,11 +405,13 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
     onVisibleColumnsChange: (columns: StoryboardColumn[]) => void;
     onGenerateImages: (rowIds: string[]) => void;
     onGenerateVideos: (rowIds: string[]) => void;
+    onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
 }) {
     const [query, setQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
     const visibleColumns = node?.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"];
+    const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
     const filteredRows = useMemo(() => {
         const keyword = query.trim().toLowerCase();
         return keyword ? rows.filter((row) => [row.plotDescription, row.dialogue, row.camera, row.motion, row.timeBeats, row.imageGenerationPrompt, row.videoMotionPrompt, row.negativePrompt].some((value) => String(value || "").toLowerCase().includes(keyword))) : rows;
@@ -441,8 +459,9 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
                 <Checkbox.Group className="script-column-picker" options={columnOptions} value={visibleColumns} onChange={(values) => onVisibleColumnsChange(values as StoryboardColumn[])} />
                 <span className="min-w-0 flex-1" />
                 <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>新增镜头</Button>
-                <Button icon={<ImageIcon className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateImages(selectedIds)}>生成分镜图</Button>
-                <Button type="primary" icon={<Film className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateVideos(selectedIds)}>生成视频</Button>
+                <Button icon={<ImageIcon className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateImages(selectedIds)}>生成{videoInputMode === "keyframe" ? "首帧" : "分镜图"}</Button>
+                <Segmented<StoryboardVideoInputMode> value={videoInputMode} options={[{ value: "direct", label: "直接生成" }, { value: "keyframe", label: "先做首帧" }]} onChange={onVideoInputModeChange} />
+                <Button type="primary" icon={<Film className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateVideos(selectedIds)}>{videoInputMode === "keyframe" ? "确认首帧并生成" : "生成视频"}</Button>
             </div>
             <Table<StoryboardRow> rowKey="id" size="small" bordered sticky pagination={false} scroll={{ x: Math.max(900, columns.length * 180), y: "calc(78vh - 170px)" }} dataSource={filteredRows} columns={columns} rowSelection={{ selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys.map(String)) }} />
         </Modal>
@@ -462,7 +481,7 @@ function SmallButton({ title, children, onClick }: { title: string; children: Re
 }
 
 function editorRow(shotNumber: number): StoryboardRow {
-    return { id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, shotNumber, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", negativePrompt: "", referenceNodeIds: [], status: "idle" };
+    return { id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, shotNumber, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], narrativeIntent: "", viewerPOV: "", performanceBlocking: "", shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", mustHave: [], optionalDetails: [], continuityOut: "", negativePrompt: "", referenceNodeIds: [], status: "idle" };
 }
 
 function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { side: "left" | "right"; top: number; scale: number; tone?: StoryboardRow["status"]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; title?: string; onPointerDown: (event: ReactPointerEvent) => void }) {

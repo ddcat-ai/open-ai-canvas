@@ -554,6 +554,59 @@
     }
 }
 
+/* CodeMirror 使用运行时注入样式，需在全局覆盖中绑定项目主题 token。 */
+.prompt-code-editor,
+.prompt-code-editor .cm-editor {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.prompt-code-editor .cm-editor {
+    background: var(--workspace-surface-strong) !important;
+    color: var(--foreground);
+    font-size: var(--fs-caption);
+}
+
+.prompt-code-editor .cm-editor.cm-focused {
+    outline: 2px solid color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+    outline-offset: -2px;
+}
+
+.prompt-code-editor .cm-scroller {
+    overflow: auto;
+    overflow-x: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    line-height: 1.65;
+}
+
+.prompt-code-editor .cm-content {
+    padding-block: var(--space-3);
+    color: var(--foreground) !important;
+    caret-color: var(--foreground);
+}
+
+.prompt-code-editor .cm-line {
+    padding-inline: var(--space-3);
+    overflow-wrap: anywhere;
+}
+
+.prompt-code-editor .cm-gutters {
+    border-right: 1px solid var(--workspace-border) !important;
+    background: color-mix(in srgb, var(--workspace-surface-strong) 92%, var(--foreground) 8%) !important;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent) !important;
+}
+
+.prompt-code-editor .cm-activeLine,
+.prompt-code-editor .cm-activeLineGutter {
+    background: color-mix(in srgb, var(--workspace-accent) 7%, transparent) !important;
+}
+
+.prompt-code-editor .cm-selectionBackground,
+.prompt-code-editor .cm-content ::selection {
+    background: color-mix(in srgb, var(--workspace-accent) 24%, transparent) !important;
+}
+
 @layer utilities {
     .app-spatial-workspace {
         --workspace-canvas: #f5f5f5;
@@ -3273,6 +3326,30 @@
 
     :where(.ant-modal-mask, .ant-drawer-mask) {
         backdrop-filter: blur(5px);
+    }
+
+    /* 画风选择器自身就是完整工作区表面，移除 AntD 外壳避免形成双层厚边。 */
+    .canvas-style-picker-modal .ant-modal-container,
+    .canvas-style-detail-modal .ant-modal-container {
+        overflow: hidden;
+        border: var(--stroke-1) solid var(--border) !important;
+        border-radius: var(--r-2xl) !important;
+        padding: 0 !important;
+        background: transparent !important;
+    }
+
+    .canvas-style-picker-modal .ant-modal-body,
+    .canvas-style-detail-modal .ant-modal-body {
+        padding: 0 !important;
+    }
+
+    .canvas-style-picker-modal .ant-modal-close,
+    .canvas-style-detail-modal .ant-modal-close {
+        top: var(--space-2);
+        right: var(--space-2);
+        color: var(--cn-text);
+        background: color-mix(in srgb, var(--cn-spatial-elevated) 84%, transparent);
+        backdrop-filter: blur(var(--space-2));
     }
 
     :where(.ant-select-dropdown, .ant-dropdown-menu, .ant-popover-inner) {

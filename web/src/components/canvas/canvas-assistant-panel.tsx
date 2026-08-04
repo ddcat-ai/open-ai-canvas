@@ -24,6 +24,7 @@ import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendin
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentOperationImpact, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { canvasAgentPromptCacheKey } from "@/lib/openai-prompt-cache";
+import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 
 export const CANVAS_AGENT_PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = CANVAS_AGENT_PANEL_MOTION_MS / 1000;
@@ -316,6 +317,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
 
     const runCinematicSession = async (sessionId: string, text: string, current: CanvasAgentSnapshot, config: AiConfig, onCreated?: (backendSessionId: string) => void) => {
         const requestConfig = resolveModelRequestConfig(config, config.textModel || config.model);
+        const storyboardContext = resolveStoryboardGenerationContext(current.nodes);
         const controller = new AbortController();
         const requestKey = `creating:${nanoid()}`;
         let backendSessionId = "";
@@ -326,6 +328,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                     projectId,
                     prompt: text,
                     canvasSnapshot: compactSnapshot(current) as unknown as Record<string, unknown>,
+                    projectStyle: storyboardContext.projectStyle,
+                    characters: storyboardContext.characters,
                     config: backendAgentProviderConfig(requestConfig),
                 },
                 {
@@ -1549,6 +1553,9 @@ function compactMetadata(metadata: CanvasNodeData["metadata"]) {
         workflowKind: metadata?.workflowKind,
         workflowTitle: metadata?.workflowTitle,
         workflowDescription: metadata?.workflowDescription,
+        characterName: metadata?.characterName,
+        characterAssetId: metadata?.characterAssetId,
+        characterVersionId: metadata?.characterVersionId,
         chapterId: metadata?.chapterId,
         chapterTitle: metadata?.chapterTitle,
         shotIndex: metadata?.shotIndex,

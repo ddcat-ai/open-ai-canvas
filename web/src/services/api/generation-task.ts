@@ -183,7 +183,7 @@ export function backendProviderConfig(config: AiConfig) {
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
         audioInstructions: config.audioInstructions,
-        systemPrompt: config.systemPrompt,
+        systemPrompt: "",
     };
 }
 

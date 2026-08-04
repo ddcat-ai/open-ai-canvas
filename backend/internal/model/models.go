@@ -688,14 +688,29 @@ type CanvasShare struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
-type StoryboardPromptTemplate struct {
-	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	Name      string    `json:"name" gorm:"size:120"`
-	Content   string    `json:"content" gorm:"type:text"`
-	Enabled   bool      `json:"enabled" gorm:"index"`
-	CreatedBy string    `json:"createdBy" gorm:"index;size:36"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+type PromptTemplate struct {
+	ID         string    `json:"id" gorm:"primaryKey;size:36"`
+	Operation  string    `json:"operation" gorm:"size:64;index;uniqueIndex:idx_prompt_template_operation_version,priority:1"`
+	Name       string    `json:"name" gorm:"size:120"`
+	Version    int       `json:"version" gorm:"uniqueIndex:idx_prompt_template_operation_version,priority:2"`
+	Content    string    `json:"content" gorm:"type:text"`
+	OutputType string    `json:"outputType" gorm:"size:24"`
+	Enabled    bool      `json:"enabled" gorm:"index;index:idx_prompt_template_active,priority:2"`
+	CreatedBy  string    `json:"createdBy" gorm:"index;size:36"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// UserPromptCustomization 只保存用户的创作策略层，动态上下文和输出契约始终由服务端编译器注入。
+type UserPromptCustomization struct {
+	ID             string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID         string    `json:"userId" gorm:"size:36;index;uniqueIndex:idx_user_prompt_operation,priority:1"`
+	Operation      string    `json:"operation" gorm:"size:64;index;uniqueIndex:idx_user_prompt_operation,priority:2"`
+	Mode           string    `json:"mode" gorm:"size:24"`
+	Content        string    `json:"content" gorm:"type:text"`
+	BaseTemplateID string    `json:"baseTemplateId" gorm:"size:36;index"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type Announcement struct {

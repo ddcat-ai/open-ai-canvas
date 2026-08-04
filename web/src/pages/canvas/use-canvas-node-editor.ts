@@ -132,7 +132,10 @@ export function useCanvasNodeEditor({
             const metadata = moderationFailure && prompt !== previousPrompt
                 ? resetGenerationTaskMetadata(node.metadata, node.metadata?.content ? "success" : "idle")
                 : node.metadata;
-            return { ...node, metadata: hasExistingContent ? { ...metadata, composerContent: prompt } : { ...metadata, prompt, composerContent: prompt } };
+            const promptTemplateMetadata = prompt !== previousPrompt && metadata.promptTemplateOperation
+                ? { promptTemplateOperation: undefined, promptTemplateVariables: undefined }
+                : {};
+            return { ...node, metadata: hasExistingContent ? { ...metadata, ...promptTemplateMetadata, composerContent: prompt } : { ...metadata, ...promptTemplateMetadata, prompt, composerContent: prompt } };
         }));
     }, [setNodes]);
 

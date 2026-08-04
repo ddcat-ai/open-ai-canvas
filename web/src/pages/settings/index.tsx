@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Tag, Tooltip } from "antd";
-import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -26,13 +26,15 @@ import {
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
 import { ModelDefaultGrid } from "./model-default-grid";
+import { PromptPreferencesPane } from "./prompt-preferences-pane";
 
-type ConfigSectionKey = "channels" | "models" | "preferences" | "storage";
+type ConfigSectionKey = "channels" | "models" | "preferences" | "prompts" | "storage";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: "生成偏好", description: "画布、音频与系统提示词", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
     { key: "storage", label: "我的 OSS", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
 ];
 
@@ -279,7 +281,7 @@ export default function SettingsPage() {
 
                 <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
                     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className="mx-auto w-full max-w-[1180px]">
+                        <div className={activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-[1180px]"}>
                     {([
                     {
                         key: "channels",
@@ -489,19 +491,21 @@ export default function SettingsPage() {
                                     </section>
 
                                     <section className="pt-6">
-                                        <div className="mb-4"><h3 className="text-sm font-semibold">默认指令</h3><p className="mt-1 text-xs text-foreground/55">在未单独填写时附加到对应生成请求。</p></div>
-                                        <div className="grid gap-5 lg:grid-cols-2">
-                                            <Form.Item label="音频指令" className="mb-0">
+                                        <div className="mb-4"><h3 className="text-sm font-semibold">音频指令</h3><p className="mt-1 text-xs text-foreground/55">在音频节点没有单独填写时使用。</p></div>
+                                        <div className="max-w-2xl">
+                                            <Form.Item label="默认音频指令" className="mb-0">
                                                 <Input.TextArea rows={5} value={config.audioInstructions} placeholder="例如：自然、温暖、适合旁白。" onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
-                                            </Form.Item>
-                                            <Form.Item label="系统提示词" className="mb-0">
-                                                <Input.TextArea rows={5} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
                                             </Form.Item>
                                         </div>
                                     </section>
                                 </Form>
                             </SettingsPane>
                         ),
+                    },
+                    {
+                        key: "prompts",
+                        label: "提示词偏好",
+                        children: <SettingsPane fill><PromptPreferencesPane /></SettingsPane>,
                     },
                     {
                         key: "storage",
@@ -526,8 +530,8 @@ export default function SettingsPage() {
     );
 }
 
-function SettingsPane({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+function SettingsPane({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
+    return <div className={fill ? "h-full" : undefined}>{children}</div>;
 }
 
 function ChannelStatus({ channel }: { channel: ModelChannel }) {

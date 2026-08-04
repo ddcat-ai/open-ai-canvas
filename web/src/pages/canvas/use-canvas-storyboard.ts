@@ -15,8 +15,10 @@ import {
     createStoryboardRow,
     expandStoryboardTextMentions,
     storyboardRowsFromTask,
+    storyboardPromptTemplateMetadata,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
+import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
@@ -86,18 +88,20 @@ export function useCanvasStoryboard({
 
     const replaceScriptRows = useCallback((nodeId: string, rows: StoryboardRow[]) => {
         const rowIds = new Set(rows.map((row) => `row:${row.id}`));
+        const previousRows = new Map((nodesRef.current.find((node) => node.id === nodeId)?.metadata?.storyboard?.rows || []).map((row) => [row.id, row]));
+        const nextRows = rows.map((row) => invalidateEditedPromptVariables(previousRows.get(row.id), row));
         setConnections((current) => current
             .filter((connection) => connection.fromNodeId !== nodeId || !connection.fromHandleId || rowIds.has(connection.fromHandleId))
             .filter((connection) => connection.toNodeId !== nodeId || !connection.toHandleId || rowIds.has(connection.toHandleId)));
-        updateScriptRows(nodeId, () => rows);
-    }, [setConnections, updateScriptRows]);
+        updateScriptRows(nodeId, () => nextRows);
+    }, [nodesRef, setConnections, updateScriptRows]);
 
     const addScriptRow = useCallback((nodeId: string) => {
         updateScriptRows(nodeId, (rows) => [...rows, createStoryboardRow(rows.length + 1)]);
     }, [updateScriptRows]);
 
     const updateScriptRow = useCallback((nodeId: string, rowId: string, patch: Partial<StoryboardRow>) => {
-        updateScriptRows(nodeId, (rows) => rows.map((row) => row.id === rowId ? { ...row, ...patch } : row));
+        updateScriptRows(nodeId, (rows) => rows.map((row) => row.id === rowId ? invalidateEditedPromptVariables(row, { ...row, ...patch }) : row));
     }, [updateScriptRows]);
 
     const removeScriptRow = useCallback((nodeId: string, rowId: string) => {
@@ -109,6 +113,13 @@ export function useCanvasStoryboard({
     const generateScriptRows = useCallback(async (nodeId: string, prompt: string) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
         if (!scriptNode || !prompt.trim()) return;
+        let storyboardContext: ReturnType<typeof resolveStoryboardGenerationContext>;
+        try {
+            storyboardContext = resolveStoryboardGenerationContext(nodesRef.current);
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "分镜上下文不完整");
+            return;
+        }
         const shotDuration = scriptNode.metadata?.storyboardShotDuration || "auto";
         const shotDurationSeconds = shotDuration === "auto" ? 0 : Number(shotDuration);
         const shotCount = scriptNode.metadata?.storyboardShotCount || "auto";
@@ -130,6 +141,8 @@ export function useCanvasStoryboard({
                 input: {
                     canvasSnapshot: { nodes: nodesRef.current, connections: connectionsRef.current },
                     requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。",
+                    projectStyle: storyboardContext.projectStyle,
+                    characters: storyboardContext.characters,
                     shotDurationSeconds,
                     shotCount: requestedShotCount,
                     config: backendProviderConfig(generationConfig),
@@ -181,8 +194,8 @@ export function useCanvasStoryboard({
             const existing = row.imageNodeId ? nextNodes.find((node) => node.id === row.imageNodeId && node.type === CanvasNodeType.Image) : undefined;
             const existingMetadata = existing?.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing?.metadata);
             const imageNode = existing
-                ? { ...existing, metadata: { ...existingMetadata, prompt, workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber } }
-                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber, status: NODE_STATUS_IDLE });
+                ? { ...existing, metadata: { ...existingMetadata, prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber } }
+                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber, status: NODE_STATUS_IDLE });
             if (!existing) {
                 imageNode.title = `镜头 ${row.shotNumber} · 分镜图`;
                 nextNodes.push(imageNode);
@@ -194,6 +207,7 @@ export function useCanvasStoryboard({
             const referenceIds = new Set([
                 ...(scriptNode.metadata?.storyboard?.referenceNodeIds || []),
                 ...(row.referenceNodeIds || []),
+                ...characterReferenceNodeIds(row, nextNodes),
                 ...nextConnections.filter((connection) => connection.toNodeId === scriptNode.id && connection.toHandleId === `row:${row.id}`).map((connection) => connection.fromNodeId),
             ]);
             referenceIds.forEach((referenceId) => {
@@ -272,14 +286,20 @@ export function useCanvasStoryboard({
             if (existingIndex >= 0) {
                 const existing = nextNodes[existingIndex];
                 const existingMetadata = existing.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing.metadata);
-                nextNodes[existingIndex] = { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" } };
+                nextNodes[existingIndex] = { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" } };
+                storyboardRowReferenceNodeIds(scriptNode, row, nextNodes, nextConnections, false).forEach((referenceId) => {
+                    if (!nextConnections.some((connection) => connection.fromNodeId === referenceId && connection.toNodeId === existing.id)) nextConnections.push({ id: nanoid(), fromNodeId: referenceId, toNodeId: existing.id });
+                });
                 videoNodeByRowId.set(row.id, existing.id);
                 return;
             }
-            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: startLeft + videoSpec.width / 2, y: scriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, composerContent: prompt, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "text_to_video", status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
+            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: startLeft + videoSpec.width / 2, y: scriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "text_to_video", status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
             videoNode.title = `镜头 ${row.shotNumber} · 视频`;
             nextNodes.push(videoNode);
             nextConnections.push({ id: nanoid(), fromNodeId: scriptNode.id, toNodeId: videoNode.id, fromHandleId: `row:${row.id}` });
+            storyboardRowReferenceNodeIds(scriptNode, row, nextNodes, nextConnections, false).forEach((referenceId) => {
+                if (!nextConnections.some((connection) => connection.fromNodeId === referenceId && connection.toNodeId === videoNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: referenceId, toNodeId: videoNode.id });
+            });
             videoNodeByRowId.set(row.id, videoNode.id);
             createdCount += 1;
         });
@@ -302,14 +322,15 @@ export function useCanvasStoryboard({
         if (!silent) message.success(createdCount ? `已创建 ${createdCount} 个视频节点` : "已同步现有视频节点的提示词");
     }, [connectionsRef, message, nodesRef, setConnections, setNodes]);
 
-    const createAndGenerateScriptVideos = useCallback(async (nodeId: string) => {
+    const createAndGenerateScriptVideos = useCallback(async (nodeId: string, rowIds?: string[]) => {
         const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, videoModel)) {
             navigateToSettings({ continueCreation: true });
             return;
         }
         let scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
-        const rows = scriptNode?.metadata?.storyboard?.rows || [];
+        const allRows = scriptNode?.metadata?.storyboard?.rows || [];
+        const rows = rowIds?.length ? allRows.filter((row) => rowIds.includes(row.id)) : allRows;
         const describedRows = rows.filter((row) => Boolean((row.videoMotionPrompt || row.plotDescription).trim()));
         const activeNodeIds = scriptNode ? activeGenerationBatchNodeIds(scriptNode, "storyboard_video") : new Set<string>();
         const targetRows = describedRows.filter((row) => {
@@ -332,19 +353,17 @@ export function useCanvasStoryboard({
             if (!videoNode || videoNode.metadata?.content) return [];
             const prompt = (currentRow.videoMotionPrompt || currentRow.plotDescription).trim();
             if (!prompt) return [];
-            const imageNode = currentRow.imageNodeId ? nodesRef.current.find((node) => node.id === currentRow.imageNodeId && node.type === CanvasNodeType.Image && node.metadata?.content) : undefined;
-            return [{ row: currentRow, videoNode, imageNode, prompt }];
+            return [{ row: currentRow, videoNode, prompt }];
         });
         const targetById = new Map(targets.map((target) => [target.videoNode.id, target]));
         const nextNodes = nodesRef.current.map((node) => {
             const target = targetById.get(node.id);
-            return target ? { ...node, metadata: { ...node.metadata, prompt: target.prompt, composerContent: target.prompt, generationMode: "video" as const, videoEditOperation: target.imageNode ? "image_to_video" as const : "text_to_video" as const } } : node;
+            return target ? { ...node, metadata: { ...node.metadata, prompt: target.prompt, composerContent: target.prompt, ...storyboardPromptTemplateMetadata(target.row, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, videoStartFrameNodeId: undefined } } : node;
         });
-        const nextConnections = [...connectionsRef.current];
-        targets.forEach((target) => {
-            const imageNode = target.imageNode;
-            if (imageNode && !nextConnections.some((connection) => connection.fromNodeId === imageNode.id && connection.toNodeId === target.videoNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: imageNode.id, toNodeId: target.videoNode.id });
-        });
+        const dedicatedFirstFrameConnections = new Set(targets
+            .filter((target) => Boolean(target.row.imageNodeId))
+            .map((target) => `${target.row.imageNodeId}:${target.videoNode.id}`));
+        const nextConnections = connectionsRef.current.filter((connection) => !dedicatedFirstFrameConnections.has(`${connection.fromNodeId}:${connection.toNodeId}`));
         nodesRef.current = nextNodes;
         connectionsRef.current = nextConnections;
         setNodes(nextNodes);
@@ -405,8 +424,8 @@ export function useCanvasStoryboard({
         const rows = (scriptNode?.metadata?.storyboard?.rows || []).filter((row) => rowIds.includes(row.id));
         if (!scriptNode || !rows.length) return;
         const readyRows = rows.filter((row) => row.imageNodeId && nodesRef.current.some((node) => node.id === row.imageNodeId && node.type === CanvasNodeType.Image && node.metadata?.content));
-        if (!readyRows.length) return message.warning("请先生成选中镜头的分镜图");
-        if (readyRows.length !== rows.length) message.warning(`${rows.length - readyRows.length} 个镜头没有可用分镜图，已跳过`);
+        if (!readyRows.length) return message.warning("请先生成并检查选中镜头的首帧");
+        if (readyRows.length !== rows.length) return message.warning(`${rows.length - readyRows.length} 个选中镜头还没有可用首帧，请全部生成并检查后再确认`);
         const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, videoModel)) {
             navigateToSettings({ continueCreation: true });
@@ -434,8 +453,8 @@ export function useCanvasStoryboard({
             const existing = row.videoNodeId ? nextNodes.find((node) => node.id === row.videoNodeId && node.type === CanvasNodeType.Video) : undefined;
             const existingMetadata = existing?.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing?.metadata);
             const videoNode = existing
-                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, seconds: String(row.durationSeconds) } }
-                : createCanvasNode(CanvasNodeType.Video, { x: startX, y: currentScriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "image_to_video", status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
+                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, videoStartFrameNodeId: row.imageNodeId, seconds: String(row.durationSeconds) } }
+                : createCanvasNode(CanvasNodeType.Video, { x: startX, y: currentScriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "image_to_video", videoStartFrameNodeId: row.imageNodeId, status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
             if (!existing) {
                 videoNode.title = `镜头 ${row.shotNumber} · 视频`;
                 nextNodes.push(videoNode);
@@ -444,7 +463,9 @@ export function useCanvasStoryboard({
                 const existingIndex = nextNodes.findIndex((node) => node.id === existing.id);
                 nextNodes[existingIndex] = videoNode;
             }
-            if (!nextConnections.some((connection) => connection.fromNodeId === row.imageNodeId && connection.toNodeId === videoNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: row.imageNodeId!, toNodeId: videoNode.id });
+            storyboardRowReferenceNodeIds(currentScriptNode, row, nextNodes, nextConnections, true).forEach((referenceId) => {
+                if (!nextConnections.some((connection) => connection.fromNodeId === referenceId && connection.toNodeId === videoNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: referenceId, toNodeId: videoNode.id });
+            });
             targets.push({ row, node: videoNode, prompt });
         });
         nodesRef.current = nextNodes;
@@ -468,6 +489,35 @@ export function useCanvasStoryboard({
         updateScriptRow,
         updateScriptRows,
     };
+}
+
+function characterReferenceNodeIds(row: StoryboardRow, nodes: CanvasNodeData[]) {
+    const assetIds = new Set(row.characters.map((character) => character.characterAssetId).filter((assetId): assetId is string => Boolean(assetId)));
+    return nodes
+        .filter((node) => node.metadata?.workflowKind === "character" && Boolean(node.metadata.characterAssetId) && assetIds.has(node.metadata.characterAssetId!))
+        .map((node) => node.id);
+}
+
+function invalidateEditedPromptVariables(previous: StoryboardRow | undefined, next: StoryboardRow) {
+    if (!previous) return next;
+    return {
+        ...next,
+        imagePromptTemplateVariables: next.imageGenerationPrompt === previous.imageGenerationPrompt ? next.imagePromptTemplateVariables : undefined,
+        videoPromptTemplateVariables: next.videoMotionPrompt === previous.videoMotionPrompt ? next.videoPromptTemplateVariables : undefined,
+    };
+}
+
+function storyboardRowReferenceNodeIds(scriptNode: CanvasNodeData, row: StoryboardRow, nodes: CanvasNodeData[], connections: CanvasConnection[], includeFirstFrame: boolean) {
+    const referenceIds = new Set([
+        ...(scriptNode.metadata?.storyboard?.referenceNodeIds || []),
+        ...(row.referenceNodeIds || []),
+        ...characterReferenceNodeIds(row, nodes),
+        ...connections.filter((connection) => connection.toNodeId === scriptNode.id && connection.toHandleId === `row:${row.id}`).map((connection) => connection.fromNodeId),
+        ...(includeFirstFrame && row.imageNodeId ? [row.imageNodeId] : []),
+    ]);
+    if (!includeFirstFrame && row.imageNodeId) referenceIds.delete(row.imageNodeId);
+    referenceIds.delete(scriptNode.id);
+    return Array.from(referenceIds);
 }
 
 function activeGenerationBatchNodeIds(node: CanvasNodeData, mode: CanvasGenerationBatchMode) {

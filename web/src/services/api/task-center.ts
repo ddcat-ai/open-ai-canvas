@@ -117,6 +117,8 @@ export type CreateSessionInput = {
     prompt: string;
     canvasSnapshot?: Record<string, unknown>;
     references?: string[];
+    projectStyle?: { presetId: string; title: string; prompt: string };
+    characters?: Array<{ assetId: string; versionId: string; name: string; definition: Record<string, unknown> }>;
     config?: Record<string, unknown>;
 };
 

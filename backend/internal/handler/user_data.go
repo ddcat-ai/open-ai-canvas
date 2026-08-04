@@ -16,6 +16,50 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/settings/prompt-templates", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		preferences, err := svc.UserPromptPreferences(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"preferences": preferences})
+	})
+	r.PATCH("/settings/prompt-templates/:operation", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.UserPromptCustomizationRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		customization, err := svc.UpdateUserPromptCustomization(user, c.Param("operation"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"customization": customization})
+	})
+	r.DELETE("/settings/prompt-templates/:operation", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.ResetUserPromptCustomization(user, c.Param("operation")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 	r.GET("/settings/oss", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
