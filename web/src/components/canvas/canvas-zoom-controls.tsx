@@ -76,7 +76,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
         {
             id: "zoom-precision",
             label: "精确缩放",
-            icon: <span className="flex items-baseline text-[var(--fs-micro)] font-bold tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[7px] opacity-55">%</span></span>,
+            icon: <span className="flex items-baseline text-[var(--fs-micro)] font-bold tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[var(--fs-nano)] opacity-55">%</span></span>,
             active: precisionOpen,
             onClick: () => setPrecisionOpen((value) => !value),
         },

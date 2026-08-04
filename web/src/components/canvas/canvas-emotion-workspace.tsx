@@ -255,7 +255,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                         key={face.id}
                         type="button"
                         aria-label={selected ? `选择${selected.name}` : "选择此人脸"}
-                        className={`absolute rounded-[7px] border-2 ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
+                        className={`absolute rounded-[var(--r-md)] border-2 ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
                         style={{ left: `${(face.x / imageWidth) * 100}%`, top: `${(face.y / imageHeight) * 100}%`, width: `${(face.width / imageWidth) * 100}%`, height: `${(face.height / imageHeight) * 100}%`, borderColor: active ? theme.accent.primary : "rgba(255,255,255,.94)", boxShadow: active ? `0 0 0 3px ${theme.accent.primarySoft}, 0 8px 24px rgba(0,0,0,.24)` : "0 8px 20px rgba(0,0,0,.18)" }}
                         whileHover={{ scale: 1.025 }}
                         whileTap={{ scale: 0.985 }}
@@ -267,7 +267,7 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                     </motion.button>
                 );
             })}
-            {manualDraft ? <div className="pointer-events-none absolute rounded-[7px] border-2 border-dashed border-white" style={{ left: `${(manualDraft.x / imageWidth) * 100}%`, top: `${(manualDraft.y / imageHeight) * 100}%`, width: `${(manualDraft.width / imageWidth) * 100}%`, height: `${(manualDraft.height / imageHeight) * 100}%`, boxShadow: "0 0 0 3px rgba(255,255,255,.16)" }} /> : null}
+            {manualDraft ? <div className="pointer-events-none absolute rounded-[var(--r-md)] border-2 border-dashed border-white" style={{ left: `${(manualDraft.x / imageWidth) * 100}%`, top: `${(manualDraft.y / imageHeight) * 100}%`, width: `${(manualDraft.width / imageWidth) * 100}%`, height: `${(manualDraft.height / imageHeight) * 100}%`, boxShadow: "0 0 0 3px rgba(255,255,255,.16)" }} /> : null}
         </div>
     );
 }
