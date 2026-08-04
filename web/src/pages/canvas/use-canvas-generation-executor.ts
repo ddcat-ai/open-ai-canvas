@@ -130,7 +130,22 @@ export function useCanvasGenerationExecutor({
 
             const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, activatedSkills);
             const effectivePrompt = expandedPrompt.trim();
-            const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
+            const { applySubmissionExclusions, buildGenerationSubmissionSnapshot } = await import("@/lib/canvas/canvas-generation-submission");
+            const submissionSnapshot = buildGenerationSubmissionSnapshot({
+                nodeId,
+                mode,
+                userPrompt: editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt,
+                nodes: nodesRef.current,
+                connections: connectionsRef.current,
+                excludedReferenceNodeIds: sourceNode?.metadata?.excludedReferenceNodeIds,
+                effectivePrompt,
+                model: generationConfig.model,
+                size: generationConfig.size,
+                seconds: generationConfig.videoSeconds,
+                vquality: generationConfig.vquality,
+            });
+            const generationContext = applySubmissionExclusions({ ...rawGenerationContext, prompt: effectivePrompt }, submissionSnapshot);
+            setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, submissionSnapshot } } : node)));
             if (mode === "audio" && generationContext.characterReferences.length) {
                 if (generationContext.characterReferences.length !== 1) {
                     finishGenerationRequest(nodeId, controller);

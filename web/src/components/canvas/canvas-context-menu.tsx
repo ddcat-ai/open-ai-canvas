@@ -8,7 +8,8 @@ import { CanvasCreateCommandGrid, type CanvasCreateCommand } from "@/components/
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, type CanvasNodeData, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { canvasReferenceRoleLabel } from "@/lib/canvas/canvas-generation-submission";
+import { CanvasNodeType, type CanvasNodeData, type CanvasReferenceRole, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -51,7 +52,21 @@ type CanvasNodeContextMenuProps = {
     onCopyMediaUrl: () => void;
     onSetAssetCategory: (category: CanvasAssetCategory) => void;
     onToggleFrame: () => void;
+    connectionRole?: CanvasReferenceRole;
+    onSetConnectionRole?: (role: CanvasReferenceRole) => void;
 };
+
+const connectionRoleOptions: Array<{ value: CanvasReferenceRole; label: string }> = [
+    { value: "auto", label: canvasReferenceRoleLabel("auto") },
+    { value: "prompt_text", label: canvasReferenceRoleLabel("prompt_text") },
+    { value: "style_ref", label: canvasReferenceRoleLabel("style_ref") },
+    { value: "subject_ref", label: canvasReferenceRoleLabel("subject_ref") },
+    { value: "first_frame", label: canvasReferenceRoleLabel("first_frame") },
+    { value: "last_frame", label: canvasReferenceRoleLabel("last_frame") },
+    { value: "motion_ref", label: canvasReferenceRoleLabel("motion_ref") },
+    { value: "audio_ref", label: canvasReferenceRoleLabel("audio_ref") },
+    { value: "character_ref", label: canvasReferenceRoleLabel("character_ref") },
+];
 
 export function CanvasNodeContextMenu({
     menu,
@@ -82,11 +97,14 @@ export function CanvasNodeContextMenu({
     onCopyMediaUrl,
     onSetAssetCategory,
     onToggleFrame,
+    connectionRole = "auto",
+    onSetConnectionRole,
 }: CanvasNodeContextMenuProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const [addOpen, setAddOpen] = useState(false);
     const [categoryOpen, setCategoryOpen] = useState(false);
+    const [roleOpen, setRoleOpen] = useState(false);
 
     useEffect(() => {
         const close = (event: PointerEvent) => {
@@ -217,9 +235,26 @@ export function CanvasNodeContextMenu({
                                 </>
                             )}
                         </>
+                    ) : roleOpen ? (
+                        <>
+                            <MenuHeader title="参考角色" description="不影响“能否生成”，只决定如何使用这条连线" />
+                            <MenuButton icon={<ArrowLeft className="size-4" />} label="返回连接菜单" onClick={() => setRoleOpen(false)} />
+                            <MenuDivider />
+                            {connectionRoleOptions.map((option) => (
+                                <MenuButton
+                                    key={option.value}
+                                    icon={connectionRole === option.value ? <Check className="size-4" /> : <Link2 className="size-4" />}
+                                    label={option.label}
+                                    active={connectionRole === option.value}
+                                    onClick={() => runAction(() => onSetConnectionRole?.(option.value))}
+                                />
+                            ))}
+                        </>
                     ) : (
                         <>
-                            <MenuHeader title="连接" />
+                            <MenuHeader title="连接" description={`当前角色：${canvasReferenceRoleLabel(connectionRole)}`} />
+                            <MenuButton icon={<Tags className="size-4" />} label="设置参考角色" chevron onClick={() => setRoleOpen(true)} />
+                            <MenuDivider />
                             <MenuButton icon={<Trash2 className="size-4" />} label="删除连接" danger onClick={() => runAction(onDelete)} />
                         </>
                     )}

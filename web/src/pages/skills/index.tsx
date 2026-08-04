@@ -211,11 +211,29 @@ export default function SkillsPage() {
 
                 {isPagedTab && categories.length ? (
                     <div className="thin-scrollbar flex gap-1 overflow-x-auto border-b border-border/70 py-2" aria-label="技能分类">
-                        {["all", ...categories].map((value) => (
-                            <button key={value} type="button" className={`h-7 shrink-0 rounded px-2.5 text-xs transition-colors ${category === value ? "bg-foreground text-background" : "text-foreground/55 hover:bg-foreground/[.05] hover:text-foreground"}`} onClick={() => { setCategory(value); setPage(1); }}>
-                                {value === "all" ? "全部分类" : value}
-                            </button>
-                        ))}
+                        {["all", ...categories.filter((value) => Boolean(value?.trim()))].map((value) => {
+                            const active = category === value;
+                            const label = value === "all" ? "全部分类" : value;
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    aria-pressed={active}
+                                    title={label}
+                                    className={`inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
+                                        active
+                                            ? "bg-primary text-primary-foreground shadow-sm"
+                                            : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground"
+                                    }`}
+                                    onClick={() => {
+                                        setCategory(value);
+                                        setPage(1);
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
                     </div>
                 ) : null}
 

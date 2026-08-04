@@ -590,6 +590,7 @@ function InfiniteCanvasPage() {
         createReferenceGroup,
         createStoryboardGroup,
         deleteConnection,
+        setConnectionRole,
         deleteNodes,
         duplicateNode,
         hasCopiedNodes,
@@ -724,7 +725,7 @@ function InfiniteCanvasPage() {
     const {
         collapsingBatchIds,
         downloadNodeImage,
-        handleConfigNodeChange,
+        handleConfigNodeChange: applyConfigNodeChange,
         handleFontSizeChange,
         handleNodeContentChange,
         handleNodePromptChange,
@@ -747,6 +748,28 @@ function InfiniteCanvasPage() {
         setToolbarNodeId,
         setHoveredNodeId,
     });
+
+    // 视频首尾帧 UI → 连线 role 同步（反向：setConnectionRole 已写 metadata）
+    const handleConfigNodeChange = useCallback((nodeId: string, patch: Parameters<typeof applyConfigNodeChange>[1]) => {
+        applyConfigNodeChange(nodeId, patch);
+        if (!("videoStartFrameNodeId" in patch) && !("videoEndFrameNodeId" in patch)) return;
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node) return;
+        const startId = "videoStartFrameNodeId" in patch ? patch.videoStartFrameNodeId : node.metadata?.videoStartFrameNodeId;
+        const endId = "videoEndFrameNodeId" in patch ? patch.videoEndFrameNodeId : node.metadata?.videoEndFrameNodeId;
+        setConnections((current) => current.map((connection) => {
+            if (connection.toNodeId !== nodeId) return connection;
+            if (startId && connection.fromNodeId === startId) return { ...connection, role: "first_frame" };
+            if (endId && connection.fromNodeId === endId) return { ...connection, role: "last_frame" };
+            if (connection.role === "first_frame" || connection.role === "last_frame") {
+                // 帧位被清空或改指其他节点时，恢复 auto
+                const stillStart = startId && connection.fromNodeId === startId;
+                const stillEnd = endId && connection.fromNodeId === endId;
+                if (!stillStart && !stillEnd) return { ...connection, role: "auto" };
+            }
+            return connection;
+        }));
+    }, [applyConfigNodeChange, nodesRef, setConnections]);
 
     const {
         activeDirectorScene,
@@ -1211,6 +1234,8 @@ function InfiniteCanvasPage() {
                     node={panelNode}
                     isRunning={runningNodeId === panelNode.id}
                     mentionReferences={mentionReferencesByNodeId.get(panelNode.id) || EMPTY_RESOURCE_REFERENCES}
+                    nodes={nodes}
+                    connections={connections}
                     onPromptChange={handleNodePromptChange}
                     onConfigChange={handleConfigNodeChange}
                     onGenerate={handleGenerateNode}
@@ -1623,6 +1648,8 @@ function InfiniteCanvasPage() {
                     onDuplicate={duplicateNode}
                     onDeleteNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                     onDeleteConnection={deleteConnection}
+                    connectionRole={contextMenu?.type === "connection" ? connections.find((item) => item.id === contextMenu.connectionId)?.role || "auto" : "auto"}
+                    onSetConnectionRole={setConnectionRole}
                     onSaveAsset={(node) => { void saveNodeAsset(node); }}
                     onViewMedia={(node) => setPreviewNodeId(node.id)}
                     onEditText={openTextNodeEditor}
@@ -1677,6 +1704,12 @@ function InfiniteCanvasPage() {
                     }}
                     onGenerateImages={(rowIds) => activeScriptNode && void generateScriptImages(activeScriptNode.id, rowIds)}
                     onGenerateVideos={(rowIds) => activeScriptNode && void generateScriptVideos(activeScriptNode.id, rowIds)}
+                    onFocusNode={(nodeId) => {
+                        setScriptEditorNodeId(null);
+                        focusCanvasNode(nodeId);
+                        setSelectedNodeIds(new Set([nodeId]));
+                        setDialogNodeId(nodeId);
+                    }}
                 />
 
                 {directorNodeId && activeDirectorScene ? (

@@ -16,8 +16,9 @@ import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
-import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { CanvasGenerationSubmissionPanel } from "@/components/canvas/canvas-generation-submission-panel";
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -29,13 +30,15 @@ type CanvasNodePromptPanelProps = {
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     onStop: (nodeId: string) => void;
     mentionReferences?: CanvasResourceReference[];
+    nodes?: CanvasNodeData[];
+    connections?: CanvasConnection[];
     onImageSettingsOpenChange?: (open: boolean) => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, mentionReferences = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, mentionReferences = [], nodes = [], connections = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const themeName = useThemeStore((state) => state.theme);
     const theme = canvasThemes[themeName];
@@ -72,9 +75,9 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const shellShadow = darkSurface ? `0 22px 60px ${theme.spatial.shadow}, 0 2px 8px rgba(0,0,0,.22)` : "0 12px 32px rgba(15,23,42,.10), 0 1px 2px rgba(15,23,42,.06)";
     const composerShadow = darkSurface ? "inset 0 1px 4px rgba(0,0,0,.22)" : "inset 0 0 0 1px rgba(15,23,42,.045)";
     const modalShadow = darkSurface ? `0 30px 90px ${theme.spatial.shadow}` : "0 24px 72px rgba(15,23,42,.16)";
-    const referenceShelfHeight = activeReferenceCount ? 42 : 0;
-    const composerMinHeight = activeReferenceCount ? 82 : 58;
-    const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
+    // 引用架与输入框分离：高度只算正文输入区
+    const composerMinHeight = 96;
+    const composerHeight = Math.min(220, Math.max(composerMinHeight, Math.ceil(promptContentHeight + 16)));
     const isSubmitDisabled = !isRunning && !prompt.trim();
     const canExpandPrompt = mode === "image" || mode === "video";
     const isPortraitTexture = mode === "image" && Boolean(node.metadata?.portraitTexture);
@@ -162,7 +165,16 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 />
             ) : null}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-                {activeReferenceCount ? <ComposerPill theme={theme} borderColor={insetBorder} icon={<Boxes className="size-2.5" />} label={`已连接 ${activeReferenceCount} 个`} /> : null}
+                <Tooltip title={activeReferenceCount ? `已连接 ${activeReferenceCount} 个可引用素材，点击缩略图或输入 @ 插入` : "当前没有可 @ 的上游素材。连接图片/视频/角色后会出现在此"}>
+                    <span>
+                        <ComposerPill
+                            theme={theme}
+                            borderColor={insetBorder}
+                            icon={<AtSign className="size-2.5" />}
+                            label={activeReferenceCount ? `可 @ ${activeReferenceCount}` : "无可 @"}
+                        />
+                    </span>
+                </Tooltip>
                 {!expanded && canExpandPrompt ? (
                     <Tooltip title="放大编辑">
                         <button
@@ -244,17 +256,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         >
             {renderComposerHeader(false)}
 
+            <div className="mt-2">
+                <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
+            </div>
+
             <div
-                className="relative mt-2 flex max-h-36 flex-col overflow-hidden rounded-xl outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
+                className="relative mt-2 flex max-h-56 flex-col overflow-hidden rounded-xl outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
                 style={{ height: composerHeight, background: composerSurface, boxShadow: composerShadow }}
             >
-                <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                 <CanvasResourceMentionTextarea
                     value={prompt}
                     references={mentionReferences}
                     onChange={updatePrompt}
                     containerClassName="min-h-0 flex-1"
-                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2 text-[13px] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2.5 text-[13px] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
                     style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                     onContentSizeChange={updatePromptContentHeight}
@@ -262,12 +277,29 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             </div>
 
             {mode === "video" && !simpleMode ? (
-                <div className="mt-1.5 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
+                <div className="mt-2 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
                     <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                 </div>
             ) : null}
 
-            <div className="mt-1.5">{renderComposerControls(false)}</div>
+            {nodes.length ? (
+                <div className="mt-2">
+                    <CanvasGenerationSubmissionPanel
+                        node={node}
+                        mode={mode}
+                        userPrompt={prompt}
+                        nodes={nodes}
+                        connections={connections}
+                        model={config.model}
+                        size={config.size}
+                        seconds={config.videoSeconds}
+                        vquality={config.vquality}
+                        onExcludedChange={(nodeId, excludedIds) => onConfigChange(nodeId, { excludedReferenceNodeIds: excludedIds })}
+                    />
+                </div>
+            ) : null}
+
+            <div className="mt-2">{renderComposerControls(false)}</div>
 
             <Modal
                 className="canvas-prompt-editor-modal"
@@ -282,17 +314,17 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             >
                 <div className="flex h-full min-h-0 flex-col gap-2.5 p-3" style={{ color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
+                    <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                     <div
-                        className="flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-xl outline-none ring-0 focus-within:outline-none focus-within:ring-0"
+                        className="mt-2 flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-xl outline-none ring-0 focus-within:outline-none focus-within:ring-0"
                         style={{ background: composerSurface, boxShadow: composerShadow }}
                     >
-                        <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />
                         <CanvasResourceMentionTextarea
                             value={prompt}
                             references={mentionReferences}
                             onChange={updatePrompt}
                             containerClassName="min-h-0 flex-1"
-                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[15px] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-3 text-[15px] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
                             style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                             placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                             aria-label={`${modeDisplayName(mode)}提示词`}
@@ -338,25 +370,32 @@ function modeDisplayName(mode: CanvasNodeGenerationMode) {
 
 function ConnectedReferenceShelf({ references, theme, onInsert }: { references: CanvasResourceReference[]; theme: CanvasTheme; onInsert: (reference: CanvasResourceReference) => void }) {
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill");
-    if (!activeReferences.length) return null;
+    if (!activeReferences.length) {
+        return (
+            <div className="flex h-7 items-center gap-1 px-0.5 text-[10px] opacity-55" style={{ color: theme.node.muted }} role="status">
+                <AtSign className="size-3 shrink-0" />
+                <span className="truncate">输入 @ 引用 · 暂无已连接素材</span>
+            </div>
+        );
+    }
 
     return (
-        <div className="thin-scrollbar flex h-[42px] shrink-0 min-w-0 items-center gap-1.5 overflow-x-auto px-2.5 pt-1.5" role="group" aria-label="已连接素材">
+        <div className="thin-scrollbar flex h-9 min-w-0 items-center gap-1.5 overflow-x-auto" role="group" aria-label="已连接素材，点击插入 @">
             {activeReferences.map((reference, index) => (
                 <button
                     key={reference.id}
                     type="button"
-                    className="group relative size-[34px] shrink-0 overflow-hidden rounded-md text-left transition hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
+                    className="group relative flex h-8 shrink-0 items-center gap-1 overflow-hidden rounded-md border pl-0.5 pr-1.5 text-left transition hover:brightness-110"
+                    style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border, color: theme.node.text }}
                     title={`插入 @${reference.label}`}
                     aria-label={`插入 @${reference.label}`}
                     onClick={() => onInsert(reference)}
                 >
-                    <span className="block size-full overflow-hidden rounded-md">
+                    <span className="relative size-7 shrink-0 overflow-hidden rounded-[5px]">
                         <ReferenceThumbnail reference={reference} />
+                        <span className="absolute left-0.5 top-0.5 grid size-3 place-items-center rounded-full bg-black/65 text-[7px] font-semibold text-white">{index + 1}</span>
                     </span>
-                    <span className="absolute left-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-[8px] font-semibold text-white backdrop-blur-sm">{index + 1}</span>
-                    <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><AtSign className="size-2" /></span>
+                    <span className="max-w-[64px] truncate text-[10px] font-medium">@{reference.label}</span>
                 </button>
             ))}
         </div>

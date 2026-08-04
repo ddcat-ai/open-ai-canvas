@@ -33,6 +33,8 @@ export type CanvasGenerationBatchMode = "storyboard_image" | "storyboard_video" 
 export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed" | "completed" | "cancelled";
 export type CanvasGenerationBatchItemStatus = "waiting" | "submitting" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type CanvasImageGenerationType = "generation" | "edit";
+export type CanvasGenerationPath = "t2i" | "i2i" | "t2v" | "i2v" | "edit-mask" | "text" | "audio" | "unknown";
+export type CanvasReferenceRole = "auto" | "prompt_text" | "style_ref" | "subject_ref" | "first_frame" | "last_frame" | "motion_ref" | "audio_ref" | "character_ref";
 export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character" | "scene" | "storyboard" | "shot" | "final" | "styleboard" | "reference_set" | "action_board";
 export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat";
 export type CanvasSkillCategory = "writing" | "storyboard" | "image" | "video" | "utility";
@@ -65,6 +67,10 @@ export type StoryboardRow = {
     referenceNodeIds: string[];
     imageNodeId?: string;
     videoNodeId?: string;
+    /** 最近一次同步/生成到图片节点的最终 prompt（可回溯） */
+    lastImageSubmissionPrompt?: string;
+    /** 最近一次同步/生成到视频节点的最终 prompt（可回溯） */
+    lastVideoSubmissionPrompt?: string;
     status?: CanvasNodeStatus;
     errorDetails?: string;
 };
@@ -136,6 +142,15 @@ export type CanvasNodeMetadata = {
     audioSpeed?: string;
     audioInstructions?: string;
     references?: string[];
+    /** 最近一次实际发送的生成快照，用于回看最终 prompt / 参考清单 */
+    submissionSnapshot?: GenerationSubmissionSnapshot;
+    /** 分镜自动生成时展开 @ 后的最终 brief（可回看） */
+    lastStoryboardSubmissionPrompt?: string;
+    lastStoryboardSubmissionAt?: string;
+    /** 图片节点最近一次实际发送/同步的 prompt（动作板等） */
+    lastImageSubmissionPrompt?: string;
+    /** 用户在发送清单里取消的参考 nodeId（生成时排除） */
+    excludedReferenceNodeIds?: string[];
     naturalWidth?: number;
     naturalHeight?: number;
     freeResize?: boolean;
@@ -278,6 +293,47 @@ export type CanvasConnection = {
     toHandleId?: string;
     fromAnchorRatio?: number;
     toAnchorRatio?: number;
+    /** 可选参考角色；缺省 auto，不强制连线即可生成 */
+    role?: CanvasReferenceRole;
+};
+
+export type GenerationSubmissionReference = {
+    id: string;
+    nodeId?: string;
+    label: string;
+    title?: string;
+    kind: "image" | "video" | "audio" | "character" | "text" | "skill";
+    role: CanvasReferenceRole;
+    included: boolean;
+    source: "mention" | "connection" | "storyboard" | "frame" | "auto";
+    reason?: string;
+    previewUrl?: string;
+    storageKey?: string;
+};
+
+export type GenerationSubmissionMention = {
+    token: string;
+    nodeId?: string;
+    skillId?: string;
+    included: boolean;
+    label?: string;
+};
+
+export type GenerationSubmissionSnapshot = {
+    path: CanvasGenerationPath;
+    pathLabel: string;
+    mode: CanvasGenerationMode;
+    userPrompt: string;
+    effectivePrompt: string;
+    mentions: GenerationSubmissionMention[];
+    references: GenerationSubmissionReference[];
+    model?: string;
+    interfaceType?: string;
+    size?: string;
+    seconds?: string;
+    vquality?: string;
+    warnings: string[];
+    createdAt?: string;
 };
 
 export type CanvasDisplayConnection = {

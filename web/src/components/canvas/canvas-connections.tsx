@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasReferenceRoleLabel, resolveConnectionRole } from "@/lib/canvas/canvas-generation-submission";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
@@ -33,6 +34,10 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = visualMode === "full" || hovered;
     const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    const role = resolveConnectionRole(connection, from, to);
+    const roleLabel = role === "auto" ? "" : canvasReferenceRoleLabel(role);
+    const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
 
     return (
         <g>
@@ -85,6 +90,24 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 strokeLinecap="round"
                 style={{ filter: `drop-shadow(0 0 3px ${theme.accent.primary}35)`, pointerEvents: "none" }}
             /> : null}
+            {showVisual && roleLabel ? (
+                <g transform={`translate(${midX}, ${midY})`} style={{ pointerEvents: "none" }}>
+                    <rect
+                        x={-Math.max(22, roleLabel.length * 5 + 10)}
+                        y={-8}
+                        width={Math.max(44, roleLabel.length * 10 + 20)}
+                        height={16}
+                        rx={4}
+                        fill={theme.spatial.elevated}
+                        stroke={theme.toolbar.border}
+                        strokeWidth={1}
+                        opacity={0.96}
+                    />
+                    <text textAnchor="middle" y={3.5} fontSize={9} fill={theme.accent.primary} style={{ userSelect: "none" }}>
+                        {roleLabel}
+                    </text>
+                </g>
+            ) : null}
         </g>
     );
 }, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);

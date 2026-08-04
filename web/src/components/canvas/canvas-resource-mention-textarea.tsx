@@ -417,7 +417,7 @@ function MentionMenu({ anchor, references, activeIndex, theme, onSelect }: { anc
             onMouseDown={stopCanvasInteraction}
             onClick={(event) => event.stopPropagation()}
         >
-            {references.map((reference, index) => (
+            {references.length ? references.map((reference, index) => (
                 <button
                     key={reference.id}
                     type="button"
@@ -436,11 +436,21 @@ function MentionMenu({ anchor, references, activeIndex, theme, onSelect }: { anc
                 >
                     <ReferencePreview reference={reference} />
                     <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{reference.label}</span>
-                        {reference.kind !== "skill" ? <span className="block truncate opacity-65">{reference.text || reference.title}</span> : null}
+                        <span className="block font-medium">@{reference.label}</span>
+                        <span className="block truncate text-[10px] opacity-65">
+                            {reference.kind === "skill" ? "技能模板" : reference.kind === "character" ? "角色参考" : reference.kind === "image" ? "图片参考" : reference.kind === "video" ? "视频参考" : reference.kind === "audio" ? "音频参考" : "文本参考"}
+                            {reference.text || reference.title ? ` · ${reference.text || reference.title}` : ""}
+                        </span>
                     </span>
                 </button>
-            ))}
+            )) : (
+                <div className="rounded-lg px-3 py-3 text-[11px] leading-5 opacity-70" style={{ color: theme.node.muted }}>
+                    <div className="mb-1 font-medium opacity-90">没有可 @ 的内容</div>
+                    <div>1. 把图片 / 视频 / 角色节点连到当前节点</div>
+                    <div>2. 或从素材库插入后再输入 @</div>
+                    <div className="mt-1 opacity-80">首尾帧可在视频工具里单独指定，不必强制 @</div>
+                </div>
+            )}
         </div>,
         document.body,
     );

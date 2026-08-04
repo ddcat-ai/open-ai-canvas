@@ -111,14 +111,29 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             status: (node.metadata?.taskStatus as GenerationTask["status"]) || "running",
             stage: node.metadata?.taskStage,
             progress: node.metadata?.taskProgress,
-            prompt: node.metadata?.prompt || "",
+            prompt: node.metadata?.submissionSnapshot?.effectivePrompt || node.metadata?.prompt || "",
             attempts: 1,
             createdAt: node.metadata?.taskCreatedAt || new Date().toISOString(),
             updatedAt: node.metadata?.taskUpdatedAt || new Date().toISOString(),
+            // 前端扩展：附带节点侧快照，任务详情可回看
+            inputJson: node.metadata?.submissionSnapshot ? JSON.stringify({ submissionSnapshot: node.metadata.submissionSnapshot }) : undefined,
         });
         try {
             const [task, logs] = await Promise.all([queryGenerationTask(taskId), listTaskLogs(taskId)]);
-            setTaskDetail(task);
+            // 若后端 inputJson 无快照，回退节点 metadata 快照
+            const nodeSnapshot = node.metadata?.submissionSnapshot;
+            let merged = task;
+            if (nodeSnapshot) {
+                try {
+                    const parsed = task.inputJson ? JSON.parse(task.inputJson) : {};
+                    if (!parsed?.submissionSnapshot) {
+                        merged = { ...task, inputJson: JSON.stringify({ ...parsed, submissionSnapshot: nodeSnapshot }) };
+                    }
+                } catch {
+                    merged = { ...task, inputJson: JSON.stringify({ submissionSnapshot: nodeSnapshot }) };
+                }
+            }
+            setTaskDetail(merged);
             setTaskDetailLogs(logs);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "任务详情加载失败");

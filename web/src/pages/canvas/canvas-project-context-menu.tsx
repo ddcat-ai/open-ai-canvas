@@ -1,5 +1,5 @@
 import { CanvasNodeContextMenu } from "@/components/canvas/canvas-context-menu";
-import { CanvasNodeType, type CanvasNodeData, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasReferenceRole, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -25,6 +25,8 @@ type CanvasProjectContextMenuProps = {
     onDuplicate: (nodeId: string) => void;
     onDeleteNode: (nodeId: string) => void;
     onDeleteConnection: (connectionId: string) => void;
+    connectionRole?: CanvasReferenceRole;
+    onSetConnectionRole?: (connectionId: string, role: CanvasReferenceRole) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
     onViewMedia: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
@@ -68,6 +70,10 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             onDelete={() => {
                 if (menu.type === "node") props.onDeleteNode(menu.nodeId);
                 else if (menu.type === "connection") props.onDeleteConnection(menu.connectionId);
+            }}
+            connectionRole={props.connectionRole}
+            onSetConnectionRole={(role) => {
+                if (menu.type === "connection") props.onSetConnectionRole?.(menu.connectionId, role);
             }}
             onSaveAsset={() => {
                 if (node) props.onSaveAsset(node);

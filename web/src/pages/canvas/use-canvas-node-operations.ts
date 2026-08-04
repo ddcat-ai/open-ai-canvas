@@ -7,7 +7,7 @@ import { FRAME_HEADER_HEIGHT, getFrameChildIds, getFrameChildren, isFrameNode } 
 import { alignCanvasNodes, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import { createCanvasNode, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata } from "@/lib/canvas/canvas-node-copy";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasReferenceRole, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 
 type CanvasClipboard = {
@@ -259,6 +259,31 @@ export function useCanvasNodeOperations({
         setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
     }, [commitConnections, connectionsRef, setContextMenu, setSelectedConnectionId]);
 
+    const setConnectionRole = useCallback((connectionId: string, role: CanvasReferenceRole) => {
+        const connection = connectionsRef.current.find((item) => item.id === connectionId);
+        if (!connection) return;
+        commitConnections(connectionsRef.current.map((item) => (item.id === connectionId ? { ...item, role } : item)));
+        // 首尾帧角色与节点结构化字段双向同步：设为 first/last_frame 时写入 video*FrameNodeId；改回其他角色时清掉自己占用的帧位。
+        const toNode = nodesRef.current.find((node) => node.id === connection.toNodeId);
+        if (toNode) {
+            const fromId = connection.fromNodeId;
+            const nextMeta = { ...toNode.metadata };
+            if (role === "first_frame") {
+                nextMeta.videoStartFrameNodeId = fromId;
+                if (nextMeta.videoEndFrameNodeId === fromId) nextMeta.videoEndFrameNodeId = undefined;
+            } else if (role === "last_frame") {
+                nextMeta.videoEndFrameNodeId = fromId;
+                if (nextMeta.videoStartFrameNodeId === fromId) nextMeta.videoStartFrameNodeId = undefined;
+            } else {
+                if (nextMeta.videoStartFrameNodeId === fromId) nextMeta.videoStartFrameNodeId = undefined;
+                if (nextMeta.videoEndFrameNodeId === fromId) nextMeta.videoEndFrameNodeId = undefined;
+            }
+            commitNodes(nodesRef.current.map((node) => (node.id === toNode.id ? { ...node, metadata: nextMeta } : node)));
+        }
+        setContextMenu(null);
+        message.success(role === "auto" ? "已恢复自动角色" : "已设置连线参考角色");
+    }, [commitConnections, commitNodes, connectionsRef, message, nodesRef, setContextMenu]);
+
     const duplicateNode = useCallback((nodeId: string) => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
         if (!source) return;
@@ -426,6 +451,7 @@ export function useCanvasNodeOperations({
         createReferenceGroup,
         createStoryboardGroup,
         deleteConnection,
+        setConnectionRole,
         deleteNodes,
         duplicateNode,
         hasCopiedNodes,

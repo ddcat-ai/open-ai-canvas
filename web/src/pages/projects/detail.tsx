@@ -75,7 +75,7 @@ export default function ProjectDetailPage() {
                 <header className="project-workbench-header shrink-0 border-b border-border/65 bg-background/80 px-3 py-2 backdrop-blur-md sm:px-4 lg:px-5 lg:py-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-x-3 lg:min-h-16 lg:flex-nowrap">
                         <div className="flex min-w-0 flex-1 items-center gap-2.5 lg:w-[250px] lg:flex-none xl:w-[290px]">
-                            <button type="button" onClick={() => navigate("/projects")} className="grid size-9 shrink-0 place-items-center rounded-md text-foreground/42 transition-colors hover:bg-foreground/[.055] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="返回项目" title="返回项目"><ArrowLeft className="size-4" /></button>
+                            <button type="button" onClick={() => navigate("/projects")} className="grid size-9 shrink-0 place-items-center rounded-md text-foreground/42 transition-colors hover:bg-foreground/[.055] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="返回项目列表" title="返回项目列表"><ArrowLeft className="size-4" /></button>
                             <WorkspaceSignalIcon variant="projects" size="sm" />
                             <div className="flex min-w-0 items-center gap-2">
                                 <h1 className="min-w-0 truncate text-[13px] font-semibold text-foreground/90">{detail.data.project.name}</h1>

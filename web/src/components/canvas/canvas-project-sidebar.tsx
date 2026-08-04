@@ -120,7 +120,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
         return (
             <aside className="relative z-30 hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
                 <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="展开项目侧栏" aria-label="展开项目侧栏" onClick={() => setCollapsed(false)}><ChevronRight className="size-4" /></button>
-                <Link to={`/projects/${projectId}/canvases`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="返回项目画布列表"><FolderKanban className="size-4" /></Link>
+                <Link to={`/projects/${projectId}/overview`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="返回项目"><FolderKanban className="size-4" /></Link>
             </aside>
         );
     }
@@ -128,7 +128,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
     return (
         <aside className="relative z-30 hidden w-[232px] shrink-0 flex-col border-r border-border bg-background/94 backdrop-blur-xl lg:flex">
             <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
-                <Link to={`/projects/${projectId}/canvases`} className="flex min-w-0 items-center gap-2 text-xs font-semibold" title="返回项目画布列表"><FolderKanban className="size-3.5 shrink-0" /><span className="truncate">{projectDetail?.project.name || "项目空间"}</span></Link>
+                <Link to={`/projects/${projectId}/overview`} className="flex min-w-0 items-center gap-2 text-xs font-semibold" title="返回项目"><FolderKanban className="size-3.5 shrink-0" /><span className="truncate">{projectDetail?.project.name || "项目空间"}</span></Link>
                 <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-foreground/45 hover:bg-foreground/[.06]" title="收起项目侧栏" aria-label="收起项目侧栏" onClick={() => setCollapsed(true)}><ChevronLeft className="size-4" /></button>
             </header>
 

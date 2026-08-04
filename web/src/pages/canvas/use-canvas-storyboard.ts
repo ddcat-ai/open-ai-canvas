@@ -16,7 +16,7 @@ import {
     expandStoryboardTextMentions,
     storyboardRowsFromTask,
 } from "@/lib/canvas/canvas-project-domain";
-import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
+import { buildNodeMentionReferences, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
 import { modelOptionName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -85,9 +85,14 @@ export function useCanvasStoryboard({
 
     const replaceScriptRows = useCallback((nodeId: string, rows: StoryboardRow[]) => {
         const rowIds = new Set(rows.map((row) => `row:${row.id}`));
-        setConnections((current) => current
-            .filter((connection) => connection.fromNodeId !== nodeId || !connection.fromHandleId || rowIds.has(connection.fromHandleId))
-            .filter((connection) => connection.toNodeId !== nodeId || !connection.toHandleId || rowIds.has(connection.toHandleId)));
+        // 仅清理已删除「镜头行」上的 row: 句柄连线。
+        // storyboard:context / 无 handle 的入边（文本设定 @ 源）必须保留，否则自动分镜后用户会感觉“线没了、@ 也没了”。
+        const isRowHandle = (handleId?: string) => Boolean(handleId?.startsWith("row:"));
+        setConnections((current) => current.filter((connection) => {
+            if (connection.fromNodeId === nodeId && isRowHandle(connection.fromHandleId) && !rowIds.has(connection.fromHandleId!)) return false;
+            if (connection.toNodeId === nodeId && isRowHandle(connection.toHandleId) && !rowIds.has(connection.toHandleId!)) return false;
+            return true;
+        }));
         updateScriptRows(nodeId, () => rows);
     }, [setConnections, updateScriptRows]);
 
@@ -112,13 +117,44 @@ export function useCanvasStoryboard({
         const shotDurationSeconds = shotDuration === "auto" ? 0 : Number(shotDuration);
         const shotCount = scriptNode.metadata?.storyboardShotCount || "auto";
         const requestedShotCount = shotCount === "auto" ? 0 : Number(shotCount);
-        const expandedPrompt = expandStoryboardTextMentions(prompt, buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current));
+        const mentionReferences = buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current);
+        const expandedPrompt = expandStoryboardTextMentions(prompt, mentionReferences);
         const generationConfig = buildGenerationConfig(effectiveConfig, scriptNode, "text");
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
             navigateToSettings({ continueCreation: true });
             return;
         }
-        setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined } } : node));
+        // 把已连接/可 @ 的文本设定显式塞进 canvasAssets，避免后端只从 snapshot 抽图片节点导致“剧情文本参考丢失”。
+        const canvasAssets = mentionReferences
+            .filter((item) => item.active)
+            .map((item) => ({
+                id: item.nodeId,
+                title: item.title || item.label,
+                type: item.kind,
+                tags: [item.kind, item.label].filter(Boolean),
+                prompt: item.kind === "text" || item.kind === "character" || item.kind === "skill"
+                    ? (item.text || item.title || item.label)
+                    : (item.title || item.label),
+            }));
+        const submissionPreview = {
+            userPrompt: prompt,
+            effectivePrompt: expandedPrompt,
+            mentionCount: mentionReferences.filter((item) => item.active).length,
+            createdAt: new Date().toISOString(),
+        };
+        setNodes((current) => current.map((node) => node.id === nodeId ? {
+            ...node,
+            metadata: {
+                ...node.metadata,
+                composerContent: prompt,
+                lastStoryboardSubmissionPrompt: expandedPrompt,
+                lastStoryboardSubmissionAt: submissionPreview.createdAt,
+                status: NODE_STATUS_LOADING,
+                taskStage: "正在创建任务",
+                taskProgress: 0,
+                errorDetails: undefined,
+            },
+        } : node));
         try {
             const task = await createGenerationTask({
                 projectId,
@@ -128,11 +164,12 @@ export function useCanvasStoryboard({
                 model: generationConfig.model,
                 input: {
                     canvasSnapshot: { nodes: nodesRef.current, connections: connectionsRef.current },
-                    requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。",
+                    canvasAssets,
+                    requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。必须优先遵循用户 brief 中【文本参考】【角色参考】给出的设定，不得忽略已引用文本另起炉灶。",
                     shotDurationSeconds,
                     shotCount: requestedShotCount,
                     config: backendProviderConfig(generationConfig),
-                    metadata: { nodeId },
+                    metadata: { nodeId, submissionPreview },
                 },
             });
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(task), status: NODE_STATUS_LOADING } } : node));
@@ -141,6 +178,13 @@ export function useCanvasStoryboard({
                 onTaskUpdate: (next) => setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(next), status: NODE_STATUS_LOADING } } : node)),
             });
             const result = storyboardRowsFromTask(completed);
+            // 自动分镜换行 ID 后：保留 context 入边，并按现存连线回填 referenceNodeIds
+            const preservedReferenceIds = Array.from(new Set([
+                ...(scriptNode.metadata?.storyboard?.referenceNodeIds || []),
+                ...connectionsRef.current
+                    .filter((connection) => connection.toNodeId === nodeId && (!connection.toHandleId || connection.toHandleId === "storyboard:context" || !connection.toHandleId.startsWith("row:")))
+                    .map((connection) => connection.fromNodeId),
+            ]));
             setNodes((current) => current.map((node) => node.id === nodeId ? {
                 ...node,
                 title: result.title || node.title,
@@ -148,11 +192,13 @@ export function useCanvasStoryboard({
                     ...node.metadata,
                     status: NODE_STATUS_SUCCESS,
                     errorDetails: undefined,
+                    lastStoryboardSubmissionPrompt: expandedPrompt,
+                    lastStoryboardSubmissionAt: submissionPreview.createdAt,
                     ...generationTaskMetadata(completed),
                     storyboard: {
                         rows: result.rows,
                         visibleColumns: cinematicStoryboardColumns(node.metadata?.storyboard?.visibleColumns),
-                        referenceNodeIds: node.metadata?.storyboard?.referenceNodeIds || [],
+                        referenceNodeIds: preservedReferenceIds,
                     },
                 },
             } : node));
@@ -201,13 +247,18 @@ export function useCanvasStoryboard({
             targets.push({ row, node: imageNode, prompt });
         });
         const imageNodeByRowId = new Map(targets.map((target) => [target.row.id, target.node.id]));
+        const promptByRowId = new Map(targets.map((target) => [target.row.id, target.prompt]));
         const scriptIndex = nextNodes.findIndex((node) => node.id === scriptNode.id);
         nextNodes[scriptIndex] = {
             ...scriptNode,
             metadata: {
                 ...scriptNode.metadata,
                 storyboard: {
-                    rows: (scriptNode.metadata?.storyboard?.rows || []).map((row) => ({ ...row, imageNodeId: imageNodeByRowId.get(row.id) || row.imageNodeId })),
+                    rows: (scriptNode.metadata?.storyboard?.rows || []).map((row) => ({
+                        ...row,
+                        imageNodeId: imageNodeByRowId.get(row.id) || row.imageNodeId,
+                        lastImageSubmissionPrompt: promptByRowId.get(row.id) || row.lastImageSubmissionPrompt,
+                    })),
                     visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
                     referenceNodeIds: scriptNode.metadata?.storyboard?.referenceNodeIds || [],
                 },
@@ -288,7 +339,15 @@ export function useCanvasStoryboard({
             metadata: {
                 ...scriptNode.metadata,
                 storyboard: {
-                    rows: allRows.map((row) => ({ ...row, videoNodeId: videoNodeByRowId.get(row.id) || row.videoNodeId })),
+                    rows: allRows.map((row) => {
+                        const videoNodeId = videoNodeByRowId.get(row.id) || row.videoNodeId;
+                        const prompt = (row.videoMotionPrompt || row.plotDescription).trim();
+                        return {
+                            ...row,
+                            videoNodeId,
+                            lastVideoSubmissionPrompt: videoNodeByRowId.has(row.id) && prompt ? prompt : row.lastVideoSubmissionPrompt,
+                        };
+                    }),
                     visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
                     referenceNodeIds: scriptNode.metadata?.storyboard?.referenceNodeIds || [],
                 },
@@ -372,18 +431,24 @@ export function useCanvasStoryboard({
         const nextNodes = [...nodesRef.current];
         const nextConnections = [...connectionsRef.current];
         const targets: Array<{ row: StoryboardRow; node: CanvasNodeData; prompt: string }> = [];
+        const contextReferences = buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current)
+            .filter((item) => item.active && (item.kind === "text" || item.kind === "character"))
+            .map((item) => formatActionBoardReference(item))
+            .filter(Boolean);
         actionBoardRows.forEach((row, index) => {
             const prompt = [
                 "生成一张电影动作拆分 12 宫格参考图，严格 3 列 4 行，12 个格子清晰分隔，保持同一角色、服装、场景和光线连续。",
                 `镜头 ${row.shotNumber}：${row.plotDescription || row.videoMotionPrompt || "根据镜头剧情补全动作"}`,
+                row.dialogue ? `台词/旁白：${row.dialogue}` : "",
                 row.characters.length ? `角色：${row.characters.map((item) => item.characterName).join("、")}` : "",
+                contextReferences.length ? `项目/设定参考：\n${contextReferences.join("\n\n")}` : "",
                 "按时间顺序展示动作起势、推进、转折、落点和结束姿态，不要添加文字、边框标题或额外画面。",
             ].filter(Boolean).join("\n");
             const existingIndex = nextNodes.findIndex((node) => node.type === CanvasNodeType.Image && node.metadata?.workflowKind === "action_board" && node.metadata.shotIndex === row.shotNumber);
             if (existingIndex >= 0 && nextNodes[existingIndex].metadata?.content) return;
             const imageNode = existingIndex >= 0
-                ? { ...nextNodes[existingIndex], metadata: { ...resetGenerationTaskMetadata(nextNodes[existingIndex].metadata), prompt } }
-                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, workflowKind: "action_board", workflowTitle: `镜头 ${row.shotNumber} 动作板`, shotIndex: row.shotNumber, actionBoardRows: 4, actionBoardColumns: 3, status: NODE_STATUS_IDLE });
+                ? { ...nextNodes[existingIndex], metadata: { ...resetGenerationTaskMetadata(nextNodes[existingIndex].metadata), prompt, lastImageSubmissionPrompt: prompt } }
+                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, lastImageSubmissionPrompt: prompt, workflowKind: "action_board", workflowTitle: `镜头 ${row.shotNumber} 动作板`, shotIndex: row.shotNumber, actionBoardRows: 4, actionBoardColumns: 3, status: NODE_STATUS_IDLE });
             imageNode.title = `镜头 ${row.shotNumber} · 动作板`;
             if (existingIndex >= 0) nextNodes[existingIndex] = imageNode;
             else {
@@ -446,6 +511,27 @@ export function useCanvasStoryboard({
             if (!nextConnections.some((connection) => connection.fromNodeId === row.imageNodeId && connection.toNodeId === videoNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: row.imageNodeId!, toNodeId: videoNode.id });
             targets.push({ row, node: videoNode, prompt });
         });
+        const promptByRowId = new Map(targets.map((target) => [target.row.id, target.prompt]));
+        const videoNodeByRowId = new Map(targets.map((target) => [target.row.id, target.node.id]));
+        const scriptIndex = nextNodes.findIndex((node) => node.id === currentScriptNode.id);
+        if (scriptIndex >= 0) {
+            const script = nextNodes[scriptIndex];
+            nextNodes[scriptIndex] = {
+                ...script,
+                metadata: {
+                    ...script.metadata,
+                    storyboard: {
+                        rows: (script.metadata?.storyboard?.rows || []).map((row) => ({
+                            ...row,
+                            videoNodeId: videoNodeByRowId.get(row.id) || row.videoNodeId,
+                            lastVideoSubmissionPrompt: promptByRowId.get(row.id) || row.lastVideoSubmissionPrompt,
+                        })),
+                        visibleColumns: script.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                        referenceNodeIds: script.metadata?.storyboard?.referenceNodeIds || [],
+                    },
+                },
+            };
+        }
         nodesRef.current = nextNodes;
         connectionsRef.current = nextConnections;
         setNodes(nextNodes);
@@ -467,6 +553,19 @@ export function useCanvasStoryboard({
         updateScriptRow,
         updateScriptRows,
     };
+}
+
+function formatActionBoardReference(reference: CanvasResourceReference) {
+    if (reference.kind === "text" && reference.text?.trim()) {
+        return `【文本参考：${reference.title || reference.label}】\n${reference.text.trim()}`;
+    }
+    if (reference.kind === "character") {
+        const detail = reference.text?.trim();
+        return detail
+            ? `【角色参考：${reference.title || reference.label}】\n${detail}`
+            : `【角色参考：${reference.title || reference.label}】`;
+    }
+    return "";
 }
 
 function activeGenerationBatchNodeIds(node: CanvasNodeData, mode: CanvasGenerationBatchMode) {

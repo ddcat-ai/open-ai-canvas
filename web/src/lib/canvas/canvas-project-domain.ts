@@ -192,14 +192,74 @@ export function storyboardRowFromHandle(nodes: CanvasNodeData[], nodeId: string,
     return nodes.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script)?.metadata?.storyboard?.rows.find((row) => `row:${row.id}` === handleId);
 }
 
+/**
+ * 展开分镜 composer 中的 @ 引用。
+ * UI 写入的是稳定 token：`@[node:id]` / `@[skill:dir]`；
+ * 旧数据可能是显示标签：`@文本1`。两者都要支持，否则自动分镜会“瞎拆”。
+ */
 export function expandStoryboardTextMentions(prompt: string, references: CanvasResourceReference[]) {
+    if (!prompt.trim() || !references.length) return prompt;
+    const byNodeId = new Map(references.map((reference) => [reference.nodeId, reference]));
     let expanded = prompt;
-    references.filter((reference) => reference.active && reference.kind === "text" && reference.text?.trim()).forEach((reference) => {
-        const token = `@${reference.label}`;
-        if (!expanded.includes(token)) return;
-        expanded = expanded.split(token).join(`【项目设定：${reference.title}】\n${reference.text!.trim()}`);
+
+    expanded = expanded.replace(/@\[node:([^\]]+)\]/g, (token, nodeId: string) => {
+        const reference = byNodeId.get(nodeId);
+        if (!reference) return token;
+        return formatStoryboardMention(reference);
     });
+
+    expanded = expanded.replace(/@\[skill:([^\]]+)\]/g, (token, skillId: string) => {
+        const reference = references.find((item) => item.kind === "skill" && (item.skill?.dir === skillId || item.nodeId === `skill:${skillId}` || item.id === `skill:${skillId}`));
+        if (!reference) return token;
+        return formatStoryboardMention(reference);
+    });
+
+    // 兼容旧版 chip 显示标签：@文本1 / @角色1
+    references
+        .filter((reference) => reference.active)
+        .slice()
+        .sort((a, b) => b.label.length - a.label.length)
+        .forEach((reference) => {
+            const token = `@${reference.label}`;
+            if (!expanded.includes(token)) return;
+            let cursor = 0;
+            let result = "";
+            while (cursor < expanded.length) {
+                const found = expanded.indexOf(token, cursor);
+                if (found < 0) {
+                    result += expanded.slice(cursor);
+                    break;
+                }
+                const end = found + token.length;
+                result += expanded.slice(cursor, found);
+                const boundary = !expanded[end] || /\s|[,.!?;:，。！？；：、)\]}】）]/.test(expanded[end]);
+                result += boundary ? formatStoryboardMention(reference) : token;
+                cursor = end;
+            }
+            expanded = result;
+        });
+
     return expanded;
+}
+
+function formatStoryboardMention(reference: CanvasResourceReference) {
+    if (reference.kind === "text" && reference.text?.trim()) {
+        return `【文本参考：${reference.title || reference.label}】\n${reference.text.trim()}`;
+    }
+    if (reference.kind === "skill") {
+        const detail = reference.skill?.detail_text || reference.text || reference.skill?.description || "";
+        return [`【技能：${reference.title || reference.label}】`, detail.trim()].filter(Boolean).join("\n");
+    }
+    if (reference.kind === "character") {
+        const detail = reference.text?.trim();
+        return detail
+            ? `【角色参考：${reference.title || reference.label}】\n${detail}`
+            : `【角色参考：${reference.title || reference.label}】`;
+    }
+    if (reference.kind === "image") return `【图片参考：${reference.title || reference.label}】`;
+    if (reference.kind === "video") return `【视频参考：${reference.title || reference.label}】`;
+    if (reference.kind === "audio") return `【音频参考：${reference.title || reference.label}】`;
+    return `【参考：${reference.title || reference.label}】`;
 }
 
 export function getInputSummary(inputs: NodeGenerationInput[]) {

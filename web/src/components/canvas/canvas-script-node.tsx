@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Button, Checkbox, Input, InputNumber, Modal, Popover, Select, Table, Tooltip } from "antd";
+import { createPortal } from "react-dom";
+import { App, Button, Checkbox, Input, InputNumber, Modal, Popover, Select, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Eye, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
+import { expandStoryboardTextMentions } from "@/lib/canvas/canvas-project-domain";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { pipelineStatusLabel, type CanvasStoryboardPipelineProgress, type StoryboardPipelineStage } from "@/lib/canvas/canvas-storyboard-progress";
 import { isContentModerationError } from "@/lib/generation-error";
@@ -18,10 +20,11 @@ import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGeneration
 export const STORYBOARD_ROW_HEIGHT = 48;
 export const STORYBOARD_HEADER_HEIGHT = 124;
 const STORYBOARD_ADD_ROW_HEIGHT = 36;
-const STORYBOARD_COMPOSER_MIN_HEIGHT = 104;
-const STORYBOARD_COMPOSER_MAX_HEIGHT = 180;
+const STORYBOARD_COMPOSER_MIN_HEIGHT = 136;
+const STORYBOARD_COMPOSER_MAX_HEIGHT = 220;
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;
+const STORYBOARD_BRIEF_BAR_HEIGHT = 30;
 const SCRIPT_GRID_TEMPLATE = "72px 150px minmax(280px, 1.4fr) minmax(220px, 1fr) 58px";
 const EMPTY_STORYBOARD_ROWS: StoryboardRow[] = [];
 
@@ -85,12 +88,14 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     onScrollTopChange: (scrollTop: number) => void;
     workspaceMode?: CanvasWorkspaceMode;
 }) {
+    const { message } = App.useApp();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const generationConfig = buildGenerationConfig(effectiveConfig, node, "text");
     const simpleMode = workspaceMode === "simple";
     const rows = node.metadata?.storyboard?.rows || [];
     const [prompt, setPrompt] = useState(node.metadata?.composerContent || "");
+    const [previewOpen, setPreviewOpen] = useState(false);
     const [scrollTop, setScrollTop] = useState(0);
     const composerHeightChangeRef = useRef(onComposerHeightChange);
     const reportedComposerHeightRef = useRef<number | null>(null);
@@ -107,19 +112,53 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const taskFeedback = node.metadata?.status === "loading"
         ? `${node.metadata.taskStage || "正在创建任务"}${typeof node.metadata.taskProgress === "number" ? ` · ${node.metadata.taskProgress}%` : ""}`
         : node.metadata?.status === "error" ? node.metadata.errorDetails : "";
+    const lastSubmissionPrompt = node.metadata?.lastStoryboardSubmissionPrompt?.trim() || "";
+    const lastSubmissionAt = node.metadata?.lastStoryboardSubmissionAt;
+    const liveExpandedBrief = useMemo(
+        () => expandStoryboardTextMentions(prompt, mentionReferences),
+        [mentionReferences, prompt],
+    );
+    const activeReferenceCount = useMemo(
+        () => mentionReferences.filter((item) => item.active && item.kind !== "skill").length,
+        [mentionReferences],
+    );
+    const hasTextReferenceInBrief = /【文本参考：/.test(liveExpandedBrief);
+    const hasCharacterReferenceInBrief = /【角色参考：/.test(liveExpandedBrief);
+    const mentionTokenCount = useMemo(() => (prompt.match(/@\[(?:node|skill):[^\]]+\]/g) || []).length, [prompt]);
+    const briefChangedFromLast = Boolean(lastSubmissionPrompt && lastSubmissionPrompt !== liveExpandedBrief.trim());
     const submitPrompt = () => {
         const value = prompt.trim();
         if (value && node.metadata?.status !== "loading") onGenerateScript(value);
     };
+    const copyLiveBrief = async () => {
+        try {
+            await navigator.clipboard.writeText(liveExpandedBrief);
+            message.success("已复制将发送的 brief");
+        } catch {
+            message.error("复制失败");
+        }
+    };
     useLayoutEffect(() => {
         composerHeightChangeRef.current = onComposerHeightChange;
     }, [onComposerHeightChange]);
+    useEffect(() => {
+        if (!previewOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            setPreviewOpen(false);
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [previewOpen]);
     const resizePrompt = useCallback((contentHeight: number) => {
         const promptHeight = Math.min(STORYBOARD_PROMPT_MAX_HEIGHT, Math.max(STORYBOARD_PROMPT_MIN_HEIGHT, contentHeight));
-        const composerHeight = promptHeight + 64;
-        if (reportedComposerHeightRef.current === composerHeight) return;
-        reportedComposerHeightRef.current = composerHeight;
-        composerHeightChangeRef.current(composerHeight);
+        // 输入区 + 「将发送」摘要条 + 底部控件
+        const nextHeight = promptHeight + STORYBOARD_BRIEF_BAR_HEIGHT + 72;
+        if (reportedComposerHeightRef.current === nextHeight) return;
+        reportedComposerHeightRef.current = nextHeight;
+        composerHeightChangeRef.current(nextHeight);
     }, []);
 
     return (
@@ -184,7 +223,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
             <div className="flex h-9 shrink-0 items-center justify-center border-b" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <button type="button" className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onAddRow(); }}><Plus className="size-3.5" />添加行</button>
             </div>
-            <div className="relative grid shrink-0 grid-rows-[minmax(0,1fr)_28px] gap-1.5 rounded-b-[17px] p-2.5" style={{ height: composerHeight, background: theme.node.panel }}>
+            <div className="relative grid shrink-0 grid-rows-[minmax(0,1fr)_auto_28px] gap-1 rounded-b-[17px] p-2.5" style={{ height: composerHeight, background: theme.node.panel }}>
                 <CanvasResourceMentionTextarea
                     rows={1}
                     references={mentionReferences}
@@ -193,7 +232,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     className="thin-scrollbar h-full min-h-0 w-full touch-pan-y resize-none overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border bg-transparent px-3 py-2 text-sm leading-5 outline-none transition placeholder:opacity-45 focus:ring-1"
                     style={{ borderColor: theme.node.stroke, color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
                     value={prompt}
-                    placeholder="描述想生成的脚本或视频内容"
+                    placeholder="描述想生成的脚本或视频内容；可用 @ 引用已连接的文本/角色"
                     onContentSizeChange={resizePrompt}
                     onChange={(value) => {
                         setPrompt(value);
@@ -209,6 +248,49 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     onPointerDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                 />
+                <div
+                    className="flex min-h-7 shrink-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-1"
+                    style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                >
+                    <Eye className="size-3.5 shrink-0 opacity-70" />
+                    <span className="text-[10px] leading-4">
+                        将发送
+                        {mentionTokenCount ? ` · @${mentionTokenCount}` : ""}
+                        {activeReferenceCount ? ` · 可引用 ${activeReferenceCount}` : " · 无可引用"}
+                        {hasTextReferenceInBrief ? " · 含文本参考" : mentionTokenCount ? " · 文本未展开?" : ""}
+                        {hasCharacterReferenceInBrief ? " · 含角色" : ""}
+                    </span>
+                    <button
+                        type="button"
+                        className="ml-auto inline-flex h-6 items-center gap-1 rounded px-1.5 text-[10px] font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
+                        style={{ color: theme.accent.primary, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setPreviewOpen(true);
+                        }}
+                    >
+                        <Eye className="size-3" />
+                        发送前预览
+                    </button>
+                    {lastSubmissionPrompt ? (
+                        <Tooltip title={briefChangedFromLast ? "与上次发出内容不同" : "与上次相同"}>
+                            <button
+                                type="button"
+                                className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[10px] outline-none transition hover:bg-black/5 dark:hover:bg-white/10"
+                                style={{ color: theme.node.muted }}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setPreviewOpen(true);
+                                }}
+                            >
+                                <ListTree className="size-3" />
+                                上次
+                            </button>
+                        </Tooltip>
+                    ) : null}
+                </div>
                 <div className="flex min-w-0 items-center justify-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     <div className="mr-auto min-w-36 max-w-56 flex-1">
                         <ModelPicker
@@ -269,6 +351,121 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     </div>
                 );
             })}
+            {previewOpen
+                ? createPortal(
+                    <div
+                        className="ant-modal fixed inset-0 z-[4000] grid place-items-center px-4"
+                        data-canvas-no-zoom
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="自动分镜发送前 brief"
+                        style={{ background: "rgba(0,0,0,0.48)" }}
+                        onMouseDown={(event) => {
+                            // 点遮罩关闭；点内容不关
+                            if (event.target === event.currentTarget) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setPreviewOpen(false);
+                            }
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => event.stopPropagation()}
+                        onWheel={(event) => event.stopPropagation()}
+                    >
+                        <div
+                            className="ant-modal-content flex max-h-[min(82vh,760px)] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border shadow-2xl backdrop-blur-2xl"
+                            style={{
+                                borderColor: theme.node.stroke,
+                                background: theme.node.panel,
+                                color: theme.node.text,
+                            }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
+                                <div className="min-w-0 flex-1 text-sm font-semibold">自动分镜 · 发送前 brief</div>
+                                <button
+                                    type="button"
+                                    className="grid size-8 place-items-center rounded-md outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
+                                    style={{ color: theme.node.muted, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                                    aria-label="关闭 brief 预览"
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setPreviewOpen(false);
+                                    }}
+                                >
+                                    <X className="size-4" />
+                                </button>
+                            </div>
+                            <div className="thin-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
+                                <div className="rounded-md border px-3 py-2 text-[11px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                    这是点发送前会实际交给模型的 brief（已展开 @）。
+                                    {hasTextReferenceInBrief ? " 已检测到【文本参考】。" : mentionTokenCount ? " 有 @，但未见【文本参考】展开，请检查引用节点是否仍有正文。" : " 当前没有 @ 文本引用。"}
+                                    {hasCharacterReferenceInBrief ? " 已含角色参考。" : ""}
+                                </div>
+                                <div>
+                                    <div className="mb-1 text-xs font-medium opacity-70">将发送（@ 已展开）</div>
+                                    <pre className="thin-scrollbar max-h-[40vh] overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[12px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                        {liveExpandedBrief.trim() || "（空）"}
+                                    </pre>
+                                </div>
+                                {lastSubmissionPrompt ? (
+                                    <div>
+                                        <div className="mb-1 text-xs font-medium opacity-70">
+                                            上次已发送
+                                            {lastSubmissionAt ? ` · ${new Date(lastSubmissionAt).toLocaleString()}` : ""}
+                                            {briefChangedFromLast ? " · 与当前不同" : " · 与当前相同"}
+                                        </div>
+                                        <pre className="thin-scrollbar max-h-40 overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[11px] leading-5 opacity-80" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                            {lastSubmissionPrompt}
+                                        </pre>
+                                    </div>
+                                ) : null}
+                            </div>
+                            <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-3" style={{ borderColor: theme.node.stroke }}>
+                                <Button
+                                    icon={<Copy className="size-3.5" />}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void copyLiveBrief();
+                                    }}
+                                >
+                                    复制将发送
+                                </Button>
+                                <Button
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setPreviewOpen(false);
+                                    }}
+                                >
+                                    关闭
+                                </Button>
+                                <Button
+                                    type="primary"
+                                    icon={<Send className="size-3.5" />}
+                                    disabled={!prompt.trim() || node.metadata?.status === "loading"}
+                                    loading={node.metadata?.status === "loading"}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setPreviewOpen(false);
+                                        submitPrompt();
+                                    }}
+                                >
+                                    确认发送
+                                </Button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body,
+                )
+                : null}
         </div>
     );
 }
@@ -379,7 +576,7 @@ function batchItemTone(item?: CanvasGenerationBatchItem): CanvasNodeStatus | und
     return "loading";
 }
 
-export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibleColumnsChange, onGenerateImages, onGenerateVideos }: {
+export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibleColumnsChange, onGenerateImages, onGenerateVideos, onFocusNode }: {
     node: CanvasNodeData | null;
     open: boolean;
     onClose: () => void;
@@ -387,6 +584,8 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
     onVisibleColumnsChange: (columns: StoryboardColumn[]) => void;
     onGenerateImages: (rowIds: string[]) => void;
     onGenerateVideos: (rowIds: string[]) => void;
+    /** 从分镜行回溯到画布上的图/视频节点 */
+    onFocusNode?: (nodeId: string) => void;
 }) {
     const [query, setQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -427,6 +626,38 @@ export function CanvasScriptEditor({ node, open, onClose, onUpdateRows, onVisibl
         fixed: option.value === "shotNumber" ? "left" as const : undefined,
         render: (_: unknown, row: StoryboardRow) => option.value === "shotNumber" ? <span className="font-semibold">{row.shotNumber}</span> : option.value === "durationSeconds" ? <InputNumber min={1} max={60} value={row.durationSeconds} addonAfter="s" onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })} /> : option.value === "shotSize" ? <Select className="w-full" value={row.shotSize || undefined} placeholder="选择景别" options={["特写", "近景", "中景", "全景", "远景"].map((value) => ({ value, label: value }))} onChange={(shotSize) => updateRow(row.id, { shotSize })} /> : <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} value={String(row[option.value] || "")} placeholder={`填写${option.label}`} onChange={(event) => updateRow(row.id, { [option.value]: event.target.value } as Partial<StoryboardRow>)} />,
     }));
+    columns.push({
+        title: "最终发送 / 回溯",
+        key: "submissionTrace",
+        dataIndex: "lastImageSubmissionPrompt",
+        width: 280,
+        render: (_: unknown, row: StoryboardRow) => (
+            <div className="space-y-1.5 py-1 text-[11px] leading-4">
+                <div className="rounded border border-black/5 bg-black/[0.02] px-1.5 py-1 dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="mb-0.5 flex items-center justify-between gap-1 opacity-60">
+                        <span>图 · 最终 prompt</span>
+                        {row.imageNodeId && onFocusNode ? (
+                            <button type="button" className="text-[10px] text-current underline-offset-2 hover:underline" onClick={() => onFocusNode(row.imageNodeId!)}>
+                                定位节点
+                            </button>
+                        ) : null}
+                    </div>
+                    <div className="max-h-16 overflow-y-auto whitespace-pre-wrap break-words opacity-80">{row.lastImageSubmissionPrompt?.trim() || "尚未同步/生成"}</div>
+                </div>
+                <div className="rounded border border-black/5 bg-black/[0.02] px-1.5 py-1 dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="mb-0.5 flex items-center justify-between gap-1 opacity-60">
+                        <span>视频 · 最终 prompt</span>
+                        {row.videoNodeId && onFocusNode ? (
+                            <button type="button" className="text-[10px] text-current underline-offset-2 hover:underline" onClick={() => onFocusNode(row.videoNodeId!)}>
+                                定位节点
+                            </button>
+                        ) : null}
+                    </div>
+                    <div className="max-h-16 overflow-y-auto whitespace-pre-wrap break-words opacity-80">{row.lastVideoSubmissionPrompt?.trim() || "尚未同步/生成"}</div>
+                </div>
+            </div>
+        ),
+    });
     columns.push({
         title: "操作", key: "actions", dataIndex: "shotNumber", width: 150, fixed: "right" as const,
         render: (_: unknown, row: StoryboardRow) => <div className="flex gap-1"><SmallButton title="上移" onClick={() => moveRow(row.id, -1)}><ChevronUp className="size-3.5" /></SmallButton><SmallButton title="下移" onClick={() => moveRow(row.id, 1)}><ChevronDown className="size-3.5" /></SmallButton><SmallButton title="复制" onClick={() => duplicateRow(row)}><Copy className="size-3.5" /></SmallButton><SmallButton title="删除" onClick={() => removeRow(row.id)}><Trash2 className="size-3.5" /></SmallButton></div>,

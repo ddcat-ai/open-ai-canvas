@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Bot, Check, ChevronDown, Coins, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
+import { ArrowLeft, Bot, Check, ChevronDown, Coins, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Modal, Tooltip } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -89,13 +89,32 @@ export function CanvasTopBar({
     return (
         <>
             <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between px-4">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+                <div className="pointer-events-auto flex min-w-0 items-center gap-2 sm:gap-3">
+                    {projectContext ? (
+                        <Tooltip title={`返回项目：${projectContext.projectName}`}>
+                            <Link
+                                to={`/projects/${projectContext.projectId}/overview`}
+                                className="grid size-9 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10"
+                                style={{ color: theme.node.text }}
+                                aria-label={`返回项目 ${projectContext.projectName}`}
+                            >
+                                <ArrowLeft className="size-5" />
+                            </Link>
+                        </Tooltip>
+                    ) : null}
                     <Dropdown
                         trigger={["click"]}
                         menu={{
                             items: [
+                                ...(projectContext
+                                    ? [
+                                          { key: "back-project", icon: <FolderKanban className="size-4" />, label: <Link to={`/projects/${projectContext.projectId}/overview`}>返回项目</Link> },
+                                          { key: "project-canvases", icon: <LayoutGrid className="size-4" />, label: <Link to={`/projects/${projectContext.projectId}/canvases`}>项目画布列表</Link> },
+                                          { type: "divider" as const },
+                                      ]
+                                    : []),
                                 { key: "home", icon: <Home className="size-4" />, label: <Link to="/">主页</Link> },
-                                { key: "projects", icon: <LayoutGrid className="size-4" />, label: <Link to="/canvas">画布</Link> },
+                                { key: "canvas-library", icon: <LayoutGrid className="size-4" />, label: <Link to="/canvas">画布库</Link> },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
@@ -152,10 +171,22 @@ export function CanvasTopBar({
                             </div>
                         )}
                         {projectContext && !isTitleEditing ? (
-                            <div className="mt-0.5 flex max-w-[360px] items-center gap-1.5 text-[10px]" style={{ color: theme.node.muted }}>
-                                <Link to={`/projects/${projectContext.projectId}/overview`} className="inline-flex min-w-0 items-center gap-1 hover:underline" title={`返回项目：${projectContext.projectName}`}>
+                            <div className="mt-0.5 flex max-w-[420px] items-center gap-1.5 text-[10px]" style={{ color: theme.node.muted }}>
+                                <Link
+                                    to={`/projects/${projectContext.projectId}/overview`}
+                                    className="inline-flex min-w-0 items-center gap-1 rounded px-1 py-0.5 font-medium hover:bg-black/5 hover:underline dark:hover:bg-white/10"
+                                    title={`返回项目：${projectContext.projectName}`}
+                                >
                                     <FolderKanban className="size-3 shrink-0" />
-                                    <span className="max-w-[120px] truncate">{projectContext.projectName}</span>
+                                    <span className="max-w-[160px] truncate">{projectContext.projectName}</span>
+                                </Link>
+                                <span aria-hidden>·</span>
+                                <Link
+                                    to={`/projects/${projectContext.projectId}/canvases`}
+                                    className="shrink-0 rounded px-1 py-0.5 hover:bg-black/5 hover:underline dark:hover:bg-white/10"
+                                    title="打开项目画布列表"
+                                >
+                                    画布列表
                                 </Link>
                                 <span aria-hidden>·</span>
                                 <button type="button" className="min-w-0 truncate hover:underline" onClick={onOpenSearch} title="搜索并定位章节或镜头">
