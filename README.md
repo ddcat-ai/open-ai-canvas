@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.7-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.34-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
@@ -28,10 +28,10 @@
 
 ## 赞助商
 
-| 赞助商 | 网站 | 说明 |
-| --- | --- | --- |
-| <img src="assets/artdance.png" alt="ArtDance" width="160"> | [ArtDance](https://artbox.top) | 本项目 Seedance 模型的天使投资人。 |
-
+| LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
+| --- | --- | --- | --- | --- |
+| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
+| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 快乐机艺术小组，一支跨学科的艺术创作团队，持续探索数字+艺术的全新表达形式。 | 暂无 |
 
 ## 主要功能
 
