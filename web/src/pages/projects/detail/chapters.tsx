@@ -41,7 +41,6 @@ import {
     Trash2,
     Underline,
     Undo2,
-    Sparkles,
     UsersRound,
     X,
 } from "lucide-react";
@@ -70,8 +69,6 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 
 import { formatCount, formatTime, statusLabel, type ProjectDetailViewProps } from "./shared";
-import { ChapterAiPanel } from "./chapter-ai-panel";
-import type { ChapterAiProposal } from "./chapter-ai-agent";
 import { extractChapterCharacters } from "./project-chapter-ai";
 
 const CHAPTER_ROW_HEIGHT = 52;
@@ -96,8 +93,6 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     const [dirty, setDirty] = useState(false);
     const [extractingCharacters, setExtractingCharacters] = useState(false);
     const [importingCanvasId, setImportingCanvasId] = useState("");
-    const [chapterAiOpen, setChapterAiOpen] = useState(false);
-    const [chapterAiUndo, setChapterAiUndo] = useState<{ html: string; title: string } | null>(null);
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const localCanvases = useCanvasStore((state) => state.projects);
@@ -222,8 +217,6 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
         setDraftTitle(selectedUnitSummary.title);
         setDraftHtml("");
         setDirty(false);
-        setChapterAiUndo(null);
-        setChapterAiOpen(false);
     }, [selectedUnitSummary?.id]);
 
     useEffect(() => {
@@ -259,23 +252,6 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
             projectStyle: resolveCanvasStylePreset(detail.project.stylePresetId)?.prompt || "",
             config: effectiveConfig,
         };
-    };
-    const applyChapterAiProposal = (proposal: ChapterAiProposal) => {
-        if (!editor) return;
-        setChapterAiUndo({ html: editor.getHTML(), title: draftTitle });
-        editor.commands.setContent(proposal.afterHtml, { emitUpdate: false });
-        setDraftHtml(proposal.afterHtml);
-        setDirty(true);
-        // 保持右侧 Agent 常驻，便于多轮继续改
-    };
-    const undoChapterAiWrite = () => {
-        if (!editor || !chapterAiUndo) return;
-        editor.commands.setContent(chapterAiUndo.html, { emitUpdate: false });
-        setDraftHtml(chapterAiUndo.html);
-        setDraftTitle(chapterAiUndo.title);
-        setDirty(true);
-        setChapterAiUndo(null);
-        message.success("已撤销 AI 写回");
     };
     const extractCharacters = async () => {
         try {
@@ -445,8 +421,6 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38"><span>{dirty ? "有未保存修改" : `保存于 ${formatTime(selectedUnit.updatedAt)}`}</span><span>·</span><span>{formatCount(wordCount)} 字</span><span>·</span><span>{chapterCanvasCount(selectedUnit.id)} 个画布</span></div>
                             </div>
                             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                                <Button size="small" icon={<Sparkles className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || selectedUnitQuery.isLoading} onClick={() => setChapterAiOpen(true)}>章节 AI</Button>
-                                {chapterAiUndo ? <Button size="small" onClick={undoChapterAiWrite}>撤销 AI 写回</Button> : null}
                                 <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} loading={extractingCharacters} onClick={() => void extractCharacters()}>提取角色</Button>
                                 {chapterShotCount(selectedUnit.id) ? <Dropdown trigger={["click"]} menu={{ items: [{ key: "new", icon: <Plus className="size-3.5" />, label: "新建章节画布并导入" }, ...(projectCanvasTargets.length ? [{ type: "divider" as const }, ...projectCanvasTargets.map((canvas) => ({ key: canvas.id, icon: <LayoutGrid className="size-3.5" />, label: `导入到：${canvas.title}${detail.canvasUnitLinks.some((link) => link.canvasId === canvas.id && link.unitId === selectedUnit.id) ? " · 已关联本章" : ""}` }))] : [])], onClick: ({ key }) => void importStoryboardToCanvas(key === "new" ? undefined : key) }}><Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} loading={Boolean(importingCanvasId)} disabled={extractingCharacters}>导入分镜</Button></Dropdown> : <Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} onClick={onCreateCanvas}>在画布中分镜</Button>}
                                 <Button size="small" type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || !dirty || !draftTitle.trim() || saveMutation.isPending} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存" : "已保存"}</Button>
@@ -459,21 +433,6 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
                                     {selectedUnitQuery.isLoading ? <WorkspaceState icon="loading" compact className="h-full" title="正在读取章节正文" description="正文准备完成后会自动显示。" /> : selectedUnitQuery.isError ? <WorkspaceErrorState compact title="章节正文读取失败" description={selectedUnitQuery.error instanceof Error ? selectedUnitQuery.error.message : "请检查网络连接后重试。"} onRetry={() => void selectedUnitQuery.refetch()} /> : <div className="project-chapter-editor-wrap min-h-full"><EditorContent editor={editor} /></div>}
                                 </div>
                             </div>
-                            {chapterAiOpen ? (
-                                <ChapterAiPanel
-                                    open={chapterAiOpen}
-                                    projectId={detail.project.id}
-                                    projectName={detail.project.name}
-                                    chapterId={selectedUnit.id}
-                                    chapterTitle={draftTitle || selectedUnit.title}
-                                    sourcePlain={editor?.getText().trim() || stripHtml(draftHtml || selectedUnitQuery.data?.unit.sourceText || "")}
-                                    disabled={!selectedUnitQuery.data?.unit || selectedUnitQuery.isLoading}
-                                    onClose={() => setChapterAiOpen(false)}
-                                    onApply={applyChapterAiProposal}
-                                    onUndo={undoChapterAiWrite}
-                                    canUndo={Boolean(chapterAiUndo)}
-                                />
-                            ) : null}
                         </div>
                     </div>
                 ) : <WorkspaceState icon="projects" compact className="h-full" title="请选择章节" description="从左侧章节列表选择一章开始编辑。" />}
