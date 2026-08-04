@@ -37,7 +37,7 @@ export function CanvasCreateCommandGrid({ commands, variant = "node" }: { comman
                 >
                     <span className="grid size-5 shrink-0 place-items-center opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5">{command.icon}</span>
                     <span className="max-w-full truncate text-[var(--fs-micro)] font-semibold leading-none">{command.label}</span>
-                    {command.badge ? <span className="absolute right-1 top-1 rounded-full border px-1 py-0.5 text-[6px] font-bold leading-none" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{command.badge}</span> : null}
+                    {command.badge ? <span className="absolute right-1 top-1 rounded-full border px-1 py-0.5 text-[var(--fs-nano)] font-bold leading-none" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{command.badge}</span> : null}
                 </motion.button>
             ))}
         </div>
