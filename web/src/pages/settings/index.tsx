@@ -50,6 +50,15 @@ function isConfigSection(value: string | null): value is ConfigSectionKey {
     return configSections.some((section) => section.key === value);
 }
 
+function channelModelFetchErrorMessage(error: unknown) {
+    const detail = error instanceof Error ? error.message : "读取模型失败";
+    // 私网地址会在实际生成时继续被 SSRF 防护拦截，不能提示用户靠手填模型绕过。
+    if (detail.includes("不允许访问本机") || detail.includes("不允许访问保留地址")) {
+        return `${detail}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS`;
+    }
+    return `${detail}；也可以直接在模型列表中手动输入模型名`;
+}
+
 export default function SettingsPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
@@ -184,7 +193,7 @@ export default function SettingsPage() {
             );
             message.success(`${latestChannel.name || "当前渠道"}模型列表已更新`);
         } catch (error) {
-            message.error(error instanceof Error ? `${error.message}；也可以直接在模型列表中手动输入模型名` : "读取模型失败，可直接手动输入模型名");
+            message.error(channelModelFetchErrorMessage(error));
         } finally {
             setChannelLoading(channel.id, false);
         }

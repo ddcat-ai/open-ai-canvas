@@ -1,0 +1,14 @@
+ARG GO_IMAGE=golang:1.25-alpine
+FROM ${GO_IMAGE}
+
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG ALPINE_MIRROR
+ENV GOPROXY=$GOPROXY
+
+RUN if [ -n "$ALPINE_MIRROR" ]; then sed -i "s#https://dl-cdn.alpinelinux.org#${ALPINE_MIRROR}#g" /etc/apk/repositories; fi \
+    && apk add --no-cache build-base git \
+    && go install github.com/air-verse/air@v1.63.0
+
+WORKDIR /workspace/backend
+
+CMD ["air", "-c", ".air.toml"]

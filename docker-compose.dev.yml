@@ -1,0 +1,76 @@
+name: open-ai-canvas-dev
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+      args:
+        GO_IMAGE: ${GO_IMAGE:-golang:1.25-alpine}
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
+    working_dir: /workspace/backend
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      HOME: /tmp
+      GOCACHE: /tmp/go-build
+      GOMODCACHE: /tmp/go-mod
+      CANVAS_BACKEND_ADDR: ":8080"
+      CANVAS_BACKEND_DATA_DIR: /data
+      CANVAS_DATABASE_DRIVER: ${CANVAS_DATABASE_DRIVER:-sqlite}
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      CANVAS_WORKER_CONCURRENCY: ${CANVAS_WORKER_CONCURRENCY:-3}
+      CANVAS_CHANNEL_CONCURRENCY: ${CANVAS_CHANNEL_CONCURRENCY:-3}
+      CANVAS_REGISTRATION_ENABLED: ${CANVAS_REGISTRATION_ENABLED:-false}
+      CANVAS_ALLOW_PRIVATE_UPSTREAMS: ${CANVAS_ALLOW_PRIVATE_UPSTREAMS:-false}
+      CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS: ${CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS:-}
+      CANVAS_CORS_ORIGINS: ${CANVAS_CORS_ORIGINS:-http://localhost:3000}
+      GIN_MODE: debug
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      # 禁止 Compose 静默创建新数据目录，避免开发时误用另一套账号数据。
+      - type: bind
+        source: ./.local/project-workbench-debug
+        target: /data
+        bind:
+          create_host_path: false
+      # 持久化首次下载和 CGO 编译结果，容器重建后继续复用开发缓存。
+      - type: bind
+        source: ./.local/cache/go-build
+        target: /tmp/go-build
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.local/cache/go-mod
+        target: /tmp/go-mod
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${CANVAS_BACKEND_HOST_PORT:-8080}:8080"
+    init: true
+
+  web:
+    image: oven/bun:1.3.13
+    working_dir: /workspace/web
+    command: ["sh", "-c", "bun install --frozen-lockfile && bun run dev"]
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8080
+      VITE_TLDRAW_LICENSE_KEY: ${VITE_TLDRAW_LICENSE_KEY:-}
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - web-node-modules:/workspace/web/node_modules
+      - web-bun-cache:/root/.bun/install/cache
+    ports:
+      - "${CANVAS_WEB_HOST_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    init: true
+
+volumes:
+  web-node-modules:
+  web-bun-cache:

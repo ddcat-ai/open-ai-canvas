@@ -62,8 +62,8 @@ func ValidateOutboundURL(rawURL string) (*url.URL, error) {
 	return parsed, nil
 }
 
-// 用户自定义渠道必须使用更严格的出口策略：只允许 HTTPS，不接受 URL 凭据，
-// 仅部署者精确配置的主机可以路由到私网。
+// 用户自定义渠道必须使用更严格的出口策略：不接受 URL 凭据，且仅部署者精确配置的
+// 主机可以路由到私网或使用会明文传输 API Key 的 HTTP。
 func ValidateCustomRelayURL(rawURL string) (*url.URL, error) {
 	if len(strings.TrimSpace(rawURL)) > 4096 {
 		return nil, BadAuthRequest("自定义渠道地址过长")
@@ -72,8 +72,12 @@ func ValidateCustomRelayURL(rawURL string) (*url.URL, error) {
 	if err != nil || parsed.Hostname() == "" || !parsed.IsAbs() {
 		return nil, BadAuthRequest("自定义渠道地址无效")
 	}
-	if parsed.Scheme != "https" {
-		return nil, BadAuthRequest("自定义渠道中转只支持 HTTPS")
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return nil, BadAuthRequest("自定义渠道地址只支持 http/https")
+	}
+	if scheme == "http" && !allowedPrivateUpstreamHost(parsed.Hostname()) {
+		return nil, BadAuthRequest("自定义渠道 HTTP 仅允许访问已配置的可信上游主机")
 	}
 	if parsed.User != nil {
 		return nil, BadAuthRequest("自定义渠道地址不允许包含认证信息")

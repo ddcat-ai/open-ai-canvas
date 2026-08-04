@@ -10,6 +10,7 @@ data
 backend/data
 backend/*.db
 .serena
+.local
 web/.next
 web/node_modules
 web/out
