@@ -118,6 +118,13 @@
     --z-tooltip: 1000;          /* L12 提示 */
     --z-max: 2000;              /* L13 最高（紧急通知）*/
 
+    /* --- 6b. Canvas 浮层定位 inset（画布安全区，对应审计 D2/P0-2）--- */
+    --canvas-inset-x: 16px;             /* 浮层水平安全区（dock inset、顶栏 px）*/
+    --canvas-inset-y: 16px;             /* 浮层垂直安全区（dock 底部）*/
+    --canvas-topbar-h: 64px;            /* 顶部栏高度 */
+    --canvas-topbar-offset: 72px;       /* 顶栏下方浮层顶部偏移（topbar-h + 8px 间距）*/
+    --canvas-dock-popover-offset: 50px; /* dock 弹出面板底部偏移 */
+
     /* --- 7. 动效（对应 #99 动效 token）--- */
     /* duration */
     --motion-dur-instant: 80ms;
