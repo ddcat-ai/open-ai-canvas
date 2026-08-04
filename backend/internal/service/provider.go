@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"

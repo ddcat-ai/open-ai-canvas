@@ -2,10 +2,13 @@
 
 FROM golang:1.25-alpine AS backend-build
 
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=$GOPROXY
+ARG GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct
+ENV GOPROXY=$GOPROXY \
+    GOSUMDB=off
 
-RUN apk add --no-cache build-base
+# 构建期使用国内 Alpine 源，降低 dl-cdn 抽风导致的 apk I/O 失败。
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache build-base
 
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
@@ -16,7 +19,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=1 GOOS=linux go 
 
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata wget \
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache ca-certificates tzdata wget \
     && addgroup -S app \
     && adduser -S app -G app
 
