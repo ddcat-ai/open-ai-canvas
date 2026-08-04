@@ -1,9 +1,34 @@
 import type { UploadedFile } from "@/services/file-storage";
 import type { UploadedImage } from "@/services/image-storage";
-import type { ImageAsset, NewAsset } from "@/stores/use-asset-store";
+import type { Asset, ImageAsset, NewAsset } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 
 export type CreationAttachment = ReferenceImage & { previewUrl: string };
+
+export type CreationAssetIdentity = {
+    taskId?: string;
+    messageId?: string;
+    resultIndex?: number;
+};
+
+export function creationAssetKey(identity: CreationAssetIdentity): string | undefined {
+    const taskId = identity.taskId?.trim();
+    const messageId = identity.messageId?.trim();
+    const scope = taskId ? `task:${taskId}` : messageId ? `message:${messageId}` : "";
+    if (!scope) return undefined;
+    const resultIndex = typeof identity.resultIndex === "number" && Number.isInteger(identity.resultIndex) && identity.resultIndex >= 0 ? identity.resultIndex : 0;
+    return `create-generation:${scope}:${resultIndex}`;
+}
+
+export function isSameCreationAsset(asset: Pick<Asset, "metadata">, identity: CreationAssetIdentity): boolean {
+    const key = creationAssetKey(identity);
+    if (!key) return false;
+    if (asset.metadata?.creationAssetKey === key) return true;
+
+    // 兼容修复前已经写入的素材：旧记录没有结果序号，只能将同一任务的首个结果视为已处理。
+    const isLegacyResult = identity.resultIndex === 0 && typeof identity.taskId === "string";
+    return isLegacyResult && asset.metadata?.source === "create-generation" && asset.metadata?.taskId === identity.taskId && asset.metadata?.resultIndex === undefined;
+}
 
 export function creationAttachmentFromImage(file: File, uploaded: UploadedImage): CreationAttachment {
     return {

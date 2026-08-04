@@ -18,9 +18,9 @@ import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@
 import { storeGeneratedVideo } from "@/services/api/video";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type NewAsset } from "@/stores/use-asset-store";
 import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
-import { creationAttachmentFromImage, creationImageAsset, creationVideoAsset, type CreationAttachment } from "./creation-assets";
+import { creationAssetKey, creationAttachmentFromImage, creationImageAsset, creationVideoAsset, isSameCreationAsset, type CreationAssetIdentity, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
@@ -86,6 +86,14 @@ async function persistCreationImageResult(image: CreationImageResult): Promise<U
     };
 }
 
+function addCreationAssetOnce(asset: NewAsset, identity: CreationAssetIdentity) {
+    const store = useAssetStore.getState();
+    const key = creationAssetKey(identity);
+    if (key && store.assets.some((existing) => isSameCreationAsset(existing, identity))) return false;
+    store.addAsset(key ? { ...asset, metadata: { ...asset.metadata, creationAssetKey: key } } : asset);
+    return true;
+}
+
 export default function CreatePage() {
     const { message: toast } = App.useApp();
     const config = useEffectiveConfig();
@@ -123,6 +131,7 @@ export default function CreatePage() {
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
     const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
+    const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
 
     useEffect(() => {
         let cancelled = false;
@@ -144,7 +153,7 @@ export default function CreatePage() {
     }, [conversations, hydrated]);
 
     useEffect(() => {
-        if (!hydrated || !pendingMediaKey) return;
+        if (!hydrated || !pendingMediaKey || !pendingTaskIds.length) return;
         let cancelled = false;
         const syncTasks = async () => {
             if (taskSyncInFlightRef.current) return;
@@ -152,7 +161,8 @@ export default function CreatePage() {
             try {
                 const summaries = await listGenerationTasks(100);
                 const tasks = await enrichCreationTaskSummaries(summaries);
-                const persistedTasks = await persistCreationTaskResults(tasks);
+                const pendingTaskIdSet = new Set(pendingTaskIds);
+                const persistedTasks = await persistCreationTaskResults(tasks.filter((task) => pendingTaskIdSet.has(task.id)));
                 if (cancelled) return;
                 taskSyncWarningRef.current = false;
                 setConversations((current) => reconcileCreationTaskMessages(current, persistedTasks));
@@ -173,7 +183,7 @@ export default function CreatePage() {
             cancelled = true;
             window.clearInterval(timer);
         };
-    }, [hydrated, pendingMediaKey, toast]);
+    }, [hydrated, pendingMediaKey, pendingTaskIds, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -259,7 +269,9 @@ export default function CreatePage() {
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
         const boundTaskIds = new Set<string>();
+        const boundTaskIdsByBatchIndex = new Map<number, string>();
         const bindTask = (task: GenerationTask) => {
+            if (typeof task.clientContext?.batchIndex === "number") boundTaskIdsByBatchIndex.set(task.clientContext.batchIndex, task.id);
             if (boundTaskIds.has(task.id)) return;
             boundTaskIds.add(task.id);
             updateAssistant(assistantMessage.id, (item) => ({ ...item, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])) }));
@@ -299,11 +311,19 @@ export default function CreatePage() {
                     count: taskCount,
                 });
                 if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-                const generatedImages = settled.flatMap((entry) => entry.status === "fulfilled" ? entry.value.images || [] : []);
+                const boundTaskIdList = Array.from(boundTaskIds);
+                const generatedImages = settled.flatMap((entry, batchIndex) => {
+                    if (entry.status !== "fulfilled") return [];
+                    return (entry.value.images || []).map((image, resultIndex) => ({
+                        image,
+                        taskId: boundTaskIdsByBatchIndex.get(batchIndex) || boundTaskIdList[batchIndex],
+                        resultIndex,
+                    }));
+                });
                 const taskFailures = settled.filter((entry): entry is PromiseRejectedResult => entry.status === "rejected");
-                const storedImages = await Promise.allSettled(generatedImages.map(async (image) => {
+                const storedImages = await Promise.allSettled(generatedImages.map(async ({ image, taskId, resultIndex }) => {
                     const uploaded = await persistCreationImageResult(image);
-                    addAsset(creationImageAsset({ title: expandedPrompt.slice(0, 24), uploaded, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId: Array.from(boundTaskIds)[0], taskIds: Array.from(boundTaskIds), prompt: expandedPrompt } }));
+                    addCreationAssetOnce(creationImageAsset({ title: expandedPrompt.slice(0, 24), uploaded, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId, taskIds: boundTaskIdList, resultIndex, prompt: expandedPrompt } }), { taskId, messageId: assistantMessage.id, resultIndex });
                     return uploaded.url;
                 }));
                 const resultUrls = storedImages.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
@@ -328,7 +348,8 @@ export default function CreatePage() {
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
                 const storedVideo = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
                 if (!storedVideo.url) throw new Error("视频结果资源不可用");
-                addAsset(creationVideoAsset({ title: expandedPrompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId: Array.from(boundTaskIds)[0], taskIds: Array.from(boundTaskIds), prompt: expandedPrompt } }));
+                const taskId = Array.from(boundTaskIds)[0];
+                addCreationAssetOnce(creationVideoAsset({ title: expandedPrompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId, taskIds: Array.from(boundTaskIds), resultIndex: 0, prompt: expandedPrompt } }), { taskId, messageId: assistantMessage.id, resultIndex: 0 });
                 updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: [storedVideo.url] }));
             }
             updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done" }));
@@ -662,6 +683,14 @@ function pendingCreationMediaKey(conversations: CreationConversation[]) {
     return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])).join("|");
 }
 
+function pendingCreationTaskIds(conversations: CreationConversation[]) {
+    const taskIds = conversations.flatMap((conversation) => conversation.messages.flatMap((message) => {
+        if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return [];
+        return message.taskIds || [];
+    }));
+    return Array.from(new Set(taskIds));
+}
+
 async function enrichCreationTaskSummaries(tasks: GenerationTask[]) {
     return Promise.all(tasks.map(async (task) => {
         if (!task.clientContext || (task.status !== "failed" && (task.status !== "succeeded" || task.previewUrl))) return task;
@@ -680,9 +709,9 @@ async function persistCreationTaskResults(tasks: GenerationTask[]): Promise<Pers
             const result = task.resultJson ? parseBackendGenerationResult(task) : null;
             const images = result?.images?.length ? result.images : task.previewUrl && task.previewKind !== "video" ? [{ dataUrl: task.previewUrl }] : [];
             if (images.length) {
-                const storedImages = await Promise.all(images.map(async (image) => {
+                const storedImages = await Promise.all(images.map(async (image, resultIndex) => {
                     const uploaded = await persistCreationImageResult(image);
-                    addAsset(creationImageAsset({ title: task.prompt.slice(0, 24), uploaded, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, prompt: task.prompt } }));
+                    addCreationAssetOnce(creationImageAsset({ title: task.prompt.slice(0, 24), uploaded, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, resultIndex, prompt: task.prompt } }), { taskId: task.id, messageId: task.clientContext?.messageId, resultIndex });
                     return uploaded.url;
                 }));
                 return { ...task, creationResultUrls: storedImages };
@@ -692,7 +721,7 @@ async function persistCreationTaskResults(tasks: GenerationTask[]): Promise<Pers
             if (videoUrl) {
                 const storedVideo = await storeGeneratedVideo({ url: videoUrl, mimeType: result?.video?.mimeType || "video/mp4" });
                 if (!storedVideo.url) throw new Error("视频结果资源不可用");
-                addAsset(creationVideoAsset({ title: task.prompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, prompt: task.prompt } }));
+                addCreationAssetOnce(creationVideoAsset({ title: task.prompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, resultIndex: 0, prompt: task.prompt } }), { taskId: task.id, messageId: task.clientContext?.messageId, resultIndex: 0 });
                 return { ...task, creationResultUrls: [storedVideo.url] };
             }
             return task;
