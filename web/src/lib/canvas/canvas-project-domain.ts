@@ -58,6 +58,9 @@ export function createStoryboardRow(shotNumber: number, patch: Partial<Storyboar
         plotDescription: "",
         dialogue: "",
         characters: [],
+        narrativeIntent: "",
+        viewerPOV: "",
+        performanceBlocking: "",
         shotSize: "",
         emotion: "",
         lightingAndAtmosphere: "",
@@ -67,6 +70,9 @@ export function createStoryboardRow(shotNumber: number, patch: Partial<Storyboar
         timeBeats: "",
         imageGenerationPrompt: "",
         videoMotionPrompt: "",
+        mustHave: [],
+        optionalDetails: [],
+        continuityOut: "",
         negativePrompt: "",
         referenceNodeIds: [],
         status: "idle",
@@ -74,14 +80,26 @@ export function createStoryboardRow(shotNumber: number, patch: Partial<Storyboar
     };
 }
 
+// 有结构化变量时由服务端按最新平台模板和用户偏好编译；变量被清除表示用户已做镜头级手动覆盖。
+export function storyboardPromptTemplateMetadata(row: StoryboardRow, kind: "image" | "video"): Pick<CanvasNodeMetadata, "promptTemplateOperation" | "promptTemplateVariables"> {
+    const variables = kind === "image" ? row.imagePromptTemplateVariables : row.videoPromptTemplateVariables;
+    return variables
+        ? { promptTemplateOperation: kind === "image" ? "storyboard_first_frame" : "storyboard_video", promptTemplateVariables: variables }
+        : { promptTemplateOperation: undefined, promptTemplateVariables: undefined };
+}
+
 export function cinematicStoryboardColumns(columns?: StoryboardColumn[]): StoryboardColumn[] {
     return Array.from(new Set([
         ...(columns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"]),
         "shotSize",
+        "narrativeIntent",
+        "viewerPOV",
+        "performanceBlocking",
         "camera",
         "motion",
         "timeBeats",
         "lightingAndAtmosphere",
+        "continuityOut",
         "negativePrompt",
     ])) as StoryboardColumn[];
 }
@@ -91,7 +109,19 @@ export function storyboardRowsFromTask(task: GenerationTask) {
     if (!Array.isArray(result.rows) || !result.rows.length) throw new Error("分镜任务没有返回镜头行");
     return {
         title: result.title?.trim(),
-        rows: result.rows.map((row, index) => createStoryboardRow(index + 1, { ...row, id: `shot-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 6)}`, shotNumber: index + 1, status: "idle", referenceNodeIds: Array.isArray(row.referenceNodeIds) ? row.referenceNodeIds : [] })),
+        rows: result.rows.map((row, index) => {
+            const next = createStoryboardRow(index + 1, {
+                ...row,
+                id: `shot-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 6)}`,
+                shotNumber: index + 1,
+                status: "idle",
+                referenceNodeIds: Array.isArray(row.referenceNodeIds) ? row.referenceNodeIds : [],
+            });
+            next.characters = Array.isArray(row.characters) ? row.characters : [];
+            next.mustHave = Array.isArray(row.mustHave) ? row.mustHave : [];
+            next.optionalDetails = Array.isArray(row.optionalDetails) ? row.optionalDetails : [];
+            return next;
+        }),
     };
 }
 
@@ -167,7 +197,7 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
 
     return nodes.map((node) => {
         if (row && node.id === linkedNode.id && scriptNodeId === connection.fromNodeId && node.type === CanvasNodeType.Video) {
-            return { ...node, title: `镜头 ${row.shotNumber} · 视频`, metadata: { ...node.metadata, prompt: videoPrompt, composerContent: videoPrompt, workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: node.metadata?.videoEditOperation || "text_to_video", seconds: String(row.durationSeconds) } };
+            return { ...node, title: `镜头 ${row.shotNumber} · 视频`, metadata: { ...node.metadata, prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: node.metadata?.videoEditOperation || "text_to_video", seconds: String(row.durationSeconds) } };
         }
         if (node.id !== scriptNodeId || node.type !== CanvasNodeType.Script) return node;
         const storyboard = node.metadata?.storyboard;

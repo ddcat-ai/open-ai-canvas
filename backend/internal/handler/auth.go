@@ -381,62 +381,64 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"ok": true})
 	})
-	r.GET("/admin/storyboard-prompts", func(c *gin.Context) {
+	r.GET("/admin/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		templates, variables, err := svc.AdminStoryboardPromptTemplates(user)
+		templates, definitions, err := svc.AdminPromptTemplates(user)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"templates": templates, "variables": variables})
+		ok(c, gin.H{"templates": templates, "definitions": definitions})
 	})
-	r.POST("/admin/storyboard-prompts", func(c *gin.Context) {
+	r.POST("/admin/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		var req service.StoryboardPromptTemplateRequest
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.PromptTemplateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		template, err := svc.CreateStoryboardPromptTemplate(user, req)
+		template, err := svc.CreatePromptTemplate(user, req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"template": template})
 	})
-	r.PATCH("/admin/storyboard-prompts/:id", func(c *gin.Context) {
+	r.PATCH("/admin/prompt-templates/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		var req service.StoryboardPromptTemplateRequest
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.PromptTemplateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		template, err := svc.UpdateStoryboardPromptTemplate(user, c.Param("id"), req)
+		template, err := svc.UpdatePromptTemplate(user, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"template": template})
 	})
-	r.DELETE("/admin/storyboard-prompts/:id", func(c *gin.Context) {
+	r.DELETE("/admin/prompt-templates/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteStoryboardPromptTemplate(user, c.Param("id")); err != nil {
+		if err := svc.DeletePromptTemplate(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}

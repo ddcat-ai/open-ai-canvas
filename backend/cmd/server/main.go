@@ -45,7 +45,7 @@ func main() {
 	if err := svc.EnsureSystemChannelModels(); err != nil {
 		log.Fatal(err)
 	}
-	if err := svc.EnsureDefaultStoryboardPromptTemplate(); err != nil {
+	if err := svc.EnsureDefaultPromptTemplates(); err != nil {
 		log.Fatal(err)
 	}
 	if err := svc.EnsureBuiltinProjectWorkflowTemplate(); err != nil {

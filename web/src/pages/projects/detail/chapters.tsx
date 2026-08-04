@@ -48,7 +48,7 @@ import {
 import { useNavigate, useParams } from "react-router";
 
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
-import { canvasStylePresets } from "@/components/canvas/canvas-style-picker-modal";
+import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { normalizeCharacterName } from "@/lib/canvas/canvas-character-reference";
 import { decodeNovelText, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
 import { upsertProjectChapterStoryboard } from "@/lib/canvas/project-chapter-storyboard";
@@ -249,7 +249,7 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
             chapterId: unit.id,
             chapterTitle: unit.title,
             sourceText,
-            projectStyle: canvasStylePresets.find((preset) => preset.id === detail.project.stylePresetId)?.prompt || "",
+            projectStyle: resolveCanvasStylePreset(detail.project.stylePresetId)?.prompt || "",
             config: effectiveConfig,
         };
     };

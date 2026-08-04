@@ -26,7 +26,7 @@ import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asse
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { canvasStylePresets } from "@/components/canvas/canvas-style-picker-modal";
+import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
@@ -434,7 +434,7 @@ function InfiniteCanvasPage() {
     });
 
     useEffect(() => {
-        const preset = canvasStylePresets.find((item) => item.id === linkedProjectQuery.data?.project.stylePresetId);
+        const preset = resolveCanvasStylePreset(linkedProjectQuery.data?.project.stylePresetId);
         if (!projectLoaded || !preset) return;
         const current = nodesRef.current.find((node) => node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "styleboard");
         const nextMetadata = {
@@ -1259,7 +1259,8 @@ function InfiniteCanvasPage() {
                     onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
                     onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
                     onGenerateImages={() => void generateScriptImages(contentNode.id, rowIds)}
-                    onGenerateVideos={() => workspaceMode === "simple" ? void createAndGenerateScriptVideos(contentNode.id) : void generateScriptVideos(contentNode.id, rowIds)}
+                    onGenerateVideos={() => contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds)}
+                    onVideoInputModeChange={(storyboardVideoInputMode) => handleConfigNodeChange(contentNode.id, { storyboardVideoInputMode })}
                     onMergeVideos={() => void mergeVideosByIds(pipeline.successfulVideoNodeIds)}
                     onCreateActionBoards={() => void createScriptActionBoards(contentNode.id)}
                     onRetryBatch={(batchId) => retryFailedBatchItems(contentNode.id, batchId)}
@@ -1690,7 +1691,12 @@ function InfiniteCanvasPage() {
                         setNodes((prev) => prev.map((node) => node.id === activeScriptNode.id ? { ...node, metadata: { ...node.metadata, storyboard: { rows: node.metadata?.storyboard?.rows || [], visibleColumns, referenceNodeIds: node.metadata?.storyboard?.referenceNodeIds || [] } } } : node));
                     }}
                     onGenerateImages={(rowIds) => activeScriptNode && void generateScriptImages(activeScriptNode.id, rowIds)}
-                    onGenerateVideos={(rowIds) => activeScriptNode && void generateScriptVideos(activeScriptNode.id, rowIds)}
+                    onGenerateVideos={(rowIds) => {
+                        if (!activeScriptNode) return;
+                        if (activeScriptNode.metadata?.storyboardVideoInputMode === "keyframe") void generateScriptVideos(activeScriptNode.id, rowIds);
+                        else void createAndGenerateScriptVideos(activeScriptNode.id, rowIds);
+                    }}
+                    onVideoInputModeChange={(storyboardVideoInputMode) => activeScriptNode && handleConfigNodeChange(activeScriptNode.id, { storyboardVideoInputMode })}
                 />
 
                 {directorNodeId && activeDirectorScene ? (

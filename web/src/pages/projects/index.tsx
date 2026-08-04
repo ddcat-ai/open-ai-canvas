@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { ListToolbar, PageHeader, TableSurface, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
+import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
 import { createProject, listProjects, type ProjectSummary } from "@/services/api/projects";
 
@@ -42,7 +43,7 @@ export default function ProjectsPage() {
         const normalizedKeyword = keyword.trim().toLowerCase();
         return [...(query.data?.projects || [])]
             .filter(({ project }) => status === "all" || project.status === status)
-            .filter(({ project }) => !normalizedKeyword || `${project.name} ${project.description} ${project.stylePresetId}`.toLowerCase().includes(normalizedKeyword))
+            .filter(({ project }) => !normalizedKeyword || `${project.name} ${project.description} ${project.stylePresetId} ${resolveCanvasStylePreset(project.stylePresetId)?.title || ""}`.toLowerCase().includes(normalizedKeyword))
             .sort((left, right) => {
                 if (sort === "name") return left.project.name.localeCompare(right.project.name, "zh-CN");
                 if (sort === "progress") return projectSummaryCompletion(right) - projectSummaryCompletion(left);
@@ -104,11 +105,12 @@ export default function ProjectsPage() {
 function ProjectRow({ row }: { row: ProjectSummary }) {
     const completion = projectSummaryCompletion(row);
     const stage = projectSummaryStage(row);
+    const styleTitle = resolveCanvasStylePreset(row.project.stylePresetId)?.title || (row.project.stylePresetId ? "自定义画风" : "未设置画风");
     return (
         <Link to={`/projects/${row.project.id}/overview`} className="group block min-w-0 px-3 py-3 transition-colors hover:bg-foreground/[.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:px-4 lg:grid lg:min-h-[76px] lg:grid-cols-[minmax(240px,1.2fr)_minmax(150px,.75fr)_minmax(150px,.7fr)_minmax(180px,.8fr)_120px_28px] lg:items-center lg:gap-4 lg:py-2.5">
             <span className="flex min-w-0 items-start gap-3">
                 <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.06] text-foreground/50"><FolderKanban className="size-4" /></span>
-                <span className="min-w-0"><span className="flex min-w-0 items-center gap-2"><strong className="truncate text-sm font-semibold">{row.project.name}</strong>{row.project.status === "archived" ? <span className="shrink-0 rounded bg-foreground/[.07] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/45">已归档</span> : null}</span><span className="mt-1 block truncate text-[var(--fs-label)] text-foreground/42">{row.project.stylePresetId || "未设置画风"} · {row.project.aspectRatio} · {sourceTypeLabel(row.project.sourceType)}</span></span>
+                <span className="min-w-0"><span className="flex min-w-0 items-center gap-2"><strong className="truncate text-sm font-semibold">{row.project.name}</strong>{row.project.status === "archived" ? <span className="shrink-0 rounded bg-foreground/[.07] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/45">已归档</span> : null}</span><span className="mt-1 block truncate text-[var(--fs-label)] text-foreground/42">{styleTitle} · {row.project.aspectRatio} · {sourceTypeLabel(row.project.sourceType)}</span></span>
             </span>
 
             <span className="mt-3 grid grid-cols-[72px_minmax(0,1fr)] items-start gap-2 lg:mt-0 lg:block">
