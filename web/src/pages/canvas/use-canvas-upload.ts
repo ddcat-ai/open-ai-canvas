@@ -366,7 +366,10 @@ export function useCanvasUpload({
     }, [message, nodesRef, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
     const pasteSystemClipboard = useCallback(async (position?: Position, clipboardEvent?: ClipboardEvent | null) => {
-        const isNodeMarker = (value: string) => value.trim().startsWith("open-ai-canvas-nodes:");
+        const isNodeMarker = (value: string) => {
+            const trimmed = value.trim();
+            return trimmed.startsWith("open-ai-canvas-nodes:") || trimmed.startsWith("open-ai-canvas-nodes-json:");
+        };
         const pasteImageFile = async (file: File) => {
             const selected = nodesRef.current.filter((node) => selectedNodeIdsRef.current.has(node.id));
             if (selected.length === 1 && selected[0].type === CanvasNodeType.Image) {

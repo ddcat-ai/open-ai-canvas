@@ -80,7 +80,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
     const presets = useMemo(() => {
         const skills = skillReferences.flatMap((reference): CanvasPromptPreset[] => {
             if (!reference.skill) return [];
-            return [{ id: `skill:${reference.skill.dir}`, name: reference.skill.name, description: reference.skill.description || reference.skill.detail_text || "已激活技能", prompt: `@${reference.skill.name} `, modes: ["text", "image", "video", "audio"], source: "skill" }];
+            return [{ id: `skill:${reference.skill.skill_id}`, name: reference.skill.skill_name, description: reference.skill.description || reference.skill.instruction || "已加入技能", prompt: `@${reference.skill.skill_name} `, modes: ["text", "image", "video", "audio"], source: "skill" }];
         });
         const normalized = query.trim().toLowerCase();
         return [...BUILTIN_PRESETS.filter((preset) => preset.modes.includes(mode)), ...skills].filter((preset) => !normalized || `${preset.name} ${preset.description}`.toLowerCase().includes(normalized));
@@ -88,7 +88,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
 
     const content = (
         <div data-canvas-no-zoom className="canvas-preset-picker-menu w-[320px] max-w-[calc(100vw-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <Input className="canvas-preset-picker-search" variant="borderless" autoFocus allowClear size="small" prefix={<Search className="size-3.5" />} placeholder="搜索预设或已激活技能" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input className="canvas-preset-picker-search" variant="borderless" autoFocus allowClear size="small" prefix={<Search className="size-3.5" />} placeholder="搜索预设或已加入技能" value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="thin-scrollbar mt-1 max-h-72 space-y-0.5 overflow-y-auto">
                 {presets.length ? presets.map((preset) => (
                     <button
@@ -104,9 +104,9 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
                         <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: theme.node.text }}>
                                 <span className="truncate">{preset.name}</span>
-                                <span className="shrink-0 text-[9px] font-medium" style={{ color: theme.accent.primary }}>{preset.source === "skill" ? "技能" : "预设"}</span>
+                                <span className="shrink-0 text-[var(--fs-micro)] font-medium" style={{ color: theme.accent.primary }}>{preset.source === "skill" ? "技能" : "预设"}</span>
                             </span>
-                            <span className="mt-0.5 block truncate text-[10px] leading-4" style={{ color: theme.node.muted }}>{preset.description}</span>
+                            <span className="mt-0.5 block truncate text-[var(--fs-tiny)] leading-4" style={{ color: theme.node.muted }}>{preset.description}</span>
                         </span>
                     </button>
                 )) : <div className="py-8 text-center text-xs" style={{ color: theme.node.muted }}>没有匹配的预设</div>}
@@ -118,7 +118,7 @@ export function CanvasPresetPicker({ mode, skillReferences = [], open, onOpenCha
         <Popover open={actualOpen} onOpenChange={setOpen} trigger="click" placement="topLeft" arrow={false} content={content} classNames={{ root: "canvas-preset-picker-popover", container: "canvas-composer-popover-surface", content: "canvas-composer-popover-content" }}>
             <button type="button" className={`canvas-preset-picker-trigger inline-flex shrink-0 items-center justify-center gap-1 rounded-lg transition hover:brightness-110 focus-visible:outline-none ${compact ? "size-6" : dense ? "h-6 px-1.5" : "h-7 px-2"}`} style={{ background: theme.accent.primarySoft, color: theme.accent.primary }} title="打开提示词预设" aria-label="打开提示词预设" aria-expanded={actualOpen}>
                 <WandSparkles className={dense ? "size-3" : "size-3.5"} />
-                {compact ? null : <span className="text-[10px] font-semibold">预设</span>}
+                {compact ? null : <span className="text-[var(--fs-tiny)] font-semibold">预设</span>}
             </button>
         </Popover>
     );

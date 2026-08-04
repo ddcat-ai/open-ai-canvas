@@ -81,14 +81,14 @@ export function sourceTypeLabel(value: string) {
 
 export function StatusPill({ status }: { status: string }) {
     const color = status === "completed" || status === "confirmed" || status === "succeeded" ? "success" : status === "failed" ? "error" : status === "running" || status === "active" ? "processing" : status === "review" || status === "pending_confirmation" ? "warning" : "default";
-    return <Tag color={color} className="m-0 !rounded-full !px-2 !text-[11px]">{statusLabel(status)}</Tag>;
+    return <Tag color={color} className="m-0 !rounded-full !px-2 !text-[var(--fs-label)]">{statusLabel(status)}</Tag>;
 }
 
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
     return (
         <div className="flex flex-col gap-2 border-b border-border/70 pb-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
-                {eyebrow ? <div className="mb-1 text-[10px] font-semibold text-foreground/40">{eyebrow}</div> : null}
+                {eyebrow ? <div className="mb-1 text-[var(--fs-tiny)] font-semibold text-foreground/40">{eyebrow}</div> : null}
                 <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
                 {description ? <p className="mt-1 text-sm leading-5 text-foreground/55">{description}</p> : null}
             </div>

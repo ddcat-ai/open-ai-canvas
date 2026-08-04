@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, Square, UserRound, Video } from "lucide-react";
+import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, SlidersHorizontal, Square, UserRound, Video } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -9,6 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
@@ -42,6 +43,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const globalConfig = useEffectiveConfig();
     const themeName = useThemeStore((state) => state.theme);
     const theme = canvasThemes[themeName];
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const simpleMode = workspaceMode === "simple";
     const mode = defaultMode(node.type);
     const config = buildNodeConfig(globalConfig, node, mode);
@@ -53,6 +55,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
     const [promptContentHeight, setPromptContentHeight] = useState(0);
+    const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
     const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? generationCount : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
@@ -151,7 +154,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
-                    <span className="truncate text-[10px] font-medium">{modeDisplayName(mode)}创作</span>
+                    <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}创作</span>
                 </div>
             )}
             {!simpleMode ? (
@@ -194,12 +197,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
     const renderComposerControls = (expanded: boolean) => simpleMode ? (
         <div className="flex min-w-0 items-center justify-between gap-2 p-1" style={{ background: controlsSurface }}>
-            <span className="min-w-0 truncate px-2 text-[10px]" style={{ color: theme.node.muted }}>
+            <span className="min-w-0 truncate px-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                 {activeReferenceCount ? `已连接 ${activeReferenceCount} 个素材` : "将使用默认模型与参数"}
             </span>
             <Button
                 type="text"
-                className="!inline-flex !h-8 shrink-0 !items-center !gap-1 !rounded-full !px-2.5 !text-[10px] !font-medium"
+                className="!inline-flex !h-8 shrink-0 !items-center !gap-1 !rounded-full !px-2.5 !text-[var(--fs-tiny)] !font-medium"
                 danger={isRunning}
                 disabled={isSubmitDisabled}
                 style={{ background: isSubmitDisabled ? theme.toolbar.itemHover : isRunning ? theme.accent.danger : monochromeAccent, color: isSubmitDisabled ? theme.node.faint : isRunning ? "#ffffff" : theme.canvas.background, boxShadow: isSubmitDisabled ? "none" : `0 8px 20px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.18)` }}
@@ -213,24 +216,24 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     ) : (
         <div className="flex min-w-0 items-center justify-between gap-0.5 p-1" style={{ background: controlsSurface }}>
             <div className={`${expanded ? "max-w-[320px]" : mode === "image" || mode === "video" ? "max-w-[240px]" : "max-w-[174px]"} min-w-[104px] flex-1`}>
-                <ModelPicker className="!h-7 !w-full !min-w-0 !text-[10px] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} showSelectedPrice={false} />
+                <ModelPicker className="!h-7 !w-full !min-w-0 !text-[var(--fs-tiny)] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3" fullWidth config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => navigateToSettings({ continueCreation: true })} showSelectedPrice={false} />
             </div>
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
                 {mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
                         placement={expanded ? "topRight" : "topLeft"}
-                        buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3"
+                        buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[var(--fs-tiny)] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3"
                         onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         onOpenChange={expanded ? undefined : onImageSettingsOpenChange}
                     />
                 ) : mode === "video" ? (
-                    <CanvasVideoSettingsPopover config={config} buttonClassName="!h-7 !w-[144px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                    <CanvasVideoSettingsPopover config={config} buttonClassName="!h-7 !w-[144px] !justify-start !rounded-full !border-0 !px-2.5 !text-[var(--fs-tiny)] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                 ) : mode === "audio" ? (
-                    <CanvasAudioSettingsPopover config={config} buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[10px] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                    <CanvasAudioSettingsPopover config={config} buttonClassName="!h-7 !w-[146px] !justify-start !rounded-full !border-0 !px-2.5 !text-[var(--fs-tiny)] !font-normal !shadow-none [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                 ) : null}
-                <GenerationCostBadge credits={credits} theme={theme} />
+                {creditsEnabled ? <GenerationCostBadge credits={credits} theme={theme} /> : null}
                 <Button
                     type="text"
                     className="!inline-flex !h-8 !w-8 shrink-0 !items-center !justify-center !rounded-full !border !p-0 transition hover:!-translate-y-px hover:!brightness-110 motion-reduce:hover:!translate-y-0"
@@ -269,16 +272,33 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     references={mentionReferences}
                     onChange={updatePrompt}
                     containerClassName="min-h-0 flex-1"
-                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2.5 text-[13px] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                    className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-2 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
                     style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                     onContentSizeChange={updatePromptContentHeight}
                 />
             </div>
 
+            {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
             {mode === "video" && !simpleMode ? (
-                <div className="mt-2 rounded-md border p-0.5" style={{ background: controlSurface, borderColor: insetBorder }}>
-                    <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                <div className="mt-1.5 overflow-hidden rounded-md border" style={{ background: controlSurface, borderColor: insetBorder }}>
+                    <button
+                        type="button"
+                        className="flex w-full items-center gap-1.5 px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors hover:bg-white/[.04]"
+                        style={{ color: theme.node.muted }}
+                        onClick={() => setParamsExpanded(!paramsExpanded)}
+                        aria-expanded={paramsExpanded}
+                        aria-label={paramsExpanded ? "收起参数" : "展开参数"}
+                    >
+                        <SlidersHorizontal className="size-3" strokeWidth={1.8} />
+                        <span className="flex-1 text-left">参数</span>
+                        <ChevronDown className={`size-3 transition-transform duration-200 ${paramsExpanded ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                    </button>
+                    {paramsExpanded ? (
+                        <div className="border-t p-0.5" style={{ borderColor: insetBorder }}>
+                            <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -324,7 +344,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                             references={mentionReferences}
                             onChange={updatePrompt}
                             containerClassName="min-h-0 flex-1"
-                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-3 text-[15px] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                            className="thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
                             style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                             placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                             aria-label={`${modeDisplayName(mode)}提示词`}
@@ -345,7 +365,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 function ComposerPill({ theme, borderColor, icon, label }: { theme: CanvasTheme; borderColor: string; icon: ReactNode; label: string }) {
     return (
         <span
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[9px] font-medium transition hover:brightness-125"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[var(--fs-micro)] font-medium transition hover:brightness-125"
             style={{ background: theme.canvas.background, borderColor, color: theme.node.activeStroke }}
         >
             {icon}
@@ -393,7 +413,8 @@ function ConnectedReferenceShelf({ references, theme, onInsert }: { references: 
                 >
                     <span className="relative size-7 shrink-0 overflow-hidden rounded-[5px]">
                         <ReferenceThumbnail reference={reference} />
-                        <span className="absolute left-0.5 top-0.5 grid size-3 place-items-center rounded-full bg-black/65 text-[7px] font-semibold text-white">{index + 1}</span>
+                        <span className="absolute left-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-[var(--fs-micro)] font-semibold text-white backdrop-blur-sm">{index + 1}</span>
+                        <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><AtSign className="size-2" /></span>
                     </span>
                     <span className="max-w-[64px] truncate text-[10px] font-medium">@{reference.label}</span>
                 </button>
@@ -418,8 +439,8 @@ function ReferenceThumbnail({ reference }: { reference: CanvasResourceReference 
 function GenerationCostBadge({ credits, theme }: { credits: number | null; theme: CanvasTheme }) {
     if (credits === null) return null;
     return (
-        <span className="canvas-generation-cost-badge inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-[9px] font-semibold tabular-nums" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }} title={`预计消耗 ${credits.toLocaleString()} 积分`} aria-label={`预计消耗 ${credits.toLocaleString()} 积分`}>
-            <CreditSymbol className="text-[11px]" />
+        <span className="canvas-generation-cost-badge inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-[var(--fs-micro)] font-semibold tabular-nums" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }} title={`预计消耗 ${credits.toLocaleString()} 积分`} aria-label={`预计消耗 ${credits.toLocaleString()} 积分`}>
+            <CreditSymbol className="text-[var(--fs-label)]" />
             {credits.toLocaleString()}
         </span>
     );

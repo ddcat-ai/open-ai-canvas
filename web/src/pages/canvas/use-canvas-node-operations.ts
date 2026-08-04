@@ -9,14 +9,21 @@ import { createCanvasNode, removeCanvasNodes } from "@/lib/canvas/canvas-project
 import { isolateCopiedNodeMetadata } from "@/lib/canvas/canvas-node-copy";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasReferenceRole, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
+import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
+import { useUserStore } from "@/stores/use-user-store";
 
 type CanvasClipboard = {
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
 };
 
+const CANVAS_NODES_CLIPBOARD_PREFIX = "open-ai-canvas-nodes:";
+const CANVAS_NODES_JSON_CLIPBOARD_PREFIX = "open-ai-canvas-nodes-json:";
+const CANVAS_NODES_CLIPBOARD_STORAGE_KEY = "open-ai-canvas:nodes-clipboard";
+
 type UseCanvasNodeOperationsOptions = {
     projectId: string;
+    defaultDrawingEngine: CanvasDrawingEngine;
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     selectedNodeIdsRef: { current: Set<string> };
@@ -32,6 +39,7 @@ type UseCanvasNodeOperationsOptions = {
 
 export function useCanvasNodeOperations({
     projectId,
+    defaultDrawingEngine,
     nodesRef,
     connectionsRef,
     selectedNodeIdsRef,
@@ -45,13 +53,16 @@ export function useCanvasNodeOperations({
     onNodesDeleted,
 }: UseCanvasNodeOperationsOptions) {
     const { message } = App.useApp();
+    const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
     const preferCopiedNodesRef = useRef(false);
     const markerWritePendingRef = useRef(false);
     const markerWriteSequenceRef = useRef(0);
+    const internalMarkerWriteRef = useRef(false);
     const [hasCopiedNodes, setHasCopiedNodes] = useState(false);
 
     const releaseCopiedNodesPastePriority = useCallback(() => {
+        if (internalMarkerWriteRef.current) return;
         markerWriteSequenceRef.current += 1;
         markerWritePendingRef.current = false;
         preferCopiedNodesRef.current = false;
@@ -94,6 +105,7 @@ export function useCanvasNodeOperations({
                 ...node,
                 metadata: {
                     ...node.metadata,
+                    drawingEngine: saved.engine,
                     drawingRevision: saved.revision,
                     drawingUpdatedAt: saved.updatedAt,
                     drawingShapeCount: saved.shapeCount,
@@ -110,11 +122,15 @@ export function useCanvasNodeOperations({
     }, [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
     const createNode = useCallback((type: CanvasNodeType, position?: Position) => {
-        const node = createCanvasNode(type, position || getCanvasCenter());
+        if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
+            message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
+            return;
+        }
+        const node = createCanvasNode(type, position || getCanvasCenter(), type === CanvasNodeType.Drawing ? { drawingEngine: defaultDrawingEngine } : undefined);
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
         if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing) setDialogNodeId(node.id);
-    }, [commitNodes, getCanvasCenter, nodesRef, selectNodes, setDialogNodeId]);
+    }, [commitNodes, defaultDrawingEngine, getCanvasCenter, message, nodesRef, selectNodes, setDialogNodeId, tldrawLicenseKey]);
 
     const arrangeSelectedNodes = useCallback((mode: "row" | "column" | "grid" | "flow") => {
         const selected = nodesRef.current.filter((node) => selectedNodeIdsRef.current.has(node.id) && !node.metadata?.locked && !isFrameNode(node));
@@ -355,26 +371,33 @@ export function useCanvasNodeOperations({
             .filter((node) => copyIds.has(node.id))
             .map((node) => ({ ...node, position: { ...node.position }, metadata: node.metadata ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined } : undefined }));
         if (!copiedNodes.length) return;
-        clipboardRef.current = {
-            nodes: copiedNodes,
-            connections: connectionsRef.current.filter((connection) => copyIds.has(connection.fromNodeId) && copyIds.has(connection.toNodeId)).map((connection) => ({ ...connection })),
-        };
+        const copiedConnections = connectionsRef.current.filter((connection) => copyIds.has(connection.fromNodeId) && copyIds.has(connection.toNodeId)).map((connection) => ({ ...connection }));
+        clipboardRef.current = { nodes: copiedNodes, connections: copiedConnections };
+        try {
+            sessionStorage.setItem(CANVAS_NODES_CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardRef.current));
+        } catch {
+            // 大型媒体节点可能超过浏览器存储配额，当前页面内仍可正常粘贴。
+        }
         setHasCopiedNodes(true);
         // 写入完成前或写入失败时优先内部节点，避免快速粘贴读到系统残留图片。
-        const marker = `open-ai-canvas-nodes:${Date.now()}:${copiedNodes.length}`;
+        const marker = `${CANVAS_NODES_CLIPBOARD_PREFIX}${Date.now()}:${copiedNodes.length}`;
         const sequence = markerWriteSequenceRef.current + 1;
         markerWriteSequenceRef.current = sequence;
         markerWritePendingRef.current = true;
         preferCopiedNodesRef.current = true;
-        void copyToClipboard(marker, { format: "text/plain" }).then((written) => {
-            if (markerWriteSequenceRef.current !== sequence) return;
-            markerWritePendingRef.current = false;
-            preferCopiedNodesRef.current = !written;
-        }, () => {
+        try {
+            internalMarkerWriteRef.current = true;
+            copyToClipboard(marker, { format: "text/plain" });
+            internalMarkerWriteRef.current = false;
             if (markerWriteSequenceRef.current !== sequence) return;
             markerWritePendingRef.current = false;
             preferCopiedNodesRef.current = true;
-        });
+        } catch {
+            internalMarkerWriteRef.current = false;
+            if (markerWriteSequenceRef.current !== sequence) return;
+            markerWritePendingRef.current = false;
+            preferCopiedNodesRef.current = true;
+        }
     }, [connectionsRef, nodesRef]);
 
     const copySelectedNodes = useCallback(() => {
@@ -442,6 +465,25 @@ export function useCanvasNodeOperations({
         return true;
     }, [cloneDrawingForNode, commitConnections, commitNodes, connectionsRef, getCanvasCenter, nodesRef, selectNodes, setContextMenu, setDialogNodeId]);
 
+    const restoreCopiedNodesFromText = useCallback((value: string) => {
+        const isMarker = value.startsWith(CANVAS_NODES_CLIPBOARD_PREFIX);
+        const isLegacyJSON = value.startsWith(CANVAS_NODES_JSON_CLIPBOARD_PREFIX);
+        if (!isMarker && !isLegacyJSON) return false;
+        try {
+            const serialized = isLegacyJSON ? value.slice(CANVAS_NODES_JSON_CLIPBOARD_PREFIX.length) : sessionStorage.getItem(CANVAS_NODES_CLIPBOARD_STORAGE_KEY);
+            if (!serialized) return false;
+            const parsed = JSON.parse(serialized) as Partial<CanvasClipboard>;
+            if (!parsed.nodes?.length) return false;
+            clipboardRef.current = { nodes: parsed.nodes, connections: parsed.connections || [] };
+            setHasCopiedNodes(true);
+            preferCopiedNodesRef.current = true;
+            markerWritePendingRef.current = false;
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
+
     return {
         alignSelectedNodes,
         arrangeSelectedNodes,
@@ -456,6 +498,7 @@ export function useCanvasNodeOperations({
         duplicateNode,
         hasCopiedNodes,
         pasteCopiedNodes,
+        restoreCopiedNodesFromText,
         releaseCopiedNodesPastePriority,
         setPrimaryVersion,
         shouldPreferCopiedNodes,

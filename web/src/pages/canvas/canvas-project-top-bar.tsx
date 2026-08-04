@@ -69,7 +69,8 @@ export function CanvasTopBar({
 }: CanvasTopBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
-    const { availableMicrocredits, refreshing } = useWalletBalance(user?.id);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -171,7 +172,7 @@ export function CanvasTopBar({
                             </div>
                         )}
                         {projectContext && !isTitleEditing ? (
-                            <div className="mt-0.5 flex max-w-[420px] items-center gap-1.5 text-[10px]" style={{ color: theme.node.muted }}>
+                            <div className="mt-0.5 flex max-w-[420px] items-center gap-1.5 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                                 <Link
                                     to={`/projects/${projectContext.projectId}/overview`}
                                     className="inline-flex min-w-0 items-center gap-1 rounded px-1 py-0.5 font-medium hover:bg-black/5 hover:underline dark:hover:bg-white/10"
@@ -219,7 +220,7 @@ export function CanvasTopBar({
                         <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" title="媒体性能模式" />
                     </Dropdown>
                     {compactAgentStatus ? <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} /> : null}
-                    {user ? (
+                    {user && creditsEnabled ? (
                         <Link
                             to="/wallet"
                             className="inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10"
@@ -249,6 +250,7 @@ export function CanvasTopBar({
                     <Shortcut keys={["滚轮"]} value="缩放画布" />
                     <Shortcut keys={["缩放滑杆"]} value="精确调整缩放" />
                     <Shortcut keys={["Shift / Ctrl / Cmd + 左键拖动"]} value="框选多个节点" />
+                    <Shortcut keys={["工具栏「框选」", "左键拖动"]} value="框选多个节点，完成后自动回到「移动与选择」" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
                     <Shortcut keys={["Alt", "点击 / 框选"]} value="移除选择节点" />
                     <Shortcut keys={["Ctrl / Cmd", "1 / 2 / 3"]} value="100% / 适应全部 / 适应选择" />
@@ -315,8 +317,8 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
                     {simple ? <Sparkles className="size-3" /> : <Settings2 className="size-3" />}
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="block text-[8px] leading-none" style={{ color: theme.node.muted }}>工作空间</span>
-                    <span className="mt-0.5 block text-[10px] font-semibold leading-none">{simple ? "简洁模式" : "专业模式"}</span>
+                    <span className="block text-[var(--fs-micro)] leading-none" style={{ color: theme.node.muted }}>工作空间</span>
+                    <span className="mt-0.5 block text-[var(--fs-tiny)] font-semibold leading-none">{simple ? "简洁模式" : "专业模式"}</span>
                 </span>
                 <motion.span animate={{ rotate: open ? 180 : 0 }} transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock} className="grid size-5 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>
                     <ChevronDown className="size-2.5" />
@@ -333,7 +335,7 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.95 }}
                             transition={aceternityMotion.spring.panel}
-                            className="aceternity-floating-panel w-full overflow-hidden rounded-[17px] border p-1.5 backdrop-blur-2xl"
+                            className="aceternity-floating-panel w-full overflow-hidden rounded-[var(--panel-radius)] border p-1.5 backdrop-blur-2xl"
                             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                         >
                             <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
@@ -358,12 +360,12 @@ function ModeOption({ active, motionEnabled, icon, title, description, theme, on
             whileHover={motionEnabled ? { x: 3 } : undefined}
             whileTap={motionEnabled ? { scale: 0.98 } : undefined}
             transition={aceternityMotion.spring.dock}
-            className="group flex min-h-11 w-full items-center gap-2 rounded-[12px] border px-2 py-1.5 text-left outline-none focus-visible:ring-2"
+            className="group flex min-h-11 w-full items-center gap-2 rounded-[var(--r-lg)] border px-2 py-1.5 text-left outline-none focus-visible:ring-2"
             style={{ background: active ? theme.accent.primarySoft : "transparent", borderColor: active ? theme.spatial.glowStrong : "transparent", color: theme.node.text }}
             onClick={onClick}
         >
-            <span className="grid size-8 shrink-0 place-items-center rounded-[10px] border [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
-            <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold">{title}</span><span className="mt-0.5 block text-[8px]" style={{ color: theme.node.muted }}>{description}</span></span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
+            <span className="min-w-0 flex-1"><span className="block text-[var(--fs-tiny)] font-semibold">{title}</span><span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{description}</span></span>
             <span className="grid size-5 shrink-0 place-items-center rounded-full border transition-opacity" style={{ background: active ? theme.accent.primary : theme.spatial.surface, borderColor: active ? theme.accent.primary : theme.toolbar.border, color: active ? "white" : theme.node.muted, opacity: active ? 1 : 0.28 }}><Check className="size-3" /></span>
         </motion.button>
     );

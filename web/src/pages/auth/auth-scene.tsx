@@ -3,8 +3,6 @@ import { ConfigProvider, Tabs } from "antd";
 import { ArrowLeft, Play } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
-import { CometCard } from "@/components/ui/aceternity/comet-card";
-import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAntThemeConfig } from "@/lib/app-theme";
 
@@ -69,7 +67,7 @@ export function AuthScene() {
                             <span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />
                             影策
                         </Link>
-                        <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[11px] text-white/76 backdrop-blur-xl">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl">
                             <Play className="size-3 fill-current" />
                             创作正在发生
                         </span>
@@ -81,7 +79,10 @@ export function AuthScene() {
                         className="absolute inset-x-0 bottom-0 max-w-2xl p-5 sm:p-7 lg:p-10"
                     >
                         <p className="text-xs font-semibold tracking-[0.18em] text-white/58">YINGCE STUDIO</p>
-                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">让一个故事，从文字走向银幕。</h1>
+                        <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+                            让一个故事，<br className="hidden sm:inline" />
+                            从文字走向银幕。
+                        </h1>
                     </motion.div>
                 </section>
 
@@ -99,34 +100,26 @@ export function AuthScene() {
                         className="my-auto w-full max-w-[460px]"
                     >
                         <ConfigProvider theme={getAntThemeConfig(true)}>
-                            <SpotlightSurface spotlightColor="rgba(96,165,250,.14)" spotlightRadius={300} className="flex h-auto rounded-[26px]">
-                                <CometCard
-                                    rotateDepth={1.8}
-                                    translateDepth={1.5}
-                                    glare={!reducedMotion}
-                                    containerClassName="h-auto"
-                                    className="auth-card-dark h-auto overflow-hidden rounded-[26px] border border-white/12 bg-[#111216]/88 shadow-[0_40px_120px_rgba(0,0,0,.48)] backdrop-blur-2xl"
-                                >
-                                    <section aria-label={copy.title} className="flex min-h-[620px] flex-col sm:min-h-[640px]">
-                                        <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
-                                            <p className="text-xs font-semibold tracking-[0.18em] text-blue-300/80">{copy.eyebrow}</p>
-                                            <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
-                                            <p className="mt-2 text-sm leading-6 text-white/45">{copy.description}</p>
-                                        </header>
-                                        <div className="border-b border-white/[0.08] px-6 sm:px-8">
-                                            <Tabs
-                                                className="auth-card-tabs"
-                                                activeKey={activeTab}
-                                                items={AUTH_TABS}
-                                                onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })}
-                                            />
-                                        </div>
-                                        <div key={location.pathname} className="flex-1 px-6 py-6 sm:px-8 sm:py-7">
-                                            <Outlet />
-                                        </div>
-                                    </section>
-                                </CometCard>
-                            </SpotlightSurface>
+                            <div className="auth-card-dark h-auto overflow-hidden rounded-lg bg-[#121318]/94 shadow-[0_28px_80px_rgba(0,0,0,.34)] backdrop-blur-2xl">
+                                <section aria-label={copy.title} className={`flex flex-col ${activeTab === "login" ? "min-h-[500px]" : "min-h-[620px] sm:min-h-[640px]"}`}>
+                                    <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
+                                        <p className="text-xs font-semibold tracking-[0.18em] text-blue-300/80">{copy.eyebrow}</p>
+                                        <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
+                                        <p className="mt-2 text-sm leading-6 text-white/45">{copy.description}</p>
+                                    </header>
+                                    <div className="px-6 sm:px-8">
+                                        <Tabs
+                                            className="auth-card-tabs"
+                                            activeKey={activeTab}
+                                            items={AUTH_TABS}
+                                            onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })}
+                                        />
+                                    </div>
+                                    <div key={location.pathname} className="flex-1 px-6 py-6 sm:px-8 sm:py-7">
+                                        <Outlet />
+                                    </div>
+                                </section>
+                            </div>
                         </ConfigProvider>
                     </motion.div>
                 </section>

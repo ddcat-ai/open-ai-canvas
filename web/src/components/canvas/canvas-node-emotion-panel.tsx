@@ -64,7 +64,7 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 5, scale: 0.98 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="aceternity-floating-panel w-[580px] max-w-full overflow-hidden rounded-[16px] border backdrop-blur-2xl"
+            className="aceternity-floating-panel w-[580px] max-w-full overflow-hidden rounded-[var(--r-2xl)] border backdrop-blur-2xl"
             style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
         >
             <div className="flex h-11 items-center gap-1.5 border-b px-2.5" style={{ borderColor: theme.toolbar.border }}>
@@ -75,16 +75,16 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                             type="button"
                             layout
                             whileTap={reducedMotion ? undefined : { scale: 0.96 }}
-                            className="relative flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] border px-1.5 pr-2 text-[11px] font-medium outline-none"
+                            className="relative flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-1.5 pr-2 text-[var(--fs-label)] font-medium outline-none"
                             style={{ background: activeCharacterId === character.id ? theme.toolbar.activeBg : theme.spatial.surface, borderColor: activeCharacterId === character.id ? theme.spatial.glowStrong : theme.toolbar.border }}
                             onClick={() => onSelectCharacter(character.id)}
                         >
-                            {activeCharacterId === character.id ? <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-[8px]" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} /> : null}
+                            {activeCharacterId === character.id ? <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-[var(--r-md)]" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} /> : null}
                             <FaceThumbnail dataUrl={dataUrl} imageWidth={imageWidth} imageHeight={imageHeight} box={character.faceBox} />
                             <span>{character.name}</span>
                         </motion.button>
                     ))}
-                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] border px-2 text-[11px] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
+                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-2 text-[var(--fs-label)] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
                         <ScanFace className="size-3.5" />手动框选
                     </button>
                 </div>
@@ -97,17 +97,17 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
             </div>
 
             <div className="flex min-h-11 items-center gap-2 border-t px-3" style={{ borderColor: theme.toolbar.border }}>
-                <span className="text-[10px]" style={{ color: theme.node.muted }}>情绪定位</span>
+                <span className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>情绪定位</span>
                 <AnimatePresence mode="wait" initial={false}>
                     <motion.span key={preset.id} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? undefined : { opacity: 0, y: -3, filter: "blur(3px)" }} transition={{ duration: reducedMotion ? 0 : 0.18 }} className="text-xs font-semibold">{preset.label}</motion.span>
                 </AnimatePresence>
-                {error ? <span className="min-w-0 flex-1 truncate text-right text-[10px]" style={{ color: theme.accent.danger }} title={error}>{error}</span> : <span className="flex-1" />}
+                {error ? <span className="min-w-0 flex-1 truncate text-right text-[var(--fs-tiny)]" style={{ color: theme.accent.danger }} title={error}>{error}</span> : <span className="flex-1" />}
                 <motion.button
                     type="button"
                     disabled={generating}
                     whileHover={reducedMotion || generating ? undefined : { y: -1 }}
                     whileTap={reducedMotion || generating ? undefined : { scale: 0.97 }}
-                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[11px] font-semibold disabled:cursor-wait disabled:opacity-55"
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-3 text-[var(--fs-label)] font-semibold disabled:cursor-wait disabled:opacity-55"
                     style={{ background: theme.node.activeStroke, color: theme.node.panel }}
                     onClick={onConfirm}
                 >
@@ -144,11 +144,11 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
     const selectedColumn = 2 - preset.intimacy;
     const selectedRow = 2 - preset.arousal;
     return (
-        <div className="relative rounded-[12px] border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
-            <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[9px]" style={{ color: theme.node.muted }}>激动</span>
-            <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[9px]" style={{ color: theme.node.muted }}>平静</span>
-            <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[9px] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>亲近</span>
-            <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[9px] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>疏离</span>
+        <div className="relative rounded-[var(--r-lg)] border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
+            <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>激动</span>
+            <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>平静</span>
+            <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>亲近</span>
+            <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>疏离</span>
             <div
                 role="slider"
                 aria-label="情绪强度"
@@ -192,7 +192,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
 function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <div className="relative overflow-hidden rounded-[12px] border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
+        <div className="relative overflow-hidden rounded-[var(--r-lg)] border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
             <Canvas frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 38, near: 0.1, far: 20, position: [0, 0, 4.15] }} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}>
                 <color attach="background" args={["#26272a"]} />
                 <ambientLight intensity={0.82} />
@@ -202,7 +202,7 @@ function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
             </Canvas>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/55 to-transparent" />
             <AnimatePresence mode="wait" initial={false}>
-                <motion.span key={preset.id} initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0, filter: "blur(5px)" }} transition={{ duration: 0.2 }} className="pointer-events-none absolute bottom-2 left-2.5 text-[10px] font-medium text-white/72">实时预览 · {preset.label}</motion.span>
+                <motion.span key={preset.id} initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0, filter: "blur(5px)" }} transition={{ duration: aceternityMotion.duration.state }} className="pointer-events-none absolute bottom-2 left-2.5 text-[var(--fs-tiny)] font-medium text-white/72">实时预览 · {preset.label}</motion.span>
             </AnimatePresence>
         </div>
     );

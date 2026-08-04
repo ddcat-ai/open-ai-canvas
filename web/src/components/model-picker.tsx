@@ -6,6 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -17,16 +18,23 @@ type ModelPickerProps = {
     placeholder?: string;
     onMissingConfig?: () => void;
     showSelectedPrice?: boolean;
+    variant?: "default" | "creation";
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true }: ModelPickerProps) {
+export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default" }: ModelPickerProps) {
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [open, setOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const options = useMemo(
-        () => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))),
+        () => {
+            const filtered = selectableModelsByCapability(config, capability);
+            const current = value?.trim();
+            const currentIncluded = current ? filtered.includes(current) : true;
+            return Array.from(new Set([...filtered, ...(!currentIncluded && current ? [current] : [])].filter((model): model is string => Boolean(model))));
+        },
         [capability, config, value],
     );
     const optionGroups = useMemo(() => {
@@ -44,6 +52,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     }, [config, options]);
     const current = value || "";
     const currentPrice = modelMenuPrice(config, current);
+    const creationVariant = variant === "creation";
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {
@@ -90,7 +99,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         <div
             ref={menuRef}
             data-canvas-no-zoom
-            className="canvas-model-picker-menu w-[320px] max-w-[calc(100vw-24px)]"
+            className={cn("canvas-model-picker-menu max-w-[calc(100vw-24px)]", creationVariant ? "creation-model-picker-menu w-[360px]" : "w-[320px]")}
             style={{ background: theme.node.panel, color: theme.node.text }}
             role="listbox"
             aria-label={placeholder}
@@ -98,6 +107,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
+            {creationVariant ? <div className="creation-model-picker-heading"><span>选择模型</span>{current ? <strong>{modelDisplayName(config, current)}</strong> : null}</div> : null}
             {optionGroups.length ? optionGroups.map((group) => (
                 <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
                     <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
@@ -121,7 +131,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                         window.requestAnimationFrame(() => triggerRef.current?.focus());
                                     }}
                                 >
-                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} />
+                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} />
                                     {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                 </button>
                             );
@@ -145,7 +155,11 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 placement="bottomLeft"
                 arrow={false}
                 content={content}
-                classNames={{ root: "canvas-model-picker-popover", container: "canvas-composer-popover-surface", content: "canvas-composer-popover-content" }}
+                classNames={{
+                    root: cn("canvas-model-picker-popover", creationVariant && "creation-model-picker-popover"),
+                    container: cn("canvas-composer-popover-surface", creationVariant && "creation-model-picker-surface"),
+                    content: "canvas-composer-popover-content",
+                }}
             >
                 <button
                     ref={triggerRef}
@@ -159,8 +173,8 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 >
                     <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5">
                         <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}><ModelIcon model={current} /></span>
-                        <span className="min-w-0 flex-1 truncate">{current ? modelOptionLabel(config, current) : placeholder}</span>
-                        {showSelectedPrice ? <ModelPrice price={currentPrice} compact /> : null}
+                        <span className="min-w-0 flex-1 truncate">{current ? creationVariant ? modelDisplayName(config, current) : modelOptionLabel(config, current) : placeholder}</span>
+                        {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
                 </button>
@@ -175,7 +189,7 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
-function ModelLabel({ config, model, capability, theme }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+function ModelLabel({ config, model, capability, theme, creationVariant, showPrice }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; creationVariant: boolean; showPrice: boolean }) {
     const meta = modelMenuMeta(model, capability);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
@@ -183,11 +197,11 @@ function ModelLabel({ config, model, capability, theme }: { config: AiConfig; mo
                 <ModelIcon model={model} />
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
-                <span className="block min-w-0 truncate text-[11px] font-medium leading-none">{modelDisplayName(config, model)}</span>
-                <span className="mt-1 block truncate text-[10px]" style={{ color: theme.node.muted }} title={`${modelOptionName(model)} · ${meta.description}`}>{modelOptionName(model)} · {meta.description}</span>
+                <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{modelDisplayName(config, model)}</span>
+                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={meta.description}>{meta.description}</span>
             </span>
-            <ModelPrice price={modelMenuPrice(config, model)} />
-            {meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
+            {showPrice ? <ModelPrice price={modelMenuPrice(config, model)} /> : null}
+            {!creationVariant && meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
         </span>
     );
 }
@@ -202,9 +216,9 @@ function modelMenuPrice(config: AiConfig, model: string): { value: number; unit:
 
 function ModelPrice({ price, compact = false }: { price: { value: number; unit: "次" | "秒" } | null | undefined; compact?: boolean }) {
     if (price === undefined) return null;
-    if (price === null) return compact ? null : <span className="shrink-0 text-[10px] text-foreground/40">未配置</span>;
+    if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
             <Coins className="size-3" />
             {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>

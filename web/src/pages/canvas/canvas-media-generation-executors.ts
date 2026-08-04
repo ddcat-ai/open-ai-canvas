@@ -22,6 +22,7 @@ export async function executeVideoGeneration({
     generationContext,
     controller,
     projectId,
+    canvasConnections,
     setNodes,
     setConnections,
     startGenerationRequest,
@@ -73,11 +74,17 @@ export async function executeVideoGeneration({
             { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: true } },
         ];
     });
-    if (!isEmptyVideoNode) setConnections((current) => [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }]);
+    // 重新生成已有视频时，新节点继承源视频的上游连接，与源视频保持并行关系，而不是作为其下游子节点。
+    if (!isEmptyVideoNode) {
+        setConnections((current) => {
+            if (!isExistingVideoNode) return [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }];
+            return [...current, ...canvasConnections.filter((connection) => connection.toNodeId === nodeId).map((connection) => ({ ...connection, id: nanoid(), toNodeId: videoId }))];
+        });
+    }
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
     try {
-        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoices: generationContext.resolvedCharacterVoices, ...videoGenerationMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
+        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoices: generationContext.resolvedCharacterVoices, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...videoGenerationMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
         if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
         const video = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);

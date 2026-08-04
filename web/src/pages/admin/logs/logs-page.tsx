@@ -102,7 +102,7 @@ function MediaResult({ log, onPreview }: { log: ApiCallLog; onPreview: (url: str
         <button type="button" title={`预览${kind === "video" ? "视频" : "图片"}`} className="group relative h-11 w-16 shrink-0 overflow-hidden rounded border border-border/75 bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onPreview(url, kind)}>
             {kind === "video" ? <video src={url} muted playsInline preload="metadata" className="size-full object-cover" /> : <img src={url} alt="生成结果" loading="lazy" decoding="async" className="size-full object-cover" />}
             <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100 group-focus-visible:bg-black/35 group-focus-visible:opacity-100">{kind === "video" ? <Play className="size-4 fill-current" /> : <Eye className="size-4" />}</span>
-            {log.mediaCount > 1 ? <span className="absolute bottom-0.5 right-0.5 rounded-sm bg-black/65 px-1 text-[9px] leading-4 text-white">{log.mediaCount}</span> : null}
+            {log.mediaCount > 1 ? <span className="absolute bottom-0.5 right-0.5 rounded-sm bg-black/65 px-1 text-[var(--fs-micro)] leading-4 text-white">{log.mediaCount}</span> : null}
         </button>
         <Button type="text" size="small" className="!size-7 !min-w-7 !p-0" icon={<Download className="size-3.5" />} onClick={() => downloadMedia(url, kind)} title="下载原文件" aria-label="下载原文件" />
     </div>;

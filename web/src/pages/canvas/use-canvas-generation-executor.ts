@@ -7,9 +7,9 @@ import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudi
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
-import { generationFailureMetadata } from "@/lib/generation-error";
+import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
-import type { UpdreamSkill } from "@/services/api/skills";
+import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -21,7 +21,7 @@ import { executeTextGeneration } from "./canvas-text-generation-executor";
 type UseCanvasGenerationExecutorOptions = {
     projectId: string;
     domainProjectId?: string;
-    activatedSkills: UpdreamSkill[];
+    addedSkills: Skill[];
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -47,7 +47,7 @@ export type CanvasNodeGenerationOptions = {
 export function useCanvasGenerationExecutor({
     projectId,
     domainProjectId,
-    activatedSkills,
+    addedSkills,
     nodesRef,
     connectionsRef,
     setNodes,
@@ -72,6 +72,20 @@ export function useCanvasGenerationExecutor({
                 return;
             }
             let generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
+            const hasLiveBatchChildren = sourceNode?.type === CanvasNodeType.Image && (sourceNode.metadata?.batchChildIds || []).some((childId) => nodesRef.current.some((node) => node.id === childId && node.metadata?.batchRootId === sourceNode.id));
+            const hasStaleImageBatchState = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content && Boolean(sourceNode.metadata?.isBatchRoot || sourceNode.metadata?.batchChildIds?.length) && !hasLiveBatchChildren;
+            if (hasStaleImageBatchState) {
+                setNodes((current) => current.map((node) => {
+                    if (node.id !== sourceNode.id) return node;
+                    const metadata = { ...node.metadata };
+                    delete metadata.isBatchRoot;
+                    delete metadata.batchChildIds;
+                    delete metadata.primaryImageId;
+                    delete metadata.imageBatchExpanded;
+                    delete metadata.batchUsesReferenceImages;
+                    return { ...node, metadata };
+                }));
+            }
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
                 navigateToSettings({ continueCreation: true });
                 return;
@@ -118,7 +132,7 @@ export function useCanvasGenerationExecutor({
                     mode === "video" && supportsVideoReferenceAudio(generationConfig),
                 );
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "生成任务准备失败";
+                const errorDetails = generationErrorMessage(error);
                 if (isPreparingEmptyImage) {
                     setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: controller.signal.aborted ? NODE_STATUS_IDLE : NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, errorDetails: controller.signal.aborted ? undefined : errorDetails } } : node)));
                 }
@@ -128,7 +142,7 @@ export function useCanvasGenerationExecutor({
                 return;
             }
 
-            const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, activatedSkills);
+            const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, addedSkills);
             const effectivePrompt = expandedPrompt.trim();
             const { applySubmissionExclusions, buildGenerationSubmissionSnapshot } = await import("@/lib/canvas/canvas-generation-submission");
             const submissionSnapshot = buildGenerationSubmissionSnapshot({
@@ -184,6 +198,7 @@ export function useCanvasGenerationExecutor({
                 nodeId,
                 sourceNode,
                 canvasNodes: nodesRef.current,
+                canvasConnections: connectionsRef.current,
                 prompt,
                 effectivePrompt,
                 generationConfig,
@@ -233,6 +248,6 @@ export function useCanvasGenerationExecutor({
                 setRunningNodeId(null);
             }
         },
-        [activatedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
+        [addedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
 }

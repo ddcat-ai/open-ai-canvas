@@ -125,7 +125,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-[62]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-panel)]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {open ? (
                     <motion.aside
@@ -143,12 +143,12 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
 
                         <div className="flex items-center justify-between gap-2 px-1 pb-2.5 pt-1.5">
                             <div className="flex min-w-0 items-center gap-2">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-[10px] border" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
+                                <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
                                     <FolderOpen className="size-3.5" />
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block text-xs font-semibold">素材空间</span>
-                                    <span className="mt-0.5 block truncate text-[9px]" style={{ color: theme.node.muted }}>拖入画布，或定位已经使用的图片</span>
+                                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>拖入画布，或定位已经使用的图片</span>
                                 </span>
                             </div>
                             <motion.button type="button" whileHover={motionEnabled ? { rotate: -5, scale: 1.05 } : undefined} whileTap={motionEnabled ? { scale: 0.92 } : undefined} className="grid size-7 shrink-0 place-items-center rounded-full border outline-none focus-visible:ring-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }} onClick={() => setOpen(false)} aria-label="收起素材空间">
@@ -156,14 +156,14 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                             </motion.button>
                         </div>
 
-                        <div className={cn("relative grid gap-1 rounded-[12px] border p-0.5", showLibrary ? "grid-cols-2" : "grid-cols-1")} style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                        <div className={cn("relative grid gap-1 rounded-[var(--r-lg)] border p-0.5", showLibrary ? "grid-cols-2" : "grid-cols-1")} style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                             {showLibrary ? <TrayTabButton active={tab === "library"} label={`素材库 ${assetImages.length}`} theme={theme} onClick={() => setTab("library")} /> : null}
                             <TrayTabButton active={tab === "canvas"} label={`当前画布 ${canvasImages.length}`} theme={theme} onClick={() => setTab("canvas")} />
                         </div>
 
                         <label className="mt-2 flex h-8 items-center gap-1.5 rounded-[11px] border px-2.5 focus-within:ring-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
                             <Search className="size-3.5 shrink-0" style={{ color: theme.node.muted }} />
-                            <input type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索图片素材..." className="min-w-0 flex-1 bg-transparent text-[10px] outline-none placeholder:opacity-55" aria-label="搜索图片素材" />
+                            <input type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索图片素材..." className="min-w-0 flex-1 bg-transparent text-[var(--fs-tiny)] outline-none placeholder:opacity-55" aria-label="搜索图片素材" />
                             {keyword ? <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full opacity-55 hover:opacity-100" onClick={() => setKeyword("")} aria-label="清空搜索"><X className="size-3" /></button> : null}
                         </label>
 
@@ -189,7 +189,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                             )}
                         </div>
 
-                        <div className="flex items-center justify-between px-1 pt-2.5 text-[10px]" style={{ color: theme.node.muted }}>
+                        <div className="flex items-center justify-between px-1 pt-2.5 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                             <span>{showLibrary && tab === "library" ? "点击插入 · 拖拽定位" : "点击回到节点"}</span>
                             <span className="rounded-full border px-2 py-0.5 tabular-nums" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>{activeItems.length} 项</span>
                         </div>
@@ -206,8 +206,8 @@ type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 function TrayTabButton({ active, label, theme, onClick }: { active: boolean; label: string; theme: CanvasTheme; onClick: () => void }) {
     return (
-        <button type="button" className={cn("relative z-10 h-7 rounded-[9px] px-2 text-[10px] font-semibold outline-none transition-colors focus-visible:ring-2", active ? "" : "opacity-55 hover:opacity-90")} style={{ color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
-            {active ? <motion.span layoutId="canvas-asset-tray-active-tab" className="absolute inset-0 -z-10 rounded-[9px] border" style={{ background: theme.node.panel, borderColor: theme.toolbar.border, boxShadow: `0 6px 16px ${theme.spatial.shadow}` }} transition={aceternityMotion.spring.dock} /> : null}
+        <button type="button" className={cn("relative z-10 h-7 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-semibold outline-none transition-colors focus-visible:ring-2", active ? "" : "opacity-55 hover:opacity-90")} style={{ color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
+            {active ? <motion.span layoutId="canvas-asset-tray-active-tab" className="absolute inset-0 -z-10 rounded-[var(--dock-item-radius)] border" style={{ background: theme.node.panel, borderColor: theme.toolbar.border, boxShadow: `0 6px 16px ${theme.spatial.shadow}` }} transition={aceternityMotion.spring.dock} /> : null}
             {label}
         </button>
     );
@@ -223,19 +223,19 @@ function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, dragg
             whileHover={motionEnabled ? { x: 4, scale: 1.008 } : undefined}
             whileTap={motionEnabled ? { scale: 0.985 } : undefined}
             transition={aceternityMotion.spring.dock}
-            className="group grid h-12 w-full grid-cols-[36px_minmax(0,1fr)_auto_24px] items-center gap-1.5 rounded-[12px] border px-1.5 text-left outline-none focus-visible:ring-2"
+            className="group grid h-12 w-full grid-cols-[36px_minmax(0,1fr)_auto_24px] items-center gap-1.5 rounded-[var(--r-lg)] border px-1.5 text-left outline-none focus-visible:ring-2"
             style={{ background: active ? theme.accent.primarySoft : theme.spatial.surface, borderColor: active ? theme.spatial.glowStrong : theme.toolbar.border, color: active ? theme.accent.primary : theme.node.text }}
             onClick={onClick}
             onDragStartCapture={onDragStart}
         >
-            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-[9px] border" style={{ background: theme.node.fill, borderColor: theme.toolbar.border }}>
+            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-[var(--dock-item-radius)] border" style={{ background: theme.node.fill, borderColor: theme.toolbar.border }}>
                 {imageUrl ? <img src={imageUrl} alt="" width={36} height={36} className="size-full object-cover" draggable={false} /> : <ImageIcon className="size-3.5 opacity-55" />}
             </span>
             <span className="min-w-0">
-                <span className="block truncate text-[10px] font-semibold">{title}</span>
-                <span className="mt-0.5 block text-[8px] opacity-45">{active ? "当前已选择" : draggable ? "拖入画布或点击插入" : "点击定位到画布"}</span>
+                <span className="block truncate text-[var(--fs-tiny)] font-semibold">{title}</span>
+                <span className="mt-0.5 block text-[var(--fs-micro)] opacity-45">{active ? "当前已选择" : draggable ? "拖入画布或点击插入" : "点击定位到画布"}</span>
             </span>
-            <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-semibold", location === "oss" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : location === "local" ? "bg-amber-500/12 text-amber-700 dark:text-amber-300" : "bg-black/5 text-stone-400 dark:bg-white/8 dark:text-stone-500")} title={resourceStorageTitle(storageKey)}>
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold", location === "oss" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : location === "local" ? "bg-amber-500/12 text-amber-700 dark:text-amber-300" : "bg-black/5 text-stone-400 dark:bg-white/8 dark:text-stone-500")} title={resourceStorageTitle(storageKey)}>
                 {resourceStorageLabel(storageKey)}
             </span>
             <span className="grid size-6 place-items-center rounded-full border opacity-45 transition-opacity group-hover:opacity-90" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>{icon}</span>
@@ -245,7 +245,7 @@ function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, dragg
 
 function TrayEmpty({ text, theme }: { text: string; theme: CanvasTheme }) {
     return (
-        <div className="grid h-full min-h-[200px] place-items-center rounded-[14px] border border-dashed text-center" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }}>
+        <div className="grid h-full min-h-[200px] place-items-center rounded-[var(--dock-radius)] border border-dashed text-center" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }}>
             <span><Images className="mx-auto size-5 opacity-35" /><span className="mt-2 block text-xs opacity-55">{text}</span></span>
         </div>
     );

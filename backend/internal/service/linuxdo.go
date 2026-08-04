@@ -491,7 +491,7 @@ func safeOAuthNext(value string) string {
 	value = strings.TrimSpace(value)
 	parsed, err := url.Parse(value)
 	if value == "" || err != nil || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") || strings.HasPrefix(value, "//") || strings.Contains(value, "\\") {
-		return "/canvas"
+		return "/create"
 	}
 	return parsed.RequestURI()
 }

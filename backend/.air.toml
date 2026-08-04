@@ -1,0 +1,19 @@
+root = "."
+tmp_dir = "/tmp/open-ai-canvas-air"
+
+[build]
+bin = "/tmp/open-ai-canvas-air/server"
+cmd = "go build -o /tmp/open-ai-canvas-air/server ./cmd/server"
+delay = 800
+exclude_dir = ["data", "tmp", "vendor"]
+exclude_regex = ["_test\\.go"]
+include_ext = ["go", "mod", "sum"]
+kill_delay = "500ms"
+send_interrupt = true
+stop_on_error = true
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true

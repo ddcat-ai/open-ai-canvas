@@ -1,4 +1,4 @@
-import { getSystemChannels, type AuthSessionPayload } from "@/services/api/auth";
+import { getFeatureAvailability, getSystemChannels, type AuthSessionPayload } from "@/services/api/auth";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
@@ -25,6 +25,8 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
+        useUserStore.getState().setDrawingEngine(payload.drawingEngine);
+        useUserStore.getState().setFeatures(payload.features);
         await Promise.all([useCanvasStore.persist.rehydrate(), useAssetStore.persist.rehydrate(), useConfigStore.persist.rehydrate()]);
         // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
         if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
@@ -55,4 +57,10 @@ export async function refreshSystemChannels() {
     // 系统模型由后端统一维护，后台变更后只刷新这一层，避免重跑整套用户数据同步。
     const payload = await getSystemChannels();
     useConfigStore.getState().mergeSystemChannels(payload.channels || []);
+}
+
+export async function refreshFeatureAvailability() {
+    const payload = await getFeatureAvailability();
+    useUserStore.getState().setFeatures(payload.features);
+    return payload.features;
 }

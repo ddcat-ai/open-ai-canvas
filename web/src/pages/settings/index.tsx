@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Tag, Tooltip } from "antd";
-import { ArrowLeft, Boxes, CircleCheck, Cloud, Info, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -26,13 +26,15 @@ import {
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
 import { ModelDefaultGrid } from "./model-default-grid";
+import { PromptPreferencesPane } from "./prompt-preferences-pane";
 
-type ConfigSectionKey = "channels" | "models" | "preferences" | "storage";
+type ConfigSectionKey = "channels" | "models" | "preferences" | "prompts" | "storage";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: "生成偏好", description: "画布、音频与系统提示词", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
     { key: "storage", label: "我的 OSS", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
 ];
 
@@ -48,6 +50,15 @@ function isConfigSection(value: string | null): value is ConfigSectionKey {
     return configSections.some((section) => section.key === value);
 }
 
+function channelModelFetchErrorMessage(error: unknown) {
+    const detail = error instanceof Error ? error.message : "读取模型失败";
+    // 私网地址会在实际生成时继续被 SSRF 防护拦截，不能提示用户靠手填模型绕过。
+    if (detail.includes("不允许访问本机") || detail.includes("不允许访问保留地址")) {
+        return `${detail}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS`;
+    }
+    return `${detail}；也可以直接在模型列表中手动输入模型名`;
+}
+
 export default function SettingsPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
@@ -55,6 +66,7 @@ export default function SettingsPage() {
     const requestedSection = searchParams.get("section");
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isConfigSection(requestedSection) ? requestedSection : "channels");
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
+    const [collapsedChannelIds, setCollapsedChannelIds] = useState<Set<string>>(new Set());
     const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
@@ -146,6 +158,15 @@ export default function SettingsPage() {
         setLoadingChannelIds((items) => (loading ? Array.from(new Set([...items, id])) : items.filter((item) => item !== id)));
     };
 
+    const toggleChannelCollapsed = (id: string) => {
+        setCollapsedChannelIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const refreshChannelModels = async (channel: ModelChannel) => {
         const connectionError = channelConnectionError(channel);
         if (connectionError) {
@@ -172,7 +193,7 @@ export default function SettingsPage() {
             );
             message.success(`${latestChannel.name || "当前渠道"}模型列表已更新`);
         } catch (error) {
-            message.error(error instanceof Error ? `${error.message}；也可以直接在模型列表中手动输入模型名` : "读取模型失败，可直接手动输入模型名");
+            message.error(channelModelFetchErrorMessage(error));
         } finally {
             setChannelLoading(channel.id, false);
         }
@@ -260,7 +281,7 @@ export default function SettingsPage() {
                                     aria-current={selected ? "page" : undefined}
                                 >
                                     <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
-                                    <span className="min-w-0"><span className="block whitespace-nowrap text-sm font-medium">{item.label}</span><span className="mt-1 hidden text-[11px] leading-4 text-current opacity-65 md:block">{item.description}</span></span>
+                                    <span className="min-w-0"><span className="block whitespace-nowrap text-sm font-medium">{item.label}</span><span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{item.description}</span></span>
                                 </button>
                             );
                         })}
@@ -269,7 +290,7 @@ export default function SettingsPage() {
 
                 <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
                     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className="mx-auto w-full max-w-[1180px]">
+                        <div className={activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-[1180px]"}>
                     {([
                     {
                         key: "channels",
@@ -327,6 +348,17 @@ export default function SettingsPage() {
                                                             >
                                                                 拉取模型
                                                             </Button>
+                                                            <Tooltip title={collapsedChannelIds.has(channel.id) ? "\u5c55\u5f00\u6e20\u9053\u914d\u7f6e" : "\u6536\u8d77\u6e20\u9053\u914d\u7f6e"}>
+                                                                <Button
+                                                                    className="size-10 p-0 sm:size-8"
+                                                                    size="small"
+                                                                    aria-label={`${collapsedChannelIds.has(channel.id) ? "\u5c55\u5f00" : "\u6536\u8d77"}\u6e20\u9053\u914d\u7f6e ${channel.name || "\u672a\u547d\u540d\u6e20\u9053"}`}
+                                                                    aria-expanded={!collapsedChannelIds.has(channel.id)}
+                                                                    aria-controls={`channel-${channel.id}-details`}
+                                                                    icon={collapsedChannelIds.has(channel.id) ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                                                                    onClick={() => toggleChannelCollapsed(channel.id)}
+                                                                />
+                                                            </Tooltip>
                                                             <Popconfirm title="删除自定义渠道？" description="该渠道关联的模型选择会同时移除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
                                                                 <Tooltip title="删除渠道">
                                                                     <Button
@@ -341,6 +373,7 @@ export default function SettingsPage() {
                                                             </Popconfirm>
                                                         </div>
                                                     </div>
+                                                    <div id={`channel-${channel.id}-details`} hidden={collapsedChannelIds.has(channel.id)}>
                                                     <div className="grid gap-x-3 gap-y-2 lg:grid-cols-12">
                                                         <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 lg:col-span-3">
                                                             <Input
@@ -397,6 +430,7 @@ export default function SettingsPage() {
                                                         </div>
                                                     </div>
                                                     <ChannelModelSettings channel={channel} onChange={(modelCosts) => updateChannel(channel.id, { modelCosts })} />
+                                                    </div>
                                                 </section>
                                             ))}
                                         </div>
@@ -466,19 +500,21 @@ export default function SettingsPage() {
                                     </section>
 
                                     <section className="pt-6">
-                                        <div className="mb-4"><h3 className="text-sm font-semibold">默认指令</h3><p className="mt-1 text-xs text-foreground/55">在未单独填写时附加到对应生成请求。</p></div>
-                                        <div className="grid gap-5 lg:grid-cols-2">
-                                            <Form.Item label="音频指令" className="mb-0">
+                                        <div className="mb-4"><h3 className="text-sm font-semibold">音频指令</h3><p className="mt-1 text-xs text-foreground/55">在音频节点没有单独填写时使用。</p></div>
+                                        <div className="max-w-2xl">
+                                            <Form.Item label="默认音频指令" className="mb-0">
                                                 <Input.TextArea rows={5} value={config.audioInstructions} placeholder="例如：自然、温暖、适合旁白。" onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
-                                            </Form.Item>
-                                            <Form.Item label="系统提示词" className="mb-0">
-                                                <Input.TextArea rows={5} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
                                             </Form.Item>
                                         </div>
                                     </section>
                                 </Form>
                             </SettingsPane>
                         ),
+                    },
+                    {
+                        key: "prompts",
+                        label: "提示词偏好",
+                        children: <SettingsPane fill><PromptPreferencesPane /></SettingsPane>,
                     },
                     {
                         key: "storage",
@@ -503,8 +539,8 @@ export default function SettingsPage() {
     );
 }
 
-function SettingsPane({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+function SettingsPane({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
+    return <div className={fill ? "h-full" : undefined}>{children}</div>;
 }
 
 function ChannelStatus({ channel }: { channel: ModelChannel }) {

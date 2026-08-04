@@ -195,7 +195,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     if (!open || !draft || !activeShot) return null;
 
     return (
-        <div data-canvas-no-zoom className="fixed inset-0 z-[500] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <div data-canvas-no-zoom className="fixed inset-0 z-[var(--z-toast)] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
                 <IconButton label="关闭导演台" onClick={onClose}><X className="size-4" /></IconButton>
                 <Input variant="borderless" value={draft.title} className="max-w-56 font-medium" onChange={(event) => replaceWithoutHistory((current) => ({ ...current, title: event.target.value }))} />
@@ -238,7 +238,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
 
                 <main className="relative min-h-0 overflow-hidden bg-neutral-900">
                     <DirectorViewport ref={viewportRef} scene={draft} selectedObjectId={selectedObjectId} transformMode={transformMode} renderMode={renderMode} playhead={playhead} onSelectObject={setSelectedObjectId} onObjectTransform={(id, transform) => updateObject(id, { transform })} />
-                    <div className="pointer-events-none absolute left-3 top-3 text-[10px] font-medium text-white/70">{activeShot.name} · {activeCamera?.name || "无摄影机"} · {activeShot.duration}s</div>
+                    <div className="pointer-events-none absolute left-3 top-3 text-[var(--fs-tiny)] font-medium text-white/70">{activeShot.name} · {activeCamera?.name || "无摄影机"} · {activeShot.duration}s</div>
                 </main>
 
                 <aside className="thin-scrollbar min-h-0 overflow-y-auto border-l max-lg:hidden" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
@@ -249,12 +249,12 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
             <footer className="shrink-0 border-t px-3 py-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
                 <div className="flex items-center gap-2">
                     <IconButton label={playing ? "暂停" : "播放"} onClick={() => setPlaying(!playing)}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}</IconButton>
-                    <span className="w-12 text-right text-[11px] tabular-nums">{playhead.toFixed(1)}s</span>
+                    <span className="w-12 text-right text-[var(--fs-label)] tabular-nums">{playhead.toFixed(1)}s</span>
                     <Slider className="min-w-0 flex-1" min={0} max={activeShot.duration} step={0.05} value={playhead} onChange={setPlayhead} />
                     <Button size="small" type="text" icon={<Focus className="size-3.5" />} onClick={selectedObject ? addObjectKeyframe : addCameraKeyframe}>记录关键帧</Button>
                 </div>
                 <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                    {draft.shots.map((shot, index) => <button key={shot.id} type="button" className="h-8 min-w-28 shrink-0 border-l-2 px-2 text-left text-[11px] transition" style={{ borderColor: draft.activeShotId === shot.id ? theme.node.activeStroke : theme.toolbar.border, background: draft.activeShotId === shot.id ? theme.toolbar.itemHover : "transparent" }} onClick={() => { commit((current) => ({ ...current, activeShotId: shot.id })); setPlayhead(0); }}><span className="block truncate">{index + 1}. {shot.name}</span><span className="block opacity-45">{shot.duration}s</span></button>)}
+                    {draft.shots.map((shot, index) => <button key={shot.id} type="button" className="h-8 min-w-28 shrink-0 border-l-2 px-2 text-left text-[var(--fs-label)] transition" style={{ borderColor: draft.activeShotId === shot.id ? theme.node.activeStroke : theme.toolbar.border, background: draft.activeShotId === shot.id ? theme.toolbar.itemHover : "transparent" }} onClick={() => { commit((current) => ({ ...current, activeShotId: shot.id })); setPlayhead(0); }}><span className="block truncate">{index + 1}. {shot.name}</span><span className="block opacity-45">{shot.duration}s</span></button>)}
                     <button type="button" className="grid h-8 w-9 shrink-0 place-items-center" title="新增镜头" onClick={addShot}><Plus className="size-4" /></button>
                 </div>
             </footer>
@@ -263,7 +263,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
 }
 
 function ObjectInspector({ object, playhead, onUpdate, onAddKeyframe, onDelete }: { object: DirectorObject; playhead: number; onUpdate: (patch: Partial<DirectorObject>) => void; onAddKeyframe: () => void; onDelete: () => void }) {
-    return <Inspector title={object.name} onTitleChange={(name) => onUpdate({ name })} onDelete={onDelete}><TransformFields transform={object.transform} onChange={(transform) => onUpdate({ transform })} /><Field label="颜色"><ColorPicker value={object.color} onChange={(_, color) => onUpdate({ color })} /></Field>{object.primitive === "character" ? <Field label="姿势"><Select className="w-full" value={object.pose} options={poseOptions} onChange={(pose) => onUpdate({ pose })} /></Field> : null}<Field label="可见"><Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} /></Field><Field label="投射阴影"><Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} /></Field><Button block icon={<Focus className="size-3.5" />} onClick={onAddKeyframe}>在 {playhead.toFixed(1)}s 记录关键帧</Button><div className="text-[10px] opacity-50">已记录 {object.keyframes.length} 个关键帧</div></Inspector>;
+    return <Inspector title={object.name} onTitleChange={(name) => onUpdate({ name })} onDelete={onDelete}><TransformFields transform={object.transform} onChange={(transform) => onUpdate({ transform })} /><Field label="颜色"><ColorPicker value={object.color} onChange={(_, color) => onUpdate({ color })} /></Field>{object.primitive === "character" ? <Field label="姿势"><Select className="w-full" value={object.pose} options={poseOptions} onChange={(pose) => onUpdate({ pose })} /></Field> : null}<Field label="可见"><Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} /></Field><Field label="投射阴影"><Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} /></Field><Button block icon={<Focus className="size-3.5" />} onClick={onAddKeyframe}>在 {playhead.toFixed(1)}s 记录关键帧</Button><div className="text-[var(--fs-tiny)] opacity-50">已记录 {object.keyframes.length} 个关键帧</div></Inspector>;
 }
 
 function LightInspector({ light, onUpdate, onDelete }: { light: DirectorLight; onUpdate: (patch: Partial<DirectorLight>) => void; onDelete: () => void }) {
@@ -286,10 +286,10 @@ function Vec3Field({ label, value, step = 0.1, onChange }: { label: string; valu
     return <Field label={label}><div className="grid grid-cols-3 gap-1">{value.map((item, index) => <InputNumber key={index} className="w-full" size="small" step={step} value={Number(item.toFixed(2))} onChange={(next) => onChange(value.map((entry, itemIndex) => itemIndex === index ? next || 0 : entry) as DirectorVec3)} />)}</div></Field>;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-1 block text-[11px] opacity-55">{label}</span>{children}</label>; }
-function PanelTitle({ title, action }: { title: string; action?: ReactNode }) { return <div className="flex h-9 items-center px-3 text-[10px] font-semibold uppercase opacity-55"><span className="flex-1">{title}</span>{action}</div>; }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-1 block text-[var(--fs-label)] opacity-55">{label}</span>{children}</label>; }
+function PanelTitle({ title, action }: { title: string; action?: ReactNode }) { return <div className="flex h-9 items-center px-3 text-[var(--fs-tiny)] font-semibold uppercase opacity-55"><span className="flex-1">{title}</span>{action}</div>; }
 function SceneRow({ active, icon, label, onClick }: { active?: boolean; icon: ReactElement; label: string; onClick: () => void }) { return <button type="button" className={`flex h-8 w-full items-center gap-2 px-2 text-left text-xs transition ${active ? "bg-black/10 dark:bg-white/10" : "hover:bg-black/5 dark:hover:bg-white/5"}`} onClick={onClick}><span className="[&>svg]:size-3.5">{icon}</span><span className="truncate">{label}</span></button>; }
-function QuickAdd({ label, icon, onClick }: { label: string; icon: ReactElement; onClick: () => void }) { return <button type="button" className="flex h-8 items-center gap-1.5 border px-2 text-[10px] transition hover:bg-black/5 dark:hover:bg-white/5" onClick={onClick}><span className="[&>svg]:size-3.5">{icon}</span><span className="truncate">{label}</span></button>; }
+function QuickAdd({ label, icon, onClick }: { label: string; icon: ReactElement; onClick: () => void }) { return <button type="button" className="flex h-8 items-center gap-1.5 border px-2 text-[var(--fs-tiny)] transition hover:bg-black/5 dark:hover:bg-white/5" onClick={onClick}><span className="[&>svg]:size-3.5">{icon}</span><span className="truncate">{label}</span></button>; }
 function IconButton({ label, disabled, children, onClick }: { label: string; disabled?: boolean; children: ReactNode; onClick: () => void }) { return <button type="button" aria-label={label} title={label} disabled={disabled} className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10" onClick={onClick}>{children}</button>; }
 function ToolButton({ label, active, children, onClick }: { label: string; active: boolean; children: ReactNode; onClick: () => void }) { return <button type="button" aria-label={label} title={label} className={`grid size-8 place-items-center rounded-md transition ${active ? "bg-black text-white dark:bg-white dark:text-black" : "hover:bg-black/5 dark:hover:bg-white/10"}`} onClick={onClick}>{children}</button>; }
 

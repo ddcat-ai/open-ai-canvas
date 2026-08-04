@@ -12,6 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
+type CreateAdminUserRequest struct {
+	Username    string           `json:"username"`
+	DisplayName string           `json:"displayName"`
+	Email       string           `json:"email"`
+	Password    string           `json:"password"`
+	Role        model.UserRole   `json:"role"`
+	Status      model.UserStatus `json:"status"`
+}
 type UpdateUserRequest struct {
 	DisplayName string           `json:"displayName"`
 	Email       string           `json:"email"`
@@ -184,6 +192,78 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Models: uniqueNonEmpty(models)})
 	}
 	return result, nil
+}
+
+func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest) (*AdminUser, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	username := normalizeUsername(req.Username)
+	email := normalizeEmail(req.Email)
+	displayName := normalizeDisplayName(req.DisplayName, username)
+	if err := validateUsername(username); err != nil {
+		return nil, err
+	}
+	if err := validatePassword(req.Password); err != nil {
+		return nil, err
+	}
+	if email != "" {
+		if err := validateEmail(email); err != nil {
+			return nil, err
+		}
+	}
+	if req.Role != model.UserRoleAdmin && req.Role != model.UserRoleUser {
+		return nil, BadAuthRequest("\u7528\u6237\u89d2\u8272\u65e0\u6548")
+	}
+	if req.Status != model.UserStatusActive && req.Status != model.UserStatusDisabled {
+		return nil, BadAuthRequest("\u7528\u6237\u72b6\u6001\u65e0\u6548")
+	}
+	if _, err := s.repo.UserByUsername(username); err == nil {
+		return nil, BadAuthRequest("\u7528\u6237\u540d\u5df2\u5b58\u5728")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	if email != "" {
+		if _, err := s.repo.UserByEmail(email); err == nil {
+			return nil, BadAuthRequest("\u90ae\u7bb1\u5df2\u88ab\u6ce8\u518c")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	user := &model.User{
+		ID:           newID(),
+		Username:     username,
+		Email:        email,
+		DisplayName:  displayName,
+		Role:         req.Role,
+		Status:       req.Status,
+		PasswordHash: passwordHash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := s.repo.Create(user); err != nil {
+		return nil, err
+	}
+	if err := s.ensureSignupBonus(user.ID); err != nil {
+		return nil, err
+	}
+	if err := s.appendAdminAudit(actor, "user.create", "user", user.ID, "\u521b\u5efa\u7528\u6237\u8d26\u53f7", map[string]any{"role": user.Role, "status": user.Status}); err != nil {
+		return nil, err
+	}
+	account, err := s.repo.CreditAccount(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &AdminUser{
+		User:                   *user,
+		AvailableMicrocredits: account.AvailableMicrocredits,
+		ReservedMicrocredits:  account.ReservedMicrocredits,
+	}, nil
 }
 
 func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserRequest) (*model.User, error) {

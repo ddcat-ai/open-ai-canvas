@@ -1,421 +1,447 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
+	"errors"
 	"net/url"
-	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
-	"golang.org/x/net/html"
+	"gorm.io/gorm"
 )
 
-const updreamSkillCommunityURL = "https://www.updream.cn/api/skills/community"
+const (
+	skillStatusEnabled = 1
+	skillSourceUser    = 1
+)
 
-type CommunitySkillsRequest struct {
-	Page       int
-	PageSize   int
-	Sort       string
-	Search     string
-	Categories []string
+var skillCategoryLabels = map[string]string{
+	"drama":     "短剧影视",
+	"ecommerce": "电商营销",
+	"creative":  "创意设计",
+	"social":    "社媒内容",
+	"others":    "其他",
 }
 
-type CommunitySkillList struct {
-	Skills     []UpdreamSkill `json:"skills"`
-	Total      int            `json:"total"`
-	Page       int            `json:"page"`
-	PageSize   int            `json:"page_size"`
-	Categories []string       `json:"categories"`
+type SkillShowcaseMedia struct {
+	Type        string `json:"type"`
+	ShowcaseURI string `json:"showcase_uri"`
+	ShowcaseURL string `json:"showcase_url"`
 }
 
-type SkillIntegrationCapabilities struct {
-	Provider             string `json:"provider"`
-	PublicCommunity      bool   `json:"publicCommunity"`
-	CategoryFilter       bool   `json:"categoryFilter"`
-	PublicRankings       bool   `json:"publicRankings"`
-	PrivateAuthorization string `json:"privateAuthorization"`
-	Upload               bool   `json:"upload"`
-	Comments             bool   `json:"comments"`
+type SkillEffectiveUser struct {
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	UID       string `json:"uid"`
 }
 
-func (s *Service) SkillIntegrationCapabilities() SkillIntegrationCapabilities {
-	return SkillIntegrationCapabilities{Provider: "updream", PublicCommunity: true, CategoryFilter: true, PublicRankings: true, PrivateAuthorization: "not_configured", Upload: false, Comments: false}
+type SkillItem struct {
+	SkillID         string               `json:"skill_id"`
+	SkillName       string               `json:"skill_name"`
+	Description     string               `json:"description"`
+	Instruction     string               `json:"instruction,omitempty"`
+	Status          int                  `json:"status"`
+	MarkdownURL     string               `json:"markdown_url"`
+	CreateTime      int64                `json:"create_time"`
+	UpdateTime      int64                `json:"update_time"`
+	Source          int                  `json:"source"`
+	Tag             string               `json:"tag"`
+	SortWeight      int                  `json:"sort_weight"`
+	IsPrivate       bool                 `json:"is_private"`
+	LikeCount       int64                `json:"like_count"`
+	IsLike          bool                 `json:"is_like"`
+	OwnerUID        string               `json:"owner_uid"`
+	EffectiveUser   SkillEffectiveUser   `json:"effective_user"`
+	OriginalSkillID *string              `json:"original_skill_id"`
+	ShowcaseMedia   []SkillShowcaseMedia `json:"showcase_media"`
+	AddedCount      int64                `json:"added_count"`
+	IsTest          bool                 `json:"is_test"`
+	ExtraInfo       string               `json:"extra_info"`
+	IsAdded         bool                 `json:"is_added"`
+	IsOwner         bool                 `json:"is_owner"`
 }
 
-type UpdreamSkill struct {
-	Dir             string   `json:"dir"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	IconURL         string   `json:"icon_url"`
-	CoverURL        string   `json:"cover_url"`
-	DetailContent   string   `json:"detail_content"`
-	DetailText      string   `json:"detail_text"`
-	Categories      []string `json:"categories"`
-	Version         int      `json:"version"`
-	UploaderID      int64    `json:"uploader_id"`
-	UploaderName    string   `json:"uploader_name"`
-	UploaderAvatar  string   `json:"uploader_avatar"`
-	IsPrivate       bool     `json:"is_private"`
-	ReviewStatus    string   `json:"review_status"`
-	CTime           string   `json:"ctime"`
-	MTime           string   `json:"mtime"`
-	FeaturedLabel   string   `json:"featured_label"`
-	ActivationCount int      `json:"activation_count"`
-	LikeCount       int      `json:"like_count"`
-	UsageCount      int      `json:"usage_count"`
-	CommentCount    int      `json:"comment_count"`
-	RatingCount     int      `json:"rating_count"`
-	AvgRating       *float64 `json:"avg_rating"`
-	HotScore        int      `json:"hot_score"`
-	Liked           bool     `json:"liked"`
-	Activated       bool     `json:"activated"`
-	UserRating      *float64 `json:"user_rating"`
-	ShareScope      string   `json:"share_scope"`
-	ShareTeamID     any      `json:"share_team_id"`
+type SkillCategory struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
-type updreamCommunityResponse struct {
-	Skills   []UpdreamSkill `json:"skills"`
-	Total    int            `json:"total"`
-	Page     int            `json:"page"`
-	PageSize int            `json:"page_size"`
+type SkillListRequest struct {
+	Page     int
+	PageSize int
+	Scope    string
+	Search   string
+	Tag      string
+	Sort     string
 }
 
-func (s *Service) CommunitySkills(ctx context.Context, userID string, req CommunitySkillsRequest) (*CommunitySkillList, error) {
-	req = normalizeCommunitySkillsRequest(req)
-	skillsURL, err := updreamCommunityListURL(req)
+type SkillList struct {
+	Skills     []SkillItem     `json:"skills"`
+	TotalCount int64           `json:"total_count"`
+	HasMore    bool            `json:"has_more"`
+	NextOffset int             `json:"next_offset"`
+	Page       int             `json:"page"`
+	PageSize   int             `json:"page_size"`
+	Categories []SkillCategory `json:"categories"`
+}
+
+type SkillMutationRequest struct {
+	SkillName     string               `json:"skill_name"`
+	Description   string               `json:"description"`
+	Instruction   string               `json:"instruction"`
+	Tag           string               `json:"tag"`
+	IsPrivate     bool                 `json:"is_private"`
+	MarkdownURL   string               `json:"markdown_url"`
+	ShowcaseMedia []SkillShowcaseMedia `json:"showcase_media"`
+	ExtraInfo     string               `json:"extra_info"`
+}
+
+func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error) {
+	req = normalizeSkillListRequest(req)
+	rows, total, err := s.repo.Skills(repository.SkillListFilter{
+		UserID: userID,
+		Scope:  req.Scope,
+		Search: req.Search,
+		Tag:    req.Tag,
+		Sort:   req.Sort,
+		Limit:  req.PageSize,
+		Offset: (req.Page - 1) * req.PageSize,
+	})
 	if err != nil {
 		return nil, err
 	}
-	var payload updreamCommunityResponse
-	if err := fetchUpdreamJSON(ctx, skillsURL, &payload); err != nil {
-		return nil, err
-	}
-	states, err := s.repo.UserSkillStatesByDirs(userID, skillDirs(payload.Skills))
+	items, err := s.skillItems(userID, rows, false)
 	if err != nil {
 		return nil, err
 	}
-	applyUserSkillStates(payload.Skills, states)
-	for index := range payload.Skills {
-		payload.Skills[index].DetailText = strings.TrimSpace(payload.Skills[index].Description)
-		payload.Skills[index].DetailContent = ""
+	nextOffset := req.Page * req.PageSize
+	if int64(nextOffset) >= total {
+		nextOffset = 0
 	}
-	categories := []string{}
-	for _, skill := range payload.Skills {
-		categories = append(categories, skill.Categories...)
-	}
-	return &CommunitySkillList{Skills: payload.Skills, Total: payload.Total, Page: payload.Page, PageSize: payload.PageSize, Categories: cleanStringList(categories)}, nil
+	return &SkillList{
+		Skills:     items,
+		TotalCount: total,
+		HasMore:    int64(req.Page*req.PageSize) < total,
+		NextOffset: nextOffset,
+		Page:       req.Page,
+		PageSize:   req.PageSize,
+		Categories: skillCategories(),
+	}, nil
 }
 
-func (s *Service) CommunitySkillDetail(ctx context.Context, userID string, dir string) (*UpdreamSkill, error) {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return nil, BadAuthRequest("技能标识不能为空")
-	}
-	skill, err := fetchUpdreamSkillDetail(ctx, dir)
+func (s *Service) AddedSkills(userID string) ([]SkillItem, error) {
+	rows, _, err := s.repo.Skills(repository.SkillListFilter{UserID: userID, Scope: "mine", Sort: "updated", Limit: -1})
 	if err != nil {
 		return nil, err
 	}
-	states, err := s.repo.UserSkillStatesByDirs(userID, []string{dir})
+	return s.skillItems(userID, rows, true)
+}
+
+func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
+	skill, err := s.visibleSkill(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	if len(states) > 0 {
-		skill.Activated = states[0].Activated
-		skill.Liked = states[0].Liked
-	} else {
-		skill.Activated = false
-		skill.Liked = false
-	}
-	skill.DetailText = detailTextFromHTML(skill.DetailContent, skill.Description)
-	skill.DetailContent = ""
-	return skill, nil
-}
-
-func (s *Service) ActivatedSkills(ctx context.Context, userID string) ([]UpdreamSkill, error) {
-	return s.userStateSkills(ctx, userID, func(state model.UserSkillState) bool { return state.Activated })
-}
-
-func (s *Service) FavoriteSkills(ctx context.Context, userID string) ([]UpdreamSkill, error) {
-	return s.userStateSkills(ctx, userID, func(state model.UserSkillState) bool { return state.Liked })
-}
-
-func (s *Service) userStateSkills(ctx context.Context, userID string, pick func(model.UserSkillState) bool) ([]UpdreamSkill, error) {
-	states, err := s.repo.UserSkillStates(userID)
+	items, err := s.skillItems(userID, []model.Skill{*skill}, true)
 	if err != nil {
 		return nil, err
 	}
-	skills := make([]UpdreamSkill, 0, len(states))
-	var firstErr error
-	for _, state := range states {
-		if !pick(state) {
-			continue
+	return &items[0], nil
+}
+
+func (s *Service) CreateSkill(userID string, req SkillMutationRequest) (*SkillItem, error) {
+	normalized, mediaJSON, err := normalizeSkillMutationRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	skill := &model.Skill{
+		ID:                newID(),
+		OwnerID:           userID,
+		Name:              normalized.SkillName,
+		Description:       normalized.Description,
+		Instruction:       normalized.Instruction,
+		Status:            skillStatusEnabled,
+		Source:            skillSourceUser,
+		Tag:               normalized.Tag,
+		IsPrivate:         normalized.IsPrivate,
+		MarkdownURL:       normalized.MarkdownURL,
+		ShowcaseMediaJSON: mediaJSON,
+		ExtraInfo:         normalized.ExtraInfo,
+	}
+	state := &model.UserSkillState{ID: newID(), UserID: userID, SkillID: skill.ID, Added: true}
+	if err := s.repo.CreateSkill(skill, state); err != nil {
+		return nil, err
+	}
+	return s.SkillDetail(userID, skill.ID)
+}
+
+func (s *Service) UpdateSkill(userID string, id string, req SkillMutationRequest) (*SkillItem, error) {
+	skill, err := s.ownedSkill(userID, id)
+	if err != nil {
+		return nil, err
+	}
+	normalized, mediaJSON, err := normalizeSkillMutationRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	skill.Name = normalized.SkillName
+	skill.Description = normalized.Description
+	skill.Instruction = normalized.Instruction
+	skill.Tag = normalized.Tag
+	skill.IsPrivate = normalized.IsPrivate
+	skill.MarkdownURL = normalized.MarkdownURL
+	skill.ShowcaseMediaJSON = mediaJSON
+	skill.ExtraInfo = normalized.ExtraInfo
+	if err := s.repo.Save(skill); err != nil {
+		return nil, err
+	}
+	return s.SkillDetail(userID, skill.ID)
+}
+
+func (s *Service) DeleteSkill(userID string, id string) error {
+	skill, err := s.ownedSkill(userID, id)
+	if err != nil {
+		return err
+	}
+	return s.repo.DeleteSkill(skill.ID)
+}
+
+func (s *Service) SetSkillAdded(userID string, id string, added bool) (*SkillItem, error) {
+	skill, err := s.visibleSkill(userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if skill.OwnerID == userID {
+		if !added {
+			return nil, BadAuthRequest("自己创建的技能始终保留在我的技能中")
 		}
-		skill, err := fetchUpdreamSkillDetail(ctx, state.SkillDir)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		skill.Activated = state.Activated
-		skill.Liked = state.Liked
-		skill.DetailText = detailTextFromHTML(skill.DetailContent, skill.Description)
-		skill.DetailContent = ""
-		skills = append(skills, *skill)
+		return s.SkillDetail(userID, id)
 	}
-	if len(skills) == 0 && firstErr != nil {
-		return nil, firstErr
+	state, err := s.skillState(userID, id)
+	if err != nil {
+		return nil, err
 	}
-	return skills, nil
+	state.Added = added
+	if err := s.repo.SetUserSkillAdded(state); err != nil {
+		return nil, err
+	}
+	return s.SkillDetail(userID, id)
 }
 
-func (s *Service) SetSkillActivated(ctx context.Context, userID string, dir string, activated bool) (*UpdreamSkill, error) {
-	skill, err := fetchUpdreamSkillDetail(ctx, strings.TrimSpace(dir))
-	if err != nil {
+func (s *Service) SetSkillLiked(userID string, id string, liked bool) (*SkillItem, error) {
+	if _, err := s.visibleSkill(userID, id); err != nil {
 		return nil, err
 	}
-	state, err := s.ensureUserSkillState(userID, skill.Dir)
-	if err != nil {
-		return nil, err
-	}
-	state.Activated = activated
-	if err := s.repo.Save(state); err != nil {
-		return nil, err
-	}
-	skill.Activated = state.Activated
-	skill.Liked = state.Liked
-	skill.DetailText = detailTextFromHTML(skill.DetailContent, skill.Description)
-	skill.DetailContent = ""
-	return skill, nil
-}
-
-func (s *Service) SetSkillLiked(ctx context.Context, userID string, dir string, liked bool) (*UpdreamSkill, error) {
-	skill, err := fetchUpdreamSkillDetail(ctx, strings.TrimSpace(dir))
-	if err != nil {
-		return nil, err
-	}
-	state, err := s.ensureUserSkillState(userID, skill.Dir)
+	state, err := s.skillState(userID, id)
 	if err != nil {
 		return nil, err
 	}
 	state.Liked = liked
-	if err := s.repo.Save(state); err != nil {
+	if err := s.repo.SetUserSkillLiked(state); err != nil {
 		return nil, err
 	}
-	skill.Activated = state.Activated
-	skill.Liked = state.Liked
-	skill.DetailText = detailTextFromHTML(skill.DetailContent, skill.Description)
-	skill.DetailContent = ""
+	return s.SkillDetail(userID, id)
+}
+
+func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruction bool) ([]SkillItem, error) {
+	ids := make([]string, 0, len(skills))
+	ownerIDs := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		ids = append(ids, skill.ID)
+		ownerIDs = append(ownerIDs, skill.OwnerID)
+	}
+	states, err := s.repo.UserSkillStatesBySkillIDs(userID, ids)
+	if err != nil {
+		return nil, err
+	}
+	metrics, err := s.repo.SkillMetrics(ids)
+	if err != nil {
+		return nil, err
+	}
+	owners, err := s.repo.SkillOwners(ownerIDs)
+	if err != nil {
+		return nil, err
+	}
+	ownerAvatars, err := s.repo.SkillOwnerAvatars(ownerIDs)
+	if err != nil {
+		return nil, err
+	}
+	stateBySkillID := make(map[string]model.UserSkillState, len(states))
+	for _, state := range states {
+		stateBySkillID[state.SkillID] = state
+	}
+	items := make([]SkillItem, 0, len(skills))
+	for _, skill := range skills {
+		var showcaseMedia []SkillShowcaseMedia
+		if err := json.Unmarshal([]byte(skill.ShowcaseMediaJSON), &showcaseMedia); err != nil {
+			return nil, errors.New("技能展示媒体数据格式错误")
+		}
+		owner := owners[skill.OwnerID]
+		ownerName := strings.TrimSpace(skill.AuthorName)
+		ownerAvatarURL := strings.TrimSpace(skill.AuthorAvatarURL)
+		if strings.TrimSpace(owner.DisplayName) != "" {
+			ownerName = strings.TrimSpace(owner.DisplayName)
+		} else if strings.TrimSpace(owner.Username) != "" {
+			ownerName = strings.TrimSpace(owner.Username)
+		}
+		if ownerAvatars[skill.OwnerID] != "" {
+			ownerAvatarURL = ownerAvatars[skill.OwnerID]
+		}
+		state := stateBySkillID[skill.ID]
+		metric := metrics[skill.ID]
+		metric.LikeCount += skill.InitialLikeCount
+		metric.AddedCount += skill.InitialAddedCount
+		instruction := ""
+		if includeInstruction {
+			instruction = skill.Instruction
+		}
+		items = append(items, SkillItem{
+			SkillID: skill.ID, SkillName: skill.Name, Description: skill.Description, Instruction: instruction,
+			Status: skill.Status, MarkdownURL: skill.MarkdownURL, CreateTime: skill.CreatedAt.UnixMilli(), UpdateTime: skill.UpdatedAt.UnixMilli(),
+			Source: skill.Source, Tag: skill.Tag, SortWeight: skill.SortWeight, IsPrivate: skill.IsPrivate,
+			LikeCount: metric.LikeCount, IsLike: state.Liked, OwnerUID: skill.OwnerID,
+			EffectiveUser: SkillEffectiveUser{Name: ownerName, AvatarURL: ownerAvatarURL, UID: skill.OwnerID}, ShowcaseMedia: showcaseMedia,
+			AddedCount: metric.AddedCount, ExtraInfo: skill.ExtraInfo, IsAdded: state.Added || skill.OwnerID == userID, IsOwner: skill.OwnerID == userID,
+		})
+	}
+	return items, nil
+}
+
+// 所有详情和关系写入都先经过同一可见性边界，避免私有技能通过加入、收藏或画布接口泄露正文。
+func (s *Service) visibleSkill(userID string, id string) (*model.Skill, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, BadAuthRequest("技能 ID 不能为空")
+	}
+	skill, err := s.repo.Skill(id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, BadAuthRequest("技能不存在或已删除")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if skill.IsPrivate && skill.OwnerID != userID {
+		return nil, Forbidden("该技能未公开")
+	}
 	return skill, nil
 }
 
-func (s *Service) ensureUserSkillState(userID string, dir string) (*model.UserSkillState, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, Unauthorized("请先登录")
+func (s *Service) ownedSkill(userID string, id string) (*model.Skill, error) {
+	skill, err := s.visibleSkill(userID, id)
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(dir) == "" {
-		return nil, BadAuthRequest("技能标识不能为空")
+	if skill.OwnerID != userID {
+		return nil, Forbidden("只有作者可以修改或删除该技能")
 	}
-	state, err := s.repo.UserSkillState(userID, dir)
+	return skill, nil
+}
+
+func (s *Service) skillState(userID string, skillID string) (*model.UserSkillState, error) {
+	state, err := s.repo.UserSkillState(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
 	if state != nil {
 		return state, nil
 	}
-	return &model.UserSkillState{ID: newID(), UserID: userID, SkillDir: dir}, nil
+	return &model.UserSkillState{ID: newID(), UserID: userID, SkillID: skillID}, nil
 }
 
-func normalizeCommunitySkillsRequest(req CommunitySkillsRequest) CommunitySkillsRequest {
+func normalizeSkillListRequest(req SkillListRequest) SkillListRequest {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
 	if req.PageSize <= 0 {
-		req.PageSize = 12
+		req.PageSize = 20
 	}
-	if req.PageSize > 48 {
-		req.PageSize = 48
+	if req.PageSize > 80 {
+		req.PageSize = 80
+	}
+	switch req.Scope {
+	case "public", "mine", "created", "favorites":
+	default:
+		req.Scope = "public"
 	}
 	switch req.Sort {
-	case "hot", "top_rated", "new":
+	case "popular", "new", "updated":
 	default:
-		req.Sort = "hot"
+		req.Sort = "popular"
 	}
 	req.Search = strings.TrimSpace(req.Search)
-	req.Categories = cleanStringList(req.Categories)
+	req.Tag = strings.TrimSpace(req.Tag)
+	if req.Tag != "" {
+		if _, ok := skillCategoryLabels[req.Tag]; !ok {
+			req.Tag = ""
+		}
+	}
 	return req
 }
 
-func updreamCommunityListURL(req CommunitySkillsRequest) (string, error) {
-	target, err := url.Parse(updreamSkillCommunityURL)
+func normalizeSkillMutationRequest(req SkillMutationRequest) (SkillMutationRequest, string, error) {
+	req.SkillName = strings.TrimSpace(req.SkillName)
+	req.Description = strings.TrimSpace(req.Description)
+	req.Instruction = strings.TrimSpace(req.Instruction)
+	req.Tag = strings.TrimSpace(req.Tag)
+	req.MarkdownURL = strings.TrimSpace(req.MarkdownURL)
+	req.ExtraInfo = strings.TrimSpace(req.ExtraInfo)
+	if req.SkillName == "" || utf8.RuneCountInString(req.SkillName) > 80 {
+		return req, "", BadAuthRequest("技能名称必须为 1-80 个字符")
+	}
+	if req.Description == "" || utf8.RuneCountInString(req.Description) > 500 {
+		return req, "", BadAuthRequest("技能简介必须为 1-500 个字符")
+	}
+	if req.Instruction == "" || utf8.RuneCountInString(req.Instruction) > 100000 {
+		return req, "", BadAuthRequest("技能指令必须为 1-100000 个字符")
+	}
+	if _, ok := skillCategoryLabels[req.Tag]; !ok {
+		return req, "", BadAuthRequest("请选择有效的技能分类")
+	}
+	if req.MarkdownURL != "" && !validSkillURL(req.MarkdownURL) {
+		return req, "", BadAuthRequest("Markdown 地址必须是有效的 HTTP(S) 链接")
+	}
+	if utf8.RuneCountInString(req.ExtraInfo) > 2000 {
+		return req, "", BadAuthRequest("补充信息不能超过 2000 个字符")
+	}
+	if len(req.ShowcaseMedia) > 8 {
+		return req, "", BadAuthRequest("展示媒体最多添加 8 个")
+	}
+	for index := range req.ShowcaseMedia {
+		media := &req.ShowcaseMedia[index]
+		media.Type = strings.TrimSpace(media.Type)
+		media.ShowcaseURI = strings.TrimSpace(media.ShowcaseURI)
+		media.ShowcaseURL = strings.TrimSpace(media.ShowcaseURL)
+		if media.Type != "image" && media.Type != "video" {
+			return req, "", BadAuthRequest("展示媒体类型仅支持图片或视频")
+		}
+		if !validSkillURL(media.ShowcaseURL) {
+			return req, "", BadAuthRequest("展示媒体必须填写有效的 HTTP(S) 链接")
+		}
+		if utf8.RuneCountInString(media.ShowcaseURI) > 500 || utf8.RuneCountInString(media.ShowcaseURL) > 2000 {
+			return req, "", BadAuthRequest("展示媒体地址过长")
+		}
+	}
+	mediaJSON, err := json.Marshal(req.ShowcaseMedia)
 	if err != nil {
-		return "", err
+		return req, "", err
 	}
-	values := target.Query()
-	values.Set("page", strconv.Itoa(req.Page))
-	values.Set("page_size", strconv.Itoa(req.PageSize))
-	values.Set("sort", req.Sort)
-	if req.Search != "" {
-		values.Set("search", req.Search)
-	}
-	for _, category := range req.Categories {
-		values.Add("categories", category)
-	}
-	target.RawQuery = values.Encode()
-	return target.String(), nil
+	return req, string(mediaJSON), nil
 }
 
-func fetchUpdreamSkillDetail(ctx context.Context, dir string) (*UpdreamSkill, error) {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return nil, BadAuthRequest("技能标识不能为空")
-	}
-	var skill UpdreamSkill
-	if err := fetchUpdreamJSON(ctx, updreamSkillCommunityURL+"/"+url.PathEscape(dir), &skill); err != nil {
-		return nil, err
-	}
-	if skill.Dir == "" {
-		skill.Dir = dir
-	}
-	return &skill, nil
+func validSkillURL(value string) bool {
+	target, err := url.ParseRequestURI(value)
+	return err == nil && (target.Scheme == "http" || target.Scheme == "https") && target.Host != ""
 }
 
-func fetchUpdreamJSON(ctx context.Context, target string, value any) error {
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return err
+func skillCategories() []SkillCategory {
+	return []SkillCategory{
+		{Value: "drama", Label: skillCategoryLabels["drama"]},
+		{Value: "ecommerce", Label: skillCategoryLabels["ecommerce"]},
+		{Value: "creative", Label: skillCategoryLabels["creative"]},
+		{Value: "social", Label: skillCategoryLabels["social"]},
+		{Value: "others", Label: skillCategoryLabels["others"]},
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "InfiniteCanvas/skills-proxy")
-	resp, err := OutboundHTTPClient(12 * time.Second).Do(req)
-	if err != nil {
-		return fmt.Errorf("Updream 技能接口连接失败: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("Updream 技能接口响应读取失败: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Updream 技能接口返回 %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	if err := json.Unmarshal(body, value); err != nil {
-		return fmt.Errorf("Updream 技能接口数据格式错误: %w", err)
-	}
-	return nil
-}
-
-func applyUserSkillStates(skills []UpdreamSkill, states []model.UserSkillState) {
-	byDir := make(map[string]model.UserSkillState, len(states))
-	for _, state := range states {
-		byDir[state.SkillDir] = state
-	}
-	for index := range skills {
-		state, ok := byDir[skills[index].Dir]
-		if !ok {
-			skills[index].Activated = false
-			skills[index].Liked = false
-			continue
-		}
-		skills[index].Activated = state.Activated
-		skills[index].Liked = state.Liked
-	}
-}
-
-func skillDirs(skills []UpdreamSkill) []string {
-	dirs := make([]string, 0, len(skills))
-	for _, skill := range skills {
-		if strings.TrimSpace(skill.Dir) != "" {
-			dirs = append(dirs, skill.Dir)
-		}
-	}
-	return dirs
-}
-
-func detailTextFromHTML(raw string, fallback string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return strings.TrimSpace(fallback)
-	}
-	doc, err := html.Parse(strings.NewReader(raw))
-	if err != nil {
-		return strings.Join(strings.Fields(stripHTMLTags(raw)), " ")
-	}
-	lines := make([]string, 0, 64)
-	var walk func(*html.Node, bool)
-	walk = func(node *html.Node, skip bool) {
-		if node == nil {
-			return
-		}
-		nextSkip := skip || isSkippedHTMLNode(node)
-		if node.Type == html.TextNode && !nextSkip {
-			text := strings.Join(strings.Fields(node.Data), " ")
-			if text != "" {
-				lines = append(lines, text)
-			}
-		}
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			walk(child, nextSkip)
-		}
-	}
-	walk(doc, false)
-	text := strings.TrimSpace(strings.Join(lines, "\n"))
-	if text == "" {
-		text = strings.TrimSpace(fallback)
-	}
-	return text
-}
-
-func isSkippedHTMLNode(node *html.Node) bool {
-	if node.Type != html.ElementNode {
-		return false
-	}
-	switch strings.ToLower(node.Data) {
-	case "script", "style", "noscript", "svg", "canvas":
-		return true
-	default:
-		return false
-	}
-}
-
-func stripHTMLTags(value string) string {
-	var builder strings.Builder
-	inTag := false
-	for _, char := range value {
-		switch {
-		case char == '<':
-			inTag = true
-		case char == '>':
-			inTag = false
-			builder.WriteRune(' ')
-		case !inTag:
-			builder.WriteRune(char)
-		}
-	}
-	return builder.String()
-}
-
-func cleanStringList(values []string) []string {
-	result := make([]string, 0, len(values))
-	seen := map[string]bool{}
-	for _, value := range values {
-		for _, item := range strings.Split(value, ",") {
-			item = strings.TrimSpace(item)
-			if item == "" || seen[item] {
-				continue
-			}
-			seen[item] = true
-			result = append(result, item)
-		}
-	}
-	return result
 }

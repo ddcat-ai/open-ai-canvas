@@ -23,6 +23,8 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendingBackendSession, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentOperationImpact, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import { canvasAgentPromptCacheKey } from "@/lib/openai-prompt-cache";
+import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 
 export const CANVAS_AGENT_PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = CANVAS_AGENT_PANEL_MOTION_MS / 1000;
@@ -315,6 +317,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
 
     const runCinematicSession = async (sessionId: string, text: string, current: CanvasAgentSnapshot, config: AiConfig, onCreated?: (backendSessionId: string) => void) => {
         const requestConfig = resolveModelRequestConfig(config, config.textModel || config.model);
+        const storyboardContext = resolveStoryboardGenerationContext(current.nodes);
         const controller = new AbortController();
         const requestKey = `creating:${nanoid()}`;
         let backendSessionId = "";
@@ -325,6 +328,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                     projectId,
                     prompt: text,
                     canvasSnapshot: compactSnapshot(current) as unknown as Record<string, unknown>,
+                    projectStyle: storyboardContext.projectStyle,
+                    characters: storyboardContext.characters,
                     config: backendAgentProviderConfig(requestConfig),
                 },
                 {
@@ -412,7 +417,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             const result = await requestToolResponse({ ...requestConfig, systemPrompt: "" }, messages, ONLINE_AGENT_TOOLS, "required", (text) => {
                 streamed = text;
                 if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            });
+            }, { promptCacheKey: canvasAgentPromptCacheKey(sessionId) });
             addOnlineLog("模型工具回复", result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
@@ -468,7 +473,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         const next = await requestToolResponse({ ...requestConfig, systemPrompt: "" }, nextMessages, ONLINE_AGENT_TOOLS, "auto", (text) => {
             streamed = text;
             if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-        });
+        }, { promptCacheKey: canvasAgentPromptCacheKey(sessionId) });
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
@@ -794,7 +799,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                         left={
                             <>
                                 <AgentTextModelPicker config={effectiveConfig} value={effectiveConfig.textModel} onChange={(model) => updateConfig("textModel", model)} />
-                                {cinematicEntryActive ? <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[10px] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>影视项目</span> : null}
+                                {cinematicEntryActive ? <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>影视项目</span> : null}
                             </>
                         }
                     />
@@ -885,16 +890,16 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
                 value={current || undefined}
                 className="agent-text-model-select w-full"
                 popupMatchSelectWidth={288}
-                options={options.map((model) => ({ value: model, label: `${modelDisplayName(config, model)} ${modelOptionName(model)} ${resolveModelChannel(config, model).name}` }))}
+                options={options.map((model) => ({ value: model, label: `${modelDisplayName(config, model)} ${resolveModelChannel(config, model).name}` }))}
                 notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">暂无文本模型</span>}
                 optionRender={(option) => {
                     const model = String(option.value);
-                    return <span className="flex min-w-0 items-center gap-2"><AgentModelIcon model={model} /><span className="min-w-0 flex-1"><span className="block truncate">{modelDisplayName(config, model)}</span><span className="block truncate text-[10px] opacity-45">{modelOptionName(model)}</span></span><span className="shrink-0 text-xs opacity-55">{resolveModelChannel(config, model).name}</span></span>;
+                    return <span className="flex min-w-0 items-center gap-2"><AgentModelIcon model={model} /><span className="min-w-0 flex-1 truncate">{modelDisplayName(config, model)}</span><span className="shrink-0 text-xs opacity-55">{resolveModelChannel(config, model).name}</span></span>;
                 }}
                 labelRender={() => <span className="flex min-w-0 items-center gap-1.5"><AgentModelIcon model={current} /><span className="min-w-0 truncate">{current ? modelDisplayName(config, current) : "选择文本模型"}</span>{current ? <span className="shrink-0 opacity-55">{resolveModelChannel(config, current).name}</span> : null}</span>}
                 onChange={onChange}
                 aria-label="选择 Agent 文本模型"
-                title={current ? `${modelDisplayName(config, current)} · ${modelOptionName(current)} · ${resolveModelChannel(config, current).name}` : "选择文本模型"}
+                title={current ? `${modelDisplayName(config, current)} · ${resolveModelChannel(config, current).name}` : "选择文本模型"}
             />
         </div>
     );
@@ -951,13 +956,13 @@ function AssistantHistory({
                     <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 items-center gap-1.5">
-                                {session.id === activeSession?.id ? <span className="shrink-0 text-[10px] font-medium" style={{ color: theme.node.text }}>当前</span> : null}
+                                {session.id === activeSession?.id ? <span className="shrink-0 text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.text }}>当前</span> : null}
                                 <div className="truncate text-sm font-medium leading-5">{session.title}</div>
                             </div>
-                            <div className="truncate text-[11px] leading-4 opacity-65">{sessionPreview(session)}</div>
+                            <div className="truncate text-[var(--fs-label)] leading-4 opacity-65">{sessionPreview(session)}</div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-[10px] opacity-55">{formatSessionTime(session.updatedAt || session.createdAt)}</span>
+                            <span className="text-[var(--fs-tiny)] opacity-55">{formatSessionTime(session.updatedAt || session.createdAt)}</span>
                             <Button size="small" className="!h-6 !px-2" onClick={() => onOpen(session.id)}>
                                 进入
                             </Button>
@@ -1056,7 +1061,7 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
             {item.dataUrl ? (
                 <span className="relative block size-8 shrink-0">
                     <img src={item.dataUrl} alt="" className="size-8 rounded-lg object-cover" />
-                    {label ? <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 py-0.5 text-[8px] font-medium leading-none text-white">{label}</span> : null}
+                    {label ? <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 py-0.5 text-[var(--fs-micro)] font-medium leading-none text-white">{label}</span> : null}
                 </span>
             ) : (
                 <span className="grid size-8 place-items-center rounded-md text-sm font-medium" style={{ background: theme.spatial.surface }}>
@@ -1548,6 +1553,9 @@ function compactMetadata(metadata: CanvasNodeData["metadata"]) {
         workflowKind: metadata?.workflowKind,
         workflowTitle: metadata?.workflowTitle,
         workflowDescription: metadata?.workflowDescription,
+        characterName: metadata?.characterName,
+        characterAssetId: metadata?.characterAssetId,
+        characterVersionId: metadata?.characterVersionId,
         chapterId: metadata?.chapterId,
         chapterTitle: metadata?.chapterTitle,
         shotIndex: metadata?.shotIndex,

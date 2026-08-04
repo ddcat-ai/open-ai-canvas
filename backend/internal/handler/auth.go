@@ -122,7 +122,17 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits})
+		drawingEngine, err := svc.DrawingEngineSetting()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		features, err := svc.FeatureAvailability()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		if _, err := currentUser(c, svc); err != nil {
@@ -173,6 +183,25 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, users)
+	})
+	r.POST("/admin/users", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.CreateAdminUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		created, err := svc.CreateAdminUser(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": created})
 	})
 	r.GET("/admin/references", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -357,62 +386,64 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"ok": true})
 	})
-	r.GET("/admin/storyboard-prompts", func(c *gin.Context) {
+	r.GET("/admin/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		templates, variables, err := svc.AdminStoryboardPromptTemplates(user)
+		templates, definitions, err := svc.AdminPromptTemplates(user)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"templates": templates, "variables": variables})
+		ok(c, gin.H{"templates": templates, "definitions": definitions})
 	})
-	r.POST("/admin/storyboard-prompts", func(c *gin.Context) {
+	r.POST("/admin/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		var req service.StoryboardPromptTemplateRequest
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.PromptTemplateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		template, err := svc.CreateStoryboardPromptTemplate(user, req)
+		template, err := svc.CreatePromptTemplate(user, req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"template": template})
 	})
-	r.PATCH("/admin/storyboard-prompts/:id", func(c *gin.Context) {
+	r.PATCH("/admin/prompt-templates/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		var req service.StoryboardPromptTemplateRequest
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.PromptTemplateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		template, err := svc.UpdateStoryboardPromptTemplate(user, c.Param("id"), req)
+		template, err := svc.UpdatePromptTemplate(user, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"template": template})
 	})
-	r.DELETE("/admin/storyboard-prompts/:id", func(c *gin.Context) {
+	r.DELETE("/admin/prompt-templates/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteStoryboardPromptTemplate(user, c.Param("id")); err != nil {
+		if err := svc.DeletePromptTemplate(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}
@@ -443,6 +474,37 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		setting, err := svc.UpdateOSSSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.GET("/admin/settings/drawing-engine", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminDrawingEngineSetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/drawing-engine", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.DrawingEngineSetting
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateDrawingEngineSetting(user, req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -693,11 +755,13 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 			failService(c, err)
 			return
 		}
-		billingOrderID = order.ID
-		if err := svc.MarkBillingRunning(billingOrderID); err != nil {
-			_ = svc.RefundBilling(billingOrderID, "系统渠道请求尚未发出")
-			failService(c, err)
-			return
+		if order != nil {
+			billingOrderID = order.ID
+			if err := svc.MarkBillingRunning(billingOrderID); err != nil {
+				_ = svc.RefundBilling(billingOrderID, "系统渠道请求尚未发出")
+				failService(c, err)
+				return
+			}
 		}
 	}
 	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, bytes.NewReader(body))

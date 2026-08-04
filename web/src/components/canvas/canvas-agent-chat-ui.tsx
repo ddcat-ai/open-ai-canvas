@@ -49,7 +49,7 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
                 <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
-                {item.meta ? <div className="mt-1 text-[11px] opacity-45">{item.meta}</div> : null}
+                {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
             </div>
             {isUser ? <AgentUserAvatar user={user} theme={theme} /> : null}
         </div>
@@ -69,7 +69,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
                             <span>确认工具调用</span>
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#d97706", background: "rgba(217,119,6,.1)" }}>等待确认</span>
                         </div>
                         <div className="mt-2 text-sm leading-6" style={{ color: theme.node.text }}>{summary}</div>
                     </div>
@@ -103,7 +103,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
 }
 
 function ImpactMetric({ label, value, attention = false, theme }: { label: string; value: number; attention?: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    return <div className="px-1 py-1"><div className="text-[10px]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
+    return <div className="px-1 py-1"><div className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{label}</div><div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: attention ? "#d97706" : theme.node.text }}>{value}</div></div>;
 }
 
 function agentImpactFromDetail(detail: unknown) {
@@ -132,7 +132,7 @@ export function AgentToolCard({ title, text, detail, theme }: { title: string; t
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">
                             <span className="min-w-0 truncate">{title}</span>
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: state.color, background: state.softBg }}>
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: state.color, background: state.softBg }}>
                                 {state.label}
                             </span>
                             {detail ? <span className="ml-auto text-xs font-normal" style={{ color: theme.node.muted }}>详情</span> : null}
@@ -272,7 +272,7 @@ export function AgentPanelTabs<T extends string>({ value, items, theme, right, o
 
 function AgentDetailBlock({ detail, theme }: { detail: unknown; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
-        <pre className="thin-scrollbar mt-3 max-h-64 overflow-auto rounded-md p-3 text-[11px] leading-4" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
+        <pre className="thin-scrollbar mt-3 max-h-64 overflow-auto rounded-md p-3 text-[var(--fs-label)] leading-4" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
             {JSON.stringify(detail, null, 2)}
         </pre>
     );

@@ -23,11 +23,11 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
             <section className="project-overview-focus overflow-hidden rounded-lg border border-border/75 bg-background/80 shadow-sm">
                 <div className="grid lg:grid-cols-[minmax(0,1fr)_300px]">
                     <div className="min-w-0 p-5 sm:p-6 lg:p-7">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                        <div className="flex flex-wrap items-center gap-2 text-[var(--fs-label)]">
                             <span className="font-medium text-[var(--workspace-accent)]">当前任务</span>
                             <span className="text-foreground/20" aria-hidden>/</span>
                             <span className="text-foreground/45">{stage.label}</span>
-                            {attentionCount ? <span className="rounded bg-foreground/[.07] px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">{attentionCount} 项待处理</span> : null}
+                            {attentionCount ? <span className="rounded bg-foreground/[.07] px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium text-foreground/70">{attentionCount} 项待处理</span> : null}
                         </div>
                         <h2 className="mt-3 max-w-[680px] text-2xl font-semibold leading-8 text-balance">{primaryAction.title}</h2>
                         <p className="mt-2 max-w-[680px] text-sm leading-6 text-foreground/52 text-pretty">{primaryAction.description}</p>
@@ -41,7 +41,7 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
 
                     <aside className="project-overview-status border-t border-border/70 bg-foreground/[.018] p-5 lg:border-l lg:border-t-0 lg:p-6" aria-label="项目进度">
                         <div className="flex items-end justify-between gap-3">
-                            <div><div className="text-[10px] font-medium text-foreground/38">章节进度</div><div className="mt-1 text-lg font-semibold tabular-nums">{completedUnits}<span className="mx-1 text-sm font-normal text-foreground/28">/</span>{units.length}</div></div>
+                            <div><div className="text-[var(--fs-tiny)] font-medium text-foreground/38">章节进度</div><div className="mt-1 text-lg font-semibold tabular-nums">{completedUnits}<span className="mx-1 text-sm font-normal text-foreground/28">/</span>{units.length}</div></div>
                             <span className="text-xs font-medium tabular-nums text-foreground/42">{completion}%</span>
                         </div>
                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/[.08]" aria-label={`章节完成度 ${completion}%`}><div className="h-full rounded-full bg-[var(--workspace-accent)] transition-[width]" style={{ width: `${completion}%` }} /></div>
@@ -53,7 +53,7 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
                         </dl>
                         {secondaryActions.length ? (
                             <div className="mt-5 border-t border-border/65 pt-4">
-                                <div className="text-[10px] font-medium text-foreground/38">随后处理</div>
+                                <div className="text-[var(--fs-tiny)] font-medium text-foreground/38">随后处理</div>
                                 <div className="mt-2 space-y-1">{secondaryActions.map((action) => <SecondaryAction key={action.id} action={action} />)}</div>
                             </div>
                         ) : null}
@@ -64,7 +64,7 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
             <section>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <div className="text-[10px] font-medium text-foreground/38">制作流水线</div>
+                        <div className="text-[var(--fs-tiny)] font-medium text-foreground/38">制作流水线</div>
                         <h2 className="mt-1 text-lg font-semibold">章节进度</h2>
                         <p className="mt-1 text-xs leading-5 text-foreground/46">从内容确认到项目画布，每章只显示当前真实状态。</p>
                     </div>
@@ -77,8 +77,8 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
                             {unitStages.map((item) => (
                                 <Link key={item.unit.id} to={`/projects/${project.id}/chapters/${item.unit.id}`} className="group grid gap-4 p-4 transition-colors hover:bg-foreground/[.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:p-5 lg:grid-cols-[minmax(220px,.75fr)_minmax(480px,1.35fr)_24px] lg:items-center">
                                     <span className="flex min-w-0 items-center gap-3">
-                                        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.055] text-[10px] font-semibold tabular-nums text-foreground/45">{String(item.unit.position + 1).padStart(2, "0")}</span>
-                                        <span className="min-w-0"><span className="block truncate text-sm font-medium">{item.unit.title}</span><span className="mt-1 block text-[10px] text-foreground/36">更新于 {formatTime(item.unit.updatedAt)}</span></span>
+                                        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.055] text-[var(--fs-tiny)] font-semibold tabular-nums text-foreground/45">{String(item.unit.position + 1).padStart(2, "0")}</span>
+                                        <span className="min-w-0"><span className="block truncate text-sm font-medium">{item.unit.title}</span><span className="mt-1 block text-[var(--fs-tiny)] text-foreground/36">更新于 {formatTime(item.unit.updatedAt)}</span></span>
                                     </span>
                                     <StagePipeline content={item.content} assets={item.assets} storyboard={item.storyboard} canvas={item.canvas} />
                                     <ArrowRight className="hidden size-4 text-foreground/22 transition group-hover:translate-x-0.5 group-hover:text-foreground/55 lg:block" />
@@ -93,12 +93,12 @@ export default function ProjectOverviewView({ detail }: ProjectDetailViewProps) 
 }
 
 function ProjectFact({ label, value, attention = false }: { label: string; value: string; attention?: boolean }) {
-    return <div className="min-w-0"><dt className="text-[10px] text-foreground/36">{label}</dt><dd className={`mt-1 truncate font-medium ${attention ? "text-foreground/85" : "text-foreground/72"}`}>{value}</dd></div>;
+    return <div className="min-w-0"><dt className="text-[var(--fs-tiny)] text-foreground/36">{label}</dt><dd className={`mt-1 truncate font-medium ${attention ? "text-foreground/85" : "text-foreground/72"}`}>{value}</dd></div>;
 }
 
 function SecondaryAction({ action }: { action: ProjectWorkbenchAction }) {
     const Icon = action.tone === "danger" ? CircleAlert : action.tone === "attention" ? Clock3 : CheckCircle2;
-    return <Link to={action.href} className="group flex min-w-0 items-center gap-2 rounded px-1 py-1.5 text-[11px] text-foreground/52 hover:bg-foreground/[.04] hover:text-foreground"><Icon className={`size-3.5 shrink-0 ${action.tone === "danger" ? "text-foreground/80" : action.tone === "attention" ? "text-foreground/60" : "text-foreground/30"}`} /><span className="min-w-0 flex-1 truncate">{action.title}</span><ArrowRight className="size-3 shrink-0 text-foreground/25 transition group-hover:text-foreground/55" /></Link>;
+    return <Link to={action.href} className="group flex min-w-0 items-center gap-2 rounded px-1 py-1.5 text-[var(--fs-label)] text-foreground/52 hover:bg-foreground/[.04] hover:text-foreground"><Icon className={`size-3.5 shrink-0 ${action.tone === "danger" ? "text-foreground/80" : action.tone === "attention" ? "text-foreground/60" : "text-foreground/30"}`} /><span className="min-w-0 flex-1 truncate">{action.title}</span><ArrowRight className="size-3 shrink-0 text-foreground/25 transition group-hover:text-foreground/55" /></Link>;
 }
 
 function StagePipeline({ content, assets, storyboard, canvas }: { content: ProjectStageCell; assets: ProjectStageCell; storyboard: ProjectStageCell; canvas: ProjectStageCell }) {
@@ -114,9 +114,9 @@ function StageStep({ label, cell }: { label: string; cell: ProjectStageCell }) {
     const bar = cell.state === "completed" ? "bg-foreground/65" : cell.state === "attention" ? "bg-foreground/40" : cell.state === "active" ? "bg-[var(--workspace-accent)]" : "bg-foreground/10";
     return (
         <span className="min-w-0">
-            <span className="block text-[10px] font-medium text-foreground/34">{label}</span>
+            <span className="block text-[var(--fs-tiny)] font-medium text-foreground/34">{label}</span>
             <span className={`mt-2 block h-1 rounded-full ${bar}`} />
-            <span className="mt-1.5 block truncate text-[10px] text-foreground/48">{cell.label}</span>
+            <span className="mt-1.5 block truncate text-[var(--fs-tiny)] text-foreground/48">{cell.label}</span>
         </span>
     );
 }

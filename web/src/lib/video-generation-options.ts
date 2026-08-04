@@ -1,5 +1,5 @@
 export const VIDEO_DURATION_OPTIONS = [6, 9, 10, 15] as const;
-export const VIDEO_RESOLUTION_OPTIONS = [480, 720, 1080] as const;
+export const VIDEO_RESOLUTION_OPTIONS = [480, 720, 1080, 2160] as const;
 export const VIDEO_DURATION_MIN = 1;
 
 export function normalizeVideoDuration(value: string | number | undefined) {
@@ -11,6 +11,7 @@ export function normalizeVideoResolution(value: string | number | undefined) {
     const token = String(value || "").trim().toLowerCase();
     if (token === "low") return "480";
     if (token === "auto" || token === "medium" || token === "high") return "720";
+    if (token === "4k") return "2160";
     const resolution = Number(token.replace(/p$/i, "")) || 720;
     return String(nearestOption(resolution, VIDEO_RESOLUTION_OPTIONS));
 }

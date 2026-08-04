@@ -129,7 +129,29 @@ export type ConfigStoreSnapshot = {
 
 function isVideoModelName(model: string) {
     const value = modelOptionName(model).toLowerCase();
-    return value.includes("seedance") || value.includes("video") || value.includes("sora") || value.includes("veo") || value.includes("kling") || value.includes("wan") || value.includes("hailuo");
+    return value.includes("seedance")
+        || value.includes("video")
+        || value.includes("sora")
+        || value.includes("veo")
+        || value.includes("kling")
+        || value.includes("wan")
+        || value.includes("hailuo")
+        || value.includes("pika")
+        || value.includes("runway")
+        || value.includes("gen-3")
+        || value.includes("gen3")
+        || value.includes("hunyuan-video")
+        || value.includes("hunyuanvideo")
+        || value.includes("cogvideo")
+        || value.includes("mochi")
+        || value.includes("latte")
+        || value.includes("stable-video")
+        || value.includes("svd")
+        || value.includes("animatediff")
+        || value.includes("ltx-video")
+        || value.includes("ltxvideo")
+        || value.includes("minimax-video")
+        || value.includes("abab-video");
 }
 
 function isImageModelName(model: string) {
@@ -146,7 +168,13 @@ function isImageModelName(model: string) {
             value.includes("flux") ||
             value.includes("sdxl") ||
             value.includes("stable-diffusion") ||
-            value.includes("midjourney"))
+            value.includes("midjourney") ||
+            value.includes("nano-banana") ||
+            value.includes("nanobanana") ||
+            value.includes("ideogram") ||
+            value.includes("recraft") ||
+            value.includes("playground") ||
+            value.includes("leonardo"))
     );
 }
 
@@ -172,10 +200,20 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
     return models.filter((model) => {
         const decoded = decodeChannelModel(model);
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
-        const configuredCapability = channel?.modelCosts?.find((item) => item.model === decoded?.model)?.capability;
-        if (configuredCapability) return configuredCapability === capability;
+        const modelName = decoded?.model || modelOptionName(model);
+        const costEntry = channel?.modelCosts?.find((item) => item.model === modelName);
+        // 协议层优先级最高：协议决定 API 端点，明确属于其他能力时直接排除，
+        // 防止用户将 video/image/audio 协议的模型误标为 text 后混入文本下拉。
+        const protocolCapability = modelProtocolCapability(costEntry?.protocol);
+        if (protocolCapability) return protocolCapability === capability;
+        // 渠道接口层：渠道级协议推断能力
         const channelCapability = capabilityForChannelInterface(channel?.interfaceType);
-        return channelCapability ? channelCapability === capability : modelMatchesCapability(model, capability);
+        if (channelCapability) return channelCapability === capability;
+        // 配置能力层：用户显式标记的 capability
+        const configuredCapability = costEntry?.capability;
+        if (configuredCapability) return configuredCapability === capability;
+        // 模型名启发式：最后回退
+        return modelMatchesCapability(model, capability);
     });
 }
 
@@ -265,7 +303,9 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
             audioFormat: config.audioFormat || defaultConfig.audioFormat,
             audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-            audioInstructions: config.audioInstructions || "",
+			audioInstructions: config.audioInstructions || "",
+            // 旧版全局 systemPrompt 会跨任务污染请求；提示词定制现已按 operation 由服务端编译。
+            systemPrompt: "",
             videoSeconds: normalizeVideoDuration(config.videoSeconds),
             vquality: normalizeVideoResolution(config.vquality),
             videoGenerateAudio: config.videoGenerateAudio || "true",
@@ -333,7 +373,9 @@ export function modelOptionName(value: string) {
 export function modelDisplayName(config: AiConfig, value: string) {
     const model = modelOptionName(value);
     const channel = resolveModelChannel(config, value);
-    return channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim() || model;
+    const displayName = channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim();
+    if (displayName) return displayName;
+    return channel.scope === "system" ? "系统模型" : model;
 }
 
 export function modelOptionLabel(config: AiConfig, value: string) {

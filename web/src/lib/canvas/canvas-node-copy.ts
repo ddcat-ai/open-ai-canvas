@@ -45,6 +45,7 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     delete metadata.versionLabel;
     delete metadata.versionPrimary;
 
+    metadata.copiedFromNodeId = node.id;
     metadata.frame = node.metadata?.frame ? { ...node.metadata.frame } : undefined;
     metadata.referenceSetId = remapOwnedNodeId(node.metadata?.referenceSetId, idMap);
     metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds

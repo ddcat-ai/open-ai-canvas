@@ -1,24 +1,30 @@
-import { useState, type CSSProperties } from "react";
-import { Check, Clapperboard, Eye, Palette, Sparkles } from "lucide-react";
-import { Button, Modal } from "antd";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Check, Eye, Palette } from "lucide-react";
+import { Button, Modal, Segmented, Select } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import {
+    compatibleProjectStyleCharacters,
+    compileCanvasStylePreset,
+    customCanvasStylePreset,
+    defaultProjectStyleSelection,
+    parseCanvasStyleSelection,
+    projectStyleMedia,
+    projectStyleTones,
+    projectStyleWorlds,
+    recommendedCanvasStylePresets,
+    type CanvasStylePreset,
+    type ProjectStyleMediumId,
+    type ProjectStyleSelection,
+} from "@/lib/canvas/canvas-style-system";
 import { useThemeStore } from "@/stores/use-theme-store";
 
-export type CanvasStylePreset = {
-    id: string;
-    title: string;
-    category: string;
-    description: string;
-    tags: string[];
-    prompt: string;
-    imageUrl: string;
-};
+export type { CanvasStylePreset } from "@/lib/canvas/canvas-style-system";
 
 // 分类按短剧制作语境组织：先看媒介，再看题材与视觉气质，避免用品牌名称代替画风。
 const PROJECT_STYLE_SCOPE = "【使用边界】本规范是全项目美术与影像风格基线，用于统一角色资产、服装材质、建筑世界观、色彩语言和成片质感；它不是某张图片或某个镜头的提示词。具体场景内容、构图、景别、机位、运镜、动作、光源位置、天气和单场情绪由剧情与分镜节点决定，不得从本规范机械复制。";
 
-export const canvasStylePresets: CanvasStylePreset[] = [
+const legacyCanvasStylePresets: CanvasStylePreset[] = [
     {
         id: "urban-live-action",
         title: "都市真人短剧",
@@ -363,43 +369,80 @@ export const canvasStylePresets: CanvasStylePreset[] = [
     },
 ];
 
+const legacyStyleUpgrades: Partial<Record<string, ProjectStyleSelection>> = {
+    "urban-live-action": { world: "urban", tone: "romantic", medium: "live-action", character: "realistic" },
+    "period-live-action": { world: "historical", tone: "epic", medium: "live-action", character: "realistic" },
+    "suspense-noir": { world: "suspense", tone: "dark", medium: "live-action", character: "realistic" },
+    "chinese-2d": { world: "xianxia", tone: "epic", medium: "2d-guoman", character: "semi-real" },
+    "ink-narrative": { world: "xianxia", tone: "healing", medium: "ink", character: "semi-real" },
+    "three-d-cartoon": { world: "urban", tone: "light-comedy", medium: "3d-cartoon", character: "stylized" },
+    "fantasy-3d": { world: "xianxia", tone: "epic", medium: "3d-anime", character: "semi-real" },
+    "future-tech": { world: "science-fiction", tone: "epic", medium: "live-action", character: "realistic" },
+    "cyberpunk-neon": { world: "science-fiction", tone: "dark", medium: "live-action", character: "realistic" },
+    "space-opera": { world: "science-fiction", tone: "epic", medium: "3d-anime", character: "semi-real" },
+    "nature-healing": { world: "pastoral", tone: "healing", medium: "live-action", character: "realistic" },
+    "real-life-documentary": { world: "urban", tone: "healing", medium: "live-action", character: "realistic" },
+};
+
+const resolvedLegacyCanvasStylePresets = legacyCanvasStylePresets.map((preset) => {
+    const upgrade = legacyStyleUpgrades[preset.id];
+    return upgrade ? { ...compileCanvasStylePreset(upgrade), id: preset.id, imageUrl: preset.imageUrl } : preset;
+});
+
+export const canvasStylePresets: CanvasStylePreset[] = [...recommendedCanvasStylePresets, ...resolvedLegacyCanvasStylePresets];
+
+export function resolveCanvasStylePreset(id?: string) {
+    return canvasStylePresets.find((preset) => preset.id === id) || customCanvasStylePreset(id);
+}
+
 export function CanvasStylePickerModal({ open, value, onClose, onSelect }: { open: boolean; value?: string; onClose: () => void; onSelect: (preset: CanvasStylePreset) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [detailPreset, setDetailPreset] = useState<CanvasStylePreset | null>(null);
+    const [mode, setMode] = useState<"recommended" | "custom">("recommended");
+    const [selection, setSelection] = useState<ProjectStyleSelection>(defaultProjectStyleSelection);
+    useEffect(() => {
+        if (!open) return;
+        const parsed = parseCanvasStyleSelection(value);
+        if (parsed) {
+            setSelection(parsed);
+            setMode(recommendedCanvasStylePresets.some((preset) => preset.id === value) ? "recommended" : "custom");
+        } else {
+            setSelection(defaultProjectStyleSelection);
+            setMode("recommended");
+        }
+    }, [open, value]);
+    const activePreset = resolveCanvasStylePreset(value);
+    const visiblePresets = activePreset && !recommendedCanvasStylePresets.some((preset) => preset.id === activePreset.id)
+        ? [activePreset, ...recommendedCanvasStylePresets.filter((preset) => preset.prompt !== activePreset.prompt)]
+        : recommendedCanvasStylePresets;
     return (
         <>
-            <Modal open={open} title={null} footer={null} centered width="min(1040px, calc(100vw - 24px))" onCancel={onClose} styles={{ body: { padding: 0 } }}>
-                <div className="overflow-hidden rounded-lg" style={{ color: theme.node.text, background: theme.node.panel }}>
-                    <header className="flex items-center gap-3 border-b px-4 py-4 sm:px-5" style={{ borderColor: theme.node.stroke }}>
-                        <span className="grid size-9 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}><Palette className="size-4" /></span>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-sm font-semibold"><span>选择项目画风</span><span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{canvasStylePresets.length} 套视觉预设</span></div>
-                            <div className="mt-0.5 truncate text-[11px]" style={{ color: theme.node.muted }}>画风会统一角色三视图、项目资产、分镜和视频提示词。</div>
-                        </div>
-                        <span className="ml-auto hidden items-center gap-1 text-[11px] sm:flex" style={{ color: theme.node.faint }}><Sparkles className="size-3.5" />先看规范，再做选择</span>
+            <Modal rootClassName="canvas-style-picker-modal" open={open} title={null} footer={null} centered width="min(920px, calc(100vw - 24px))" onCancel={onClose} styles={{ container: { padding: 0 }, body: { padding: 0 } }}>
+                <div className="overflow-hidden" style={{ color: theme.node.text, background: theme.node.panel }}>
+                    <header className="flex flex-col gap-3 border-b px-4 py-3 pr-12 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: theme.node.stroke }}>
+                        <h2 className="text-sm font-semibold">选择项目画风</h2>
+                        <Segmented size="small" value={mode} options={[{ value: "recommended", label: "推荐画风" }, { value: "custom", label: "自定义组合" }]} onChange={(next) => setMode(next as typeof mode)} />
                     </header>
-                    <div className="thin-scrollbar grid max-h-[76vh] grid-cols-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
-                        {canvasStylePresets.map((preset) => {
+                    {mode === "recommended" ? <div className="thin-scrollbar grid max-h-[76vh] grid-cols-1 gap-2 overflow-y-auto p-2 md:grid-cols-2 md:p-3">
+                        {visiblePresets.map((preset) => {
                             const active = preset.id === value;
                             return (
                                 <article key={preset.id} className="group relative">
-                                    <button type="button" className="h-full w-full overflow-hidden rounded-lg border text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2" style={{ background: theme.node.panel, borderColor: active ? theme.node.activeStroke : theme.node.stroke, boxShadow: active ? `0 0 0 1px ${theme.node.activeStroke}` : undefined, "--tw-ring-color": theme.node.activeStroke } as CSSProperties} onClick={() => onSelect(preset)}>
-                                        <span className="relative block aspect-[16/9] overflow-hidden" style={{ background: theme.canvas.background }}>
-                                            <img src={preset.imageUrl} width="960" height="540" alt={`${preset.title}画风示意`} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" style={preset.id === "black-white-noir" ? { filter: "grayscale(1) contrast(1.08)" } : undefined} loading="lazy" />
-                                            <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2 text-white" style={{ background: "linear-gradient(180deg, transparent, rgba(0,0,0,.72))" }}><span className="text-[10px] font-medium tracking-wide">{preset.category}</span>{active ? <span className="grid size-5 place-items-center rounded-full bg-white text-black"><Check className="size-3.5" /></span> : null}</span>
+                                    <button type="button" className="flex min-h-24 w-full overflow-hidden rounded-[var(--r-md)] border text-left transition-colors focus-visible:outline-none focus-visible:ring-2" style={{ background: theme.canvas.background, borderColor: active ? theme.node.activeStroke : theme.node.stroke, boxShadow: active ? `inset 0 0 0 1px ${theme.node.activeStroke}` : undefined, "--tw-ring-color": theme.node.activeStroke } as CSSProperties} onClick={() => onSelect(preset)}>
+                                        <span className="relative w-28 shrink-0 overflow-hidden border-r" style={{ background: theme.canvas.background, borderColor: theme.node.stroke }}>
+                                            <img src={preset.imageUrl} width="960" height="540" alt={`${preset.title}画风示意`} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" style={preset.id === "black-white-noir" ? { filter: "grayscale(1) contrast(1.08)" } : undefined} loading="lazy" />
                                         </span>
-                                        <span className="block p-3">
-                                            <span className="flex items-center gap-2"><span className="text-sm font-semibold">{preset.title}</span>{active ? <span className="text-[10px]" style={{ color: theme.node.activeStroke }}>已选择</span> : null}</span>
-                                            <span className="mt-1 block text-xs leading-5" style={{ color: theme.node.muted }}>{preset.description}</span>
-                                            <span className="mt-2 flex flex-wrap gap-1">{preset.tags.map((tag) => <span key={tag} className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{tag}</span>)}</span>
+                                        <span className="min-w-0 flex-1 px-3 py-2.5 pr-10">
+                                            <span className="flex items-center gap-1.5 text-xs font-semibold"><span className="truncate">{preset.title}</span>{active ? <span className="grid size-4 shrink-0 place-items-center rounded-[var(--r-full)]" style={{ background: theme.node.activeStroke, color: theme.canvas.background }}><Check className="size-3" /></span> : null}</span>
+                                            <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>{preset.category}</span>
+                                            <span className="mt-1 line-clamp-2 block text-[var(--fs-tiny)] leading-4" style={{ color: theme.node.muted }}>{preset.description}</span>
                                         </span>
                                     </button>
-                                    <button type="button" className="absolute right-2 top-2 grid size-8 place-items-center rounded-md bg-black/60 text-white shadow-sm backdrop-blur transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" onClick={() => setDetailPreset(preset)} aria-label={`查看${preset.title}详情`} title="查看画风详情"><Eye className="size-4" /></button>
+                                    <button type="button" className="absolute right-2 top-2 grid size-7 place-items-center rounded-[var(--r-sm)] transition-colors focus-visible:outline-none focus-visible:ring-2" style={{ background: theme.toolbar.itemHover, color: theme.node.muted, "--tw-ring-color": theme.node.activeStroke } as CSSProperties} onClick={() => setDetailPreset(preset)} aria-label={`查看${preset.title}规范`} title="查看画风规范"><Eye className="size-3.5" /></button>
                                 </article>
                             );
                         })}
-                    </div>
-                    <footer className="flex items-center gap-2 border-t px-4 py-3 text-[11px]" style={{ borderColor: theme.node.stroke, color: theme.node.faint }}><Clapperboard className="size-3.5" />图片是风格示意，实际效果取决于模型、角色参考图与分镜提示词。</footer>
+                    </div> : <CanvasStyleComposer selection={selection} value={value} theme={theme} onChange={setSelection} onSelect={onSelect} onDetail={setDetailPreset} />}
                 </div>
             </Modal>
             <CanvasStyleDetailModal open={Boolean(detailPreset)} preset={detailPreset} selected={detailPreset?.id === value} onClose={() => setDetailPreset(null)} onSelect={(preset) => { setDetailPreset(null); onSelect(preset); }} />
@@ -407,27 +450,83 @@ export function CanvasStylePickerModal({ open, value, onClose, onSelect }: { ope
     );
 }
 
+function CanvasStyleComposer({ selection, value, theme, onChange, onSelect, onDetail }: {
+    selection: ProjectStyleSelection;
+    value?: string;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onChange: (selection: ProjectStyleSelection) => void;
+    onSelect: (preset: CanvasStylePreset) => void;
+    onDetail: (preset: CanvasStylePreset) => void;
+}) {
+    const preset = useMemo(() => compileCanvasStylePreset(selection), [selection]);
+    const characterOptions = compatibleProjectStyleCharacters(selection.medium);
+    const updateMedium = (medium: ProjectStyleMediumId) => {
+        const compatible = compatibleProjectStyleCharacters(medium);
+        const character = compatible.some((item) => item.id === selection.character) ? selection.character : compatible[0].id;
+        onChange({ ...selection, medium, character });
+    };
+    return (
+        <div className="thin-scrollbar grid max-h-[76vh] overflow-y-auto md:grid-cols-5">
+            <section className="grid content-start gap-3 border-b p-4 md:col-span-2 md:border-b-0 md:border-r" style={{ borderColor: theme.node.stroke }}>
+                <StyleSelect label="题材世界" value={selection.world} options={projectStyleWorlds} onChange={(world) => onChange({ ...selection, world })} />
+                <StyleSelect label="叙事气质" value={selection.tone} options={projectStyleTones} onChange={(tone) => onChange({ ...selection, tone })} />
+                <StyleSelect label="视觉媒介" value={selection.medium} options={projectStyleMedia} onChange={updateMedium} />
+                <StyleSelect label="角色造型" value={selection.character} options={characterOptions} onChange={(character) => onChange({ ...selection, character })} />
+            </section>
+            <section className="flex min-h-0 flex-col md:col-span-3">
+                <div className="relative aspect-video overflow-hidden" style={{ background: theme.canvas.background }}>
+                    <img src={preset.imageUrl} width="960" height="540" alt={`${preset.title}画风示意`} className="h-full w-full object-cover" />
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col p-4">
+                    <div className="text-sm font-semibold">{preset.title}</div>
+                    <p className="mt-1.5 text-xs leading-5" style={{ color: theme.node.muted }}>{preset.description}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-y py-3 text-[var(--fs-tiny)]" style={{ borderColor: theme.node.stroke }}>
+                        <StyleSummary label="题材" value={projectStyleWorlds.find((item) => item.id === selection.world)?.label} muted={theme.node.muted} />
+                        <StyleSummary label="气质" value={projectStyleTones.find((item) => item.id === selection.tone)?.label} muted={theme.node.muted} />
+                        <StyleSummary label="媒介" value={projectStyleMedia.find((item) => item.id === selection.medium)?.label} muted={theme.node.muted} />
+                        <StyleSummary label="角色" value={characterOptions.find((item) => item.id === selection.character)?.label} muted={theme.node.muted} />
+                    </div>
+                    <div className="mt-auto flex justify-end gap-2 pt-4">
+                        <Button icon={<Eye className="size-3.5" />} onClick={() => onDetail(preset)}>查看规范</Button>
+                        <Button type="primary" disabled={preset.id === value} icon={preset.id === value ? <Check className="size-3.5" /> : <Palette className="size-3.5" />} onClick={() => onSelect(preset)}>{preset.id === value ? "当前画风" : "应用组合"}</Button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function StyleSummary({ label, value, muted }: { label: string; value?: string; muted: string }) {
+    return <div className="flex min-w-0 items-center gap-2"><span className="shrink-0" style={{ color: muted }}>{label}</span><span className="truncate font-medium">{value}</span></div>;
+}
+
+function StyleSelect<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: Array<{ id: T; label: string; description: string }>; onChange: (value: T) => void }) {
+    return (
+        <label className="grid gap-1.5 text-xs">
+            <span className="font-semibold">{label}</span>
+            <Select<T> value={value} optionLabelProp="label" onChange={onChange} options={options.map((option) => ({ value: option.id, label: option.label, title: option.description }))} optionRender={(option) => <div className="py-1"><div className="text-xs font-medium">{option.label}</div><div className="mt-0.5 whitespace-normal text-[var(--fs-tiny)] opacity-60">{option.data.title}</div></div>} />
+        </label>
+    );
+}
+
 export function CanvasStyleDetailModal({ open, preset, selected = false, onClose, onSelect }: { open: boolean; preset: CanvasStylePreset | null; selected?: boolean; onClose: () => void; onSelect?: (preset: CanvasStylePreset) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const sections = preset ? parseStyleSections(preset.prompt) : [];
     return (
-        <Modal open={open} title={null} footer={null} centered destroyOnHidden width="min(920px, calc(100vw - 24px))" onCancel={onClose} styles={{ body: { padding: 0 } }}>
-            {preset ? <div className="flex max-h-[82vh] flex-col overflow-hidden rounded-lg md:grid md:grid-cols-[300px_minmax(0,1fr)]" style={{ color: theme.node.text, background: theme.node.panel }}>
-                <aside className="shrink-0 border-b md:border-b-0 md:border-r" style={{ borderColor: theme.node.stroke, background: theme.canvas.background }}>
-                    <div className="aspect-[16/7] overflow-hidden md:aspect-auto md:h-full md:min-h-[540px]"><img src={preset.imageUrl} width="960" height="640" alt={`${preset.title}画风示意`} className="h-full w-full object-cover" style={preset.id === "black-white-noir" ? { filter: "grayscale(1) contrast(1.08)" } : undefined} /></div>
-                </aside>
-                <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <header className="border-b px-5 py-4" style={{ borderColor: theme.node.stroke }}>
-                        <div className="text-[10px] font-medium" style={{ color: theme.node.activeStroke }}>{preset.category}</div>
-                        <h2 className="mt-1 text-xl font-semibold">{preset.title}</h2>
-                        <p className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>{preset.description}</p>
-                        <div className="mt-3 flex flex-wrap gap-1.5">{preset.tags.map((tag) => <span key={tag} className="rounded px-2 py-1 text-[10px]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{tag}</span>)}</div>
-                    </header>
-                    <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-2">
-                        {sections.map((section) => <div key={section.title} className="border-b py-3 last:border-b-0" style={{ borderColor: theme.node.stroke }}><h3 className="text-xs font-semibold">{section.title}</h3><p className="mt-1.5 text-xs leading-5" style={{ color: theme.node.muted }}>{section.content}</p></div>)}
-                    </div>
-                    <footer className="flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: theme.node.stroke }}><span className="text-[10px]" style={{ color: theme.node.faint }}>角色三视图会自动提取其中的色彩、造型和材质规范</span><div className="flex shrink-0 justify-end gap-2"><Button onClick={onClose}>关闭</Button>{onSelect ? <Button type="primary" disabled={selected} icon={selected ? <Check className="size-3.5" /> : <Palette className="size-3.5" />} onClick={() => onSelect(preset)}>{selected ? "当前画风" : "选择该画风"}</Button> : null}</div></footer>
-                </section>
+        <Modal rootClassName="canvas-style-detail-modal" open={open} title={null} footer={null} centered destroyOnHidden width="min(820px, calc(100vw - 24px))" onCancel={onClose} styles={{ container: { padding: 0 }, body: { padding: 0 } }}>
+            {preset ? <div className="flex max-h-[84vh] flex-col overflow-hidden" style={{ color: theme.node.text, background: theme.node.panel }}>
+                <div className="flex h-44 shrink-0 items-center justify-center overflow-hidden border-b sm:h-52" style={{ borderColor: theme.node.stroke, background: theme.canvas.background }}>
+                    <img src={preset.imageUrl} width="960" height="540" alt={`${preset.title}画风示意`} className="h-full w-full object-contain" style={preset.id === "black-white-noir" ? { filter: "grayscale(1) contrast(1.08)" } : undefined} />
+                </div>
+                <header className="border-b px-4 py-3 pr-12 sm:px-5 sm:pr-12" style={{ borderColor: theme.node.stroke }}>
+                    <div className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.activeStroke }}>{preset.category}</div>
+                    <h2 className="mt-1 text-base font-semibold">{preset.title}</h2>
+                    <p className="mt-1.5 text-xs leading-5" style={{ color: theme.node.muted }}>{preset.description}</p>
+                </header>
+                <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5">
+                    {sections.map((section) => <section key={section.title} className="border-b py-3 last:border-b-0" style={{ borderColor: theme.node.stroke }}><h3 className="text-xs font-semibold">{section.title}</h3><p className="mt-1.5 text-xs leading-5" style={{ color: theme.node.muted }}>{section.content}</p></section>)}
+                </div>
+                <footer className="flex shrink-0 justify-end gap-2 border-t px-4 py-3 sm:px-5" style={{ borderColor: theme.node.stroke }}><Button onClick={onClose}>关闭</Button>{onSelect ? <Button type="primary" disabled={selected} icon={selected ? <Check className="size-3.5" /> : <Palette className="size-3.5" />} onClick={() => onSelect(preset)}>{selected ? "当前画风" : "选择该画风"}</Button> : null}</footer>
             </div> : null}
         </Modal>
     );

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { App, Button, Input, Modal, Select } from "antd";
-import { Archive, Check, Eye, Save, ShieldAlert } from "lucide-react";
+import { Archive, Check, Eye, Palette, Save, ShieldAlert } from "lucide-react";
 
-import { CanvasStyleDetailModal, canvasStylePresets, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { CanvasStyleDetailModal, CanvasStylePickerModal, resolveCanvasStylePreset, type CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { updateProject } from "@/services/api/projects";
 
 import type { ProjectDetailViewProps } from "./shared";
@@ -17,9 +17,11 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
     const [sourceType, setSourceType] = useState(project.sourceType);
     const [stylePresetId, setStylePresetId] = useState(project.stylePresetId || "");
     const [styleDetail, setStyleDetail] = useState<CanvasStylePreset | null>(null);
+    const [stylePickerOpen, setStylePickerOpen] = useState(false);
     const [archiveOpen, setArchiveOpen] = useState(false);
     useEffect(() => { setName(project.name); setDescription(project.description || ""); setAspectRatio(project.aspectRatio); setSourceType(project.sourceType); setStylePresetId(project.stylePresetId || ""); }, [project]);
     const dirty = useMemo(() => name.trim() !== project.name || description !== (project.description || "") || aspectRatio !== project.aspectRatio || sourceType !== project.sourceType || stylePresetId !== (project.stylePresetId || ""), [aspectRatio, description, name, project, sourceType, stylePresetId]);
+    const selectedStyle = useMemo(() => resolveCanvasStylePreset(stylePresetId), [stylePresetId]);
     const saveMutation = useMutation({ mutationFn: () => updateProject(project.id, { name: name.trim(), description, aspectRatio, sourceType, stylePresetId }), onSuccess: () => { refreshProject(); message.success("项目设置已保存"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目设置保存失败") });
     const archiveMutation = useMutation({ mutationFn: () => updateProject(project.id, { status: project.status === "archived" ? "active" : "archived" }), onSuccess: () => { setArchiveOpen(false); refreshProject(); message.success(project.status === "archived" ? "项目已恢复" : "项目已归档"); }, onError: (error) => message.error(error instanceof Error ? error.message : "项目状态更新失败") });
 
@@ -38,23 +40,27 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
             </section>
 
             <section className="border-b border-border/70 py-4">
-                <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">项目画风</h3><p className="mt-0.5 text-[11px] text-foreground/45">选择后会同步到项目画布中的画风节点</p></div>{stylePresetId ? <span className="text-[11px] text-[var(--workspace-accent)]">已选择</span> : <span className="text-[11px] text-foreground/40">未设置</span>}</div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {canvasStylePresets.map((preset) => {
-                        const active = preset.id === stylePresetId;
-                        return <div key={preset.id} className={`group flex min-w-0 items-center overflow-hidden rounded-lg border transition-colors ${active ? "border-[var(--workspace-accent)] bg-[var(--workspace-accent-soft)]" : "border-border/80 hover:border-foreground/25"}`}><button type="button" onClick={() => setStylePresetId(preset.id)} className="grid min-w-0 flex-1 grid-cols-[72px_minmax(0,1fr)_24px] items-center gap-2 p-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><img src={preset.imageUrl} width="72" height="44" alt={`${preset.title}画风示意`} loading="lazy" className="h-11 w-[72px] rounded object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-medium">{preset.title}</span><span className="mt-0.5 block truncate text-[10px] text-foreground/42">{preset.description}</span></span><span className={`grid size-5 place-items-center rounded-full ${active ? "bg-[var(--workspace-accent)] text-white" : "border border-border text-transparent"}`}><Check className="size-3" /></span></button><button type="button" className="mr-1 grid size-8 shrink-0 place-items-center rounded-md text-foreground/42 hover:bg-foreground/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setStyleDetail(preset)} aria-label={`查看${preset.title}详情`} title="查看画风详情"><Eye className="size-3.5" /></button></div>;
-                    })}
+                <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">项目画风</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/45">选择后会同步到项目画布中的画风节点</p></div>{stylePresetId ? <span className="text-[var(--fs-label)] text-[var(--workspace-accent)]">已选择</span> : <span className="text-[var(--fs-label)] text-foreground/40">未设置</span>}</div>
+                <div className="flex flex-col gap-3 border-y border-border/70 py-3 sm:flex-row sm:items-center">
+                    {selectedStyle ? <img src={selectedStyle.imageUrl} width="160" height="90" alt={`${selectedStyle.title}画风示意`} className="aspect-video w-40 shrink-0 rounded-md object-cover" /> : <span className="grid aspect-video w-40 shrink-0 place-items-center rounded-md bg-foreground/[.04] text-foreground/35"><Palette className="size-5" /></span>}
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold">{selectedStyle?.title || "尚未设置项目画风"}</div>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-foreground/48">{selectedStyle?.description || "选择题材世界、叙事气质、视觉媒介和角色造型。"}</p>
+                        {selectedStyle ? <div className="mt-2 flex flex-wrap gap-1">{selectedStyle.tags.map((tag) => <span key={tag} className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/55">{tag}</span>)}</div> : null}
+                    </div>
+                    <div className="flex shrink-0 gap-2"><Button icon={<Eye className="size-3.5" />} disabled={!selectedStyle} onClick={() => setStyleDetail(selectedStyle || null)}>查看规范</Button><Button icon={<Palette className="size-3.5" />} onClick={() => setStylePickerOpen(true)}>{selectedStyle ? "更换画风" : "选择画风"}</Button></div>
                 </div>
             </section>
 
             <section className="py-4">
                 <div className="flex flex-col gap-3 rounded-lg border border-red-500/20 bg-red-500/[.025] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded bg-red-500/10 text-red-500"><Archive className="size-3.5" /></span><div className="min-w-0"><h3 className="text-sm font-medium">{project.status === "archived" ? "恢复项目" : "归档项目"}</h3><p className="mt-0.5 text-[11px] text-foreground/48">{project.status === "archived" ? "恢复后可继续创建章节、画布和生成任务" : "保留全部章节、画布和资产，停止项目内新建与生成"}</p></div></div>
+                    <div className="flex min-w-0 items-center gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded bg-red-500/10 text-red-500"><Archive className="size-3.5" /></span><div className="min-w-0"><h3 className="text-sm font-medium">{project.status === "archived" ? "恢复项目" : "归档项目"}</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/48">{project.status === "archived" ? "恢复后可继续创建章节、画布和生成任务" : "保留全部章节、画布和资产，停止项目内新建与生成"}</p></div></div>
                     <Button size="small" danger={project.status !== "archived"} icon={project.status === "archived" ? <Check className="size-3.5" /> : <ShieldAlert className="size-3.5" />} onClick={() => setArchiveOpen(true)}>{project.status === "archived" ? "恢复项目" : "归档项目"}</Button>
                 </div>
             </section>
 
             <Modal title={project.status === "archived" ? "恢复项目" : "归档项目"} open={archiveOpen} okText={project.status === "archived" ? "确认恢复" : "确认归档"} cancelText="取消" okButtonProps={{ danger: project.status !== "archived", loading: archiveMutation.isPending }} onCancel={() => setArchiveOpen(false)} onOk={() => archiveMutation.mutate()} width={440} styles={{ body: { paddingTop: 12 } }}><p className="m-0 text-sm leading-6 text-foreground/65">{project.status === "archived" ? "恢复后项目会重新进入可编辑状态。" : "归档不会删除章节、画布或资产，画布文档仍可在创作画布中打开。"}</p></Modal>
+            <CanvasStylePickerModal open={stylePickerOpen} value={stylePresetId} onClose={() => setStylePickerOpen(false)} onSelect={(preset) => { setStylePresetId(preset.id); setStylePickerOpen(false); }} />
             <CanvasStyleDetailModal open={Boolean(styleDetail)} preset={styleDetail} selected={styleDetail?.id === stylePresetId} onClose={() => setStyleDetail(null)} onSelect={(preset) => { setStylePresetId(preset.id); setStyleDetail(null); }} />
         </div>
     );

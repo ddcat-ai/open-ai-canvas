@@ -175,8 +175,11 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
     }, [nodesRef, setNodes]);
 
     const recoverInterruptedGenerationTasks = useCallback(async () => {
-        const recoveryNodes = nodesRef.current.filter((node) => node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.errorDetails === "页面刷新后生成已中断，请重新生成。" || Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS));
-        if (!recoveryNodes.length) return;
+        const recoveryNodes = nodesRef.current.filter((node) => {
+            const aggregateBatchRoot = node.metadata?.isBatchRoot && node.metadata.batchChildIds?.length && !node.metadata.taskId;
+            if (aggregateBatchRoot) return false;
+            return node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.errorDetails === "页面刷新后生成已中断，请重新生成。" || Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS);
+        });
         const taskIds = Array.from(new Set(recoveryNodes.map((node) => node.metadata?.taskId).filter((id): id is string => Boolean(id))));
         const tasks = (await Promise.all(taskIds.map((id) => queryGenerationTask(id).catch(() => undefined)))).filter((task): task is GenerationTask => Boolean(task));
         if (recoveryNodes.some((node) => !node.metadata?.taskId)) {
@@ -208,6 +211,30 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             } finally {
                 recoveringTaskIdsRef.current.delete(task.id);
             }
+        }));
+        setNodes((current) => current.map((node) => {
+            if (!node.metadata?.isBatchRoot || !node.metadata.batchChildIds?.length || node.metadata.taskId) return node;
+            const children = node.metadata.batchChildIds.map((id) => current.find((item) => item.id === id)).filter(Boolean) as CanvasNodeData[];
+            const primary = children.find((item) => item.id === node.metadata?.primaryImageId && item.metadata?.content) || children.find((item) => item.metadata?.content);
+            const loading = children.some((item) => item.metadata?.status === NODE_STATUS_LOADING);
+            const failed = children.find((item) => item.metadata?.status === NODE_STATUS_ERROR);
+            return {
+                ...node,
+                metadata: {
+                    ...node.metadata,
+                    ...(primary ? {
+                        content: primary.metadata?.content,
+                        storageKey: primary.metadata?.storageKey,
+                        mimeType: primary.metadata?.mimeType,
+                        bytes: primary.metadata?.bytes,
+                        naturalWidth: primary.metadata?.naturalWidth,
+                        naturalHeight: primary.metadata?.naturalHeight,
+                        primaryImageId: primary.id,
+                    } : {}),
+                    status: primary ? NODE_STATUS_SUCCESS : loading ? NODE_STATUS_LOADING : NODE_STATUS_ERROR,
+                    errorDetails: primary ? undefined : failed?.metadata?.errorDetails || "全部图片生成失败",
+                },
+            };
         }));
     }, [applyGenerationTaskResult, bindGenerationTask, nodesRef, projectId, setNodes]);
 

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.7-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.34-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
@@ -26,6 +26,13 @@
 - 测试环境：[https://ai.ddcat.pro/login](https://ai.ddcat.pro/login)
 - 代码仓库：[ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)
 
+## 赞助商
+
+| LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
+| --- | --- | --- | --- | --- |
+| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
+| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 快乐机艺术小组，一支跨学科的艺术创作团队，持续探索数字+艺术的全新表达形式。 | 暂无 |
+
 ## 主要功能
 
 - **自由画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
@@ -39,26 +46,24 @@
 
 <table>
   <tr>
-    <td width="33%" valign="top">
+    <td width="50%" valign="top">
       <img src="assets/login.png" alt="登录与注册" width="100%">
       <br><sub><b>登录与注册</b></sub>
     </td>
-    <td width="33%" valign="top">
-      <img src="assets/huabu.png" alt="画布项目管理" width="100%">
-      <br><sub><b>画布项目管理</b></sub>
-    </td>
-    <td width="33%" valign="top">
-      <img src="assets/huabu-info.png" alt="画布创作工作台" width="100%">
-      <br><sub><b>画布创作工作台</b></sub>
+    <td width="50%" valign="top">
+      <img src="assets/create.png" alt="AI 创作工作台" width="100%">
+      <br><sub><b>AI 创作工作台</b></sub>
     </td>
   </tr>
   <tr>
-    <td width="33%" valign="top">
-      <img src="assets/backend.png" alt="运维管理后台" width="100%">
-      <br><sub><b>运维管理后台</b></sub>
+    <td width="50%" valign="top">
+      <img src="assets/project-detail.png" alt="短剧项目制作概览" width="100%">
+      <br><sub><b>短剧项目制作概览</b></sub>
     </td>
-    <td width="33%"></td>
-    <td width="33%"></td>
+    <td width="50%" valign="top">
+      <img src="assets/canvas.png" alt="自由画布创作工作台" width="100%">
+      <br><sub><b>自由画布创作工作台</b></sub>
+    </td>
   </tr>
 </table>
 
@@ -113,9 +118,24 @@ curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/script
 ```bash
 git clone https://github.com/ddcat-ai/open-ai-canvas.git
 cd open-ai-canvas
+```
 
+后端开发数据统一保存在 Git 忽略的 `.local/project-workbench-debug`。启动前先检查该目录，不要改用 `backend/data` 或其他目录；仅在确认本机没有既有开发数据时创建：
+
+```bash
+if [ -d .local/project-workbench-debug ]; then
+  find .local/project-workbench-debug -maxdepth 1 -type f -name 'open_ai_canvas.db*' -ls
+else
+  mkdir -p .local/project-workbench-debug
+fi
+mkdir -p .local/cache/go-build .local/cache/go-mod
+```
+
+直接在宿主机开发：
+
+```bash
 cd backend
-go run ./cmd/server
+CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server
 
 # 另开终端
 cd web
@@ -127,7 +147,19 @@ bun run dev
 
 资源配额、Worker/渠道/账号任务并发、业务频控、任务超时和渠道中转策略可在“系统配置 → 资源与策略”中统一热更新，支持重置和自用模式；系统渠道可选择跟随全局值，或单独设置 `1-999` 的最大并发数。未保存后台配置时 Worker 和全局渠道并发分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
 
-Docker 一体化运行：
+Docker 热更新开发：
+
+```bash
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml up --build
+```
+
+前端通过 Vite HMR 更新，后端由 Air 在 Go 源码或模块文件变化后重新编译。前端地址为 `http://localhost:3000`，局域网设备可通过 `http://<开发机 IP>:3000` 访问；后端 `8080` 端口只开放给开发机本机，浏览器 API 请求统一由 Vite 转发。
+
+宿主机端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖默认的 3000/8080；建议把本机取值写入 Git 忽略的 `.local/docker-compose.dev.env`，并在 Compose 命令中使用 `--env-file .local/docker-compose.dev.env`。Go 模块和编译缓存保存在 `.local/cache`，重建容器不会重复完整冷编译。
+
+后端默认通过 SSRF 防护拒绝本机、私网和链路本地上游。开发环境需要连接可信局域网模型服务时，在 `.local/docker-compose.dev.env` 中使用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=192.168.1.10` 精确放行；只填写主机名或 IP，多个值用英文逗号分隔，不包含协议、端口和路径。精确白名单中的自定义渠道可使用 HTTP，但 API Key 会在后端到上游的链路中明文传输，仅限可信网络；其他自定义渠道仍要求 HTTPS。保持 `CANVAS_ALLOW_PRIVATE_UPSTREAMS=false`，避免放行所有私网目标。
+
+Docker 一体化运行（静态前端和 release 后端，不提供源码热更新）：
 
 ```bash
 docker compose -f docker-compose.local.yml up -d --build

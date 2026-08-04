@@ -4,13 +4,16 @@ import { nanoid } from "nanoid";
 
 import type { PendingConnectionCreate } from "@/components/canvas/canvas-workspace-overlays";
 import { getNodeSpec } from "@/constant/canvas";
-import { attachNodeToStoryboardRow, createCanvasNode, getConnectionTargetAnchor, isHiddenBatchChild, normalizeConnection, storyboardHandleAtY, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
+import { attachNodeToStoryboardRow, createCanvasNode, getConnectionTargetAnchor, isHiddenBatchChild, normalizeConnection, storyboardHandleAtY, storyboardPromptTemplateMetadata, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
 import { createCanvasDrawingFromImage } from "@/lib/canvas/canvas-drawing-storage";
+import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
+import { useUserStore } from "@/stores/use-user-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
 
 type UseCanvasConnectionControllerOptions = {
     projectId: string;
+    defaultDrawingEngine: CanvasDrawingEngine;
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     viewportRef: { current: ViewportTransform };
@@ -38,6 +41,7 @@ const NODE_STATUS_IDLE = "idle" as const;
 
 export function useCanvasConnectionController({
     projectId,
+    defaultDrawingEngine,
     nodesRef,
     connectionsRef,
     viewportRef,
@@ -52,6 +56,7 @@ export function useCanvasConnectionController({
     setDrawingNodeId,
 }: UseCanvasConnectionControllerOptions) {
     const { message } = App.useApp();
+    const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
     const [connectionTargetAnchorRatio, setConnectionTargetAnchorRatio] = useState<number | undefined>();
@@ -111,14 +116,20 @@ export function useCanvasConnectionController({
     }, [connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
 
     const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing, pending: PendingConnectionCreate) => {
+        if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
+            message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
+            return;
+        }
         const storyboardRow = type === CanvasNodeType.Video ? storyboardRowFromHandle(nodesRef.current, pending.connection.nodeId, pending.connection.handleId) : undefined;
         const videoPrompt = storyboardRow ? (storyboardRow.videoMotionPrompt || storyboardRow.plotDescription).trim() : "";
         const sourceNode = pending.connection.handleType === "source" ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
         const scriptPrompt = type === CanvasNodeType.Script && sourceNode?.type === CanvasNodeType.Text ? (sourceNode.metadata?.content || sourceNode.metadata?.prompt || "").trim() : "";
-        const metadata = type === CanvasNodeType.Script && scriptPrompt
+        const metadata = type === CanvasNodeType.Drawing
+            ? { drawingEngine: defaultDrawingEngine }
+            : type === CanvasNodeType.Script && scriptPrompt
               ? { prompt: scriptPrompt, composerContent: scriptPrompt }
             : type === CanvasNodeType.Video && storyboardRow
-              ? { prompt: videoPrompt, composerContent: videoPrompt, generationMode: "video" as const, videoEditOperation: "text_to_video" as const, workflowKind: "shot" as const, workflowTitle: `镜头 ${storyboardRow.shotNumber} 视频`, shotIndex: storyboardRow.shotNumber, seconds: String(storyboardRow.durationSeconds), status: NODE_STATUS_IDLE }
+              ? { prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(storyboardRow, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, workflowKind: "shot" as const, workflowTitle: `镜头 ${storyboardRow.shotNumber} 视频`, shotIndex: storyboardRow.shotNumber, seconds: String(storyboardRow.durationSeconds), status: NODE_STATUS_IDLE }
               : undefined;
         const sourceNodeForQuickCreate = pending.quick ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
         const spec = getNodeSpec(type);
@@ -148,7 +159,7 @@ export function useCanvasConnectionController({
             closeConnectionCreateMenu();
             setConnecting(null);
             try {
-                const saved = await createCanvasDrawingFromImage(projectId, newNode.metadata.drawingId, {
+                const saved = await createCanvasDrawingFromImage(projectId, newNode.metadata.drawingId, defaultDrawingEngine, {
                     url: sourceUrl,
                     storageKey: drawingSourceNode.metadata?.storageKey,
                     name: drawingSourceNode.title || "来源图片",
@@ -157,6 +168,7 @@ export function useCanvasConnectionController({
                 newNode.title = `${drawingSourceNode.title || "图片"} · 绘图`;
                 newNode.metadata = {
                     ...newNode.metadata,
+                    drawingEngine: saved.engine,
                     drawingRevision: saved.revision,
                     drawingUpdatedAt: saved.updatedAt,
                     drawingShapeCount: saved.shapeCount,
@@ -180,7 +192,7 @@ export function useCanvasConnectionController({
         else if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
         closeConnectionCreateMenu();
         setConnecting(null);
-    }, [closeConnectionCreateMenu, message, nodesRef, projectId, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [closeConnectionCreateMenu, defaultDrawingEngine, message, nodesRef, projectId, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, tldrawLicenseKey]);
 
     const getConnectionDropTarget = useCallback((clientX: number, clientY: number, current: ConnectionHandle): ConnectionDropTarget => {
         const world = screenToCanvas(clientX, clientY);

@@ -14,6 +14,8 @@ export type FloatingDockCommand = {
     active?: boolean;
     disabled?: boolean;
     danger?: boolean;
+    /** 面板展开型工具——使用 aria-expanded 而非 aria-pressed */
+    expands?: boolean;
 };
 
 export type FloatingDockEntry = FloatingDockCommand | { kind: "separator"; id: string };
@@ -78,10 +80,10 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
                     : coarsePointer
                     ? embedded
                         ? size === "compact" ? "h-10 gap-1 px-0.5" : "h-11 gap-1 px-0.5"
-                        : size === "compact" ? "h-11 gap-1 rounded-[15px] px-1.5 pb-1" : "h-12 gap-1 rounded-[17px] px-2 pb-1"
+                        : size === "compact" ? "h-11 gap-1 rounded-[15px] px-1.5 pb-1" : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
                     : embedded
                         ? size === "compact" ? "h-8 gap-0.5 px-0.5 pb-0.5" : "h-9 gap-0.5 px-0.5 pb-0.5"
-                        : size === "compact" ? "h-8 gap-0.5 rounded-[12px] px-1 pb-1" : "h-10 gap-0.5 rounded-[14px] px-1.5 pb-1",
+                        : size === "compact" ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1" : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
                 className,
             )}
             style={style}
@@ -90,10 +92,59 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             }}
             onPointerLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         >
-            {items.map((item) => item.kind === "separator" ? <DockSeparator key={item.id} compact={size === "compact"} labeled={showLabels} /> : <DockCommandButton key={item.id} command={item} mouseX={mouseX} metrics={metrics} motionEnabled={motionEnabled && !showLabels} compact={size === "compact"} showLabel={showLabels} />)}
+            {renderDockItems(items, { mouseX, metrics, motionEnabled: motionEnabled && !showLabels, compact: size === "compact", showLabel: showLabels })}
         </motion.div>
     );
 });
+
+type DockItemRenderProps = {
+    mouseX: MotionValue<number>;
+    metrics: DockMetrics;
+    motionEnabled: boolean;
+    compact: boolean;
+    showLabel: boolean;
+};
+
+/**
+ * 渲染 Dock 条目，将连续的 danger 命令包裹在 is-danger-group 容器中实现视觉隔离。
+ * 满足"危险操作必须与常规按钮隔离"的硬约束。
+ */
+function renderDockItems(items: FloatingDockEntry[], props: DockItemRenderProps) {
+    const result: ReactNode[] = [];
+    let dangerGroup: FloatingDockCommand[] = [];
+    let index = 0;
+
+    const flushDangerGroup = () => {
+        if (!dangerGroup.length) return;
+        const groupKey = `danger-group-${index}`;
+        result.push(
+            <span key={groupKey} className="aceternity-dock-danger-group flex shrink-0 items-end gap-0.5 rounded-[calc(var(--dock-item-radius)+2px)] px-0.5">
+                {dangerGroup.map((command) => (
+                    <DockCommandButton key={command.id} command={command} mouseX={props.mouseX} metrics={props.metrics} motionEnabled={props.motionEnabled} compact={props.compact} showLabel={props.showLabel} />
+                ))}
+            </span>,
+        );
+        dangerGroup = [];
+    };
+
+    for (const item of items) {
+        if (item.kind === "separator") {
+            flushDangerGroup();
+            result.push(<DockSeparator key={item.id} compact={props.compact} labeled={props.showLabel} />);
+            continue;
+        }
+        if (item.danger) {
+            dangerGroup.push(item);
+            index += 1;
+            continue;
+        }
+        flushDangerGroup();
+        result.push(<DockCommandButton key={item.id} command={item} mouseX={props.mouseX} metrics={props.metrics} motionEnabled={props.motionEnabled} compact={props.compact} showLabel={props.showLabel} />);
+        index += 1;
+    }
+    flushDangerGroup();
+    return result;
+}
 
 function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, showLabel }: { command: FloatingDockCommand; mouseX: MotionValue<number>; metrics: DockMetrics; motionEnabled: boolean; compact: boolean; showLabel: boolean }) {
     const ref = useRef<HTMLSpanElement>(null);
@@ -116,9 +167,10 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 <motion.button
                     type="button"
                     aria-label={command.label}
-                    aria-pressed={command.active || undefined}
+                    aria-expanded={command.expands ? command.active || undefined : undefined}
+                    aria-pressed={command.expands ? undefined : command.active || undefined}
                     disabled={command.disabled}
-                    className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
+                    className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
                     whileTap={!command.disabled ? { scale: 0.96 } : undefined}
                     transition={aceternityMotion.spring.dock}
                     onMouseEnter={() => setHovered(true)}
@@ -128,7 +180,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                     onClick={command.onClick}
                 >
                     <span className="grid size-3.5 shrink-0 place-items-center">{command.icon}</span>
-                    <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">{command.displayLabel || command.label}</span>
+                    <span className="inline-flex h-4 items-center text-[var(--fs-label)] font-medium leading-none">{command.displayLabel || command.label}</span>
                 </motion.button>
             </motion.span>
         );
@@ -140,7 +192,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
             <motion.button
                 type="button"
                 aria-label={command.label}
-                aria-pressed={command.active || undefined}
+                aria-expanded={command.expands ? command.active || undefined : undefined}
+                aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
                 className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
@@ -161,7 +214,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 4, scale: 0.96 }}
                             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                            className={cn("aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[140] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl", compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[9px]" : "-top-8 rounded-md px-2 py-1 text-[10px]")}
+                            className={cn("aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[140] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl", compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]")}
                         >
                             {command.label}
                         </motion.span>

@@ -28,7 +28,7 @@ export function CanvasCreateCommandGrid({ commands, variant = "node" }: { comman
                     transition={aceternityMotion.spring.dock}
                     className={cn(
                         "group relative min-w-0 border border-black/10 bg-white/70 text-center outline-none transition-colors hover:border-black/20 hover:bg-black/5 focus-visible:ring-2 dark:border-white/10 dark:bg-white/[.04] dark:hover:border-white/20 dark:hover:bg-white/8",
-                        variant === "node" ? "flex h-12 flex-col items-center justify-center gap-1 rounded-[10px]" : "flex h-9 items-center justify-center gap-1.5 rounded-[9px] px-2",
+                        variant === "node" ? "flex h-12 flex-col items-center justify-center gap-1 rounded-[var(--dock-item-radius)]" : "flex h-9 items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2",
                     )}
                     style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
                     title={command.label}
@@ -36,7 +36,7 @@ export function CanvasCreateCommandGrid({ commands, variant = "node" }: { comman
                     onClick={command.onClick}
                 >
                     <span className="grid size-5 shrink-0 place-items-center opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5">{command.icon}</span>
-                    <span className="max-w-full truncate text-[9px] font-semibold leading-none">{command.label}</span>
+                    <span className="max-w-full truncate text-[var(--fs-micro)] font-semibold leading-none">{command.label}</span>
                     {command.badge ? <span className="absolute right-1 top-1 rounded-full border px-1 py-0.5 text-[6px] font-bold leading-none" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{command.badge}</span> : null}
                 </motion.button>
             ))}

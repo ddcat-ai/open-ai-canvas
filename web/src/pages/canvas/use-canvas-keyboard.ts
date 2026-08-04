@@ -23,6 +23,7 @@ type UseCanvasKeyboardOptions = {
     cancelSelectionBox: () => void;
     copySelectedNodes: () => void;
     pasteCopiedNodes: () => boolean;
+    restoreCopiedNodesFromText: (value: string) => boolean;
     shouldPreferCopiedNodes: () => boolean;
     pasteSystemClipboard: (position?: undefined, clipboardEvent?: ClipboardEvent | null) => Promise<boolean> | boolean;
     deleteNodes: (ids: Set<string>) => void;
@@ -53,6 +54,7 @@ export function useCanvasKeyboard({
     cancelSelectionBox,
     copySelectedNodes,
     pasteCopiedNodes,
+    restoreCopiedNodesFromText,
     shouldPreferCopiedNodes,
     pasteSystemClipboard,
     deleteNodes,
@@ -90,7 +92,9 @@ export function useCanvasKeyboard({
                 if (!event.repeat) void saveCanvasProject();
                 return;
             }
-            if (isTextEditingTarget || target?.closest("[data-canvas-no-zoom]")) return;
+            if (isTextEditingTarget) return;
+            const isCanvasControlTarget = Boolean(target?.closest("[data-canvas-no-zoom]"));
+            if (isCanvasControlTarget && !(isModifierShortcut && !event.altKey && (key === "c" || key === "v"))) return;
             if (event.key === "?" && !isModifierShortcut && !event.altKey) {
                 event.preventDefault();
                 setShortcutRequestNonce((value) => value + 1);
@@ -128,8 +132,14 @@ export function useCanvasKeyboard({
                 return;
             }
             if (isModifierShortcut && !event.altKey && key === "v") {
-                // 不在 keydown 直接粘贴节点：交给 paste 事件，优先系统剪贴板图片。
-                // 这里只做标记，真正逻辑在 paste 监听器里。
+                // 有些浏览器/焦点状态不会继续派发 paste 事件；内部节点复制必须有 keydown 兜底。
+                if (shouldPreferCopiedNodes()) {
+                    event.preventDefault();
+                    if (pasteCopiedNodes()) return;
+                    void navigator.clipboard?.readText?.().then((text) => {
+                        if (restoreCopiedNodesFromText(text)) pasteCopiedNodes();
+                    }).catch(() => undefined);
+                }
                 return;
             }
             if (event.key === "Delete" || event.key === "Backspace") {
@@ -147,9 +157,11 @@ export function useCanvasKeyboard({
 
         const handlePaste = (event: ClipboardEvent) => {
             const target = event.target instanceof Element ? event.target : null;
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || target?.closest("[contenteditable='true'],[data-canvas-no-zoom]")) return;
+            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || target?.closest("[contenteditable='true']")) return;
             // 节点标记写入失败或仍在写入时避开旧系统图片，其余情况保持系统内容优先。
             event.preventDefault();
+            const text = event.clipboardData?.getData("text/plain") || "";
+            if (text && restoreCopiedNodesFromText(text) && pasteCopiedNodes()) return;
             if (shouldPreferCopiedNodes() && pasteCopiedNodes()) return;
             void (async () => {
                 const handled = await pasteSystemClipboard(undefined, event);
@@ -163,5 +175,5 @@ export function useCanvasKeyboard({
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("paste", handlePaste, true);
         };
-    }, [cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, fitCanvasContent, fitCanvasSelection, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
+    }, [cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, fitCanvasContent, fitCanvasSelection, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
 }

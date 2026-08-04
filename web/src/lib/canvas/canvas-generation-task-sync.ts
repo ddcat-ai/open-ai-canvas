@@ -3,27 +3,12 @@ import { fitNodeSize, nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canva
 import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
+import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask } from "@/services/api/task-center";
 import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
-
-type BackendGenerationResult = {
-    mode?: CanvasGenerationMode;
-    images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string }>;
-    video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string; lastFrameUrl?: string };
-    audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
-    text?: string;
-};
-
-
-export function parseBackendGenerationResult(task: GenerationTask): BackendGenerationResult {
-    if (!task.resultJson) throw new Error("后端任务没有返回结果");
-    const result = JSON.parse(task.resultJson) as BackendGenerationResult;
-    if (!result || typeof result !== "object") throw new Error("后端任务结果格式错误");
-    return result;
-}
 
 export function generationTaskInput(task: GenerationTask) {
     if (!task.inputJson) return null;

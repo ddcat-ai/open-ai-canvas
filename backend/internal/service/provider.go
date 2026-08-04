@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -151,6 +152,15 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		input.Prompt = fallbackPrompt
 	}
+	promptTemplateOperation := metadataString(input.Metadata, "promptTemplateOperation")
+	if promptTemplateOperation != "" {
+		values := metadataStringValues(input.Metadata["promptTemplateVariables"])
+		compiled, compileErr := s.compilePrompt(userID, promptTemplateOperation, values)
+		if compileErr != nil {
+			return nil, fmt.Errorf("编译用户提示词失败：%w", compileErr)
+		}
+		input.Prompt = compiled.Content
+	}
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("prompt is required")
 	}
@@ -184,7 +194,11 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	case "image":
 		return runImageTask(ctx, input)
 	case "text":
-		return runTextTask(ctx, input)
+		result, taskErr := runTextTask(ctx, input)
+		if taskErr == nil && promptTemplateOperation != "" {
+			taskErr = validatePromptTemplateResult(promptTemplateOperation, result)
+		}
+		return result, taskErr
 	case "video":
 		return runVideoTask(ctx, input)
 	case "audio":
@@ -192,6 +206,18 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+func metadataStringValues(value any) map[string]string {
+	values := map[string]string{}
+	raw, ok := value.(map[string]interface{})
+	if !ok {
+		return values
+	}
+	for key, item := range raw {
+		values[key] = strings.TrimSpace(fmt.Sprint(item))
+	}
+	return values
 }
 
 func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, requirePublicURL bool) error {
@@ -225,6 +251,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 		if resource.Status != "ready" {
 			return errors.New("任务参考资源尚未上传完成")
 		}
+		// 本地素材自动迁移到 OSS
 		if resource.Provider == "local" {
 			resource, err = s.promoteLocalResourceToRemote(userID, resource)
 			if err != nil {
@@ -1250,6 +1277,10 @@ func normalizeNewAPIChannel2Resolution(value string, modelName string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "480", "480p", "low":
 		return "480p"
+	case "1080", "1080p":
+		return "1080p"
+	case "2160", "2160p", "4k":
+		return "2160p"
 	default:
 		return "720p"
 	}
@@ -2285,6 +2316,9 @@ func normalizeVideoResolution(value string) string {
 	if value == "low" {
 		return "480p"
 	}
+	if strings.EqualFold(value, "4k") {
+		return "2160p"
+	}
 	if strings.HasSuffix(value, "p") {
 		return value
 	}
@@ -2305,6 +2339,8 @@ func normalizeXAIVideoResolution(value string) string {
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "2160", "2160p", "4k":
+		return "2160p"
 	default:
 		return "720p"
 	}
@@ -2394,8 +2430,11 @@ func normalizeSeedanceVideosRatio(value string) string {
 
 func normalizeSeedanceResolution(value string, model string) string {
 	resolution := strings.TrimSuffix(strings.TrimSpace(value), "p")
+	if strings.EqualFold(resolution, "4k") {
+		resolution = "2160"
+	}
 	switch resolution {
-	case "480", "720", "1080":
+	case "480", "720", "1080", "2160":
 	default:
 		if value == "low" {
 			resolution = "480"
@@ -2403,7 +2442,7 @@ func normalizeSeedanceResolution(value string, model string) string {
 			resolution = "720"
 		}
 	}
-	if strings.Contains(strings.ToLower(model), "fast") && resolution == "1080" {
+	if strings.Contains(strings.ToLower(model), "fast") && (resolution == "1080" || resolution == "2160") {
 		resolution = "720"
 	}
 	return resolution + "p"

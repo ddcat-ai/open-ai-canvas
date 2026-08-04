@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Input, Modal, Segmented, Tag } from "antd";
-import { Download, Ellipsis, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import { Ellipsis, Lock, Plus, Settings2, Unlock } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
+import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarTools, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
-import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
+import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
@@ -232,28 +233,55 @@ export function CanvasNodeHoverToolbar({
         setImageToolSettingsOpen(true);
     }
 
-    const baseToolbarTools: ToolbarTool[] = [
-        { id: "info", title: isCharacterReference ? "查看角色详情" : "查看节点信息", label: isCharacterReference ? "角色详情" : "信息", icon: isCharacterReference ? <UserRound className="size-3.5" /> : <Info className="size-3.5" />, onClick: () => onInfo(node) },
-        { id: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-3.5" />, onClick: () => onDelete(node), danger: true },
-    ];
-    const nodeToolbarTools: ToolbarTool[] = [
-        ...(canRetry ? [{ id: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-3.5" />, onClick: () => onRetry(node) }] : []),
-        ...(hasVideo && !simpleMode ? [{ id: "extractLastFrame", title: extractingVideoFrame ? "正在截取尾帧" : "截取尾帧", label: extractingVideoFrame ? "截取中" : "尾帧", icon: extractingVideoFrame ? <LoaderCircle className="size-3.5 animate-spin" /> : <GalleryHorizontalEnd className="size-3.5" />, onClick: () => onExtractVideoLastFrame(node), disabled: extractingVideoFrame }] : []),
-        ...(hasImage || hasVideo || isEditableText ? [{ id: "saveAsset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-3.5" />, onClick: () => onSaveAsset(node) }] : []),
-        ...(hasImage || hasVideo || hasAudio ? [{ id: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: "下载", icon: <Download className="size-3.5" />, onClick: () => onDownload(node) }] : []),
-        ...(canOpenDialog ? [{ id: "edit", title: isEditableText ? "调用文本模型生成内容" : "编辑", label: isEditableText ? "文本生成" : "编辑", icon: <MessageSquare className="size-3.5" />, onClick: () => onToggleDialog(node) }] : []),
-        ...(isEditableText ? [{ id: "editText", title: "放大编辑文本", label: "放大编辑", icon: <Maximize2 className="size-3.5" />, onClick: () => onEditText(node) }] : []),
-        ...(isEditableText ? [{ id: "generateImage", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-3.5" />, onClick: () => onGenerateImage(node) }] : []),
-        ...(isConfig && !simpleMode ? [{ id: "config", title: "生成配置", label: "生成配置", icon: <Settings2 className="size-3.5" />, onClick: () => onToggleDialog(node) }] : []),
-        ...(isEditableText && !simpleMode ? [{ id: "decreaseFont", title: "减小字号", label: "缩小", icon: <Minus className="size-3.5" />, onClick: () => onDecreaseFont(node) }] : []),
-        ...(isEditableText && !simpleMode ? [{ id: "increaseFont", title: "增大字号", label: "放大", icon: <Plus className="size-3.5" />, onClick: () => onIncreaseFont(node) }] : []),
-        ...(isImage && !hasImage ? [{ id: "uploadImage", title: "上传图片", label: "上传图片", icon: <Upload className="size-3.5" />, onClick: () => onUpload(node) }] : []),
-        ...(isVideo ? [{ id: "uploadVideo", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-3.5" />, onClick: () => onUpload(node) }] : []),
-        ...(isAudio ? [{ id: "uploadAudio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <Music2 className="size-3.5" />, onClick: () => onUpload(node) }] : []),
-        ...(hasImage && !simpleMode ? imageTools.map((tool) => ({ id: tool.id, title: tool.title, label: tool.label, icon: tool.icon, active: tool.active, onClick: tool.onClick })) : []),
-    ];
-    const toolbarTools = hasImage ? [...baseToolbarTools, ...nodeToolbarTools].filter((tool) => quickImageToolIdSet.has(tool.id as ImageQuickToolId)) : [...baseToolbarTools, ...nodeToolbarTools];
-    const selectableImageToolbarTools = [...baseToolbarTools, ...nodeToolbarTools].filter((tool): tool is ToolbarTool & { id: ImageQuickToolId } => isImageQuickToolId(tool.id));
+    // 构建 ToolContext——供注册表解析工具
+    const nodeHoverHandlers = {
+        onNodeInfo: onInfo, onNodeDelete: onDelete, onNodeRetry: onRetry, onNodeEditText: onEditText, onNodeDecreaseFont: onDecreaseFont, onNodeIncreaseFont: onIncreaseFont,
+        onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeUpload: onUpload, onNodeDownload: onDownload,
+        onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
+        onNodeSplit: onSplit, onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
+        onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
+        onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
+    } as Partial<ToolbarHandlers> as ToolbarHandlers;
+
+    const nodeHoverCtx: ToolContext = {
+        selectedCount: 0,
+        selectedNodeTypes: new Set(),
+        selectedVideoCount: 0,
+        canvasTool: "move",
+        workspaceMode: workspaceMode || "professional",
+        isProjectLinked: false,
+        canUndo: false,
+        canRedo: false,
+        node,
+        nodeMetadata: node.metadata,
+        extractingVideoFrame,
+        mergingVideos: false,
+        addPanelOpen: false,
+        appearancePanelOpen: false,
+        settingsPanelOpen: false,
+        handlers: nodeHoverHandlers,
+    };
+
+    // 从注册表解析工具（已按 applicable 过滤、用户偏好排序）
+    const registryTools = resolveToolbarTools("node-hover", nodeHoverCtx, readToolbarPrefs("node-hover") ?? defaultToolbarPrefs("node-hover"));
+    // 分离 node-lock（始终显示，不参与 quickImageToolIds 过滤）
+    const otherRegistryTools = registryTools.filter((tool) => tool.id !== "node-lock");
+    // 转为 ToolbarTool 供组件内部逻辑使用
+    const otherTools: ToolbarTool[] = otherRegistryTools.map((tool) => ({
+        id: tool.id,
+        title: typeof tool.label === "function" ? tool.label(nodeHoverCtx) : tool.label,
+        label: tool.displayLabel ? (typeof tool.displayLabel === "function" ? tool.displayLabel(nodeHoverCtx) : tool.displayLabel) : (typeof tool.label === "function" ? tool.label(nodeHoverCtx) : tool.label),
+        icon: typeof tool.icon === "function" ? tool.icon(nodeHoverCtx) : tool.icon,
+        active: tool.active?.(nodeHoverCtx),
+        danger: tool.danger,
+        disabled: tool.disabled?.(nodeHoverCtx),
+        onClick: () => tool.run(nodeHoverCtx),
+    }));
+    // 合并图片工具（当 hasImage && !simpleMode 时追加到 otherTools 末尾）
+    const allTools: ToolbarTool[] = hasImage && !simpleMode ? [...otherTools, ...imageTools.map((tool) => ({ id: tool.id, title: tool.title, label: tool.label, icon: tool.icon, active: tool.active, danger: undefined, disabled: undefined, onClick: tool.onClick }))] : otherTools;
+    // hasImage 时按 quickImageToolIds 过滤
+    const toolbarTools = hasImage ? allTools.filter((tool) => quickImageToolIdSet.has(tool.id as ImageQuickToolId)) : allTools;
+    const selectableImageToolbarTools = allTools.filter((tool): tool is ToolbarTool & { id: ImageQuickToolId } => isImageQuickToolId(tool.id));
     const temporaryImageToolbarTools = selectableImageToolbarTools.filter((tool) => !quickImageToolIdSet.has(tool.id));
     const dockItems: FloatingDockEntry[] = [
         ...toolbarTools.map((tool) => ({ id: tool.id, label: tool.title, displayLabel: tool.label, icon: tool.icon, active: tool.active, danger: tool.danger, disabled: tool.disabled, onClick: () => tool.onClick() })),
@@ -314,7 +342,7 @@ export function CanvasNodeHoverToolbar({
         <>
             <div
                 ref={toolbarRef}
-                className="canvas-node-toolbar absolute z-[70] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
+                className="canvas-node-toolbar absolute z-[var(--z-panel-floating)] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
                 style={{ left: anchor.left, top: anchor.top, width: "max-content", maxWidth: `min(calc(100% - 20px), ${showDockLabels ? 840 : 560}px)`, color: theme.node.text }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {
@@ -323,7 +351,7 @@ export function CanvasNodeHoverToolbar({
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[14px] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? labeledDockStyle : dockShellStyle}>
+                <div className={`aceternity-floating-dock thin-scrollbar relative flex max-w-full overflow-x-auto rounded-[var(--dock-radius)] border backdrop-blur-2xl ${showDockLabels ? "h-11 items-center px-2 py-1" : "h-10 items-end gap-1 px-1.5 pb-1"}`} style={showDockLabels ? labeledDockStyle : dockShellStyle}>
                     {dockItems.length ? <FloatingDock embedded items={dockItems} size="compact" showLabels={showDockLabels} ariaLabel="节点快捷工具" className={`pointer-events-auto shrink-0 ${showDockLabels ? "" : "max-w-[min(calc(100vw-20px),400px)]"}`} style={embeddedDockStyle} /> : null}
                     {hasImage && !simpleMode ? (
                         <Dropdown
@@ -341,13 +369,13 @@ export function CanvasNodeHoverToolbar({
                         >
                             <button
                                 type="button"
-                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "is-labeled inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
+                                className={`aceternity-dock-command pointer-events-auto shrink-0 outline-none focus-visible:ring-2 ${showDockLabels ? "is-labeled inline-flex h-8 items-center justify-center gap-1.5 rounded-[var(--dock-item-radius)] px-2.5" : "grid size-8 place-items-center rounded-full"}`}
                                 style={{ color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties}
                                 aria-label="更多图片工具"
                                 title="更多图片工具"
                             >
                                 <Ellipsis className="size-3.5" />
-                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[11px] font-medium leading-none">更多</span> : null}
+                                {showDockLabels ? <span className="inline-flex h-4 items-center text-[var(--fs-label)] font-medium leading-none">更多</span> : null}
                             </button>
                         </Dropdown>
                     ) : null}
@@ -433,7 +461,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
     const title = (
         <div className="flex items-center justify-between gap-4 pr-10">
             <div className="min-w-0">
-                <div className="text-[17px] font-semibold tracking-[-0.02em]">节点信息</div>
+                <div className="text-[var(--fs-heading-lg)] font-semibold tracking-[-0.02em]">节点信息</div>
                 {node ? <div className="mt-0.5 truncate text-xs opacity-45">{node.id}</div> : null}
             </div>
             <Segmented
@@ -481,7 +509,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                                 return <button key={option.value} type="button" disabled={readOnly} onClick={() => saveAssetCategory(option.value)} className="h-7 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: active ? theme.accent.primary : theme.toolbar.border, background: active ? theme.accent.primarySoft : theme.toolbar.panel, color: active ? theme.accent.primary : theme.node.muted }}>{option.label}</button>;
                                             })}
                                         </div>
-                                        <div className="mt-2 text-[11px] leading-5 opacity-45">生成后会按此分类进入项目资产；角色、场景和画风工作流会自动预填。</div>
+                                        <div className="mt-2 text-[var(--fs-label)] leading-5 opacity-45">生成后会按此分类进入项目资产；角色、场景和画风工作流会自动预填。</div>
                                     </div>
                                 ) : null}
                                 {node.metadata?.prompt ? (
@@ -546,7 +574,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
 
                             {node.metadata?.errorDetails ? (
                                 <div className="rounded-2xl border p-3 text-red-500" style={{ borderColor: theme.node.stroke }}>
-                                    {node.metadata.errorDetails}
+                                    {generationErrorMessage(node.metadata.errorDetails)}
                                 </div>
                             ) : null}
                         </div>

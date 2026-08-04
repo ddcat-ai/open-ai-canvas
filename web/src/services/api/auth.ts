@@ -3,6 +3,8 @@ import axios from "axios";
 import type { ModelChannel } from "@/stores/use-config-store";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
+import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
+import type { FeatureAvailability } from "@/stores/use-user-store";
 
 const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
 
@@ -31,6 +33,8 @@ export type AuthSessionPayload = {
     user: LocalUser | null;
     systemChannels?: ModelChannel[];
     runtimeLimits?: RuntimeLimits;
+    drawingEngine?: CanvasDrawingEngineSetting;
+    features?: FeatureAvailability;
 };
 
 export type RuntimeLimits = {
@@ -199,19 +203,49 @@ export type ModelPricing = {
     updatedAt: string;
 };
 
-export type StoryboardPromptTemplate = {
+export type PromptTemplate = {
     id: string;
+    operation: string;
     name: string;
+    version: number;
     content: string;
+    outputType: "json" | "text";
     enabled: boolean;
     createdBy?: string;
     createdAt: string;
     updatedAt: string;
 };
 
-export type StoryboardPromptVariable = {
+export type PromptTemplateVariable = {
     label: string;
     placeholder: string;
+};
+
+export type PromptOperationDefinition = {
+    operation: string;
+    label: string;
+    category: string;
+    description: string;
+    outputType: "json" | "text";
+    schemaKey?: string;
+    variables: PromptTemplateVariable[];
+    outputContract: string;
+};
+
+export type UserPromptCustomization = {
+    id: string;
+    operation: string;
+    mode: "inherit" | "append" | "rewrite";
+    content: string;
+    baseTemplateId: string;
+    updatedAt: string;
+};
+
+export type UserPromptPreference = {
+    definition: PromptOperationDefinition;
+    template: PromptTemplate | null;
+    customization?: UserPromptCustomization;
+    outdated: boolean;
 };
 
 export type AdminOSSSetting = {
@@ -322,6 +356,18 @@ export function getSystemChannels() {
     return request<{ channels: ModelChannel[] }>(api.get("/channels/system"));
 }
 
+export function getFeatureAvailability() {
+    return request<{ features: FeatureAvailability }>(api.get("/features"));
+}
+
+export function getAdminFeatureAvailability() {
+    return request<{ features: FeatureAvailability }>(api.get("/admin/settings/features"));
+}
+
+export function updateAdminFeatureAvailability(features: Pick<FeatureAvailability, "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled">) {
+    return request<{ features: FeatureAvailability }>(api.patch("/admin/settings/features", features));
+}
+
 export function login(input: { username: string; password: string }) {
     return request<{ user: LocalUser }>(api.post("/auth/login", input));
 }
@@ -342,6 +388,10 @@ export type AdminListParams = { keyword?: string; status?: string; role?: string
 
 export function listAdminUsers(params: AdminListParams = {}) {
     return request<{ users: AdminUser[]; total: number; page: number; limit: number }>(api.get("/admin/users", { params }));
+}
+
+export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+    return request<{ user: AdminUser }>(api.post("/admin/users", input));
 }
 
 export function getAdminReferences() {
@@ -392,20 +442,32 @@ export function deleteAdminChannel(id: string) {
     return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(id)}`));
 }
 
-export function listAdminStoryboardPromptTemplates() {
-    return request<{ templates: StoryboardPromptTemplate[]; variables: StoryboardPromptVariable[] }>(api.get("/admin/storyboard-prompts"));
+export function listAdminPromptTemplates() {
+    return request<{ templates: PromptTemplate[]; definitions: PromptOperationDefinition[] }>(api.get("/admin/prompt-templates"));
 }
 
-export function createAdminStoryboardPromptTemplate(input: Partial<Pick<StoryboardPromptTemplate, "name" | "content" | "enabled">>) {
-    return request<{ template: StoryboardPromptTemplate }>(api.post("/admin/storyboard-prompts", input));
+export function createAdminPromptTemplate(input: Pick<PromptTemplate, "operation" | "name" | "content"> & { enabled?: boolean }) {
+    return request<{ template: PromptTemplate }>(api.post("/admin/prompt-templates", input));
 }
 
-export function updateAdminStoryboardPromptTemplate(id: string, input: Partial<Pick<StoryboardPromptTemplate, "name" | "content" | "enabled">>) {
-    return request<{ template: StoryboardPromptTemplate }>(api.patch(`/admin/storyboard-prompts/${encodeURIComponent(id)}`, input));
+export function updateAdminPromptTemplate(id: string, input: Pick<PromptTemplate, "operation" | "name" | "content"> & { enabled?: boolean }) {
+    return request<{ template: PromptTemplate }>(api.patch(`/admin/prompt-templates/${encodeURIComponent(id)}`, input));
 }
 
-export function deleteAdminStoryboardPromptTemplate(id: string) {
-    return request<{ ok: boolean }>(api.delete(`/admin/storyboard-prompts/${encodeURIComponent(id)}`));
+export function deleteAdminPromptTemplate(id: string) {
+    return request<{ ok: boolean }>(api.delete(`/admin/prompt-templates/${encodeURIComponent(id)}`));
+}
+
+export function listUserPromptPreferences() {
+    return request<{ preferences: UserPromptPreference[] }>(api.get("/settings/prompt-templates"));
+}
+
+export function updateUserPromptCustomization(operation: string, input: Pick<UserPromptCustomization, "mode" | "content">) {
+    return request<{ customization: UserPromptCustomization }>(api.patch(`/settings/prompt-templates/${encodeURIComponent(operation)}`, input));
+}
+
+export function resetUserPromptCustomization(operation: string) {
+    return request<{ ok: boolean }>(api.delete(`/settings/prompt-templates/${encodeURIComponent(operation)}`));
 }
 
 export function getAdminOSSSetting() {
@@ -430,6 +492,14 @@ export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting
 
 export function resetAdminRuntimePolicySetting() {
     return request<{ setting: RuntimePolicySetting }>(api.delete("/admin/settings/runtime-policy"));
+}
+
+export function getAdminDrawingEngineSetting() {
+    return request<{ setting: CanvasDrawingEngineSetting }>(api.get("/admin/settings/drawing-engine"));
+}
+
+export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineSetting, "defaultEngine" | "tldrawLicenseKey">) {
+    return request<{ setting: CanvasDrawingEngineSetting }>(api.patch("/admin/settings/drawing-engine", input));
 }
 
 export function listAdminApiLogs(params: AdminListParams = {}) {

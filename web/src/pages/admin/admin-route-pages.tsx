@@ -8,6 +8,7 @@ const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announceme
 const CreditOperationsPanel = lazy(() => import("./components/credit-operations-panel"));
 const AccessSettingsPanel = lazy(() => import("./components/access-settings-panel"));
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
+const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 
 function PageFallback({ label }: { label: string }) {
     return <div className="py-16 text-center text-sm text-foreground/50">正在读取{label}...</div>;
@@ -32,5 +33,9 @@ export function AccessSettingsPage() {
 }
 
 export function EmailSettingsPage() {
-    return <AdminPageFrame title="邮件服务" description="注册验证码 SMTP"><div className="mx-auto max-w-5xl"><Suspense fallback={<PageFallback label="邮件配置" />}><EmailSettingsPanel /></Suspense></div></AdminPageFrame>;
+    return <AdminPageFrame title="邮件服务" description="注册验证码 SMTP"><div className="pt-4"><Suspense fallback={<PageFallback label="邮件配置" />}><EmailSettingsPanel /></Suspense></div></AdminPageFrame>;
+}
+
+export function FeatureAvailabilityPage() {
+    return <AdminPageFrame title="功能开放" description="控制用户工作台入口与计费模式"><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
 }

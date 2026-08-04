@@ -4,9 +4,11 @@ import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRe
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
+import { createClientId } from "@/lib/client-id";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
+import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
@@ -100,7 +102,7 @@ type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal };
+type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string };
 
 const QUALITY_BASE: Record<string, number> = {
     low: 1024,
@@ -261,7 +263,7 @@ function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         ...(contentType ? { "Content-Type": contentType } : {}),
-        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "image", "X-Idempotency-Key": crypto.randomUUID() } : {}),
+        ...(isSystemProxyBaseUrl(config.baseUrl) ? { "X-Canvas-Scene": "image", "X-Idempotency-Key": createClientId() } : {}),
     };
 }
 
@@ -945,13 +947,21 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
                 parallel_tool_calls: false,
             }, onDelta, options);
         }
-        return await requestStreamingResponse(requestConfig, {
-            model: requestConfig.model,
-            input: toResponseInput(withSystemMessage(requestConfig, messages)),
-            tools: tools.map(toResponseTool),
-            tool_choice: toolChoice,
-            parallel_tool_calls: false,
-        }, onDelta, options);
+        return await requestStreamingResponse(
+            requestConfig,
+            withOpenAIPromptCacheKey(
+                {
+                    model: requestConfig.model,
+                    input: toResponseInput(withSystemMessage(requestConfig, messages)),
+                    tools: tools.map(toResponseTool),
+                    tool_choice: toolChoice,
+                    parallel_tool_calls: false,
+                },
+                options?.promptCacheKey,
+            ),
+            onDelta,
+            options,
+        );
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
     }

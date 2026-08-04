@@ -12,7 +12,8 @@ import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-
 import { cancelGenerationTask, createAgentSession, createGenerationTask, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog, type TaskStatus } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelDisplayName, resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { formatCredits } from "@/constant/credits";
 import { listProjects, type ProjectSummary } from "@/services/api/projects";
 
@@ -29,6 +30,8 @@ export default function TasksPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const projects = useCanvasStore((state) => state.projects);
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const [form] = Form.useForm<CreateTaskInput & { operation: string }>();
     const [tasks, setTasks] = useState<GenerationTask[]>([]);
     const [domainProjects, setDomainProjects] = useState<ProjectSummary[]>([]);
@@ -74,6 +77,10 @@ export default function TasksPage() {
     }), [canvasById, domainProjectNameById, keyword, projectFilter, statusFilter, tasks]);
 
     useEffect(() => {
+        if (!shortDramaEnabled) {
+            setDomainProjects([]);
+            return;
+        }
         let cancelled = false;
         void listProjects().then((result) => {
             if (!cancelled) setDomainProjects(result.projects);
@@ -81,7 +88,7 @@ export default function TasksPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [shortDramaEnabled]);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
@@ -275,7 +282,7 @@ export default function TasksPage() {
                     return (
                         <div className="min-w-0">
                             <div className="truncate text-xs font-medium text-foreground/82" title={context.canvasName}>{context.canvasName}</div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-foreground/42" title={context.projectName || "未加入项目"}>
+                            <div className="mt-1 flex min-w-0 items-center gap-1 text-[var(--fs-tiny)] text-foreground/42" title={context.projectName || "未加入项目"}>
                                 <FolderKanban className="size-3 shrink-0" />
                                 <span className="truncate">{context.projectName || "未加入项目"}</span>
                             </div>
@@ -287,7 +294,7 @@ export default function TasksPage() {
                 title: "类型｜模型",
                 width: 180,
                 responsive: ["md"],
-                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[10px] text-foreground/42" title={formatModelName(task)}>{formatModelName(task)}</div></div>,
+                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[var(--fs-tiny)] text-foreground/42" title={formatModelName(effectiveConfig, task)}>{formatModelName(effectiveConfig, task)}</div></div>,
             },
             {
                 title: "任务名称",
@@ -299,14 +306,14 @@ export default function TasksPage() {
                         <TaskPreviewThumbnail task={task} onOpen={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: prompt || formatTaskKind(task) })} />
                         <div className="min-w-0 flex-1">
                             <div title={prompt} className="line-clamp-2 max-w-full break-words text-xs font-medium leading-5 text-foreground/88">{prompt || "未命名任务"}</div>
-                            <div className={`mt-1 hidden truncate text-[10px] md:block ${task.status === "failed" ? "text-red-600 dark:text-red-400" : task.status === "cancelled" ? "text-amber-600 dark:text-amber-400" : "text-foreground/38"}`} title={task.error ? generationErrorMessage(task.error) : undefined}>
+                            <div className={`mt-1 hidden truncate text-[var(--fs-tiny)] md:block ${task.status === "failed" ? "text-red-600 dark:text-red-400" : task.status === "cancelled" ? "text-amber-600 dark:text-amber-400" : "text-foreground/38"}`} title={task.error ? generationErrorMessage(task.error) : undefined}>
                                 {task.status === "failed" || task.status === "cancelled" ? taskAttentionReason(task) : task.stage || statusLabel[task.status]}
                             </div>
                             <div className="mt-2 space-y-2 md:hidden">
-                                <div className="truncate text-[10px] text-foreground/45">{formatTaskKind(task)} · {formatModelName(task)}</div>
-                                <div className="truncate text-[10px] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
+                                <div className="truncate text-[var(--fs-tiny)] text-foreground/45">{formatTaskKind(task)} · {formatModelName(effectiveConfig, task)}</div>
+                                <div className="truncate text-[var(--fs-tiny)] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
                                 <div className="flex items-center justify-between gap-3">
-                                    <div className="flex min-w-0 items-center gap-2 text-[11px]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span><TaskBilling billing={task.billing} /></div>
+                                    <div className="flex min-w-0 items-center gap-2 text-[var(--fs-label)]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span>{creditsEnabled ? <TaskBilling billing={task.billing} /> : null}</div>
                                     <Space size={0}>
                                         <Button type="text" size="small" aria-label="查看详情" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)} />
                                         {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")} /> : null}
@@ -327,7 +334,7 @@ export default function TasksPage() {
                         <div className="flex items-center gap-2 text-xs font-medium">
                             <span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} />
                             <span>{statusLabel[task.status]}</span>
-                            {task.status === "queued" || task.status === "running" ? <span className="ml-auto text-[10px] tabular-nums text-foreground/42">{task.progress || 0}%</span> : null}
+                            {task.status === "queued" || task.status === "running" ? <span className="ml-auto text-[var(--fs-tiny)] tabular-nums text-foreground/42">{task.progress || 0}%</span> : null}
                         </div>
                         {task.status === "queued" || task.status === "running" ? <Progress className="!mb-0 !mt-1.5 block" percent={task.progress || 0} showInfo={false} size={[90, 3]} strokeColor="var(--workspace-accent)" /> : null}
                     </div>
@@ -348,13 +355,13 @@ export default function TasksPage() {
                 responsive: ["lg"],
                 render: (value) => <TaskDate value={value} />,
             },
-            {
+            ...(creditsEnabled ? [{
                 title: "消耗积分",
                 width: 130,
                 align: "right",
                 responsive: ["md"],
                 render: (_, task) => <TaskBilling billing={task.billing} />,
-            },
+            }] as ColumnsType<GenerationTask> : []),
             {
                 title: "操作",
                 width: 168,
@@ -369,7 +376,7 @@ export default function TasksPage() {
                 ),
             },
         ],
-        [actingId, canvasById, domainProjectNameById, openTaskDetail],
+        [actingId, canvasById, creditsEnabled, domainProjectNameById, effectiveConfig, openTaskDetail],
     );
 
     return (
@@ -442,7 +449,7 @@ export default function TasksPage() {
                             <InfoItem label="状态" value={statusLabel[detailTask.status]} />
                             <InfoItem label="画布名称" value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
                             <InfoItem label="任务类型" value={formatTaskKind(detailTask)} />
-                            <InfoItem label="模型" value={formatModelName(detailTask)} />
+                            <InfoItem label="模型" value={formatModelName(effectiveConfig, detailTask)} />
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
                         </div>
@@ -575,7 +582,7 @@ function taskAttentionReason(task: GenerationTask) {
 function taskEmptyState(status: TaskStatusFilter) {
     if (status === "all") return { title: "还没有任务", description: "新提交的生成会在这里显示状态和实时进度。" };
     if (status === "active") return { title: "没有运行中的任务", description: "新提交的生成会在这里显示排队状态和实时进度。" };
-    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和积分消耗会保留在这里。" };
+    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和执行记录会保留在这里。" };
     return { title: "目前没有需要处理的任务", description: "失败或取消的生成会出现在这里，并提供原因和可用操作。" };
 }
 
@@ -591,17 +598,17 @@ function TaskDate({ value }: { value?: string }) {
     if (!value) return <span className="text-xs text-foreground/38">-</span>;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return <span className="text-xs text-foreground/38">-</span>;
-    return <div className="text-xs tabular-nums text-foreground/62"><div>{date.toLocaleDateString()}</div><div className="mt-1 text-[10px] text-foreground/38">{date.toLocaleTimeString()}</div></div>;
+    return <div className="text-xs tabular-nums text-foreground/62"><div>{date.toLocaleDateString()}</div><div className="mt-1 text-[var(--fs-tiny)] text-foreground/38">{date.toLocaleTimeString()}</div></div>;
 }
 
 function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }) {
     if (!billing) return <span className="text-xs text-foreground/30">-</span>;
     const amount = formatCredits(billing.amountMicrocredits);
     const note = billing.status === "settled" ? "已结算" : billing.status === "refunded" ? "已退回" : billing.status === "uncertain" ? "待核对" : "预计";
-    return <div className="text-right"><div className="text-xs font-medium tabular-nums text-foreground/78">{amount}</div><div className={`mt-1 text-[10px] ${billing.status === "uncertain" ? "text-amber-600 dark:text-amber-300" : "text-foreground/38"}`}>{note}</div></div>;
+    return <div className="text-right"><div className="text-xs font-medium tabular-nums text-foreground/78">{amount}</div><div className={`mt-1 text-[var(--fs-tiny)] ${billing.status === "uncertain" ? "text-amber-600 dark:text-amber-300" : "text-foreground/38"}`}>{note}</div></div>;
 }
 
-function formatModelName(task: GenerationTask) {
+function formatModelName(config: AiConfig, task: GenerationTask) {
     const raw = (task.model || task.provider || "").trim();
     const model = raw.includes("::") ? raw.split("::").pop()?.trim() || raw : raw;
 
@@ -610,7 +617,7 @@ function formatModelName(task: GenerationTask) {
     if (model === "workflow-router") return "工作流路由";
     if (model === "internal-agent") return "内置工作流";
     if (model === "openai-compatible") return "OpenAI 兼容接口";
-    return model;
+    return modelDisplayName(config, raw);
 }
 
 function formatDate(value?: string) {
