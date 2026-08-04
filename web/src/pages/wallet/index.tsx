@@ -118,7 +118,7 @@ export default function WalletPage() {
     ];
 
     return (
-        <main className="app-user-content thin-scrollbar relative h-full overflow-y-auto text-foreground">
+        <main className="app-user-content app-workspace-scroll relative h-full overflow-y-auto text-foreground">
             <div className="relative mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
                 <motion.header initial={reducedMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="app-page-header flex flex-wrap items-start justify-between gap-4 pb-6">
                     <div className="flex items-center gap-3">
