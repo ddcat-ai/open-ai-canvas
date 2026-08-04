@@ -678,6 +678,14 @@ func (r *Repository) SaveResource(resource *model.Resource) error {
 	return r.db.Save(resource).Error
 }
 
+func (r *Repository) Resource(id string) (*model.Resource, error) {
+	var resource model.Resource
+	if err := r.db.First(&resource, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &resource, nil
+}
+
 func (r *Repository) ResourceForUser(userID string, id string) (*model.Resource, error) {
 	var resource model.Resource
 	if err := r.db.First(&resource, "id = ? AND user_id = ?", id, userID).Error; err != nil {
