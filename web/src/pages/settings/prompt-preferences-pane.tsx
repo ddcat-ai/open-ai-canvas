@@ -1,6 +1,6 @@
 import { Alert, App, Button, Input, Segmented, Select, Skeleton, Tabs, Tag } from "antd";
 import { RotateCcw, Save, ShieldCheck, Undo2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PromptCodeEditor } from "@/components/prompt/prompt-code-editor";
 import {
@@ -28,17 +28,27 @@ export function PromptPreferencesPane() {
     const [rewriteContent, setRewriteContent] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [loadError, setLoadError] = useState("");
+    const requestIdRef = useRef(0);
 
     const reload = async (preferredOperation?: string) => {
+        const reqId = ++requestIdRef.current;
         setLoading(true);
+        setLoadError("");
         try {
             const result = await listUserPromptPreferences();
+            if (reqId !== requestIdRef.current) return;
             setPreferences(result.preferences);
             setSelectedOperation((current) => preferredOperation || current || result.preferences[0]?.definition.operation || "");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取提示词偏好失败");
+            if (reqId !== requestIdRef.current) return;
+            const msg = error instanceof Error ? error.message : "读取提示词偏好失败";
+            setLoadError(msg);
+            message.error(msg);
         } finally {
-            setLoading(false);
+            if (reqId === requestIdRef.current) {
+                setLoading(false);
+            }
         }
     };
 
@@ -123,6 +133,14 @@ export function PromptPreferencesPane() {
     };
 
     if (loading && preferences.length === 0) return <Skeleton active paragraph={{ rows: 10 }} />;
+    if (loadError && preferences.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+                <Alert type="error" showIcon message="加载提示词偏好失败" description={loadError} />
+                <Button icon={<RotateCcw className="size-4" />} onClick={() => void reload()}>重试</Button>
+            </div>
+        );
+    }
     if (!selected) return <div className="py-16 text-center text-sm text-foreground/50">暂无可配置的提示词模板</div>;
 
     const templateContent = selected.template?.content || "当前没有启用的平台模板";
