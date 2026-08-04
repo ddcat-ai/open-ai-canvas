@@ -6,7 +6,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile.dev
       args:
+        GO_IMAGE: ${GO_IMAGE:-golang:1.25-alpine}
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
     working_dir: /workspace/backend
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     environment:
@@ -35,8 +37,19 @@ services:
         target: /data
         bind:
           create_host_path: false
+      # 持久化首次下载和 CGO 编译结果，容器重建后继续复用开发缓存。
+      - type: bind
+        source: ./.local/cache/go-build
+        target: /tmp/go-build
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.local/cache/go-mod
+        target: /tmp/go-mod
+        bind:
+          create_host_path: false
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${CANVAS_BACKEND_HOST_PORT:-8080}:8080"
     init: true
 
   web:
@@ -53,7 +66,7 @@ services:
       - web-node-modules:/workspace/web/node_modules
       - web-bun-cache:/root/.bun/install/cache
     ports:
-      - "3000:3000"
+      - "${CANVAS_WEB_HOST_PORT:-3000}:3000"
     depends_on:
       - backend
     init: true

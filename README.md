@@ -128,6 +128,7 @@ if [ -d .local/project-workbench-debug ]; then
 else
   mkdir -p .local/project-workbench-debug
 fi
+mkdir -p .local/cache/go-build .local/cache/go-mod
 ```
 
 直接在宿主机开发：
@@ -153,6 +154,8 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml u
 ```
 
 前端通过 Vite HMR 更新，后端由 Air 在 Go 源码或模块文件变化后重新编译。前端地址为 `http://localhost:3000`，局域网设备可通过 `http://<开发机 IP>:3000` 访问；后端 `8080` 端口只开放给开发机本机，浏览器 API 请求统一由 Vite 转发。
+
+宿主机端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖默认的 3000/8080；建议把本机取值写入 Git 忽略的 `.local/docker-compose.dev.env`，并在 Compose 命令中使用 `--env-file .local/docker-compose.dev.env`。Go 模块和编译缓存保存在 `.local/cache`，重建容器不会重复完整冷编译。
 
 本机完整操作和数据保护说明记录在 `.local/DEVELOPMENT.md`。该文件由 Git 忽略，普通仓库更新不会影响；不要使用带 `-x` 或 `-X` 的 `git clean`，也不要手动删除 `.local/`。
 

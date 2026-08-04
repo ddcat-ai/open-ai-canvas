@@ -20,10 +20,12 @@ export default defineConfig({
             "/api": {
                 target: apiProxyTarget,
                 changeOrigin: true,
+                xfwd: true,
             },
             "/oauth/linuxdo/callback": {
                 target: apiProxyTarget,
                 changeOrigin: true,
+                xfwd: true,
             },
         },
     },
