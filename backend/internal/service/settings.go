@@ -85,6 +85,14 @@ func (s *Service) UpdateOSSSetting(actor *model.User, req OSSSettingRequest) (*P
 	if err != nil {
 		return nil, err
 	}
+	if !next.Enabled {
+		if next.PublicBaseURL == "" {
+			return nil, BadAuthRequest("服务器本地存储需要填写服务器访问地址")
+		}
+		if _, err := validatePublicResourceBaseURL(next.PublicBaseURL); err != nil {
+			return nil, fmt.Errorf("服务器访问地址无效：%w", err)
+		}
+	}
 	stored := next
 	stored.AccessKeySecret, err = s.encryptSettingSecret(next.AccessKeySecret)
 	if err != nil {
