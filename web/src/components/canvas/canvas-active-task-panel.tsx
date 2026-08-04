@@ -41,7 +41,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={motionTransition}
-                className="pointer-events-none absolute right-3 top-[72px] z-[var(--z-panel-floating)] w-[min(332px,calc(100vw-24px))]"
+                className="pointer-events-none absolute right-3 top-[72px] z-[var(--z-panel-floating)] w-[var(--canvas-panel-width)]"
             >
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section

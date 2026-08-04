@@ -503,6 +503,10 @@
     --panel-shadow: var(--shadow-lg);
     --panel-section-gap: var(--space-3);  /* 12px */
 
+    /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
+    --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
+    --canvas-panel-width: min(332px, calc(100vw - 24px)); /* 浮动面板默认宽度（活动任务等）*/
+
     /* Prompt 面板（对应 #98 决策2 渐进式三区）*/
     --prompt-panel-max-height: min(70vh, 640px);
     --prompt-panel-input-min-height: 72px;
