@@ -239,7 +239,7 @@ export function expandStoryboardTextMentions(prompt: string, references: CanvasR
     });
 
     expanded = expanded.replace(/@\[skill:([^\]]+)\]/g, (token, skillId: string) => {
-        const reference = references.find((item) => item.kind === "skill" && (item.skill?.dir === skillId || item.nodeId === `skill:${skillId}` || item.id === `skill:${skillId}`));
+        const reference = references.find((item) => item.kind === "skill" && (item.skill?.skill_id === skillId || item.nodeId === `skill:${skillId}` || item.id === `skill:${skillId}`));
         if (!reference) return token;
         return formatStoryboardMention(reference);
     });
@@ -277,7 +277,7 @@ function formatStoryboardMention(reference: CanvasResourceReference) {
         return `【文本参考：${reference.title || reference.label}】\n${reference.text.trim()}`;
     }
     if (reference.kind === "skill") {
-        const detail = reference.skill?.detail_text || reference.text || reference.skill?.description || "";
+        const detail = reference.skill?.instruction || reference.text || reference.skill?.description || "";
         return [`【技能：${reference.title || reference.label}】`, detail.trim()].filter(Boolean).join("\n");
     }
     if (reference.kind === "character") {

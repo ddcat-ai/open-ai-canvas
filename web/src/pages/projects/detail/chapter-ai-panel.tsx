@@ -11,7 +11,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { expandSkillMentions, renderSkillPrompt } from "@/lib/canvas/canvas-skill-mentions";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
-import { listActivatedSkills } from "@/services/api/skills";
+import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -124,12 +124,12 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
     const editedAfterRef = useRef("");
 
     const skillsQuery = useQuery({
-        queryKey: ["activated-skills", "chapter-ai"],
-        queryFn: listActivatedSkills,
+        queryKey: ["added-skills", "chapter-ai"],
+        queryFn: listAddedSkills,
         enabled: open,
         staleTime: 60_000,
     });
-    const skills = skillsQuery.data?.skills || [];
+    const skills: Skill[] = skillsQuery.data?.skills || [];
     const activeThread = threads.find((item) => item.id === activeThreadId) || threads[0];
 
     useEffect(() => {
@@ -201,7 +201,7 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
         }
         if (name === "chapter_list_skills") {
             return JSON.stringify({
-                skills: skills.map((skill) => ({ id: skill.dir, name: skill.name, description: skill.description })),
+                skills: skills.map((skill) => ({ id: skill.skill_id, name: skill.skill_name, description: skill.description })),
             });
         }
         if (name === "chapter_propose_rewrite") {
@@ -210,7 +210,7 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
             const mode = (["rewrite", "polish", "expand", "shorten", "custom"].includes(String(args.mode)) ? String(args.mode) : "rewrite") as ChapterAiMode;
             const instruction = String(args.instruction || "").trim();
             const requestSkillId = String(args.skillId || skillIdRef.current || "").trim() || undefined;
-            const skill = skills.find((item) => item.dir === requestSkillId);
+            const skill = skills.find((item) => item.skill_id === requestSkillId);
             if (!instruction && !skill) throw new Error("请提供改写指令或选择 skill");
             const model = (modelRef.current || effectiveConfig.textModel || effectiveConfig.model || "").trim();
             if (!model) throw new Error("请先选择文本模型");
@@ -274,8 +274,8 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
             navigateToSettings({ continueCreation: true });
             return;
         }
-        const skill = skills.find((item) => item.dir === skillId);
-        const userVisible = skill ? `${text}\n\n（附带技能：${skill.name}）` : text;
+        const skill = skills.find((item) => item.skill_id === skillId);
+        const userVisible = skill ? `${text}\n\n（附带技能：${skill.skill_name}）` : text;
         const userMessage: CanvasAgentChatMessage = { id: nanoid(), role: "user", text: userVisible };
         const historyForModel = [...activeThread.messages, userMessage];
         pushMessages(userMessage);
@@ -297,7 +297,7 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
                         `章节：${titleRef.current}`,
                         `章节 ID：${chapterId}`,
                         `当前模型：${model}`,
-                        skill ? `用户已点选技能：${skill.name}（${skill.dir}）\n${renderSkillPrompt(skill)}` : "",
+                        skill ? `用户已点选技能：${skill.skill_name}（${skill.skill_id}）\n${renderSkillPrompt(skill)}` : "",
                         `当前正文摘要：\n${sourceRef.current.slice(0, 8000)}`,
                         `用户：${expandSkillMentions(text, skills)}`,
                     ]
@@ -457,7 +457,7 @@ export function ChapterAiPanel({ open, projectId, projectName, chapterId, chapte
                         allowClear
                         placeholder={skills.length ? "可选，附带到本轮" : "无已激活技能"}
                         value={skillId}
-                        options={skills.map((skill) => ({ value: skill.dir, label: skill.name }))}
+                        options={skills.map((skill) => ({ value: skill.skill_id, label: skill.skill_name }))}
                         onChange={(value) => setSkillId(value)}
                     />
                 </div>

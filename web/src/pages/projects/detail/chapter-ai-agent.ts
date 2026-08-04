@@ -1,6 +1,6 @@
 import { expandSkillMentions, renderSkillPrompt } from "@/lib/canvas/canvas-skill-mentions";
 import { requestImageQuestion, type AiTextMessage } from "@/services/api/image";
-import type { UpdreamSkill } from "@/services/api/skills";
+import type { Skill } from "@/services/api/skills";
 import type { AiConfig } from "@/stores/use-config-store";
 
 export type ChapterAiMode = "rewrite" | "polish" | "expand" | "shorten" | "custom";
@@ -38,8 +38,8 @@ export async function proposeChapterRewrite(input: {
     instruction: string;
     sourcePlain: string;
     sourceHtml: string;
-    skill?: UpdreamSkill | null;
-    skills?: UpdreamSkill[];
+    skill?: Skill | null;
+    skills?: Skill[];
     config: AiConfig;
     /** 面板选中的文本模型；缺省 textModel || model */
     model?: string;
@@ -93,8 +93,8 @@ export async function proposeChapterRewrite(input: {
     return {
         mode: input.mode,
         instruction: input.instruction.trim(),
-        skillId: input.skill?.dir,
-        skillName: input.skill?.name,
+        skillId: input.skill?.skill_id,
+        skillName: input.skill?.skill_name,
         beforePlain: sourcePlain,
         afterPlain,
         afterHtml: plainTextToChapterHtml(afterPlain),
