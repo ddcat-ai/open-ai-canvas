@@ -133,7 +133,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                         animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
                         exit={{ opacity: 0, y: 14, scale: 0.95, rotateX: 3 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[50px] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[18px] border p-2.5 backdrop-blur-2xl"
+                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[18px] border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, height: safeTrayHeight, minHeight: Math.min(TRAY_MIN_HEIGHT, getMaxTrayHeight()), maxHeight: "calc(100vh - 6rem)", boxShadow: `0 32px 100px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />

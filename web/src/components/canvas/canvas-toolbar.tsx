@@ -175,7 +175,7 @@ export function CanvasToolbar({
     const resourceCommands = addNodeCommands.filter((cmd) => cmd.section === "resource").map(toCommand);
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-4 bottom-4 z-[var(--z-toolbar)] flex justify-center">
+        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] z-[var(--z-toolbar)] flex justify-center">
             <AnimatePresence>
                 {addOpen ? (
                     <AddNodeMenu
@@ -191,7 +191,7 @@ export function CanvasToolbar({
 
             <AnimatePresence>
                 {appearanceOpen ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-[var(--dock-z-popover)] w-[224px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: panelX || "50%" }}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[224px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: panelX || "50%" }}>
                         <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
                             <PanelHeading icon={<Palette className="size-4" />} title="画布外观" subtitle="调整整个创作空间" theme={theme} />
                             <div className="mt-3 text-[var(--fs-micro)] font-semibold uppercase opacity-45">主题模式</div>
@@ -231,7 +231,7 @@ function AddNodeMenu({ x, theme, nodeCommands, resourceCommands }: {
     resourceCommands: CanvasCreateCommand[];
 }) {
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[50px] z-[var(--dock-z-popover)] w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>
             <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
                 <PanelHeading icon={<Plus className="size-4" />} title="创建内容" subtitle="选择节点类型" theme={theme} />
                 <MenuSection title="创作节点" />
