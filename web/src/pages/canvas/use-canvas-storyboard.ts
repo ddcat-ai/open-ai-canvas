@@ -475,6 +475,13 @@ export function useCanvasStoryboard({
                 nextNodes.push(imageNode);
                 nextConnections.push({ id: nanoid(), fromNodeId: scriptNode.id, toNodeId: imageNode.id, fromHandleId: `row:${row.id}` });
             }
+            // 与分镜图一致：把脚本级参考、镜头参考、角色原型图连到动作板节点，
+            // 否则批量 12 宫格只会吃到纯文本 prompt，不会带上角色三视图等图片引用。
+            storyboardRowReferenceNodeIds(scriptNode, row, nextNodes, nextConnections, false).forEach((referenceId) => {
+                if (referenceId !== imageNode.id && !nextConnections.some((connection) => connection.fromNodeId === referenceId && connection.toNodeId === imageNode.id)) {
+                    nextConnections.push({ id: nanoid(), fromNodeId: referenceId, toNodeId: imageNode.id });
+                }
+            });
             targets.push({ row, node: imageNode, prompt });
         });
         nodesRef.current = nextNodes;
