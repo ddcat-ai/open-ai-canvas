@@ -16,7 +16,7 @@ import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Canv
 import { ImageToolSettingsModal } from "./canvas-image-toolbar-settings-modal";
 import { IMAGE_QUICK_TOOLS_STORAGE_KEY, buildImageToolbarTools, defaultImageQuickToolIds, isImageQuickToolId, readImageQuickToolsConfig, type ImageQuickToolId } from "./canvas-image-toolbar-tools";
 
-type CanvasNodeHoverToolbarProps = {
+type CanvasNodeToolbarProps = {
     node: CanvasNodeData | null;
     viewport: ViewportTransform;
     containerRef: RefObject<HTMLDivElement | null>;
@@ -77,7 +77,7 @@ type ToolbarTool = {
 const MAX_IMAGE_QUICK_TOOLS = 7;
 const NODE_DOCK_LABELS_STORAGE_KEY = "canvas-node-dock-show-labels-v1";
 
-export function CanvasNodeHoverToolbar({
+export function CanvasNodeToolbar({
     node,
     viewport,
     containerRef,
@@ -110,7 +110,7 @@ export function CanvasNodeHoverToolbar({
     onToggleLocked,
     onDelete,
     workspaceMode = "professional",
-}: CanvasNodeHoverToolbarProps) {
+}: CanvasNodeToolbarProps) {
     const [quickImageToolIds, setQuickImageToolIds] = useState<ImageQuickToolId[]>(defaultImageQuickToolIds);
     const [draftImageToolIds, setDraftImageToolIds] = useState<ImageQuickToolId[]>(defaultImageQuickToolIds);
     const [showDockLabels, setShowDockLabels] = useState(true);
@@ -342,7 +342,7 @@ export function CanvasNodeHoverToolbar({
         <>
             <div
                 ref={toolbarRef}
-                className="canvas-node-toolbar absolute z-[var(--z-panel-floating)] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
+                className="canvas-node-toolbar absolute z-[var(--z-node-toolbar)] flex -translate-x-1/2 -translate-y-full items-end justify-center overflow-visible"
                 style={{ left: anchor.left, top: anchor.top, width: "max-content", maxWidth: `min(calc(100% - 20px), ${showDockLabels ? 840 : 560}px)`, color: theme.node.text }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {

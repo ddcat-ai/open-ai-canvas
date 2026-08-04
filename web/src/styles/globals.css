@@ -101,19 +101,21 @@
     --shadow-glow-md: 0 0 24px rgba(125, 162, 255, 0.3);
     --shadow-glow-lg: 0 0 40px rgba(125, 162, 255, 0.4);
 
-    /* --- 6. Elevation（z-index 12 档，对应 #98 五层体系）--- */
-    --z-canvas: 0;              /* L0 画布层 */
-    --z-canvas-overlay: 5;      /* L0 画布覆盖（网格、连线）*/
-    --z-toolbar: 10;            /* L1 浮动工具层 */
-    --z-toolbar-floating: 20;   /* L1 悬停工具栏 */
-    --z-panel: 50;              /* L2 侧边面板层 */
-    --z-panel-floating: 80;     /* L2 浮动面板 */
-    --z-modal: 100;             /* L3 对话框层 */
-    --z-modal-overlay: 110;     /* L3 遮罩 */
-    --z-popover: 200;           /* L3 popover */
-    --z-toast: 500;             /* L4 通知层 */
-    --z-tooltip: 1000;          /* L4 tooltip */
-    --z-max: 2000;              /* 最高层（紧急通知）*/
+    /* --- 6. Elevation（z-index 14 档，按视觉层划分，见 ADR-001）--- */
+    --z-canvas: 0;              /* L0 画布底 */
+    --z-canvas-overlay: 5;      /* L1 画布覆盖（网格、连线）*/
+    --z-node: 10;               /* L2 节点层（未选中）*/
+    --z-node-active: 20;        /* L3 激活节点（选中/拖拽）*/
+    --z-toolbar: 30;            /* L4 浮动工具栏（顶栏、dock、zoom）*/
+    --z-node-toolbar: 50;       /* L5 节点工具栏（click 触发）*/
+    --z-panel: 60;              /* L6 侧边面板（侧栏、素材托盘）*/
+    --z-panel-floating: 80;     /* L7 浮动面板（助手/agent/活动任务）*/
+    --z-modal: 100;             /* L8 对话框 */
+    --z-modal-overlay: 110;     /* L9 遮罩 */
+    --z-popover: 200;           /* L10 弹出层 */
+    --z-toast: 500;             /* L11 通知 */
+    --z-tooltip: 1000;          /* L12 提示 */
+    --z-max: 2000;              /* L13 最高（紧急通知）*/
 
     /* --- 7. 动效（对应 #99 动效 token）--- */
     /* duration */
@@ -464,6 +466,7 @@
     --dock-shadow: var(--shadow-lg);
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
+    --dock-z-popover: 30;                 /* dock 子面板在 toolbar 根 stacking context 内的层级（见 ADR-001）*/
 
     /* Node 组件（画布节点，对应 #97 节点视觉规范）*/
     --node-radius: var(--r-2xl);          /* 16px */
@@ -483,6 +486,9 @@
     --node-badge-fs: var(--fs-tiny);      /* 10px */
     --node-type-strip-width: 3px;         /* 色带宽度 */
     --node-type-badge-size: 20px;         /* 图标徽章尺寸 */
+    --node-z-content: 30;                 /* 节点遮罩层（stacking context 内，见 ADR-001）*/
+    --node-z-overlay: 40;                 /* 节点角标/按钮层 */
+    --node-z-handle: 50;                  /* 节点 resize handle 层 */
 
     /* Modal 组件（对话框，对应 #98 面板层级）*/
     --modal-radius: var(--r-3xl);         /* 20px */

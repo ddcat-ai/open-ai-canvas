@@ -27,7 +27,7 @@ import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
-import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-hover-toolbar";
+import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
@@ -45,6 +45,7 @@ import { CanvasScriptEditor, CanvasScriptNodeContent, STORYBOARD_HEADER_HEIGHT, 
 import { CanvasDirectorNodePanel } from "@/components/canvas/director/canvas-director-node-panel";
 import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-compare-modal";
 import { CanvasLocalAgentPanel } from "@/components/canvas/canvas-local-agent-panel";
+import { useFocusMode } from "@/hooks/use-focus-mode";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
@@ -151,20 +152,20 @@ function CanvasRefreshShell() {
                 }}
             />
 
-            <div className="absolute bottom-5 left-1/2 z-50 flex h-14 -translate-x-1/2 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
+            <div className="absolute bottom-5 left-1/2 z-[var(--z-toolbar)] flex h-14 -translate-x-1/2 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
                 {Array.from({ length: 7 }).map((_, index) => (
                     <div key={index} className="size-8 rounded-md bg-current opacity-10" />
                 ))}
             </div>
 
-            <div className="absolute bottom-24 left-6 z-50 h-40 w-[240px] rounded-lg border shadow-2xl backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
+            <div className="absolute bottom-24 left-6 z-[var(--z-toolbar)] h-40 w-[240px] rounded-lg border shadow-2xl backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
                 <div className="absolute left-7 top-7 h-5 w-12 rounded-sm bg-current opacity-10" />
                 <div className="absolute left-28 top-16 h-6 w-16 rounded-sm bg-current opacity-10" />
                 <div className="absolute bottom-7 left-16 h-8 w-20 rounded-sm bg-current opacity-10" />
                 <div className="absolute inset-5 rounded border border-current opacity-15" />
             </div>
 
-            <div className="absolute bottom-5 left-5 z-50 flex h-14 w-[260px] items-center gap-2 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
+            <div className="absolute bottom-5 left-5 z-[var(--z-toolbar)] flex h-14 w-[260px] items-center gap-2 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
                 <div className="size-8 rounded-md bg-current opacity-10" />
                 <div className="size-8 rounded-md bg-current opacity-10" />
                 <div className="h-1 flex-1 rounded-full bg-current opacity-10" />
@@ -238,8 +239,12 @@ function InfiniteCanvasPage() {
     const [titleDraft, setTitleDraft] = useState("");
     const [shortcutRequestNonce, setShortcutRequestNonce] = useState(0);
     const [cinematicAgentEntry, setCinematicAgentEntry] = useState(false);
+    const [assistantWidth, setAssistantWidth] = useState(520);
     const { agentMode, assistantClosing, assistantMounted, assistantOpen, closeAgent, openAgent, setAgentMode } = useCanvasAssistantVisibility();
     const { tasks: activeTasks } = useCanvasActiveTasks(projectId, projectLoaded);
+    const { focusMode, forcedOn, toggleFocusMode } = useFocusMode();
+    const anyPanelOpen = assistantMounted && !assistantClosing;
+    const panelColumnWidth = anyPanelOpen ? Math.max(assistantWidth, 332) : 0;
 
     useEffect(() => {
         persistCanvasWorkspaceMode(workspaceMode);
@@ -805,7 +810,6 @@ function InfiniteCanvasPage() {
         collapsingBatchIds,
         addedSkills,
         directorScenes: currentProject?.directorScenes,
-        toolbarNodeId,
         infoNodeId,
         cropNodeId,
         maskEditNodeId,
@@ -1378,7 +1382,12 @@ function InfiniteCanvasPage() {
         <a href="#canvas-main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[var(--z-toast)] focus:rounded-md focus:border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg">跳转到画布主内容</a>
         <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: theme.canvas.background, color: theme.node.text }}>
             {shortDramaEnabled && currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} /> : null}
-            <section className="relative min-w-0 flex-1 overflow-hidden">
+            <section
+                className="relative min-w-0 flex-1 overflow-hidden transition-[padding]"
+                style={{
+                    paddingRight: focusMode && anyPanelOpen ? panelColumnWidth : undefined,
+                }}
+            >
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}
                     workspaceMode={workspaceMode}
@@ -1409,6 +1418,9 @@ function InfiniteCanvasPage() {
                         projectId: currentProject.projectId,
                         projectName: linkedProjectQuery.data?.project.name || currentProject.title,
                     } : undefined}
+                    focusMode={focusMode}
+                    focusModeForced={forcedOn}
+                    onToggleFocusMode={toggleFocusMode}
                 />
 
                 <CanvasNodeSearchModal
@@ -1564,7 +1576,7 @@ function InfiniteCanvasPage() {
                 {mergeVideoProgress ? <CanvasMergeStatusToast progress={mergeVideoProgress} theme={theme} /> : null}
                 {lastAgentChange ? <CanvasAgentChangeToast change={lastAgentChange} theme={theme} onView={viewLastAgentChange} onUndo={() => { undoAgentOps(); }} onClose={dismissLastAgentChange} /> : null}
 
-                <CanvasNodeHoverToolbar
+                <CanvasNodeToolbar
                     node={isNodeDragging || nodeImageSettingsOpen || emotionNodeId ? null : toolbarNode}
                     workspaceMode={workspaceMode}
                     viewport={viewport}
@@ -1777,31 +1789,34 @@ function InfiniteCanvasPage() {
                 />
                 <CanvasProjectAssetModal open={projectAssetOpen} detail={linkedProjectQuery.data} initialCategory={projectAssetInitialCategory} onClose={closeProjectAssets} onInsert={(payloads) => handleProjectAssetsInsert(payloads, projectAssetInsertPosition)} />
                 {codexCompactAgent && !assistantMounted ? <CanvasLocalAgentPanel headless snapshot={agentSnapshot} canUndoOps={canUndoAgentOps} undoOpsCount={agentUndoCount} onApplyOps={applyAgentOps} onUndoOps={undoAgentOps} autoConnect={codexAutoConnect} /> : null}
+                {assistantMounted ? (
+                    <CanvasAssistantPanel
+                        nodes={nodes}
+                        selectedNodeIds={selectedNodeIds}
+                        snapshot={agentSnapshot}
+                        projectId={projectId}
+                        sessions={chatSessions}
+                        activeSessionId={activeChatId}
+                        onSelectNodeIds={setSelectedNodeIds}
+                        onSessionsChange={handleAssistantSessionsChange}
+                        onApplyOps={applyAgentOps}
+                        canUndoOps={canUndoAgentOps}
+                        undoOpsCount={agentUndoCount}
+                        onUndoOps={undoAgentOps}
+                        onPasteImage={pasteAssistantImage}
+                        agentMode={agentMode}
+                        onAgentModeChange={setAgentMode}
+                        autoConnectLocal={codexAutoConnect}
+                        closing={assistantClosing}
+                        onCollapse={closeAgent}
+                        cinematicEntry={cinematicAgentEntry}
+                        onCinematicEntryConsumed={() => setCinematicAgentEntry(false)}
+                        width={assistantWidth}
+                        onWidthChange={setAssistantWidth}
+                        focusMode={focusMode}
+                    />
+                ) : null}
             </section>
-            {assistantMounted ? (
-                <CanvasAssistantPanel
-                    nodes={nodes}
-                    selectedNodeIds={selectedNodeIds}
-                    snapshot={agentSnapshot}
-                    projectId={projectId}
-                    sessions={chatSessions}
-                    activeSessionId={activeChatId}
-                    onSelectNodeIds={setSelectedNodeIds}
-                    onSessionsChange={handleAssistantSessionsChange}
-                    onApplyOps={applyAgentOps}
-                    canUndoOps={canUndoAgentOps}
-                    undoOpsCount={agentUndoCount}
-                    onUndoOps={undoAgentOps}
-                    onPasteImage={pasteAssistantImage}
-                    agentMode={agentMode}
-                    onAgentModeChange={setAgentMode}
-                    autoConnectLocal={codexAutoConnect}
-                    closing={assistantClosing}
-                    onCollapse={closeAgent}
-                    cinematicEntry={cinematicAgentEntry}
-                    onCinematicEntryConsumed={() => setCinematicAgentEntry(false)}
-                />
-            ) : null}
         </main>
         </>
     );

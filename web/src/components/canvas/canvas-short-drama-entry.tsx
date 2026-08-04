@@ -130,13 +130,13 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
     if (!progress.active) return null;
     if (collapsed) {
         return (
-            <button type="button" data-canvas-no-zoom className="absolute left-[calc(50%+64px)] top-2 z-[var(--z-toolbar-floating)] inline-flex h-8 max-w-[calc(50vw-76px)] min-w-0 items-center gap-2 rounded-lg border px-3 text-xs font-medium shadow-sm backdrop-blur outline-none focus-visible:ring-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties} onClick={onToggle}>
+            <button type="button" data-canvas-no-zoom className="absolute left-[calc(50%+64px)] top-2 z-[var(--z-toolbar)] inline-flex h-8 max-w-[calc(50vw-76px)] min-w-0 items-center gap-2 rounded-lg border px-3 text-xs font-medium shadow-sm backdrop-blur outline-none focus-visible:ring-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties} onClick={onToggle}>
                 <Clapperboard className="size-3.5 shrink-0" /><span className="truncate">短剧流程 {progress.completedCount}/5</span><ChevronDown className="size-3 shrink-0" />
             </button>
         );
     }
     return (
-        <div data-canvas-no-zoom className="absolute left-1/2 top-[68px] z-[var(--z-toolbar-floating)] flex max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <div data-canvas-no-zoom className="absolute left-1/2 top-[68px] z-[var(--z-toolbar)] flex max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <div className="hide-scrollbar flex max-w-[min(760px,calc(100vw-150px))] items-center overflow-x-auto">
                 {progress.steps.map((step, index) => (
                     <span key={step.id} className="flex shrink-0 items-center">
