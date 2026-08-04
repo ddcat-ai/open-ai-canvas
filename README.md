@@ -156,14 +156,16 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml u
 
 本机完整操作和数据保护说明记录在 `.local/DEVELOPMENT.md`。该文件由 Git 忽略，普通仓库更新不会影响；不要使用带 `-x` 或 `-X` 的 `git clean`，也不要手动删除 `.local/`。
 
-本机 Docker 开发改动维护在不跟踪远端的 `local-development` 分支，`main` 仅用于快进同步主仓库。主仓库更新后，将本地开发分支变基到最新 `main`，再重建容器；开发数据库和依赖卷不需要删除：
+Docker 开发改动维护在 Fork 的 `origin/local-development` 分支，`main` 仅用于从官方 `upstream/main` 快进同步。主仓库更新后，先同步本地和 Fork 的 `main`，再将开发分支变基到最新 `main` 并安全推送；开发数据库和依赖卷不需要删除：
 
 ```bash
 docker compose -f docker-compose.dev.yml down
 git switch main
-git pull --ff-only origin main
+git pull --ff-only upstream main
+git push origin main
 git switch local-development
 git rebase main
+git push --force-with-lease origin local-development
 LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml up -d --build --force-recreate
 ```
 
