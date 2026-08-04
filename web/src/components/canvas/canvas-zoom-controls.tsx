@@ -94,7 +94,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 9, scale: 0.96 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[50px] left-0 w-[220px] overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl"
+                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 w-[220px] overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
