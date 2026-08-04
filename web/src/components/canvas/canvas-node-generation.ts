@@ -261,7 +261,15 @@ export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[
     const resourceNodes = getGenerationResourceNodes(nodeId, nodes, connections);
     return resourceNodes.flatMap((node): NodeGenerationInput[] => {
         const character = readCharacterReference(node);
-        if (character) return [{ nodeId: node.id, type: "character" as const, title: node.title, character }];
+        if (character) {
+            // 角色卡本身不是 Image 节点：先带上封面/三视图封面，预览与未 hydrate 前也能当参考图；
+            // hydrate 阶段再补齐多视角。
+            const cover = readCharacterCoverImage(node);
+            return [
+                { nodeId: node.id, type: "character" as const, title: node.title, character },
+                ...(cover ? [{ nodeId: node.id, type: "image" as const, title: node.title || "角色参考图", image: cover }] : []),
+            ];
+        }
         const image = readReferenceImage(node);
         if (image) return [{ nodeId: node.id, type: "image" as const, sourceKind: image.source?.kind, title: node.title, image }];
         const video = readReferenceVideo(node);
@@ -339,26 +347,46 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     const { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
     const details = await Promise.all(context.characterReferences.map((reference) => getProjectCharacter(domainProjectId, reference.assetId)));
     const remainingBudget = 9 - referenceImages.length;
-    const selected = details.flatMap((detail) => {
+    const primaryByAsset = details.flatMap((detail, index) => {
         const representation = preferredCharacterRepresentation(detail.character.representations);
-        return representation ? [representation] : [];
+        if (!representation) return [];
+        return [{ representation, reference: context.characterReferences[index], detail }];
     });
-    if (selected.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${selected.length} 张主参考图`);
-    const usedResourceIds = new Set(selected.map((item) => item.resourceId));
-    const supplements = details.flatMap((detail) => detail.character.representations.filter((item) => {
-        if (!["front", "side", "back", "turnaround_sheet"].includes(item.role) || usedResourceIds.has(item.resourceId)) return false;
+    if (primaryByAsset.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${primaryByAsset.length} 张主参考图`);
+    const usedResourceIds = new Set(primaryByAsset.map((item) => item.representation.resourceId));
+    // 封面先入 referenceImages 的也占位，避免同一角色封面+主视角重复发送。
+    referenceImages.forEach((image) => {
+        const resourceId = resourceIdFromStorageKey(image.storageKey) || resourceIdFromFileUrl(image.dataUrl) || resourceIdFromFileUrl(image.url);
+        if (resourceId) usedResourceIds.add(resourceId);
+    });
+    const extras = details.flatMap((detail, index) => detail.character.representations.flatMap((item) => {
+        if (!["front", "side", "back", "turnaround_sheet", "primary"].includes(item.role) || usedResourceIds.has(item.resourceId)) return [];
         usedResourceIds.add(item.resourceId);
-        return true;
+        return [{ representation: item, reference: context.characterReferences[index], detail }];
     }));
-    const characterImages = [...selected, ...supplements].slice(0, Math.max(0, remainingBudget)).map((representation, index) => ({
-        id: `character-reference-${index + 1}`,
-        name: `character-reference-${index + 1}.png`,
-        type: "image/png",
-        dataUrl: "",
-        storageKey: resourceStorageKey(representation.resourceId),
-    } satisfies ReferenceImage));
+    const primaryNodeIds = new Set<string>();
+    const characterImages = [...primaryByAsset, ...extras].slice(0, Math.max(0, remainingBudget)).map((item) => {
+        const nodeId = item.reference?.nodeId || item.detail.asset.id;
+        // 每个角色主视角用角色节点 id（对齐发送清单）；补充视角加 role 后缀。
+        const isPrimary = !primaryNodeIds.has(nodeId);
+        if (isPrimary) primaryNodeIds.add(nodeId);
+        return {
+            id: isPrimary ? nodeId : `${nodeId}:${item.representation.role}`,
+            name: `${item.detail.asset.title || "角色"}-${item.representation.role || "ref"}.png`,
+            type: "image/png",
+            dataUrl: "",
+            storageKey: resourceStorageKey(item.representation.resourceId),
+        } satisfies ReferenceImage;
+    });
     const hydratedCharacterImages = await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
-    referenceImages = [...referenceImages, ...hydratedCharacterImages];
+    const hydratedResourceIds = new Set(hydratedCharacterImages.map((image) => resourceIdFromStorageKey(image.storageKey)).filter(Boolean));
+    referenceImages = [
+        ...referenceImages.filter((image) => {
+            const resourceId = resourceIdFromStorageKey(image.storageKey) || resourceIdFromFileUrl(image.dataUrl) || resourceIdFromFileUrl(image.url);
+            return !resourceId || !hydratedResourceIds.has(resourceId);
+        }),
+        ...hydratedCharacterImages,
+    ];
     const characterBlocks = details
         .map((detail) => compileCharacterReferencePrompt(detail.asset.title, detail.character.definition))
         // 角色卡若已在 prompt（动作板预写 / 上次展开稿 / 上游文本）中出现，不再二次追加。
@@ -429,8 +457,31 @@ function readCharacterReference(node: CanvasNodeData): CharacterGenerationRefere
     return assetId ? { nodeId: node.id, assetId, requestedVersionId: node.metadata?.characterVersionPolicy === "pinned" ? node.metadata.characterVersionId : undefined } : null;
 }
 
+function readCharacterCoverImage(node: CanvasNodeData): ReferenceImage | null {
+    if (node.metadata?.workflowKind !== "character") return null;
+    const coverUrl = String(node.metadata.characterCoverUrl || "").trim();
+    if (!coverUrl) return null;
+    const resourceId = resourceIdFromFileUrl(coverUrl);
+    return {
+        id: node.id,
+        name: `${node.metadata.characterName || node.title || "角色"}-参考图.png`,
+        type: "image/png",
+        dataUrl: coverUrl,
+        url: coverUrl,
+        storageKey: resourceId ? `resource:${resourceId}` : undefined,
+    };
+}
+
+function resourceIdFromFileUrl(url?: string) {
+    if (!url) return "";
+    const match = url.match(/\/resources\/([^/?#]+)\/file/);
+    return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
 function preferredCharacterRepresentation(representations: Array<{ id: string; resourceId: string; role: string }>) {
-    return ["turnaround_sheet", "primary", "front", "side", "back"].map((role) => representations.find((item) => item.role === role)).find(Boolean);
+    return ["turnaround_sheet", "primary", "front", "side", "back"]
+        .map((role) => representations.find((item) => item.role === role))
+        .find(Boolean);
 }
 
 function compileResolvedVoicePrompt(voice: ResolvedCharacterVoice) {

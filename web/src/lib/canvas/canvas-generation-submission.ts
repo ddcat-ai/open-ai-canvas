@@ -128,6 +128,10 @@ export function buildGenerationSubmissionSnapshot(options: {
         const frameForced = role === "first_frame" || role === "last_frame";
         const autoInclude = usesComposer ? mentioned || frameForced || Boolean(input.alwaysIncludeText) : true;
         const included = autoInclude && !excluded.has(input.nodeId);
+        const fromNode = options.nodes.find((node) => node.id === (input.nodeId.includes(":") ? input.nodeId.split(":")[0] : input.nodeId));
+        const characterPreview = input.type === "character"
+            ? (fromNode?.metadata?.characterCoverUrl || undefined)
+            : undefined;
         pushReference({
             id: input.nodeId,
             nodeId: input.nodeId.includes(":") ? input.nodeId.split(":")[0] : input.nodeId,
@@ -145,8 +149,10 @@ export function buildGenerationSubmissionSnapshot(options: {
                     ? "视频结构化首尾帧"
                     : mentioned
                       ? "提示词中已 @"
+                      : input.type === "character"
+                        ? "角色卡入边（将解析三视图参考图）"
                       : "入边自动带入",
-            previewUrl: input.image?.dataUrl || input.video?.url || undefined,
+            previewUrl: input.image?.dataUrl || input.image?.url || input.video?.url || characterPreview,
             storageKey: input.image?.storageKey || input.video?.storageKey || input.audio?.storageKey,
         });
     });

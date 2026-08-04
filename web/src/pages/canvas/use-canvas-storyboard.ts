@@ -600,11 +600,18 @@ function invalidateEditedPromptVariables(previous: StoryboardRow | undefined, ne
 }
 
 function storyboardRowReferenceNodeIds(scriptNode: CanvasNodeData, row: StoryboardRow, nodes: CanvasNodeData[], connections: CanvasConnection[], includeFirstFrame: boolean) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const referenceIds = new Set([
         ...(scriptNode.metadata?.storyboard?.referenceNodeIds || []),
         ...(row.referenceNodeIds || []),
         ...characterReferenceNodeIds(row, nodes),
+        // 行级 handle 入边
         ...connections.filter((connection) => connection.toNodeId === scriptNode.id && connection.toHandleId === `row:${row.id}`).map((connection) => connection.fromNodeId),
+        // 脚本 context 入边里的角色卡（storyboard:context / 无 handle）——动作板/分镜图必须带上
+        ...connections
+            .filter((connection) => connection.toNodeId === scriptNode.id && (!connection.toHandleId || connection.toHandleId === "storyboard:context" || connection.toHandleId === "context"))
+            .map((connection) => connection.fromNodeId)
+            .filter((fromId) => nodeById.get(fromId)?.metadata?.workflowKind === "character"),
         ...(includeFirstFrame && row.imageNodeId ? [row.imageNodeId] : []),
     ]);
     if (!includeFirstFrame && row.imageNodeId) referenceIds.delete(row.imageNodeId);
