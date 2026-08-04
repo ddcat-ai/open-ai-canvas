@@ -95,7 +95,12 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                           defaultActiveColor: "#ffffff",
                           defaultActiveBorderColor: "#525252",
                       }
-                    : {}),
+                    : {
+                          /* 浅色模式：primary 近黑(#171717)，antd 默认 hover 加暗到 #000000 几乎不可见。
+                             改为提亮 hover/active，让交互反馈可感知（审计 #121）*/
+                          colorPrimaryHover: "#404040",
+                          colorPrimaryActive: "#525252",
+                      }),
             },
             Input: {
                 paddingInline: 11,

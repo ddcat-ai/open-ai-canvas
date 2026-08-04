@@ -306,7 +306,7 @@
     --workspace-canvas: #ffffff;
     --workspace-surface: rgba(255, 255, 255, 0.82);
     --workspace-surface-strong: #ffffff;
-    --workspace-border: rgba(15, 23, 42, 0.1);
+    --workspace-border: rgba(15, 23, 42, 0.14);
     --workspace-border-strong: rgba(15, 23, 42, 0.18);
     --workspace-grid-line: rgba(51, 65, 85, 0.045);
     --workspace-nav: rgba(255, 255, 255, 0.88);
@@ -2484,6 +2484,7 @@
         background: #383d47;
         color: #e5e8ec;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13);
+        cursor: pointer;
         transition: transform 150ms var(--motion-ease-out), background-color 150ms ease, color 150ms ease;
     }
     .creation-studio-submit:hover:not(:disabled) { background: #f4f5f6; color: #111317; transform: translateY(-1px); }
@@ -4937,6 +4938,7 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
     border-radius: 9px;
     background: #f3f4f5;
     color: #1b1d21;
+    cursor: pointer;
     transition: transform 140ms var(--motion-ease-out), background-color 140ms ease;
 }
 
@@ -4944,6 +4946,7 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
 .creation-chat-submit:disabled { background: #292d34; color: #606771; cursor: not-allowed; }
 .creation-chat-submit.is-stopping { background: #d06060; color: #fff; }
 html:not(.dark) .creation-chat-submit { background: #202328; color: #fff; }
+html:not(.dark) .creation-chat-submit:hover:not(:disabled) { background: #2d3139; }
 
 .creation-control-popover-surface,
 .creation-model-picker-surface {
