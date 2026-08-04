@@ -78,7 +78,9 @@ export async function executeImageGeneration({
         width: rootWidth,
         height: rootHeight,
         metadata: {
+            // prompt 存最终发送稿便于任务展示；composerContent 保留原始短提示，避免重试/批次再次叠层展开。
             prompt: effectivePrompt,
+            composerContent: sourceNode?.metadata?.composerContent || prompt,
             status: NODE_STATUS_LOADING,
             size: generationConfig.size,
             isBatchRoot: count > 1,
@@ -98,7 +100,7 @@ export async function executeImageGeneration({
         position: imageGenerationChildPosition(rootNode.position, rootNode.width, outputNodeSize, index),
         width: outputNodeSize.width,
         height: outputNodeSize.height,
-        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined, ...generationMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
+        metadata: { prompt: effectivePrompt, composerContent: sourceNode?.metadata?.composerContent || prompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined, ...generationMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
     }));
     const batchConnections = directCopiedBatch
         ? childIds.map((childId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: childId }))

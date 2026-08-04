@@ -75,7 +75,15 @@ export function useCanvasGenerationRetry({ projectId, domainProjectId, addedSkil
                 return;
             }
 
-            const retryPromptSource = sourceNode.metadata?.composerContent || sourceNode.metadata?.prompt || node.metadata?.prompt || "";
+            // composerContent 保留用户或镜头原始短提示；metadata.prompt 可能已是展开后的最终稿，重试优先用短稿再走连线展开。
+            const retryPromptSource = (
+                sourceNode.metadata?.composerContent
+                || node.metadata?.composerContent
+                || sourceNode.metadata?.lastImageSubmissionPrompt
+                || sourceNode.metadata?.prompt
+                || node.metadata?.prompt
+                || ""
+            ).trim();
             const retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture
                 ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture)
                 : retryPromptSource;

@@ -17,7 +17,7 @@ import {
     storyboardRowsFromTask,
     storyboardPromptTemplateMetadata,
 } from "@/lib/canvas/canvas-project-domain";
-import { buildNodeMentionReferences, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -240,8 +240,8 @@ export function useCanvasStoryboard({
             const existing = row.imageNodeId ? nextNodes.find((node) => node.id === row.imageNodeId && node.type === CanvasNodeType.Image) : undefined;
             const existingMetadata = existing?.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing?.metadata);
             const imageNode = existing
-                ? { ...existing, metadata: { ...existingMetadata, prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber } }
-                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber, status: NODE_STATUS_IDLE });
+                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent: existingMetadata?.composerContent || prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber } }
+                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "image"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 分镜图`, shotIndex: row.shotNumber, status: NODE_STATUS_IDLE });
             if (!existing) {
                 imageNode.title = `镜头 ${row.shotNumber} · 分镜图`;
                 nextNodes.push(imageNode);
@@ -451,24 +451,21 @@ export function useCanvasStoryboard({
         const nextNodes = [...nodesRef.current];
         const nextConnections = [...connectionsRef.current];
         const targets: Array<{ row: StoryboardRow; node: CanvasNodeData; prompt: string }> = [];
-        const contextReferences = buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current)
-            .filter((item) => item.active && (item.kind === "text" || item.kind === "character"))
-            .map((item) => formatActionBoardReference(item))
-            .filter(Boolean);
+        // 画风/章节/角色卡不要 bake 进动作板 prompt：生成时会按连线再收集一次，预写会导致最终 prompt 重复 2～3 遍。
+        // 角色一致性靠下面的 reference 连线 + 角色三视图参考图；镜头侧只保留本镜动作描述。
         actionBoardRows.forEach((row, index) => {
             const prompt = [
                 "生成一张电影动作拆分 12 宫格参考图，严格 3 列 4 行，12 个格子清晰分隔，保持同一角色、服装、场景和光线连续。",
                 `镜头 ${row.shotNumber}：${row.plotDescription || row.videoMotionPrompt || "根据镜头剧情补全动作"}`,
                 row.dialogue ? `台词/旁白：${row.dialogue}` : "",
-                row.characters.length ? `角色：${row.characters.map((item) => item.characterName).join("、")}` : "",
-                contextReferences.length ? `项目/设定参考：\n${contextReferences.join("\n\n")}` : "",
+                row.characters.length ? `出场角色：${row.characters.map((item) => item.characterName).filter(Boolean).join("、")}` : "",
                 "按时间顺序展示动作起势、推进、转折、落点和结束姿态，不要添加文字、边框标题或额外画面。",
             ].filter(Boolean).join("\n");
             const existingIndex = nextNodes.findIndex((node) => node.type === CanvasNodeType.Image && node.metadata?.workflowKind === "action_board" && node.metadata.shotIndex === row.shotNumber);
             if (existingIndex >= 0 && nextNodes[existingIndex].metadata?.content) return;
             const imageNode = existingIndex >= 0
-                ? { ...nextNodes[existingIndex], metadata: { ...resetGenerationTaskMetadata(nextNodes[existingIndex].metadata), prompt, lastImageSubmissionPrompt: prompt } }
-                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, lastImageSubmissionPrompt: prompt, workflowKind: "action_board", workflowTitle: `镜头 ${row.shotNumber} 动作板`, shotIndex: row.shotNumber, actionBoardRows: 4, actionBoardColumns: 3, status: NODE_STATUS_IDLE });
+                ? { ...nextNodes[existingIndex], metadata: { ...resetGenerationTaskMetadata(nextNodes[existingIndex].metadata), prompt, composerContent: prompt, lastImageSubmissionPrompt: prompt } }
+                : createCanvasNode(CanvasNodeType.Image, { x: startX + imageSpec.width / 2, y: scriptNode.position.y + index * (imageSpec.height + 36) + imageSpec.height / 2 }, { prompt, composerContent: prompt, lastImageSubmissionPrompt: prompt, workflowKind: "action_board", workflowTitle: `镜头 ${row.shotNumber} 动作板`, shotIndex: row.shotNumber, actionBoardRows: 4, actionBoardColumns: 3, status: NODE_STATUS_IDLE });
             imageNode.title = `镜头 ${row.shotNumber} · 动作板`;
             if (existingIndex >= 0) nextNodes[existingIndex] = imageNode;
             else {
@@ -584,18 +581,7 @@ export function useCanvasStoryboard({
     };
 }
 
-function formatActionBoardReference(reference: CanvasResourceReference) {
-    if (reference.kind === "text" && reference.text?.trim()) {
-        return `【文本参考：${reference.title || reference.label}】\n${reference.text.trim()}`;
-    }
-    if (reference.kind === "character") {
-        const detail = reference.text?.trim();
-        return detail
-            ? `【角色参考：${reference.title || reference.label}】\n${detail}`
-            : `【角色参考：${reference.title || reference.label}】`;
-    }
-    return "";
-}
+
 
 function characterReferenceNodeIds(row: StoryboardRow, nodes: CanvasNodeData[]) {
     const assetIds = new Set(row.characters.map((character) => character.characterAssetId).filter((assetId): assetId is string => Boolean(assetId)));

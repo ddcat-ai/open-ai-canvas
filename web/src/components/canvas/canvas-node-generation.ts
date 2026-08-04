@@ -65,12 +65,15 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     }
 
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
-    const basePrompt = isStoryboardMedia && storyboardInputs.length ? removeTrailingInputBlocks(prompt, storyboardInputs) : prompt;
+    // 节点 metadata.prompt 可能已是上一轮展开后的最终稿；先剥掉末尾已拼接的分镜/参考块，避免重试再叠一层。
+    const strippedPrompt = removeContainedInputBlocks(prompt, inputs);
+    const basePrompt = isStoryboardMedia && storyboardInputs.length ? removeContainedInputBlocks(strippedPrompt, storyboardInputs) : strippedPrompt;
     const textInputs = inputs.filter((input) => input.type === "text");
     const characterReferences = inputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
+    // 画风/章节等文本参考：仅追加 basePrompt 里还没有的正文，防止「连线展开 + 节点已 bake」双写。
     const upstreamText = textInputs
-        .map((input) => input.text)
-        .filter(Boolean)
+        .map((input) => input.text?.trim() || "")
+        .filter((text) => text && !containsTextBlock(basePrompt, text))
         .join("\n\n");
     const referenceImages = inputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = inputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
@@ -91,21 +94,57 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     };
 }
 
-function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]) {
+function normalizePromptBlock(value: string) {
+    return value.replace(/\s+/g, " ").trim();
+}
+
+function containsTextBlock(prompt: string, block: string) {
+    const needle = normalizePromptBlock(block);
+    if (!needle) return false;
+    const haystack = normalizePromptBlock(prompt);
+    if (haystack.includes(needle)) return true;
+    // 角色卡常见形态：【角色卡：名】… 或 【角色参考：名】\n【角色卡：名】…
+    const characterTitle = block.match(/【角色卡：([^\]]+)】/)?.[1]?.trim();
+    if (characterTitle && haystack.includes(normalizePromptBlock(`【角色卡：${characterTitle}】`))) {
+        const body = normalizePromptBlock(block.replace(/【角色卡：[^\]]+】/g, ""));
+        if (!body || haystack.includes(body.slice(0, Math.min(body.length, 120)))) return true;
+    }
+    return false;
+}
+
+function removeContainedInputBlocks(prompt: string, inputs: NodeGenerationInput[]) {
     let next = prompt.trim();
     let removed = true;
     while (removed) {
         removed = false;
         for (const input of inputs) {
             const block = input.text?.trim();
-            if (!block || !next.endsWith(block)) continue;
-            const prefix = next.slice(0, next.length - block.length);
-            if (!prefix.trim() || !/\n\s*\n$/.test(prefix)) continue;
-            next = prefix.trimEnd();
-            removed = true;
-            break;
+            if (!block) continue;
+            // 1) 旧逻辑：块贴在末尾
+            if (next.endsWith(block)) {
+                const prefix = next.slice(0, next.length - block.length);
+                if (prefix.trim() && /\n\s*\n$/.test(prefix)) {
+                    next = prefix.trimEnd();
+                    removed = true;
+                    break;
+                }
+            }
+            // 2) 块出现在正文中（含「项目/设定参考」预写、重试叠层）：整段删掉
+            const indexed = next.indexOf(block);
+            if (indexed >= 0) {
+                const before = next.slice(0, indexed).replace(/\n{3,}/g, "\n\n").trimEnd();
+                const after = next.slice(indexed + block.length).replace(/^\s*\n+/, "").trimStart();
+                const merged = [before, after].filter(Boolean).join("\n\n").trim();
+                if (merged !== next) {
+                    next = merged;
+                    removed = true;
+                    break;
+                }
+            }
         }
     }
+    // 清掉动作板遗留的空「项目/设定参考：」标题
+    next = next.replace(/(?:^|\n)项目\/设定参考：\s*(?=\n|$)/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     return next;
 }
 
@@ -320,7 +359,10 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     } satisfies ReferenceImage));
     const hydratedCharacterImages = await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
     referenceImages = [...referenceImages, ...hydratedCharacterImages];
-    const characterBlocks = details.map((detail) => compileCharacterReferencePrompt(detail.asset.title, detail.character.definition));
+    const characterBlocks = details
+        .map((detail) => compileCharacterReferencePrompt(detail.asset.title, detail.character.definition))
+        // 角色卡若已在 prompt（动作板预写 / 上次展开稿 / 上游文本）中出现，不再二次追加。
+        .filter((block) => block && !containsTextBlock(context.prompt, block));
     const resolvedCharacterVersions = details.map((detail) => ({ assetId: detail.asset.id, versionId: detail.character.versionId }));
     const resolvedCharacterVoices = details.flatMap((detail): ResolvedCharacterVoice[] => {
         const voice = detail.character.voice;
@@ -362,7 +404,9 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
         storageKey: resourceStorageKey(voice.sampleResourceId!),
     } satisfies ReferenceAudio));
     const referenceAudios = [...context.referenceAudios, ...characterVoiceAudios];
-    const voiceBlocks = mode === "video" ? resolvedCharacterVoices.map(compileResolvedVoicePrompt) : [];
+    const voiceBlocks = mode === "video"
+        ? resolvedCharacterVoices.map(compileResolvedVoicePrompt).filter((block) => block && !containsTextBlock(context.prompt, block))
+        : [];
     return {
         ...context,
         prompt: [context.prompt.trim(), ...characterBlocks, ...voiceBlocks].filter(Boolean).join("\n\n"),
