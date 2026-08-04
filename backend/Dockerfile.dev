@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1.7
+
+FROM golang:1.25-alpine
+
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=$GOPROXY
+
+RUN apk add --no-cache build-base git \
+    && go install github.com/air-verse/air@v1.63.0
+
+WORKDIR /workspace/backend
+
+CMD ["air", "-c", ".air.toml"]

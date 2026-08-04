@@ -118,9 +118,23 @@ curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/script
 ```bash
 git clone https://github.com/ddcat-ai/open-ai-canvas.git
 cd open-ai-canvas
+```
 
+后端开发数据统一保存在 Git 忽略的 `.local/project-workbench-debug`。启动前先检查该目录，不要改用 `backend/data` 或其他目录；仅在确认本机没有既有开发数据时创建：
+
+```bash
+if [ -d .local/project-workbench-debug ]; then
+  find .local/project-workbench-debug -maxdepth 1 -type f -name 'open_ai_canvas.db*' -ls
+else
+  mkdir -p .local/project-workbench-debug
+fi
+```
+
+直接在宿主机开发：
+
+```bash
 cd backend
-go run ./cmd/server
+CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server
 
 # 另开终端
 cd web
@@ -132,7 +146,28 @@ bun run dev
 
 资源配额、Worker/渠道/账号任务并发、业务频控、任务超时和渠道中转策略可在“系统配置 → 资源与策略”中统一热更新，支持重置和自用模式；系统渠道可选择跟随全局值，或单独设置 `1-999` 的最大并发数。未保存后台配置时 Worker 和全局渠道并发分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
 
-Docker 一体化运行：
+Docker 热更新开发：
+
+```bash
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml up --build
+```
+
+前端通过 Vite HMR 更新，后端由 Air 在 Go 源码或模块文件变化后重新编译。前端地址为 `http://localhost:3000`，局域网设备可通过 `http://<开发机 IP>:3000` 访问；后端 `8080` 端口只开放给开发机本机，浏览器 API 请求统一由 Vite 转发。
+
+本机完整操作和数据保护说明记录在 `.local/DEVELOPMENT.md`。该文件由 Git 忽略，普通仓库更新不会影响；不要使用带 `-x` 或 `-X` 的 `git clean`，也不要手动删除 `.local/`。
+
+本机 Docker 开发改动维护在不跟踪远端的 `local-development` 分支，`main` 仅用于快进同步主仓库。主仓库更新后，将本地开发分支变基到最新 `main`，再重建容器；开发数据库和依赖卷不需要删除：
+
+```bash
+docker compose -f docker-compose.dev.yml down
+git switch main
+git pull --ff-only origin main
+git switch local-development
+git rebase main
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml up -d --build --force-recreate
+```
+
+Docker 一体化运行（静态前端和 release 后端，不提供源码热更新）：
 
 ```bash
 docker compose -f docker-compose.local.yml up -d --build
