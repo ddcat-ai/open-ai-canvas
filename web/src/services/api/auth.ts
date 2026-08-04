@@ -4,6 +4,7 @@ import type { ModelChannel } from "@/stores/use-config-store";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
+import type { FeatureAvailability } from "@/stores/use-user-store";
 
 const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
 
@@ -33,6 +34,7 @@ export type AuthSessionPayload = {
     systemChannels?: ModelChannel[];
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
+    features?: FeatureAvailability;
 };
 
 export type RuntimeLimits = {
@@ -351,6 +353,18 @@ export function getAuthSession() {
 
 export function getSystemChannels() {
     return request<{ channels: ModelChannel[] }>(api.get("/channels/system"));
+}
+
+export function getFeatureAvailability() {
+    return request<{ features: FeatureAvailability }>(api.get("/features"));
+}
+
+export function getAdminFeatureAvailability() {
+    return request<{ features: FeatureAvailability }>(api.get("/admin/settings/features"));
+}
+
+export function updateAdminFeatureAvailability(features: Pick<FeatureAvailability, "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled">) {
+    return request<{ features: FeatureAvailability }>(api.patch("/admin/settings/features", features));
 }
 
 export function login(input: { username: string; password: string }) {

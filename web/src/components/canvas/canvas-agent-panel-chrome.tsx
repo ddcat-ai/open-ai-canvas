@@ -3,6 +3,7 @@ import { BookOpenText, Bot, Clapperboard, Focus, Globe2, LayoutTemplate, Laptop,
 
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasTheme } from "@/lib/canvas-theme";
+import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAgentMode } from "./canvas-agent-chat-ui";
 
 export function AgentPanelChrome({
@@ -90,6 +91,8 @@ const starterActions = [
 ];
 
 export function AgentChatEmptyState({ theme, nodeCount, onSelect }: { theme: CanvasTheme; nodeCount: number; onSelect: (value: string) => void }) {
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    const visibleStarterActions = shortDramaEnabled ? starterActions : starterActions.filter((item) => item.label !== "搭建短剧工作流");
     return (
         <div className="flex h-full items-center px-5 py-8">
             <div className="mx-auto w-full max-w-[380px]">
@@ -99,7 +102,7 @@ export function AgentChatEmptyState({ theme, nodeCount, onSelect }: { theme: Can
                 </div>
                 <h2 className="mt-3 text-[19px] font-semibold leading-6" style={{ color: theme.node.text }}>从当前画布开始</h2>
                 <div className="mt-4 grid grid-cols-1 gap-1">
-                    {starterActions.map(({ label, icon: Icon }) => (
+                    {visibleStarterActions.map(({ label, icon: Icon }) => (
                         <button key={label} type="button" className="group flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-xs font-medium transition-colors" style={{ color: theme.node.text }} onMouseEnter={(event) => { event.currentTarget.style.background = theme.spatial.surface; }} onMouseLeave={(event) => { event.currentTarget.style.background = "transparent"; }} onFocus={(event) => { event.currentTarget.style.background = theme.spatial.surface; }} onBlur={(event) => { event.currentTarget.style.background = "transparent"; }} onClick={() => onSelect(label)}>
                             <span className="grid size-7 shrink-0 place-items-center rounded-md" style={{ background: theme.spatial.surface, color: theme.node.muted }}><Icon className="size-3.5" /></span>
                             <span className="min-w-0 truncate">{label}</span>

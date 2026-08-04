@@ -1,5 +1,5 @@
 import { Tooltip } from "antd";
-import { ArrowLeft, BarChart3, BellRing, Coins, FileClock, HardDrive, Home, Infinity as InfinityIcon, Mail, MessageSquareText, Paintbrush, PanelLeftClose, PanelLeftOpen, RadioTower, Settings2, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
+import { ArrowLeft, BarChart3, BellRing, Coins, FileClock, HardDrive, Home, Infinity as InfinityIcon, Mail, MessageSquareText, Paintbrush, PanelLeftClose, PanelLeftOpen, RadioTower, Settings2, ShieldCheck, TicketCheck, ToggleLeft, UsersRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet } from "react-router";
 
@@ -40,6 +40,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
+            { path: "/admin/settings/features", label: "功能开放", description: "菜单、页面与积分模式", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
             { path: "/admin/settings/access", label: "登录与注册", description: "注册策略与 Linux.do", icon: <ShieldCheck className="size-4" /> },
@@ -99,8 +100,8 @@ export function AdminShell() {
 export function AdminPageFrame({ title, description, actions, back, children }: { title: string; description: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; children: ReactNode }) {
     return (
         <WorkspacePage>
-            <div className="mx-auto w-full max-w-[1440px] pb-5">
-                <header className="flex min-h-[64px] flex-col gap-3 border-b border-border/75 pb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="w-full pb-5">
+                <header className="flex min-h-14 flex-col gap-3 border-b border-border/75 pb-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                         {back ? (
                             <Tooltip title={back.label}>

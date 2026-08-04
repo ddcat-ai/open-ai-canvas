@@ -107,6 +107,9 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	if user == nil {
 		return nil, Unauthorized("请先登录")
 	}
+	if err := s.RequireFeature(FeatureCredits); err != nil {
+		return nil, err
+	}
 	if page <= 0 {
 		page = 1
 	}
@@ -131,6 +134,9 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string) (*model.CreditAccount, error) {
 	if user == nil {
 		return nil, Unauthorized("请先登录")
+	}
+	if err := s.RequireFeature(FeatureCredits); err != nil {
+		return nil, err
 	}
 	code = strings.ToLower(strings.TrimSpace(code))
 	if len(code) != 32 {
@@ -414,6 +420,13 @@ func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, code
 }
 
 func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
+	enabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
+	}
 	config, _ := input["config"].(map[string]any)
 	if config == nil {
 		return nil, nil
@@ -435,6 +448,13 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 }
 
 func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
+	enabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
+	}
 	if strings.TrimSpace(idempotencyKey) == "" {
 		idempotencyKey = newID()
 	}

@@ -24,10 +24,11 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const navigate = useNavigate();
     const { message } = App.useApp();
     const [menuOpen, setMenuOpen] = useState(false);
-    const { availableMicrocredits } = useWalletBalance(user?.id, true);
+    const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const balance = availableMicrocredits === null
         ? "--"
         : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
@@ -69,7 +70,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                                 <UserAvatar user={user} className="size-8" />
                                 <div className="min-w-0 flex-1">
                                     <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
-                                    <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div>
+                                    {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div> : null}
                                 </div>
                             </div>
 
@@ -92,11 +93,11 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                         </div>
                     )}
                 >
-                    <button type="button" className={cn("flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-foreground/[.045]", accountClassName)} title={`${user.displayName || user.username} · ${balance} 积分`}>
+                    <button type="button" className={cn("flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-foreground/[.045]", accountClassName)} title={creditsEnabled ? `${user.displayName || user.username} · ${balance} 积分` : user.displayName || user.username}>
                         <UserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
                             <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
-                            <span className="mt-0.5 block truncate text-[var(--fs-micro)] tabular-nums text-foreground/42">{balance} 积分</span>
+                            {creditsEnabled ? <span className="mt-0.5 block truncate text-[var(--fs-micro)] tabular-nums text-foreground/42">{balance} 积分</span> : null}
                         </span>
                         <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/30", expandedClassName)} />
                     </button>

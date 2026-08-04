@@ -69,7 +69,8 @@ export function CanvasTopBar({
 }: CanvasTopBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
-    const { availableMicrocredits, refreshing } = useWalletBalance(user?.id);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -188,7 +189,7 @@ export function CanvasTopBar({
                         <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" title="媒体性能模式" />
                     </Dropdown>
                     {compactAgentStatus ? <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} /> : null}
-                    {user ? (
+                    {user && creditsEnabled ? (
                         <Link
                             to="/wallet"
                             className="inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10"

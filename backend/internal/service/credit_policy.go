@@ -108,6 +108,10 @@ func (s *Service) UpdateCreditPolicy(actor *model.User, policy CreditPolicy) (Cr
 }
 
 func (s *Service) ensureSignupBonus(userID string) error {
+	enabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil || !enabled {
+		return err
+	}
 	policy, err := s.creditPolicy()
 	if err != nil || policy.SignupBonusMicrocredits == 0 {
 		return err
@@ -119,6 +123,9 @@ func (s *Service) ensureSignupBonus(userID string) error {
 func (s *Service) CheckinCredits(user *model.User) (*model.CreditAccount, bool, error) {
 	if user == nil {
 		return nil, false, Unauthorized("请先登录")
+	}
+	if err := s.RequireFeature(FeatureCredits); err != nil {
+		return nil, false, err
 	}
 	policy, err := s.creditPolicy()
 	if err != nil {

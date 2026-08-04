@@ -165,7 +165,7 @@ export default function RuntimePolicySettingsPage() {
             actions={<div className="flex items-center gap-2"><Button icon={<RotateCcw className="size-4" />} disabled={loading || saving} onClick={reset}>重置</Button><Button icon={<InfinityIcon className="size-4" />} disabled={loading || saving} onClick={() => void useSelfMode()}>自用模式</Button></div>}
         >
             <Form form={form} layout="vertical" requiredMark={false} disabled={loading} onValuesChange={() => setDirty(true)}>
-                <div className="mx-auto max-w-6xl space-y-5">
+                <div className="space-y-3 pt-4">
                     <PolicySection icon={<Database className="size-4" />} title="资源与账号配额" description="上传、文件容量、结构化数据和历史记录上限。" fields={resourceFields} />
                     <PolicySection icon={<Gauge className="size-4" />} title="任务与并发" description="后台任务消费、渠道调度和单账号活动任务上限。" fields={concurrencyFields} status={<Tag variant="filled" color="blue">热更新</Tag>} />
                     <PolicySection icon={<TimerReset className="size-4" />} title="任务超时" description="不同生成类型的最长执行时间。" fields={timeoutFields} />
@@ -184,7 +184,7 @@ export default function RuntimePolicySettingsPage() {
 function PolicySection({ icon, title, description, fields, status }: { icon: ReactNode; title: string; description: string; fields: PolicyField[]; status?: ReactNode }) {
     return (
         <SettingsSectionCard icon={icon} title={title} description={description} status={status}>
-            <div className="grid grid-cols-1 gap-x-5 px-5 pt-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-4 px-4 pt-4 md:grid-cols-2 xl:grid-cols-3">
                 {fields.map((field) => (
                     <Form.Item key={`${field.group}.${field.name}`} name={[field.group, field.name]} label={field.label} extra={field.extra} rules={[{ required: true, message: `请填写${field.label}` }, { type: "number", min: 1, max: field.max, message: `${field.label}必须是 1-${field.max} 的整数` }]}>
                         <InputNumber className="w-full" min={1} max={field.max} precision={0} addonAfter={field.unit} />

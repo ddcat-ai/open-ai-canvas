@@ -68,7 +68,7 @@ export default function AccessSettingsPanel() {
 
 
     return (
-        <div className="mx-auto max-w-5xl space-y-5">
+        <div className="space-y-4 pt-4">
             <SettingsSectionCard
                 icon={<UserPlus className="size-4" />}
                 title="用户注册"

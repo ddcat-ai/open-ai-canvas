@@ -1,9 +1,10 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { RequireFeature } from "@/components/auth/require-feature";
 import UserLayout from "@/layouts/user-layout";
 import AdminPage from "@/pages/admin";
-import { AccessSettingsPage, AnalyticsPage, AnnouncementsPage, CreditOperationsPage, EmailSettingsPage } from "@/pages/admin/admin-route-pages";
+import { AccessSettingsPage, AnalyticsPage, AnnouncementsPage, CreditOperationsPage, EmailSettingsPage, FeatureAvailabilityPage } from "@/pages/admin/admin-route-pages";
 import ChannelsPage from "@/pages/admin/channels/channels-page";
 import LogsPage from "@/pages/admin/logs/logs-page";
 import RedemptionCodesPage from "@/pages/admin/redemption-codes/redemption-codes-page";
@@ -51,15 +52,15 @@ export const router = createBrowserRouter([
             { path: "/", element: <Navigate to="/create" replace /> },
             { path: "/create", element: <RequireAuth><CreatePage /></RequireAuth> },
             { path: "/home", element: <HomePage /> },
-            { path: "/tasks", element: <RequireAuth><TasksPage /></RequireAuth> },
+            { path: "/tasks", element: <RequireAuth><RequireFeature feature="taskCenterEnabled"><TasksPage /></RequireFeature></RequireAuth> },
             { path: "/assets", element: <RequireAuth><AssetsPage /></RequireAuth> },
             { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
-            { path: "/wallet", element: <RequireAuth><WalletPage /></RequireAuth> },
+            { path: "/wallet", element: <RequireAuth><RequireFeature feature="creditsEnabled"><WalletPage /></RequireFeature></RequireAuth> },
             { path: "/settings", element: <RequireAuth><SettingsPage /></RequireAuth> },
-            { path: "/projects", element: <RequireAuth><ProjectsPage /></RequireAuth> },
-            { path: "/projects/:projectId", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
-            { path: "/projects/:projectId/:view", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
-            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><ProjectDetailPage /></RequireAuth> },
+            { path: "/projects", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectsPage /></RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId/:view", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
             { path: "/canvas", element: <RequireAuth><CanvasPage /></RequireAuth> },
             { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
             {
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
                     { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },
                     { path: "settings/concurrency", element: <Navigate to="/admin/settings/runtime-policy" replace /> },
                     { path: "settings/runtime-policy", element: <RuntimePolicySettingsPage /> },
+                    { path: "settings/features", element: <FeatureAvailabilityPage /> },
                     { path: "settings/access", element: <AccessSettingsPage /> },
                     { path: "settings/email", element: <EmailSettingsPage /> },
                     { path: "settings/storage", element: <StorageSettingsPage /> },

@@ -82,6 +82,21 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onUp
     );
 }
 
+export function CanvasFreeformEmptyState({ onUpload, onAddText }: { onUpload: () => void; onAddText: () => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-20 pt-24">
+            <div className="pointer-events-auto w-full max-w-[440px] rounded-lg border p-4 shadow-sm backdrop-blur" data-canvas-no-zoom style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+                <div className="text-center"><h2 className="text-base font-semibold">从空白画布开始</h2><p className="mt-1 text-xs" style={{ color: theme.node.muted }}>添加文本或导入已有素材。</p></div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={onAddText} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border text-sm font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Type className="size-4" />新建文本</button>
+                    <button type="button" onClick={onUpload} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border text-sm font-medium" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><Upload className="size-4" />导入素材</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function PathCard({ icon, title, description, action, accent, theme, focusStyle, onClick }: {
     icon: ReactNode;
     title: string;

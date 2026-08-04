@@ -6,11 +6,15 @@ import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
 import { WorkspaceSidebarFooter } from "@/components/layout/workspace-sidebar-footer";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
+import { refreshFeatureAvailability } from "@/lib/user-session";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
+    const user = useUserStore((state) => state.user);
+    const features = useUserStore((state) => state.features);
     const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
     const scrollRef = useRef<HTMLElement>(null);
     const [scrollState, setScrollState] = useState({
@@ -22,7 +26,13 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const creationWorkspace = pathname === "/create";
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
-    const visibleNavigationTools = spatialWorkbench ? navigationTools : navigationTools.filter((tool) => tool.section === "创作空间");
+    const visibleNavigationTools = (spatialWorkbench ? navigationTools : navigationTools.filter((tool) => tool.section === "创作空间"))
+        .filter((tool) => {
+            if (tool.slug === "projects") return features.shortDramaEnabled;
+            if (tool.slug === "tasks") return features.taskCenterEnabled;
+            if (tool.slug === "wallet") return features.creditsEnabled;
+            return true;
+        });
 
     const handleScroll = () => {
         const element = scrollRef.current;
@@ -48,6 +58,17 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     useEffect(() => {
         handleScroll();
     }, [visibleNavigationTools.length, mobileSidebarExpanded]);
+
+    useEffect(() => {
+        if (!user) return;
+        const refresh = () => void refreshFeatureAvailability().catch((error) => console.warn("功能开放状态刷新失败", error));
+        const timer = window.setInterval(refresh, 30_000);
+        window.addEventListener("focus", refresh);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener("focus", refresh);
+        };
+    }, [user]);
 
     return (
         <>
