@@ -65,6 +65,7 @@ const (
 	ChannelInterfaceVolcengineArkImage    ChannelInterfaceType = "volcengine-ark-image"
 	ChannelInterfaceVolcengineJiMengImage ChannelInterfaceType = "volcengine-jimeng-image"
 	ChannelInterfaceOpenAIAudio           ChannelInterfaceType = "openai-audio"
+	ChannelInterfaceAsyncAudio            ChannelInterfaceType = "async-audio"
 	ChannelInterfaceNewAPIVideo           ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1        ChannelInterfaceType = "newapi-channel-1"
 	ChannelInterfaceNewAPIChannel2        ChannelInterfaceType = "newapi-channel-2"

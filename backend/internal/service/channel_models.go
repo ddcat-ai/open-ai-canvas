@@ -408,7 +408,7 @@ func capabilityForProtocol(protocol model.ChannelInterfaceType) string {
 	switch protocol {
 	case model.ChannelInterfaceOpenAIImage, model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineJiMengImage:
 		return "image"
-	case model.ChannelInterfaceOpenAIAudio:
+	case model.ChannelInterfaceOpenAIAudio, model.ChannelInterfaceAsyncAudio:
 		return "audio"
 	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo:
 		return "video"
