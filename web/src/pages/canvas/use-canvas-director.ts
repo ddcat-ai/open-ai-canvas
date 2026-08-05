@@ -2,11 +2,12 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
 
-import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
+import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createDirectorScene } from "@/lib/canvas/director/director-scene";
 import { uploadImage } from "@/services/image-storage";
+import { uploadMediaFile } from "@/services/file-storage";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 import type { DirectorScene, DirectorSceneOutput } from "@/types/director";
 
@@ -94,50 +95,76 @@ export function useCanvasDirector({
     const applyDirectorOutput = useCallback(async (output: DirectorSceneOutput) => {
         const sourceNode = nodesRef.current.find((item) => item.id === directorNodeId);
         if (!sourceNode) throw new Error("镜头节点不存在");
-        const uploads = await Promise.all([uploadImage(output.beauty), uploadImage(output.depth), uploadImage(output.normal)]);
-        const labels = ["导演台构图", "导演台深度", "导演台法线"];
-        const existingIds = [sourceNode.metadata?.directorPreviewNodeId, sourceNode.metadata?.directorDepthNodeId, sourceNode.metadata?.directorNormalNodeId];
+        const [image, videoUpload] = await Promise.all([
+            uploadImage(output.beauty),
+            output.clayVideo ? uploadMediaFile(output.clayVideo, "director-clay") : Promise.resolve(null),
+        ]);
+        const previewId = sourceNode.metadata?.directorPreviewNodeId || `image-director-${Date.now()}`;
+        const previewSize = fitNodeSize(image.width, image.height);
         const nextNodes = [...nodesRef.current];
-        const outputIds: string[] = [];
-        uploads.forEach((image, index) => {
-            const id = existingIds[index] || `image-director-${Date.now()}-${index}`;
-            const size = fitNodeSize(image.width, image.height);
-            const node: CanvasNodeData = {
-                id,
-                type: CanvasNodeType.Image,
-                title: `${sourceNode.title} · ${labels[index]}`,
-                position: { x: sourceNode.position.x - 3 * (size.width + 36) + index * (size.width + 36), y: sourceNode.position.y },
-                width: size.width,
-                height: size.height,
-                metadata: { ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: [labels[index], `镜头:${sourceNode.title}`] },
+        const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
+        const existingPreview = previewIndex >= 0 ? nextNodes[previewIndex] : null;
+        const previewNode: CanvasNodeData = {
+            ...existingPreview,
+            id: previewId,
+            type: CanvasNodeType.Image,
+            title: `${sourceNode.title} · 导演台构图`,
+            position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
+            width: previewSize.width,
+            height: previewSize.height,
+            metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["导演台构图", `镜头:${sourceNode.title}`] },
+        };
+        if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;
+        else nextNodes.push(previewNode);
+
+        let clayVideoId = sourceNode.metadata?.directorClayVideoNodeId;
+        if (videoUpload) {
+            clayVideoId ||= `video-director-clay-${Date.now()}`;
+            const videoIndex = nextNodes.findIndex((item) => item.id === clayVideoId);
+            const existingVideo = videoIndex >= 0 ? nextNodes[videoIndex] : null;
+            const videoNode: CanvasNodeData = {
+                ...existingVideo,
+                id: clayVideoId,
+                type: CanvasNodeType.Video,
+                title: `${sourceNode.title} · 白膜视频`,
+                position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
+                width: existingVideo?.width || 360,
+                height: existingVideo?.height || 220,
+                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: ["导演台白膜", `镜头:${sourceNode.title}`] },
             };
-            const currentIndex = nextNodes.findIndex((item) => item.id === id);
-            if (currentIndex >= 0) nextNodes[currentIndex] = node;
-            else nextNodes.push(node);
-            outputIds.push(id);
-        });
+            if (videoIndex >= 0) nextNodes[videoIndex] = videoNode;
+            else nextNodes.push(videoNode);
+        }
+
         const nextConnections = [...connectionsRef.current];
-        outputIds.forEach((id) => {
+        [previewId, videoUpload ? clayVideoId : null].filter((id): id is string => Boolean(id)).forEach((id) => {
             if (!nextConnections.some((connection) => connection.fromNodeId === id && connection.toNodeId === sourceNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: id, toNodeId: sourceNode.id });
         });
+        const retiredReferenceIds = new Set([sourceNode.metadata?.directorDepthNodeId, sourceNode.metadata?.directorNormalNodeId].filter(Boolean));
+        const referenceAssetNodeIds = Array.from(new Set([
+            ...(sourceNode.metadata?.referenceAssetNodeIds || []).filter((id) => !retiredReferenceIds.has(id)),
+            previewId,
+            ...(clayVideoId ? [clayVideoId] : []),
+        ]));
         const directorMetadata: Partial<CanvasNodeMetadata> = {
             directorSceneId: output.scene.id,
             directorShotId: output.shot.id,
-            directorPreviewNodeId: outputIds[0],
-            directorDepthNodeId: outputIds[1],
-            directorNormalNodeId: outputIds[2],
+            directorPreviewNodeId: previewId,
+            directorDepthNodeId: undefined,
+            directorNormalNodeId: undefined,
+            directorClayVideoNodeId: clayVideoId,
             composerContent: output.prompt,
             prompt: output.prompt,
             videoCameraMoveId: output.shot.cameraMove,
             videoCameraMovePrompt: output.prompt,
-            referenceAssetNodeIds: Array.from(new Set([...(sourceNode.metadata?.referenceAssetNodeIds || []), ...outputIds])),
+            referenceAssetNodeIds,
         };
         const finalizedNodes = nextNodes.map((item) => item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, ...directorMetadata } } : item);
         nodesRef.current = finalizedNodes;
         connectionsRef.current = nextConnections;
         setNodes(finalizedNodes);
         setConnections(nextConnections);
-        saveDirectorScene({ ...output.scene, shots: output.scene.shots.map((shot) => shot.id === output.shot.id ? { ...shot, previewNodeId: outputIds[0], depthNodeId: outputIds[1], normalNodeId: outputIds[2] } : shot) });
+        saveDirectorScene({ ...output.scene, shots: output.scene.shots.map((shot) => shot.id === output.shot.id ? { ...shot, previewNodeId: previewId, depthNodeId: undefined, normalNodeId: undefined } : shot) });
     }, [connectionsRef, directorNodeId, nodesRef, saveDirectorScene, setConnections, setNodes]);
 
     return { applyDirectorOutput, createDirectorShot, openDirectorWorkbench, saveDirectorScene };

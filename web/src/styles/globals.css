@@ -341,6 +341,17 @@
     --cn-spatial-elevated: var(--color-neutral-0);
     --cn-spatial-toolbar-border: var(--color-neutral-200);
 
+    --director-sequencer-surface: var(--color-neutral-900);
+    --director-sequencer-surface-raised: var(--color-neutral-800);
+    --director-sequencer-border: rgba(255, 255, 255, 0.11);
+    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --director-dock-surface: rgba(17, 19, 21, 0.92);
+    --director-dock-fg: rgba(255, 255, 255, 0.62);
+    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --director-control-hover: rgba(255, 255, 255, 0.09);
+    --director-swatch-inset: rgba(0, 0, 0, 0.18);
+
     /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
     --cn-type-image: var(--palette-node-image);
     --cn-type-video: var(--palette-node-video);
@@ -457,6 +468,17 @@
     --cn-spatial-elevated: var(--color-neutral-900);
     --cn-spatial-toolbar-border: rgba(255, 255, 255, 0.1);
 
+    --director-sequencer-surface: #111315;
+    --director-sequencer-surface-raised: #191c1f;
+    --director-sequencer-border: rgba(255, 255, 255, 0.11);
+    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --director-dock-surface: rgba(17, 19, 21, 0.92);
+    --director-dock-fg: rgba(255, 255, 255, 0.62);
+    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --director-control-hover: rgba(255, 255, 255, 0.09);
+    --director-swatch-inset: rgba(0, 0, 0, 0.18);
+
     /* --- Shadow dark 覆盖（暗色下黑影不可见，改用白色微影制造抬升感，审计 D4/P2-D2）---
        组件 token（--node-shadow/--dock-shadow/--panel-shadow/--modal-shadow）均引用
        var(--shadow-*)，此处覆盖自动级联。--cn-spatial-shadow（内联 boxShadow 用）已有
@@ -526,6 +548,17 @@
     --panel-padding: var(--space-4);      /* 16px */
     --panel-shadow: var(--shadow-lg);
     --panel-section-gap: var(--space-3);  /* 12px */
+
+    /* Director workbench / Sequencer */
+    --director-sequencer-min-height: 180px;
+    --director-sequencer-label-width: 208px;
+    --director-sequencer-row-height: 30px;
+    --director-sequencer-base-width: 860px;
+    --director-sequencer-shot-select-width: 144px;
+    --director-dock-button-size: var(--space-10);
+    --director-dock-bottom: var(--space-3);
+    --director-pose-button-height: var(--space-8);
+    --director-color-swatch-size: var(--space-6);
 
     /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
     --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
@@ -5137,6 +5170,357 @@ html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:f
 }
 
 /* 创作入口与空间导航在同一块画布上，避免视觉断层。 */
+
+.director-sequencer {
+    position: relative;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: var(--fs-caption);
+}
+
+.director-viewport-dock {
+    position: absolute;
+    z-index: var(--z-toolbar);
+    bottom: var(--director-dock-bottom);
+    left: 50%;
+    display: flex;
+    max-width: calc(100% - var(--space-6));
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1-half);
+    overflow-x: auto;
+    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border-radius: var(--r-lg);
+    background: var(--director-dock-surface);
+    box-shadow: var(--shadow-xl);
+    color: var(--director-dock-fg);
+    transform: translateX(-50%);
+    backdrop-filter: blur(var(--space-4));
+}
+
+.director-viewport-dock-button {
+    display: grid;
+    width: var(--director-dock-button-size);
+    height: var(--director-dock-button-size);
+    flex: 0 0 var(--director-dock-button-size);
+    place-items: center;
+    border-radius: var(--r-md);
+    transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out), transform var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-viewport-dock-button > svg {
+    width: var(--space-5);
+    height: var(--space-5);
+}
+
+.director-viewport-dock-button:hover {
+    background: var(--director-control-hover);
+    color: var(--director-dock-fg-strong);
+}
+
+.director-viewport-dock-button:active {
+    transform: translateY(1px);
+}
+
+.director-viewport-dock-button.is-active {
+    background: var(--workspace-accent);
+    color: var(--color-neutral-0);
+    box-shadow: var(--shadow-glow-sm);
+}
+
+.director-viewport-dock-divider {
+    width: var(--stroke-1);
+    height: var(--space-6);
+    flex: 0 0 var(--stroke-1);
+    margin: 0 var(--space-half);
+    background: var(--director-sequencer-border);
+}
+
+.director-actor-colors {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-1-half);
+}
+
+.director-actor-color {
+    width: var(--director-color-swatch-size);
+    height: var(--director-color-swatch-size);
+    flex: 0 0 var(--director-color-swatch-size);
+    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border-radius: var(--r-full);
+    box-shadow: inset 0 0 0 var(--stroke-1) var(--director-swatch-inset);
+}
+
+.director-actor-color.is-active {
+    outline: var(--stroke-2) solid var(--workspace-accent);
+    outline-offset: var(--space-half);
+}
+
+.director-pose-section {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.director-inspector-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--cn-muted);
+    font-size: var(--fs-label);
+}
+
+.director-inspector-section-title > span:last-child {
+    color: var(--workspace-accent);
+}
+
+.director-pose-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-1);
+}
+
+.director-pose-button {
+    min-width: 0;
+    height: var(--director-pose-button-height);
+    padding: 0 var(--space-1);
+    overflow: hidden;
+    border: var(--stroke-1) solid var(--cn-stroke);
+    border-radius: var(--r-sm);
+    color: var(--cn-muted);
+    font-size: var(--fs-tiny);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color var(--motion-dur-fast) var(--motion-ease-out), background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-pose-button:hover {
+    border-color: var(--workspace-accent);
+    color: var(--cn-text);
+}
+
+.director-pose-button.is-active {
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent-soft);
+    color: var(--workspace-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .director-viewport-dock-button,
+    .director-pose-button {
+        transition: none;
+    }
+}
+
+.director-sequencer-resizer {
+    position: absolute;
+    z-index: 2;
+    inset: -4px 0 auto;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+.director-sequencer-resizer::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 44px;
+    height: 2px;
+    border-radius: var(--r-full);
+    background: rgba(255, 255, 255, 0.28);
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-sequencer:hover .director-sequencer-resizer::after,
+.director-sequencer-resizer:focus-visible::after {
+    opacity: 1;
+}
+
+.director-sequencer-body {
+    position: relative;
+    height: calc(100% - 40px);
+    min-height: 0;
+}
+
+.director-sequencer-grid {
+    position: relative;
+    display: grid;
+    min-width: calc(var(--director-sequencer-base-width) * var(--director-sequencer-track-scale, 1));
+    grid-template-columns: var(--director-sequencer-label-width) minmax(640px, 1fr);
+}
+
+.director-sequencer-global-playhead {
+    position: absolute;
+    z-index: 1;
+    top: 28px;
+    bottom: 0;
+    right: 0;
+    left: var(--director-sequencer-label-width);
+    pointer-events: none;
+}
+
+.director-sequencer-global-playhead > i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #f0b36a;
+}
+
+.director-sequencer-label,
+.director-sequencer-track {
+    min-width: 0;
+    height: var(--director-sequencer-row-height);
+    border-bottom: 1px solid var(--director-sequencer-border);
+}
+
+.director-sequencer-row {
+    display: contents;
+}
+
+.director-sequencer-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: var(--director-sequencer-label-width);
+    padding: 0 var(--space-3);
+    color: rgba(255, 255, 255, 0.64);
+    text-align: left;
+    white-space: nowrap;
+    transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-sequencer-label:hover,
+.director-sequencer-row.is-selected > .director-sequencer-label {
+    background: rgba(255, 255, 255, 0.075);
+    color: rgba(255, 255, 255, 0.96);
+}
+
+.director-sequencer-label.is-indent {
+    padding-left: var(--space-6);
+    color: rgba(255, 255, 255, 0.46);
+}
+
+.director-sequencer-ruler-label,
+.director-sequencer-ruler {
+    height: 28px;
+    border-bottom-color: var(--director-sequencer-border);
+    background: var(--director-sequencer-surface-raised);
+}
+
+.director-sequencer-ruler-label {
+    padding-left: var(--space-3);
+    color: rgba(255, 255, 255, 0.42);
+    font-size: var(--fs-micro);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.director-sequencer-ruler {
+    position: relative;
+    cursor: ew-resize;
+    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--director-sequencer-grid) 20%);
+}
+
+.director-sequencer-tick {
+    position: absolute;
+    top: var(--space-2);
+    color: rgba(255, 255, 255, 0.38);
+    font-size: var(--fs-micro);
+    transform: translateX(-50%);
+}
+
+.director-sequencer-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #f0b36a;
+    pointer-events: none;
+}
+
+.director-sequencer-track {
+    position: relative;
+    overflow: hidden;
+    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--director-sequencer-grid) 20%);
+}
+
+.director-sequencer-track-content {
+    position: absolute;
+    inset: 0;
+}
+
+.director-sequencer-key {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-xs);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.38);
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.director-sequencer-clip {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    display: flex;
+    align-items: center;
+    min-width: 30px;
+    padding: 0 var(--space-2);
+    overflow: hidden;
+    border: 1px solid;
+    border-radius: var(--r-xs);
+    font-size: var(--fs-micro);
+}
+
+.director-sequencer-transport,
+.director-sequencer-icon,
+.director-sequencer-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--space-8);
+    border-radius: var(--r-sm);
+    color: rgba(255, 255, 255, 0.62);
+    transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.director-sequencer-transport,
+.director-sequencer-icon {
+    width: var(--space-8);
+}
+
+.director-sequencer-tool {
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+    font-size: var(--fs-micro);
+}
+
+.director-sequencer-shot-select {
+    width: var(--director-sequencer-shot-select-width);
+    height: var(--space-8);
+    padding: 0 var(--space-2);
+    overflow: hidden;
+    border: 1px solid var(--director-sequencer-border);
+    border-radius: var(--r-sm);
+    background: var(--director-sequencer-surface-raised);
+    color: rgba(255, 255, 255, 0.72);
+    font-size: var(--fs-micro);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.director-sequencer-transport:hover,
+.director-sequencer-icon:hover,
+.director-sequencer-tool:hover,
+.director-sequencer-icon.is-active,
+.director-sequencer-tool.is-active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
 .app-workspace-shell.is-creation-workspace,
 .app-workspace-shell.is-creation-workspace .app-workspace-sidebar,
 .app-workspace-shell.is-creation-workspace .app-workspace-stage {

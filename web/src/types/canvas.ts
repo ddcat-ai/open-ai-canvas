@@ -224,6 +224,7 @@ export type CanvasNodeMetadata = {
     directorPreviewNodeId?: string;
     directorDepthNodeId?: string;
     directorNormalNodeId?: string;
+    directorClayVideoNodeId?: string;
     skillId?: string;
     skillVersion?: number;
     skillSnapshot?: CanvasSkillSnapshot;
