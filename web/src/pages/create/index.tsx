@@ -11,17 +11,19 @@ import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-referen
 import { createClientId } from "@/lib/client-id";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
-import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch } from "@/services/api/generation-task";
+import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { storeGeneratedVideo } from "@/services/api/video";
+import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
-import type { ReferenceImage } from "@/types/image";
+import { useAssetStore, type NewAsset } from "@/stores/use-asset-store";
 import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { creationAssetKey, creationAttachmentFromImage, creationImageAsset, creationVideoAsset, isSameCreationAsset, type CreationAssetIdentity, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
-type CreationAttachment = ReferenceImage & { previewUrl: string };
 type CreationSettings = { ratio: string; seconds: string; quality: string; videoQuality: string; count: string };
 type CreationMessage = {
     id: string;
@@ -68,10 +70,36 @@ function newMessage(role: CreationMessage["role"], content: string, extra: Parti
     return { id: createClientId(), role, content, createdAt: new Date().toISOString(), ...extra };
 }
 
+type CreationImageResult = NonNullable<BackendGenerationResult["images"]>[number];
+
+async function persistCreationImageResult(image: CreationImageResult): Promise<UploadedImage> {
+    if (!image.storageKey) return uploadImage(image.dataUrl);
+    const url = await resolveImageUrl(image.storageKey, image.dataUrl);
+    if (!url) throw new Error("图片结果资源不可用");
+    return {
+        url,
+        storageKey: image.storageKey,
+        width: image.width || 1024,
+        height: image.height || 1024,
+        bytes: image.bytes || 0,
+        mimeType: image.mimeType || "image/png",
+    };
+}
+
+function addCreationAssetOnce(asset: NewAsset, identity: CreationAssetIdentity) {
+    const store = useAssetStore.getState();
+    const key = creationAssetKey(identity);
+    if (key && store.assets.some((existing) => isSameCreationAsset(existing, identity))) return false;
+    store.addAsset(key ? { ...asset, metadata: { ...asset.metadata, creationAssetKey: key } } : asset);
+    return true;
+}
+
 export default function CreatePage() {
     const { message: toast } = App.useApp();
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const assets = useAssetStore((state) => state.assets);
+    const addAsset = useAssetStore((state) => state.addAsset);
     const [conversations, setConversations] = useState<CreationConversation[]>([]);
     const [activeId, setActiveId] = useState("");
     const [hydrated, setHydrated] = useState(false);
@@ -92,6 +120,7 @@ export default function CreatePage() {
     const threadScrollRef = useRef<HTMLElement>(null);
     const followLatestMessageRef = useRef(true);
     const taskSyncWarningRef = useRef(false);
+    const taskSyncInFlightRef = useRef(false);
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const historyConversations = useMemo(
@@ -102,6 +131,7 @@ export default function CreatePage() {
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
     const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
+    const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
 
     useEffect(() => {
         let cancelled = false;
@@ -123,15 +153,19 @@ export default function CreatePage() {
     }, [conversations, hydrated]);
 
     useEffect(() => {
-        if (!hydrated || !pendingMediaKey) return;
+        if (!hydrated || !pendingMediaKey || !pendingTaskIds.length) return;
         let cancelled = false;
         const syncTasks = async () => {
+            if (taskSyncInFlightRef.current) return;
+            taskSyncInFlightRef.current = true;
             try {
                 const summaries = await listGenerationTasks(100);
                 const tasks = await enrichCreationTaskSummaries(summaries);
+                const pendingTaskIdSet = new Set(pendingTaskIds);
+                const persistedTasks = await persistCreationTaskResults(tasks.filter((task) => pendingTaskIdSet.has(task.id)));
                 if (cancelled) return;
                 taskSyncWarningRef.current = false;
-                setConversations((current) => reconcileCreationTaskMessages(current, tasks));
+                setConversations((current) => reconcileCreationTaskMessages(current, persistedTasks));
             } catch (error) {
                 if (cancelled) return;
                 console.warn("创作任务状态同步失败", error);
@@ -139,6 +173,8 @@ export default function CreatePage() {
                     taskSyncWarningRef.current = true;
                     toast.warning("任务状态暂时无法同步，请稍后刷新");
                 }
+            } finally {
+                taskSyncInFlightRef.current = false;
             }
         };
         void syncTasks();
@@ -147,7 +183,7 @@ export default function CreatePage() {
             cancelled = true;
             window.clearInterval(timer);
         };
-    }, [hydrated, pendingMediaKey, toast]);
+    }, [hydrated, pendingMediaKey, pendingTaskIds, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -192,12 +228,19 @@ export default function CreatePage() {
     };
 
     const addAttachments = (files: FileList | File[]) => {
-        const next = Array.from(files).filter((file) => file.type.startsWith("image/"));
+        const next = Array.from(files).filter((file) => file.type.startsWith("image/")).slice(0, Math.max(0, 6 - attachments.length));
         if (!next.length) return;
-        void Promise.all(next.slice(0, 6).map(async (file) => {
-            const dataUrl = await readFileAsDataUrl(file);
-            return { id: createClientId(), name: file.name, type: file.type, dataUrl, previewUrl: dataUrl } satisfies CreationAttachment;
-        })).then((items) => setAttachments((current) => [...current, ...items].slice(0, 6))).catch(() => toast.error("参考图读取失败，请重试"));
+        void Promise.allSettled(next.map(async (file) => {
+            const uploaded = await uploadImage(file);
+            const attachment = creationAttachmentFromImage(file, uploaded);
+            addAsset(creationImageAsset({ title: file.name, uploaded, metadata: { source: "create-upload", fileName: file.name } }));
+            return attachment;
+        })).then((settled) => {
+            const items = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
+            const failed = settled.filter((entry) => entry.status === "rejected");
+            if (items.length) setAttachments((current) => [...current, ...items].slice(0, 6));
+            if (failed.length) toast.error(`${failed.length} 张参考图片上传失败，请重试`);
+        });
     };
 
     const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -226,7 +269,9 @@ export default function CreatePage() {
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
         const boundTaskIds = new Set<string>();
+        const boundTaskIdsByBatchIndex = new Map<number, string>();
         const bindTask = (task: GenerationTask) => {
+            if (typeof task.clientContext?.batchIndex === "number") boundTaskIdsByBatchIndex.set(task.clientContext.batchIndex, task.id);
             if (boundTaskIds.has(task.id)) return;
             boundTaskIds.add(task.id);
             updateAssistant(assistantMessage.id, (item) => ({ ...item, taskIds: Array.from(new Set([...(item.taskIds || []), task.id])) }));
@@ -266,14 +311,30 @@ export default function CreatePage() {
                     count: taskCount,
                 });
                 if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-                const resultUrls = settled.flatMap((entry) => entry.status === "fulfilled" ? (entry.value.images || []).map((image) => image.dataUrl).filter(Boolean) : []);
-                const failed = settled.filter((entry): entry is PromiseRejectedResult => entry.status === "rejected");
+                const boundTaskIdList = Array.from(boundTaskIds);
+                const generatedImages = settled.flatMap((entry, batchIndex) => {
+                    if (entry.status !== "fulfilled") return [];
+                    return (entry.value.images || []).map((image, resultIndex) => ({
+                        image,
+                        taskId: boundTaskIdsByBatchIndex.get(batchIndex) || boundTaskIdList[batchIndex],
+                        resultIndex,
+                    }));
+                });
+                const taskFailures = settled.filter((entry): entry is PromiseRejectedResult => entry.status === "rejected");
+                const storedImages = await Promise.allSettled(generatedImages.map(async ({ image, taskId, resultIndex }) => {
+                    const uploaded = await persistCreationImageResult(image);
+                    addCreationAssetOnce(creationImageAsset({ title: expandedPrompt.slice(0, 24), uploaded, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId, taskIds: boundTaskIdList, resultIndex, prompt: expandedPrompt } }), { taskId, messageId: assistantMessage.id, resultIndex });
+                    return uploaded.url;
+                }));
+                const resultUrls = storedImages.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
+                const resourceFailures = storedImages.filter((entry) => entry.status === "rejected");
+                const failedCount = taskFailures.length + resourceFailures.length;
                 if (!resultUrls.length) {
-                    const reason = failed[0]?.reason;
+                    const reason = taskFailures[0]?.reason || resourceFailures[0]?.reason;
                     throw reason instanceof Error ? reason : new Error("后端任务没有返回图片");
                 }
-                if (failed.length) toast.warning(`${resultUrls.length} 张图片已生成，${failed.length} 张生成失败`);
-                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: failed.length ? `${resultUrls.length} 张图片已生成，${failed.length} 张失败` : "图片已生成", resultUrls }));
+                if (failedCount) toast.warning(`${resultUrls.length} 张图片已生成，${failedCount} 张生成失败`);
+                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成", resultUrls }));
             } else {
                 const result = await runBackendGenerationTask({
                     mode: "video",
@@ -285,8 +346,11 @@ export default function CreatePage() {
                     onTaskUpdate: bindTask,
                 });
                 if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
-                const videoUrl = result.video.dataUrl;
-                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: [videoUrl] }));
+                const storedVideo = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
+                if (!storedVideo.url) throw new Error("视频结果资源不可用");
+                const taskId = Array.from(boundTaskIds)[0];
+                addCreationAssetOnce(creationVideoAsset({ title: expandedPrompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId, taskIds: Array.from(boundTaskIds), resultIndex: 0, prompt: expandedPrompt } }), { taskId, messageId: assistantMessage.id, resultIndex: 0 });
+                updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: [storedVideo.url] }));
             }
             updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done" }));
         } catch (error) {
@@ -619,6 +683,14 @@ function pendingCreationMediaKey(conversations: CreationConversation[]) {
     return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])).join("|");
 }
 
+function pendingCreationTaskIds(conversations: CreationConversation[]) {
+    const taskIds = conversations.flatMap((conversation) => conversation.messages.flatMap((message) => {
+        if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return [];
+        return message.taskIds || [];
+    }));
+    return Array.from(new Set(taskIds));
+}
+
 async function enrichCreationTaskSummaries(tasks: GenerationTask[]) {
     return Promise.all(tasks.map(async (task) => {
         if (!task.clientContext || (task.status !== "failed" && (task.status !== "succeeded" || task.previewUrl))) return task;
@@ -627,7 +699,39 @@ async function enrichCreationTaskSummaries(tasks: GenerationTask[]) {
     }));
 }
 
-function reconcileCreationTaskMessages(conversations: CreationConversation[], tasks: GenerationTask[]) {
+type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationError?: string };
+
+async function persistCreationTaskResults(tasks: GenerationTask[]): Promise<PersistedCreationTask[]> {
+    const addAsset = useAssetStore.getState().addAsset;
+    return Promise.all(tasks.map(async (task): Promise<PersistedCreationTask> => {
+        if (task.status !== "succeeded" || !task.clientContext) return task;
+        try {
+            const result = task.resultJson ? parseBackendGenerationResult(task) : null;
+            const images = result?.images?.length ? result.images : task.previewUrl && task.previewKind !== "video" ? [{ dataUrl: task.previewUrl }] : [];
+            if (images.length) {
+                const storedImages = await Promise.all(images.map(async (image, resultIndex) => {
+                    const uploaded = await persistCreationImageResult(image);
+                    addCreationAssetOnce(creationImageAsset({ title: task.prompt.slice(0, 24), uploaded, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, resultIndex, prompt: task.prompt } }), { taskId: task.id, messageId: task.clientContext?.messageId, resultIndex });
+                    return uploaded.url;
+                }));
+                return { ...task, creationResultUrls: storedImages };
+            }
+
+            const videoUrl = result?.video?.dataUrl || (task.previewKind === "video" ? task.previewUrl : "");
+            if (videoUrl) {
+                const storedVideo = await storeGeneratedVideo({ url: videoUrl, mimeType: result?.video?.mimeType || "video/mp4" });
+                if (!storedVideo.url) throw new Error("视频结果资源不可用");
+                addCreationAssetOnce(creationVideoAsset({ title: task.prompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", taskId: task.id, conversationId: task.clientContext?.conversationId, messageId: task.clientContext?.messageId, batchIndex: task.clientContext?.batchIndex, resultIndex: 0, prompt: task.prompt } }), { taskId: task.id, messageId: task.clientContext?.messageId, resultIndex: 0 });
+                return { ...task, creationResultUrls: [storedVideo.url] };
+            }
+            return task;
+        } catch (error) {
+            return { ...task, creationError: error instanceof Error ? error.message : "生成结果资源化失败" };
+        }
+    }));
+}
+
+function reconcileCreationTaskMessages(conversations: CreationConversation[], tasks: PersistedCreationTask[]) {
     let changed = false;
     const next = conversations.map((conversation) => {
         let conversationChanged = false;
@@ -642,8 +746,7 @@ function reconcileCreationTaskMessages(conversations: CreationConversation[], ta
             if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
 
             const resultUrls = Array.from(new Set(matches.filter((task) => task.status === "succeeded").flatMap(creationTaskResultUrls)));
-            const succeededCount = matches.filter((task) => task.status === "succeeded").length;
-            const failedCount = matches.length - succeededCount;
+            const failedCount = matches.filter((task) => task.status !== "succeeded" || Boolean(task.creationError)).length;
             const nextTaskIds = Array.from(new Set([...(message.taskIds || []), ...matches.map((task) => task.id)]));
             completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
             conversationChanged = true;
@@ -654,23 +757,17 @@ function reconcileCreationTaskMessages(conversations: CreationConversation[], ta
                 return { ...message, status: "done" as const, content, resultUrls, error: undefined, taskIds: nextTaskIds };
             }
             if (matches.every((task) => task.status === "cancelled")) return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };
-            const failed = matches.find((task) => task.status === "failed");
-            return { ...message, status: "error" as const, content: "生成失败", error: generationErrorMessage(failed?.error || "任务已结束，但生成结果暂时无法读取"), taskIds: nextTaskIds };
+            const failed = matches.find((task) => task.status === "failed" || task.creationError);
+            return { ...message, status: "error" as const, content: "生成失败", error: generationErrorMessage(failed?.creationError || failed?.error || "任务已结束，但生成结果暂时无法读取"), taskIds: nextTaskIds };
         });
         return conversationChanged ? { ...conversation, messages, updatedAt: completedAt } : conversation;
     });
     return changed ? next : conversations;
 }
 
-function creationTaskResultUrls(task: GenerationTask) {
-    if (task.previewUrl) return [task.previewUrl];
-    if (!task.resultJson) return [];
-    try {
-        const result = parseBackendGenerationResult(task);
-        return [...(result.images || []).map((image) => image.dataUrl), result.video?.dataUrl].filter((url): url is string => Boolean(url));
-    } catch {
-        return [];
-    }
+function creationTaskResultUrls(task: PersistedCreationTask) {
+    if (task.creationResultUrls?.length) return task.creationResultUrls;
+    return [];
 }
 
 function conversationTimestamp(value: string) {
@@ -690,5 +787,3 @@ function ratioPreviewStyle(value: string) {
     const scale = Math.min(28 / width, 20 / height);
     return { width: Math.max(8, width * scale), height: Math.max(8, height * scale) };
 }
-
-function readFileAsDataUrl(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error || new Error("文件读取失败")); reader.readAsDataURL(file); }); }
