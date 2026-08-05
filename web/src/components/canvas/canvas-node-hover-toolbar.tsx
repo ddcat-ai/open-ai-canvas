@@ -29,6 +29,7 @@ type CanvasNodeHoverToolbarProps = {
     onToggleDialog: (node: CanvasNodeData) => void;
     onAnnotate: (node: CanvasNodeData) => void;
     onGenerateImage: (node: CanvasNodeData) => void;
+    onGenerateVideoFromActionBoard: (node: CanvasNodeData) => void;
     onUpload: (node: CanvasNodeData) => void;
     onDownload: (node: CanvasNodeData) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
@@ -90,6 +91,7 @@ export function CanvasNodeHoverToolbar({
     onToggleDialog,
     onAnnotate,
     onGenerateImage,
+    onGenerateVideoFromActionBoard,
     onUpload,
     onDownload,
     onSaveAsset,
@@ -236,7 +238,7 @@ export function CanvasNodeHoverToolbar({
     // 构建 ToolContext——供注册表解析工具
     const nodeHoverHandlers = {
         onNodeInfo: onInfo, onNodeDelete: onDelete, onNodeRetry: onRetry, onNodeEditText: onEditText, onNodeDecreaseFont: onDecreaseFont, onNodeIncreaseFont: onIncreaseFont,
-        onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeUpload: onUpload, onNodeDownload: onDownload,
+        onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeGenerateVideoFromActionBoard: onGenerateVideoFromActionBoard, onNodeUpload: onUpload, onNodeDownload: onDownload,
         onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
         onNodeSplit: onSplit, onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
         onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
@@ -279,8 +281,13 @@ export function CanvasNodeHoverToolbar({
     }));
     // 合并图片工具（当 hasImage && !simpleMode 时追加到 otherTools 末尾）
     const allTools: ToolbarTool[] = hasImage && !simpleMode ? [...otherTools, ...imageTools.map((tool) => ({ id: tool.id, title: tool.title, label: tool.label, icon: tool.icon, active: tool.active, danger: undefined, disabled: undefined, onClick: tool.onClick }))] : otherTools;
+    // 动作板「出视频」必须始终可见，不依赖用户快捷工具偏好。
+    const actionBoardVideoTool = otherTools.find((tool) => tool.id === "generateVideoFromActionBoard");
     // hasImage 时按 quickImageToolIds 过滤
-    const toolbarTools = hasImage ? allTools.filter((tool) => quickImageToolIdSet.has(tool.id as ImageQuickToolId)) : allTools;
+    const filteredTools = hasImage ? allTools.filter((tool) => quickImageToolIdSet.has(tool.id as ImageQuickToolId) || tool.id === "generateVideoFromActionBoard") : allTools;
+    const toolbarTools = actionBoardVideoTool && !filteredTools.some((tool) => tool.id === actionBoardVideoTool.id)
+        ? [actionBoardVideoTool, ...filteredTools]
+        : filteredTools;
     const selectableImageToolbarTools = allTools.filter((tool): tool is ToolbarTool & { id: ImageQuickToolId } => isImageQuickToolId(tool.id));
     const temporaryImageToolbarTools = selectableImageToolbarTools.filter((tool) => !quickImageToolIdSet.has(tool.id));
     const dockItems: FloatingDockEntry[] = [

@@ -110,9 +110,10 @@ export function buildGenerationSubmissionSnapshot(options: {
     }));
     const mentionedNodeIds = new Set(mentionTokens.filter((item) => item.kind === "node").map((item) => item.id));
     const hasExplicitMention = mentionTokens.length > 0;
-    // 必须与 buildNodeGenerationContext 一致：仅 Config+composer 或提示词显式 @ 才进入「只发被 @ 的」模式。
-    // 动作板/分镜图也会写 composerContent（短提示原稿，防重试叠层），绝不能因此关掉入边角色与参考图。
-    const usesComposer = (sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitMention;
+    // 必须与 buildNodeGenerationContext 一致：只有 Config 才进入「只发被 @ 的」模式。
+    // 视频节点 prompt 里的 @[node:…] 是参考标注；入边画风/章节/角色仍默认勾选发送。
+    const usesComposer = sourceNode?.type === CanvasNodeType.Config
+        && (Boolean(sourceNode.metadata?.composerContent?.trim()) || hasExplicitMention);
 
     const references: GenerationSubmissionReference[] = [];
     const pushReference = (item: GenerationSubmissionReference) => {

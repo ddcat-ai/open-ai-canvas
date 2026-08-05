@@ -60,7 +60,11 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const sourceNode = nodes.find((node) => node.id === nodeId);
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
     const hasExplicitNodeMention = /@\[node:[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
-    if ((sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitNodeMention) {
+    // 仅 Config 的 composer / 显式 @ 进入「只收集被 @ 的」路径。
+    // 视频/图片节点 prompt 里写 @[node:…] 只是标注参考，入边角色/画风/章节仍应全部带上。
+    const useComposerPath = sourceNode?.type === CanvasNodeType.Config
+        && (Boolean(sourceNode.metadata?.composerContent?.trim()) || hasExplicitNodeMention);
+    if (useComposerPath) {
         return buildComposerGenerationContext(inputs, prompt, [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id)));
     }
 

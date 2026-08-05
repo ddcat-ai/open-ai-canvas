@@ -11,6 +11,8 @@ function isAudio(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Au
 function isText(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Text; }
 function isConfig(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Config; }
 function hasImage(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.content); }
+function isActionBoard(ctx: ToolContext) { return isImage(ctx) && ctx.nodeMetadata?.workflowKind === "action_board"; }
+function hasActionBoardImage(ctx: ToolContext) { return isActionBoard(ctx) && Boolean(ctx.nodeMetadata?.content); }
 function hasVideo(ctx: ToolContext) { return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content); }
 function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content); }
 function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId); }
@@ -132,6 +134,18 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultOrder: 90,
         applicable: isEditableText,
         run: (ctx) => ctx.handlers.onNodeGenerateImage(ctx.node!),
+    },
+    {
+        id: "generateVideoFromActionBoard",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "根据 12 宫格动作板创建视频节点（不自动生成）",
+        displayLabel: "出视频节点",
+        icon: <Video className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 95,
+        applicable: hasActionBoardImage,
+        run: (ctx) => ctx.handlers.onNodeGenerateVideoFromActionBoard(ctx.node!),
     },
     {
         id: "config",

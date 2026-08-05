@@ -218,6 +218,8 @@ export type CanvasNodeMetadata = {
     };
     actionBoardRows?: number;
     actionBoardColumns?: number;
+    /** 视频节点由哪块动作板一键生成（用于回溯与去重） */
+    actionBoardNodeId?: string;
     taskId?: string;
     taskStatus?: "queued" | "running" | "succeeded" | "failed" | "cancelled" | string;
     taskProgress?: number;

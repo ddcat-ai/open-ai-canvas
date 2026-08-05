@@ -68,6 +68,8 @@ export type ToolbarHandlers = {
     onNodeToggleDialog: (node: CanvasNodeData) => void;
     onNodeAnnotate: (node: CanvasNodeData) => void;
     onNodeGenerateImage: (node: CanvasNodeData) => void;
+    /** 从 12 宫格动作板一键生成视频节点 */
+    onNodeGenerateVideoFromActionBoard: (node: CanvasNodeData) => void;
     onNodeUpload: (node: CanvasNodeData) => void;
     onNodeDownload: (node: CanvasNodeData) => void;
     onNodeSaveAsset: (node: CanvasNodeData) => void;

@@ -1157,6 +1157,7 @@ function InfiniteCanvasPage() {
         generateScriptImages,
         generateScriptRows,
         generateScriptVideos,
+        generateVideoFromActionBoard,
         removeScriptRow,
         replaceScriptRows,
         updateScriptRow,
@@ -1602,6 +1603,7 @@ function InfiniteCanvasPage() {
                     onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
                     onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
                     onGenerateImage={generateImageFromTextNode}
+                    onGenerateVideoFromActionBoard={(node) => generateVideoFromActionBoard(node.id)}
                     onUpload={(node) => handleUploadRequest(node.id)}
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
