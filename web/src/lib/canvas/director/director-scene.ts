@@ -3,7 +3,7 @@ import { Color, Euler, Quaternion } from "three";
 
 import type { DirectorBoneKeyframe, DirectorBoneTrack, DirectorCamera, DirectorHumanoidBone, DirectorKeyframe, DirectorLight, DirectorObject, DirectorPose, DirectorQuat, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
 
-export const DIRECTOR_DEFAULT_ACTOR_URL = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r185/examples/models/gltf/Soldier.glb";
+export const DIRECTOR_DEFAULT_ACTOR_URL = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r185/examples/models/gltf/Xbot.glb";
 export const DIRECTOR_ACTOR_COLORS = ["#f1f3f5", "#202329", "#2f7de1", "#d84949", "#dfae3f", "#34a276"] as const;
 
 export const directorIdentityTransform = (position: DirectorVec3 = [0, 0, 0]): DirectorTransform => ({ position, rotation: [0, 0, 0], scale: [1, 1, 1] });
@@ -19,10 +19,7 @@ export function createDirectorScene(title = "未命名场景"): DirectorScene {
         background: "#d8dde3",
         environmentIntensity: 0.7,
         gridVisible: true,
-        objects: [
-            createDirectorActor("演员 1", [0, 0, 0]),
-            createDirectorObject("box", "前景道具", [1.8, 0.45, 0.8], "#8b7355"),
-        ],
+        objects: [createDirectorActor("演员 1", [0, 0, 0])],
         cameras: [camera],
         lights: [createDirectorLight("directional", "主光", [4, 6, 4], 2.4), createDirectorLight("directional", "轮廓光", [-4, 3, -2], 1.1), createDirectorLight("ambient", "环境光", [0, 0, 0], 0.65)],
         shots: [{ id: shotId, name: "镜头 1", cameraId: camera.id, duration: 5, fps: 24, shotSize: "medium", cameraMove: "static", prompt: "" }],

@@ -26,7 +26,7 @@ const cameraMoveLabels: Record<DirectorShot["cameraMove"], string> = {
 export function compileDirectorPrompt(scene: DirectorScene, shot: DirectorShot) {
     const camera = scene.cameras.find((item) => item.id === shot.cameraId) || scene.cameras[0];
     const visibleObjects = scene.objects.filter((item) => item.visible);
-    const actors = visibleObjects.filter((item) => item.kind === "actor");
+    const actors = visibleObjects.filter((item) => item.kind === "actor" || item.primitive === "character");
     return [
         shot.prompt.trim(),
         `镜头设计：${shotSizeLabels[shot.shotSize]}，${cameraMoveLabels[shot.cameraMove]}，时长 ${formatNumber(shot.duration)} 秒。`,
@@ -52,7 +52,7 @@ function cameraPrompt(camera: DirectorCamera) {
 function objectPrompt(object: DirectorObject) {
     const [x, y, z] = object.transform.position;
     const pose = object.pose ? `，姿势${directorPoseLabel(object.pose)}` : "";
-    const color = object.kind === "actor" ? `，${directorColorLabel(object.color)}参考人偶` : "";
+    const color = object.kind === "actor" || object.primitive === "character" ? `，${directorColorLabel(object.color)}参考人偶` : "";
     return `${object.name}${color}位于 (${formatNumber(x)}, ${formatNumber(y)}, ${formatNumber(z)})${pose}`;
 }
 
