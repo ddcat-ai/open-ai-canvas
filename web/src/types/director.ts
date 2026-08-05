@@ -1,4 +1,5 @@
 export type DirectorVec3 = [number, number, number];
+export type DirectorQuat = [number, number, number, number];
 
 export type DirectorTransform = {
     position: DirectorVec3;
@@ -7,16 +8,47 @@ export type DirectorTransform = {
 };
 
 export type DirectorPrimitiveKind = "box" | "sphere" | "cylinder" | "plane" | "character";
-export type DirectorObjectKind = "primitive" | "model" | "billboard";
-export type DirectorPose = "neutral" | "stand" | "walk" | "run" | "sit" | "action";
+export type DirectorObjectKind = "primitive" | "model" | "actor" | "billboard";
+export type DirectorPose = "neutral" | "stand" | "t_pose" | "walk" | "run" | "sit" | "squat" | "kneel_single" | "kneel_double" | "hands_hips" | "lean" | "bow" | "think" | "fight" | "kick" | "throw" | "push" | "wave" | "reach" | "arms_crossed" | "phone";
 export type DirectorCameraMove = "static" | "push_in" | "pull_out" | "pan_left" | "pan_right" | "tilt_up" | "tilt_down" | "orbit_left" | "orbit_right" | "handheld";
 export type DirectorShotSize = "extreme_wide" | "wide" | "full" | "medium" | "close_up" | "extreme_close_up";
-export type DirectorRenderMode = "beauty" | "depth" | "normal";
+export type DirectorRenderMode = "beauty" | "clay" | "depth" | "normal" | "pose";
 
 export type DirectorKeyframe = {
     id: string;
     time: number;
     transform: DirectorTransform;
+    easing?: "step" | "linear" | "smooth";
+};
+
+export type DirectorHumanoidBone = "root" | "hips" | "spine" | "chest" | "neck" | "head" | "leftShoulder" | "leftUpperArm" | "leftLowerArm" | "leftHand" | "rightShoulder" | "rightUpperArm" | "rightLowerArm" | "rightHand" | "leftUpperLeg" | "leftLowerLeg" | "leftFoot" | "rightUpperLeg" | "rightLowerLeg" | "rightFoot";
+
+export type DirectorBoneKeyframe = {
+    id: string;
+    time: number;
+    rotation: DirectorQuat;
+    easing?: "step" | "linear" | "smooth";
+};
+
+export type DirectorBoneTrack = {
+    bone: DirectorHumanoidBone;
+    keyframes: DirectorBoneKeyframe[];
+};
+
+export type DirectorRig = {
+    status: "unmapped" | "ready";
+    boneMap: Partial<Record<DirectorHumanoidBone, string>>;
+    animationNames: string[];
+};
+
+export type DirectorMotionClip = {
+    id: string;
+    name: string;
+    sourceAnimation: string;
+    start: number;
+    duration: number;
+    playbackRate: number;
+    loop: boolean;
 };
 
 export type DirectorObject = {
@@ -30,6 +62,11 @@ export type DirectorObject = {
     castShadow: boolean;
     receiveShadow: boolean;
     pose?: DirectorPose;
+    rig?: DirectorRig;
+    motionClips?: DirectorMotionClip[];
+    activeMotionClipId?: string;
+    boneOverrides?: Partial<Record<DirectorHumanoidBone, DirectorQuat>>;
+    boneTracks?: DirectorBoneTrack[];
     sourceNodeId?: string;
     assetId?: string;
     storageKey?: string;
@@ -69,6 +106,7 @@ export type DirectorShot = {
     name: string;
     cameraId: string;
     duration: number;
+    fps: 24 | 25 | 30;
     shotSize: DirectorShotSize;
     cameraMove: DirectorCameraMove;
     prompt: string;
@@ -98,6 +136,8 @@ export type DirectorSceneOutput = {
     shot: DirectorShot;
     prompt: string;
     beauty: Blob;
-    depth: Blob;
-    normal: Blob;
+    depth?: Blob;
+    normal?: Blob;
+    clayVideo?: Blob;
+    clayVideoMimeType?: string;
 };
