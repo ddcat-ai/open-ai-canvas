@@ -26,26 +26,124 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
     assertAudioConfig(requestConfig, model);
     const format = normalizeAudioFormatValue(config.audioFormat);
     const instructions = config.audioInstructions.trim();
+    const payload = {
+        model,
+        input: prompt,
+        voice: normalizeAudioVoiceValue(config.audioVoice),
+        response_format: format,
+        speed: Number(normalizeAudioSpeedValue(config.audioSpeed)),
+        ...(instructions ? { instructions } : {}),
+    };
 
     try {
+        if (requestConfig.interfaceType === "async-audio") {
+            return await requestAsyncAudioGeneration(requestConfig, payload, format, options);
+        }
         const request = channelRequest(requestConfig, aiApiUrl(requestConfig, "/audio/speech"), aiHeaders(requestConfig));
-        const response = await axios.post<Blob>(
-            request.url,
-            {
-                model,
-                input: prompt,
-                voice: normalizeAudioVoiceValue(config.audioVoice),
-                response_format: format,
-                speed: Number(normalizeAudioSpeedValue(config.audioSpeed)),
-                ...(instructions ? { instructions } : {}),
-            },
-            { headers: request.headers, withCredentials: request.credentials === "include", responseType: "blob", signal: options?.signal },
-        );
+        const response = await axios.post<Blob>(request.url, payload, { headers: request.headers, withCredentials: request.credentials === "include", responseType: "blob", signal: options?.signal });
         await assertAudioBlob(response.data);
         return response.data.type.startsWith("audio/") ? response.data : new Blob([response.data], { type: audioMimeType(format) });
     } catch (error) {
         throw new Error(readAxiosError(error, "音频生成失败"));
     }
+}
+
+async function requestAsyncAudioGeneration(config: AiConfig, payload: Record<string, unknown>, format: string, options?: RequestOptions) {
+    const createRequest = channelRequest(config, aiApiUrl(config, "/audio/tasks"), aiHeaders(config));
+    const created = await axios.post<Record<string, unknown>>(createRequest.url, payload, { headers: createRequest.headers, withCredentials: createRequest.credentials === "include", signal: options?.signal });
+    let state = asyncAudioPayload(created.data);
+    const taskId = asyncAudioTaskId(state);
+    if (!taskId) throw new Error("异步音频接口没有返回任务 ID");
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+        if (asyncAudioSucceeded(state)) return downloadAsyncAudio(config, taskId, state, format, options);
+        const status = String(state.status || "").toLowerCase();
+        if (["failed", "cancelled", "canceled", "expired", "error"].includes(status)) {
+            throw new Error(asyncAudioError(state));
+        }
+        await waitForAudioPoll(options?.signal);
+        const pollRequest = channelRequest(config, aiApiUrl(config, `/audio/tasks/${encodeURIComponent(taskId)}`), aiHeaders(config));
+        const polled = await axios.get<Record<string, unknown>>(pollRequest.url, { headers: pollRequest.headers, withCredentials: pollRequest.credentials === "include", signal: options?.signal });
+        state = asyncAudioPayload(polled.data);
+    }
+    throw new Error(`异步音频生成超时（任务 ${taskId}）`);
+}
+
+function asyncAudioPayload(payload: Record<string, unknown>): Record<string, unknown> {
+    for (const key of ["data", "result", "output"]) {
+        const nested = payload[key];
+        if (nested && typeof nested === "object" && !Array.isArray(nested)) return { ...payload, ...(nested as Record<string, unknown>) };
+    }
+    return payload;
+}
+
+function asyncAudioTaskId(payload: Record<string, unknown>) {
+    for (const value of [payload.id, payload.task_id, payload.request_id]) {
+        if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return undefined;
+}
+
+function asyncAudioSucceeded(payload: Record<string, unknown>) {
+    const status = String(payload.status || "").toLowerCase();
+    return payload.done === true || ["completed", "succeeded", "success", "done"].includes(status) || (!status && Boolean(asyncAudioResultUrl(payload)));
+}
+
+function asyncAudioResultUrl(payload: Record<string, unknown>): string {
+    for (const key of ["audio_url", "audioUrl", "result_url", "resultUrl", "output_url", "outputUrl", "url", "data"]) {
+        const value = payload[key];
+        if (typeof value === "string" && (/^https?:\/\//i.test(value) || value.startsWith("data:audio/"))) return value;
+    }
+    for (const key of ["audio", "data", "result", "output"]) {
+        const value = payload[key];
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            const nested = asyncAudioResultUrl(value as Record<string, unknown>);
+            if (nested) return nested;
+        }
+    }
+    return "";
+}
+
+async function downloadAsyncAudio(config: AiConfig, taskId: string, state: Record<string, unknown>, format: string, options?: RequestOptions) {
+    const resultUrl = asyncAudioResultUrl(state);
+    let blob: Blob;
+    if (resultUrl.startsWith("data:audio/")) {
+        blob = await (await fetch(resultUrl, { signal: options?.signal })).blob();
+    } else if (/^https?:\/\//i.test(resultUrl)) {
+        blob = (await axios.get<Blob>(resultUrl, { responseType: "blob", signal: options?.signal })).data;
+    } else {
+        const contentRequest = channelRequest(config, aiApiUrl(config, `/audio/tasks/${encodeURIComponent(taskId)}/content`), aiHeaders(config));
+        blob = (await axios.get<Blob>(contentRequest.url, { headers: contentRequest.headers, withCredentials: contentRequest.credentials === "include", responseType: "blob", signal: options?.signal })).data;
+    }
+    await assertAudioBlob(blob);
+    return blob.type.startsWith("audio/") ? blob : new Blob([blob], { type: audioMimeType(format) });
+}
+
+function asyncAudioError(payload: Record<string, unknown>) {
+    const error = payload.error;
+    if (typeof error === "string" && error.trim()) return error;
+    if (error && typeof error === "object" && !Array.isArray(error)) {
+        const message = (error as Record<string, unknown>).message;
+        if (typeof message === "string" && message.trim()) return message;
+    }
+    return typeof payload.message === "string" && payload.message.trim() ? payload.message : "异步音频生成失败";
+}
+
+function waitForAudioPoll(signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+        }
+        const onAbort = () => {
+            window.clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+        };
+        const timer = window.setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, 2500);
+        signal?.addEventListener("abort", onAbort, { once: true });
+    });
 }
 
 export async function storeGeneratedAudio(blob: Blob, format = "mp3"): Promise<UploadedFile> {
@@ -61,7 +159,9 @@ function assertAudioConfig(config: AiConfig, model: string) {
 }
 
 async function assertAudioBlob(blob: Blob) {
-    if (!blob.type.includes("json")) return;
+    const mimeType = blob.type.toLowerCase();
+    if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("text/")) throw new Error(`上游返回了非音频内容：${mimeType}`);
+    if (!mimeType.includes("json")) return;
     let payload: { code?: number; msg?: string; error?: { message?: string } };
     try {
         payload = JSON.parse(await blob.text()) as { code?: number; msg?: string; error?: { message?: string } };
