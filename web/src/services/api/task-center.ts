@@ -14,6 +14,7 @@ export type BackendEnvelope<T> = {
 
 export type GenerationTask = {
     id: string;
+    submissionId?: string;
     sessionId?: string;
     projectId?: string;
     type: string;
@@ -123,6 +124,7 @@ export type CreateSessionInput = {
 };
 
 export type CreateTaskInput = {
+    submissionId?: string;
     sessionId?: string;
     projectId?: string;
     type?: string;
@@ -131,6 +133,29 @@ export type CreateTaskInput = {
     provider?: string;
     model?: string;
     input?: Record<string, unknown>;
+};
+
+export class TaskRequestTransportError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "TaskRequestTransportError";
+    }
+}
+
+export function isTaskRequestTransportUncertain(error: unknown): error is TaskRequestTransportError {
+    return error instanceof TaskRequestTransportError;
+}
+
+export type TaskTextChunk = {
+    sequence: number;
+    delta: string;
+};
+
+export type TaskTextStream = {
+    task: GenerationTask;
+    attempt: number;
+    chunks: TaskTextChunk[];
+    nextSequence: number;
 };
 
 const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
@@ -183,7 +208,7 @@ export function uploadAgentFile(sessionId: string, file: File) {
 }
 
 export function createGenerationTask(input: CreateTaskInput) {
-    return request<GenerationTask>(api.post("/tasks", input)).then((task) => {
+    return createTaskRequest(input).then((task) => {
         notifyCanvasTaskCreated(task);
         // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
         window.dispatchEvent(new CustomEvent("wallet:updated"));
@@ -191,8 +216,28 @@ export function createGenerationTask(input: CreateTaskInput) {
     });
 }
 
+async function createTaskRequest(input: CreateTaskInput) {
+    try {
+        const response = await api.post<BackendEnvelope<GenerationTask>>("/tasks", input);
+        if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
+        return response.data.data;
+    } catch (error) {
+        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
+            if (!error.response) throw new TaskRequestTransportError(error.message || "任务提交连接中断");
+            throw new Error(error.response.data?.msg || error.message || "请求失败");
+        }
+        throw error;
+    }
+}
+
 export function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }) {
     return request<GenerationTask[]>(api.get("/tasks", { params: { limit, projectId: options?.projectId, activeOnly: options?.activeOnly || undefined } }));
+}
+
+export function recoverGenerationTasks(submissionIds: string[]) {
+    const uniqueIds = Array.from(new Set(submissionIds.map((value) => value.trim()).filter(Boolean))).slice(0, 100);
+    if (!uniqueIds.length) return Promise.resolve([] as GenerationTask[]);
+    return request<GenerationTask[]>(api.post("/tasks/recover", { submissionIds: uniqueIds }));
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
@@ -213,6 +258,15 @@ export function cancelGenerationTask(id: string) {
 
 export function listTaskLogs(id: string) {
     return request<TaskLog[]>(api.get(`/tasks/${encodeURIComponent(id)}/logs`));
+}
+
+export function getTaskTextChunks(id: string, after = 0) {
+    return request<TaskTextStream>(api.get(`/tasks/${encodeURIComponent(id)}/text-chunks`, { params: { after: Math.max(0, after) } }));
+}
+
+export function taskTextEventsUrl(id: string, after = 0) {
+    const baseUrl = String(api.defaults.baseURL || "/api").replace(/\/$/, "");
+    return `${baseUrl}/tasks/${encodeURIComponent(id)}/text-events?after=${Math.max(0, after)}`;
 }
 
 export async function waitForGenerationTask(id: string, options?: { signal?: AbortSignal; intervalMs?: number; timeoutMs?: number; initialTask?: GenerationTask; onTaskUpdate?: (task: GenerationTask) => void }) {

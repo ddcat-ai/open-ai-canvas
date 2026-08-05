@@ -1,7 +1,7 @@
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
-import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { createGenerationTask, isTaskRequestTransportUncertain, recoverGenerationTasks, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -26,6 +26,16 @@ type BackendGenerationTaskOptions = {
     referenceAudios?: ReferenceAudio[];
     mask?: ReferenceImage;
     signal?: AbortSignal;
+    metadata?: Record<string, unknown>;
+    onTaskUpdate?: (task: GenerationTask) => void;
+};
+
+export type BackendTextGenerationTaskOptions = {
+    submissionId: string;
+    projectId?: string;
+    prompt: string;
+    config: AiConfig;
+    referenceImages?: ReferenceImage[];
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
 };
@@ -66,6 +76,46 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
         ...options,
         metadata: { ...options.metadata, batchIndex, batchCount: count },
     }, prepared)));
+}
+
+// 文本创作只提交一次后台任务；页面重入后由 submissionId 重新关联，不将任务寿命绑定到当前页面。
+export async function submitBackendTextGenerationTask({
+    submissionId,
+    projectId,
+    prompt,
+    config,
+    referenceImages = [],
+    metadata,
+    onTaskUpdate,
+}: BackendTextGenerationTaskOptions) {
+    const prepared = await prepareGenerationReferences({ referenceImages });
+    try {
+        const task = await createGenerationTask({
+            submissionId,
+            ...(projectId ? { projectId } : {}),
+            type: "canvas_text",
+            operation: "text",
+            prompt,
+            model: config.model,
+            input: {
+                mode: "text",
+                prompt,
+                config: backendProviderConfig(config),
+                referenceImages: prepared.referenceImages,
+                referenceVideos: [],
+                referenceAudios: [],
+                metadata,
+            },
+        });
+        onTaskUpdate?.(task);
+        return task;
+    } catch (error) {
+        if (!isTaskRequestTransportUncertain(error)) throw error;
+        const [task] = await recoverGenerationTasks([submissionId]).catch(() => [] as GenerationTask[]);
+        if (!task) throw error;
+        onTaskUpdate?.(task);
+        return task;
+    }
 }
 
 function throwIfAborted(signal?: AbortSignal) {

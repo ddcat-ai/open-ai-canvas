@@ -19,6 +19,8 @@ import (
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -53,14 +55,15 @@ type CreateSessionRequest struct {
 }
 
 type CreateTaskRequest struct {
-	SessionID string         `json:"sessionId"`
-	ProjectID string         `json:"projectId"`
-	Type      string         `json:"type"`
-	Operation string         `json:"operation"`
-	Prompt    string         `json:"prompt"`
-	Provider  string         `json:"provider"`
-	Model     string         `json:"model"`
-	Input     map[string]any `json:"input"`
+	SubmissionID string         `json:"submissionId"`
+	SessionID    string         `json:"sessionId"`
+	ProjectID    string         `json:"projectId"`
+	Type         string         `json:"type"`
+	Operation    string         `json:"operation"`
+	Prompt       string         `json:"prompt"`
+	Provider     string         `json:"provider"`
+	Model        string         `json:"model"`
+	Input        map[string]any `json:"input"`
 }
 
 type SessionDetail struct {
@@ -72,6 +75,7 @@ type SessionDetail struct {
 
 type TaskSummary struct {
 	ID                string              `json:"id"`
+	SubmissionID      string              `json:"submissionId,omitempty"`
 	SessionID         string              `json:"sessionId,omitempty"`
 	ProjectID         string              `json:"projectId,omitempty"`
 	Type              string              `json:"type"`
@@ -159,20 +163,20 @@ type agentStoryboardPlan struct {
 }
 
 type agentStoryboardShot struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description"`
-	Duration     int      `json:"durationSeconds"`
-	Dialogue     string   `json:"dialogue"`
-	ShotSize     string   `json:"shotSize"`
-	Emotion      string   `json:"emotion"`
-	Lighting     string   `json:"lightingAndAtmosphere"`
-	AudioEffects string   `json:"audioEffects"`
-	VisualPrompt string   `json:"visualPrompt"`
-	VideoPrompt  string   `json:"videoPrompt"`
-	Camera       string   `json:"camera"`
-	Motion       string   `json:"motion"`
-	TimeBeats    string   `json:"timeBeats"`
-	Negative     string   `json:"negativePrompt"`
+	Title         string   `json:"title"`
+	Description   string   `json:"description"`
+	Duration      int      `json:"durationSeconds"`
+	Dialogue      string   `json:"dialogue"`
+	ShotSize      string   `json:"shotSize"`
+	Emotion       string   `json:"emotion"`
+	Lighting      string   `json:"lightingAndAtmosphere"`
+	AudioEffects  string   `json:"audioEffects"`
+	VisualPrompt  string   `json:"visualPrompt"`
+	VideoPrompt   string   `json:"videoPrompt"`
+	Camera        string   `json:"camera"`
+	Motion        string   `json:"motion"`
+	TimeBeats     string   `json:"timeBeats"`
+	Negative      string   `json:"negativePrompt"`
 	AssetTags     []string `json:"assetTags"`
 	CharacterIDs  []string `json:"characterIds"`
 	Intent        string   `json:"narrativeIntent"`
@@ -309,6 +313,19 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if prompt == "" {
 		return nil, errors.New("prompt is required")
 	}
+	submissionID, err := normalizeTaskSubmissionID(req.SubmissionID)
+	if err != nil {
+		return nil, err
+	}
+	if submissionID != "" {
+		existing, findErr := s.repo.TaskForSubmission(userID, submissionID)
+		if findErr == nil {
+			return taskForOutput(*existing), nil
+		}
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return nil, findErr
+		}
+	}
 	normalizedInput, err := normalizeTaskInput(req.Input)
 	if err != nil {
 		return nil, err
@@ -331,7 +348,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if taskType == "" {
 		taskType = "video_image_to_video"
 	}
-	task := model.Task{ID: newID(), UserID: userID, SessionID: req.SessionID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	task := model.Task{ID: newID(), UserID: userID, SubmissionID: submissionID, SessionID: req.SessionID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
 	if err := s.ensureTaskProjectActive(userID, req.ProjectID); err != nil {
 		return nil, err
 	}
@@ -348,6 +365,11 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		task.BillingOrderID = billingOrder.ID
 	}
 	err = s.createTaskWithinStorageQuota(&task, billingOrder, policy)
+	if err != nil && submissionID != "" {
+		if existing, findErr := s.repo.TaskForSubmission(userID, submissionID); findErr == nil {
+			return taskForOutput(*existing), nil
+		}
+	}
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
@@ -360,6 +382,14 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	s.recordActivity(userID, "task", 1)
 	_ = s.log(userID, task.ID, "info", "任务已进入队列", "")
 	return taskForOutput(task), nil
+}
+
+func normalizeTaskSubmissionID(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if len(value) > 96 {
+		return "", BadAuthRequest("submissionId 长度不能超过 96 个字符")
+	}
+	return value, nil
 }
 
 // 所有任务输入先收敛为 JSON 对象，确保计费与密钥保护不会因 Go 结构体类型不同而被绕过。
@@ -584,6 +614,146 @@ func (s *Service) TaskLogs(userID string, id string) ([]model.TaskLog, error) {
 	return s.repo.TaskLogs(userID, id)
 }
 
+func (s *Service) TasksForSubmissions(userID string, submissionIDs []string) ([]TaskSummary, error) {
+	ids := make([]string, 0, len(submissionIDs))
+	seen := map[string]struct{}{}
+	for _, raw := range submissionIDs {
+		id, err := normalizeTaskSubmissionID(raw)
+		if err != nil {
+			return nil, err
+		}
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) > 100 {
+		return nil, BadAuthRequest("一次最多恢复 100 个任务")
+	}
+	tasks, err := s.repo.TasksForSubmissions(userID, ids)
+	if err != nil {
+		return nil, err
+	}
+	orders, err := s.repo.BillingOrdersByTaskIDs(userID, taskBillingTaskIDs(tasks))
+	if err != nil {
+		return nil, err
+	}
+	return taskSummariesForOutputWithBilling(tasks, orders), nil
+}
+
+type TaskTextChunkOutput struct {
+	Sequence int64  `json:"sequence"`
+	Delta    string `json:"delta"`
+}
+
+type TaskTextStream struct {
+	Task         TaskSummary           `json:"task"`
+	Attempt      int                   `json:"attempt"`
+	Chunks       []TaskTextChunkOutput `json:"chunks"`
+	NextSequence int64                 `json:"nextSequence"`
+}
+
+func (s *Service) TaskTextStream(userID string, id string, afterSequence int64) (*TaskTextStream, error) {
+	task, err := s.repo.TaskForUser(userID, id)
+	if err != nil {
+		return nil, err
+	}
+	attempt := task.Attempts
+	chunks, err := s.repo.TaskTextChunks(userID, task.ID, attempt, afterSequence)
+	if err != nil {
+		return nil, err
+	}
+	result := TaskTextStream{Task: taskSummaryForOutput(*task), Attempt: attempt, Chunks: make([]TaskTextChunkOutput, 0, len(chunks)), NextSequence: afterSequence}
+	for _, chunk := range chunks {
+		result.Chunks = append(result.Chunks, TaskTextChunkOutput{Sequence: chunk.Sequence, Delta: chunk.Delta})
+		result.NextSequence = chunk.Sequence
+	}
+	return &result, nil
+}
+
+const (
+	taskTextChunkFlushBytes    = 768
+	taskTextChunkFlushInterval = 250 * time.Millisecond
+)
+
+type taskTextWriter struct {
+	service      *Service
+	userID       string
+	taskID       string
+	attempt      int
+	mu           sync.Mutex
+	nextSequence int64
+	pending      strings.Builder
+	lastFlush    time.Time
+	progressed   bool
+	failure      error
+}
+
+func (s *Service) newTaskTextWriter(task model.Task) (*taskTextWriter, error) {
+	nextSequence, err := s.repo.LastTaskTextChunkSequence(task.ID, task.Attempts)
+	if err != nil {
+		return nil, err
+	}
+	return &taskTextWriter{service: s, userID: task.UserID, taskID: task.ID, attempt: task.Attempts, nextSequence: nextSequence, lastFlush: time.Now()}, nil
+}
+
+func (w *taskTextWriter) Write(delta string) error {
+	if delta == "" {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.failure != nil {
+		return w.failure
+	}
+	w.pending.WriteString(delta)
+	if w.pending.Len() < taskTextChunkFlushBytes && time.Since(w.lastFlush) < taskTextChunkFlushInterval {
+		return nil
+	}
+	return w.flushLocked()
+}
+
+func (w *taskTextWriter) Flush() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.flushLocked()
+}
+
+func (w *taskTextWriter) flushLocked() error {
+	if w.failure != nil {
+		return w.failure
+	}
+	if w.pending.Len() == 0 {
+		return nil
+	}
+	delta := w.pending.String()
+	w.pending.Reset()
+	nextSequence := w.nextSequence + 1
+	chunk := model.TaskTextChunk{ID: newID(), UserID: w.userID, TaskID: w.taskID, Attempt: w.attempt, Sequence: nextSequence, Delta: delta}
+	if err := w.service.repo.CreateTaskTextChunk(&chunk); err != nil {
+		w.pending.WriteString(delta)
+		w.failure = err
+		return err
+	}
+	w.nextSequence = nextSequence
+	w.lastFlush = time.Now()
+	if !w.progressed {
+		w.progressed = true
+		_ = w.service.repo.UpdateTaskProgress(w.taskID, "正在生成文本", 60)
+	}
+	return nil
+}
+
+func (w *taskTextWriter) Failure() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.failure
+}
+
 func taskSummariesForOutput(tasks []model.Task) []TaskSummary {
 	return taskSummariesForOutputWithBilling(tasks, nil)
 }
@@ -627,6 +797,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 	return TaskSummary{
 		ID:                task.ID,
+		SubmissionID:      task.SubmissionID,
 		SessionID:         task.SessionID,
 		ProjectID:         task.ProjectID,
 		Type:              task.Type,
@@ -1014,6 +1185,10 @@ func (s *Service) processTask(ctx context.Context, task model.Task) (map[string]
 	ctx = withProviderAnalytics(ctx, s, task)
 	if task.Type == "agent_storyboard_rows" {
 		return s.processStoryboardRowsTask(ctx, task)
+	}
+	if task.Type == "canvas_text" {
+		result, err := s.processCanvasTextGenerationTask(ctx, task)
+		return result, nil, err
 	}
 	if strings.HasPrefix(task.Type, "canvas_") || canRunProviderTask(task) {
 		result, err := s.processCanvasGenerationTask(ctx, task.UserID, task.Type, task.Prompt, task.InputJSON)
@@ -1701,10 +1876,10 @@ func shotDescription(shot agentStoryboardShot) string {
 func storyboardImagePromptValues(projectStyle string, styleGuide string, shot agentStoryboardShot) map[string]string {
 	negative := defaultString(strings.TrimSpace(shot.Negative), "禁止换脸、服装变化、手部畸形、乱码、风格突变和塑料材质")
 	return map[string]string{
-		"项目视觉": storyboardProjectVisualSummary(projectStyle, styleGuide),
-		"首帧构图": compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 360),
+		"项目视觉":   storyboardProjectVisualSummary(projectStyle, styleGuide),
+		"首帧构图":   compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 360),
 		"表演起始状态": compactPromptText(shot.Performance, 180),
-		"负面要求": compactPromptText(negative, 140),
+		"负面要求":   compactPromptText(negative, 140),
 	}
 }
 
@@ -1725,15 +1900,15 @@ func storyboardVideoPromptValues(projectStyle string, styleGuide string, shot ag
 	timeBeats := defaultString(strings.TrimSpace(shot.TimeBeats), fmt.Sprintf("0-%d秒：%s", shot.Duration, strings.TrimSpace(shot.Description)))
 	negative := defaultString(strings.TrimSpace(shot.Negative), "禁止换脸、服装变化、手部畸形、乱码、闪烁、风格突变和动作僵硬")
 	values := map[string]string{
-		"项目视觉": storyboardProjectVisualSummary(projectStyle, styleGuide),
-		"镜头意图": compactPromptText(shot.Intent+"；观众视点："+shot.ViewerPOV+"；情绪："+shot.Emotion, 150),
-		"首帧构图": compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 280),
+		"项目视觉":  storyboardProjectVisualSummary(projectStyle, styleGuide),
+		"镜头意图":  compactPromptText(shot.Intent+"；观众视点："+shot.ViewerPOV+"；情绪："+shot.Emotion, 150),
+		"首帧构图":  compactPromptText(shot.VisualPrompt+"；光影："+shot.Lighting, 280),
 		"表演与调度": compactPromptText(shot.Performance, 180),
-		"摄影机": compactPromptText(strings.TrimSpace(shot.ShotSize)+"；"+camera+"；主运镜："+motion, 220),
-		"时间节拍": compactPromptText(timeBeats, 240),
+		"摄影机":   compactPromptText(strings.TrimSpace(shot.ShotSize)+"；"+camera+"；主运镜："+motion, 220),
+		"时间节拍":  compactPromptText(timeBeats, 240),
 		"运动与结尾": compactPromptText(shot.VideoPrompt+"；连续性结尾："+shot.ContinuityOut, 240),
-		"声音": compactPromptText(strings.TrimSpace(shot.Dialogue)+"；音效："+strings.TrimSpace(shot.AudioEffects), 160),
-		"负面要求": compactPromptText(negative, 160),
+		"声音":    compactPromptText(strings.TrimSpace(shot.Dialogue)+"；音效："+strings.TrimSpace(shot.AudioEffects), 160),
+		"负面要求":  compactPromptText(negative, 160),
 	}
 	if len(shot.MustHave) > 0 {
 		priority := "必须完成：" + strings.Join(shot.MustHave, "；")

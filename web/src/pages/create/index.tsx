@@ -11,10 +11,9 @@ import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-referen
 import { createClientId } from "@/lib/client-id";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
-import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
-import { requestImageQuestion } from "@/services/api/image";
+import { parseBackendGenerationResult, runBackendGenerationTask, runBackendGenerationTaskBatch, submitBackendTextGenerationTask, type BackendGenerationResult } from "@/services/api/generation-task";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { cancelGenerationTask, getTaskTextChunks, listGenerationTasks, queryGenerationTask, recoverGenerationTasks, taskTextEventsUrl, type GenerationTask, type TaskTextStream } from "@/services/api/task-center";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -39,6 +38,9 @@ type CreationMessage = {
     references?: CreationReference[];
     settings?: CreationSettings;
     taskIds?: string[];
+    submissionId?: string;
+    textAttempt?: number;
+    textSequence?: number;
 };
 type CreationConversation = { id: string; title: string; updatedAt: string; messages: CreationMessage[] };
 
@@ -121,6 +123,8 @@ export default function CreatePage() {
     const followLatestMessageRef = useRef(true);
     const taskSyncWarningRef = useRef(false);
     const taskSyncInFlightRef = useRef(false);
+    const textSyncInFlightRef = useRef(false);
+    const textStopRequestedRef = useRef(false);
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const historyConversations = useMemo(
@@ -132,6 +136,12 @@ export default function CreatePage() {
     const isEmpty = !activeConversation?.messages.length;
     const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
+    const pendingTextTaskIds = useMemo(() => pendingCreationTextTaskIds(conversations), [conversations]);
+    const pendingTextSubmissionIds = useMemo(() => pendingCreationTextSubmissionIds(conversations), [conversations]);
+    const pendingTextTaskKey = pendingTextTaskIds.join("|");
+    const pendingTextSubmissionKey = pendingTextSubmissionIds.join("|");
+    const activeTextTaskId = useMemo(() => activeConversation?.messages.find((item) => item.role === "assistant" && item.mode === "text" && item.status === "streaming" && item.taskIds?.[0])?.taskIds?.[0], [activeConversation]);
+    const composerBusy = busy || Boolean(activeTextTaskId);
 
     useEffect(() => {
         let cancelled = false;
@@ -184,6 +194,67 @@ export default function CreatePage() {
             window.clearInterval(timer);
         };
     }, [hydrated, pendingMediaKey, pendingTaskIds, toast]);
+
+    useEffect(() => {
+        if (!hydrated || !pendingTextSubmissionKey) return;
+        let cancelled = false;
+        const submissionIds = pendingTextSubmissionKey.split("|").filter(Boolean);
+        void recoverGenerationTasks(submissionIds).then((tasks) => {
+            if (!cancelled) setConversations((current) => bindRecoveredTextTasks(current, tasks));
+        }).catch((error) => console.warn("文本创作任务恢复失败", error));
+        return () => {
+            cancelled = true;
+        };
+    }, [hydrated, pendingTextSubmissionKey]);
+
+    useEffect(() => {
+        if (!hydrated || !pendingTextTaskKey) return;
+        let cancelled = false;
+        const taskIds = pendingTextTaskKey.split("|").filter(Boolean);
+        const syncTextTasks = async () => {
+            if (textSyncInFlightRef.current) return;
+            textSyncInFlightRef.current = true;
+            try {
+                const streams = await Promise.all(taskIds.map((taskId) => getTaskTextChunks(taskId)));
+                if (!cancelled) setConversations((current) => reconcileTextTaskMessages(current, streams));
+            } catch (error) {
+                if (!cancelled) console.warn("文本创作任务状态同步失败", error);
+            } finally {
+                textSyncInFlightRef.current = false;
+            }
+        };
+        void syncTextTasks();
+        const timer = window.setInterval(() => void syncTextTasks(), 2000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [hydrated, pendingTextTaskKey]);
+
+    useEffect(() => {
+        if (!hydrated || !pendingTextTaskKey) return;
+        let cancelled = false;
+        const sources = pendingTextTaskKey.split("|").filter(Boolean).map((taskId) => {
+            const source = new EventSource(taskTextEventsUrl(taskId), { withCredentials: true });
+            source.addEventListener("delta", (event) => {
+                const payload = parseTextTaskEvent(event);
+                if (!payload || cancelled) return;
+                setConversations((current) => appendTextTaskDelta(current, taskId, payload.attempt, payload.sequence, payload.delta));
+            });
+            source.addEventListener("terminal", () => source.close());
+            source.onerror = () => source.close();
+            return source;
+        });
+        return () => {
+            cancelled = true;
+            sources.forEach((source) => source.close());
+        };
+    }, [hydrated, pendingTextTaskKey]);
+
+    useEffect(() => {
+        if (!hydrated) return;
+        setConversations((current) => markOrphanedTextDrafts(current));
+    }, [hydrated]);
 
     useEffect(() => {
         let cancelled = false;
@@ -267,7 +338,8 @@ export default function CreatePage() {
         const referenceMetadata = creationReferenceMetadata(references);
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
-        const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings });
+        const submissionId = mode === "text" ? createClientId() : "";
+        const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" ? "streaming" : "pending", settings, ...(submissionId ? { submissionId } : {}) });
         const boundTaskIds = new Set<string>();
         const boundTaskIdsByBatchIndex = new Map<number, string>();
         const bindTask = (task: GenerationTask) => {
@@ -286,18 +358,21 @@ export default function CreatePage() {
         setAttachments([]);
         setDraftReferences([]);
         setBusy(true);
+        if (mode === "text") textStopRequestedRef.current = false;
         const controller = new AbortController();
         abortRef.current = controller;
         const requestConfig = { ...config, model: selectedModel, imageModel: selectedModel, videoModel: selectedModel, textModel: selectedModel, size: ratio, videoSeconds: seconds, quality, vquality: videoQuality, count };
         try {
             if (mode === "text") {
-                const history = [...(activeConversation.messages || []), userMessage].map((item) => ({
-                    role: item.role,
-                    content: item.role === "user"
-                        ? buildTextMessageContent(item)
-                        : item.content,
-                }));
-                await requestImageQuestion(requestConfig, history, (text) => updateAssistant(assistantMessage.id, (item) => ({ ...item, content: text })), { signal: controller.signal });
+                const task = await submitBackendTextGenerationTask({
+                    submissionId,
+                    prompt: buildBackendTextPrompt([...activeConversation.messages, userMessage]),
+                    config: requestConfig,
+                    referenceImages: attachments,
+                    metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
+                    onTaskUpdate: bindTask,
+                });
+                if (textStopRequestedRef.current) await cancelGenerationTask(task.id);
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(15, Math.floor(Number(count) || 1)));
                 const settled = await runBackendGenerationTaskBatch({
@@ -352,7 +427,7 @@ export default function CreatePage() {
                 addCreationAssetOnce(creationVideoAsset({ title: expandedPrompt.slice(0, 24), uploaded: storedVideo, metadata: { source: "create-generation", conversationId: activeConversation.id, messageId: assistantMessage.id, taskId, taskIds: Array.from(boundTaskIds), resultIndex: 0, prompt: expandedPrompt } }), { taskId, messageId: assistantMessage.id, resultIndex: 0 });
                 updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done", content: "视频已生成", resultUrls: [storedVideo.url] }));
             }
-            updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done" }));
+            if (mode !== "text") updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "done" }));
         } catch (error) {
             if (controller.signal.aborted) {
                 updateAssistant(assistantMessage.id, (item) => ({ ...item, status: "cancelled", content: "已停止" }));
@@ -407,6 +482,7 @@ export default function CreatePage() {
         if (!previous?.content || busy) return;
         followLatestMessageRef.current = true;
         restoreMessageDraft(previous);
+        if (previous.mode === "text") return;
         const removedIds = new Set([item.id, previous.id]);
         updateActive((conversation) => {
             const messages = conversation.messages.filter((message) => !removedIds.has(message.id));
@@ -438,7 +514,7 @@ export default function CreatePage() {
         mode,
         prompt,
         setPrompt,
-        busy,
+        busy: composerBusy,
         attachments,
         references: mentionReferences,
         onRemoveAttachment: removeAttachment,
@@ -459,7 +535,17 @@ export default function CreatePage() {
         count,
         setCount,
         onSubmit: submit,
-        onStop: () => abortRef.current?.abort(),
+        onStop: () => {
+            if (activeTextTaskId) {
+                void cancelGenerationTask(activeTextTaskId).catch((error) => toast.error(generationErrorMessage(error)));
+                return;
+            }
+            if (mode === "text") {
+                textStopRequestedRef.current = true;
+                return;
+            }
+            abortRef.current?.abort();
+        },
     };
 
     return <>
@@ -506,7 +592,7 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
 function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void }) {
     if (item.role === "user") return <CreationUserMessage item={item} />;
     const mode = item.mode || "text";
-    const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : "";
+    const stateLabel = item.status === "pending" || item.status === "streaming" ? "生成中" : item.status === "cancelled" ? "已停止" : "";
     return <article className="creation-assistant-message"><div className="creation-message-heading"><span className="creation-message-mark"><Sparkles /></span><span>{modeLabels[mode]}</span>{modelName ? <span className="creation-message-model">{modelName}</span> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>{mode === "text" ? <div className="creation-message-content">{item.content ? <ReactMarkdown>{item.content}</ReactMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} />}{item.error ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}</article>;
 }
 
@@ -668,11 +754,11 @@ function conversationPreviewMessage(conversation: CreationConversation) {
     return fallback;
 }
 
-function buildTextMessageContent(item: CreationMessage) {
-    const content = expandCreationPrompt(item.content, item.references || [], item.attachments || []);
-    const images = item.attachments || [];
-    if (!images.length) return content;
-    return [{ type: "text" as const, text: content }, ...images.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl || image.url || "" } }))];
+function buildBackendTextPrompt(messages: CreationMessage[]) {
+    return messages
+        .filter((item) => item.content.trim())
+        .map((item) => `${item.role === "assistant" ? "助手" : "用户"}：${expandCreationPrompt(item.content, item.references || [], item.attachments || [])}`)
+        .join("\n\n");
 }
 
 function removeReferenceTokens(value: string, references: CreationReference[]) {
@@ -689,6 +775,113 @@ function pendingCreationTaskIds(conversations: CreationConversation[]) {
         return message.taskIds || [];
     }));
     return Array.from(new Set(taskIds));
+}
+
+function pendingCreationTextTaskIds(conversations: CreationConversation[]) {
+    const taskIds = conversations.flatMap((conversation) => conversation.messages.flatMap((message) => {
+        if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming") return [];
+        return message.taskIds || [];
+    }));
+    return Array.from(new Set(taskIds));
+}
+
+function pendingCreationTextSubmissionIds(conversations: CreationConversation[]) {
+    return Array.from(new Set(conversations.flatMap((conversation) => conversation.messages.flatMap((message) => {
+        if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming" || !message.submissionId) return [];
+        return [message.submissionId];
+    }))));
+}
+
+function bindRecoveredTextTasks(conversations: CreationConversation[], tasks: GenerationTask[]) {
+    const bySubmissionID = new Map(tasks.filter((task) => task.submissionId).map((task) => [task.submissionId!, task]));
+    if (!bySubmissionID.size) return conversations;
+    return conversations.map((conversation) => {
+        let changed = false;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming" || !message.submissionId) return message;
+            const task = bySubmissionID.get(message.submissionId);
+            if (!task || message.taskIds?.includes(task.id)) return message;
+            changed = true;
+            return { ...message, taskIds: Array.from(new Set([...(message.taskIds || []), task.id])) };
+        });
+        return changed ? { ...conversation, messages, updatedAt: new Date().toISOString() } : conversation;
+    });
+}
+
+function appendTextTaskDelta(conversations: CreationConversation[], taskID: string, attempt: number, sequence: number, delta: string) {
+    if (!delta || !Number.isFinite(sequence)) return conversations;
+    return conversations.map((conversation) => {
+        let changed = false;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming" || !message.taskIds?.includes(taskID)) return message;
+            const previousAttempt = message.textAttempt ?? attempt;
+            if (attempt < previousAttempt) return message;
+            const reset = attempt > previousAttempt;
+            const previousSequence = reset ? 0 : message.textSequence || 0;
+            if (sequence <= previousSequence) return message;
+            changed = true;
+            return {
+                ...message,
+                content: `${reset ? "" : message.content}${delta}`,
+                textAttempt: attempt,
+                textSequence: sequence,
+            };
+        });
+        return changed ? { ...conversation, messages, updatedAt: new Date().toISOString() } : conversation;
+    });
+}
+
+function reconcileTextTaskMessages(conversations: CreationConversation[], streams: TaskTextStream[]) {
+    const byTaskID = new Map(streams.map((stream) => [stream.task.id, stream]));
+    return conversations.map((conversation) => {
+        let changed = false;
+        let updatedAt = conversation.updatedAt;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming") return message;
+            const stream = (message.taskIds || []).map((id) => byTaskID.get(id)).find(Boolean);
+            if (!stream) return message;
+            let next = message;
+            for (const chunk of stream.chunks) {
+                const merged = appendTextTaskDelta([{ ...conversation, messages: [next] }], stream.task.id, stream.attempt, chunk.sequence, chunk.delta)[0].messages[0];
+                next = merged;
+            }
+            if (stream.task.status === "succeeded") {
+                next = { ...next, status: "done", error: undefined };
+            } else if (stream.task.status === "failed") {
+                next = { ...next, status: "error", content: next.content || "未完成草稿", error: stream.task.error || "生成中断，草稿已保留" };
+            } else if (stream.task.status === "cancelled") {
+                next = { ...next, status: "cancelled", content: next.content || "已停止", error: undefined };
+            }
+            if (next !== message) {
+                changed = true;
+                updatedAt = stream.task.updatedAt || updatedAt;
+            }
+            return next;
+        });
+        return changed ? { ...conversation, messages, updatedAt } : conversation;
+    });
+}
+
+function markOrphanedTextDrafts(conversations: CreationConversation[]) {
+    return conversations.map((conversation) => {
+        let changed = false;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || message.mode !== "text" || message.status !== "streaming" || message.submissionId || message.taskIds?.length) return message;
+            changed = true;
+            return { ...message, status: "error" as const, content: message.content || "未完成草稿", error: "生成请求已中断，草稿已保留" };
+        });
+        return changed ? { ...conversation, messages, updatedAt: new Date().toISOString() } : conversation;
+    });
+}
+
+function parseTextTaskEvent(event: Event) {
+    try {
+        const value = JSON.parse((event as MessageEvent<string>).data) as { attempt?: unknown; sequence?: unknown; delta?: unknown };
+        if (typeof value.attempt !== "number" || typeof value.sequence !== "number" || typeof value.delta !== "string") return null;
+        return { attempt: value.attempt, sequence: value.sequence, delta: value.delta };
+    } catch {
+        return null;
+    }
 }
 
 async function enrichCreationTaskSummaries(tasks: GenerationTask[]) {

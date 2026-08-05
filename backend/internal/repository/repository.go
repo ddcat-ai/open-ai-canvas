@@ -270,6 +270,23 @@ func (r *Repository) TaskForUser(userID string, id string) (*model.Task, error) 
 	return &task, nil
 }
 
+func (r *Repository) TaskForSubmission(userID string, submissionID string) (*model.Task, error) {
+	var task model.Task
+	if err := r.db.First(&task, "user_id = ? AND submission_id = ?", userID, submissionID).Error; err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+func (r *Repository) TasksForSubmissions(userID string, submissionIDs []string) ([]model.Task, error) {
+	if len(submissionIDs) == 0 {
+		return []model.Task{}, nil
+	}
+	var tasks []model.Task
+	err := r.db.Where("user_id = ? AND submission_id IN ?", userID, submissionIDs).Order("created_at asc").Find(&tasks).Error
+	return tasks, err
+}
+
 func (r *Repository) ActiveTaskCountForUser(userID string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Task{}).Where("user_id = ? AND status IN ?", userID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).Count(&count).Error
@@ -420,7 +437,7 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	query := r.db.Select("id", "submission_id", "session_id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "attempts", "started_at", "completed_at", "created_at", "updated_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))
@@ -481,6 +498,25 @@ func (r *Repository) TaskLogs(userID string, taskID string) ([]model.TaskLog, er
 	var logs []model.TaskLog
 	err := r.db.Order("created_at asc").Find(&logs, "user_id = ? AND task_id = ?", userID, taskID).Error
 	return logs, err
+}
+
+func (r *Repository) TaskTextChunks(userID string, taskID string, attempt int, afterSequence int64) ([]model.TaskTextChunk, error) {
+	var chunks []model.TaskTextChunk
+	query := r.db.Where("user_id = ? AND task_id = ? AND attempt = ?", userID, taskID, attempt).Order("sequence asc")
+	if afterSequence > 0 {
+		query = query.Where("sequence > ?", afterSequence)
+	}
+	return chunks, query.Find(&chunks).Error
+}
+
+func (r *Repository) LastTaskTextChunkSequence(taskID string, attempt int) (int64, error) {
+	var sequence int64
+	err := r.db.Model(&model.TaskTextChunk{}).Where("task_id = ? AND attempt = ?", taskID, attempt).Select("COALESCE(MAX(sequence), 0)").Scan(&sequence).Error
+	return sequence, err
+}
+
+func (r *Repository) CreateTaskTextChunk(chunk *model.TaskTextChunk) error {
+	return r.db.Create(chunk).Error
 }
 
 func (r *Repository) SystemChannels(includeDisabled bool) ([]model.ModelChannel, error) {

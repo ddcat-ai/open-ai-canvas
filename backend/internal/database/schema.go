@@ -57,6 +57,7 @@ func Models() []any {
 		&model.Session{},
 		&model.Message{},
 		&model.TaskLog{},
+		&model.TaskTextChunk{},
 		&model.SessionFile{},
 		&model.Result{},
 	}
@@ -79,5 +80,8 @@ func MigrateSchema(db *gorm.DB) error {
 	if err := db.Exec("DROP INDEX IF EXISTS idx_users_email").Error; err != nil {
 		return err
 	}
-	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error; err != nil {
+		return err
+	}
+	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_user_submission_nonempty ON tasks(user_id, submission_id) WHERE submission_id <> ''").Error
 }

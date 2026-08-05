@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -60,6 +61,7 @@ type providerConfig struct {
 const providerHTTPTimeout = 5 * time.Minute
 const videoPollTimeout = 30 * time.Minute
 const maxProviderResponseBytes int64 = 64 << 20
+const maxTextStreamResponseBytes int64 = 8 << 20
 
 type providerMedia struct {
 	ID         string `json:"id"`
@@ -144,58 +146,19 @@ func (e providerHTTPError) Error() string {
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
-	var input canvasGenerationInput
-	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
-		return nil, fmt.Errorf("任务输入解析失败：%w", err)
-	}
-	if strings.TrimSpace(input.Prompt) == "" {
-		input.Prompt = fallbackPrompt
-	}
-	promptTemplateOperation := metadataString(input.Metadata, "promptTemplateOperation")
-	if promptTemplateOperation != "" {
-		values := metadataStringValues(input.Metadata["promptTemplateVariables"])
-		compiled, compileErr := s.compilePrompt(userID, promptTemplateOperation, values)
-		if compileErr != nil {
-			return nil, fmt.Errorf("编译用户提示词失败：%w", compileErr)
-		}
-		input.Prompt = compiled.Content
-	}
-	if strings.TrimSpace(input.Prompt) == "" {
-		return nil, errors.New("prompt is required")
-	}
-	if input.Mode == "" && strings.HasPrefix(taskType, "video_") {
-		input.Mode = "video"
-	}
-	config, err := s.resolveProviderConfig(input.Config)
+	input, err := s.canvasGenerationInput(ctx, userID, taskType, fallbackPrompt, rawInput)
 	if err != nil {
 		return nil, err
-	}
-	input.Config = config
-	if input.Config.APIFormat == "gemini" && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiVeo) {
-		return nil, errors.New("后端任务队列暂不支持 Gemini 调用格式，请使用 OpenAI 兼容渠道")
-	}
-	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
-		return nil, errors.New("后端生成任务缺少 Base URL、API Key 或模型名")
-	}
-	if err := validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
-		return nil, err
-	}
-	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
-		return nil, errors.New("即梦官方 API 缺少 Secret Key")
-	}
-	if resumedProviderRequestID(ctx) == "" {
-		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
-		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
-			return nil, err
-		}
 	}
 	switch input.Mode {
 	case "image":
 		return runImageTask(ctx, input)
 	case "text":
 		result, taskErr := runTextTask(ctx, input)
-		if taskErr == nil && promptTemplateOperation != "" {
-			taskErr = validatePromptTemplateResult(promptTemplateOperation, result)
+		if taskErr == nil {
+			if operation := metadataString(input.Metadata, "promptTemplateOperation"); operation != "" {
+				taskErr = validatePromptTemplateResult(operation, result)
+			}
 		}
 		return result, taskErr
 	case "video":
@@ -205,6 +168,101 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+func (s *Service) canvasGenerationInput(ctx context.Context, userID string, taskType string, fallbackPrompt string, rawInput string) (canvasGenerationInput, error) {
+	var input canvasGenerationInput
+	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
+		return canvasGenerationInput{}, fmt.Errorf("任务输入解析失败：%w", err)
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		input.Prompt = fallbackPrompt
+	}
+	if operation := metadataString(input.Metadata, "promptTemplateOperation"); operation != "" {
+		values := metadataStringValues(input.Metadata["promptTemplateVariables"])
+		compiled, err := s.compilePrompt(userID, operation, values)
+		if err != nil {
+			return canvasGenerationInput{}, fmt.Errorf("编译用户提示词失败：%w", err)
+		}
+		input.Prompt = compiled.Content
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		return canvasGenerationInput{}, errors.New("prompt is required")
+	}
+	if input.Mode == "" && strings.HasPrefix(taskType, "video_") {
+		input.Mode = "video"
+	}
+	config, err := s.resolveProviderConfig(input.Config)
+	if err != nil {
+		return canvasGenerationInput{}, err
+	}
+	input.Config = config
+	if input.Config.APIFormat == "gemini" && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiVeo) {
+		return canvasGenerationInput{}, errors.New("后端任务队列暂不支持 Gemini 调用格式，请使用 OpenAI 兼容渠道")
+	}
+	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
+		return canvasGenerationInput{}, errors.New("后端生成任务缺少 Base URL、API Key 或模型名")
+	}
+	if err := validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
+		return canvasGenerationInput{}, err
+	}
+	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
+		return canvasGenerationInput{}, errors.New("即梦官方 API 缺少 Secret Key")
+	}
+	if resumedProviderRequestID(ctx) == "" {
+		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
+		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
+			return canvasGenerationInput{}, err
+		}
+	}
+	return input, nil
+}
+
+func (s *Service) processCanvasTextGenerationTask(ctx context.Context, task model.Task) (map[string]interface{}, error) {
+	input, err := s.canvasGenerationInput(ctx, task.UserID, task.Type, task.Prompt, task.InputJSON)
+	if err != nil {
+		return nil, err
+	}
+	writer, err := s.newTaskTextWriter(task)
+	if err != nil {
+		return nil, err
+	}
+	flushStop := make(chan struct{})
+	flushDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(taskTextChunkFlushInterval)
+		defer ticker.Stop()
+		defer close(flushDone)
+		for {
+			select {
+			case <-ticker.C:
+				if err := writer.Flush(); err != nil {
+					return
+				}
+			case <-flushStop:
+				return
+			}
+		}
+	}()
+	result, runErr := runTextTaskStream(ctx, input, writer.Write)
+	close(flushStop)
+	<-flushDone
+	flushErr := writer.Flush()
+	if runErr != nil {
+		return nil, runErr
+	}
+	if writerErr := writer.Failure(); writerErr != nil {
+		return nil, writerErr
+	}
+	if flushErr != nil {
+		return nil, flushErr
+	}
+	if operation := metadataString(input.Metadata, "promptTemplateOperation"); operation != "" {
+		if err := validatePromptTemplateResult(operation, result); err != nil {
+			return result, err
+		}
+	}
+	return result, nil
 }
 
 func metadataStringValues(value any) map[string]string {
@@ -537,6 +595,171 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 		return runResponsesTextTask(ctx, input)
 	}
 	return runLegacyTextTask(ctx, input)
+}
+
+type textDeltaHandler func(string) error
+
+func runTextTaskStream(ctx context.Context, input canvasGenerationInput, onDelta textDeltaHandler) (map[string]interface{}, error) {
+	if onDelta == nil {
+		return runTextTask(ctx, input)
+	}
+	switch input.Config.InterfaceType {
+	case "chat-completion":
+		return runChatCompletionsTextTaskStream(ctx, input, onDelta)
+	case "openai-response":
+		return runResponsesTextTaskStream(ctx, input, onDelta)
+	}
+	return runLegacyTextTaskStream(ctx, input, onDelta)
+}
+
+func runLegacyTextTaskStream(ctx context.Context, input canvasGenerationInput, onDelta textDeltaHandler) (map[string]interface{}, error) {
+	emitted := false
+	forward := func(delta string) error {
+		emitted = true
+		return onDelta(delta)
+	}
+	result, err := runResponsesTextTaskStream(ctx, input, forward)
+	if err == nil || emitted || !shouldFallbackTextToChat(err) {
+		return result, err
+	}
+	return runChatCompletionsTextTaskStream(ctx, input, onDelta)
+}
+
+func runResponsesTextTaskStream(ctx context.Context, input canvasGenerationInput, onDelta textDeltaHandler) (map[string]interface{}, error) {
+	responseInput, err := textResponseInput(input)
+	if err != nil {
+		return nil, err
+	}
+	return streamTextTaskRequest(ctx, input.Config, "/responses", map[string]interface{}{"model": input.Config.Model, "input": responseInput}, extractResponseText, extractResponsesStreamDelta, onDelta)
+}
+
+func runChatCompletionsTextTaskStream(ctx context.Context, input canvasGenerationInput, onDelta textDeltaHandler) (map[string]interface{}, error) {
+	messages := []map[string]interface{}{}
+	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
+		messages = append(messages, map[string]interface{}{"role": "system", "content": systemPrompt})
+	}
+	userContent, err := textChatContent(input)
+	if err != nil {
+		return nil, err
+	}
+	messages = append(messages, map[string]interface{}{"role": "user", "content": userContent})
+	return streamTextTaskRequest(ctx, input.Config, "/chat/completions", map[string]interface{}{"model": input.Config.Model, "messages": messages}, extractChatCompletionText, extractChatCompletionStreamDelta, onDelta)
+}
+
+func streamTextTaskRequest(ctx context.Context, config providerConfig, path string, body map[string]interface{}, extractText func(map[string]interface{}) string, extractDelta func(string, map[string]interface{}) string, onDelta textDeltaHandler) (map[string]interface{}, error) {
+	body["stream"] = true
+	var text strings.Builder
+	appendDelta := func(delta string) error {
+		if delta == "" {
+			return nil
+		}
+		if err := onDelta(delta); err != nil {
+			return err
+		}
+		text.WriteString(delta)
+		return nil
+	}
+	handleEvent := func(event string, data string) error {
+		if strings.TrimSpace(data) == "[DONE]" {
+			return nil
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			return fmt.Errorf("文本流事件格式无效：%w", err)
+		}
+		if message := providerStreamError(payload); message != "" {
+			return errors.New(message)
+		}
+		return appendDelta(extractDelta(event, payload))
+	}
+	handleJSON := func(data []byte) error {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("文本接口返回非 JSON 内容：%w", err)
+		}
+		if message := providerStreamError(payload); message != "" {
+			return errors.New(message)
+		}
+		if content := extractText(payload); content != "" {
+			return appendDelta(content)
+		}
+		return errors.New("文本接口没有返回内容")
+	}
+	if _, err := postTextEventStream(ctx, config, path, body, handleEvent, handleJSON); err != nil {
+		return nil, err
+	}
+	if text.Len() == 0 {
+		return nil, errors.New("文本接口没有返回内容")
+	}
+	return map[string]interface{}{"mode": "text", "text": text.String()}, nil
+}
+
+func providerStreamError(payload map[string]interface{}) string {
+	if errorValue, ok := payload["error"].(map[string]interface{}); ok {
+		if message := stringField(errorValue, "message"); message != "" {
+			return message
+		}
+	}
+	if message := stringField(payload, "message"); message != "" && (strings.Contains(strings.ToLower(stringField(payload, "type")), "error") || payload["code"] != nil) {
+		return message
+	}
+	if code, ok := payload["code"].(float64); ok && code != 0 {
+		return defaultString(stringField(payload, "msg"), "请求失败")
+	}
+	return ""
+}
+
+func extractResponsesStreamDelta(event string, payload map[string]interface{}) string {
+	eventType := strings.ToLower(strings.TrimSpace(defaultString(event, stringField(payload, "type"))))
+	if strings.Contains(eventType, "output_text.delta") || strings.Contains(eventType, "text.delta") || eventType == "" {
+		return stringField(payload, "delta")
+	}
+	return ""
+}
+
+func extractChatCompletionStreamDelta(_ string, payload map[string]interface{}) string {
+	if data, ok := payload["data"].(map[string]interface{}); ok {
+		payload = data
+	}
+	choices, ok := payload["choices"].([]interface{})
+	if !ok {
+		return ""
+	}
+	var chunks []string
+	for _, choice := range choices {
+		record, ok := choice.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if delta, ok := record["delta"].(map[string]interface{}); ok {
+			if text := streamContentText(delta["content"]); text != "" {
+				chunks = append(chunks, text)
+			}
+		}
+		if text := stringField(record, "text"); text != "" {
+			chunks = append(chunks, text)
+		}
+	}
+	return strings.Join(chunks, "")
+}
+
+func streamContentText(value interface{}) string {
+	switch item := value.(type) {
+	case string:
+		return item
+	case []interface{}:
+		var chunks []string
+		for _, child := range item {
+			if record, ok := child.(map[string]interface{}); ok {
+				if text := stringField(record, "text"); text != "" {
+					chunks = append(chunks, text)
+				}
+			}
+		}
+		return strings.Join(chunks, "")
+	default:
+		return ""
+	}
 }
 
 func runLegacyTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -1613,6 +1836,19 @@ func postJSON(ctx context.Context, config providerConfig, path string, body inte
 	return doJSON(req, target)
 }
 
+func postTextEventStream(ctx context.Context, config providerConfig, path string, body interface{}, onEvent func(string, string) error, onJSON func([]byte) error) (bool, error) {
+	data, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL(config.BaseURL, path), bytes.NewReader(data))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	ApplyOutboundHeaders(req, config.Headers)
+	return doTextEventStream(req, onEvent, onJSON)
+}
+
 func postForm(ctx context.Context, config providerConfig, path string, contentType string, body io.Reader, target interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL(config.BaseURL, path), body)
 	if err != nil {
@@ -1692,6 +1928,134 @@ func doJSON(req *http.Request, target interface{}) error {
 		}
 	}
 	return nil
+}
+
+func doTextEventStream(req *http.Request, onEvent func(string, string) error, onJSON func([]byte) error) (bool, error) {
+	startedAt := time.Now()
+	requestTimeout := providerHTTPTimeout
+	if deadline, ok := req.Context().Deadline(); ok {
+		if remaining := time.Until(deadline); remaining > 0 {
+			requestTimeout = remaining
+		}
+	}
+	var release func()
+	var coordinator *runtimeCoordinator
+	var runtimeService *Service
+	channelID := ""
+	if metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok && metadata.Service != nil {
+		runtimeService = metadata.Service
+		coordinator = metadata.Service.coordinator
+		channelID = metadata.ChannelID
+		open, err := coordinator.circuitOpen(req.Context(), channelID)
+		if err != nil {
+			return false, fmt.Errorf("读取渠道熔断状态失败：%w", err)
+		}
+		if open {
+			return false, errors.New("当前渠道连续失败，已暂时熔断，请稍后重试")
+		}
+		slotID := channelID
+		if slotID == "" {
+			slotID = "custom:" + strings.ToLower(req.URL.Host)
+		}
+		acquiredRelease, _, acquireErr := metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, requestTimeout+time.Minute)
+		if acquireErr != nil {
+			recordProviderRequest(req, startedAt, 0, nil, acquireErr)
+			return false, acquireErr
+		}
+		release = acquiredRelease
+		defer release()
+	}
+	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
+		recordProviderRequest(req, startedAt, 0, nil, err)
+		return false, err
+	}
+	ApplyDefaultOutboundHeaders(req)
+	resp, err := OutboundHTTPClient(requestTimeout).Do(req)
+	if err != nil {
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, !errors.Is(err, context.Canceled))
+		}
+		recordProviderRequest(req, startedAt, 0, nil, err)
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, maxTextStreamResponseBytes+1))
+		err := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data)}
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
+		}
+		recordProviderRequest(req, startedAt, resp.StatusCode, data, err)
+		return false, err
+	}
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxTextStreamResponseBytes+1))
+		if readErr != nil {
+			recordProviderRequest(req, startedAt, resp.StatusCode, nil, readErr)
+			return false, readErr
+		}
+		if int64(len(data)) > maxTextStreamResponseBytes {
+			err := fmt.Errorf("文本响应超过 %s 限制", formatStorageLimit(maxTextStreamResponseBytes))
+			recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+			return false, err
+		}
+		if err := onJSON(data); err != nil {
+			recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+			return false, err
+		}
+		recordProviderRequest(req, startedAt, resp.StatusCode, nil, nil)
+		if runtimeService != nil {
+			_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
+		}
+		return false, nil
+	}
+
+	scanner := bufio.NewScanner(io.LimitReader(resp.Body, maxTextStreamResponseBytes+1))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	eventName := "message"
+	dataLines := make([]string, 0, 2)
+	dispatch := func() error {
+		if len(dataLines) == 0 {
+			return nil
+		}
+		err := onEvent(eventName, strings.Join(dataLines, "\n"))
+		eventName = "message"
+		dataLines = dataLines[:0]
+		return err
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if err := dispatch(); err != nil {
+				recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+				return true, err
+			}
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+		if strings.HasPrefix(line, "event:") {
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+		return true, err
+	}
+	if err := dispatch(); err != nil {
+		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+		return true, err
+	}
+	recordProviderRequest(req, startedAt, resp.StatusCode, nil, nil)
+	if runtimeService != nil {
+		_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
+	}
+	return true, nil
 }
 
 func doBinary(req *http.Request) ([]byte, string, error) {
