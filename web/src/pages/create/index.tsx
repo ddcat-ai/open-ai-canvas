@@ -114,7 +114,7 @@ export default function CreatePage() {
         });
         return () => {
             cancelled = true;
-            abortRef.current?.abort();
+            // 页面卸载只停止当前页面的状态更新，后台任务由任务中心继续执行，返回页面后再恢复状态。
         };
     }, []);
 
