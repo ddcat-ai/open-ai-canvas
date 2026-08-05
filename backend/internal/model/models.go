@@ -754,12 +754,25 @@ type Task struct {
 	LeaseExpiresAt    *time.Time `json:"-" gorm:"index;index:idx_tasks_claim,priority:2"`
 	InputJSON         string     `json:"inputJson" gorm:"type:text"`
 	ResultJSON        string     `json:"resultJson" gorm:"type:text"`
+	TextDraft         string     `json:"textDraft,omitempty" gorm:"type:text"`
 	Error             string     `json:"error"`
 	Attempts          int        `json:"attempts"`
 	StartedAt         *time.Time `json:"startedAt"`
 	CompletedAt       *time.Time `json:"completedAt"`
 	CreatedAt         time.Time  `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+// TaskTextDelta 只保存可回放窗口内的文本增量；最终正文和失败草稿分别归并到 Task.ResultJSON 与 Task.TextDraft。
+type TaskTextDelta struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID    string    `json:"userId" gorm:"index;size:36;index:idx_task_text_deltas_user_created,priority:1"`
+	TaskID    string    `json:"taskId" gorm:"index;size:36;uniqueIndex:idx_task_text_deltas_sequence,priority:1"`
+	Sequence  int64     `json:"sequence" gorm:"uniqueIndex:idx_task_text_deltas_sequence,priority:2"`
+	Content   string    `json:"content" gorm:"type:text"`
+	ByteCount int64     `json:"byteCount"`
+	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_task_text_deltas_user_created,priority:2"`
+	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
 }
 
 type Session struct {

@@ -11,6 +11,19 @@ import (
 )
 
 func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/admin/text-replay-stats", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		stats, err := svc.AdminTextReplayStats(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, stats)
+	})
 	r.POST("/tasks", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -64,6 +77,40 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, task)
+	})
+	r.POST("/tasks/:id/text-deltas", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Content string `json:"content"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		item, err := svc.AppendTaskTextDelta(user.ID, c.Param("id"), req.Content)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, item)
+	})
+	r.GET("/tasks/:id/text-deltas", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		after, _ := strconv.ParseInt(c.DefaultQuery("after", "0"), 10, 64)
+		result, err := svc.TaskTextReplay(user.ID, c.Param("id"), after)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
 	})
 	r.POST("/tasks/:id/retry", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
