@@ -184,6 +184,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, errors.New("即梦官方 API 缺少 Secret Key")
 	}
 	if resumedProviderRequestID(ctx) == "" {
+		// local-h3-video 走 multipart 直传，不要求参考图先变公网 URL。
 		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceAPIMartVideo) || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
 		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
 			return nil, err
@@ -765,6 +766,9 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceAPIMartVideo) {
 		return runAPIMartVideoTask(ctx, input)
+	}
+	if input.Config.InterfaceType == string(model.ChannelInterfaceLocalH3Video) {
+		return runLocalH3VideoTask(ctx, input)
 	}
 	if input.Config.InterfaceType == "newapi-channel-2" {
 		return runNewAPIChannel2VideoTask(ctx, input)
@@ -1429,7 +1433,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
 		"image": {"openai-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true},
-		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "apimart-video": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true},
+		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "apimart-video": true, "local-h3-video": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true},
 		"audio": {"openai-audio": true},
 	}
 	if allowed[mode] != nil && !allowed[mode][interfaceType] {

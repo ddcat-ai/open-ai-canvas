@@ -9,6 +9,7 @@ export type ModelProtocol =
     | "newapi-channel-1"
     | "newapi-channel-2"
     | "apimart-video"
+    | "local-h3-video"
     | "xai-video"
     | "volcengine-ark-video"
     | "volcengine-jimeng-video"
@@ -37,6 +38,7 @@ export const MODEL_PROTOCOLS: ModelProtocolDefinition[] = [
     { value: "newapi-channel-1", label: "NewAPI 媒体任务", capability: "video", create: "POST /v1/videos", poll: "GET /v1/videos/{task_id}", contentType: "application/json", media: "图片、视频、音频公网 URL" },
     { value: "newapi-channel-2", label: "NewAPI Video Generations", capability: "video", create: "POST /v1/video/generations", poll: "GET /v1/video/generations/{task_id}", contentType: "application/json", media: "image_urls（首帧、尾帧、其他参考图） / video_urls / audio_urls" },
     { value: "apimart-video", label: "APIMart 统一视频", capability: "video", create: "POST /v1/videos/generations", poll: "GET /v1/tasks/{task_id}", contentType: "application/json", media: "image_urls / image_with_roles / video_urls / audio_urls" },
+    { value: "local-h3-video", label: "Local H3 视频（multipart）", capability: "video", create: "POST /v1/video/generations/upload", poll: "GET /v1/video/generations/{task_id}", contentType: "multipart/form-data", media: "images[] / videos[] / audios[] 直传，无需公网 URL" },
     { value: "xai-video", label: "xAI 官方视频", capability: "video", create: "POST /v1/videos/generations", poll: "GET /v1/videos/{request_id}", contentType: "application/json", media: "单张起始图" },
     { value: "volcengine-ark-video", label: "火山方舟视频", capability: "video", create: "POST /api/v3/contents/generations/tasks", poll: "GET /api/v3/contents/generations/tasks/{task_id}", contentType: "application/json", media: "图片、视频、音频参考素材" },
     { value: "volcengine-jimeng-video", label: "即梦官方视频", capability: "video", create: "POST CVSync2AsyncSubmitTask", poll: "POST CVSync2AsyncGetResult", contentType: "application/json + AK/SK 签名", media: "文本或一张首帧图，模型标识填写 req_key" },

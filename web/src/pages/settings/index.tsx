@@ -652,5 +652,5 @@ function channelProtocolLabel(channel: ModelChannel) {
 function isKnownDefaultBaseUrl(value: string) {
     const normalized = value.trim().replace(/\/+$/, "");
     if (!normalized) return true;
-    return [defaultBaseUrlForApiFormat("openai"), defaultBaseUrlForApiFormat("gemini"), defaultBaseUrlForChannelInterface("apimart-video")].some((candidate) => candidate.replace(/\/+$/, "") === normalized);
+    return [defaultBaseUrlForApiFormat("openai"), defaultBaseUrlForApiFormat("gemini"), defaultBaseUrlForChannelInterface("apimart-video"), defaultBaseUrlForChannelInterface("local-h3-video")].some((candidate) => candidate.replace(/\/+$/, "") === normalized);
 }

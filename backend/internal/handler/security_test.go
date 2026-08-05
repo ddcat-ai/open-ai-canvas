@@ -125,7 +125,7 @@ func TestAuthorizeSystemProxyVolcengineArkImageOnlyAllowsGenerations(t *testing.
 
 func TestAuthorizeSystemProxyBlocksBackendOnlyVideoInterfaces(t *testing.T) {
 	body := []byte(`{"model":"grok-image-video"}`)
-	for _, interfaceType := range []model.ChannelInterfaceType{model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceAPIMartVideo, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceVolcengineJiMengVideo} {
+	for _, interfaceType := range []model.ChannelInterfaceType{model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceAPIMartVideo, model.ChannelInterfaceLocalH3Video, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceVolcengineJiMengVideo} {
 		channel := &model.ModelChannel{APIFormat: "openai", ModelsJSON: `["grok-image-video"]`}
 		if err := authorizeSystemProxy(channel, interfaceType, http.MethodPost, "/video/generations", "application/json", body); err == nil {
 			t.Fatalf("authorizeSystemProxy() error = nil for backend-only interface %q", interfaceType)

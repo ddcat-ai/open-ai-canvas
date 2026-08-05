@@ -38,7 +38,7 @@ type ApiEnvelope<T> = T | { code?: number; data?: T | null; msg?: string };
 type RequestOptions = { signal?: AbortSignal };
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string; lastFrameUrl?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "video-generations" | "apimart" | "gemini-veo"; model: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "video-generations" | "apimart" | "local-h3" | "gemini-veo"; model: string };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 function aiApiUrl(config: AiConfig, path: string) {
@@ -61,7 +61,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
         const state = await pollVideoGenerationTask(config, task, options);
         if (state.status === "completed") return state.result;
         if (state.status === "failed") throw new Error(state.error);
-        const providerName = task.provider === "seedance" ? "Seedance " : task.provider === "apimart" ? "APIMart " : "";
+        const providerName = task.provider === "seedance" ? "Seedance " : task.provider === "apimart" ? "APIMart " : task.provider === "local-h3" ? "Local H3 " : "";
         if (attempt === 119) throw new Error(`${providerName}视频生成超时，请稍后重试`);
         await delay(delayMs, options?.signal);
     }
@@ -74,6 +74,9 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     assertVideoConfig(requestConfig, requestConfig.model);
     if (requestConfig.interfaceType === "apimart-video") {
         return createAPIMartVideoTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
+    }
+    if (requestConfig.interfaceType === "local-h3-video") {
+        return createLocalH3VideoTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
     if (requestConfig.interfaceType === "newapi-channel-2") {
         return createVideoGenerationsTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
@@ -98,9 +101,102 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
     assertVideoConfig(requestConfig, requestConfig.model);
     if (task.provider === "seedance") return pollSeedanceTask(requestConfig, task, options);
     if (task.provider === "apimart") return pollAPIMartVideoTask(requestConfig, task, options);
+    if (task.provider === "local-h3") return pollLocalH3VideoTask(requestConfig, task, options);
     if (task.provider === "video-generations") return pollVideoGenerationsTask(requestConfig, task, options);
     if (task.provider === "gemini-veo") return pollGeminiVeoTask(requestConfig, task, options);
     return pollOpenAIVideoTask(requestConfig, task, options);
+}
+
+/** Local MiniMax H3：multipart 直传参考素材，不经公网 OSS。 */
+async function createLocalH3VideoTask(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+    if (references.length > 9 || videoReferences.length > 3 || audioReferences.length > 3) throw new Error("Local H3 视频最多支持 9 张参考图、3 个参考视频和 3 个参考音频");
+    if (audioReferences.length && !references.length && !videoReferences.length) throw new Error("Local H3 参考音频不能单独使用，请同时添加参考图或参考视频");
+    const body = new FormData();
+    body.append("prompt", prompt.trim());
+    body.append("model", modelOptionName(model) || "minimax-h3-r2v-sage");
+    body.append("seconds", normalizeLocalH3Seconds(config.videoSeconds));
+    body.append("size", normalizeLocalH3Size(config.vquality, config.size));
+    body.append("aspect_ratio", normalizeLocalH3AspectRatio(config.size));
+    body.append("use_enhancer", "true");
+    body.append("generate_audio", String(boolConfig(config.videoGenerateAudio, true)));
+    for (const image of references) {
+        body.append("images", dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) }));
+    }
+    for (const video of videoReferences) {
+        body.append("videos", await mediaReferenceToFile(video, "video"));
+    }
+    for (const audio of audioReferences) {
+        body.append("audios", await mediaReferenceToFile(audio, "audio"));
+    }
+    try {
+        const created = unwrapVideoResponse(await channelPostForm<ApiVideoResponse>(config, aiApiUrl(config, "/video/generations/upload"), body, options));
+        const id = videoTaskId(created);
+        if (!id) throw new Error("Local H3 视频接口没有返回任务 ID");
+        return { id, provider: "local-h3", model };
+    } catch (error) {
+        throw new Error(readAxiosError(error, "Local H3 视频任务创建失败"));
+    }
+}
+
+async function pollLocalH3VideoTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+    try {
+        const raw = await channelGet<ApiEnvelope<Record<string, unknown>>>(config, aiApiUrl(config, `/video/generations/${encodeURIComponent(task.id)}`), options);
+        const state = unwrapEnvelopeRecord(raw);
+        const status = String(state.status || "").toUpperCase();
+        if (status === "SUCCESS" || status === "SUCCEEDED" || status === "COMPLETED" || status === "DONE") {
+            const url = String(state.result_url || state.video_url || state.url || "");
+            if (url) return { status: "completed", result: await videoResultFromUrl(url, options) };
+            try {
+                const blob = await channelGetBlob(config, aiApiUrl(config, `/files/${encodeURIComponent(task.id)}`), options);
+                await assertVideoBlob(blob);
+                return { status: "completed", result: { blob } };
+            } catch {
+                return { status: "failed", error: `Local H3 视频任务 ${task.id} 已完成但没有返回视频地址` };
+            }
+        }
+        if (status === "FAILURE" || status === "FAILED" || status === "CANCELLED" || status === "CANCELED") {
+            return { status: "failed", error: String(state.fail_reason || state.error || state.message || "Local H3 视频生成失败") };
+        }
+        return { status: "pending" };
+    } catch (error) {
+        throw new Error(readAxiosError(error, "Local H3 视频任务查询失败"));
+    }
+}
+
+async function mediaReferenceToFile(media: ReferenceVideo | ReferenceAudio, kind: "video" | "audio") {
+    let blob: Blob | null = null;
+    if (media.storageKey) blob = await getMediaBlob(media.storageKey);
+    if (!blob && media.url?.startsWith("blob:")) blob = await (await fetch(media.url)).blob();
+    if (!blob && media.url?.startsWith("data:")) blob = await (await fetch(media.url)).blob();
+    if (!blob && media.url && /^https?:\/\//i.test(media.url)) blob = (await axios.get<Blob>(media.url, { responseType: "blob" })).data;
+    if (!blob) throw new Error(`Local H3 ${kind === "video" ? "参考视频" : "参考音频"}读取失败`);
+    const type = blob.type || (kind === "video" ? "video/mp4" : "audio/mpeg");
+    const name = media.name || `${kind}-${media.id || "ref"}.${kind === "video" ? "mp4" : "mp3"}`;
+    return new File([blob], name, { type });
+}
+
+function normalizeLocalH3Seconds(value: string) {
+    const seconds = Math.floor(Number(value) || 5);
+    return String(Math.min(15, Math.max(1, seconds)));
+}
+
+function normalizeLocalH3Size(quality: string, size: string) {
+    const raw = String(quality || size || "480p").toLowerCase();
+    if (raw.includes("1080") || raw === "1080p") return "1080p";
+    if (raw.includes("720") || raw === "720p" || raw === "high") return "720p";
+    if (raw.includes("480") || raw === "480p" || raw === "low") return "480p";
+    return "480p";
+}
+
+function normalizeLocalH3AspectRatio(size: string) {
+    const raw = String(size || "").trim().toLowerCase().replace("×", "x");
+    if (/^\d+x\d+$/.test(raw)) {
+        const [w, h] = raw.split("x").map(Number);
+        if (w === h) return "1:1";
+        return w > h ? "16:9" : "9:16";
+    }
+    if (["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"].includes(raw)) return raw;
+    return "16:9";
 }
 
 async function createVideoGenerationsTask(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
