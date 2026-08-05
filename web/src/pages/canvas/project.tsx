@@ -1662,6 +1662,7 @@ function InfiniteCanvasPage() {
                     screenToCanvas={screenToCanvas}
                     onClose={() => setContextMenu(null)}
                     onAddNode={(type, position) => createNode(type, position)}
+                    onChooseStyle={() => setStylePickerOpen(true)}
                     onOpenDirector={createDirectorShot}
                     onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
                     onOpenAssets={openAssetsAtPosition}

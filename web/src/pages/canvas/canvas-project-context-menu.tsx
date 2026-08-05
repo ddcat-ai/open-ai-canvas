@@ -14,6 +14,7 @@ type CanvasProjectContextMenuProps = {
     screenToCanvas: (clientX: number, clientY: number) => Position;
     onClose: () => void;
     onAddNode: (type: CanvasNodeType, position: Position) => void;
+    onChooseStyle: () => void;
     onOpenDirector: (position?: Position) => void;
     onUpload: (nodeId: string | undefined, position: Position) => void;
     onOpenAssets: (position: Position) => void;
@@ -52,6 +53,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             onAddNode={(type) => {
                 if (menu.type === "canvas") props.onAddNode(type, menu.position);
             }}
+            onChooseStyle={props.onChooseStyle}
             onOpenDirector={props.onOpenDirector}
             onUpload={() => props.onUpload(menu.type === "node" ? menu.nodeId : undefined, menuPosition())}
             onOpenAssets={() => props.onOpenAssets(menuPosition())}

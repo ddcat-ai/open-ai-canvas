@@ -1,6 +1,6 @@
 import type { FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 
-import type { AddNodeMenuCommand, ToolCategory, ToolContext, ToolDefinition, ToolbarId, ToolbarPrefs } from "./tool-definition";
+import type { AddNodeMenuCommand, AddNodeMenuContext, ToolCategory, ToolContext, ToolDefinition, ToolbarId, ToolbarPrefs } from "./tool-definition";
 
 /** 模块级注册表 */
 const registry = new Map<ToolbarId, ToolDefinition[]>();
@@ -67,7 +67,7 @@ export function resolveToolbarTools(toolbar: ToolbarId, ctx: ToolContext, prefs:
 }
 
 /** 解析添加节点菜单命令——仅 applicable 过滤，不参与排序/显隐 */
-export function resolveAddNodeMenuCommands(ctx: ToolContext): AddNodeMenuCommand[] {
+export function resolveAddNodeMenuCommands(ctx: AddNodeMenuContext): AddNodeMenuCommand[] {
     return getAddNodeMenuCommands().filter((command) => !command.applicable || command.applicable(ctx));
 }
 

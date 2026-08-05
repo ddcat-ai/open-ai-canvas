@@ -486,8 +486,11 @@
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
     --dock-precision-width: var(--space-12);
-    --dock-create-node-height: calc(var(--space-12) + var(--space-2));
     --dock-z-popover: 30;                 /* dock 子面板在 toolbar 根 stacking context 内的层级（见 ADR-001）*/
+
+    /* Canvas 创建菜单：固定行高保证图标、徽标和单行标签互不挤占 */
+    --canvas-create-node-height: var(--space-12);
+    --canvas-create-resource-height: var(--space-8);
 
     /* Node 组件（画布节点，对应 #97 节点视觉规范）*/
     --node-radius: var(--r-2xl);          /* 16px */
