@@ -2267,8 +2267,27 @@ func normalizeImageQuality(value string) string {
 
 func normalizePixelSize(value string) string {
 	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" || strings.Contains(value, ":") {
+	if value == "" || value == "auto" {
 		return ""
+	}
+	// 画布按比例保存常用预设；图片接口只接受像素尺寸，必须在请求边界完成转换。
+	switch value {
+	case "1:1":
+		return "1024x1024"
+	case "3:2":
+		return "1536x1024"
+	case "2:3":
+		return "1024x1536"
+	case "4:3":
+		return "1360x1024"
+	case "3:4":
+		return "1024x1360"
+	case "16:9":
+		return "1824x1024"
+	case "9:16":
+		return "1024x1824"
+	case "21:9":
+		return "2352x1008"
 	}
 	if strings.Contains(value, "x") {
 		return value
