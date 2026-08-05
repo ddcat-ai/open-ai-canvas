@@ -4,7 +4,7 @@ import { Switch } from "antd";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceDurationOptions, seedanceRatioOptions, seedanceResolutionOptions } from "@/lib/seedance-video";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { normalizeVideoDuration, normalizeVideoResolution, VIDEO_DURATION_MIN, VIDEO_DURATION_OPTIONS, VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
+import { normalizeVideoDuration, normalizeVideoResolution, videoResolutionForSize, videoSizeForResolution, VIDEO_DURATION_MIN, VIDEO_DURATION_OPTIONS, VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
 const resolutionOptions = VIDEO_RESOLUTION_OPTIONS.map((value) => ({ value: String(value), label: `${value}P` }));
@@ -44,7 +44,22 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const resolution = normalizeVideoResolutionValue(config.vquality);
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 720));
-        onConfigChange("size", `${key === "width" ? next : dimensions.width}x${key === "height" ? next : dimensions.height}`);
+        const nextSize = `${key === "width" ? next : dimensions.width}x${key === "height" ? next : dimensions.height}`;
+        onConfigChange("size", nextSize);
+        onConfigChange("vquality", videoResolutionForSize(nextSize));
+    };
+    const setResolution = (nextResolution: string) => {
+        onConfigChange("vquality", nextResolution);
+        if (size !== "auto") onConfigChange("size", videoSizeForResolution(nextResolution, size));
+    };
+    const setSizePreset = (nextSize: string) => {
+        if (nextSize === "auto") {
+            onConfigChange("size", "auto");
+            return;
+        }
+        const linked = videoSizeForResolution(resolution, nextSize);
+        onConfigChange("size", linked);
+        onConfigChange("vquality", videoResolutionForSize(linked));
     };
 
     return (
@@ -54,7 +69,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 <SettingGroup title="分辨率" color={theme.node.muted}>
                     <div className="grid grid-cols-3 gap-1.5">
                         {resolutionOptions.map((item) => (
-                            <OptionPill key={item.value} selected={resolution === item.value} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
+                            <OptionPill key={item.value} selected={resolution === item.value} theme={theme} onClick={() => setResolution(item.value)}>
                                 {item.label}
                             </OptionPill>
                         ))}
@@ -72,9 +87,9 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 key={item.value}
                                 type="button"
                                 className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
-                                style={{ background: size === item.value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+                                style={{ background: size === item.value || (item.value !== "auto" && size !== "auto" && sameAspect(size, item.value)) ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                 onMouseDown={(event) => event.stopPropagation()}
-                                onClick={() => onConfigChange("size", item.value)}
+                                onClick={() => setSizePreset(item.value)}
                             >
                                 <SizePreview width={item.width} height={item.height} color={theme.node.text} />
                                 <span>{item.label}</span>
@@ -302,4 +317,11 @@ function readSizeDimensions(size: string) {
     if (size === "auto") return { width: 0, height: 0 };
     const match = size.match(/^(\d+)x(\d+)$/);
     return { width: Number(match?.[1]) || 1280, height: Number(match?.[2]) || 720 };
+}
+
+function sameAspect(a: string, b: string) {
+    const left = readSizeDimensions(a);
+    const right = readSizeDimensions(b);
+    if (!left.width || !left.height || !right.width || !right.height) return false;
+    return Math.abs(left.width / left.height - right.width / right.height) < 0.02;
 }

@@ -17,6 +17,7 @@ import {
     storyboardRowsFromTask,
     storyboardPromptTemplateMetadata,
 } from "@/lib/canvas/canvas-project-domain";
+import { ACTION_BOARD_VIDEO_DEFAULT_SIZE, ACTION_BOARD_VIDEO_DEFAULT_VQUALITY, buildActionBoardVideoPrompt, classifyActionBoardMention, type ActionBoardPromptMention } from "@/lib/canvas/action-board-video";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { generationErrorMessage } from "@/lib/generation-error";
@@ -565,6 +566,135 @@ export function useCanvasStoryboard({
         if (enqueueGenerationBatch(nodeId, "storyboard_video", targets.map((target) => ({ rowId: target.row.id, nodeId: target.node.id })))) message.success("镜头视频已加入生成队列");
     }, [connectionsRef, confirmGenerationSubmission, createScriptVideoNodes, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes]);
 
+    /** 从已生成的 12 宫格动作板只创建视频节点：写 prompt、复制入边参考与动作板真引用；不入队生成。 */
+    const generateVideoFromActionBoard = useCallback((actionBoardNodeId: string) => {
+        const board = nodesRef.current.find((node) => node.id === actionBoardNodeId && node.type === CanvasNodeType.Image && node.metadata?.workflowKind === "action_board");
+        if (!board) return;
+        if (!board.metadata?.content) {
+            message.warning("请先生成动作板图片，再创建视频节点");
+            return;
+        }
+        const existingVideo = nodesRef.current.find((node) => node.type === CanvasNodeType.Video && node.metadata?.actionBoardNodeId === board.id);
+        if (existingVideo?.metadata?.content) {
+            message.info("该动作板已有成片视频，已选中现有节点");
+            setSelectedNodeIds(new Set([existingVideo.id]));
+            return;
+        }
+        if (existingVideo && (existingVideo.metadata?.status === "loading" || Boolean(existingVideo.metadata?.taskId))) {
+            message.info("该动作板视频正在生成中，已选中现有节点");
+            setSelectedNodeIds(new Set([existingVideo.id]));
+            return;
+        }
+
+        const shotIndex = board.metadata?.shotIndex;
+        const nextNodes = [...nodesRef.current];
+        const nextConnections = [...connectionsRef.current];
+
+        // 先收集动作板入边：分区写进 prompt（自然语言，无 @ token），并复制到视频入边。
+        const boardIncoming = nextConnections.filter((connection) => connection.toNodeId === board.id);
+        const mentions: ActionBoardPromptMention[] = boardIncoming
+            .map((connection) => nextNodes.find((node) => node.id === connection.fromNodeId))
+            .filter((node): node is CanvasNodeData => Boolean(node))
+            .filter((node) => node.type !== CanvasNodeType.Script)
+            .map((node) => ({
+                nodeId: node.id,
+                kind: classifyActionBoardMention(node),
+                title: node.metadata?.characterName || node.title || node.id,
+            }));
+
+        const matchedScript = shotIndex
+            ? nextNodes.find((node) => node.type === CanvasNodeType.Script && (node.metadata?.storyboard?.rows || []).some((row) => row.shotNumber === shotIndex))
+            : undefined;
+        const matchedRow = matchedScript?.metadata?.storyboard?.rows.find((row) => row.shotNumber === shotIndex);
+        const seconds = String(Math.max(1, Math.floor(Number(matchedRow?.durationSeconds) || 5)));
+        const prompt = buildActionBoardVideoPrompt(board, mentions);
+
+        const videoSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+        let videoNode: CanvasNodeData;
+        let created = false;
+        const videoMetadata = {
+            prompt,
+            composerContent: prompt,
+            generationMode: "video" as const,
+            // 多参考图生视频：动作板走 subject_ref（自然语言「图1」），不要写成首帧。
+            videoEditOperation: "image_to_video" as const,
+            videoStartFrameNodeId: undefined,
+            videoEndFrameNodeId: undefined,
+            actionBoardNodeId: board.id,
+            workflowKind: "shot" as const,
+            workflowTitle: shotIndex ? `镜头 ${shotIndex} 视频` : "动作板视频",
+            shotIndex,
+            status: NODE_STATUS_IDLE,
+            seconds,
+            size: ACTION_BOARD_VIDEO_DEFAULT_SIZE,
+            vquality: ACTION_BOARD_VIDEO_DEFAULT_VQUALITY,
+        };
+        if (existingVideo) {
+            const index = nextNodes.findIndex((node) => node.id === existingVideo.id);
+            videoNode = {
+                ...existingVideo,
+                title: shotIndex ? `镜头 ${shotIndex} · 视频` : existingVideo.title || "动作板视频",
+                metadata: {
+                    ...resetGenerationTaskMetadata(existingVideo.metadata),
+                    ...videoMetadata,
+                    // 显式清掉可能残留的首尾帧，避免再次被当成首帧。
+                    videoStartFrameNodeId: undefined,
+                    videoEndFrameNodeId: undefined,
+                },
+            };
+            nextNodes[index] = videoNode;
+        } else {
+            videoNode = createCanvasNode(
+                CanvasNodeType.Video,
+                {
+                    x: board.position.x + board.width + 96 + videoSpec.width / 2,
+                    y: board.position.y + board.height / 2,
+                },
+                videoMetadata,
+            );
+            videoNode.title = shotIndex ? `镜头 ${shotIndex} · 视频` : "动作板视频";
+            nextNodes.push(videoNode);
+            created = true;
+        }
+
+        const ensureEdge = (fromNodeId: string, toNodeId: string, role?: CanvasConnection["role"]) => {
+            if (fromNodeId === toNodeId) return;
+            if (nextConnections.some((connection) => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId)) return;
+            nextConnections.push({ id: nanoid(), fromNodeId, toNodeId, ...(role ? { role } : {}) });
+        };
+        // 动作板图：主体参考，不是首帧。
+        ensureEdge(board.id, videoNode.id, "subject_ref");
+        boardIncoming.forEach((connection) => ensureEdge(connection.fromNodeId, videoNode.id, connection.role));
+
+        if (matchedScript && matchedRow && shotIndex) {
+            const scriptIndex = nextNodes.findIndex((node) => node.id === matchedScript.id);
+            const rows = matchedScript.metadata?.storyboard?.rows || [];
+            nextNodes[scriptIndex] = {
+                ...matchedScript,
+                metadata: {
+                    ...matchedScript.metadata,
+                    storyboard: {
+                        rows: rows.map((row) => row.shotNumber === shotIndex
+                            ? { ...row, videoNodeId: videoNode.id, lastVideoSubmissionPrompt: prompt }
+                            : row),
+                        visibleColumns: matchedScript.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                        referenceNodeIds: matchedScript.metadata?.storyboard?.referenceNodeIds || [],
+                    },
+                },
+            };
+            ensureEdge(matchedScript.id, videoNode.id);
+        }
+
+        nodesRef.current = nextNodes;
+        connectionsRef.current = nextConnections;
+        setNodes(nextNodes);
+        setConnections(nextConnections);
+        setSelectedNodeIds(new Set([videoNode.id]));
+        message.success(created
+            ? `已创建视频节点（图1=动作板 · ${seconds}s · 横屏480p）`
+            : `已同步视频节点提示词/连线（图1=动作板 · ${seconds}s · 横屏480p）`);
+    }, [connectionsRef, message, nodesRef, setConnections, setNodes, setSelectedNodeIds]);
+
     return {
         addScriptRow,
         createAndGenerateScriptVideos,
@@ -574,14 +704,13 @@ export function useCanvasStoryboard({
         generateScriptImages,
         generateScriptRows,
         generateScriptVideos,
+        generateVideoFromActionBoard,
         removeScriptRow,
         replaceScriptRows,
         updateScriptRow,
         updateScriptRows,
     };
 }
-
-
 
 function characterReferenceNodeIds(row: StoryboardRow, nodes: CanvasNodeData[]) {
     const assetIds = new Set(row.characters.map((character) => character.characterAssetId).filter((assetId): assetId is string => Boolean(assetId)));
