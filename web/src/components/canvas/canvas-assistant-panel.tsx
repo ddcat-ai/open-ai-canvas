@@ -834,8 +834,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         </>
     );
 
-    // 垂直分槽：顶部 72px（顶栏）+ 200px（活动任务最大预估高）+ 16px（间距）= 288px，留给活动任务面板
-    const PANEL_SLOT_TOP_OFFSET = 288;
+    // 面板顶部偏移：顶部栏高度 + 间距，活动任务面板为 absolute 定位无需额外预留
+    const PANEL_SLOT_TOP_OFFSET = 80;
     const panelOffsetRight = focusMode ? 0 : 12;
     const panelOffsetBottom = focusMode ? 0 : 16;
 
@@ -856,7 +856,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             }}
         >
             <motion.aside
-                className="relative flex shrink-0 flex-col overflow-hidden rounded-[var(--panel-radius)] border"
+                className="pointer-events-auto relative flex shrink-0 flex-col overflow-hidden rounded-[var(--panel-radius)] border"
                 initial={{ x: 48, opacity: 0 }}
                 animate={{ x: closing ? 28 : 0, opacity: closing ? 0 : 1 }}
                 transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
