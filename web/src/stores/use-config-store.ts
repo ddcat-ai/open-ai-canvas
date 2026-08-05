@@ -31,8 +31,11 @@ export type ModelChannel = {
         displayName?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
-        billingMode: "fixed_request" | "per_second";
+        billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
+        inputTokenPriceMicrocredits?: number;
+        outputTokenPriceMicrocredits?: number;
+        cachedTokenPriceMicrocredits?: number;
     }>;
 };
 

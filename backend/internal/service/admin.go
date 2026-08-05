@@ -114,12 +114,15 @@ type PublicModelChannel struct {
 }
 
 type PublicChannelModelPrice struct {
-	Model                 string                     `json:"model"`
-	DisplayName           string                     `json:"displayName"`
-	Capability            string                     `json:"capability"`
-	Protocol              model.ChannelInterfaceType `json:"protocol"`
-	BillingMode           string                     `json:"billingMode"`
-	UnitPriceMicrocredits int64                      `json:"unitPriceMicrocredits"`
+	Model                        string                     `json:"model"`
+	DisplayName                  string                     `json:"displayName"`
+	Capability                   string                     `json:"capability"`
+	Protocol                     model.ChannelInterfaceType `json:"protocol"`
+	BillingMode                  string                     `json:"billingMode"`
+	UnitPriceMicrocredits        int64                      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                      `json:"cachedTokenPriceMicrocredits"`
 }
 
 func (s *Service) RequireAdmin(user *model.User) error {
@@ -260,7 +263,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		return nil, err
 	}
 	return &AdminUser{
-		User:                   *user,
+		User:                  *user,
 		AvailableMicrocredits: account.AvailableMicrocredits,
 		ReservedMicrocredits:  account.ReservedMicrocredits,
 	}, nil
@@ -746,7 +749,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		}
 		models = append(models, item.ModelKey)
 		if item.Enabled && item.PriceConfigured {
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits})
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits})
 		}
 	}
 	if len(models) == 0 {
