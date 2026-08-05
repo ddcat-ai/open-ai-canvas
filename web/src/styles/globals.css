@@ -485,6 +485,8 @@
     --dock-shadow: var(--shadow-lg);
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
+    --dock-precision-width: var(--space-12);
+    --dock-create-node-height: calc(var(--space-12) + var(--space-2));
     --dock-z-popover: 30;                 /* dock 子面板在 toolbar 根 stacking context 内的层级（见 ADR-001）*/
 
     /* Node 组件（画布节点，对应 #97 节点视觉规范）*/
@@ -3387,6 +3389,52 @@
         backdrop-filter: blur(var(--space-2));
     }
 
+    .canvas-toolbar-settings-modal {
+        max-width: calc(100vw - var(--space-8));
+    }
+
+    .canvas-toolbar-settings-modal .ant-modal-container,
+    .canvas-toolbar-settings-modal .ant-modal-content {
+        overflow: hidden;
+        border: 0 !important;
+        border-radius: var(--r-xl);
+        padding: 0 !important;
+        background: var(--cn-spatial-elevated) !important;
+    }
+
+    .canvas-toolbar-settings-modal .ant-modal-content {
+        box-shadow: var(--workspace-overlay-shadow) !important;
+    }
+
+    .canvas-toolbar-settings-modal .ant-modal-container {
+        box-shadow: none !important;
+    }
+
+    .canvas-toolbar-settings-modal .ant-modal-body {
+        padding: 0 !important;
+    }
+
+    .canvas-toolbar-settings-card {
+        background: var(--cn-spatial-surface);
+        transition: background-color var(--motion-dur-fast) var(--motion-ease-out), opacity var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-toolbar-settings-card:hover {
+        background: color-mix(in srgb, var(--cn-spatial-surface) 72%, var(--cn-spatial-elevated));
+    }
+
+    .canvas-toolbar-settings-card.is-hidden {
+        background: color-mix(in srgb, var(--cn-spatial-surface) 52%, transparent);
+    }
+
+    .canvas-toolbar-settings-card.is-hidden .canvas-toolbar-settings-card-content {
+        opacity: var(--opa-subtle);
+    }
+
+    .canvas-toolbar-settings-card.is-dragging {
+        opacity: var(--opa-muted);
+    }
+
     :where(.ant-select-dropdown, .ant-dropdown-menu, .ant-popover-inner) {
         border: 1px solid var(--border);
         box-shadow: 0 20px 56px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
@@ -3581,6 +3629,19 @@
         color: var(--dock-command-active-text);
         stroke: currentColor;
         opacity: 1;
+    }
+
+    .aceternity-dock-command.is-quiet {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .aceternity-dock-command.is-quiet:hover:not(:disabled),
+    .aceternity-dock-command.is-quiet.is-active {
+        border-color: transparent;
+        background: var(--dock-command-hover);
+        box-shadow: none;
     }
 
     .aceternity-dock-command.is-danger {

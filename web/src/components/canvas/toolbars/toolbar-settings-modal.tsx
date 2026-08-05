@@ -1,7 +1,7 @@
 import { Modal, Switch } from "antd";
-import { GripVertical, RotateCcw } from "lucide-react";
-import { Reorder, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { GripVertical, RotateCcw, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, getToolbarTools, persistToolbarPrefs, readToolbarPrefs, type ToolbarId, type ToolbarPrefs, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
@@ -43,6 +43,10 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
     const reducedMotion = useReducedMotion();
     const [items, setItems] = useState<SettingsItem[]>([]);
     const [toolbarId, setToolbarId] = useState<ToolbarId>(toolbar);
+    const draggedItemIdRef = useRef<string | null>(null);
+    const dragTargetIdRef = useRef<string | null>(null);
+    const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+    const visibleCount = items.filter((item) => item.visible).length;
 
     // 当 modal 打开或 toolbar 变化时，加载工具列表与偏好
     useEffect(() => {
@@ -66,9 +70,34 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
         })));
     }, [open, toolbar]);
 
-    const handleReorder = (newOrder: SettingsItem[]) => {
-        setItems(newOrder);
-        persistCurrent(newOrder);
+    const handleDragStart = (id: string) => {
+        draggedItemIdRef.current = id;
+        dragTargetIdRef.current = id;
+        setDraggedItemId(id);
+    };
+
+    const handleDragEnter = (targetId: string) => {
+        const sourceId = draggedItemIdRef.current;
+        if (!sourceId || dragTargetIdRef.current === targetId) return;
+        dragTargetIdRef.current = targetId;
+
+        setItems((current) => {
+            const sourceIndex = current.findIndex((item) => item.id === sourceId);
+            const targetIndex = current.findIndex((item) => item.id === targetId);
+            if (sourceIndex < 0 || targetIndex < 0) return current;
+
+            const next = [...current];
+            const [movedItem] = next.splice(sourceIndex, 1);
+            next.splice(targetIndex, 0, movedItem);
+            persistCurrent(next);
+            return next;
+        });
+    };
+
+    const handleDragEnd = () => {
+        draggedItemIdRef.current = null;
+        dragTargetIdRef.current = null;
+        setDraggedItemId(null);
     };
 
     const handleToggleVisible = (id: string, visible: boolean) => {
@@ -102,51 +131,100 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
 
     return (
         <Modal
+            className="canvas-toolbar-settings-modal"
             open={open}
             onCancel={onClose}
             footer={null}
-            title="工具栏设置"
-            width={360}
+            closable={false}
+            width={720}
             centered
             destroyOnClose
-            styles={{ body: { padding: 0 } }}
+            styles={{
+                container: { padding: 0, background: theme.spatial.elevated, border: 0, boxShadow: "none" },
+                body: { padding: 0, background: theme.spatial.elevated },
+            }}
         >
-            <div className="flex items-center justify-between px-4 pb-2 pt-1">
-                <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>拖拽排序 · 开关控制显隐</span>
+            <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
+                <div className="min-w-0">
+                    <h2 className="text-[var(--fs-heading)] font-semibold leading-none">工具栏设置</h2>
+                    <p className="mt-2 text-[var(--fs-caption)] leading-none" style={{ color: theme.node.muted }}>拖动调整顺序，关闭不常用入口</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:hover:bg-white/8"
+                    style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
+                    aria-label="关闭工具栏设置"
+                >
+                    <X className="size-4" />
+                </button>
+            </div>
+            <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-1">
+                <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>已显示 {visibleCount}/{items.length}</span>
                 <button
                     type="button"
                     onClick={handleReset}
-                    className="inline-flex items-center gap-1 rounded-[var(--dock-item-radius)] px-2 py-1 text-[var(--fs-tiny)] font-semibold transition-colors hover:bg-current/5"
-                    style={{ color: theme.node.muted }}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-medium outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 dark:hover:bg-white/8"
+                    style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
+                    aria-label="恢复默认工具栏设置"
                 >
                     <RotateCcw className="size-3" />
                     恢复默认
                 </button>
             </div>
-            <Reorder.Group
-                axis="y"
-                values={items}
-                onReorder={handleReorder}
-                className="thin-scrollbar max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-4"
-            >
+            <div className="grid grid-cols-2 gap-2 px-5 pb-5 pt-2 md:grid-cols-5" aria-label="主工具栏顺序">
                 {items.map((item) => (
-                    <Reorder.Item
+                    <ToolbarSettingsItem
                         key={item.id}
-                        value={item}
-                        initial={false}
-                        animate={reducedMotion ? undefined : { opacity: 1 }}
-                        dragTransition={reducedMotion ? undefined : { bounceStiffness: 600, bounceDamping: 40 }}
-                        className="flex items-center gap-2 rounded-[var(--dock-item-radius)] border px-2.5 py-2"
-                        style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.text }}
-                    >
-                        <GripVertical className="size-4 shrink-0 cursor-grab opacity-40 active:cursor-grabbing" />
-                        <span className="grid size-5 shrink-0 place-items-center opacity-70 [&_svg]:size-3.5">{item.icon}</span>
-                        <span className="min-w-0 flex-1 truncate text-[var(--fs-label)] font-medium">{item.label}</span>
-                        <Switch size="small" checked={item.visible} onChange={(checked) => handleToggleVisible(item.id, checked)} />
-                    </Reorder.Item>
+                        item={item}
+                        reducedMotion={Boolean(reducedMotion)}
+                        theme={theme}
+                        dragging={draggedItemId === item.id}
+                        onToggleVisible={handleToggleVisible}
+                        onDragStart={handleDragStart}
+                        onDragEnter={handleDragEnter}
+                        onDragEnd={handleDragEnd}
+                    />
                 ))}
-            </Reorder.Group>
+            </div>
         </Modal>
+    );
+}
+
+function ToolbarSettingsItem({ item, reducedMotion, theme, dragging, onToggleVisible, onDragStart, onDragEnter, onDragEnd }: { item: SettingsItem; reducedMotion: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; dragging: boolean; onToggleVisible: (id: string, visible: boolean) => void; onDragStart: (id: string) => void; onDragEnter: (id: string) => void; onDragEnd: () => void }) {
+    return (
+        <motion.div
+            layout={!reducedMotion}
+            transition={reducedMotion ? { duration: 0 } : undefined}
+            className={`canvas-toolbar-settings-card flex h-24 min-w-0 flex-col rounded-[var(--r-md)] p-3 ${item.visible ? "" : "is-hidden"} ${dragging ? "is-dragging" : ""}`}
+            style={{ color: theme.node.text }}
+            onDragEnter={() => onDragEnter(item.id)}
+            onDragOver={(event) => event.preventDefault()}
+        >
+            <div className="flex items-center justify-between gap-2">
+                <button
+                    type="button"
+                    draggable
+                    className="grid size-6 touch-none cursor-grab place-items-center rounded-[var(--r-sm)] outline-none opacity-35 transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 active:cursor-grabbing"
+                    style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
+                    onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        onDragStart(item.id);
+                    }}
+                    onDragEnd={onDragEnd}
+                    aria-label={`拖动调整${item.label}顺序`}
+                >
+                    <GripVertical className="size-4" />
+                </button>
+                <Switch size="small" checked={item.visible} onChange={(checked) => onToggleVisible(item.id, checked)} aria-label={`${item.visible ? "隐藏" : "显示"}${item.label}`} />
+            </div>
+            <div className="canvas-toolbar-settings-card-content mt-auto flex min-w-0 flex-col items-center gap-1">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
+                    <span className="grid size-4 place-items-center [&_svg]:size-4">{item.icon}</span>
+                </span>
+                <span className="max-w-full whitespace-nowrap text-[var(--fs-caption)] font-medium leading-5" title={item.label}>{item.label}</span>
+            </div>
+        </motion.div>
     );
 }
 
