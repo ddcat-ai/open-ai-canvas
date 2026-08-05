@@ -5,7 +5,7 @@ import { AnimationClip, AnimationMixer, Box3, Bone, Color, Group, LoopOnce, Loop
 import type { Material } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
-import { directorPoseBoneDeltas, interpolateDirectorBoneRotation, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, interpolateDirectorBoneRotation, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
 import { resolveMediaUrl } from "@/services/file-storage";
 import type { DirectorCamera, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
 
@@ -181,7 +181,7 @@ function DirectorObjectView({ object, selected, selectedBone, transformMode, pla
 }
 
 function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
-    if ((object.kind === "model" || object.kind === "actor") && object.url) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />;
+    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />;
     if (object.kind === "billboard" && object.url) return <DirectorBillboard object={object} selected={selected} />;
     if (object.primitive === "character") return <DirectorCharacter object={object} selected={selected} />;
     const material = <meshStandardMaterial color={selected ? "#2f8cff" : object.color} roughness={0.68} metalness={0.05} />;
@@ -224,18 +224,19 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     const selectedBoneObject = selectedBone && rig?.boneMap[selectedBone as DirectorHumanoidBone] ? model?.getObjectByName(rig.boneMap[selectedBone as DirectorHumanoidBone]!) : null;
     const motion = object.motionClips?.find((item) => item.id === object.activeMotionClipId);
     const activeAnimation = motion ? animations.find((item) => item.name === motion.sourceAnimation) : undefined;
+    const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
 
     useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
 
     useEffect(() => {
         let active = true;
         const loader = new GLTFLoader();
-        void resolveMediaUrl(object.storageKey, object.url).then((url) => loader.load(url, (gltf) => {
+        void resolveMediaUrl(object.storageKey, modelUrl).then((url) => loader.load(url, (gltf) => {
             if (!active) return;
             const next = SkeletonUtils.clone(gltf.scene);
             normalizeModel(next, object.castShadow, object.receiveShadow);
             const nextRig = inferDirectorRig(next, gltf.animations.map((clip) => clip.name));
-            if (object.kind === "actor") applyActorReferenceMaterial(next, object.color);
+            if (object.kind === "actor" || object.primitive === "character") applyActorReferenceMaterial(next, object.color);
             mixerRef.current = new AnimationMixer(next);
             setRig(nextRig);
             setRestRotations(readRigRestRotations(next, nextRig));
@@ -248,7 +249,7 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
             mixerRef.current?.stopAllAction();
             mixerRef.current = null;
         };
-    }, [object.kind, object.storageKey, object.url]);
+    }, [modelUrl, object.kind, object.storageKey]);
 
     useEffect(() => {
         if (!model) return;
@@ -262,7 +263,7 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     }, [invalidate, model, object.castShadow, object.receiveShadow]);
 
     useEffect(() => {
-        if (!model || object.kind !== "actor") return;
+        if (!model || (object.kind !== "actor" && object.primitive !== "character")) return;
         updateActorReferenceColor(model, object.color);
         invalidate();
     }, [invalidate, model, object.color, object.kind]);
