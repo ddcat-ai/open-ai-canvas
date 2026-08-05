@@ -45,7 +45,7 @@ export function createDirectorObject(primitive: DirectorObject["primitive"] = "b
     };
 }
 
-export function createDirectorActor(name = "演员", position: DirectorVec3 = [0, 0, 0], color = DIRECTOR_ACTOR_COLORS[0]): DirectorObject {
+export function createDirectorActor(name = "演员", position: DirectorVec3 = [0, 0, 0], color: string = DIRECTOR_ACTOR_COLORS[0]): DirectorObject {
     return {
         ...createDirectorObject("box", name, position, color),
         kind: "actor",

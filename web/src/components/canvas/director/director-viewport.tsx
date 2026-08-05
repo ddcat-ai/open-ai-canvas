@@ -183,7 +183,6 @@ function DirectorObjectView({ object, selected, selectedBone, transformMode, pla
 function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
     if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />;
     if (object.kind === "billboard" && object.url) return <DirectorBillboard object={object} selected={selected} />;
-    if (object.primitive === "character") return <DirectorCharacter object={object} selected={selected} />;
     const material = <meshStandardMaterial color={selected ? "#2f8cff" : object.color} roughness={0.68} metalness={0.05} />;
     return (
         <mesh castShadow={object.castShadow} receiveShadow={object.receiveShadow}>
@@ -191,25 +190,6 @@ function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSele
             {material}
         </mesh>
     );
-}
-
-function DirectorCharacter({ object, selected }: { object: DirectorObject; selected: boolean }) {
-    const color = selected ? "#2f8cff" : object.color;
-    const pose = characterPose(object.pose || "stand");
-    return (
-        <group>
-            <mesh castShadow position={[0, 1.55, 0]}><sphereGeometry args={[0.24, 24, 18]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>
-            <mesh castShadow position={[0, 1.05, 0]}><capsuleGeometry args={[0.28, 0.65, 8, 16]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>
-            <Limb position={[-0.34, 1.16, 0]} rotation={pose.leftArm} color={color} />
-            <Limb position={[0.34, 1.16, 0]} rotation={pose.rightArm} color={color} />
-            <Limb position={[-0.17, 0.43, 0]} rotation={pose.leftLeg} color={color} length={0.82} />
-            <Limb position={[0.17, 0.43, 0]} rotation={pose.rightLeg} color={color} length={0.82} />
-        </group>
-    );
-}
-
-function Limb({ position, rotation, color, length = 0.68 }: { position: [number, number, number]; rotation: [number, number, number]; color: string; length?: number }) {
-    return <mesh castShadow position={position} rotation={rotation}><capsuleGeometry args={[0.09, length, 6, 12]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>;
 }
 
 function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
@@ -274,7 +254,9 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
         mixer.stopAllAction();
         if (!activeAnimation) return;
         mixer.clipAction(activeAnimation).setLoop(motion?.loop ? LoopRepeat : LoopOnce, motion?.loop ? Infinity : 1).play();
-        return () => mixer.stopAllAction();
+        return () => {
+            mixer.stopAllAction();
+        };
     }, [activeAnimation, model, motion?.loop]);
 
     useEffect(() => {
@@ -298,7 +280,7 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
         <primitive object={model} />
         {selected && helper ? <primitive object={helper} /> : null}
         {selected && rig ? Object.entries(rig.boneMap).filter(([, name]) => Boolean(name)).map(([bone, name]) => <BoneController key={bone} bone={model.getObjectByName(name!)} model={model} selected={selectedBone === bone} onSelect={() => onSelectBone(bone)} />) : null}
-        {selected && selectedBoneObject ? <TransformControls object={selectedBoneObject} mode="rotate" size={0.55} onMouseDown={(event) => { event.stopPropagation(); }} onMouseUp={() => onBoneTransform(selectedBone!, selectedBoneObject.quaternion.toArray() as DirectorQuat)} /> : null}
+        {selected && selectedBoneObject ? <TransformControls object={selectedBoneObject} mode="rotate" size={0.55} onMouseUp={() => onBoneTransform(selectedBone!, selectedBoneObject.quaternion.toArray() as DirectorQuat)} /> : null}
     </group>;
 }
 
@@ -440,14 +422,6 @@ function DirectorLightView({ light }: { light: DirectorLight }) {
     if (light.type === "point") return <pointLight position={position} color={light.color} intensity={light.intensity} castShadow={light.castShadow} />;
     if (light.type === "spot") return <spotLight position={position} color={light.color} intensity={light.intensity} angle={light.angle} penumbra={light.penumbra} castShadow={light.castShadow} />;
     return <directionalLight position={position} color={light.color} intensity={light.intensity} castShadow={light.castShadow} shadow-mapSize-width={1024} shadow-mapSize-height={1024} />;
-}
-
-function characterPose(pose: NonNullable<DirectorObject["pose"]>): Record<"leftArm" | "rightArm" | "leftLeg" | "rightLeg", [number, number, number]> {
-    if (pose === "walk") return { leftArm: [0.35, 0, 0.18], rightArm: [-0.35, 0, -0.18], leftLeg: [-0.24, 0, 0.08], rightLeg: [0.24, 0, -0.08] };
-    if (pose === "run") return { leftArm: [0.7, 0, 0.35], rightArm: [-0.7, 0, -0.35], leftLeg: [-0.55, 0, 0.12], rightLeg: [0.55, 0, -0.12] };
-    if (pose === "sit") return { leftArm: [0.15, 0, 0.05], rightArm: [0.15, 0, -0.05], leftLeg: [1.1, 0, 0], rightLeg: [1.1, 0, 0] };
-    if (pose === "fight" || pose === "throw" || pose === "push") return { leftArm: [1.1, 0.2, 0.5], rightArm: [-0.7, -0.2, -0.5], leftLeg: [-0.35, 0, 0.2], rightLeg: [0.45, 0, -0.15] };
-    return { leftArm: [0, 0, 0.08], rightArm: [0, 0, -0.08], leftLeg: [0, 0, 0], rightLeg: [0, 0, 0] };
 }
 
 async function captureFrame(context: CaptureContext | null, mode: DirectorRenderMode) {
