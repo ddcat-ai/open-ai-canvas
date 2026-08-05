@@ -750,7 +750,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	}
 	defer releaseChannel()
 	if c.Request.Method == http.MethodPost {
-		order, err := svc.ReserveProxyBilling(user.ID, channel.ID, strings.TrimPrefix(modelName, "models/"), capability, c.GetHeader("X-Canvas-Scene"), c.GetHeader("X-Idempotency-Key"), proxyRequestVideoSeconds(c.GetHeader("Content-Type"), body))
+		order, err := svc.ReserveProxyBillingWithBody(user.ID, channel.ID, strings.TrimPrefix(modelName, "models/"), capability, c.GetHeader("X-Canvas-Scene"), c.GetHeader("X-Idempotency-Key"), proxyRequestVideoSeconds(c.GetHeader("Content-Type"), body), body)
 		if err != nil {
 			failService(c, err)
 			return
@@ -816,8 +816,11 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		fail(c, http.StatusBadGateway, fmt.Errorf("系统渠道响应超过 %dMB 限制", policy.Request.SystemRelayResponseMB))
 		return
 	}
+	logErr := logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
 	if status == model.ApiCallStatusSucceeded {
-		if err := svc.SettleBilling(billingOrderID, ""); err != nil {
+		if logErr != nil {
+			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但调用日志写入失败，费用状态待核对")
+		} else if err := svc.SettleBilling(billingOrderID, ""); err != nil {
 			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但积分结算失败："+err.Error())
 		}
 	} else if statusCode == 524 {
@@ -825,7 +828,6 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	} else {
 		_ = svc.RefundBilling(billingOrderID, "上游明确返回失败")
 	}
-	logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
 	for _, key := range []string{"Content-Type", "Cache-Control", "Content-Disposition"} {
 		if value := resp.Header.Get(key); value != "" {
 			c.Header(key, value)
@@ -870,10 +872,10 @@ func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID st
 	}
 }
 
-func logSystemProxyCall(svc *service.Service, log model.ApiCallLog, responseBody []byte) {
+func logSystemProxyCall(svc *service.Service, log model.ApiCallLog, responseBody []byte) error {
 	log.ResponseBody = service.SanitizeAPICallPayload(responseBody, "")
 	svc.EnrichAPICallLog(&log, responseBody)
-	_ = svc.LogAPICall(log)
+	return svc.LogAPICall(log)
 }
 
 func readPayloadModel(body []byte) string {
