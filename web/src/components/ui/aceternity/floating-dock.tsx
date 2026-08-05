@@ -10,6 +10,8 @@ export type FloatingDockCommand = {
     label: string;
     displayLabel?: string;
     icon: ReactNode;
+    wide?: boolean;
+    quiet?: boolean;
     onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
     active?: boolean;
     disabled?: boolean;
@@ -159,6 +161,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
     const iconTarget = useTransform(distance, (value) => proximitySize(value, metrics.icon, metrics.iconMagnified, metrics.distance, motionEnabled));
     const itemSize = useSpring(itemTarget, aceternityMotion.spring.dock);
     const iconSize = useSpring(iconTarget, aceternityMotion.spring.dock);
+    // 鼠标点击产生的 focus 不能阻塞提示收起，只有键盘可见焦点才持续显示提示。
     const showTooltip = !showLabel && (hovered || focused) && !command.disabled;
 
     if (showLabel) {
@@ -187,7 +190,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
     }
 
     return (
-        <motion.span ref={ref} className="relative block shrink-0" style={{ width: itemSize, height: itemSize }}>
+        <motion.span ref={ref} className={cn("relative block shrink-0", command.wide && "min-w-[var(--dock-precision-width)]")} style={{ width: itemSize, height: itemSize }}>
             {/* 放大项留在 Flex 流内，由布局推开邻项，保持 Aceternity Floating Dock 的空间关系。 */}
             <motion.button
                 type="button"
@@ -195,16 +198,17 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 aria-expanded={command.expands ? command.active || undefined : undefined}
                 aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
-                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.active && "is-active", command.danger && "is-danger")}
+                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.quiet && "is-quiet", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
                 transition={aceternityMotion.spring.dock}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
-                onFocus={() => setFocused(true)}
+                onFocus={(event) => setFocused(event.currentTarget.matches(":focus-visible"))}
                 onBlur={() => setFocused(false)}
+                onMouseDown={() => setFocused(false)}
                 onClick={command.onClick}
             >
-                <motion.span className="grid place-items-center" style={{ width: iconSize, height: iconSize }}>
+                <motion.span className={cn("grid place-items-center", command.wide && "w-full")} style={command.wide ? { height: iconSize } : { width: iconSize, height: iconSize }}>
                     {command.icon}
                 </motion.span>
                 <AnimatePresence>
@@ -212,7 +216,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                         <motion.span
                             initial={{ opacity: 0, y: 7, scale: 0.94 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.96, transition: { duration: 0 } }}
                             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
                             className={cn("aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[140] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl", compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]")}
                         >

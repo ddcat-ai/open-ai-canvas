@@ -294,29 +294,26 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
         <div ref={rootRef} className="aceternity-mode-switch pointer-events-auto absolute left-1/2 top-2 z-[var(--dock-z-popover)] -translate-x-1/2">
             <motion.button
                 type="button"
-                whileHover={reducedMotion ? undefined : { y: -1, scale: 1.015 }}
+                whileHover={reducedMotion ? undefined : { y: -1 }}
                 whileTap={reducedMotion ? undefined : { scale: 0.97 }}
                 transition={aceternityMotion.spring.dock}
-                className="flex h-8 min-w-[112px] items-center gap-1.5 rounded-full border px-2 text-left outline-none backdrop-blur-2xl focus-visible:ring-2"
-                style={{ background: theme.spatial.elevated, borderColor: open ? theme.spatial.glowStrong : theme.toolbar.border, color: theme.node.text, boxShadow: `0 16px 44px ${theme.spatial.shadow}` }}
+                className="flex h-9 min-w-28 items-center gap-2 rounded-full px-2.5 text-left outline-none backdrop-blur-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ background: open ? theme.spatial.surface : theme.spatial.elevated, color: theme.node.text, boxShadow: "var(--workspace-overlay-shadow)", outlineColor: theme.accent.primary }}
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={`当前为${simple ? "简洁" : "专业"}模式，点击切换`}
                 onClick={() => setOpen((value) => !value)}
             >
-                <span className="grid size-6 shrink-0 place-items-center rounded-full border" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
+                <span className="grid size-6 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover, color: theme.accent.primary }}>
                     {simple ? <Sparkles className="size-3" /> : <Settings2 className="size-3" />}
                 </span>
-                <span className="min-w-0 flex-1">
-                    <span className="block text-[var(--fs-micro)] leading-none" style={{ color: theme.node.muted }}>工作空间</span>
-                    <span className="mt-0.5 block text-[var(--fs-tiny)] font-semibold leading-none">{simple ? "简洁模式" : "专业模式"}</span>
-                </span>
-                <motion.span animate={{ rotate: open ? 180 : 0 }} transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock} className="grid size-5 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>
-                    <ChevronDown className="size-2.5" />
+                <span className="min-w-0 flex-1 whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none">{simple ? "简洁模式" : "专业模式"}</span>
+                <motion.span animate={{ rotate: open ? 180 : 0 }} transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock} className="grid size-4 place-items-center" style={{ color: theme.node.muted }}>
+                    <ChevronDown className="size-3" />
                 </motion.span>
             </motion.button>
 
-            <div className="absolute left-1/2 top-[38px] w-[236px] -translate-x-1/2">
+            <div className="absolute left-1/2 top-11 w-72 -translate-x-1/2" style={{ maxWidth: "calc(100vw - var(--space-8))" }}>
                 <AnimatePresence>
                     {open ? (
                         <motion.div
@@ -326,10 +323,9 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.95 }}
                             transition={aceternityMotion.spring.panel}
-                            className="aceternity-floating-panel w-full overflow-hidden rounded-[var(--panel-radius)] border p-1.5 backdrop-blur-2xl"
-                            style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
+                            className="aceternity-floating-panel w-full overflow-hidden rounded-[var(--r-lg)] p-1.5 backdrop-blur-2xl"
+                            style={{ background: theme.spatial.elevated, color: theme.node.text, boxShadow: "var(--workspace-overlay-shadow)" }}
                         >
-                            <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
                             <ModeOption active={simple} motionEnabled={!reducedMotion} icon={<Sparkles className="size-4" />} title="简洁模式" description="保留核心创作路径，降低参数密度" theme={theme} onClick={() => selectMode("simple")} />
                             <ModeOption active={!simple} motionEnabled={!reducedMotion} icon={<Settings2 className="size-4" />} title="专业模式" description="显示完整节点、导演台与生成控制" theme={theme} onClick={() => selectMode("professional")} />
                         </motion.div>
@@ -348,16 +344,15 @@ function ModeOption({ active, motionEnabled, icon, title, description, theme, on
             type="button"
             role="option"
             aria-selected={active}
-            whileHover={motionEnabled ? { x: 3 } : undefined}
             whileTap={motionEnabled ? { scale: 0.98 } : undefined}
             transition={aceternityMotion.spring.dock}
-            className="group flex min-h-11 w-full items-center gap-2 rounded-[var(--r-lg)] border px-2 py-1.5 text-left outline-none focus-visible:ring-2"
-            style={{ background: active ? theme.accent.primarySoft : "transparent", borderColor: active ? theme.spatial.glowStrong : "transparent", color: theme.node.text }}
+            className="group flex min-h-14 w-full items-center gap-3 rounded-[var(--r-md)] px-3 py-2 text-left outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 dark:hover:bg-white/8"
+            style={{ background: active ? theme.accent.primarySoft : "transparent", color: theme.node.text, outlineColor: theme.accent.primary }}
             onClick={onClick}
         >
-            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
-            <span className="min-w-0 flex-1"><span className="block text-[var(--fs-tiny)] font-semibold">{title}</span><span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{description}</span></span>
-            <span className="grid size-5 shrink-0 place-items-center rounded-full border transition-opacity" style={{ background: active ? theme.accent.primary : theme.spatial.surface, borderColor: active ? theme.accent.primary : theme.toolbar.border, color: active ? "white" : theme.node.muted, opacity: active ? 1 : 0.28 }}><Check className="size-3" /></span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] [&_svg]:size-3.5" style={{ background: theme.spatial.surface, color: active ? theme.accent.primary : theme.node.muted }}>{icon}</span>
+            <span className="min-w-0 flex-1"><span className="block text-[var(--fs-body)] font-semibold leading-none">{title}</span><span className="mt-1.5 block text-[var(--fs-caption)] leading-5" style={{ color: theme.node.muted }}>{description}</span></span>
+            <span className="grid size-5 shrink-0 place-items-center" style={{ color: theme.accent.primary, opacity: active ? 1 : 0 }}><Check className="size-3.5" /></span>
         </motion.button>
     );
 }
