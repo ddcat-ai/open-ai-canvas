@@ -1,12 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Segmented, Switch } from "antd";
-import { CircleDot, Grid2x2, Moon, Plus, Palette, Sun, Square, Info } from "lucide-react";
+import { CircleDot, Grid2x2, Moon, Palette, Sun, Square, Info } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { FloatingDock } from "@/components/ui/aceternity/floating-dock";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
-import { CanvasCreateCommandGrid, type CanvasCreateCommand } from "@/components/canvas/canvas-create-command-grid";
+import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import { ToolbarSettingsModal } from "@/components/canvas/toolbars/toolbar-settings-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
@@ -169,10 +169,10 @@ export function CanvasToolbar({
         label: cmd.label,
         icon: cmd.icon,
         badge: cmd.badge,
+        section: cmd.section,
         onClick: () => runAddAction(() => cmd.run(ctx)),
     });
-    const nodeCommands = addNodeCommands.filter((cmd) => cmd.section === "node").map(toCommand);
-    const resourceCommands = addNodeCommands.filter((cmd) => cmd.section === "resource").map(toCommand);
+    const createCommands = addNodeCommands.map(toCommand);
 
     return (
         <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] z-[var(--z-toolbar)] flex justify-center">
@@ -181,8 +181,7 @@ export function CanvasToolbar({
                     <AddNodeMenu
                         x={panelX}
                         theme={theme}
-                        nodeCommands={nodeCommands}
-                        resourceCommands={resourceCommands}
+                        commands={createCommands}
                     />
                 ) : null}
             </AnimatePresence>
@@ -224,20 +223,15 @@ export function CanvasToolbar({
     );
 }
 
-function AddNodeMenu({ x, theme, nodeCommands, resourceCommands }: {
+function AddNodeMenu({ x, theme, commands }: {
     x: number;
     theme: CanvasTheme;
-    nodeCommands: CanvasCreateCommand[];
-    resourceCommands: CanvasCreateCommand[];
+    commands: CanvasCreateCommand[];
 }) {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: aceternityMotion.duration.instant }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[260px] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: x || "50%" }}>
             <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ y: 6, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 4, scale: 0.98 }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 64px ${theme.spatial.shadow}` }} onWheel={(event) => event.stopPropagation()}>
-                <PanelHeading icon={<Plus className="size-4" />} title="创建内容" subtitle="选择节点类型" theme={theme} />
-                <MenuSection title="创作节点" />
-                <CanvasCreateCommandGrid commands={nodeCommands} />
-                <MenuSection title="导入资源" />
-                <CanvasCreateCommandGrid commands={resourceCommands} variant="resource" />
+                <CanvasCreateMenu commands={commands} />
             </SpotlightSurface>
         </motion.div>
     );
@@ -250,10 +244,6 @@ function PanelHeading({ icon, title, subtitle, theme }: { icon: ReactNode; title
             <span className="min-w-0"><span className="block text-xs font-semibold">{title}</span><span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{subtitle}</span></span>
         </div>
     );
-}
-
-function MenuSection({ title }: { title: string }) {
-    return <div className="mb-1 mt-3 px-1 text-[var(--fs-micro)] font-semibold uppercase opacity-42">{title}</div>;
 }
 
 function CanvasThemeButton({ colorTheme, targetTheme, onThemeChange, children }: { colorTheme: CanvasColorTheme; targetTheme: CanvasColorTheme; onThemeChange: (theme: CanvasColorTheme) => void; children: ReactNode }) {
