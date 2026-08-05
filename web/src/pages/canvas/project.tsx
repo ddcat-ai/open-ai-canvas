@@ -1383,9 +1383,9 @@ function InfiniteCanvasPage() {
         <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: theme.canvas.background, color: theme.node.text }}>
             {shortDramaEnabled && currentProject?.projectId ? <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} /> : null}
             <section
-                className="relative min-w-0 flex-1 overflow-hidden transition-[padding]"
+                className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden transition-[padding]"
                 style={{
-                    paddingRight: focusMode && anyPanelOpen ? panelColumnWidth : undefined,
+                    paddingRight: anyPanelOpen ? panelColumnWidth : undefined,
                 }}
             >
                 <CanvasTopBar
@@ -1449,6 +1449,7 @@ function InfiniteCanvasPage() {
 
                 <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
+                <div className="relative flex-1 min-h-0">
                 <InfiniteCanvas
                     containerRef={containerRef}
                     viewport={viewport}
@@ -1541,6 +1542,7 @@ function InfiniteCanvasPage() {
                         onOpenDrawing={openDrawingNode}
                     />
                 </InfiniteCanvas>
+                </div>
 
                 {angleNode?.metadata?.content ? (
                     <CanvasNodePanelOverlay node={angleNode} viewport={viewport} containerRef={containerRef} panelWidth={580} panelHeight={350}>
