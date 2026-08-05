@@ -1,12 +1,13 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Bot, Check, ChevronDown, Coins, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, PanelRightClose, PanelRightOpen, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
+import { Bot, Check, ChevronDown, Clapperboard, Coins, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Modal, Tooltip } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
+import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -38,9 +39,8 @@ type CanvasTopBarProps = {
     onMediaPerformanceModeChange: (mode: CanvasMediaPerformanceMode) => void;
     onOpenSearch: () => void;
     projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
-    focusMode: boolean;
-    focusModeForced: boolean;
-    onToggleFocusMode: () => void;
+    onEnterFocusMode: () => void;
+    shortDramaGuide?: { progress: CanvasShortDramaProgress; collapsed: boolean; onToggle: () => void };
 };
 
 export function CanvasTopBar({
@@ -69,9 +69,8 @@ export function CanvasTopBar({
     onMediaPerformanceModeChange,
     onOpenSearch,
     projectContext,
-    focusMode,
-    focusModeForced,
-    onToggleFocusMode,
+    onEnterFocusMode,
+    shortDramaGuide,
 }: CanvasTopBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
@@ -79,6 +78,19 @@ export function CanvasTopBar({
     const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [workspaceModeOpen, setWorkspaceModeOpen] = useState(false);
+
+    const handleWorkspaceModeOpenChange = (next: boolean) => {
+        // 模式开关下拉向下展开，会覆盖展开中的短剧流程条，打开时先收起流程条避免重叠。
+        if (next && shortDramaGuide && !shortDramaGuide.collapsed) shortDramaGuide.onToggle();
+        setWorkspaceModeOpen(next);
+    };
+
+    const handleShortDramaGuideToggle = () => {
+        // 展开流程条会与模式开关下拉在顶部中心重叠，展开前先关闭模式开关。
+        if (shortDramaGuide?.collapsed) setWorkspaceModeOpen(false);
+        shortDramaGuide?.onToggle();
+    };
 
     useEffect(() => {
         if (shortcutRequestNonce > 0) setShortcutsOpen(true);
@@ -175,7 +187,7 @@ export function CanvasTopBar({
                     </div>
                 </div>
 
-                <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={onWorkspaceModeChange} />
+                <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={onWorkspaceModeChange} open={workspaceModeOpen} onOpenChange={handleWorkspaceModeOpenChange} />
 
                 <div className="pointer-events-auto flex items-center gap-1.5">
                     <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
@@ -206,22 +218,30 @@ export function CanvasTopBar({
                             <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
                         </Link>
                     ) : null}
-                    <Tooltip title={focusModeForced ? "小屏强制避让模式" : focusMode ? "专注模式：已避让（点击切换浮层）" : "专注模式：已浮层（点击切换避让）"}>
+                    <Tooltip title="进入专注模式（⇧⌘F）">
                         <Button
                             type="text"
                             className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0"
-                            style={{
-                                color: theme.node.text,
-                                opacity: focusModeForced ? 0.45 : 1,
-                                background: focusMode ? theme.toolbar.panel : undefined,
-                            }}
-                            icon={focusMode ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-                            onClick={onToggleFocusMode}
-                            disabled={focusModeForced}
-                            aria-pressed={focusMode}
-                            aria-label="专注模式：画布与侧面板避让/浮层切换"
+                            style={{ color: theme.node.text }}
+                            icon={<Focus className="size-4" />}
+                            onClick={onEnterFocusMode}
+                            aria-label="进入专注模式"
                         />
                     </Tooltip>
+                    {shortDramaGuide ? (
+                        <Tooltip title={shortDramaGuide.collapsed ? "展开短剧流程" : "收起短剧流程"}>
+                            <Button
+                                type="text"
+                                className="!h-10 !rounded-xl !px-2.5 !font-medium"
+                                style={{ color: theme.node.text, background: shortDramaGuide.collapsed ? undefined : theme.toolbar.activeBg }}
+                                icon={<Clapperboard className="size-4" />}
+                                onClick={handleShortDramaGuideToggle}
+                                aria-label="短剧流程"
+                            >
+                                <span className="tabular-nums">{shortDramaGuide.progress.completedCount}/5</span>
+                            </Button>
+                        </Tooltip>
+                    ) : null}
                     <Button type="text" className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
                     <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
                     <Button
@@ -246,6 +266,7 @@ export function CanvasTopBar({
                     <Shortcut keys={["Alt", "点击 / 框选"]} value="移除选择节点" />
                     <Shortcut keys={["Ctrl / Cmd", "1 / 2 / 3"]} value="100% / 适应全部 / 适应选择" />
                     <Shortcut keys={["?"]} value="打开快捷键" />
+                    <Shortcut keys={["Shift / Ctrl / Cmd", "F"]} value="进入 / 退出专注模式" />
                     <Shortcut keys={["Ctrl / Cmd", "A"]} value="全选节点" />
                     <Shortcut keys={["Ctrl / Cmd", "K"]} value="搜索并定位节点" />
                     <Shortcut keys={["Ctrl / Cmd", "C / V"]} value="复制 / 粘贴节点，或粘贴剪切板文本/图片" />
@@ -262,20 +283,19 @@ export function CanvasTopBar({
     );
 }
 
-function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMode; onChange: (mode: CanvasWorkspaceMode) => void }) {
+function CanvasWorkspaceModeSwitch({ mode, onChange, open, onOpenChange }: { mode: CanvasWorkspaceMode; onChange: (mode: CanvasWorkspaceMode) => void; open: boolean; onOpenChange: (open: boolean) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const simple = mode === "simple";
-    const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!open) return;
         const closeOnOutsidePress = (event: PointerEvent) => {
-            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
+            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) onOpenChange(false);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Escape") onOpenChange(false);
         };
         document.addEventListener("pointerdown", closeOnOutsidePress);
         document.addEventListener("keydown", closeOnEscape);
@@ -283,11 +303,11 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
             document.removeEventListener("pointerdown", closeOnOutsidePress);
             document.removeEventListener("keydown", closeOnEscape);
         };
-    }, [open]);
+    }, [open, onOpenChange]);
 
     const selectMode = (nextMode: CanvasWorkspaceMode) => {
         if (nextMode !== mode) onChange(nextMode);
-        setOpen(false);
+        onOpenChange(false);
     };
 
     return (
@@ -302,7 +322,7 @@ function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMo
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={`当前为${simple ? "简洁" : "专业"}模式，点击切换`}
-                onClick={() => setOpen((value) => !value)}
+                onClick={() => onOpenChange(!open)}
             >
                 <span className="grid size-6 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover, color: theme.accent.primary }}>
                     {simple ? <Sparkles className="size-3" /> : <Settings2 className="size-3" />}

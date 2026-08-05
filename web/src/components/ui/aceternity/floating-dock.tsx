@@ -54,6 +54,8 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
     const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
     const reducedMotion = useReducedMotion();
     const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+    // 窄屏下 dock 按钮总宽易超出可用宽度：此时允许横向滚动并禁用放大（放大依赖 overflow-visible，与滚动互斥）
+    const [narrow, setNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
 
     useEffect(() => {
         const media = window.matchMedia("(pointer: coarse)");
@@ -63,7 +65,15 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
         return () => media.removeEventListener("change", update);
     }, []);
 
-    const motionEnabled = !reducedMotion && !coarsePointer;
+    useEffect(() => {
+        const update = () => setNarrow(window.innerWidth < 768);
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+    }, []);
+
+    // scrollable 场景（触屏或窄屏）禁用放大并允许横向滚动，保证按钮始终可达
+    const scrollable = coarsePointer || narrow;
+    const motionEnabled = !reducedMotion && !scrollable;
     const metrics = coarsePointer ? TOUCH_DOCK_METRICS[size] : DOCK_METRICS[size];
 
     return (
@@ -72,7 +82,8 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             role="toolbar"
             aria-label={ariaLabel}
             className={cn(
-                "aceternity-floating-dock flex overflow-visible",
+                "aceternity-floating-dock flex",
+                scrollable ? "overflow-x-auto" : "overflow-visible",
                 showLabels ? "items-center" : "items-end",
                 embedded ? "shadow-none" : "border backdrop-blur-2xl",
                 showLabels
@@ -163,6 +174,8 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
     const iconSize = useSpring(iconTarget, aceternityMotion.spring.dock);
     // 鼠标点击产生的 focus 不能阻塞提示收起，只有键盘可见焦点才持续显示提示。
     const showTooltip = !showLabel && (hovered || focused) && !command.disabled;
+    // scrollable 场景自定义 tooltip 会被 overflow 裁剪，用原生 title 兜底
+    const nativeTitle = !motionEnabled ? command.label : undefined;
 
     if (showLabel) {
         return (
@@ -195,6 +208,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
             <motion.button
                 type="button"
                 aria-label={command.label}
+                title={nativeTitle}
                 aria-expanded={command.expands ? command.active || undefined : undefined}
                 aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
