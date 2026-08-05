@@ -110,11 +110,31 @@ export function buildGenerationSubmissionSnapshot(options: {
     }));
     const mentionedNodeIds = new Set(mentionTokens.filter((item) => item.kind === "node").map((item) => item.id));
     const hasExplicitMention = mentionTokens.length > 0;
-    const usesComposer = sourceNode?.type === CanvasNodeType.Config || Boolean(sourceNode?.metadata?.composerContent?.trim()) || hasExplicitMention;
+    // 必须与 buildNodeGenerationContext 一致：仅 Config+composer 或提示词显式 @ 才进入「只发被 @ 的」模式。
+    // 动作板/分镜图也会写 composerContent（短提示原稿，防重试叠层），绝不能因此关掉入边角色与参考图。
+    const usesComposer = (sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitMention;
 
     const references: GenerationSubmissionReference[] = [];
     const pushReference = (item: GenerationSubmissionReference) => {
         const key = item.nodeId || item.id;
+        // 角色节点会同时产出 character + 封面 image；清单只保留一条角色参考，封面并入预览。
+        if (item.kind === "image") {
+            const characterRef = references.find((existing) => existing.kind === "character" && (existing.nodeId || existing.id) === key);
+            if (characterRef) {
+                if (!characterRef.previewUrl && item.previewUrl) characterRef.previewUrl = item.previewUrl;
+                if (!characterRef.storageKey && item.storageKey) characterRef.storageKey = item.storageKey;
+                return;
+            }
+        }
+        if (item.kind === "character") {
+            const imageIndex = references.findIndex((existing) => existing.kind === "image" && (existing.nodeId || existing.id) === key);
+            if (imageIndex >= 0) {
+                const cover = references[imageIndex];
+                references.splice(imageIndex, 1);
+                item.previewUrl = item.previewUrl || cover.previewUrl;
+                item.storageKey = item.storageKey || cover.storageKey;
+            }
+        }
         if (references.some((existing) => (existing.nodeId || existing.id) === key && existing.kind === item.kind)) return;
         references.push(item);
     };
