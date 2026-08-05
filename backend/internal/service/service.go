@@ -189,6 +189,7 @@ func New(repo *repository.Repository, dataDir string) *Service {
 }
 
 func (s *Service) StartWorker() {
+	s.startTextReplayCleanup()
 	go func() {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
@@ -576,6 +577,9 @@ func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
 	if task.SessionID != "" {
 		_ = s.markSessionFailed(*task, "会话任务已取消。")
 	}
+	if err := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); err != nil {
+		_ = s.log(userID, task.ID, "error", "文本回放草稿归并失败", err.Error())
+	}
 	_ = s.log(userID, task.ID, "warn", "任务已取消", "")
 	return taskForOutput(*task), nil
 }
@@ -911,6 +915,9 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 				_ = s.MarkBillingUncertain(task.BillingOrderID, "任务取消时上游费用状态不明确")
 			}
 			_ = s.markSessionFailed(*task, "会话任务已取消。")
+			if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); compactErr != nil {
+				_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+			}
 			_ = s.log(task.UserID, task.ID, "warn", "任务已取消", "")
 			return nil
 		}
@@ -922,6 +929,9 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_ = s.repo.Save(task)
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		if providerSucceeded || (!channelSlotFailedBeforeRequest && s.BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)) {
 			_ = s.MarkBillingUncertain(task.BillingOrderID, task.Error)
 		} else {
@@ -936,6 +946,9 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		return err
 	}
 	if latest.Status == model.TaskStatusCancelled {
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		_ = s.MarkBillingUncertain(task.BillingOrderID, "上游已返回结果，但任务被取消")
 		_ = s.markSessionFailed(*latest, "会话任务已取消。")
 		_ = s.log(task.UserID, task.ID, "warn", "任务已取消，丢弃生成结果", "")
@@ -952,10 +965,16 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_ = s.repo.Save(task)
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		_ = s.MarkBillingUncertain(task.BillingOrderID, "上游已成功但任务结果未保存："+task.Error)
 		_ = s.markSessionFailed(*task, task.Error)
 		_ = s.log(task.UserID, task.ID, "error", "任务结果保存失败", task.Error)
 		return err
+	}
+	if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusSucceeded); compactErr != nil {
+		_ = s.log(task.UserID, task.ID, "error", "文本回放窗口更新失败", compactErr.Error())
 	}
 	if completedTask, fetchErr := s.repo.Task(task.ID); fetchErr == nil {
 		if registerErr := s.RegisterTaskOutputFromTask(*completedTask); registerErr != nil {

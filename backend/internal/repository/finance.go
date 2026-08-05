@@ -222,7 +222,7 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		}
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
-			"started_at": nil, "completed_at": nil, "updated_at": time.Now(),
+			"text_draft": "", "started_at": nil, "completed_at": nil, "updated_at": time.Now(),
 		}
 		if order != nil {
 			updates["billing_order_id"] = order.ID
@@ -238,6 +238,9 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		}
 		if updated.RowsAffected != 1 {
 			return ErrTaskNotRetryable
+		}
+		if err := tx.Delete(&model.TaskTextDelta{}, "user_id = ? AND task_id = ?", userID, taskID).Error; err != nil {
+			return err
 		}
 		return tx.First(&task, "id = ? AND user_id = ?", taskID, userID).Error
 	})

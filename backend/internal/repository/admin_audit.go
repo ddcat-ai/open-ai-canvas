@@ -58,6 +58,9 @@ func (r *Repository) BulkDisableUsers(actorID string, userIDs []string, events [
 		if err := tx.Delete(&model.AuthSession{}, "user_id IN ?", userIDs).Error; err != nil {
 			return err
 		}
+		if err := tx.Delete(&model.TaskTextDelta{}, "user_id IN ?", userIDs).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&model.User{}).Where("id IN ?", userIDs).Updates(map[string]any{"status": model.UserStatusDisabled, "updated_at": now}).Error; err != nil {
 			return err
 		}
