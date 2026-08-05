@@ -104,6 +104,26 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 	}
 }
 
+func TestNormalizePixelSizeConvertsCanvasAspectRatios(t *testing.T) {
+	tests := map[string]string{
+		"1:1":  "1024x1024",
+		"3:2":  "1536x1024",
+		"2:3":  "1024x1536",
+		"4:3":  "1360x1024",
+		"3:4":  "1024x1360",
+		"16:9": "1824x1024",
+		"9:16": "1024x1824",
+		"21:9": "2352x1008",
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			if got := normalizePixelSize(input); got != want {
+				t.Fatalf("normalizePixelSize(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+}
+
 func TestDoBinaryRejectsOversizedProviderResponse(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
