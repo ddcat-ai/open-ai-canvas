@@ -1538,7 +1538,7 @@ function InfiniteCanvasPage() {
                                 />
                             </InfiniteCanvas>
 
-                            <CanvasActiveTaskPanel tasks={activeTasks} />
+                            <CanvasActiveTaskPanel tasks={activeTasks} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
 
                             {focusMode ? (
                                 <CanvasFocusModeBar
