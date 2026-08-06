@@ -4,6 +4,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type TaskBillingStatus = "reserved" | "running" | "settled" | "refunded" | "uncertain";
+export type ProviderCancelStatus = "requested" | "confirmed" | "uncertain";
 export type AgentSessionStatus = "active" | "completed" | "failed";
 
 export type BackendEnvelope<T> = {
@@ -25,11 +26,17 @@ export type GenerationTask = {
     provider?: string;
     model?: string;
     providerRequestId?: string;
+    providerCancelStatus?: ProviderCancelStatus;
+    providerCancelError?: string;
+    providerCancelAttempts?: number;
+    providerCancelRequestedAt?: string;
+    providerCancelledAt?: string;
     errorCode?: string;
     previewUrl?: string;
     previewKind?: "image" | "video";
     inputJson?: string;
     resultJson?: string;
+    textDraft?: string;
     error?: string;
     attempts: number;
     startedAt?: string;
@@ -55,6 +62,23 @@ export type ProviderTaskQueryResult = {
     providerStatus: string;
     recovered: boolean;
     billingSettled: boolean;
+};
+
+export type TaskTextDelta = {
+    id: string;
+    taskId: string;
+    sequence: number;
+    content: string;
+    byteCount: number;
+    createdAt: string;
+    expiresAt: string;
+};
+
+export type TaskTextReplay = {
+    deltas: TaskTextDelta[];
+    textDraft?: string;
+    finalText?: string;
+    complete: boolean;
 };
 
 export type AgentSession = {
@@ -197,6 +221,14 @@ export function listGenerationTasks(limit = 30, options?: { projectId?: string; 
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
     return request<GenerationTask>(api.get(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal }));
+}
+
+export function appendTaskTextDelta(id: string, content: string) {
+    return request<TaskTextDelta>(api.post(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content }));
+}
+
+export function queryTaskTextReplay(id: string, after = 0) {
+    return request<TaskTextReplay>(api.get(`/tasks/${encodeURIComponent(id)}/text-deltas`, { params: { after } }));
 }
 
 export function retryGenerationTask(id: string) {

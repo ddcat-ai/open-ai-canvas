@@ -1,6 +1,6 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { Dropdown } from "antd";
-import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronRight, ChevronUp, Clapperboard, FolderKanban, Images, MoreHorizontal, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
+import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronUp, Clapperboard, FolderKanban, Images, MoreHorizontal, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
@@ -127,37 +127,51 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
     onStepClick: (stepId: CanvasShortDramaStepId) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    if (!progress.active) return null;
-    if (collapsed) {
-        return (
-            <button type="button" data-canvas-no-zoom className="absolute left-[calc(50%+64px)] top-2 z-[var(--z-toolbar)] inline-flex h-8 max-w-[calc(50vw-76px)] min-w-0 items-center gap-2 rounded-lg border px-3 text-xs font-medium shadow-sm backdrop-blur outline-none focus-visible:ring-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, "--tw-ring-color": theme.accent.primary } as CSSProperties} onClick={onToggle}>
-                <Clapperboard className="size-3.5 shrink-0" /><span className="truncate">短剧流程 {progress.completedCount}/5</span><ChevronDown className="size-3 shrink-0" />
-            </button>
-        );
-    }
+    if (!progress.active || collapsed) return null;
     return (
-        <div data-canvas-no-zoom className="absolute left-1/2 top-[68px] z-[var(--z-toolbar)] flex max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
-            <div className="hide-scrollbar flex max-w-[min(760px,calc(100vw-150px))] items-center overflow-x-auto">
-                {progress.steps.map((step, index) => (
-                    <span key={step.id} className="flex shrink-0 items-center">
-                        {index ? <ChevronRight className="mx-0.5 size-3 opacity-25" /> : null}
-                        <button
-                            type="button"
-                            aria-current={step.status === "current" ? "step" : undefined}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-inset dark:hover:bg-white/10"
-                            style={{
-                                background: step.status === "current" ? theme.accent.primarySoft : "transparent",
-                                borderColor: step.status === "current" ? `${theme.accent.primary}40` : "transparent",
-                                color: step.status === "current" ? theme.accent.primary : step.status === "completed" ? theme.node.text : theme.node.muted,
-                                "--tw-ring-color": theme.accent.primary,
-                            } as CSSProperties}
-                            onClick={() => onStepClick(step.id)}
-                        >
-                            <span className="grid size-4 place-items-center rounded-full border text-[var(--fs-micro)]" style={{ borderColor: step.status === "current" ? theme.accent.primary : theme.node.stroke, background: step.status === "completed" ? theme.accent.primary : "transparent", color: step.status === "completed" ? "#fff" : "currentColor" }}>{step.status === "completed" ? <Check className="size-2.5" /> : index + 1}</span>
-                            {step.label}
-                        </button>
-                    </span>
-                ))}
+        <div data-canvas-no-zoom className="absolute left-1/2 top-[var(--canvas-topbar-offset)] z-[var(--z-toolbar)] flex max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+            <div className="hide-scrollbar flex min-w-0 flex-1 items-center overflow-x-auto">
+                <div className="flex shrink-0 items-center px-[var(--space-1)]">
+                    {progress.steps.map((step, index) => (
+                        <Fragment key={step.id}>
+                            {index ? (
+                                <span
+                                    aria-hidden
+                                    className="shrink-0 rounded-full transition-colors duration-150 motion-reduce:transition-none"
+                                    style={{ width: "var(--flow-step-track-width)", height: "var(--flow-step-track-height)", background: step.status === "pending" ? theme.node.stroke : theme.accent.primary }}
+                                />
+                            ) : null}
+                            <button
+                                type="button"
+                                aria-current={step.status === "current" ? "step" : undefined}
+                                className="flex h-8 shrink-0 items-center gap-[var(--flow-step-gap)] rounded-md px-[var(--space-1-half)] outline-none transition-colors motion-reduce:transition-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-inset dark:hover:bg-white/10"
+                                style={{ "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                                onClick={() => onStepClick(step.id)}
+                            >
+                                <span
+                                    className="grid shrink-0 place-items-center rounded-full font-semibold transition-all duration-150 motion-reduce:transition-none"
+                                    style={{
+                                        width: step.status === "current" ? "var(--flow-step-node-current)" : "var(--flow-step-node)",
+                                        height: step.status === "current" ? "var(--flow-step-node-current)" : "var(--flow-step-node)",
+                                        background: step.status === "pending" ? "transparent" : theme.accent.primary,
+                                        border: step.status === "pending" ? "var(--stroke-2) solid var(--cn-stroke)" : "none",
+                                        color: step.status === "pending" ? theme.node.muted : "#fff",
+                                        boxShadow: step.status === "current" ? "var(--flow-step-current-glow)" : undefined,
+                                        fontSize: step.status === "current" ? "var(--fs-body)" : "var(--fs-caption)",
+                                    }}
+                                >
+                                    {step.status === "completed" ? <Check className="size-3.5" /> : index + 1}
+                                </span>
+                                <span
+                                    className="whitespace-nowrap text-[var(--fs-caption)] font-semibold transition-colors duration-150 motion-reduce:transition-none"
+                                    style={{ color: step.status === "current" ? theme.accent.primary : step.status === "completed" ? theme.node.text : theme.node.muted }}
+                                >
+                                    {step.label}
+                                </span>
+                            </button>
+                        </Fragment>
+                    ))}
+                </div>
             </div>
             <span className="mx-1 h-4 w-px shrink-0" style={{ background: theme.toolbar.border }} />
             {!progress.completed ? <button type="button" className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[var(--fs-label)] outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ color: theme.node.muted, "--tw-ring-color": theme.accent.primary } as CSSProperties} onClick={onSkip}><X className="size-3" />跳过导引</button> : null}

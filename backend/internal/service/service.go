@@ -71,28 +71,33 @@ type SessionDetail struct {
 }
 
 type TaskSummary struct {
-	ID                string              `json:"id"`
-	SessionID         string              `json:"sessionId,omitempty"`
-	ProjectID         string              `json:"projectId,omitempty"`
-	Type              string              `json:"type"`
-	Status            model.TaskStatus    `json:"status"`
-	Stage             string              `json:"stage"`
-	Progress          int                 `json:"progress"`
-	Prompt            string              `json:"prompt"`
-	Operation         string              `json:"operation,omitempty"`
-	Provider          string              `json:"provider,omitempty"`
-	Model             string              `json:"model,omitempty"`
-	ProviderRequestID string              `json:"providerRequestId,omitempty"`
-	ErrorCode         string              `json:"errorCode,omitempty"`
-	PreviewURL        string              `json:"previewUrl,omitempty"`
-	PreviewKind       string              `json:"previewKind,omitempty"`
-	Attempts          int                 `json:"attempts"`
-	StartedAt         *time.Time          `json:"startedAt"`
-	CompletedAt       *time.Time          `json:"completedAt"`
-	CreatedAt         time.Time           `json:"createdAt"`
-	UpdatedAt         time.Time           `json:"updatedAt"`
-	Billing           *TaskBillingSummary `json:"billing,omitempty"`
-	ClientContext     *TaskClientContext  `json:"clientContext,omitempty"`
+	ID                        string                     `json:"id"`
+	SessionID                 string                     `json:"sessionId,omitempty"`
+	ProjectID                 string                     `json:"projectId,omitempty"`
+	Type                      string                     `json:"type"`
+	Status                    model.TaskStatus           `json:"status"`
+	Stage                     string                     `json:"stage"`
+	Progress                  int                        `json:"progress"`
+	Prompt                    string                     `json:"prompt"`
+	Operation                 string                     `json:"operation,omitempty"`
+	Provider                  string                     `json:"provider,omitempty"`
+	Model                     string                     `json:"model,omitempty"`
+	ProviderRequestID         string                     `json:"providerRequestId,omitempty"`
+	ProviderCancelStatus      model.ProviderCancelStatus `json:"providerCancelStatus,omitempty"`
+	ProviderCancelError       string                     `json:"providerCancelError,omitempty"`
+	ProviderCancelAttempts    int                        `json:"providerCancelAttempts,omitempty"`
+	ProviderCancelRequestedAt *time.Time                 `json:"providerCancelRequestedAt,omitempty"`
+	ProviderCancelledAt       *time.Time                 `json:"providerCancelledAt,omitempty"`
+	ErrorCode                 string                     `json:"errorCode,omitempty"`
+	PreviewURL                string                     `json:"previewUrl,omitempty"`
+	PreviewKind               string                     `json:"previewKind,omitempty"`
+	Attempts                  int                        `json:"attempts"`
+	StartedAt                 *time.Time                 `json:"startedAt"`
+	CompletedAt               *time.Time                 `json:"completedAt"`
+	CreatedAt                 time.Time                  `json:"createdAt"`
+	UpdatedAt                 time.Time                  `json:"updatedAt"`
+	Billing                   *TaskBillingSummary        `json:"billing,omitempty"`
+	ClientContext             *TaskClientContext         `json:"clientContext,omitempty"`
 }
 
 type TaskClientContext struct {
@@ -189,6 +194,8 @@ func New(repo *repository.Repository, dataDir string) *Service {
 }
 
 func (s *Service) StartWorker() {
+	s.startTextReplayCleanup()
+	s.startProviderCancellationReconciliation()
 	go func() {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
@@ -459,6 +466,12 @@ func (s *Service) refreshTaskProviderState(task *model.Task) error {
 	}
 	task.PollStage = latest.PollStage
 	task.NextPollAt = latest.NextPollAt
+	task.ProviderCancelStatus = latest.ProviderCancelStatus
+	task.ProviderCancelError = latest.ProviderCancelError
+	task.ProviderCancelAttempts = latest.ProviderCancelAttempts
+	task.ProviderCancelRequestedAt = latest.ProviderCancelRequestedAt
+	task.ProviderCancelledAt = latest.ProviderCancelledAt
+	task.ProviderCancelNextCheckAt = latest.ProviderCancelNextCheckAt
 	return nil
 }
 
@@ -469,6 +482,9 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	}
 	if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusCancelled {
 		return nil, errors.New("only failed or cancelled tasks can be retried")
+	}
+	if task.ProviderCancelStatus == model.ProviderCancelStatusRequested {
+		return nil, BadAuthRequest("上游取消状态仍在确认中，请确认费用结果后再重试")
 	}
 	if isContentModerationFailure(task.Error) {
 		return nil, BadAuthRequest(contentModerationRetryMessage)
@@ -516,7 +532,7 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	return taskForOutput(*task), nil
 }
 
-func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
+func (s *Service) CancelTask(ctx context.Context, userID string, id string) (*model.Task, error) {
 	task, err := s.repo.TaskForUser(userID, id)
 	if err != nil {
 		return nil, err
@@ -525,6 +541,7 @@ func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
 		return nil, errors.New("completed task cannot be cancelled")
 	}
 	now := time.Now()
+	cancelledRunningTask := false
 	if task.Status == model.TaskStatusQueued {
 		cancelled, err := s.repo.CancelTaskIfStatus(userID, task.ID, model.TaskStatusQueued, now)
 		if err != nil {
@@ -546,7 +563,6 @@ func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
 		}
 	}
 	if task.Status == model.TaskStatusRunning {
-		s.cancelActiveTask(task.ID)
 		cancelled, err := s.repo.CancelTaskIfStatus(userID, task.ID, model.TaskStatusRunning, now)
 		if err != nil {
 			return nil, err
@@ -561,6 +577,8 @@ func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
 			}
 			task = latest
 		} else {
+			cancelledRunningTask = true
+			s.cancelActiveTask(task.ID)
 			if err := s.MarkBillingUncertain(task.BillingOrderID, "运行中的上游请求被用户取消，费用状态待核对"); err != nil {
 				return nil, err
 			}
@@ -575,6 +593,18 @@ func (s *Service) CancelTask(userID string, id string) (*model.Task, error) {
 	}
 	if task.SessionID != "" {
 		_ = s.markSessionFailed(*task, "会话任务已取消。")
+	}
+	if cancelledRunningTask {
+		if err := s.requestProviderCancellation(ctx, task); err != nil {
+			return nil, err
+		}
+		task, err = s.repo.TaskForUser(userID, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); err != nil {
+		_ = s.log(userID, task.ID, "error", "文本回放草稿归并失败", err.Error())
 	}
 	_ = s.log(userID, task.ID, "warn", "任务已取消", "")
 	return taskForOutput(*task), nil
@@ -626,27 +656,32 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 	previewURL, previewKind := taskMediaPreview(task.ResultJSON, task.Type)
 	return TaskSummary{
-		ID:                task.ID,
-		SessionID:         task.SessionID,
-		ProjectID:         task.ProjectID,
-		Type:              task.Type,
-		Status:            task.Status,
-		Stage:             task.Stage,
-		Progress:          task.Progress,
-		Prompt:            truncateRunes(task.Prompt, 500),
-		Operation:         task.Operation,
-		Provider:          task.Provider,
-		Model:             task.Model,
-		ProviderRequestID: task.ProviderRequestID,
-		ErrorCode:         errorCode,
-		PreviewURL:        previewURL,
-		PreviewKind:       previewKind,
-		Attempts:          task.Attempts,
-		StartedAt:         task.StartedAt,
-		CompletedAt:       task.CompletedAt,
-		CreatedAt:         task.CreatedAt,
-		UpdatedAt:         task.UpdatedAt,
-		ClientContext:     taskClientContext(task.InputJSON),
+		ID:                        task.ID,
+		SessionID:                 task.SessionID,
+		ProjectID:                 task.ProjectID,
+		Type:                      task.Type,
+		Status:                    task.Status,
+		Stage:                     task.Stage,
+		Progress:                  task.Progress,
+		Prompt:                    truncateRunes(task.Prompt, 500),
+		Operation:                 task.Operation,
+		Provider:                  task.Provider,
+		Model:                     task.Model,
+		ProviderRequestID:         task.ProviderRequestID,
+		ProviderCancelStatus:      task.ProviderCancelStatus,
+		ProviderCancelError:       task.ProviderCancelError,
+		ProviderCancelAttempts:    task.ProviderCancelAttempts,
+		ProviderCancelRequestedAt: task.ProviderCancelRequestedAt,
+		ProviderCancelledAt:       task.ProviderCancelledAt,
+		ErrorCode:                 errorCode,
+		PreviewURL:                previewURL,
+		PreviewKind:               previewKind,
+		Attempts:                  task.Attempts,
+		StartedAt:                 task.StartedAt,
+		CompletedAt:               task.CompletedAt,
+		CreatedAt:                 task.CreatedAt,
+		UpdatedAt:                 task.UpdatedAt,
+		ClientContext:             taskClientContext(task.InputJSON),
 	}
 }
 
@@ -873,7 +908,7 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		task.Stage = "计费准备失败"
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
-		_ = s.repo.Save(task)
+		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
 		_ = s.RefundBilling(task.BillingOrderID, "计费准备失败，上游请求未发出")
 		return err
 	}
@@ -904,13 +939,16 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 			task.Stage = "任务已取消"
 			task.Error = "任务已取消"
 			task.CompletedAt = ptr(time.Now())
-			_ = s.repo.Save(task)
+			_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
 			if channelSlotFailedBeforeRequest {
 				_ = s.RefundBilling(task.BillingOrderID, "等待渠道槽位期间取消，上游请求未发出")
 			} else {
 				_ = s.MarkBillingUncertain(task.BillingOrderID, "任务取消时上游费用状态不明确")
 			}
 			_ = s.markSessionFailed(*task, "会话任务已取消。")
+			if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); compactErr != nil {
+				_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+			}
 			_ = s.log(task.UserID, task.ID, "warn", "任务已取消", "")
 			return nil
 		}
@@ -921,7 +959,10 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		task.Stage = "任务失败"
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
-		_ = s.repo.Save(task)
+		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		if providerSucceeded || (!channelSlotFailedBeforeRequest && s.BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)) {
 			_ = s.MarkBillingUncertain(task.BillingOrderID, task.Error)
 		} else {
@@ -936,6 +977,9 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		return err
 	}
 	if latest.Status == model.TaskStatusCancelled {
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusCancelled); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		_ = s.MarkBillingUncertain(task.BillingOrderID, "上游已返回结果，但任务被取消")
 		_ = s.markSessionFailed(*latest, "会话任务已取消。")
 		_ = s.log(task.UserID, task.ID, "warn", "任务已取消，丢弃生成结果", "")
@@ -947,15 +991,30 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 	task.Progress = 90
 	_ = s.repo.UpdateTaskProgress(task.ID, task.Stage, task.Progress)
 	if err := s.saveTaskCompletionWithinStorageQuota(task, resultJSON, opsJSON, len(canvasOps) > 0); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			latest, latestErr := s.repo.Task(task.ID)
+			if latestErr == nil && latest.Status == model.TaskStatusCancelled {
+				_ = s.MarkBillingUncertain(task.BillingOrderID, "上游已返回结果，但任务被取消")
+				_ = s.markSessionFailed(*latest, "会话任务已取消。")
+				_ = s.log(task.UserID, task.ID, "warn", "任务已取消，丢弃生成结果", "")
+				return nil
+			}
+		}
 		task.Status = model.TaskStatusFailed
 		task.Stage = "任务结果保存失败"
 		task.Error = taskFailureMessage(err)
 		task.CompletedAt = ptr(time.Now())
-		_ = s.repo.Save(task)
+		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
+		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "文本回放草稿归并失败", compactErr.Error())
+		}
 		_ = s.MarkBillingUncertain(task.BillingOrderID, "上游已成功但任务结果未保存："+task.Error)
 		_ = s.markSessionFailed(*task, task.Error)
 		_ = s.log(task.UserID, task.ID, "error", "任务结果保存失败", task.Error)
 		return err
+	}
+	if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusSucceeded); compactErr != nil {
+		_ = s.log(task.UserID, task.ID, "error", "文本回放窗口更新失败", compactErr.Error())
 	}
 	if completedTask, fetchErr := s.repo.Task(task.ID); fetchErr == nil {
 		if registerErr := s.RegisterTaskOutputFromTask(*completedTask); registerErr != nil {

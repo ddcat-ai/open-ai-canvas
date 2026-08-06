@@ -20,6 +20,9 @@ type FormValues = {
     protocol: ModelProtocol;
     billingMode: ChannelModel["billingMode"];
     unitPrice: number;
+    inputTokenPrice: number;
+    outputTokenPrice: number;
+    cachedTokenPrice: number;
     enabled: boolean;
 };
 
@@ -83,13 +86,13 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const startCreate = () => {
         setEditing(null);
-        form.setFieldsValue({ modelKey: "", displayName: "", capability: "text", protocol: "chat-completion", billingMode: "fixed_request", unitPrice: 0, enabled: true });
+        form.setFieldsValue({ modelKey: "", displayName: "", capability: "text", protocol: "chat-completion", billingMode: "fixed_request", unitPrice: 0, inputTokenPrice: 0, outputTokenPrice: 0, cachedTokenPrice: 0, enabled: true });
         setEditorOpen(true);
     };
 
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
-        form.setFieldsValue({ modelKey: item.modelKey, displayName: item.displayName, capability: item.capability || undefined, protocol: item.protocol, billingMode: item.billingMode, unitPrice: item.unitPriceMicrocredits / 1_000_000, enabled: item.enabled });
+        form.setFieldsValue({ modelKey: item.modelKey, displayName: item.displayName, capability: item.capability || undefined, protocol: item.protocol, billingMode: item.billingMode, unitPrice: item.unitPriceMicrocredits / 1_000_000, inputTokenPrice: item.inputTokenPriceMicrocredits / 1_000_000, outputTokenPrice: item.outputTokenPriceMicrocredits / 1_000_000, cachedTokenPrice: item.cachedTokenPriceMicrocredits / 1_000_000, enabled: item.enabled });
         setEditorOpen(true);
     };
 
@@ -104,6 +107,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 protocol: values.protocol,
                 billingMode: values.billingMode,
                 unitPriceMicrocredits: Math.round(values.unitPrice * 1_000_000),
+                inputTokenPriceMicrocredits: Math.round((values.inputTokenPrice || 0) * 1_000_000),
+                outputTokenPriceMicrocredits: Math.round((values.outputTokenPrice || 0) * 1_000_000),
+                cachedTokenPriceMicrocredits: Math.round((values.cachedTokenPrice || 0) * 1_000_000),
                 priceConfigured: true,
                 enabled: values.enabled !== false,
             };
@@ -151,7 +157,10 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const handleFormValuesChange = (changed: Partial<FormValues>) => {
         if (!changed.capability) return;
-        if (changed.capability !== "video") form.setFieldValue("billingMode", "fixed_request");
+        const currentBillingMode = form.getFieldValue("billingMode") as ChannelModel["billingMode"] | undefined;
+        if ((currentBillingMode === "per_second" && changed.capability !== "video") || (currentBillingMode === "token" && changed.capability !== "text")) {
+            form.setFieldValue("billingMode", "fixed_request");
+        }
         const current = form.getFieldValue("protocol") as ModelProtocol | undefined;
         if (modelProtocolCapability(current) !== changed.capability) {
             form.setFieldValue("protocol", MODEL_PROTOCOLS.find((item) => item.capability === changed.capability)?.value);
@@ -173,7 +182,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         },
         { title: "能力", dataIndex: "capability", width: 90, render: capabilityLabel },
         { title: "请求协议", dataIndex: "protocol", width: 230, render: (value: ModelProtocol) => value ? <div><div className="text-xs font-medium">{modelProtocolLabel(value)}</div><div className="truncate text-[var(--fs-tiny)] text-foreground/45">{modelProtocolDefinition(value)?.create}</div></div> : <Tag color="orange">待配置</Tag> },
-        { title: "计费", width: 165, render: (_, item) => (item.priceConfigured ? `${formatCredits(item.unitPriceMicrocredits)} 积分 / ${item.billingMode === "per_second" ? "秒" : "次"}` : <Tag color="orange">未配置价格</Tag>) },
+        { title: "计费", width: 220, render: (_, item) => (item.priceConfigured ? billingSummary(item) : <Tag color="orange">未配置价格</Tag>) },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => (enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
         {
@@ -238,11 +247,25 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                         <ProtocolCardPicker capability={modelCapability} />
                     </Form.Item>
                     <Form.Item name="billingMode" label="计费方式" rules={[{ required: true }]}>
-                        <Segmented block options={[{ label: "按次计费", value: "fixed_request" }, { label: "按秒计费", value: "per_second", disabled: modelCapability !== "video" }]} />
+                        <Segmented block options={[{ label: "按次计费", value: "fixed_request" }, { label: "按秒计费", value: "per_second", disabled: modelCapability !== "video" }, { label: "Token 计费", value: "token", disabled: modelCapability !== "text" }]} />
                     </Form.Item>
-                    <Form.Item name="unitPrice" label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
-                        <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
-                    </Form.Item>
+                    {billingMode === "token" ? (
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <Form.Item name="inputTokenPrice" label="输入 / 百万 Token" rules={[{ required: true, message: "请输入输入价格" }]}>
+                                <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
+                            </Form.Item>
+                            <Form.Item name="outputTokenPrice" label="输出 / 百万 Token" rules={[{ required: true, message: "请输入输出价格" }]}>
+                                <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
+                            </Form.Item>
+                            <Form.Item name="cachedTokenPrice" label="缓存 / 百万 Token" rules={[{ required: true, message: "请输入缓存价格" }]}>
+                                <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
+                            </Form.Item>
+                        </div>
+                    ) : (
+                        <Form.Item name="unitPrice" label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
+                            <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} />
+                        </Form.Item>
+                    )}
                     <Form.Item name="enabled" label="启用" valuePropName="checked">
                         <Switch />
                     </Form.Item>
@@ -373,6 +396,19 @@ function modelBrandLabel(model: string) {
 
 function capabilityLabel(value: ChannelModel["capability"]) {
     return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value];
+}
+
+function billingSummary(item: ChannelModel) {
+    if (item.billingMode !== "token") {
+        return `${formatCredits(item.unitPriceMicrocredits)} 积分 / ${item.billingMode === "per_second" ? "秒" : "次"}`;
+    }
+    return (
+        <div className="text-xs leading-5">
+            <div>输入 {formatCredits(item.inputTokenPriceMicrocredits)} / 百万</div>
+            <div>输出 {formatCredits(item.outputTokenPriceMicrocredits)} / 百万</div>
+            <div>缓存 {formatCredits(item.cachedTokenPriceMicrocredits)} / 百万</div>
+        </div>
+    );
 }
 
 function formatCredits(value: number) {

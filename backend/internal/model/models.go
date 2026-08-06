@@ -7,6 +7,7 @@ import (
 )
 
 type TaskStatus string
+type ProviderCancelStatus string
 type SessionStatus string
 type UserRole string
 type UserStatus string
@@ -65,6 +66,7 @@ const (
 	ChannelInterfaceVolcengineArkImage    ChannelInterfaceType = "volcengine-ark-image"
 	ChannelInterfaceVolcengineJiMengImage ChannelInterfaceType = "volcengine-jimeng-image"
 	ChannelInterfaceOpenAIAudio           ChannelInterfaceType = "openai-audio"
+	ChannelInterfaceAsyncAudio            ChannelInterfaceType = "async-audio"
 	ChannelInterfaceNewAPIVideo           ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1        ChannelInterfaceType = "newapi-channel-1"
 	ChannelInterfaceNewAPIChannel2        ChannelInterfaceType = "newapi-channel-2"
@@ -86,6 +88,10 @@ const (
 	BillingStatusSettled   BillingStatus = "settled"
 	BillingStatusRefunded  BillingStatus = "refunded"
 	BillingStatusUncertain BillingStatus = "uncertain"
+
+	ProviderCancelStatusRequested ProviderCancelStatus = "requested"
+	ProviderCancelStatusConfirmed ProviderCancelStatus = "confirmed"
+	ProviderCancelStatusUncertain ProviderCancelStatus = "uncertain"
 
 	CreditLedgerRedeem       CreditLedgerType = "redeem"
 	CreditLedgerAdminGrant   CreditLedgerType = "admin_grant"
@@ -217,20 +223,23 @@ type ModelChannel struct {
 }
 
 type ChannelModel struct {
-	ID                    string               `json:"id" gorm:"primaryKey;size:36"`
-	ChannelID             string               `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
-	ModelKey              string               `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
-	DisplayName           string               `json:"displayName" gorm:"size:160"`
-	Capability            string               `json:"capability" gorm:"size:32;index"`
-	Protocol              ChannelInterfaceType `json:"protocol" gorm:"size:32;index"`
-	BillingMode           string               `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits int64                `json:"unitPriceMicrocredits"`
-	PriceConfigured       bool                 `json:"priceConfigured" gorm:"index"`
-	Enabled               bool                 `json:"enabled" gorm:"index"`
-	PriceVersion          int64                `json:"priceVersion"`
-	CreatedAt             time.Time            `json:"createdAt"`
-	UpdatedAt             time.Time            `json:"updatedAt"`
-	DeletedAt             gorm.DeletedAt       `json:"-" gorm:"index"`
+	ID                           string               `json:"id" gorm:"primaryKey;size:36"`
+	ChannelID                    string               `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
+	ModelKey                     string               `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
+	DisplayName                  string               `json:"displayName" gorm:"size:160"`
+	Capability                   string               `json:"capability" gorm:"size:32;index"`
+	Protocol                     ChannelInterfaceType `json:"protocol" gorm:"size:32;index"`
+	BillingMode                  string               `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits        int64                `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                `json:"cachedTokenPriceMicrocredits"`
+	PriceConfigured              bool                 `json:"priceConfigured" gorm:"index"`
+	Enabled                      bool                 `json:"enabled" gorm:"index"`
+	PriceVersion                 int64                `json:"priceVersion"`
+	CreatedAt                    time.Time            `json:"createdAt"`
+	UpdatedAt                    time.Time            `json:"updatedAt"`
+	DeletedAt                    gorm.DeletedAt       `json:"-" gorm:"index"`
 }
 
 type ApiCallLog struct {
@@ -310,31 +319,41 @@ type CreditLedgerEntry struct {
 }
 
 type BillingOrder struct {
-	ID                    string        `json:"id" gorm:"primaryKey;size:36"`
-	UserID                string        `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
-	IdempotencyKey        string        `json:"idempotencyKey" gorm:"size:160;uniqueIndex:idx_billing_user_idempotency,priority:2"`
-	TaskID                string        `json:"taskId,omitempty" gorm:"index;size:36"`
-	ChannelID             string        `json:"channelId" gorm:"index;size:36"`
-	ChannelModelID        string        `json:"channelModelId" gorm:"index;size:36"`
-	Model                 string        `json:"model" gorm:"index;size:120"`
-	Capability            string        `json:"capability" gorm:"index;size:32"`
-	Scene                 string        `json:"scene" gorm:"index;size:80"`
-	BillingMode           string        `json:"billingMode" gorm:"size:32"`
-	PriceVersion          int64         `json:"priceVersion"`
-	UnitPriceMicrocredits int64         `json:"unitPriceMicrocredits"`
-	MultiplierBasisPoints int64         `json:"multiplierBasisPoints"`
-	Quantity              int64         `json:"quantity"`
-	AmountMicrocredits    int64         `json:"amountMicrocredits"`
-	Status                BillingStatus `json:"status" gorm:"index;size:24"`
-	ProviderRequestID     string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
-	Error                 string        `json:"error,omitempty" gorm:"size:1000"`
-	ResolvedBy            string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
-	ResolutionNote        string        `json:"resolutionNote,omitempty" gorm:"size:500"`
-	StartedAt             *time.Time    `json:"startedAt"`
-	SettledAt             *time.Time    `json:"settledAt"`
-	RefundedAt            *time.Time    `json:"refundedAt"`
-	CreatedAt             time.Time     `json:"createdAt" gorm:"index"`
-	UpdatedAt             time.Time     `json:"updatedAt"`
+	ID                           string        `json:"id" gorm:"primaryKey;size:36"`
+	UserID                       string        `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
+	IdempotencyKey               string        `json:"idempotencyKey" gorm:"size:160;uniqueIndex:idx_billing_user_idempotency,priority:2"`
+	TaskID                       string        `json:"taskId,omitempty" gorm:"index;size:36"`
+	ChannelID                    string        `json:"channelId" gorm:"index;size:36"`
+	ChannelModelID               string        `json:"channelModelId" gorm:"index;size:36"`
+	Model                        string        `json:"model" gorm:"index;size:120"`
+	Capability                   string        `json:"capability" gorm:"index;size:32"`
+	Scene                        string        `json:"scene" gorm:"index;size:80"`
+	BillingMode                  string        `json:"billingMode" gorm:"size:32"`
+	PriceVersion                 int64         `json:"priceVersion"`
+	UnitPriceMicrocredits        int64         `json:"unitPriceMicrocredits"`
+	MultiplierBasisPoints        int64         `json:"multiplierBasisPoints"`
+	Quantity                     int64         `json:"quantity"`
+	AmountMicrocredits           int64         `json:"amountMicrocredits"`
+	ReservedAmountMicrocredits   int64         `json:"reservedAmountMicrocredits"`
+	ActualAmountMicrocredits     int64         `json:"actualAmountMicrocredits"`
+	RefundedAmountMicrocredits   int64         `json:"refundedAmountMicrocredits"`
+	InputTokenPriceMicrocredits  int64         `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64         `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64         `json:"cachedTokenPriceMicrocredits"`
+	InputTokens                  int64         `json:"inputTokens"`
+	OutputTokens                 int64         `json:"outputTokens"`
+	CachedTokens                 int64         `json:"cachedTokens"`
+	UsageAvailable               bool          `json:"usageAvailable"`
+	Status                       BillingStatus `json:"status" gorm:"index;size:24"`
+	ProviderRequestID            string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
+	Error                        string        `json:"error,omitempty" gorm:"size:1000"`
+	ResolvedBy                   string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
+	ResolutionNote               string        `json:"resolutionNote,omitempty" gorm:"size:500"`
+	StartedAt                    *time.Time    `json:"startedAt"`
+	SettledAt                    *time.Time    `json:"settledAt"`
+	RefundedAt                   *time.Time    `json:"refundedAt"`
+	CreatedAt                    time.Time     `json:"createdAt" gorm:"index"`
+	UpdatedAt                    time.Time     `json:"updatedAt"`
 }
 
 type RedeemBatch struct {
@@ -734,32 +753,51 @@ type UserAnnouncementRead struct {
 }
 
 type Task struct {
-	ID                string     `json:"id" gorm:"primaryKey;size:36"`
-	UserID            string     `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1"`
-	SessionID         string     `json:"sessionId" gorm:"index;size:36"`
-	ProjectID         string     `json:"projectId" gorm:"index;size:80"`
-	Type              string     `json:"type" gorm:"index;size:64"`
-	Status            TaskStatus `json:"status" gorm:"index;size:24;index:idx_tasks_status_created,priority:1;index:idx_tasks_claim,priority:1"`
-	Stage             string     `json:"stage" gorm:"size:80"`
-	Progress          int        `json:"progress"`
-	Prompt            string     `json:"prompt"`
-	Operation         string     `json:"operation" gorm:"size:64"`
-	Provider          string     `json:"provider" gorm:"size:64"`
-	Model             string     `json:"model" gorm:"size:120"`
-	BillingOrderID    string     `json:"billingOrderId,omitempty" gorm:"index;size:36"`
-	ProviderRequestID string     `json:"providerRequestId,omitempty" gorm:"index;size:160"`
-	PollStage         string     `json:"pollStage,omitempty" gorm:"size:32"`
-	NextPollAt        *time.Time `json:"nextPollAt,omitempty" gorm:"index"`
-	LeaseOwner        string     `json:"-" gorm:"index;size:120"`
-	LeaseExpiresAt    *time.Time `json:"-" gorm:"index;index:idx_tasks_claim,priority:2"`
-	InputJSON         string     `json:"inputJson" gorm:"type:text"`
-	ResultJSON        string     `json:"resultJson" gorm:"type:text"`
-	Error             string     `json:"error"`
-	Attempts          int        `json:"attempts"`
-	StartedAt         *time.Time `json:"startedAt"`
-	CompletedAt       *time.Time `json:"completedAt"`
-	CreatedAt         time.Time  `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	ID                        string               `json:"id" gorm:"primaryKey;size:36"`
+	UserID                    string               `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1"`
+	SessionID                 string               `json:"sessionId" gorm:"index;size:36"`
+	ProjectID                 string               `json:"projectId" gorm:"index;size:80"`
+	Type                      string               `json:"type" gorm:"index;size:64"`
+	Status                    TaskStatus           `json:"status" gorm:"index;size:24;index:idx_tasks_status_created,priority:1;index:idx_tasks_claim,priority:1;index:idx_tasks_provider_cancel,priority:1"`
+	Stage                     string               `json:"stage" gorm:"size:80"`
+	Progress                  int                  `json:"progress"`
+	Prompt                    string               `json:"prompt"`
+	Operation                 string               `json:"operation" gorm:"size:64"`
+	Provider                  string               `json:"provider" gorm:"size:64"`
+	Model                     string               `json:"model" gorm:"size:120"`
+	BillingOrderID            string               `json:"billingOrderId,omitempty" gorm:"index;size:36"`
+	ProviderRequestID         string               `json:"providerRequestId,omitempty" gorm:"index;size:160"`
+	ProviderCancelStatus      ProviderCancelStatus `json:"providerCancelStatus,omitempty" gorm:"index;size:24;index:idx_tasks_provider_cancel,priority:2"`
+	ProviderCancelError       string               `json:"providerCancelError,omitempty" gorm:"type:text"`
+	ProviderCancelAttempts    int                  `json:"providerCancelAttempts,omitempty"`
+	ProviderCancelRequestedAt *time.Time           `json:"providerCancelRequestedAt,omitempty"`
+	ProviderCancelledAt       *time.Time           `json:"providerCancelledAt,omitempty"`
+	ProviderCancelNextCheckAt *time.Time           `json:"providerCancelNextCheckAt,omitempty" gorm:"index:idx_tasks_provider_cancel,priority:3"`
+	PollStage                 string               `json:"pollStage,omitempty" gorm:"size:32"`
+	NextPollAt                *time.Time           `json:"nextPollAt,omitempty" gorm:"index"`
+	LeaseOwner                string               `json:"-" gorm:"index;size:120"`
+	LeaseExpiresAt            *time.Time           `json:"-" gorm:"index;index:idx_tasks_claim,priority:2"`
+	InputJSON                 string               `json:"inputJson" gorm:"type:text"`
+	ResultJSON                string               `json:"resultJson" gorm:"type:text"`
+	TextDraft                 string               `json:"textDraft,omitempty" gorm:"type:text"`
+	Error                     string               `json:"error"`
+	Attempts                  int                  `json:"attempts"`
+	StartedAt                 *time.Time           `json:"startedAt"`
+	CompletedAt               *time.Time           `json:"completedAt"`
+	CreatedAt                 time.Time            `json:"createdAt" gorm:"index:idx_tasks_user_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_claim,priority:3"`
+	UpdatedAt                 time.Time            `json:"updatedAt"`
+}
+
+// TaskTextDelta 只保存可回放窗口内的文本增量；最终正文和失败草稿分别归并到 Task.ResultJSON 与 Task.TextDraft。
+type TaskTextDelta struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID    string    `json:"userId" gorm:"index;size:36;index:idx_task_text_deltas_user_created,priority:1"`
+	TaskID    string    `json:"taskId" gorm:"index;size:36;uniqueIndex:idx_task_text_deltas_sequence,priority:1"`
+	Sequence  int64     `json:"sequence" gorm:"uniqueIndex:idx_task_text_deltas_sequence,priority:2"`
+	Content   string    `json:"content" gorm:"type:text"`
+	ByteCount int64     `json:"byteCount"`
+	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_task_text_deltas_user_created,priority:2"`
+	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
 }
 
 type Session struct {

@@ -14,14 +14,17 @@ import (
 )
 
 type ChannelModelRequest struct {
-	ModelKey              string `json:"modelKey"`
-	DisplayName           string `json:"displayName"`
-	Capability            string `json:"capability"`
-	Protocol              string `json:"protocol"`
-	BillingMode           string `json:"billingMode"`
-	UnitPriceMicrocredits int64  `json:"unitPriceMicrocredits"`
-	PriceConfigured       bool   `json:"priceConfigured"`
-	Enabled               *bool  `json:"enabled"`
+	ModelKey                     string `json:"modelKey"`
+	DisplayName                  string `json:"displayName"`
+	Capability                   string `json:"capability"`
+	Protocol                     string `json:"protocol"`
+	BillingMode                  string `json:"billingMode"`
+	UnitPriceMicrocredits        int64  `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64  `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64  `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64  `json:"cachedTokenPriceMicrocredits"`
+	PriceConfigured              bool   `json:"priceConfigured"`
+	Enabled                      *bool  `json:"enabled"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -124,14 +127,24 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if billingMode == "" {
 		billingMode = "fixed_request"
 	}
-	if billingMode != "fixed_request" && billingMode != "per_second" {
-		return nil, BadAuthRequest("模型计费方式仅支持按次或按秒")
+	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
+		return nil, BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
 	}
 	if billingMode == "per_second" && capability != "video" {
 		return nil, BadAuthRequest("只有视频模型可以按秒计费")
 	}
-	if req.UnitPriceMicrocredits < 0 {
+	if billingMode == "token" && capability != "text" {
+		return nil, BadAuthRequest("只有文本模型可以按 Token 计费")
+	}
+	if req.UnitPriceMicrocredits < 0 || req.InputTokenPriceMicrocredits < 0 || req.OutputTokenPriceMicrocredits < 0 || req.CachedTokenPriceMicrocredits < 0 {
 		return nil, BadAuthRequest("模型积分价格不能小于 0")
+	}
+	if billingMode == "token" && req.InputTokenPriceMicrocredits == 0 && req.OutputTokenPriceMicrocredits == 0 && req.CachedTokenPriceMicrocredits == 0 {
+		return nil, BadAuthRequest("Token 计费至少需要配置一项价格")
+	}
+	const maxTokenPriceMicrocredits = int64(1_000_000) * CreditScale
+	if req.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
+		return nil, BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
 	}
 	item := &model.ChannelModel{ID: newID(), ChannelID: channelID, Enabled: true, PriceVersion: 1}
 	if id != "" {
@@ -157,6 +170,9 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.Protocol = protocol
 	item.BillingMode = billingMode
 	item.UnitPriceMicrocredits = req.UnitPriceMicrocredits
+	item.InputTokenPriceMicrocredits = req.InputTokenPriceMicrocredits
+	item.OutputTokenPriceMicrocredits = req.OutputTokenPriceMicrocredits
+	item.CachedTokenPriceMicrocredits = req.CachedTokenPriceMicrocredits
 	item.PriceConfigured = req.PriceConfigured
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
@@ -392,7 +408,7 @@ func capabilityForProtocol(protocol model.ChannelInterfaceType) string {
 	switch protocol {
 	case model.ChannelInterfaceOpenAIImage, model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineJiMengImage:
 		return "image"
-	case model.ChannelInterfaceOpenAIAudio:
+	case model.ChannelInterfaceOpenAIAudio, model.ChannelInterfaceAsyncAudio:
 		return "audio"
 	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo:
 		return "video"

@@ -31,8 +31,11 @@ export type ModelChannel = {
         displayName?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
-        billingMode: "fixed_request" | "per_second";
+        billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
+        inputTokenPriceMicrocredits?: number;
+        outputTokenPriceMicrocredits?: number;
+        cachedTokenPriceMicrocredits?: number;
     }>;
 };
 
@@ -276,8 +279,9 @@ export const useConfigStore = create<ConfigStore>()(
     ),
 );
 
-export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
-    const persistedConfig = (snapshot.config || {}) as Partial<AiConfig>;
+export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefined = {}) {
+    // 坏存储/旧版本快照可能是 undefined 或缺 config，兜底为 defaultConfig，保证渲染不崩溃
+    const persistedConfig = (snapshot?.config || {}) as Partial<AiConfig>;
     const config = { ...defaultConfig, ...persistedConfig };
     const hasPersistedChannels = Array.isArray(persistedConfig.channels);
     if (!hasPersistedChannels) config.channels = [];

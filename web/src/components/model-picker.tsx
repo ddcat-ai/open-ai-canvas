@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { Check, ChevronDown, Coins, Cpu } from "lucide-react";
 import { Popover } from "antd";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -24,7 +24,9 @@ type ModelPickerProps = {
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default" }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
+    const rawTheme = useThemeStore((state) => state.theme);
+    const theme = (canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark) as CanvasTheme;
     const [open, setOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
