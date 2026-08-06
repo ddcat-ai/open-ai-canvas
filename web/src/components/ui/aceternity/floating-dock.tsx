@@ -88,15 +88,27 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
                 embedded ? "shadow-none" : "border backdrop-blur-2xl",
                 showLabels
                     ? embedded
-                        ? size === "compact" ? "h-9 gap-0.5 px-0.5" : "h-10 gap-0.5 px-0.5"
-                        : size === "compact" ? "h-10 gap-0.5 rounded-[13px] px-1.5" : "h-11 gap-0.5 rounded-[15px] px-2"
+                        ? size === "compact"
+                            ? "h-9 gap-0.5 px-0.5"
+                            : "h-10 gap-0.5 px-0.5"
+                        : size === "compact"
+                          ? "h-10 gap-0.5 rounded-[var(--dock-radius-compact)] px-1.5"
+                          : "h-11 gap-0.5 rounded-[var(--dock-radius-tight)] px-2"
                     : coarsePointer
-                    ? embedded
-                        ? size === "compact" ? "h-10 gap-1 px-0.5" : "h-11 gap-1 px-0.5"
-                        : size === "compact" ? "h-11 gap-1 rounded-[15px] px-1.5 pb-1" : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
-                    : embedded
-                        ? size === "compact" ? "h-8 gap-0.5 px-0.5 pb-0.5" : "h-9 gap-0.5 px-0.5 pb-0.5"
-                        : size === "compact" ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1" : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
+                      ? embedded
+                          ? size === "compact"
+                              ? "h-10 gap-1 px-0.5"
+                              : "h-11 gap-1 px-0.5"
+                          : size === "compact"
+                            ? "h-11 gap-1 rounded-[var(--dock-radius-tight)] px-1.5 pb-1"
+                            : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
+                      : embedded
+                        ? size === "compact"
+                            ? "h-8 gap-0.5 px-0.5 pb-0.5"
+                            : "h-9 gap-0.5 px-0.5 pb-0.5"
+                        : size === "compact"
+                          ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1"
+                          : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
                 className,
             )}
             style={style}
@@ -186,7 +198,11 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                     aria-expanded={command.expands ? command.active || undefined : undefined}
                     aria-pressed={command.expands ? undefined : command.active || undefined}
                     disabled={command.disabled}
-                    className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
+                    className={cn(
+                        "aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none",
+                        command.active && "is-active",
+                        command.danger && "is-danger",
+                    )}
                     whileTap={!command.disabled ? { scale: 0.96 } : undefined}
                     transition={aceternityMotion.spring.dock}
                     onMouseEnter={() => setHovered(true)}
@@ -232,7 +248,10 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 4, scale: 0.96, transition: { duration: 0 } }}
                             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                            className={cn("aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[140] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl", compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]")}
+                            className={cn(
+                                "aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[var(--dock-tooltip-z)] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl",
+                                compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]",
+                            )}
                         >
                             {command.label}
                         </motion.span>

@@ -1,7 +1,6 @@
-import axios from "axios";
-
 import { getActiveUserScope } from "@/lib/user-scope";
-import type { BackendEnvelope } from "@/services/api/task-center";
+import axios from "axios";
+import { apiBaseURL, apiClient, request, type BackendEnvelope } from "@/services/api/request";
 
 export type RemoteResource = {
     id: string;
@@ -41,17 +40,10 @@ export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | 
     accessKeySecret?: string;
 };
 
-const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
-const api = axios.create({ baseURL: apiBaseURL, withCredentials: true });
+const api = apiClient;
 const resourceCache = new Map<string, RemoteResource>();
 const resourceRequests = new Map<string, Promise<RemoteResource>>();
 const missingResourceIds = new Set<string>();
-
-async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    const response = await promise;
-    if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-    return response.data.data;
-}
 
 export function resourceStorageKey(id: string) {
     return `resource:${id}`;

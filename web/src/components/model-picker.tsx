@@ -31,15 +31,12 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const [open, setOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const options = useMemo(
-        () => {
-            const filtered = selectableModelsByCapability(config, capability);
-            const current = value?.trim();
-            const currentIncluded = current ? filtered.includes(current) : true;
-            return Array.from(new Set([...filtered, ...(!currentIncluded && current ? [current] : [])].filter((model): model is string => Boolean(model))));
-        },
-        [capability, config, value],
-    );
+    const options = useMemo(() => {
+        const filtered = selectableModelsByCapability(config, capability);
+        const current = value?.trim();
+        const currentIncluded = current ? filtered.includes(current) : true;
+        return Array.from(new Set([...filtered, ...(!currentIncluded && current ? [current] : [])].filter((model): model is string => Boolean(model))));
+    }, [capability, config, value]);
     const optionGroups = useMemo(() => {
         const channelGroups = config.channels
             .map((channel) => ({
@@ -115,7 +112,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         <div
             ref={menuRef}
             data-canvas-no-zoom
-            className={cn("canvas-model-picker-menu max-w-[calc(100vw-24px)]", creationVariant ? "creation-model-picker-menu w-[360px]" : "w-[320px]")}
+            className={cn("canvas-model-picker-menu max-w-[calc(100vw-24px)]", creationVariant ? "creation-model-picker-menu w-[360px]" : "w-[var(--panel-width-compact)]")}
             style={{ background: theme.node.panel, color: theme.node.text }}
             role="listbox"
             aria-label={placeholder}
@@ -123,47 +120,56 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            {creationVariant ? <div className="creation-model-picker-heading"><span>选择模型</span>{current ? <strong>{modelDisplayName(config, current)}</strong> : null}</div> : null}
-            {optionGroups.length ? optionGroups.map((group) => (
-                <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
-                    <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
-                        <span className="truncate">{group.label}</span>
-                        <span className="shrink-0" style={{ color: theme.node.muted }}>{group.scope}</span>
-                    </div>
-                    <div className="grid min-w-0 gap-1">
-                        {group.models.map((model) => {
-                            const selected = model === current;
-                            return (
-                                <button
-                                    key={model}
-                                    type="button"
-                                    role="option"
-                                    aria-selected={selected}
-                                    className="canvas-model-picker-option"
-                                    style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
-                                    onClick={() => {
-                                        onChange(model);
-                                        setOpen(false);
-                                        window.requestAnimationFrame(() => triggerRef.current?.focus());
-                                    }}
-                                >
-                                    <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} />
-                                    {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </section>
-            )) : <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>{emptyModelLabel(config, capability)}</div>}
+            {creationVariant ? (
+                <div className="creation-model-picker-heading">
+                    <span>选择模型</span>
+                    {current ? <strong>{modelDisplayName(config, current)}</strong> : null}
+                </div>
+            ) : null}
+            {optionGroups.length ? (
+                optionGroups.map((group) => (
+                    <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
+                        <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
+                            <span className="truncate">{group.label}</span>
+                            <span className="shrink-0" style={{ color: theme.node.muted }}>
+                                {group.scope}
+                            </span>
+                        </div>
+                        <div className="grid min-w-0 gap-1">
+                            {group.models.map((model) => {
+                                const selected = model === current;
+                                return (
+                                    <button
+                                        key={model}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={selected}
+                                        className="canvas-model-picker-option"
+                                        style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
+                                        onClick={() => {
+                                            onChange(model);
+                                            setOpen(false);
+                                            window.requestAnimationFrame(() => triggerRef.current?.focus());
+                                        }}
+                                    >
+                                        <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} />
+                                        {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+                ))
+            ) : (
+                <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>
+                    {emptyModelLabel(config, capability)}
+                </div>
+            )}
         </div>
     );
 
     return (
-        <div
-            className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full")}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-        >
+        <div className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full")} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <Popover
                 open={open}
                 onOpenChange={setPickerOpen}
@@ -188,8 +194,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                     onKeyDown={handleTriggerKeyDown}
                 >
                     <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5">
-                        <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}><ModelIcon model={current} /></span>
-                        <span className="min-w-0 flex-1 truncate">{current ? creationVariant ? modelDisplayName(config, current) : modelOptionLabel(config, current) : placeholder}</span>
+                        <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}>
+                            <ModelIcon model={current} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? modelDisplayName(config, current) : modelOptionLabel(config, current)) : placeholder}</span>
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
@@ -205,7 +213,21 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
 }
 
-function ModelLabel({ config, model, capability, theme, creationVariant, showPrice }: { config: AiConfig; model: string; capability?: ModelCapability; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; creationVariant: boolean; showPrice: boolean }) {
+function ModelLabel({
+    config,
+    model,
+    capability,
+    theme,
+    creationVariant,
+    showPrice,
+}: {
+    config: AiConfig;
+    model: string;
+    capability?: ModelCapability;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    creationVariant: boolean;
+    showPrice: boolean;
+}) {
     const meta = modelMenuMeta(model, capability);
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
     const capabilitySummary = videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description;
@@ -216,10 +238,16 @@ function ModelLabel({ config, model, capability, theme, creationVariant, showPri
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{modelDisplayName(config, model)}</span>
-                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={capabilitySummary}>{capabilitySummary}</span>
+                <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={capabilitySummary}>
+                    {capabilitySummary}
+                </span>
             </span>
             {showPrice ? <ModelPrice price={modelMenuPrice(config, model)} /> : null}
-            {!creationVariant && meta.time ? <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>{meta.time}</span> : null}
+            {!creationVariant && meta.time ? (
+                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[var(--fs-tiny)] tabular-nums" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
+                    {meta.time}
+                </span>
+            ) : null}
         </span>
     );
 }
@@ -280,16 +308,7 @@ export function resolveModelIcon(model: string) {
     const name = model.toLowerCase();
     if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
     // Flow2API 短名：Nano Banana / Imagen / Veo / Omni 均属 Google Gemini 系。
-    if (
-        name.includes("gemini") ||
-        name.includes("google") ||
-        name.includes("nano banana") ||
-        name.includes("nanobanana") ||
-        name.includes("imagen") ||
-        name.includes("veo") ||
-        name.includes("omni flash") ||
-        name.includes("omni-flash")
-    ) {
+    if (name.includes("gemini") || name.includes("google") || name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen") || name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) {
         return "/icons/gemini.svg";
     }
     if (name.includes("gpt") || name.includes("openai") || name.includes("dall-e") || name.includes("dalle")) return "/icons/openai.svg";

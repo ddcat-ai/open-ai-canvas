@@ -1,12 +1,11 @@
-import axios from "axios";
-
 import type { ModelChannel } from "@/stores/use-config-store";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
+import { apiClient, request } from "@/services/api/request";
 
-const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
+const api = apiClient;
 
 export type LocalUser = {
     id: string;
@@ -325,18 +324,6 @@ export type RuntimePolicySetting = {
     updatedAt?: string;
 };
 
-type BackendEnvelope<T> = { code: number; data: T; msg: string };
-
-async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    try {
-        const response = await promise;
-        if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-        return response.data.data;
-    } catch (error) {
-        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data?.msg || error.message || "请求失败");
-        throw error;
-    }
-}
 
 export function getAuthSettings() {
     return request<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>(api.get("/auth/settings"));
