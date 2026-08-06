@@ -5,6 +5,7 @@ import { App, Button, Drawer, Dropdown, Form, Input, Modal, Select, Space, Tag, 
 import { CollectionGrid, ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
+import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -432,8 +433,8 @@ export default function AssetsPage() {
 function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: LibraryAsset; selected: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; onEdit: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void; onDelete: () => void }) {
     const summary = assetSummary(asset);
     return (
-        <article className={`library-card asset-library-card group ${selected ? "is-selected" : ""}`}>
-            <div className="relative overflow-hidden bg-foreground/[.045]">
+        <AssetLibraryCard selected={selected}>
+            <AssetLibraryCardMedia className="relative overflow-hidden bg-foreground/[.045]">
                 <button type="button" className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
                     <AssetMediaPreview asset={asset} alt={asset.title} className="aspect-[4/3] w-full bg-black object-cover" fallback={<div className="flex aspect-[4/3] items-center justify-center bg-foreground/[.035] p-4 text-center text-xs leading-5 text-foreground/55">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>} />
                 </button>
@@ -456,7 +457,7 @@ function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownlo
                     <span className="rounded-[var(--r-xs)] bg-black/60 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium text-white/90 backdrop-blur">{assetKindLabel(asset.kind)}</span>
                     <span className="rounded-[var(--r-xs)] bg-black/60 px-1.5 py-0.5 text-[var(--fs-tiny)] text-white/75 backdrop-blur">{assetCategoryLabel(asset.category)}</span>
                 </div>
-            </div>
+            </AssetLibraryCardMedia>
             <button type="button" className="block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
                 <div className="flex min-w-0 items-center justify-between gap-2">
                     <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>{asset.title}</h2>
@@ -469,7 +470,7 @@ function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownlo
                     <span className="truncate">{assetProjectLabel(asset)}</span>
                 </div>
             </button>
-        </article>
+        </AssetLibraryCard>
     );
 }
 

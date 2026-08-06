@@ -1,4 +1,5 @@
 import { Check, Clapperboard, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Plus, Settings2, Sparkles, Trash2, Video, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Dropdown, Input } from "antd";
 
@@ -18,7 +19,7 @@ export function CanvasCreateCard({ disabled, onClick }: { disabled?: boolean; on
     </button>;
 }
 
-export function CanvasProjectCard({ project, projectName, variant = "library" }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent" }) {
+export function CanvasProjectCard({ project, projectName, variant = "library", readOnly = false, footer }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent"; readOnly?: boolean; footer?: ReactNode }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const renameProject = useCanvasStore((state) => state.renameProject);
@@ -40,7 +41,7 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
 
     const compact = variant === "recent";
     return (
-        <article className={cn("app-canvas-project-card group h-full cursor-pointer", compact ? "is-recent" : "is-library", selected && "is-selected")} onClick={() => !editing && open()}>
+        <article className={cn("app-canvas-project-card group h-full cursor-pointer", compact ? "is-recent" : "is-library", selected && "is-selected")} onClick={() => (!editing || readOnly) && open()}>
             <div className="app-canvas-project-preview relative">
                 <button
                     type="button"
@@ -52,13 +53,13 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                 >
                     <ProjectPreview project={project} />
                 </button>
-                {!compact ? <span className={`canvas-project-select ${selected ? "is-visible" : ""}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox" aria-label={`选择 ${project.title}`} /></span> : null}
+                {!compact && !readOnly ? <span className={`canvas-project-select ${selected ? "is-visible" : ""}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox" aria-label={`选择 ${project.title}`} /></span> : null}
                 <div className="canvas-project-cover-meta" aria-hidden="true"><span className="canvas-project-node-count">{project.nodes.length} 节点</span></div>
             </div>
 
             <div className={cn("app-canvas-project-body", compact ? "is-compact" : "")}>
                 <div className="canvas-project-heading-row">
-                    {editing ? (
+                    {editing && !readOnly ? (
                         <Input className="canvas-project-title-input" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
                     ) : (
                         <button
@@ -72,12 +73,12 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                             <h2>{project.title}</h2>
                         </button>
                     )}
-                    {editing ? (
+                    {editing && !readOnly ? (
                         <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
                             <button type="button" onClick={saveTitle} aria-label="保存名称"><Check className="size-3.5" /></button>
                             <button type="button" onClick={stopEditing} aria-label="取消重命名"><X className="size-3.5" /></button>
                         </div>
-                    ) : (
+                    ) : !readOnly ? (
                         <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
                             <button type="button" onClick={() => startEditing(project.id, project.title)} aria-label={`重命名 ${project.title}`} title="重命名"><Pencil className="size-3.5" /></button>
                             <Dropdown
@@ -94,9 +95,10 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                                 <button type="button" aria-label={`${project.title} 画布操作`} title="更多操作"><MoreHorizontal className="size-4" /></button>
                             </Dropdown>
                         </div>
-                    )}
+                    ) : null}
                 </div>
                 <div className="canvas-project-stats"><span>{projectName || "自由画布"}</span><span aria-hidden="true">·</span><time dateTime={project.updatedAt}>{formatProjectTime(project.updatedAt)}</time></div>
+                {footer ? <div className="canvas-project-card-footer" onClick={(event) => event.stopPropagation()}>{footer}</div> : null}
             </div>
         </article>
     );
