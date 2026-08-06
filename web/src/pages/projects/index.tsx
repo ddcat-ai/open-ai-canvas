@@ -121,5 +121,5 @@ function ProjectRow({ row }: { row: ProjectSummary }) {
 }
 
 function ProjectCount({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
-    return <span className="inline-flex items-center gap-1.5" title={`${value} ${label}`}><span className="text-foreground/32">{icon}</span><strong className="font-medium tabular-nums text-foreground/65">{value}</strong><span className="hidden 2xl:inline">{label}</span></span>;
+    return <span className="inline-flex items-center gap-1.5" title={`${value} ${label}`}><span className="text-foreground/32">{icon}</span><strong className="font-medium tabular-nums text-foreground/65">{value}</strong><span>{label}</span></span>;
 }

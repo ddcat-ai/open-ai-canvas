@@ -119,3 +119,7 @@ export function formatTime(value?: string) {
 export function formatCount(value: number) {
     return new Intl.NumberFormat("zh-CN").format(value);
 }
+
+export function textValue(value: unknown) {
+    return typeof value === "string" ? value.trim() : "";
+}

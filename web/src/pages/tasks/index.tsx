@@ -432,10 +432,10 @@ function TaskListRow({ task, canvasById, projectNameById, effectiveConfig, credi
             <TaskPreviewThumbnail task={task} onOpen={onPreview} />
             <div className="task-record-main">
                 <div className="task-record-heading">
+                    <span className={`task-record-status ${isFailed ? "is-failed" : isActive ? "is-active" : "is-success"}`}><i className={statusDotClassName(task.status)} />{statusLabel[task.status]}</span>
                     <button type="button" className="task-record-title" title={task.prompt} onClick={onOpen}>{task.prompt || "未命名任务"}</button>
-                    <span className={`task-record-status ${isFailed ? "is-failed" : isActive ? "is-active" : "is-success"}`}><i className={`size-1.5 rounded-full ${statusDotClassName(task.status)}`} />{statusLabel[task.status]}</span>
                 </div>
-                <div className="task-record-meta"><span>{formatTaskKind(task)}</span><span aria-hidden="true">·</span><span>{formatModelName(effectiveConfig, task)}</span><span aria-hidden="true">·</span><FolderKanban className="size-3" /><span className="truncate">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</span></div>
+                <div className="task-record-meta"><span>{formatTaskKind(task)}</span><span aria-hidden="true">·</span><span>{formatModelName(effectiveConfig, task)}</span><span className="task-record-meta-canvas"><FolderKanban className="size-3" />{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</span></div>
                 {isActive ? <div className="task-record-progress"><span>{task.stage || "正在生成"}</span><span>{task.progress || 0}%</span><i><b style={{ width: `${task.progress || 0}%` }} /></i></div> : null}
                 {isFailed ? <p className="task-record-error" title={task.error ? generationErrorMessage(task.error) : undefined}>{taskAttentionReason(task)}</p> : null}
             </div>
@@ -531,11 +531,11 @@ function taskEmptyState(status: TaskStatusFilter) {
 }
 
 function statusDotClassName(status: TaskStatus) {
-    if (status === "succeeded") return "bg-emerald-500";
-    if (status === "running") return "bg-amber-500";
-    if (status === "queued") return "bg-blue-500";
-    if (status === "failed") return "bg-red-500";
-    return "bg-foreground/30";
+    if (status === "succeeded") return "task-record-dot bg-emerald-500";
+    if (status === "running") return "task-record-dot is-pulsing bg-amber-500";
+    if (status === "queued") return "task-record-dot bg-blue-500";
+    if (status === "failed") return "task-record-dot bg-red-500";
+    return "task-record-dot bg-foreground/30";
 }
 
 function taskMediaKind(task: GenerationTask): Exclude<TaskKindFilter, "all"> {

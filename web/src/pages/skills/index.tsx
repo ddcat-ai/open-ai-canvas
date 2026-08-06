@@ -239,10 +239,10 @@ export default function SkillsPage() {
 
 function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; loading: boolean; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
     return (
-        <article className="library-card skill-library-card group">
-            <div className="flex min-h-8 items-start gap-3">
-                <button type="button" className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
-                    <h3 className="line-clamp-1 text-[var(--fs-body-lg)] font-semibold leading-6">{skill.skill_name}</h3>
+        <article className={`library-card skill-library-card group${skill.is_added ? " is-added" : ""}`}>
+            <div className="skill-card-top">
+                <button type="button" className="skill-card-title-button" onClick={onOpen}>
+                    <h3>{skill.skill_name}</h3>
                 </button>
                 {skill.is_owner ? (
                     <Dropdown
@@ -255,33 +255,39 @@ function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: 
                             onClick: ({ key }) => key === "edit" ? onEdit() : onDelete(),
                         }}
                     >
-                        <button type="button" aria-label="技能操作" className="-mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground/42 transition-colors hover:bg-foreground/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <button type="button" aria-label="技能操作" className="skill-card-more">
                             <MoreHorizontal className="size-4" />
                         </button>
                     </Dropdown>
-                ) : (
-                    <Tooltip title={`${skill.is_added ? "从我的技能移除" : "加入我的技能"} · ${formatSkillCount(skill.added_count)} 人已加入`}>
-                        <button type="button" disabled={loading} aria-label={skill.is_added ? "从我的技能移除" : "加入我的技能"} className={`-mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait ${skill.is_added ? "bg-foreground/[.08] text-foreground" : "text-foreground/70 hover:bg-foreground/[.07] hover:text-foreground"}`} onClick={onAdd}>
-                            {loading ? <LoaderCircle className="size-4 animate-spin" /> : skill.is_added ? <Check className="size-4" /> : <Plus className="size-4" />}
-                        </button>
-                    </Tooltip>
-                )}
+                ) : null}
             </div>
-            <button type="button" className="mt-1 min-h-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
-                <p className="line-clamp-3 text-xs leading-5 text-foreground/52">{skill.description || "暂无技能简介"}</p>
+            <button type="button" className="skill-card-description" onClick={onOpen}>
+                <p>{skill.description || "暂无技能简介"}</p>
             </button>
-            <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-border/45 pt-3 text-[var(--fs-label)] text-foreground/42">
-                <button type="button" disabled={loading} className="inline-flex shrink-0 items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait" aria-label={skill.is_like ? "取消收藏" : "收藏"} onClick={onLike}>
+            <div className="skill-card-footer">
+                <button type="button" disabled={loading} className="skill-card-like" aria-label={skill.is_like ? "取消收藏" : "收藏"} onClick={onLike}>
                     <Heart className={`size-3.5 ${skill.is_like ? "fill-current text-rose-500" : ""}`} />
                     <span>{formatSkillCount(skill.like_count)}</span>
                 </button>
-                <span className="truncate">来自 · {skill.effective_user.name || "未知用户"}</span>
-                {skill.is_private ? <span className="ml-auto shrink-0 text-foreground/55">仅自己</span> : null}
+                <span className="skill-card-author">{skill.effective_user.name || "未知用户"}</span>
+                {skill.is_private ? <span className="skill-card-flag">仅自己</span> : null}
             </div>
+            {/* 加入是这个页面的主行为，给它完整的按钮 + 文案 + 已加入人数，不再藏在角落的加号里。 */}
+            {skill.is_owner
+                ? <div className="skill-card-action"><span className="skill-card-owner-flag">我创建的</span><span className="skill-card-added-count">{formatSkillCount(skill.added_count)} 人已加入</span></div>
+                : (
+                    <div className="skill-card-action">
+                        <button type="button" disabled={loading} className={`skill-card-join${skill.is_added ? " is-added" : ""}`} onClick={onAdd}>
+                            {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : skill.is_added ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+                            <span>{skill.is_added ? "已加入" : "加入我的技能库"}</span>
+                        </button>
+                        <Tooltip title={`${formatSkillCount(skill.added_count)} 人已加入`}><span className="skill-card-added-count">{formatSkillCount(skill.added_count)}</span></Tooltip>
+                    </div>
+                )}
         </article>
     );
 }
 
 function SkillSkeleton() {
-    return <div className="grid grid-cols-1 gap-3 py-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[178px] animate-pulse rounded-md border border-border/45 bg-foreground/[.035]" />)}</div>;
+    return <div className="library-grid skill-library-grid py-6">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[218px] animate-pulse rounded-[var(--r-xl)] bg-foreground/[.035]" />)}</div>;
 }
