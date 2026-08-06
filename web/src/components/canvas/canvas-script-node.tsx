@@ -134,7 +134,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 <Clapperboard className="size-4" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>{node.title || "分镜脚本"}</span>
                 {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[var(--fs-label)] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[var(--fs-label)] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
-                <span className="text-xs font-medium" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
+                <span className="text-[var(--fs-caption)] font-semibold tabular-nums" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
                 {batch ? <>
                     {hasFailedBatchItems ? <Tooltip title="重试失败项"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRetryBatch(batch.id); }} aria-label="重试失败项"><RefreshCw className="size-3.5" /></button></Tooltip> : null}
                     {hasWaitingBatchItems ? <Tooltip title="停止剩余任务"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onStopBatch(batch.id); }} aria-label="停止剩余任务"><Square className="size-3.5" /></button></Tooltip> : null}
@@ -332,9 +332,21 @@ function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, videoInp
                 )}
             </PipelineStageCell>
             <PipelineStageCell label="合并成片" stage={pipeline.final} theme={theme} last>
-                <Button size="small" type={canMerge ? "primary" : "text"} icon={<Merge className="size-3" />} disabled={!canMerge} onClick={onMergeVideos}>
+                <button
+                    type="button"
+                    className="inline-flex h-7 max-w-full items-center justify-center gap-1.5 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-semibold transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                    style={{
+                        background: canMerge ? theme.accent.primary : "transparent",
+                        color: canMerge ? "var(--primary-foreground)" : theme.node.faint,
+                        "--tw-ring-color": theme.accent.primary,
+                        "--tw-ring-offset-color": theme.node.fill,
+                    } as CSSProperties}
+                    disabled={!canMerge}
+                    onClick={onMergeVideos}
+                >
+                    <Merge className="size-3 shrink-0" />
                     {pipeline.final.success ? "成片已完成" : pipeline.successfulVideoNodeIds.length >= 2 ? `合并 ${pipeline.successfulVideoNodeIds.length} 段视频` : "至少完成 2 段视频"}
-                </Button>
+                </button>
             </PipelineStageCell>
         </div>
     );
