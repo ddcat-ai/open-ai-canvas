@@ -4,9 +4,9 @@ import { ChevronRight, FlaskConical, Settings2 } from "lucide-react";
 
 import { testChannelModelConnection } from "@/lib/model-connection-test";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
-import { ModelCapabilityProtocolModal } from "@/components/model-protocol-picker";
+import { CapabilityCardPicker, ProtocolCardPicker } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
-import { modelProtocolCapability, modelProtocolDefinition, type ModelProtocol } from "@/lib/model-protocols";
+import { MODEL_PROTOCOLS, modelProtocolCapability, modelProtocolDefinition, type ModelProtocol } from "@/lib/model-protocols";
 import { modelMatchesCapability, modelOptionName, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
@@ -114,17 +114,30 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                             <div className="text-xs font-medium">模型能力与请求协议</div>
                             <div className="mt-1 text-[var(--fs-tiny)] text-foreground/45">这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。</div>
                         </div>
-                        <ModelCapabilityProtocolModal
-                            value={{ capability: activeCapability, protocol: activeProtocol }}
-                            onChange={({ capability: nextCapability, protocol: nextProtocol }) =>
-                                updateCost(activeModel, {
-                                    protocol: nextProtocol,
-                                    capability: nextCapability,
-                                    billingMode: nextCapability === "video" ? activeBillingMode : "fixed_request",
-                                    capabilityConfig: nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol) : undefined,
-                                })
-                            }
-                        />
+                        <section className="space-y-2">
+                            <div className="text-xs font-medium">模型能力</div>
+                            <CapabilityCardPicker
+                                value={activeCapability}
+                                onChange={(nextCapability) => {
+                                    const nextProtocol = MODEL_PROTOCOLS.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || MODEL_PROTOCOLS.find((item) => item.capability === nextCapability)?.value;
+                                    if (!nextProtocol) return;
+                                    updateCost(activeModel, {
+                                        protocol: nextProtocol,
+                                        capability: nextCapability,
+                                        billingMode: nextCapability === "video" ? activeBillingMode : "fixed_request",
+                                        capabilityConfig: nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol) : undefined,
+                                    });
+                                }}
+                            />
+                        </section>
+                        <section className="space-y-2">
+                            <div className="text-xs font-medium">请求协议</div>
+                            <ProtocolCardPicker
+                                capability={activeCapability}
+                                value={activeProtocol}
+                                onChange={(nextProtocol) => updateCost(activeModel, { protocol: nextProtocol, capabilityConfig: activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol) : undefined })}
+                            />
+                        </section>
                         {activeCapability === "video" ? (
                             <div className="space-y-2">
                                 <div className="text-xs font-medium">计费方式</div>
