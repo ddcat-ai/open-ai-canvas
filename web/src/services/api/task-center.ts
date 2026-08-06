@@ -4,6 +4,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type TaskBillingStatus = "reserved" | "running" | "settled" | "refunded" | "uncertain";
+export type ProviderCancelStatus = "requested" | "confirmed" | "uncertain";
 export type AgentSessionStatus = "active" | "completed" | "failed";
 
 export type BackendEnvelope<T> = {
@@ -25,6 +26,11 @@ export type GenerationTask = {
     provider?: string;
     model?: string;
     providerRequestId?: string;
+    providerCancelStatus?: ProviderCancelStatus;
+    providerCancelError?: string;
+    providerCancelAttempts?: number;
+    providerCancelRequestedAt?: string;
+    providerCancelledAt?: string;
     errorCode?: string;
     previewUrl?: string;
     previewKind?: "image" | "video";

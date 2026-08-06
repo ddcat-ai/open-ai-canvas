@@ -224,7 +224,11 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		}
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
-			"text_draft": "", "started_at": nil, "completed_at": nil, "updated_at": time.Now(),
+			"text_draft": "", "started_at": nil, "completed_at": nil,
+			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
+			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
+			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
+			"lease_owner": "", "lease_expires_at": nil, "updated_at": time.Now(),
 		}
 		if order != nil {
 			updates["billing_order_id"] = order.ID

@@ -2021,7 +2021,7 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	log := model.ApiCallLog{
 		UserID: metadata.UserID, ChannelID: metadata.ChannelID, TaskID: metadata.TaskID, BillingOrderID: metadata.BillingOrderID,
 		Source: "backend-task", Capability: metadata.Capability, Operation: metadata.Operation,
-		RequestKind: requestKind, Billable: req.Method == http.MethodPost,
+		RequestKind: requestKind, Billable: req.Method == http.MethodPost && requestKind != "cancel",
 		APIFormat: apiFormat, Method: req.Method, Path: req.URL.Path, Model: metadata.Model,
 		Status: status, StatusCode: statusCode, DurationMs: time.Since(startedAt).Milliseconds(),
 		Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,

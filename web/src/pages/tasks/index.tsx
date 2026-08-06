@@ -190,7 +190,11 @@ export default function TasksPage() {
                 setStatusFilter("active");
                 setPage(1);
             }
-            message.success(action === "retry" ? "任务已重新入队" : "任务已取消");
+            if (action === "retry") message.success("任务已重新入队");
+            else if (next.providerCancelStatus === "requested") message.info("已请求上游取消，正在确认费用状态");
+            else if (next.providerCancelStatus === "confirmed") message.success("上游已确认取消，积分已退回");
+            else if (next.providerCancelStatus === "uncertain") message.warning("任务已取消，上游费用待核对");
+            else message.success("任务已取消，积分已退回");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败");
         } finally {
@@ -452,6 +456,8 @@ export default function TasksPage() {
                             <InfoItem label="模型" value={formatModelName(effectiveConfig, detailTask)} />
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
+                            {detailTask.providerCancelStatus ? <InfoItem label="上游取消" value={providerCancelStatusLabel(detailTask)} /> : null}
+                            {detailTask.providerCancelRequestedAt ? <InfoItem label="请求取消时间" value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
                         </div>
                         {canQueryProviderTask(detailTask) ? <div className="flex justify-end"><Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button></div> : null}
                         {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre> : null}
@@ -573,10 +579,21 @@ function getTaskCanvasContext(task: GenerationTask, canvasById: Map<string, { ti
 }
 
 function taskAttentionReason(task: GenerationTask) {
-    if (task.status === "cancelled") return "任务已取消，可按原输入重新提交";
+    if (task.status === "cancelled") return providerCancelStatusLabel(task);
     if (task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)) return "内容审核未通过，请修改输入后新建任务";
     if (task.error) return generationErrorMessage(task.error);
     return task.stage || "生成失败，打开详情查看原因";
+}
+
+function providerCancelStatusLabel(task: GenerationTask) {
+    if (task.providerCancelStatus === "requested") return "已请求上游取消，正在等待确认";
+    if (task.providerCancelStatus === "confirmed") return "上游已确认取消，积分已退回";
+    if (task.providerCancelStatus === "uncertain") {
+        if (task.billing?.status === "settled") return "上游未能取消，费用已结算";
+        if (task.billing?.status === "refunded") return "上游取消结果未确认，积分已退回";
+        return task.providerCancelError || "上游无法确认取消，费用待核对";
+    }
+    return task.billing?.status === "refunded" ? "任务在调用上游前取消，积分已退回" : "任务已取消，可按原输入重新提交";
 }
 
 function taskEmptyState(status: TaskStatusFilter) {

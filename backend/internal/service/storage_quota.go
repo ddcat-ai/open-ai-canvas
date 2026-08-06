@@ -141,6 +141,7 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 		return err
 	}
 
+	expectedStatus := task.Status
 	completed := *task
 	completed.Status = model.TaskStatusSucceeded
 	completed.Stage = "任务完成"
@@ -148,7 +149,7 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	completed.ResultJSON = string(resultJSON)
 	completed.InputJSON = publicInputJSON
 	completed.CompletedAt = ptr(time.Now())
-	if err := s.repo.SaveTaskCompletion(&completed, session, message, results); err != nil {
+	if err := s.repo.SaveTaskCompletion(&completed, expectedStatus, session, message, results); err != nil {
 		return err
 	}
 	*task = completed

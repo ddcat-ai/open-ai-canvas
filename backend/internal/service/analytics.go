@@ -953,7 +953,7 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 		log.OutputTokens = firstInt64(usageMetadata, "candidatesTokenCount")
 		log.CachedTokens = firstInt64(usageMetadata, "cachedContentTokenCount")
 	}
-	log.ProviderRequestID = firstNonEmpty(stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), log.ProviderRequestID)
+	log.ProviderRequestID = firstNonEmpty(stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
 	log.ProviderStatus = strings.ToLower(firstNonEmpty(stringField(payload, "status"), log.ProviderStatus))
 	if log.ProviderStatus == "failed" || log.ProviderStatus == "cancelled" || log.ProviderStatus == "expired" {
 		log.Status = model.ApiCallStatusFailed
