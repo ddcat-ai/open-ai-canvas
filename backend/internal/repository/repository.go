@@ -75,10 +75,12 @@ func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
 	return usage, err
 }
 
+// Create 是低层兼容入口；业务写路径应优先使用带领域约束的显式方法。
 func (r *Repository) Create(value any) error {
 	return r.db.Create(value).Error
 }
 
+// Save 是低层兼容入口；涉及状态机或权限边界的写入不得绕过显式事务方法。
 func (r *Repository) Save(value any) error {
 	return r.db.Save(value).Error
 }
@@ -122,6 +124,7 @@ func (r *Repository) Vacuum() error {
 	return r.db.Exec("VACUUM").Error
 }
 
+// Delete 是低层兼容入口；删除业务数据应使用带用户/项目作用域和关联清理的显式方法。
 func (r *Repository) Delete(value any, query any, args ...any) error {
 	conds := append([]any{query}, args...)
 	return r.db.Delete(value, conds...).Error
