@@ -88,6 +88,9 @@
     --r-2xl: 16px;
     --r-3xl: 20px;
     --r-4xl: 24px;
+    --r-tight: 15px;
+    --r-dock-compact: 13px;
+    --r-wide-tight: 22px;
     --r-5xl: 32px;
     --r-full: 9999px;
 
@@ -116,6 +119,7 @@
     --z-popover: 200;           /* L10 弹出层 */
     --z-toast: 500;             /* L11 通知 */
     --z-tooltip: 1000;          /* L12 提示 */
+    --z-loader: 1200;           /* 全屏加载遮罩 */
     --z-max: 2000;              /* L13 最高（紧急通知）*/
 
     /* --- 6b. Canvas 浮层定位 inset（画布安全区，对应审计 D2/P0-2）--- */
@@ -516,6 +520,9 @@
     --dock-shadow: var(--shadow-lg);
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
+    --dock-radius-tight: var(--r-tight);
+    --dock-radius-compact: var(--r-dock-compact);
+    --dock-tooltip-z: 140;
     --dock-precision-width: var(--space-12);
     --dock-z-popover: 30;                 /* dock 子面板在 toolbar 根 stacking context 内的层级（见 ADR-001）*/
 
@@ -557,6 +564,9 @@
     --panel-padding: var(--space-4);      /* 16px */
     --panel-shadow: var(--shadow-lg);
     --panel-section-gap: var(--space-3);  /* 12px */
+    --panel-width-compact: 320px;
+    --panel-radius-wide-tight: var(--r-wide-tight);
+    --loader-z: var(--z-loader);
 
     /* Director workbench / Sequencer */
     --director-sequencer-min-height: 180px;

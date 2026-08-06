@@ -334,6 +334,7 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/sessions/:id", querySession)
 	r.POST("/files", uploadFile)
 	r.GET("/sessions/:id/results", downloadResults)
+	// 兼容旧客户端的废弃路由；新调用统一使用上方 REST 风格路径。
 	r.POST("/create_session", createSession)
 	r.GET("/query_session/:id", querySession)
 	r.POST("/upload_file", uploadFile)

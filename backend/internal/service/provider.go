@@ -1022,7 +1022,13 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	id := resumedProviderRequestID(ctx)
 	var created map[string]interface{}
 	if id == "" && (input.Config.InterfaceType == "xai-video" || isGrokVideoConfig(input.Config)) {
-		requestBody, err := grokVideoBody(input)
+		var requestBody interface{}
+		var err error
+		if input.Config.InterfaceType == "xai-video" {
+			requestBody, err = xaiVideoRequestBody(input)
+		} else {
+			requestBody, err = grokVideoBody(input)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -1109,21 +1115,21 @@ func runGeminiVeoVideoTask(ctx context.Context, input canvasGenerationInput) (ma
 	}
 	id := resumedProviderRequestID(ctx)
 	if id == "" {
-		instance := map[string]interface{}{"prompt": strings.TrimSpace(input.Prompt)}
+		instance := geminiVeoInstance{Prompt: strings.TrimSpace(input.Prompt)}
 		if len(input.ReferenceImages) == 1 {
 			raw, mimeType, err := mediaBytes(input.ReferenceImages[0])
 			if err != nil {
 				return nil, fmt.Errorf("读取 Gemini Veo 起始图失败：%w", err)
 			}
-			instance["image"] = map[string]interface{}{"bytesBase64Encoded": base64.StdEncoding.EncodeToString(raw), "mimeType": mimeType}
+			instance.Image = &geminiVeoImage{BytesBase64Encoded: base64.StdEncoding.EncodeToString(raw), MIMEType: mimeType}
 		}
-		body := map[string]interface{}{
-			"instances": []interface{}{instance},
-			"parameters": map[string]interface{}{
-				"aspectRatio":     normalizeNewAPIChannel2Ratio(input.Config.Size, strings.ToLower(input.Config.Model)),
-				"durationSeconds": normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
-				"resolution":      normalizeNewAPIChannel2Resolution(input.Config.VQuality, strings.ToLower(input.Config.Model)),
-				"sampleCount":     1,
+		body := geminiVeoRequest{
+			Instances: []geminiVeoInstance{instance},
+			Parameters: geminiVeoParameters{
+				AspectRatio:     normalizeNewAPIChannel2Ratio(input.Config.Size, strings.ToLower(input.Config.Model)),
+				DurationSeconds: normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
+				Resolution:      normalizeNewAPIChannel2Resolution(input.Config.VQuality, strings.ToLower(input.Config.Model)),
+				SampleCount:     1,
 			},
 		}
 		var created map[string]interface{}
@@ -1273,7 +1279,7 @@ func runNewAPIChannel2VideoTask(ctx context.Context, input canvasGenerationInput
 	id := resumedProviderRequestID(ctx)
 	var created map[string]interface{}
 	if id == "" {
-		body, err := newAPIChannel2VideoBody(input)
+		body, err := newAPIChannel2VideoRequestBody(input)
 		if err != nil {
 			return nil, err
 		}
@@ -1393,9 +1399,9 @@ func logNewAPIChannel2QueryRetry(ctx context.Context, providerTaskID string, ret
 	_ = metadata.Service.log(metadata.UserID, metadata.TaskID, "warn", "上游任务查询失败，1 分钟后重试", payload)
 }
 
-func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
+func newAPIChannel2VideoRequestBody(input canvasGenerationInput) (newAPIVideoRequest, error) {
 	if len(input.ReferenceImages) > 9 || len(input.ReferenceVideos) > 3 || len(input.ReferenceAudios) > 3 {
-		return nil, errors.New("NewAPI Video Generations 最多支持 9 张参考图、3 个参考视频和 3 个参考音频")
+		return newAPIVideoRequest{}, errors.New("NewAPI Video Generations 最多支持 9 张参考图、3 个参考视频和 3 个参考音频")
 	}
 	modelName := strings.ToLower(strings.TrimSpace(input.Config.Model))
 	requiresSingleImage := modelName == "grok-video-1.5" || modelName == "grok-video-1.5-1080p"
@@ -1405,19 +1411,19 @@ func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{
 		for _, image := range input.ReferenceImages {
 			url, err := videoGenerationsMediaURL(image)
 			if err != nil {
-				return nil, err
+				return newAPIVideoRequest{}, err
 			}
 			images = append(images, url)
 		}
 	}
 	if requiresSingleImage {
 		if len(images) != 1 {
-			return nil, fmt.Errorf("NewAPI Video Generations 的 %s 必须且只能提供 1 张参考图（当前 %d 张）", input.Config.Model, len(images))
+			return newAPIVideoRequest{}, fmt.Errorf("NewAPI Video Generations 的 %s 必须且只能提供 1 张参考图（当前 %d 张）", input.Config.Model, len(images))
 		}
 	}
 	frameImages, err := videoFrameImageURLs(input, images)
 	if err != nil {
-		return nil, err
+		return newAPIVideoRequest{}, err
 	}
 	if len(frameImages) > 0 {
 		images = frameImages
@@ -1429,42 +1435,52 @@ func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{
 	}
 	ratio := normalizeNewAPIChannel2Ratio(input.Config.Size, modelName)
 	resolution := normalizeNewAPIChannel2Resolution(input.Config.VQuality, modelName)
-	body := map[string]interface{}{
-		"model":        input.Config.Model,
-		"prompt":       strings.TrimSpace(input.Prompt),
-		"seconds":      strconv.Itoa(seconds),
-		"aspect_ratio": ratio,
-		"resolution":   resolution,
+	body := newAPIVideoRequest{
+		Model:       input.Config.Model,
+		Prompt:      strings.TrimSpace(input.Prompt),
+		Seconds:     strconv.Itoa(seconds),
+		AspectRatio: ratio,
+		Resolution:  resolution,
 	}
 	if videoCapabilitySupportsAudio(input) {
-		body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
+		value := parseBool(input.Config.VideoGenerateAudio, true)
+		body.GenerateAudio = &value
 	}
 	if len(images) > 0 {
-		body["image_urls"] = images
+		body.ImageURLs = images
 	}
 	videoURLs := make([]string, 0, len(input.ReferenceVideos))
 	for _, video := range input.ReferenceVideos {
 		url, err := videoGenerationsMediaURL(video)
 		if err != nil {
-			return nil, err
+			return newAPIVideoRequest{}, err
 		}
 		videoURLs = append(videoURLs, url)
 	}
 	if len(videoURLs) > 0 {
-		body["video_urls"] = videoURLs
+		body.VideoURLs = videoURLs
 	}
 	audioURLs := make([]string, 0, len(input.ReferenceAudios))
 	for _, audio := range input.ReferenceAudios {
 		url, err := videoGenerationsMediaURL(audio)
 		if err != nil {
-			return nil, err
+			return newAPIVideoRequest{}, err
 		}
 		audioURLs = append(audioURLs, url)
 	}
 	if len(audioURLs) > 0 {
-		body["audio_urls"] = audioURLs
+		body.AudioURLs = audioURLs
 	}
 	return body, nil
+}
+
+// 兼容现有单元测试和旧调用方；实际请求路径使用上面的类型化 DTO。
+func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
+	body, err := newAPIChannel2VideoRequestBody(input)
+	if err != nil {
+		return nil, err
+	}
+	return requestAsMap(body)
 }
 
 func videoGenerationsMediaURL(media providerMedia) (string, error) {
@@ -1680,7 +1696,11 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 
 func grokVideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
 	if input.Config.InterfaceType == "xai-video" {
-		return xaiVideoBody(input)
+		body, err := xaiVideoRequestBody(input)
+		if err != nil {
+			return nil, err
+		}
+		return requestAsMap(body)
 	}
 
 	seconds := defaultString(input.Config.VideoSeconds, "6")
@@ -1713,33 +1733,42 @@ func grokVideoBody(input canvasGenerationInput) (map[string]interface{}, error) 
 }
 
 // xAI 生成接口与 legacy /videos 使用不同字段，保持独立可避免兼容字段触发上游 422。
-func xaiVideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
-	body := map[string]interface{}{
-		"model":        input.Config.Model,
-		"prompt":       strings.TrimSpace(input.Prompt),
-		"duration":     normalizeXAIVideoDuration(input.Config.VideoSeconds),
-		"aspect_ratio": normalizeXAIVideoAspectRatio(input.Config.Size),
-		"resolution":   normalizeXAIVideoResolution(input.Config.VQuality),
+func xaiVideoRequestBody(input canvasGenerationInput) (xaiVideoRequest, error) {
+	body := xaiVideoRequest{
+		Model:       input.Config.Model,
+		Prompt:      strings.TrimSpace(input.Prompt),
+		Duration:    normalizeXAIVideoDuration(input.Config.VideoSeconds),
+		AspectRatio: normalizeXAIVideoAspectRatio(input.Config.Size),
+		Resolution:  normalizeXAIVideoResolution(input.Config.VQuality),
 	}
 	if !shouldSendNewAPIVideoImages(input) || len(input.ReferenceImages) == 0 {
 		return body, nil
 	}
 	if len(input.ReferenceImages) > 1 {
-		return nil, fmt.Errorf("xAI 图生视频只支持 1 张起始图，当前连接了 %d 张", len(input.ReferenceImages))
+		return xaiVideoRequest{}, fmt.Errorf("xAI 图生视频只支持 1 张起始图，当前连接了 %d 张", len(input.ReferenceImages))
 	}
 	imageURL, err := openAIImageInputURL(input.ReferenceImages[0])
 	if err != nil {
+		return xaiVideoRequest{}, err
+	}
+	body.Image = &xaiVideoImage{URL: imageURL}
+	return body, nil
+}
+
+// 兼容旧的 map 断言调用；xAI 实际请求使用类型化 DTO。
+func xaiVideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
+	body, err := xaiVideoRequestBody(input)
+	if err != nil {
 		return nil, err
 	}
-	body["image"] = map[string]interface{}{"url": imageURL}
-	return body, nil
+	return requestAsMap(body)
 }
 
 func runSeedanceVideosTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	id := resumedProviderRequestID(ctx)
 	var created map[string]interface{}
 	if id == "" {
-		body, err := seedanceVideosBody(input)
+		body, err := seedanceVideosRequestBody(input)
 		if err != nil {
 			return nil, err
 		}
@@ -1807,18 +1836,20 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 				}
 			}
 		}
-		body := map[string]interface{}{
-			"model":      input.Config.Model,
-			"content":    content,
-			"ratio":      normalizeSeedanceRatio(input.Config.Size),
-			"resolution": normalizeSeedanceResolution(input.Config.VQuality, input.Config.Model),
-			"duration":   normalizeSeedanceDuration(input.Config.VideoSeconds),
+		body := seedanceAgentPlanRequest{
+			Model:      input.Config.Model,
+			Content:    content,
+			Ratio:      normalizeSeedanceRatio(input.Config.Size),
+			Resolution: normalizeSeedanceResolution(input.Config.VQuality, input.Config.Model),
+			Duration:   normalizeSeedanceDuration(input.Config.VideoSeconds),
 		}
 		if videoCapabilitySupportsAudio(input) {
-			body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
+			value := parseBool(input.Config.VideoGenerateAudio, true)
+			body.GenerateAudio = &value
 		}
 		if videoCapabilitySupportsWatermark(input) {
-			body["watermark"] = parseBool(input.Config.VideoWatermark, false)
+			value := parseBool(input.Config.VideoWatermark, false)
+			body.Watermark = &value
 		}
 		if err := postJSON(ctx, input.Config, "/contents/generations/tasks", body, &created); err != nil {
 			return nil, err
@@ -2364,62 +2395,72 @@ func newAPIVideoPromptText(input canvasGenerationInput) string {
 	return strings.TrimSpace(input.Prompt)
 }
 
-func seedanceVideosBody(input canvasGenerationInput) (map[string]interface{}, error) {
+func seedanceVideosRequestBody(input canvasGenerationInput) (seedanceVideosRequest, error) {
 	if (len(input.ReferenceVideos) > 0 || len(input.ReferenceAudios) > 0) && len(input.ReferenceImages) == 0 {
-		return nil, errors.New("Seedance 参考视频或参考音频需要同时连接至少 1 张主参考图")
+		return seedanceVideosRequest{}, errors.New("Seedance 参考视频或参考音频需要同时连接至少 1 张主参考图")
 	}
-	body := map[string]interface{}{
-		"model":        input.Config.Model,
-		"prompt":       seedanceVideosPromptText(input),
-		"aspect_ratio": normalizeSeedanceVideosRatio(input.Config.Size),
-		"duration":     normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
+	body := seedanceVideosRequest{
+		Model:       input.Config.Model,
+		Prompt:      seedanceVideosPromptText(input),
+		AspectRatio: normalizeSeedanceVideosRatio(input.Config.Size),
+		Duration:    normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
 	}
 	if videoCapabilitySupportsAudio(input) {
-		body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
+		value := parseBool(input.Config.VideoGenerateAudio, true)
+		body.GenerateAudio = &value
 	}
 	imageURLs := make([]string, 0, len(input.ReferenceImages))
 	for _, image := range input.ReferenceImages {
 		url, err := openAIImageInputURL(image)
 		if err != nil {
-			return nil, err
+			return seedanceVideosRequest{}, err
 		}
 		imageURLs = append(imageURLs, url)
 	}
 	frameImageURLs, err := videoFrameImageURLs(input, imageURLs)
 	if err != nil {
-		return nil, err
+		return seedanceVideosRequest{}, err
 	}
 	if len(frameImageURLs) > 0 {
-		body["image_urls"] = frameImageURLs
+		body.ImageURLs = frameImageURLs
 	} else if len(imageURLs) > 0 {
-		body["image_url"] = imageURLs[0]
+		body.ImageURL = imageURLs[0]
 		if len(imageURLs) > 1 {
-			body["reference_image_urls"] = imageURLs[1:]
+			body.ReferenceImageURLs = imageURLs[1:]
 		}
 	}
 	videoURLs := make([]string, 0, len(input.ReferenceVideos))
 	for _, video := range input.ReferenceVideos {
 		url, err := seedanceVideosMediaURL(video)
 		if err != nil {
-			return nil, err
+			return seedanceVideosRequest{}, err
 		}
 		videoURLs = append(videoURLs, url)
 	}
 	if len(videoURLs) > 0 {
-		body["reference_videos"] = videoURLs
+		body.ReferenceVideos = videoURLs
 	}
 	audioURLs := make([]string, 0, len(input.ReferenceAudios))
 	for _, audio := range input.ReferenceAudios {
 		url, err := seedanceVideosMediaURL(audio)
 		if err != nil {
-			return nil, err
+			return seedanceVideosRequest{}, err
 		}
 		audioURLs = append(audioURLs, url)
 	}
 	if len(audioURLs) > 0 {
-		body["reference_audios"] = audioURLs
+		body.ReferenceAudios = audioURLs
 	}
 	return body, nil
+}
+
+// 兼容旧的 map 断言调用；实际请求路径使用类型化 Seedance DTO。
+func seedanceVideosBody(input canvasGenerationInput) (map[string]interface{}, error) {
+	body, err := seedanceVideosRequestBody(input)
+	if err != nil {
+		return nil, err
+	}
+	return requestAsMap(body)
 }
 
 func seedancePromptText(input canvasGenerationInput) string {
@@ -2525,249 +2566,4 @@ func seedanceErrorMessage(state map[string]interface{}) string {
 		return code
 	}
 	return ""
-}
-
-func isPublicMediaURL(value string) bool {
-	lower := strings.ToLower(value)
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
-}
-
-func isSeedanceVideoConfig(config providerConfig) bool {
-	model := strings.ToLower(config.Model)
-	return strings.Contains(model, "seedance") || strings.Contains(model, "doubao-seedance") || isArkPlanVideoConfig(config)
-}
-
-func isGrokVideoConfig(config providerConfig) bool {
-	return strings.Contains(strings.ToLower(strings.TrimSpace(config.Model)), "grok")
-}
-
-func isArkPlanVideoConfig(config providerConfig) bool {
-	return strings.Contains(strings.ToLower(config.BaseURL), "/api/plan/v3")
-}
-
-func normalizeImageQuality(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1k":
-		return "low"
-	case "2k":
-		return "medium"
-	case "4k":
-		return "high"
-	default:
-		return value
-	}
-}
-
-func normalizePixelSize(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" {
-		return ""
-	}
-	// 画布按比例保存常用预设；图片接口只接受像素尺寸，必须在请求边界完成转换。
-	switch value {
-	case "1:1":
-		return "1024x1024"
-	case "3:2":
-		return "1536x1024"
-	case "2:3":
-		return "1024x1536"
-	case "4:3":
-		return "1360x1024"
-	case "3:4":
-		return "1024x1360"
-	case "16:9":
-		return "1824x1024"
-	case "9:16":
-		return "1024x1824"
-	case "21:9":
-		return "2352x1008"
-	}
-	if strings.Contains(value, "x") {
-		return value
-	}
-	return ""
-}
-
-func normalizeVideoSize(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" {
-		return ""
-	}
-	if strings.Contains(value, "x") {
-		return value
-	}
-	if value == "9:16" || value == "2:3" || value == "3:4" {
-		return "720x1280"
-	}
-	return "1280x720"
-}
-
-func normalizeVideoResolution(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" || value == "medium" || value == "high" {
-		return "720p"
-	}
-	if value == "low" {
-		return "480p"
-	}
-	if strings.EqualFold(value, "4k") {
-		return "2160p"
-	}
-	if strings.HasSuffix(value, "p") {
-		return value
-	}
-	return value + "p"
-}
-
-func normalizeXAIVideoDuration(value string) int {
-	duration, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || duration <= 0 {
-		return 6
-	}
-	return duration
-}
-
-func normalizeXAIVideoResolution(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "480", "480p", "low":
-		return "480p"
-	case "1080", "1080p":
-		return "1080p"
-	case "2160", "2160p", "4k":
-		return "2160p"
-	default:
-		return "720p"
-	}
-}
-
-func normalizeXAIVideoAspectRatio(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	allowed := map[string]bool{
-		"1:1": true, "16:9": true, "9:16": true, "4:3": true,
-		"3:4": true, "3:2": true, "2:3": true,
-	}
-	if allowed[value] {
-		return value
-	}
-	parts := strings.Split(value, "x")
-	if len(parts) != 2 {
-		return "16:9"
-	}
-	width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
-	height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
-		return "16:9"
-	}
-	ratio := float64(width) / float64(height)
-	candidates := []struct {
-		name  string
-		ratio float64
-	}{
-		{name: "1:1", ratio: 1},
-		{name: "16:9", ratio: 16.0 / 9},
-		{name: "9:16", ratio: 9.0 / 16},
-		{name: "4:3", ratio: 4.0 / 3},
-		{name: "3:4", ratio: 3.0 / 4},
-		{name: "3:2", ratio: 3.0 / 2},
-		{name: "2:3", ratio: 2.0 / 3},
-	}
-	bestName := "16:9"
-	bestDifference := 2.0
-	for _, candidate := range candidates {
-		difference := ratio - candidate.ratio
-		if difference < 0 {
-			difference = -difference
-		}
-		if difference < bestDifference {
-			bestName = candidate.name
-			bestDifference = difference
-		}
-	}
-	return bestName
-}
-
-func normalizeSeedanceDuration(value string) int {
-	if strings.TrimSpace(value) == "-1" {
-		return -1
-	}
-	seconds, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || seconds <= 0 {
-		return 5
-	}
-	return seconds
-}
-
-func normalizeSeedanceVideosDuration(value string) int {
-	return normalizeSeedanceDuration(value)
-}
-
-func normalizeSeedanceRatio(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" || value == "adaptive" {
-		return "adaptive"
-	}
-	switch value {
-	case "16:9", "9:16", "1:1", "4:3", "3:4", "21:9":
-		return value
-	default:
-		return "adaptive"
-	}
-}
-
-func normalizeSeedanceVideosRatio(value string) string {
-	ratio := normalizeSeedanceRatio(value)
-	if ratio == "adaptive" {
-		return "16:9"
-	}
-	return ratio
-}
-
-func normalizeSeedanceResolution(value string, model string) string {
-	resolution := strings.TrimSuffix(strings.TrimSpace(value), "p")
-	if strings.EqualFold(resolution, "4k") {
-		resolution = "2160"
-	}
-	switch resolution {
-	case "480", "720", "1080", "2160":
-	default:
-		if value == "low" {
-			resolution = "480"
-		} else {
-			resolution = "720"
-		}
-	}
-	if strings.Contains(strings.ToLower(model), "fast") && (resolution == "1080" || resolution == "2160") {
-		resolution = "720"
-	}
-	return resolution + "p"
-}
-
-func parseBool(value string, fallback bool) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true":
-		return true
-	case "false":
-		return false
-	default:
-		return fallback
-	}
-}
-
-func parseFloat(value string, fallback float64) float64 {
-	number, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || number == 0 {
-		return fallback
-	}
-	return number
-}
-
-func sleepContext(ctx context.Context, duration time.Duration) error {
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
