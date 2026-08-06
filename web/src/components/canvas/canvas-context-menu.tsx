@@ -140,6 +140,7 @@ export function CanvasNodeContextMenu({
         <>
             <SpotlightSurface
                 spotlightColor={theme.toolbar.itemHover}
+                data-canvas-context-menu
                 initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97, x: -3, y: -3 }}
                 animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                 transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
