@@ -16,7 +16,7 @@
         "@excalidraw/excalidraw": "0.18.1",
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
-        "@mediapipe/tasks-vision": "^0.10.35",
+        "@mediapipe/tasks-vision": "^1.0.1",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.6.1",
         "@tanstack/react-query": "^5.101.2",
