@@ -162,8 +162,8 @@ export default function SkillsPage() {
 
     return (
         <>
-            <WorkspacePage>
-                <PageHeader icon="skills" title="技能库" meta={<span className="text-xs text-foreground/45">{total} 个技能</span>} actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => void openEditor()}>创建技能</Button>} />
+            <WorkspacePage className="library-page skills-library-page" grid>
+                <PageHeader icon="skills" title="技能库" description="把常用的提示词、角色设定和创作方法收进自己的工具架。" meta={<span className="text-xs text-foreground/45">{total} 个技能</span>} actions={null} />
 
                 <div className="mt-1 flex flex-col border-b border-border/75 xl:flex-row xl:items-end xl:justify-between">
                     <nav className="thin-scrollbar -mb-px flex min-w-0 overflow-x-auto" aria-label="技能库范围" role="tablist">
@@ -186,7 +186,7 @@ export default function SkillsPage() {
                         })}
                     </nav>
 
-                    <div className="flex min-w-0 flex-wrap items-center gap-2 py-2.5 xl:flex-nowrap xl:justify-end">
+                    <div className="library-toolbar-controls flex min-w-0 flex-wrap items-center gap-2 py-2.5 xl:flex-nowrap xl:justify-end">
                         <Input className="w-full sm:!w-72" prefix={<Search className="size-4 text-foreground/38" />} value={search} allowClear placeholder="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
                         <Select className="w-[136px]" value={tag} options={[{ value: "all", label: "全部分类" }, ...categories]} onChange={(value) => { setTag(value); setPage(1); }} />
                         <Select className="w-[124px]" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
@@ -206,7 +206,8 @@ export default function SkillsPage() {
                                     <h2 id={`skill-category-${group.value}`} className="text-sm font-medium text-foreground/62">{group.label}</h2>
                                     <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
                                 </div>
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                                <div className="library-grid skill-library-grid">
+                                    {groupedSkills[0] === group ? <button type="button" className="library-create-card" onClick={() => void openEditor()}><span className="library-create-cover"><Plus className="size-8" /></span><span className="library-create-title">创建技能</span><span className="library-create-meta">把一套方法变成可复用能力</span></button> : null}
                                     {group.skills.map((skill) => <SkillCard key={skill.skill_id} skill={skill} loading={mutatingID === skill.skill_id} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
                                 </div>
                             </section>
@@ -238,7 +239,7 @@ export default function SkillsPage() {
 
 function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; loading: boolean; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
     return (
-        <article className="flex h-[178px] min-w-0 flex-col rounded-md border border-border/55 bg-[color:var(--workspace-surface-strong)] p-4 transition-[border-color,box-shadow,background-color] duration-200 hover:border-border hover:bg-[color:var(--workspace-surface)] hover:shadow-sm">
+        <article className="library-card skill-library-card group">
             <div className="flex min-h-8 items-start gap-3">
                 <button type="button" className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
                     <h3 className="line-clamp-1 text-[var(--fs-body-lg)] font-semibold leading-6">{skill.skill_name}</h3>
