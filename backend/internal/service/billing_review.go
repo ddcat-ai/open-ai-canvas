@@ -3,8 +3,6 @@ package service
 import (
 	"log"
 	"time"
-
-	"infinite-canvas/backend/internal/repository"
 )
 
 const billingReviewStaleAfter = 15 * time.Minute
