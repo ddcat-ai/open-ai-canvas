@@ -171,3 +171,7 @@ function defaultProtocolForModel(channel: ModelChannel, model: string): ModelPro
     if (modelMatchesCapability(model, "image")) return "openai-image";
     return "chat-completion";
 }
+
+function capabilityLabel(value: ModelCost["capability"]) {
+    return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value] || "待配置";
+}
