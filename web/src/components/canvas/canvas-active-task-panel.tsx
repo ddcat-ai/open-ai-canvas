@@ -10,7 +10,8 @@ import type { GenerationTask } from "@/services/api/task-center";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-export function CanvasActiveTaskPanel({ tasks, align = "right" }: { tasks: GenerationTask[]; align?: "left" | "right" }) {
+// 顶栏是绝对定位浮层，面板必须按调用方传入的 topInset 避让；专注模式隐藏顶栏时传小间距。
+export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(--canvas-topbar-offset)" }: { tasks: GenerationTask[]; align?: "left" | "right"; topInset?: string }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const reducedMotion = useReducedMotion();
@@ -41,7 +42,8 @@ export function CanvasActiveTaskPanel({ tasks, align = "right" }: { tasks: Gener
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={motionTransition}
-                className={`pointer-events-none absolute top-3 z-[var(--z-panel-floating)] w-[var(--canvas-panel-width)] ${align === "left" ? "left-3" : "right-3"}`}
+                className={`pointer-events-none absolute z-[var(--z-panel-floating)] w-[var(--canvas-panel-width)] ${align === "left" ? "left-3" : "right-3"}`}
+                style={{ top: topInset }}
             >
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section
