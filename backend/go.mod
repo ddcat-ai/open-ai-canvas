@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/redis/go-redis/v9 v9.21.0
-	github.com/volcengine/volc-sdk-golang v1.0.252
+	github.com/volcengine/volc-sdk-golang v1.0.253
 	golang.org/x/crypto v0.54.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/driver/sqlite v1.6.0
