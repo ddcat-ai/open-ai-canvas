@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -112,6 +115,24 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+	r.GET("/tasks/:id/text-events", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		after, err := taskTextEventCursor(c)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		initial, err := svc.TaskTextReplay(user.ID, c.Param("id"), after)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		streamTaskTextEvents(c, svc, user.ID, c.Param("id"), after, initial)
+	})
 	r.POST("/tasks/:id/retry", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -164,6 +185,76 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, logs)
 	})
+}
+
+func taskTextEventCursor(c *gin.Context) (int64, error) {
+	raw := c.Query("after")
+	if raw == "" {
+		raw = c.GetHeader("Last-Event-ID")
+	}
+	if raw == "" {
+		return 0, nil
+	}
+	after, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || after < 0 {
+		return 0, errors.New("after 或 Last-Event-ID 必须是非负整数")
+	}
+	return after, nil
+}
+
+func streamTaskTextEvents(c *gin.Context, svc *service.Service, userID string, taskID string, after int64, replay *service.TextReplayResult) {
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache, no-transform")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	if _, err := fmt.Fprint(c.Writer, ": connected\n\n"); err != nil {
+		return
+	}
+	c.Writer.Flush()
+
+	pollTicker := time.NewTicker(750 * time.Millisecond)
+	heartbeatTicker := time.NewTicker(15 * time.Second)
+	defer pollTicker.Stop()
+	defer heartbeatTicker.Stop()
+	for {
+		for _, delta := range replay.Deltas {
+			writeTaskTextSSE(c, "delta", delta.Sequence, map[string]any{"sequence": delta.Sequence, "content": delta.Content})
+			after = delta.Sequence
+		}
+		if replay.Complete {
+			writeTaskTextSSE(c, "terminal", 0, replay)
+			return
+		}
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case <-heartbeatTicker.C:
+			if _, err := fmt.Fprint(c.Writer, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			c.Writer.Flush()
+		case <-pollTicker.C:
+		}
+		next, err := svc.TaskTextReplay(userID, taskID, after)
+		if err != nil {
+			writeTaskTextSSE(c, "error", 0, map[string]string{"message": "任务文本流不可用"})
+			return
+		}
+		replay = next
+	}
+}
+
+func writeTaskTextSSE(c *gin.Context, event string, id int64, value any) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+	if id > 0 {
+		_, _ = fmt.Fprintf(c.Writer, "id: %d\n", id)
+	}
+	_, _ = fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, data)
+	c.Writer.Flush()
 }
 
 func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
