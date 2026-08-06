@@ -10,7 +10,7 @@ export default function RouteErrorPage() {
     const message = error instanceof Error ? error.message : "页面暂时无法显示";
 
     return (
-        <main className="grid h-dvh place-items-center bg-background px-6 text-foreground">
+        <main className="app-workspace-page grid h-dvh place-items-center px-6 text-foreground">
             <section className="w-full max-w-md text-center">
                 <WorkspaceSignalIcon variant="error" size="lg" className="mx-auto" />
                 <p className="text-xs font-medium text-muted-foreground">页面运行异常</p>

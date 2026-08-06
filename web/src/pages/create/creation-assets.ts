@@ -38,6 +38,9 @@ export function creationAttachmentFromImage(file: File, uploaded: UploadedImage)
         dataUrl: uploaded.url,
         url: uploaded.url,
         storageKey: uploaded.storageKey,
+        bytes: uploaded.bytes,
+        width: uploaded.width,
+        height: uploaded.height,
         previewUrl: uploaded.url,
     };
 }
@@ -51,6 +54,9 @@ export function creationAttachmentFromAsset(asset: ImageAsset): CreationAttachme
         dataUrl: url,
         url,
         storageKey: asset.data.storageKey,
+        bytes: asset.data.bytes,
+        width: asset.data.width,
+        height: asset.data.height,
         previewUrl: url,
     };
 }

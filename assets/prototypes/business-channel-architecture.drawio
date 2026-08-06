@@ -1,0 +1,325 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.0 Safari/537.36" version="29.6.1">
+  <diagram id="business-channel-architecture" name="业务与渠道架构">
+    <mxGraphModel dx="2989" dy="1551" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="bg" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F7F8FA;strokeColor=none;" value="" vertex="1">
+          <mxGeometry height="1700" width="2400" as="geometry" />
+        </mxCell>
+        <mxCell id="title" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#101828;fontSize=28;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=middle;" value="&lt;b&gt;【影策】底层架构&lt;/b&gt;" vertex="1">
+          <mxGeometry height="44" width="1040" x="60" y="24" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D0D5DD;fontColor=#475467;fontSize=11;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="实线：业务顺序　　虚线边框：可选或持续复用能力　　所有生成任务统一进入底部任务与渠道底座" vertex="1">
+          <mxGeometry height="34" width="850" x="1470" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="story-layer" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#ECFDF3;strokeColor=#ABEFC6;fontColor=#067647;fontSize=13;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=top;spacingLeft=18;spacingTop=12;" value="01  剧情项目生产线" vertex="1">
+          <mxGeometry height="500" width="2280" x="60" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="story-prep-label" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#D1FADF;strokeColor=#6CE9A6;fontColor=#05603A;fontSize=11;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="A　故事与资产准备" vertex="1">
+          <mxGeometry height="28" width="190" x="90" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="story-project" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;1. 创建剧情项目&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;类型、画幅、内容来源&lt;/span&gt;" vertex="1">
+          <mxGeometry height="76" width="300" x="100" y="202" as="geometry" />
+        </mxCell>
+        <mxCell id="story-chapter" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;2. 新建 / 导入章节&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;粘贴文本、小说拆章、审核修改&lt;/span&gt;" vertex="1">
+          <mxGeometry height="76" width="300" x="470" y="202" as="geometry" />
+        </mxCell>
+        <mxCell id="story-extract" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;3. 从章节提取资产候选&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;角色、场景、道具与服饰&lt;/span&gt;" vertex="1">
+          <mxGeometry height="76" width="300" x="840" y="202" as="geometry" />
+        </mxCell>
+        <mxCell id="story-confirm" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;4. 审核并确认项目资产&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;合并别名、去重、建立资产身份&lt;/span&gt;" vertex="1">
+          <mxGeometry height="76" width="300" x="1210" y="202" as="geometry" />
+        </mxCell>
+        <mxCell id="story-character" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#32D583;fontColor=#05603A;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;5A. 完善角色卡&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;生成 / 绑定三视图 → 绑定声音&lt;br&gt;形成可复用角色版本&lt;/span&gt;" vertex="1">
+          <mxGeometry height="96" width="310" x="1580" y="192" as="geometry" />
+        </mxCell>
+        <mxCell id="story-scene" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#32D583;fontColor=#05603A;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;5B. 完善场景 / 画风资产&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:11px;color:#667085&#39;&gt;场景建模卡、空间设定、参考图&lt;br&gt;项目画风与版本约束&lt;/span&gt;" vertex="1">
+          <mxGeometry height="96" width="310" x="1960" y="192" as="geometry" />
+        </mxCell>
+        <mxCell id="story-stage-note" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6CE9A6;dashed=1;fontColor=#067647;fontSize=11;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="资产准备完成后进入章节画布制作；也可先创建画布，再逐步补齐缺失资产" vertex="1">
+          <mxGeometry height="34" width="900" x="730" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="story-production-label" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#D1FADF;strokeColor=#6CE9A6;fontColor=#05603A;fontSize=11;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="B　章节画布制作" vertex="1">
+          <mxGeometry height="28" width="190" x="90" y="365" as="geometry" />
+        </mxCell>
+        <mxCell id="story-canvas" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;6. 创建章节画布&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;一章一画布 / 多章合并&lt;/span&gt;" vertex="1">
+          <mxGeometry height="90" width="245" x="90" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="story-import" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;7. 引入剧情与项目资产&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;章节正文、角色卡、场景卡、画风&lt;/span&gt;" vertex="1">
+          <mxGeometry height="90" width="245" x="370" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="story-skill" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6CE9A6;dashed=1;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;8. 引入创作技能（可选）&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;编剧、分镜、导演或视频技能节点&lt;/span&gt;" vertex="1">
+          <mxGeometry height="90" width="245" x="650" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="story-script" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;9. AI 生成分镜脚本&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;镜号、时长、画面、对白、运镜与提示词&lt;/span&gt;" vertex="1">
+          <mxGeometry height="90" width="245" x="930" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="story-shot-nodes" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;10. 每镜拆出创作节点&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;分镜图节点 → 视频节点&lt;br&gt;也可直接创建视频节点&lt;/span&gt;" vertex="1">
+          <mxGeometry height="110" width="245" x="1210" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="story-reference" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;11. 关联镜头参考&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;角色版本 / 三视图 / 声音&lt;br&gt;场景建模卡 / 画风 / 首尾帧&lt;/span&gt;" vertex="1">
+          <mxGeometry height="110" width="245" x="1490" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="story-generate" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;12. 批量异步生成&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;分镜图、镜头视频、角色配音&lt;br&gt;失败可逐镜重试和恢复&lt;/span&gt;" vertex="1">
+          <mxGeometry height="110" width="245" x="1770" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="story-deliver" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#32D583;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;13. 审核、合并与交付&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;版本对比、镜头审核、合并成片&lt;br&gt;产物持续沉淀到项目资产&lt;/span&gt;" vertex="1">
+          <mxGeometry height="110" width="245" x="2050" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="free-layer" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#EEF4FF;strokeColor=#B2CCFF;fontColor=#1849A9;fontSize=13;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=top;spacingLeft=18;spacingTop=12;" value="02  普通画布自由创作线" vertex="1">
+          <mxGeometry height="210" width="2280" x="60" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="free-create" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;1. 创建独立画布&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;不绑定章节流程&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="90" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-input" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;2. 放入基础输入&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;文本、上传图片、视频、音频&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="405" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-assets" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;3. 引用已有素材&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;我的素材 / 项目资产 / 角色卡&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="720" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-skill" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#84ADFF;dashed=1;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;4. 引入技能（按需）&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;选技能 → 快照为技能节点&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="1035" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-compose" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;5. 连线编排创作上下文&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;文本 / 技能 / 参考素材 → 生成配置&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="1350" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-generate" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;6. 选择模型并生成&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;文本 / 图片 / 视频 / 音频任务&lt;/span&gt;" vertex="1">
+          <mxGeometry height="82" width="270" x="1665" y="693" as="geometry" />
+        </mxCell>
+        <mxCell id="free-result" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#528BFF;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;7. 迭代与沉淀&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;结果继续连线、保存到我的素材&lt;br&gt;或加入项目资产&lt;/span&gt;" vertex="1">
+          <mxGeometry height="102" width="300" x="1980" y="683" as="geometry" />
+        </mxCell>
+        <mxCell id="library-layer" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#FFF6ED;strokeColor=#F9DBAF;fontColor=#B54708;fontSize=13;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=top;spacingLeft=18;spacingTop=12;" value="03  资产库与技能库持续复用闭环" vertex="1">
+          <mxGeometry height="300" width="2280" x="60" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-label" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#FEF0C7;strokeColor=#FEC84B;fontColor=#B54708;fontSize=11;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="资产闭环" vertex="1">
+          <mxGeometry height="28" width="120" x="90" y="904" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-source" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;来源&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;上传 / AI 生成 / 章节提取&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="270" x="240" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-personal" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;我的素材&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;图片、视频、音频、文本、实体&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="270" x="560" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-project" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;加入项目并分类&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;角色 / 场景 / 道具 / 画风 / 其他&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="880" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-version" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;资产身份与版本&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;主版本、历史版本、媒体表示&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="1210" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-reference" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;按上下文引用&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;放入画布 / 关联镜头 / 设为首帧&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="1540" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="asset-update" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;dashed=1;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;新结果形成新版本&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;不覆盖历史；继续服务后续章节和画布&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="360" x="1870" y="891" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-label" parent="1" style="rounded=1;arcSize=18;whiteSpace=wrap;html=1;fillColor=#FEF0C7;strokeColor=#FEC84B;fontColor=#B54708;fontSize=11;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="技能闭环" vertex="1">
+          <mxGeometry height="28" width="120" x="90" y="1024" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-library" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;技能库&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;内置技能 / 自定义技能 / 版本&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="270" x="240" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-scene" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;按创作场景选择&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;编剧 / 分镜 / 图片 / 视频 / 工具&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="270" x="560" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-snapshot" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;保存技能版本快照&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;模板、说明、输出约束可追溯&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="880" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-node" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;插入技能节点 / 创作引用&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;技能成为画布中的可见上下文&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="1210" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-connect" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;连接到使用位置&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;分镜脚本 / 生成节点 / Agent 参考&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="280" x="1540" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-output" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FDB022;dashed=1;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;按技能约束产出&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;结果回到画布，并可进一步沉淀资产&lt;/span&gt;" vertex="1">
+          <mxGeometry height="65" width="360" x="1870" y="1012" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-layer" parent="1" style="rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#F4F3FF;strokeColor=#D9D6FE;fontColor=#5925DC;fontSize=13;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=left;verticalAlign=top;spacingLeft=18;spacingTop=12;" value="04  共享任务、渠道与官方模型底座" vertex="1">
+          <mxGeometry height="450" width="2280" x="60" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-task" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B8AFB;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;异步任务中心&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;创建、排队、轮询、重试、恢复&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="350" x="130" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-model" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B8AFB;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;统一模型与协议目录&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;图片 / 视频 / 文本 / 音频能力匹配&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="350" x="570" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-route" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B8AFB;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;分级路由策略&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;等级 → 优先级 → 成本 → 可用性&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="350" x="1010" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-control" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B8AFB;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;渠道运行控制&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;号池状态、并发、频控、超时、熔断、回退&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="350" x="1450" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="infra-observe" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B8AFB;fontColor=#101828;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;结果与运营治理&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;回填、计费、成本、成功率、耗时与审计&lt;/span&gt;" vertex="1">
+          <mxGeometry height="70" width="350" x="1890" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="grade-s" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#32D583;fontColor=#05603A;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;S 级 · 官方直连&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;稳定、可控、主渠道&lt;/span&gt;" vertex="1">
+          <mxGeometry height="64" width="400" x="270" y="1365" as="geometry" />
+        </mxCell>
+        <mxCell id="grade-a" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EFF8FF;strokeColor=#53B1FD;fontColor=#175CD3;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;A 级 · 稳定反代&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;扩充模型、备用渠道&lt;/span&gt;" vertex="1">
+          <mxGeometry height="64" width="400" x="1000" y="1365" as="geometry" />
+        </mxCell>
+        <mxCell id="grade-b" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFAEB;strokeColor=#FEC84B;fontColor=#B54708;fontSize=12;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;B 级 · 弹性号池&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#667085&#39;&gt;多账号 / 多 Key 补充容量&lt;/span&gt;" vertex="1">
+          <mxGeometry height="64" width="400" x="1730" y="1365" as="geometry" />
+        </mxCell>
+        <mxCell id="source-direct" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EE46BC;fontColor=#101828;fontSize=12;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="官方 API 直连渠道" vertex="1">
+          <mxGeometry height="50" width="320" x="310" y="1470" as="geometry" />
+        </mxCell>
+        <mxCell id="source-proxy" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EE46BC;fontColor=#101828;fontSize=12;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="聚合 / 反代渠道（例如 LibTV）" vertex="1">
+          <mxGeometry height="50" width="320" x="1040" y="1470" as="geometry" />
+        </mxCell>
+        <mxCell id="source-pool" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EE46BC;fontColor=#101828;fontSize=12;fontStyle=1;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="号池接入渠道" vertex="1">
+          <mxGeometry height="50" width="320" x="1770" y="1470" as="geometry" />
+        </mxCell>
+        <mxCell id="provider-jimeng" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#101828;strokeColor=#344054;fontColor=#FFFFFF;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;即梦官方 API&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#D0D5DD&#39;&gt;图片 / 视频 / 官方任务状态&lt;/span&gt;" vertex="1">
+          <mxGeometry height="58" width="400" x="270" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="provider-other" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#344054;strokeColor=#475467;fontColor=#FFFFFF;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;其他官方模型 API&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#D0D5DD&#39;&gt;由聚合渠道按协议转发&lt;/span&gt;" vertex="1">
+          <mxGeometry height="58" width="400" x="1000" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="provider-account" parent="1" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#344054;strokeColor=#475467;fontColor=#FFFFFF;fontSize=13;fontFamily=PingFang SC,Microsoft YaHei,sans-serif;align=center;verticalAlign=middle;" value="&lt;b&gt;官方授权账号能力&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;font-size:10px;color:#D0D5DD&#39;&gt;由号池统一调度可用容量&lt;/span&gt;" vertex="1">
+          <mxGeometry height="58" width="400" x="1730" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sp-1" edge="1" parent="1" source="story-project" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-chapter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sp-2" edge="1" parent="1" source="story-chapter" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-extract">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sp-3" edge="1" parent="1" source="story-extract" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-confirm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sp-4a" edge="1" parent="1" source="story-confirm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.35;entryX=0;entryY=0.35;fontColor=#067647;fontSize=9;labelBackgroundColor=#ECFDF3;" target="story-character" value="角色">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sp-4b" edge="1" parent="1" source="story-confirm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.7;entryX=0;entryY=0.7;fontColor=#067647;fontSize=9;labelBackgroundColor=#ECFDF3;" target="story-scene" value="场景 / 画风">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1545" y="305" />
+              <mxPoint x="1930" y="305" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-sc-1" edge="1" parent="1" source="story-canvas" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-import">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-2" edge="1" parent="1" source="story-import" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-skill">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-3" edge="1" parent="1" source="story-skill" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-script">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-4" edge="1" parent="1" source="story-script" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-shot-nodes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-5" edge="1" parent="1" source="story-shot-nodes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-reference">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-6" edge="1" parent="1" source="story-reference" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-generate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-sc-7" edge="1" parent="1" source="story-generate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#12B76A;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="story-deliver">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-1" edge="1" parent="1" source="free-create" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-2" edge="1" parent="1" source="free-input" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-assets">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-3" edge="1" parent="1" source="free-assets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-skill">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-4" edge="1" parent="1" source="free-skill" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-compose">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-5" edge="1" parent="1" source="free-compose" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-generate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-free-6" edge="1" parent="1" source="free-generate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#2970FF;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="free-result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-asset-1" edge="1" parent="1" source="asset-source" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="asset-personal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-asset-2" edge="1" parent="1" source="asset-personal" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="asset-project">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-asset-3" edge="1" parent="1" source="asset-project" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="asset-version">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-asset-4" edge="1" parent="1" source="asset-version" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="asset-reference">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-asset-5" edge="1" parent="1" source="asset-reference" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="asset-update">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-skill-1" edge="1" parent="1" source="skill-library" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="skill-scene">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-skill-2" edge="1" parent="1" source="skill-scene" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="skill-snapshot">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-skill-3" edge="1" parent="1" source="skill-snapshot" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="skill-node">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-skill-4" edge="1" parent="1" source="skill-node" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="skill-connect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-skill-5" edge="1" parent="1" source="skill-connect" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="skill-output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-infra-1" edge="1" parent="1" source="infra-task" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7F56D9;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="infra-model">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-infra-2" edge="1" parent="1" source="infra-model" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7F56D9;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="infra-route">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-infra-3" edge="1" parent="1" source="infra-route" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7F56D9;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="infra-control">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-infra-4" edge="1" parent="1" source="infra-control" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7F56D9;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="infra-observe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-route-s" edge="1" parent="1" source="infra-route" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#32D583;strokeWidth=2;endArrow=block;endFill=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;fontColor=#067647;fontSize=9;labelBackgroundColor=#F4F3FF;" target="grade-s" value="主用">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1080" y="1330" />
+              <mxPoint x="470" y="1330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-route-a" edge="1" parent="1" source="infra-route" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#53B1FD;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontColor=#175CD3;fontSize=9;labelBackgroundColor=#F4F3FF;" target="grade-a" value="备用">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-route-b" edge="1" parent="1" source="infra-route" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#F79009;strokeWidth=2;endArrow=block;endFill=1;exitX=0.8;exitY=1;entryX=0.5;entryY=0;fontColor=#B54708;fontSize=9;labelBackgroundColor=#F4F3FF;" target="grade-b" value="补量">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1290" y="1345" />
+              <mxPoint x="1930" y="1345" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-s-source" edge="1" parent="1" source="grade-s" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C11574;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="source-direct">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-a-source" edge="1" parent="1" source="grade-a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C11574;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="source-proxy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-b-source" edge="1" parent="1" source="grade-b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C11574;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="source-pool">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-direct-provider" edge="1" parent="1" source="source-direct" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#475467;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="provider-jimeng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-proxy-provider" edge="1" parent="1" source="source-proxy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#475467;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="provider-other">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-pool-provider" edge="1" parent="1" source="source-pool" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#475467;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="provider-account">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

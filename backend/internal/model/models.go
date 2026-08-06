@@ -237,6 +237,9 @@ type ChannelModel struct {
 	PriceConfigured              bool                 `json:"priceConfigured" gorm:"index"`
 	Enabled                      bool                 `json:"enabled" gorm:"index"`
 	PriceVersion                 int64                `json:"priceVersion"`
+	CapabilityConfigJSON         string               `json:"-" gorm:"type:text"`
+	CapabilityVersion            int64                `json:"capabilityVersion"`
+	CapabilityConfig             map[string]any       `json:"capabilityConfig,omitempty" gorm:"-"`
 	CreatedAt                    time.Time            `json:"createdAt"`
 	UpdatedAt                    time.Time            `json:"updatedAt"`
 	DeletedAt                    gorm.DeletedAt       `json:"-" gorm:"index"`
