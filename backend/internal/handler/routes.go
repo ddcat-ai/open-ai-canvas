@@ -144,7 +144,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		task, err := svc.CancelTask(user.ID, c.Param("id"))
+		task, err := svc.CancelTask(c.Request.Context(), user.ID, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
