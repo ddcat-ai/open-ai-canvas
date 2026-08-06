@@ -8,6 +8,7 @@ import { ListToolbar, PageHeader, TableSurface, WorkspacePage } from "@/componen
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-task-display";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 
 import { cancelGenerationTask, createAgentSession, createGenerationTask, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog, type TaskStatus } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
@@ -676,6 +677,7 @@ function formatTaskJson(value?: string) {
 
 function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConfig>) {
     return {
+        channelId: config.channelId,
         apiFormat: config.apiFormat,
         interfaceType: config.interfaceType,
         baseUrl: config.baseUrl,
@@ -694,6 +696,7 @@ function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConf
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
         audioInstructions: config.audioInstructions,
+        capabilityConfig: modelCapabilityConfigFor(config, config.model),
         systemPrompt: config.systemPrompt,
     };
 }

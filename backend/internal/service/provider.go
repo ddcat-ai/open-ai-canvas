@@ -31,30 +31,32 @@ type canvasGenerationInput struct {
 	ReferenceAudios []providerMedia        `json:"referenceAudios"`
 	Mask            *providerMedia         `json:"mask"`
 	Metadata        map[string]interface{} `json:"metadata"`
+	VideoCapability *VideoCapabilityConfig `json:"-"`
 }
 
 type providerConfig struct {
-	ChannelID             string           `json:"channelId"`
-	APIFormat             string           `json:"apiFormat"`
-	InterfaceType         string           `json:"interfaceType"`
-	BaseURL               string           `json:"baseUrl"`
-	APIKey                string           `json:"apiKey"`
-	SecretKey             string           `json:"secretKey"`
-	Headers               []OutboundHeader `json:"headers"`
-	Model                 string           `json:"model"`
-	Size                  string           `json:"size"`
-	Quality               string           `json:"quality"`
-	TransparentBackground string           `json:"transparentBackground"`
-	Count                 string           `json:"count"`
-	VideoSeconds          string           `json:"videoSeconds"`
-	VQuality              string           `json:"vquality"`
-	VideoGenerateAudio    string           `json:"videoGenerateAudio"`
-	VideoWatermark        string           `json:"videoWatermark"`
-	AudioVoice            string           `json:"audioVoice"`
-	AudioFormat           string           `json:"audioFormat"`
-	AudioSpeed            string           `json:"audioSpeed"`
-	AudioInstructions     string           `json:"audioInstructions"`
-	SystemPrompt          string           `json:"systemPrompt"`
+	ChannelID             string                 `json:"channelId"`
+	APIFormat             string                 `json:"apiFormat"`
+	InterfaceType         string                 `json:"interfaceType"`
+	BaseURL               string                 `json:"baseUrl"`
+	APIKey                string                 `json:"apiKey"`
+	SecretKey             string                 `json:"secretKey"`
+	Headers               []OutboundHeader       `json:"headers"`
+	Model                 string                 `json:"model"`
+	Size                  string                 `json:"size"`
+	Quality               string                 `json:"quality"`
+	TransparentBackground string                 `json:"transparentBackground"`
+	Count                 string                 `json:"count"`
+	VideoSeconds          string                 `json:"videoSeconds"`
+	VQuality              string                 `json:"vquality"`
+	VideoGenerateAudio    string                 `json:"videoGenerateAudio"`
+	VideoWatermark        string                 `json:"videoWatermark"`
+	AudioVoice            string                 `json:"audioVoice"`
+	AudioFormat           string                 `json:"audioFormat"`
+	AudioSpeed            string                 `json:"audioSpeed"`
+	AudioInstructions     string                 `json:"audioInstructions"`
+	SystemPrompt          string                 `json:"systemPrompt"`
+	CapabilityConfig      *ModelCapabilityConfig `json:"capabilityConfig"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -69,6 +71,10 @@ type providerMedia struct {
 	URL        string `json:"url"`
 	StorageKey string `json:"storageKey"`
 	MimeType   string `json:"mimeType"`
+	Bytes      int64  `json:"bytes"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	DurationMs int64  `json:"durationMs"`
 }
 
 type imageResponse struct {
@@ -183,9 +189,19 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
 		return nil, errors.New("即梦官方 API 缺少 Secret Key")
 	}
+	if input.Mode == "video" {
+		if err := s.validateResolvedVideoCapability(&input); err != nil {
+			return nil, err
+		}
+	}
 	if resumedProviderRequestID(ctx) == "" {
 		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
 		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
+			return nil, err
+		}
+	}
+	if input.Mode == "video" && input.VideoCapability != nil {
+		if err := validateVideoTask(input.VideoCapability, input); err != nil {
 			return nil, err
 		}
 	}
@@ -205,6 +221,27 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) error {
+	channelID := strings.TrimSpace(input.Config.ChannelID)
+	if channelID == "" {
+		if input.Config.CapabilityConfig == nil || input.Config.CapabilityConfig.Video == nil {
+			return nil
+		}
+		input.VideoCapability = input.Config.CapabilityConfig.Video
+		return validateVideoTask(input.VideoCapability, *input)
+	}
+	item, err := s.repo.ChannelModelByKey(channelID, strings.TrimPrefix(strings.TrimSpace(input.Config.Model), "models/"))
+	if err != nil {
+		return errors.New("当前系统渠道模型未配置或已停用")
+	}
+	profile, err := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
+	if err != nil || profile == nil || profile.Video == nil {
+		return errors.New("当前视频模型尚未配置能力参数")
+	}
+	input.VideoCapability = profile.Video
+	return validateVideoTask(profile.Video, *input)
 }
 
 func metadataStringValues(value any) map[string]string {
@@ -257,6 +294,10 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 		media.URL = signedURL
 		media.DataURL = ""
 		media.MimeType = firstNonEmpty(media.MimeType, resource.MimeType)
+		media.Bytes = resource.Size
+		media.Width = resource.Width
+		media.Height = resource.Height
+		media.DurationMs = resource.DurationMs
 		return nil
 	}
 	if strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
@@ -282,6 +323,10 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requ
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
 	media.DataURL = dataURL(mimeType, data)
 	media.MimeType = mimeType
+	media.Bytes = int64(len(data))
+	media.Width = resource.Width
+	media.Height = resource.Height
+	media.DurationMs = resource.DurationMs
 	return nil
 }
 
@@ -1385,12 +1430,14 @@ func newAPIChannel2VideoBody(input canvasGenerationInput) (map[string]interface{
 	ratio := normalizeNewAPIChannel2Ratio(input.Config.Size, modelName)
 	resolution := normalizeNewAPIChannel2Resolution(input.Config.VQuality, modelName)
 	body := map[string]interface{}{
-		"model":          input.Config.Model,
-		"prompt":         strings.TrimSpace(input.Prompt),
-		"seconds":        strconv.Itoa(seconds),
-		"aspect_ratio":   ratio,
-		"resolution":     resolution,
-		"generate_audio": parseBool(input.Config.VideoGenerateAudio, true),
+		"model":        input.Config.Model,
+		"prompt":       strings.TrimSpace(input.Prompt),
+		"seconds":      strconv.Itoa(seconds),
+		"aspect_ratio": ratio,
+		"resolution":   resolution,
+	}
+	if videoCapabilitySupportsAudio(input) {
+		body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
 	}
 	if len(images) > 0 {
 		body["image_urls"] = images
@@ -1557,16 +1604,19 @@ func newAPIChannel1VideoBody(input canvasGenerationInput) (map[string]interface{
 		}
 		media = append(media, map[string]string{"type": "reference_voice", "url": url})
 	}
+	parameters := map[string]interface{}{
+		"resolution":    normalizeNewAPIChannel1Resolution(input.Config.VQuality),
+		"ratio":         normalizeNewAPIChannel1Ratio(input.Config.Size),
+		"prompt_extend": false,
+		"duration":      normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
+	}
+	if videoCapabilitySupportsWatermark(input) {
+		parameters["watermark"] = parseBool(input.Config.VideoWatermark, false)
+	}
 	body := map[string]interface{}{
-		"model": input.Config.Model,
-		"input": map[string]interface{}{"prompt": strings.TrimSpace(input.Prompt)},
-		"parameters": map[string]interface{}{
-			"resolution":    normalizeNewAPIChannel1Resolution(input.Config.VQuality),
-			"ratio":         normalizeNewAPIChannel1Ratio(input.Config.Size),
-			"prompt_extend": false,
-			"watermark":     parseBool(input.Config.VideoWatermark, false),
-			"duration":      normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
-		},
+		"model":      input.Config.Model,
+		"input":      map[string]interface{}{"prompt": strings.TrimSpace(input.Prompt)},
+		"parameters": parameters,
 	}
 	if len(media) > 0 {
 		body["input"].(map[string]interface{})["media"] = media
@@ -1758,13 +1808,17 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 			}
 		}
 		body := map[string]interface{}{
-			"model":          input.Config.Model,
-			"content":        content,
-			"ratio":          normalizeSeedanceRatio(input.Config.Size),
-			"resolution":     normalizeSeedanceResolution(input.Config.VQuality, input.Config.Model),
-			"duration":       normalizeSeedanceDuration(input.Config.VideoSeconds),
-			"generate_audio": parseBool(input.Config.VideoGenerateAudio, true),
-			"watermark":      parseBool(input.Config.VideoWatermark, false),
+			"model":      input.Config.Model,
+			"content":    content,
+			"ratio":      normalizeSeedanceRatio(input.Config.Size),
+			"resolution": normalizeSeedanceResolution(input.Config.VQuality, input.Config.Model),
+			"duration":   normalizeSeedanceDuration(input.Config.VideoSeconds),
+		}
+		if videoCapabilitySupportsAudio(input) {
+			body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
+		}
+		if videoCapabilitySupportsWatermark(input) {
+			body["watermark"] = parseBool(input.Config.VideoWatermark, false)
 		}
 		if err := postJSON(ctx, input.Config, "/contents/generations/tasks", body, &created); err != nil {
 			return nil, err
@@ -2297,6 +2351,15 @@ func shouldSendNewAPIVideoImages(input canvasGenerationInput) bool {
 	return strings.TrimSpace(operation) != "text_to_video"
 }
 
+// 本地测试 helper 没有能力配置时保留历史协议字段；真实系统任务会携带已解析的模型能力。
+func videoCapabilitySupportsAudio(input canvasGenerationInput) bool {
+	return input.VideoCapability == nil || input.VideoCapability.GenerateAudio.Supported
+}
+
+func videoCapabilitySupportsWatermark(input canvasGenerationInput) bool {
+	return input.VideoCapability == nil || input.VideoCapability.Watermark.Supported
+}
+
 func newAPIVideoPromptText(input canvasGenerationInput) string {
 	return strings.TrimSpace(input.Prompt)
 }
@@ -2306,11 +2369,13 @@ func seedanceVideosBody(input canvasGenerationInput) (map[string]interface{}, er
 		return nil, errors.New("Seedance 参考视频或参考音频需要同时连接至少 1 张主参考图")
 	}
 	body := map[string]interface{}{
-		"model":          input.Config.Model,
-		"prompt":         seedanceVideosPromptText(input),
-		"aspect_ratio":   normalizeSeedanceVideosRatio(input.Config.Size),
-		"duration":       normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
-		"generate_audio": parseBool(input.Config.VideoGenerateAudio, true),
+		"model":        input.Config.Model,
+		"prompt":       seedanceVideosPromptText(input),
+		"aspect_ratio": normalizeSeedanceVideosRatio(input.Config.Size),
+		"duration":     normalizeSeedanceVideosDuration(input.Config.VideoSeconds),
+	}
+	if videoCapabilitySupportsAudio(input) {
+		body["generate_audio"] = parseBool(input.Config.VideoGenerateAudio, true)
 	}
 	imageURLs := make([]string, 0, len(input.ReferenceImages))
 	for _, image := range input.ReferenceImages {

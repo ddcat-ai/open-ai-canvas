@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ChannelInterfaceType = ModelProtocol;
@@ -36,6 +37,7 @@ export type ModelChannel = {
         inputTokenPriceMicrocredits?: number;
         outputTokenPriceMicrocredits?: number;
         cachedTokenPriceMicrocredits?: number;
+        capabilityConfig?: ModelCapabilityConfig;
     }>;
 };
 

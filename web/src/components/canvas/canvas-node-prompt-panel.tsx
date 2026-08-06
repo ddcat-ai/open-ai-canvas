@@ -77,7 +77,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const modalShadow = darkSurface ? `0 30px 90px ${theme.spatial.shadow}` : "0 24px 72px rgba(15,23,42,.16)";
     const referenceShelfHeight = activeReferenceCount ? 42 : 0;
     const composerMinHeight = activeReferenceCount ? 82 : 58;
-    const composerHeight = Math.min(144, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
+    const composerHeight = Math.min(224, Math.max(composerMinHeight, Math.ceil(promptContentHeight + referenceShelfHeight)));
     const isSubmitDisabled = !isRunning && !prompt.trim();
     const canExpandPrompt = mode === "image" || mode === "video";
     const isPortraitTexture = mode === "image" && Boolean(node.metadata?.portraitTexture);
@@ -248,7 +248,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             {renderComposerHeader(false)}
 
             <div
-                className="relative mt-2 flex max-h-36 flex-col overflow-hidden rounded-xl outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
+                className="relative mt-2 flex max-h-[var(--prompt-panel-input-max-height)] flex-col overflow-hidden rounded-xl outline-none ring-0 transition-[height] duration-150 focus-within:outline-none focus-within:ring-0 motion-reduce:transition-none"
                 style={{ height: composerHeight, background: composerSurface, boxShadow: composerShadow }}
             >
                 <ConnectedReferenceShelf references={mentionReferences} theme={theme} onInsert={insertPromptReference} />

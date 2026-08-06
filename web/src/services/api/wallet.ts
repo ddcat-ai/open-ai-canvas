@@ -74,6 +74,8 @@ export type ChannelModel = {
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;
+    capabilityVersion?: number;
+    capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
     createdAt: string;
     updatedAt: string;
 };
@@ -241,7 +243,7 @@ export function fetchAdminChannelModels(channelId: string) {
     return request<{ models: string[]; added: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`));
 }
 
-export function testAdminChannelModel(channelId: string, input: Pick<ChannelModel, "modelKey" | "capability" | "protocol">) {
+export function testAdminChannelModel(channelId: string, input: Pick<ChannelModel, "modelKey" | "capability" | "protocol"> & { capabilityConfig?: ChannelModel["capabilityConfig"] }) {
     return request<{ durationMs: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/test`, input, { timeout: 10 * 60 * 1000 }));
 }
 

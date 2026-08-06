@@ -14,17 +14,18 @@ import (
 )
 
 type ChannelModelRequest struct {
-	ModelKey                     string `json:"modelKey"`
-	DisplayName                  string `json:"displayName"`
-	Capability                   string `json:"capability"`
-	Protocol                     string `json:"protocol"`
-	BillingMode                  string `json:"billingMode"`
-	UnitPriceMicrocredits        int64  `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64  `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64  `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64  `json:"cachedTokenPriceMicrocredits"`
-	PriceConfigured              bool   `json:"priceConfigured"`
-	Enabled                      *bool  `json:"enabled"`
+	ModelKey                     string                 `json:"modelKey"`
+	DisplayName                  string                 `json:"displayName"`
+	Capability                   string                 `json:"capability"`
+	Protocol                     string                 `json:"protocol"`
+	BillingMode                  string                 `json:"billingMode"`
+	UnitPriceMicrocredits        int64                  `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                  `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                  `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                  `json:"cachedTokenPriceMicrocredits"`
+	PriceConfigured              bool                   `json:"priceConfigured"`
+	Enabled                      *bool                  `json:"enabled"`
+	CapabilityConfig             *ModelCapabilityConfig `json:"capabilityConfig"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -63,7 +64,20 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
 		return nil, err
 	}
-	return s.ensureChannelModels(channelID, true)
+	items, err := s.ensureChannelModels(channelID, true)
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		if strings.TrimSpace(items[index].CapabilityConfigJSON) == "" {
+			continue
+		}
+		var config map[string]any
+		if json.Unmarshal([]byte(items[index].CapabilityConfigJSON), &config) == nil {
+			items[index].CapabilityConfig = config
+		}
+	}
+	return items, nil
 }
 
 func (s *Service) SystemChannelModel(channelID string, modelKey string) (*model.ChannelModel, error) {
@@ -123,6 +137,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
+	if capability == "video" {
+		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
+			return nil, err
+		}
+	}
 	billingMode := strings.TrimSpace(req.BillingMode)
 	if billingMode == "" {
 		billingMode = "fixed_request"
@@ -174,6 +193,23 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.OutputTokenPriceMicrocredits = req.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = req.CachedTokenPriceMicrocredits
 	item.PriceConfigured = req.PriceConfigured
+	if capability == "video" {
+		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		encoded, encodeErr := json.Marshal(capabilityConfig)
+		if encodeErr != nil {
+			return nil, encodeErr
+		}
+		if item.CapabilityConfigJSON != string(encoded) {
+			item.CapabilityVersion++
+		}
+		item.CapabilityConfigJSON = string(encoded)
+	} else {
+		item.CapabilityConfigJSON = ""
+		item.CapabilityVersion = 0
+	}
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
@@ -197,6 +233,11 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	modelKey, capability, protocol, err := normalizeChannelModelContract(channel, req)
 	if err != nil {
 		return nil, err
+	}
+	if capability == "video" {
+		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
+			return nil, err
+		}
 	}
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")

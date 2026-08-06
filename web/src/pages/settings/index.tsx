@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Tag, Tooltip } from "antd";
+import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Select, Tag, Tooltip } from "antd";
 import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -8,19 +8,16 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { refreshSystemChannels } from "@/lib/user-session";
-import { MODEL_PROTOCOL_OPTIONS, modelProtocolLabel } from "@/lib/model-protocols";
 import { fetchChannelModels } from "@/services/api/image";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import {
     createModelChannel,
     defaultBaseUrlForApiFormat,
-    defaultBaseUrlForChannelInterface,
     defaultConfig,
     filterModelsByCapability,
     modelOptionsFromChannels,
     useConfigStore,
     type AiConfig,
-    type ChannelInterfaceType,
     type ModelChannel,
 } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -38,13 +35,7 @@ const configSections: Array<{ key: ConfigSectionKey; label: string; description:
     { key: "storage", label: "我的 OSS", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
 ];
 
-type UserChannelProtocol = ChannelInterfaceType | "auto" | "gemini";
-
-const channelProtocolOptions = [
-    { label: "OpenAI 自动兼容", value: "auto" },
-    { label: "Google Gemini（模型级选择）", value: "gemini" },
-    ...MODEL_PROTOCOL_OPTIONS,
-];
+type UserChannelConnection = "openai" | "gemini";
 
 function isConfigSection(value: string | null): value is ConfigSectionKey {
     return configSections.some((section) => section.key === value);
@@ -131,12 +122,12 @@ export default function SettingsPage() {
         }));
     };
 
-    const updateChannelProtocol = (channel: ModelChannel, protocol: UserChannelProtocol) => {
-        const apiFormat = protocol === "gemini" || protocol === "gemini-veo" ? "gemini" : "openai";
-        const interfaceType = protocol === "auto" || protocol === "gemini" ? undefined : protocol;
-        const defaultBaseUrl = protocol === "gemini" ? defaultBaseUrlForApiFormat("gemini") : defaultBaseUrlForChannelInterface(interfaceType);
+    const updateChannelConnection = (channel: ModelChannel, connection: UserChannelConnection) => {
+        const apiFormat = connection;
+        const defaultBaseUrl = defaultBaseUrlForApiFormat(apiFormat);
         const baseUrl = isKnownDefaultBaseUrl(channel.baseUrl) ? defaultBaseUrl : channel.baseUrl;
-        updateChannel(channel.id, { apiFormat, interfaceType, baseUrl });
+        // 渠道只负责连接类型；具体模型能力和请求协议由下方共享能力卡片维护。
+        updateChannel(channel.id, { apiFormat, interfaceType: undefined, baseUrl });
     };
 
     const addChannel = () => {
@@ -253,7 +244,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <main className="flex h-full min-h-0 flex-col bg-[var(--workspace-canvas)] text-foreground">
+        <main className="app-workspace-page flex h-full min-h-0 flex-col text-foreground">
             <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
                 <div className="flex min-w-0 items-center gap-3">
                     {shouldPromptContinue ? (
@@ -290,7 +281,7 @@ export default function SettingsPage() {
 
                 <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-transparent">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className={activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-[1180px]"}>
+                        <div className={activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}>
                     {([
                     {
                         key: "channels",
@@ -302,7 +293,7 @@ export default function SettingsPage() {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 text-xs text-foreground/65">
                                                 <Info className="size-3.5 shrink-0" />
-                                                <span>渠道保存连接和默认协议；拉取模型后，请为需要特殊路径的模型单独选择请求协议。</span>
+                                                <span>渠道只保存连接类型；拉取模型后，请在每个模型下配置能力与请求协议。</span>
                                                 <Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={() => selectSection("models")}>
                                                     打开模型选择
                                                 </Button>
@@ -324,10 +315,10 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                     {userChannels.length ? (
-                                        <div className="space-y-3">
+                                        <div className="space-y-2">
                                             {userChannels.map((channel) => (
-                                                <section key={channel.id} aria-labelledby={`channel-${channel.id}-title`} className="rounded-md border border-border bg-background p-3">
-                                                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                                                <section key={channel.id} aria-labelledby={`channel-${channel.id}-title`} className="rounded-md border border-border bg-background p-2.5 sm:p-3">
+                                                    <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2.5">
                                                         <div className="min-w-0 flex-1 basis-52">
                                                             <h3 id={`channel-${channel.id}-title`} className="truncate text-sm font-semibold">
                                                                 {channel.name || "未命名渠道"}
@@ -384,12 +375,12 @@ export default function SettingsPage() {
                                                                 onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || "未命名渠道" })}
                                                             />
                                                         </Form.Item>
-                                                        <Form.Item label="默认模型协议" htmlFor={`channel-${channel.id}-protocol`} className="mb-0 lg:col-span-3" extra="用于新模型预填，单个模型可在下方覆盖。">
-                                                            <Select<UserChannelProtocol>
-                                                                id={`channel-${channel.id}-protocol`}
-                                                                value={channelProtocolValue(channel)}
-                                                                options={channelProtocolOptions}
-                                                                onChange={(value) => updateChannelProtocol(channel, value)}
+                                                        <Form.Item label="渠道连接类型" className="mb-0 lg:col-span-3" extra="仅用于拉取模型目录；模型能力和请求协议在下方统一配置。">
+                                                            <Segmented<UserChannelConnection>
+                                                                block
+                                                                value={channelConnectionMode(channel)}
+                                                                options={[{ label: "OpenAI 兼容", value: "openai" }, { label: "Gemini 原生", value: "gemini" }]}
+                                                                onChange={(value) => updateChannelConnection(channel, value)}
                                                             />
                                                         </Form.Item>
                                                         <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 lg:col-span-6">
@@ -410,6 +401,16 @@ export default function SettingsPage() {
                                                                 placeholder={channel.apiFormat === "gemini" ? "填写 Gemini API Key" : "填写当前渠道 API Key"}
                                                                 onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })}
                                                                 onBlur={(event) => updateChannel(channel.id, { apiKey: event.target.value.trim() })}
+                                                            />
+                                                        </Form.Item>
+                                                        <Form.Item label="Secret Key（可选）" htmlFor={`channel-${channel.id}-secret-key`} className="mb-0 lg:col-span-5" extra="即梦等 AK/SK 协议需要；其他协议留空。">
+                                                            <Input.Password
+                                                                id={`channel-${channel.id}-secret-key`}
+                                                                autoComplete="new-password"
+                                                                value={channel.secretKey || ""}
+                                                                placeholder="填写 Secret Key"
+                                                                onChange={(event) => updateChannel(channel.id, { secretKey: event.target.value })}
+                                                                onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })}
                                                             />
                                                         </Form.Item>
                                                         <Form.Item label="模型列表" htmlFor={`channel-${channel.id}-models`} className="mb-0 lg:col-span-7">
@@ -593,9 +594,8 @@ function uniqueModels(models: string[]) {
     return Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)));
 }
 
-function channelProtocolValue(channel: ModelChannel): UserChannelProtocol {
-    if (channel.apiFormat === "gemini") return "gemini";
-    return channel.interfaceType || "auto";
+function channelConnectionMode(channel: ModelChannel): UserChannelConnection {
+    return channel.apiFormat === "gemini" ? "gemini" : "openai";
 }
 
 function channelConnectionError(channel: ModelChannel) {
@@ -607,12 +607,13 @@ function channelConnectionError(channel: ModelChannel) {
     } catch {
         return "Base URL 格式不正确";
     }
-    if (!channel.apiKey.trim()) return "请填写 API Key";
+    if (!channel.apiKey.trim()) return "请填写 API Key / Access Key";
+    if (requiresSecretKey(channel) && !channel.secretKey?.trim()) return "当前协议需要填写 Secret Key";
     return "";
 }
 
 function channelConnectionSignature(channel: ModelChannel) {
-    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.apiFormat, channel.interfaceType || "auto", JSON.stringify(channel.headers || [])].join("\n");
+    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", JSON.stringify(channel.headers || [])].join("\n");
 }
 
 function channelValidationError(channel: ModelChannel) {
@@ -624,8 +625,8 @@ function isChannelReady(channel: ModelChannel) {
 }
 
 function focusInvalidChannelField(channel: ModelChannel) {
-    const baseUrlError = channelConnectionError({ ...channel, apiKey: "valid" });
-    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : "models";
+    const baseUrlError = channelConnectionError({ ...channel, apiKey: "valid", secretKey: "valid" });
+    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : requiresSecretKey(channel) && !channel.secretKey?.trim() ? "secret-key" : "models";
     requestAnimationFrame(() => {
         const element = document.getElementById(`channel-${channel.id}-${field}`);
         element?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -634,23 +635,15 @@ function focusInvalidChannelField(channel: ModelChannel) {
 }
 
 function channelProtocolLabel(channel: ModelChannel) {
-    const protocol = channelProtocolValue(channel);
-    switch (protocol) {
-        case "gemini":
-            return "Gemini 原生";
-        case "chat-completion":
-            return "Chat Completions";
-        case "openai-response":
-            return "OpenAI Responses";
-        case "openai-image":
-            return "OpenAI Images";
-        default:
-            return protocol === "auto" ? "OpenAI 自动兼容" : modelProtocolLabel(protocol);
-    }
+    return channelConnectionMode(channel) === "gemini" ? "Gemini 原生" : "OpenAI 兼容";
 }
 
 function isKnownDefaultBaseUrl(value: string) {
     const normalized = value.trim().replace(/\/+$/, "");
     if (!normalized) return true;
     return [defaultBaseUrlForApiFormat("openai"), defaultBaseUrlForApiFormat("gemini")].some((candidate) => candidate.replace(/\/+$/, "") === normalized);
+}
+
+function requiresSecretKey(channel: ModelChannel) {
+    return channel.interfaceType?.startsWith("volcengine-jimeng-") === true || channel.modelCosts?.some((item) => item.protocol?.startsWith("volcengine-jimeng-")) === true;
 }
