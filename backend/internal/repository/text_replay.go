@@ -117,7 +117,7 @@ func (r *Repository) CleanupTaskTextDeltas(now time.Time) (int64, error) {
 				return err
 			}
 		}
-		result := tx.Where("expires_at <= ? OR NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.id = task_text_deltas.task_id)", now).Delete(&model.TaskTextDelta{})
+		result := tx.Where("expires_at <= ? OR NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.id = task_text_delta.task_id)", now).Delete(&model.TaskTextDelta{})
 		deleted = result.RowsAffected
 		return result.Error
 	})
