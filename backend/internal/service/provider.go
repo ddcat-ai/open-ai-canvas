@@ -1035,7 +1035,7 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		status := strings.ToLower(stringField(state, "status"))
 		if status == "completed" || status == "succeeded" || status == "success" || status == "done" {
 			if videoURL := newAPIVideoResultURL(state); videoURL != "" {
-				data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+				data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
 				if err != nil {
 					return nil, fmt.Errorf("视频结果下载失败（任务 %s）：%w", id, err)
 				}
@@ -1291,7 +1291,7 @@ func queryNewAPIChannel2VideoTask(ctx context.Context, input canvasGenerationInp
 		if videoURL == "" {
 			return nil, status, fmt.Errorf("NewAPI Video Generations 任务 %s 已成功但没有返回视频地址", id)
 		}
-		data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+		data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
 		if err != nil {
 			return nil, status, fmt.Errorf("NewAPI Video Generations 视频结果下载失败（任务 %s）：%w", id, err)
 		}
@@ -1869,6 +1869,27 @@ func getExternalBinary(ctx context.Context, rawURL string) ([]byte, string, erro
 		return nil, "", err
 	}
 	return doBinary(req)
+}
+
+func getProviderExternalBinary(ctx context.Context, config providerConfig, rawURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	if sameProviderOrigin(config.BaseURL, rawURL) {
+		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+		ApplyOutboundHeaders(req, config.Headers)
+	}
+	return doBinary(req)
+}
+
+func sameProviderOrigin(baseURL string, rawURL string) bool {
+	base, baseErr := url.Parse(strings.TrimSpace(baseURL))
+	target, targetErr := url.Parse(strings.TrimSpace(rawURL))
+	if baseErr != nil || targetErr != nil || base.Scheme == "" || base.Host == "" || target.Scheme == "" || target.Host == "" {
+		return false
+	}
+	return strings.EqualFold(base.Scheme, target.Scheme) && strings.EqualFold(base.Host, target.Host)
 }
 
 func doJSON(req *http.Request, target interface{}) error {

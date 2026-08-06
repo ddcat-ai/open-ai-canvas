@@ -401,8 +401,8 @@ func TestRunVideoTaskUsesNestedURLBeforeResultURL(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"code":"success","data":{"task_id":"video-1","status":"SUCCESS","result_url":"` + server.URL + `/v1/videos/video-1/content","data":{"status":"completed","url":"` + server.URL + `/files/video.mp4"}}}`))
 		case "GET /files/video.mp4":
-			if authorization := r.Header.Get("Authorization"); authorization != "" {
-				t.Errorf("file Authorization = %q, want empty", authorization)
+			if authorization := r.Header.Get("Authorization"); authorization != "Bearer test-key" {
+				t.Errorf("file Authorization = %q, want Bearer test-key", authorization)
 			}
 			w.Header().Set("Content-Type", "video/mp4")
 			_, _ = w.Write([]byte("video"))
@@ -512,8 +512,8 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"status":"done","video":{"url":"` + server.URL + `/files/video.mp4"}}`))
 		case "GET /files/video.mp4":
-			if authorization := r.Header.Get("Authorization"); authorization != "" {
-				t.Errorf("file Authorization = %q, want empty", authorization)
+			if authorization := r.Header.Get("Authorization"); authorization != "Bearer test-key" {
+				t.Errorf("file Authorization = %q, want Bearer test-key", authorization)
 			}
 			w.Header().Set("Content-Type", "video/mp4")
 			_, _ = w.Write([]byte("video"))
@@ -779,6 +779,9 @@ func TestRunNewAPIChannel1VideoTaskDownloadsSucceededObject(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"channel-1-task","status":"SUCCEEDED","object":"` + server.URL + `/video.mp4"}`))
 		case "GET /video.mp4":
+			if authorization := r.Header.Get("Authorization"); authorization != "" {
+				t.Errorf("file Authorization = %q, want empty", authorization)
+			}
 			w.Header().Set("Content-Type", "video/mp4")
 			_, _ = w.Write([]byte("video"))
 		default:
@@ -819,7 +822,7 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Fatalf("decode request: %v", err)
 			}
-			if body["model"] != "grok-image-video" || body["seconds"] != "10" || body["aspect_ratio"] != "9:16" || body["resolution"] != "720p" {
+			if body["model"] != "grok-image-video" || body["seconds"] != "15" || body["aspect_ratio"] != "9:16" || body["resolution"] != "720p" {
 				t.Errorf("body = %#v", body)
 			}
 			images, ok := body["image_urls"].([]interface{})
@@ -837,6 +840,9 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"code":"success","data":{"task_id":"grok-task","status":"SUCCESS","result_url":"` + server.URL + `/video.mp4"}}`))
 		case "GET /video.mp4":
+			if authorization := r.Header.Get("Authorization"); authorization != "Bearer test-key" {
+				t.Errorf("file Authorization = %q, want Bearer test-key", authorization)
+			}
 			w.Header().Set("Content-Type", "video/mp4")
 			_, _ = w.Write([]byte("video"))
 		default:
