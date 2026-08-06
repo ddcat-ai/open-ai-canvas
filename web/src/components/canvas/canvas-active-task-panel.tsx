@@ -10,7 +10,7 @@ import type { GenerationTask } from "@/services/api/task-center";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
+export function CanvasActiveTaskPanel({ tasks, align = "right" }: { tasks: GenerationTask[]; align?: "left" | "right" }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const reducedMotion = useReducedMotion();
@@ -41,7 +41,7 @@ export function CanvasActiveTaskPanel({ tasks }: { tasks: GenerationTask[] }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={motionTransition}
-                className="pointer-events-none absolute right-3 top-[var(--canvas-topbar-offset)] z-[var(--z-panel-floating)] w-[var(--canvas-panel-width)]"
+                className={`pointer-events-none absolute top-3 z-[var(--z-panel-floating)] w-[var(--canvas-panel-width)] ${align === "left" ? "left-3" : "right-3"}`}
             >
                 <LayoutGroup id="canvas-active-tasks">
                     <motion.section

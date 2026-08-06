@@ -585,6 +585,14 @@
     --zoom-control-min: 0.05;
     --zoom-control-max: 2;
     --zoom-control-step: 0.1;
+
+    /* 短剧流程引导步骤（里程碑节点 + 状态轨道）*/
+    --flow-step-node: var(--space-5);             /* 20px 完成/待办节点直径 */
+    --flow-step-node-current: var(--space-6);     /* 24px 当前节点直径 */
+    --flow-step-gap: var(--space-1);              /* 4px 节点与标签间距 */
+    --flow-step-track-height: var(--stroke-2);    /* 2px 状态轨道高 */
+    --flow-step-track-width: var(--space-5);      /* 20px 轨道段长 */
+    --flow-step-current-glow: 0 0 0 4px var(--cn-active-stroke-soft); /* 当前节点光晕 */
 }
 
 @layer base {
