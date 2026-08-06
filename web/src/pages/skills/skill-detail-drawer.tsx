@@ -6,7 +6,7 @@ import type { Skill, SkillCategory } from "@/services/api/skills";
 
 export function SkillDetailDrawer({ skill, loading, mutating, categories, onClose, onAdd, onLike, onEdit }: { skill: Skill | null; loading: boolean; mutating: boolean; categories: SkillCategory[]; onClose: () => void; onAdd: (skill: Skill) => void; onLike: (skill: Skill) => void; onEdit: (skill: Skill) => void }) {
     return (
-        <Drawer open={Boolean(skill)} size={760} destroyOnHidden title={skill?.skill_name || "技能详情"} onClose={onClose} extra={skill?.is_owner ? <Button icon={<Pencil className="size-4" />} onClick={() => onEdit(skill)}>编辑</Button> : undefined}>
+        <Drawer className="library-drawer" open={Boolean(skill)} size={760} destroyOnHidden title={skill?.skill_name || "技能详情"} onClose={onClose} extra={skill?.is_owner ? <Button icon={<Pencil className="size-4" />} onClick={() => onEdit(skill)}>编辑</Button> : undefined}>
             {skill ? (
                 <div className="space-y-6">
                     <header>

@@ -1,10 +1,9 @@
-import { App, Button, Drawer, Form, Input, Modal, Progress, Segmented, Select, Space, Table, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, Plus, RefreshCw, RotateCcw, Search, Video, X } from "lucide-react";
+import { App, Button, Drawer, Form, Input, Modal, Segmented, Select, Tooltip, Typography } from "antd";
+import { Coins, Eye, FileText, FolderKanban, Image as ImageIcon, Play, Plus, RefreshCw, RotateCcw, Search, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { ListToolbar, PageHeader, TableSurface, WorkspacePage } from "@/components/layout/workspace-page";
+import { ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, operationOptions, statusLabel } from "@/lib/generation-task-display";
@@ -18,8 +17,8 @@ import { useUserStore } from "@/stores/use-user-store";
 import { formatCredits } from "@/constant/credits";
 import { listProjects, type ProjectSummary } from "@/services/api/projects";
 
-const taskTableClassName = "app-data-table";
 type TaskStatusFilter = "all" | "failed" | "active" | "succeeded";
+type TaskKindFilter = "all" | "text" | "image" | "video";
 
 function taskStatusFilter(value: string | null): TaskStatusFilter {
     return value === "failed" || value === "active" || value === "succeeded" ? value : "all";
@@ -48,6 +47,8 @@ export default function TasksPage() {
     };
     const [keyword, setKeyword] = useState("");
     const [projectFilter, setProjectFilter] = useState("all");
+    const [kindFilter, setKindFilter] = useState<TaskKindFilter>("all");
+    const [modelFilter, setModelFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [detailTask, setDetailTask] = useState<GenerationTask | null>(null);
@@ -64,6 +65,7 @@ export default function TasksPage() {
         const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
         return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
     }), [domainProjectNameById, projects]);
+    const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")), [effectiveConfig, tasks]);
     const filteredTasks = useMemo(() => tasks.filter((task) => {
         if (statusFilter === "all") return true;
         if (statusFilter === "active") return task.status === "queued" || task.status === "running";
@@ -72,10 +74,13 @@ export default function TasksPage() {
         return false;
     }).filter((task) => {
         if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
+        if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
+        if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
         const query = keyword.trim().toLowerCase();
         const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
         return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
-    }), [canvasById, domainProjectNameById, keyword, projectFilter, statusFilter, tasks]);
+    }), [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks]);
+    const visibleTasks = useMemo(() => filteredTasks.slice((page - 1) * pageSize, page * pageSize), [filteredTasks, page, pageSize]);
 
     useEffect(() => {
         if (!shortDramaEnabled) {
@@ -276,162 +281,45 @@ export default function TasksPage() {
         }
     };
 
-    const columns = useMemo<ColumnsType<GenerationTask>>(
-        () => [
-            {
-                title: "画布（项目）",
-                width: 190,
-                responsive: ["lg"],
-                render: (_, task) => {
-                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
-                    return (
-                        <div className="min-w-0">
-                            <div className="truncate text-xs font-medium text-foreground/82" title={context.canvasName}>{context.canvasName}</div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1 text-[var(--fs-tiny)] text-foreground/42" title={context.projectName || "未加入项目"}>
-                                <FolderKanban className="size-3 shrink-0" />
-                                <span className="truncate">{context.projectName || "未加入项目"}</span>
-                            </div>
-                        </div>
-                    );
-                },
-            },
-            {
-                title: "类型｜模型",
-                width: 180,
-                responsive: ["md"],
-                render: (_, task) => <div className="min-w-0"><div className="truncate text-xs font-medium text-foreground/78">{formatTaskKind(task)}</div><div className="mt-1 truncate text-[var(--fs-tiny)] text-foreground/42" title={formatModelName(effectiveConfig, task)}>{formatModelName(effectiveConfig, task)}</div></div>,
-            },
-            {
-                title: "任务名称",
-                dataIndex: "prompt",
-                width: 340,
-                render: (prompt, task) => {
-                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
-                    return <div className="flex min-w-0 items-start gap-3 md:items-center">
-                        <TaskPreviewThumbnail task={task} onOpen={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: prompt || formatTaskKind(task) })} />
-                        <div className="min-w-0 flex-1">
-                            <div title={prompt} className="line-clamp-2 max-w-full break-words text-xs font-medium leading-5 text-foreground/88">{prompt || "未命名任务"}</div>
-                            <div className={`mt-1 hidden truncate text-[var(--fs-tiny)] md:block ${task.status === "failed" ? "text-red-600 dark:text-red-400" : task.status === "cancelled" ? "text-amber-600 dark:text-amber-400" : "text-foreground/38"}`} title={task.error ? generationErrorMessage(task.error) : undefined}>
-                                {task.status === "failed" || task.status === "cancelled" ? taskAttentionReason(task) : task.stage || statusLabel[task.status]}
-                            </div>
-                            <div className="mt-2 space-y-2 md:hidden">
-                                <div className="truncate text-[var(--fs-tiny)] text-foreground/45">{formatTaskKind(task)} · {formatModelName(effectiveConfig, task)}</div>
-                                <div className="truncate text-[var(--fs-tiny)] text-foreground/38">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="flex min-w-0 items-center gap-2 text-[var(--fs-label)]"><span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} /><span>{statusLabel[task.status]}</span>{creditsEnabled ? <TaskBilling billing={task.billing} /> : null}</div>
-                                    <Space size={0}>
-                                        <Button type="text" size="small" aria-label="查看详情" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)} />
-                                        {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")} /> : null}
-                                        {task.status === "queued" || task.status === "running" ? <Button type="text" size="small" aria-label="取消任务" danger icon={<X className="size-3.5" />} loading={actingId === task.id} onClick={() => runAction(task.id, "cancel")} /> : null}
-                                    </Space>
-                                </div>
-                            </div>
-                        </div>
-                    </div>;
-                },
-            },
-            {
-                title: "状态",
-                width: 135,
-                responsive: ["md"],
-                render: (_, task) => (
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs font-medium">
-                            <span className={`size-1.5 shrink-0 rounded-full ${statusDotClassName(task.status)}`} />
-                            <span>{statusLabel[task.status]}</span>
-                            {task.status === "queued" || task.status === "running" ? <span className="ml-auto text-[var(--fs-tiny)] tabular-nums text-foreground/42">{task.progress || 0}%</span> : null}
-                        </div>
-                        {task.status === "queued" || task.status === "running" ? <Progress className="!mb-0 !mt-1.5 block" percent={task.progress || 0} showInfo={false} size={[90, 3]} strokeColor="var(--workspace-accent)" /> : null}
-                    </div>
-                ),
-            },
-            {
-                title: "重试",
-                dataIndex: "attempts",
-                width: 75,
-                align: "center",
-                responsive: ["lg"],
-                render: (attempts: number) => <span className="text-xs tabular-nums text-foreground/55">{Math.max(0, (attempts || 1) - 1)} 次</span>,
-            },
-            {
-                title: "创建时间",
-                dataIndex: "createdAt",
-                width: 145,
-                responsive: ["lg"],
-                render: (value) => <TaskDate value={value} />,
-            },
-            ...(creditsEnabled ? [{
-                title: "消耗积分",
-                width: 130,
-                align: "right",
-                responsive: ["md"],
-                render: (_, task) => <TaskBilling billing={task.billing} />,
-            }] as ColumnsType<GenerationTask> : []),
-            {
-                title: "操作",
-                width: 168,
-                align: "right",
-                responsive: ["md"],
-                render: (_, task) => (
-                    <Space size={2}>
-                        <Button type="text" size="small" icon={<Eye className="size-3.5" />} onClick={() => openTaskDetail(task)}>详情</Button>
-                        {task.status === "failed" || task.status === "cancelled" ? <Button type="text" size="small" aria-label="重新生成" title={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error) ? "内容审核未通过，请修改提示词后新建任务" : "重新生成"} icon={<RotateCcw className="size-3.5" />} loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={() => runAction(task.id, "retry")}>重试</Button> : null}
-                        {task.status === "queued" || task.status === "running" ? <Button type="text" size="small" aria-label="取消任务" danger icon={<X className="size-3.5" />} loading={actingId === task.id} onClick={() => runAction(task.id, "cancel")}>取消</Button> : null}
-                    </Space>
-                ),
-            },
-        ],
-        [actingId, canvasById, creditsEnabled, domainProjectNameById, effectiveConfig, openTaskDetail],
-    );
-
     return (
         <>
-            <WorkspacePage grid>
+            <WorkspacePage grid className="library-page task-library-page">
                 <PageHeader
                     icon="tasks"
                     title="任务中心"
-                    description="先处理失败任务，再跟踪运行进度和检查生成结果。"
                     meta={<span className="text-xs text-foreground/45">{filteredTasks.length} 个任务{loading ? " · 正在同步" : ""}</span>}
-                    actions={(
-                        <>
+                        actions={(
+                            <>
                             <Button icon={<RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />} onClick={() => void loadTasks(true)}>刷新</Button>
-                            <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>
-                        </>
-                    )}
+                            <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>
+                            </>
+                        )}
                 />
-                <ListToolbar active={Boolean(keyword || projectFilter !== "all")} onReset={() => { setKeyword(""); setProjectFilter("all"); setPage(1); }}>
-                    <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型、画布或项目" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                <ListToolbar className="library-toolbar task-library-toolbar" active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")} onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}>
+                    <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型或画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
                     <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
+                    <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: "全部类型", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }]} />
+                    <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
                     <Segmented
                         size="small"
                         value={statusFilter}
                         onChange={(value) => { setStatusFilter(value as typeof statusFilter); setPage(1); }}
                         options={[
-                            { label: `全部 ${tasks.length}`, value: "all" },
-                            { label: `需要处理 ${tasks.filter((task) => task.status === "failed" || task.status === "cancelled").length}`, value: "failed" },
-                            { label: `运行中 ${tasks.filter((task) => task.status === "queued" || task.status === "running").length}`, value: "active" },
-                            { label: `已完成 ${tasks.filter((task) => task.status === "succeeded").length}`, value: "succeeded" },
+                            { label: "全部", value: "all" },
+                            { label: "待处理", value: "failed" },
+                            { label: "运行中", value: "active" },
+                            { label: "已完成", value: "succeeded" },
                         ]}
                     />
                 </ListToolbar>
 
-                <TableSurface className="task-table-surface">
-                    <Table
-                        rowKey="id"
-                        size="middle"
-                        className={taskTableClassName}
-                        columns={columns}
-                        dataSource={filteredTasks}
-                        loading={loading}
-                        rowClassName={() => "task-table-row align-middle"}
-                        tableLayout="fixed"
-                        pagination={{ current: page, pageSize, total: filteredTasks.length, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (total, range) => `${range[0]}-${range[1]} / 共 ${total} 个任务`, onChange: (nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); } }}
-                        scroll={{ x: 1280 }}
-                        locale={{ emptyText: <WorkspaceState compact title={taskEmptyState(statusFilter).title} description={taskEmptyState(statusFilter).description} /> }}
-                    />
-                </TableSurface>
+                {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
+                {!loading || tasks.length ? (
+                    visibleTasks.length ? <div className="task-record-list">{visibleTasks.map((task) => <TaskListRow key={task.id} task={task} canvasById={canvasById} projectNameById={domainProjectNameById} effectiveConfig={effectiveConfig} creditsEnabled={creditsEnabled} actingId={actingId} onOpen={() => void openTaskDetail(task)} onRetry={() => void runAction(task.id, "retry")} onCancel={() => void runAction(task.id, "cancel")} onPreview={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: task.prompt || formatTaskKind(task) })} />)}</div> : <WorkspaceState compact title={taskEmptyState(statusFilter).title} description={taskEmptyState(statusFilter).description} />
+                ) : null}
+                <PaginationBar current={page} pageSize={pageSize} total={filteredTasks.length} pageSizeOptions={[20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
             </WorkspacePage>
-            <Modal title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
+            <Modal className="library-modal" title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
                 <Form form={form} layout="vertical" initialValues={{ operation: "agent_session" }}>
                     <Form.Item name="operation" label="任务类型" rules={[{ required: true, message: "请选择任务类型" }]}>
                         <Select options={operationOptions} />
@@ -447,7 +335,7 @@ export default function TasksPage() {
                     </Form.Item>
                 </Form>
             </Modal>
-            <Drawer title="任务详情" open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
+            <Drawer className="library-drawer" title="任务详情" open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
                 {detailTask ? (
                     <div className="space-y-5">
                         <div className="grid border-y border-border text-sm sm:grid-cols-2">
@@ -482,7 +370,7 @@ export default function TasksPage() {
                 centered
                 width="min(1040px, calc(100vw - 32px))"
                 destroyOnHidden
-                className="task-media-preview-modal"
+                className="library-modal task-media-preview-modal"
             >
                 {mediaPreview?.kind === "video"
                     ? <video src={mediaPreview.url} className="max-h-[76vh] w-full bg-black object-contain" controls playsInline preload="metadata" />
@@ -521,6 +409,44 @@ function TaskResultMedia({ value, taskType }: { value?: string; taskType: string
                     : <img key={`${url}-${index}`} src={url} alt={`生成结果 ${index + 1}`} className="aspect-square w-full rounded-md bg-black object-contain" />)}
             </div>
         </div>
+    );
+}
+
+function TaskListRow({ task, canvasById, projectNameById, effectiveConfig, creditsEnabled, actingId, onOpen, onRetry, onCancel, onPreview }: {
+    task: GenerationTask;
+    canvasById: Map<string, { title: string; projectId?: string }>;
+    projectNameById: Map<string, string>;
+    effectiveConfig: AiConfig;
+    creditsEnabled: boolean;
+    actingId: string;
+    onOpen: () => void;
+    onRetry: () => void;
+    onCancel: () => void;
+    onPreview: () => void;
+}) {
+    const context = getTaskCanvasContext(task, canvasById, projectNameById);
+    const isActive = task.status === "queued" || task.status === "running";
+    const isFailed = task.status === "failed" || task.status === "cancelled";
+    return (
+        <article className={`task-record-row group${isFailed ? " is-attention" : ""}`}>
+            <TaskPreviewThumbnail task={task} onOpen={onPreview} />
+            <div className="task-record-main">
+                <div className="task-record-heading">
+                    <button type="button" className="task-record-title" title={task.prompt} onClick={onOpen}>{task.prompt || "未命名任务"}</button>
+                    <span className={`task-record-status ${isFailed ? "is-failed" : isActive ? "is-active" : "is-success"}`}><i className={`size-1.5 rounded-full ${statusDotClassName(task.status)}`} />{statusLabel[task.status]}</span>
+                </div>
+                <div className="task-record-meta"><span>{formatTaskKind(task)}</span><span aria-hidden="true">·</span><span>{formatModelName(effectiveConfig, task)}</span><span aria-hidden="true">·</span><FolderKanban className="size-3" /><span className="truncate">{context.canvasName}{context.projectName ? ` · ${context.projectName}` : ""}</span></div>
+                {isActive ? <div className="task-record-progress"><span>{task.stage || "正在生成"}</span><span>{task.progress || 0}%</span><i><b style={{ width: `${task.progress || 0}%` }} /></i></div> : null}
+                {isFailed ? <p className="task-record-error" title={task.error ? generationErrorMessage(task.error) : undefined}>{taskAttentionReason(task)}</p> : null}
+            </div>
+            <div className="task-record-date"><TaskDate value={task.createdAt} /></div>
+            {creditsEnabled ? <TaskBilling billing={task.billing} /> : <span className="task-record-billing-empty" aria-hidden="true" />}
+            <div className="task-record-actions">
+                <Tooltip title="查看详情"><Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label="查看详情" onClick={onOpen} /></Tooltip>
+                {isFailed ? <Tooltip title="重试任务"><Button type="text" size="small" icon={<RotateCcw className="size-3.5" />} aria-label="重试任务" loading={actingId === task.id} disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)} onClick={onRetry} /></Tooltip> : null}
+                {isActive ? <Tooltip title="取消任务"><Button type="text" size="small" danger icon={<X className="size-3.5" />} aria-label="取消任务" loading={actingId === task.id} onClick={onCancel} /></Tooltip> : null}
+            </div>
+        </article>
     );
 }
 
@@ -612,18 +538,26 @@ function statusDotClassName(status: TaskStatus) {
     return "bg-foreground/30";
 }
 
+function taskMediaKind(task: GenerationTask): Exclude<TaskKindFilter, "all"> {
+    const value = `${task.type} ${task.operation || ""}`.toLowerCase();
+    if (value.includes("video") || value.includes("视频")) return "video";
+    if (value.includes("image") || value.includes("图片") || value.includes("画面")) return "image";
+    return "text";
+}
+
 function TaskDate({ value }: { value?: string }) {
     if (!value) return <span className="text-xs text-foreground/38">-</span>;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return <span className="text-xs text-foreground/38">-</span>;
-    return <div className="text-xs tabular-nums text-foreground/62"><div>{date.toLocaleDateString()}</div><div className="mt-1 text-[var(--fs-tiny)] text-foreground/38">{date.toLocaleTimeString()}</div></div>;
+    const compact = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+    return <time className="task-record-date-value" dateTime={date.toISOString()} title={date.toLocaleString()}>{compact}</time>;
 }
 
 function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }) {
-    if (!billing) return <span className="text-xs text-foreground/30">-</span>;
+    if (!billing) return <span className="task-record-billing-empty text-xs text-foreground/30">-</span>;
     const amount = formatCredits(billing.amountMicrocredits);
     const note = billing.status === "settled" ? "已结算" : billing.status === "refunded" ? "已退回" : billing.status === "uncertain" ? "待核对" : "预计";
-    return <div className="text-right"><div className="text-xs font-medium tabular-nums text-foreground/78">{amount}</div><div className={`mt-1 text-[var(--fs-tiny)] ${billing.status === "uncertain" ? "text-amber-600 dark:text-amber-300" : "text-foreground/38"}`}>{note}</div></div>;
+    return <div className={`task-record-billing ${billing.status === "uncertain" ? "is-uncertain" : ""}`} title={`积分${note}`}><Coins className="size-4" /><span><strong>{amount}</strong><small>{note}</small></span></div>;
 }
 
 function formatModelName(config: AiConfig, task: GenerationTask) {
