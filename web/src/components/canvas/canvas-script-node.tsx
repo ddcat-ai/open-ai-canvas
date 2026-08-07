@@ -143,6 +143,8 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     size="small"
                     value={viewMode}
                     options={[{ value: "table", label: "表格" }, { value: "card", label: "卡片" }]}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                     onChange={onViewModeChange}
                 />
                 {batch ? <>
