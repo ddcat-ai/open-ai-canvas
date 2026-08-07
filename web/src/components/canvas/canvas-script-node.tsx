@@ -342,13 +342,13 @@ function useStoryboardThumbUrl(imageNode?: CanvasNodeData) {
 function StoryboardCardThumb({ imageNode, imageState, theme }: { imageNode?: CanvasNodeData; imageState: StoryboardPipelineItemState; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const url = useStoryboardThumbUrl(imageNode);
     if (imageState === "loading") {
-        return <div className="grid h-[58px] w-[92px] shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.node.fill }}><LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" style={{ color: theme.accent.primary }} /></div>;
+        return <div className="grid h-14 w-24 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.node.fill }}><LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" style={{ color: theme.accent.primary }} /></div>;
     }
     if (imageState === "success" && url) {
-        return <img src={url} alt="分镜图" draggable={false} className="h-[58px] w-[92px] shrink-0 rounded-[var(--r-md)] border object-cover" style={{ borderColor: theme.node.stroke }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
+        return <img src={url} alt="分镜图" draggable={false} className="h-14 w-24 shrink-0 rounded-[var(--r-md)] border object-cover" style={{ borderColor: theme.node.stroke }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} />;
     }
     return (
-        <div className="grid h-[58px] w-[92px] shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.node.fill, color: imageState === "error" ? theme.accent.danger : theme.node.faint }}>
+        <div className="grid h-14 w-24 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.node.fill, color: imageState === "error" ? theme.accent.danger : theme.node.faint }}>
             {imageState === "error" ? <CircleAlert className="size-5" /> : <ImageIcon className="size-5" />}
         </div>
     );
