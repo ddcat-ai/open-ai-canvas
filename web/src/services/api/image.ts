@@ -812,6 +812,24 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
+    if (requestConfig.interfaceType === "grok-image") {
+        try {
+            const responseData = await postChannelJSON<ImageApiResponse>(
+                requestConfig,
+                aiApiUrl(requestConfig, "/images/generations"),
+                {
+                    model: requestConfig.model,
+                    prompt: withSystemPrompt(requestConfig, prompt),
+                    n,
+                    response_format: "url",
+                },
+                options,
+            );
+            return parseImagePayload(responseData);
+        } catch (error) {
+            throw new Error(readAxiosError(error, "Grok 图片生成失败"));
+        }
+    }
     const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
     const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
     const isVolcengineArk = requestConfig.interfaceType === "volcengine-ark-image";
@@ -853,6 +871,12 @@ async function postChannelJSON<T>(config: ReturnType<typeof resolveModelRequestC
     ).data;
 }
 
+async function grokImageInputURL(image: ReferenceImage) {
+    const candidate = image.url?.trim() || "";
+    if (/^https?:\/\//i.test(candidate)) return candidate;
+    return imageToDataUrl(image);
+}
+
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
@@ -867,6 +891,28 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             return await requestGeminiImages(requestConfig, requestPrompt, references, n, options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
+        }
+    }
+    if (requestConfig.interfaceType === "grok-image") {
+        if (mask) throw new Error("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试");
+        if (references.length !== 1) throw new Error("Grok 图片编辑必须提供且仅支持 1 张参考图");
+        try {
+            const imageUrl = await grokImageInputURL(references[0]);
+            const response = await postChannelJSON<ImageApiResponse>(
+                requestConfig,
+                aiApiUrl(requestConfig, "/images/edits"),
+                {
+                    model: requestConfig.model,
+                    prompt: withSystemPrompt(requestConfig, requestPrompt),
+                    image: { url: imageUrl },
+                    n,
+                    response_format: "url",
+                },
+                options,
+            );
+            return parseImagePayload(response);
+        } catch (error) {
+            throw new Error(readAxiosError(error, "Grok 图片编辑失败"));
         }
     }
     if (requestConfig.interfaceType === "volcengine-ark-image") {

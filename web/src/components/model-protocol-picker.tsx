@@ -146,7 +146,7 @@ function ProtocolBrandMark({ protocol, compact = false }: { protocol: ModelProto
     if (protocol.value.startsWith("volcengine-jimeng-")) return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Sparkles className={compact ? "size-3" : "size-4"} /></span>;
     if (protocol.value.startsWith("volcengine-")) return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Flame className={compact ? "size-3" : "size-4"} /></span>;
     if (protocol.value.startsWith("newapi-channel-")) return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Network className={compact ? "size-3" : "size-4"} /></span>;
-    const brand = protocol.value === "gemini-veo" ? "gemini" : protocol.value === "xai-video" ? "grok" : "openai";
+    const brand = protocol.value === "gemini-veo" ? "gemini" : protocol.value === "grok-image" || protocol.value === "xai-video" ? "grok" : "openai";
     return <BrandIconRow models={[brand]} compact={compact} />;
 }
 

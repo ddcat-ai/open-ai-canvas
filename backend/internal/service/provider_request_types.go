@@ -52,6 +52,18 @@ type xaiVideoImage struct {
 	URL string `json:"url"`
 }
 
+type grokImageRequest struct {
+	Model          string          `json:"model"`
+	Prompt         string          `json:"prompt"`
+	Image          *grokImageInput `json:"image,omitempty"`
+	N              int             `json:"n"`
+	ResponseFormat string          `json:"response_format"`
+}
+
+type grokImageInput struct {
+	URL string `json:"url"`
+}
+
 type geminiVeoRequest struct {
 	Instances  []geminiVeoInstance `json:"instances"`
 	Parameters geminiVeoParameters `json:"parameters"`

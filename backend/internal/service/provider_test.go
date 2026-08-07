@@ -104,6 +104,66 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 	}
 }
 
+func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/edits" {
+			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
+		}
+		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+			t.Errorf("Content-Type = %q, want application/json", contentType)
+		}
+		var body grokImageRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body.Model != "grok-imagine-image-quality" || body.N != 1 || body.ResponseFormat != "url" {
+			t.Fatalf("request body = %#v", body)
+		}
+		if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
+			t.Fatalf("image = %#v", body.Image)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.com/result.png"}]}`))
+	}))
+	defer server.Close()
+
+	result, err := runImageTask(context.Background(), canvasGenerationInput{
+		Mode:            "image",
+		Prompt:          "edit the reference",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "grok-imagine-image-quality", InterfaceType: "grok-image"},
+		ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
+	})
+	if err != nil {
+		t.Fatalf("runImageTask() error = %v", err)
+	}
+	images, _ := result["images"].([]map[string]string)
+	if len(images) != 1 || images[0]["dataUrl"] != "https://example.com/result.png" {
+		t.Fatalf("images = %#v", result["images"])
+	}
+}
+
+func TestGrokImageRequestBodyRejectsMaskAndMultipleReferences(t *testing.T) {
+	if _, _, err := grokImageRequestBody(canvasGenerationInput{Config: providerConfig{InterfaceType: "grok-image"}, Mask: &providerMedia{DataURL: testReferenceImageDataURL}}); err == nil || !strings.Contains(err.Error(), "不支持蒙版") {
+		t.Fatalf("mask error = %v", err)
+	}
+	if _, _, err := grokImageRequestBody(canvasGenerationInput{Config: providerConfig{InterfaceType: "grok-image"}, ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}, {DataURL: testReferenceImageDataURL}}}); err == nil || !strings.Contains(err.Error(), "只支持 1 张") {
+		t.Fatalf("multiple reference error = %v", err)
+	}
+}
+
+func TestGrokImageRequestBodyPrefersPublicURL(t *testing.T) {
+	body, path, err := grokImageRequestBody(canvasGenerationInput{
+		Config:          providerConfig{Model: "grok-imagine-image", InterfaceType: "grok-image"},
+		ReferenceImages: []providerMedia{{URL: "https://example.com/reference.png", DataURL: testReferenceImageDataURL}},
+	})
+	if err != nil {
+		t.Fatalf("grokImageRequestBody() error = %v", err)
+	}
+	if path != "/images/edits" || body.Image == nil || body.Image.URL != "https://example.com/reference.png" {
+		t.Fatalf("path = %q, image = %#v", path, body.Image)
+	}
+}
+
 func TestNormalizePixelSizeConvertsCanvasAspectRatios(t *testing.T) {
 	tests := map[string]string{
 		"1:1":  "1024x1024",
@@ -972,6 +1032,9 @@ func TestValidateGenerationInterfaceRejectsMismatchedType(t *testing.T) {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}
 	if err := validateGenerationInterface("video", "xai-video"); err != nil {
+		t.Fatalf("validateGenerationInterface() error = %v", err)
+	}
+	if err := validateGenerationInterface("image", "grok-image"); err != nil {
 		t.Fatalf("validateGenerationInterface() error = %v", err)
 	}
 }
