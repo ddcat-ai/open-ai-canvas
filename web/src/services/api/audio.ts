@@ -48,35 +48,6 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
     }
 }
 
-export async function transcribeAudio(config: AiConfig, blob: Blob, options?: RequestOptions): Promise<string> {
-    const requestConfig = resolveModelRequestConfig(config, config.audioModel || config.model);
-    const model = requestConfig.model.trim();
-    if (!model) throw new Error("请先配置支持语音转写的音频模型");
-    const formData = new FormData();
-    formData.append("file", blob, "recording.webm");
-    formData.append("model", model);
-    formData.append("language", "zh");
-    const headers: Record<string, string> = {};
-    if (requestConfig.apiKey.trim()) headers.Authorization = `Bearer ${requestConfig.apiKey}`;
-    if (isSystemProxyBaseUrl(config.baseUrl)) {
-        headers["X-Canvas-Scene"] = "audio";
-        headers["X-Idempotency-Key"] = createClientId();
-    }
-    const request = channelRequest(requestConfig, aiApiUrl(requestConfig, "/audio/transcriptions"), headers);
-    try {
-        const response = await axios.post<{ text?: string }>(request.url, formData, {
-            headers: request.headers,
-            withCredentials: request.credentials === "include",
-            signal: options?.signal,
-        });
-        const text = response.data?.text?.trim();
-        if (!text) throw new Error("语音转写未返回文本");
-        return text;
-    } catch (error) {
-        throw new Error(readAxiosError(error, "语音转写失败"));
-    }
-}
-
 async function requestAsyncAudioGeneration(config: AiConfig, payload: Record<string, unknown>, format: string, options?: RequestOptions) {
     const createRequest = channelRequest(config, aiApiUrl(config, "/audio/tasks"), aiHeaders(config));
     const created = await axios.post<Record<string, unknown>>(createRequest.url, payload, { headers: createRequest.headers, withCredentials: createRequest.credentials === "include", signal: options?.signal });

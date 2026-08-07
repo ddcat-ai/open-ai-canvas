@@ -5,10 +5,8 @@ import { Check, Mic, Square, X } from "lucide-react";
 import { AudioWaveform } from "./audio-waveform";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
-import { transcribeAudio } from "@/services/api/audio";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { useEffectiveConfig } from "@/stores/use-config-store";
 
 type VoiceRecordingInlineProps = {
     /** 转写完成回调，返回转写文本 */
@@ -25,7 +23,6 @@ type TranscribeState = "idle" | "transcribing" | "done" | "error";
  */
 export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecordingInlineProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const effectiveConfig = useEffectiveConfig();
     const {
         state,
         waveform,
@@ -69,18 +66,9 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
         stopRequestedRef.current = true;
         setTranscribeState("transcribing");
         setTranscribeError("");
-        const [text, blob] = await Promise.all([stopSpeech(), stopRecording()]);
-        let trimmed = text.trim();
-        if (!trimmed && blob) {
-            try {
-                trimmed = await transcribeAudio(effectiveConfig, blob);
-            } catch (error) {
-                setTranscribeError(error instanceof Error ? error.message : "语音转写失败，请重试");
-                setTranscribeState("error");
-                stopRequestedRef.current = false;
-                return;
-            }
-        }
+        const text = await stopSpeech();
+        void stopRecording();
+        const trimmed = text.trim();
         if (!trimmed) {
             setTranscribeError("未识别到语音内容，请重试");
             setTranscribeState("error");
@@ -120,7 +108,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
 
     return (
         <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border px-2 py-1.5"
+            className="flex min-w-0 max-w-full flex-1 items-center gap-2 rounded-lg border px-2 py-1.5"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
         >
             {displayError ? (
@@ -133,6 +121,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                             <Button
                                 type="text"
                                 size="small"
+                                className="!shrink-0"
                                 icon={<Mic className="size-3.5" />}
                                 onClick={handleRetry}
                                 style={{ color: theme.node.muted }}
@@ -143,6 +132,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            className="!shrink-0"
                             icon={<X className="size-3.5" />}
                             onClick={onCancel}
                             style={{ color: theme.node.muted }}
@@ -177,6 +167,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            className="!shrink-0"
                             icon={<X className="size-3.5" />}
                             onClick={() => {
                                 cancelRecording();
@@ -190,6 +181,7 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
                         <Button
                             type="text"
                             size="small"
+                            className="!shrink-0"
                             icon={<Square className="size-3.5" />}
                             onClick={handleStop}
                             disabled={state !== "recording" || transcribeState !== "idle"}
