@@ -27,15 +27,15 @@ type PromptTemplateVariable struct {
 }
 
 type PromptOperationDefinition struct {
-	Operation     string                   `json:"operation"`
-	Label         string                   `json:"label"`
-	Category      string                   `json:"category"`
-	Description   string                   `json:"description"`
-	OutputType    string                   `json:"outputType"`
-	SchemaKey     string                   `json:"schemaKey,omitempty"`
-	Variables     []PromptTemplateVariable `json:"variables"`
-	OutputContract string                 `json:"outputContract"`
-	DefaultContent string                 `json:"-"`
+	Operation      string                   `json:"operation"`
+	Label          string                   `json:"label"`
+	Category       string                   `json:"category"`
+	Description    string                   `json:"description"`
+	OutputType     string                   `json:"outputType"`
+	SchemaKey      string                   `json:"schemaKey,omitempty"`
+	Variables      []PromptTemplateVariable `json:"variables"`
+	OutputContract string                   `json:"outputContract"`
+	DefaultContent string                   `json:"-"`
 }
 
 type PromptTemplateRequest struct {
@@ -51,10 +51,10 @@ type UserPromptCustomizationRequest struct {
 }
 
 type UserPromptPreference struct {
-	Definition    PromptOperationDefinition       `json:"definition"`
-	Template      *model.PromptTemplate           `json:"template"`
+	Definition    PromptOperationDefinition      `json:"definition"`
+	Template      *model.PromptTemplate          `json:"template"`
 	Customization *model.UserPromptCustomization `json:"customization,omitempty"`
-	Outdated      bool                            `json:"outdated"`
+	Outdated      bool                           `json:"outdated"`
 }
 
 type CompiledPrompt struct {

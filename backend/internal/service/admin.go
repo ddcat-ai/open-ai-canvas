@@ -123,7 +123,7 @@ type PublicChannelModelPrice struct {
 	InputTokenPriceMicrocredits  int64                      `json:"inputTokenPriceMicrocredits"`
 	OutputTokenPriceMicrocredits int64                      `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits int64                      `json:"cachedTokenPriceMicrocredits"`
-	CapabilityConfig             *ModelCapabilityConfig      `json:"capabilityConfig,omitempty"`
+	CapabilityConfig             *ModelCapabilityConfig     `json:"capabilityConfig,omitempty"`
 }
 
 func (s *Service) RequireAdmin(user *model.User) error {

@@ -49,7 +49,10 @@ export type StyleProfileSnapshot = {
     revision: number;
 };
 
-export type StyleProfileSource = Pick<StyleProfileSnapshot, "presetId" | "title" | "description" | "tags" | "prompt"> & {
+export type StyleProfileSource = Pick<StyleProfileSnapshot, "title" | "description" | "tags" | "prompt"> & {
+    // 内置画风使用 id，持久化配置使用 presetId，两种来源在此统一归一化。
+    presetId?: string;
+    id?: string;
     negativePrompt?: string;
     coverUrl?: string;
     sourceProfileId?: string;
@@ -93,7 +96,7 @@ export type StyleExecutionPlan = {
 export function createStyleProfileSnapshot(source: StyleProfileSource): StyleProfileSnapshot {
     return {
         schemaVersion: 1,
-        presetId: source.presetId.trim(),
+        presetId: (source.presetId || source.id || "").trim(),
         title: source.title.trim(),
         description: source.description.trim(),
         tags: source.tags.map((tag) => tag.trim()).filter(Boolean),
@@ -102,15 +105,17 @@ export function createStyleProfileSnapshot(source: StyleProfileSource): StylePro
         coverUrl: source.coverUrl?.trim() || undefined,
         sourceProfileId: source.sourceProfileId?.trim() || undefined,
         selection: source.selection ? { ...source.selection } : undefined,
-        assets: source.assets ? source.assets.map((asset) => ({
-            ...asset,
-            parameters: asset.parameters ? { ...asset.parameters } : undefined,
-            license: asset.license ? { ...asset.license } : undefined,
-            baseModels: asset.baseModels ? [...asset.baseModels] : undefined,
-            triggerWords: asset.triggerWords ? [...asset.triggerWords] : undefined,
-            referenceUrls: asset.referenceUrls ? [...asset.referenceUrls] : undefined,
-            referenceResourceIds: asset.referenceResourceIds ? [...asset.referenceResourceIds] : undefined,
-        })) : [],
+        assets: source.assets
+            ? source.assets.map((asset) => ({
+                  ...asset,
+                  parameters: asset.parameters ? { ...asset.parameters } : undefined,
+                  license: asset.license ? { ...asset.license } : undefined,
+                  baseModels: asset.baseModels ? [...asset.baseModels] : undefined,
+                  triggerWords: asset.triggerWords ? [...asset.triggerWords] : undefined,
+                  referenceUrls: asset.referenceUrls ? [...asset.referenceUrls] : undefined,
+                  referenceResourceIds: asset.referenceResourceIds ? [...asset.referenceResourceIds] : undefined,
+              }))
+            : [],
         executionPolicy: source.executionPolicy || "compatible-fallback",
         source: source.source || "builtin",
         revision: source.revision || 1,
@@ -131,7 +136,16 @@ export function parseStyleProfile(value?: string | null): StyleProfileSnapshot |
     if (!raw || new TextEncoder().encode(raw).length > MAX_PROFILE_BYTES) return null;
     try {
         const parsed = JSON.parse(raw) as Partial<StyleProfileSnapshot>;
-        if (parsed.schemaVersion !== 1 || typeof parsed.presetId !== "string" || typeof parsed.title !== "string" || typeof parsed.description !== "string" || typeof parsed.prompt !== "string" || !Array.isArray(parsed.tags) || !Array.isArray(parsed.assets)) return null;
+        if (
+            parsed.schemaVersion !== 1 ||
+            typeof parsed.presetId !== "string" ||
+            typeof parsed.title !== "string" ||
+            typeof parsed.description !== "string" ||
+            typeof parsed.prompt !== "string" ||
+            !Array.isArray(parsed.tags) ||
+            !Array.isArray(parsed.assets)
+        )
+            return null;
         if (!parsed.tags.every((tag) => typeof tag === "string")) return null;
         if ([parsed.negativePrompt, parsed.coverUrl, parsed.sourceProfileId].some((value) => value !== undefined && typeof value !== "string")) return null;
         if (parsed.selection !== undefined && (!parsed.selection || typeof parsed.selection !== "object" || Array.isArray(parsed.selection) || !Object.values(parsed.selection).every((value) => typeof value === "string"))) return null;
@@ -243,18 +257,34 @@ function resolveAssetExecution(asset: StyleAssetBinding, context: StyleExecution
 function isStyleAssetBinding(value: unknown): value is StyleAssetBinding {
     if (!value || typeof value !== "object") return false;
     const asset = value as Partial<StyleAssetBinding>;
-    if (typeof asset.id !== "string" || typeof asset.kind !== "string" || !["lora", "template", "reference", "prompt"].includes(asset.kind) || typeof asset.provider !== "string" || typeof asset.title !== "string" || !["draft", "validated", "unavailable"].includes(String(asset.status))) return false;
+    if (
+        typeof asset.id !== "string" ||
+        typeof asset.kind !== "string" ||
+        !["lora", "template", "reference", "prompt"].includes(asset.kind) ||
+        typeof asset.provider !== "string" ||
+        typeof asset.title !== "string" ||
+        !["draft", "validated", "unavailable"].includes(String(asset.status))
+    )
+        return false;
     if (asset.enabled !== undefined && typeof asset.enabled !== "boolean") return false;
     if (asset.weight !== undefined && (!Number.isFinite(asset.weight) || asset.weight < 0 || asset.weight > 2)) return false;
     if (![asset.sourceId, asset.sourceUrl, asset.model, asset.version, asset.promptFragment].every(isOptionalString)) return false;
     if (![asset.baseModels, asset.triggerWords, asset.referenceUrls, asset.referenceResourceIds].every((values) => values === undefined || (Array.isArray(values) && values.every((item) => typeof item === "string")))) return false;
-    if (asset.parameters !== undefined && (!asset.parameters || typeof asset.parameters !== "object"
-        || !isOptionalString(asset.parameters.sampler) || !isOptionalString(asset.parameters.size)
-        || (asset.parameters.steps !== undefined && !Number.isInteger(asset.parameters.steps))
-        || (asset.parameters.cfg !== undefined && !Number.isFinite(asset.parameters.cfg)))) return false;
-    if (asset.license !== undefined && (!asset.license || typeof asset.license !== "object"
-        || (asset.license.commercial !== undefined && typeof asset.license.commercial !== "boolean")
-        || ![asset.license.note, asset.license.source, asset.license.capturedAt].every(isOptionalString))) return false;
+    if (
+        asset.parameters !== undefined &&
+        (!asset.parameters ||
+            typeof asset.parameters !== "object" ||
+            !isOptionalString(asset.parameters.sampler) ||
+            !isOptionalString(asset.parameters.size) ||
+            (asset.parameters.steps !== undefined && !Number.isInteger(asset.parameters.steps)) ||
+            (asset.parameters.cfg !== undefined && !Number.isFinite(asset.parameters.cfg)))
+    )
+        return false;
+    if (
+        asset.license !== undefined &&
+        (!asset.license || typeof asset.license !== "object" || (asset.license.commercial !== undefined && typeof asset.license.commercial !== "boolean") || ![asset.license.note, asset.license.source, asset.license.capturedAt].every(isOptionalString))
+    )
+        return false;
     return !styleAssetValidationMessage(asset as StyleAssetBinding);
 }
 

@@ -22,6 +22,8 @@ const (
 
 type providerCancellationOutcome string
 
+type geminiOperation map[string]any
+
 const (
 	providerCancellationPending   providerCancellationOutcome = "pending"
 	providerCancellationConfirmed providerCancellationOutcome = "confirmed"
@@ -213,7 +215,9 @@ func deleteProviderTask(ctx context.Context, config providerConfig, path string)
 func queryProviderCancellation(ctx context.Context, config providerConfig, providerRequestID string) (providerCancellationOutcome, string, error) {
 	switch config.InterfaceType {
 	case string(model.ChannelInterfaceGeminiVeo):
-		var operation map[string]any
+		// Gemini 用 operation.error 表示取消终态，此处必须保留该字段再判断，
+		// 不能让通用 JSON 解包提前把它转换成请求失败。
+		var operation geminiOperation
 		if err := getGeminiJSON(ctx, config, "/"+strings.TrimLeft(providerRequestID, "/"), &operation); err != nil {
 			return "", "", err
 		}
