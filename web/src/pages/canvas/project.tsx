@@ -1192,7 +1192,6 @@ function InfiniteCanvasPage() {
             }
             if (contentNode.type === CanvasNodeType.Script) {
                 const pipeline = deriveStoryboardPipelineProgress(contentNode, nodesRef.current, connectionsRef.current);
-                const rowIds = pipeline.rows.map((item) => item.row.id);
                 return (
                     <CanvasScriptNodeContent
                         node={contentNode}
@@ -1203,8 +1202,8 @@ function InfiniteCanvasPage() {
                         onOpen={() => setScriptEditorNodeId(contentNode.id)}
                         onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
                         onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
-                        onGenerateImages={() => void generateScriptImages(contentNode.id, rowIds)}
-                        onGenerateVideos={() => (contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds))}
+                        onGenerateImages={(rowIds) => void generateScriptImages(contentNode.id, rowIds)}
+                        onGenerateVideos={(rowIds) => (contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds))}
                         onVideoInputModeChange={(storyboardVideoInputMode) => handleConfigNodeChange(contentNode.id, { storyboardVideoInputMode })}
                         onMergeVideos={() => void mergeVideosByIds(pipeline.successfulVideoNodeIds)}
                         onCreateActionBoards={() => void createScriptActionBoards(contentNode.id)}
