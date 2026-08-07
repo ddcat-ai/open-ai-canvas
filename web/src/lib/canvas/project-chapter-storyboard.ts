@@ -84,5 +84,8 @@ function createChapterStoryboardNode(nodes: CanvasNodeData[], unit: Pick<Project
 }
 
 function validStoryboardHandle(handleId: string | undefined, validRowHandles: Set<string>) {
-    return !handleId || handleId === "storyboard:context" || validRowHandles.has(handleId);
+    if (!handleId) return true;
+    if (handleId === "storyboard:context" || handleId === "context") return true;
+    if (handleId.startsWith("storyboard:")) return true; // 五槽：story/characters/background/style/props
+    return validRowHandles.has(handleId);
 }

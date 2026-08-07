@@ -3,9 +3,10 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasReferenceRoleLabel, resolveConnectionRole } from "@/lib/canvas/canvas-generation-submission";
+import { storyboardSlotFromHandle, storyboardSlotHandleWorldY } from "@/lib/canvas/storyboard-input-slots";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/components/canvas/canvas-script-node";
-import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ConnectionHandle, type Position } from "@/types/canvas";
 
 export const ConnectionPath = React.memo(function ConnectionPath({
     connection,
@@ -137,7 +138,13 @@ export function activeConnectionPath(node: CanvasNodeData | undefined, handle: C
 }
 
 export function connectionHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0, anchorRatio?: number) {
-    if (handleId === "storyboard:context") return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
+    if (handleId === "storyboard:context" || handleId === "context") {
+        return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
+    }
+    if (handleId?.startsWith("storyboard:") && node.type === CanvasNodeType.Script) {
+        const slot = storyboardSlotFromHandle(handleId);
+        if (slot && slot !== "legacy") return storyboardSlotHandleWorldY(node, slot);
+    }
     if (!handleId?.startsWith("row:")) return node.position.y + node.height * normalizedAnchorRatio(anchorRatio);
     const rowId = handleId.slice(4);
     const index = (node.metadata?.storyboard?.rows || []).findIndex((row) => row.id === rowId);

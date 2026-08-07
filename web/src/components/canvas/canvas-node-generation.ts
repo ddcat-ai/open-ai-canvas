@@ -545,12 +545,16 @@ function readReferenceImage(node: CanvasNodeData): ReferenceImage | null {
 
 function readReferenceVideo(node: CanvasNodeData): ReferenceVideo | null {
     if (node.type !== CanvasNodeType.Video || !node.metadata?.content) return null;
+    const url = node.metadata.content;
+    const fromUrl = resourceIdFromFileUrl(url);
+    const storageKey = node.metadata.storageKey
+        || (fromUrl ? `resource:${fromUrl}` : undefined);
     return {
         id: node.id,
         name: `${node.title || node.id}.mp4`,
         type: node.metadata.mimeType || "video/mp4",
-        url: node.metadata.content,
-        storageKey: node.metadata.storageKey,
+        url,
+        storageKey,
         bytes: node.metadata.bytes,
         width: node.metadata.naturalWidth,
         height: node.metadata.naturalHeight,
@@ -560,12 +564,16 @@ function readReferenceVideo(node: CanvasNodeData): ReferenceVideo | null {
 
 function readReferenceAudio(node: CanvasNodeData): ReferenceAudio | null {
     if (node.type !== CanvasNodeType.Audio || !node.metadata?.content) return null;
+    const url = node.metadata.content;
+    const fromUrl = resourceIdFromFileUrl(url);
+    const storageKey = node.metadata.storageKey
+        || (fromUrl ? `resource:${fromUrl}` : undefined);
     return {
         id: node.id,
         name: `${node.title || node.id}.mp3`,
         type: node.metadata.mimeType || "audio/mpeg",
-        url: node.metadata.content,
-        storageKey: node.metadata.storageKey,
+        url,
+        storageKey,
         durationMs: node.metadata.durationMs,
     };
 }

@@ -13,9 +13,18 @@ import { pipelineStatusLabel, type CanvasStoryboardPipelineProgress, type Storyb
 import { generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
+import {
+    STORYBOARD_INPUT_SLOTS,
+    STORYBOARD_SLOT_HANDLE,
+    STORYBOARD_SLOT_LABEL,
+    collectStoryboardInputSlots,
+    storyboardInputSlotSummary,
+    storyboardSlotHandleLocalTops,
+} from "@/lib/canvas/storyboard-input-slots";
+import type { StoryboardPromptPreview } from "@/services/api/auth";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchItemStatus, CanvasNodeData, CanvasNodeStatus, CanvasWorkspaceMode, StoryboardColumn, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
+import type { CanvasConnection, CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchItemStatus, CanvasNodeData, CanvasNodeStatus, CanvasWorkspaceMode, StoryboardColumn, StoryboardInputSlot, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
 
 export const STORYBOARD_ROW_HEIGHT = 48;
 export const STORYBOARD_HEADER_HEIGHT = 124;
@@ -62,12 +71,15 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "负面要求", value: "negativePrompt" },
 ];
 
-export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
+export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, canvasNodes = [], canvasConnections = [], onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onPreviewPlannerPrompt, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
     node: CanvasNodeData;
     batch?: CanvasGenerationBatch;
     pipeline: CanvasStoryboardPipelineProgress;
     scale: number;
     mentionReferences: CanvasResourceReference[];
+    /** 用于五槽摘要；缺省则只显示口不统计 */
+    canvasNodes?: CanvasNodeData[];
+    canvasConnections?: CanvasConnection[];
     onOpen: () => void;
     onCreateImageNodes: () => void;
     onCreateVideoNodes: () => void;
@@ -85,11 +97,14 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     onUpdateRow: (rowId: string, patch: Partial<StoryboardRow>) => void;
     onPromptChange: (prompt: string) => void;
     onGenerateScript: (prompt: string) => void;
+    /** 与真实发送同一路径 compile 的完整规划 Prompt（模板+偏好+变量） */
+    onPreviewPlannerPrompt?: (prompt: string) => Promise<StoryboardPromptPreview>;
     onModelChange: (model: string) => void;
     onShotDurationChange: (duration: StoryboardShotDuration) => void;
     onShotCountChange: (count: StoryboardShotCount) => void;
     onComposerHeightChange: (height: number) => void;
-    onConnectStart: (event: ReactPointerEvent, rowId: string, handleType: "source" | "target") => void;
+    /** handleKey: 五槽 handleId（storyboard:*）或行 id */
+    onConnectStart: (event: ReactPointerEvent, handleKey: string, handleType: "source" | "target") => void;
     onScrollTopChange: (scrollTop: number) => void;
     workspaceMode?: CanvasWorkspaceMode;
 }) {
@@ -101,6 +116,10 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const rows = node.metadata?.storyboard?.rows || [];
     const [prompt, setPrompt] = useState(node.metadata?.composerContent || "");
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [plannerPrompt, setPlannerPrompt] = useState("");
+    const [plannerMode, setPlannerMode] = useState("");
+    const [plannerLoading, setPlannerLoading] = useState(false);
+    const [plannerError, setPlannerError] = useState("");
     const [scrollTop, setScrollTop] = useState(0);
     const composerHeightChangeRef = useRef(onComposerHeightChange);
     const reportedComposerHeightRef = useRef<number | null>(null);
@@ -132,6 +151,12 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const hasCharacterReferenceInBrief = /【角色参考：/.test(liveExpandedBrief);
     const mentionTokenCount = useMemo(() => (prompt.match(/@\[(?:node|skill):[^\]]+\]/g) || []).length, [prompt]);
     const briefChangedFromLast = Boolean(lastSubmissionPrompt && lastSubmissionPrompt !== liveExpandedBrief.trim());
+    const inputSlots = useMemo(
+        () => (canvasNodes.length ? collectStoryboardInputSlots(node.id, canvasNodes, canvasConnections) : null),
+        [canvasConnections, canvasNodes, node.id],
+    );
+    const slotSummary = useMemo(() => (inputSlots ? storyboardInputSlotSummary(inputSlots) : []), [inputSlots]);
+    const slotLocalTops = useMemo(() => storyboardSlotHandleLocalTops(composerHeight), [composerHeight]);
     const submitPrompt = () => {
         const value = prompt.trim();
         if (value && node.metadata?.status !== "loading") onGenerateScript(value);
@@ -139,16 +164,55 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const copyLiveBrief = async () => {
         try {
             await navigator.clipboard.writeText(liveExpandedBrief);
-            message.success("已复制将发送的 brief");
+            message.success("已复制 brief");
         } catch {
             message.error("复制失败");
         }
     };
+    const copyPlannerPrompt = async () => {
+        if (!plannerPrompt.trim()) {
+            message.warning("规划 Prompt 尚未加载");
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(plannerPrompt);
+            message.success("已复制完整规划 Prompt");
+        } catch {
+            message.error("复制失败");
+        }
+    };
+    const loadPlannerPreview = useCallback(async () => {
+        const raw = prompt.trim();
+        if (!raw) {
+            setPlannerPrompt("");
+            setPlannerMode("");
+            setPlannerError("请先填写 brief");
+            return;
+        }
+        if (!onPreviewPlannerPrompt) {
+            setPlannerError("当前环境未接入规划 Prompt 预览");
+            return;
+        }
+        setPlannerLoading(true);
+        setPlannerError("");
+        try {
+            const preview = await onPreviewPlannerPrompt(raw);
+            setPlannerPrompt(preview.plannerPrompt || "");
+            setPlannerMode(preview.customizationMode || "inherit");
+        } catch (error) {
+            setPlannerPrompt("");
+            setPlannerMode("");
+            setPlannerError(error instanceof Error ? error.message : "加载规划 Prompt 失败");
+        } finally {
+            setPlannerLoading(false);
+        }
+    }, [onPreviewPlannerPrompt, prompt]);
     useLayoutEffect(() => {
         composerHeightChangeRef.current = onComposerHeightChange;
     }, [onComposerHeightChange]);
     useEffect(() => {
         if (!previewOpen) return;
+        void loadPlannerPreview();
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
@@ -157,7 +221,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
         };
         window.addEventListener("keydown", onKeyDown, true);
         return () => window.removeEventListener("keydown", onKeyDown, true);
-    }, [previewOpen]);
+    }, [loadPlannerPreview, previewOpen]);
     const resizePrompt = useCallback((contentHeight: number) => {
         const promptHeight = Math.min(STORYBOARD_PROMPT_MAX_HEIGHT, Math.max(STORYBOARD_PROMPT_MIN_HEIGHT, contentHeight));
         // 输入区 + 「将发送」摘要条 + 底部控件
@@ -264,11 +328,12 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 >
                     <Eye className="size-3.5 shrink-0 opacity-70" />
                     <span className="text-[10px] leading-4">
-                        将发送
+                        五槽
+                        {slotSummary.length
+                            ? slotSummary.filter((item) => item.count > 0).map((item) => ` · ${item.label}${item.count}`).join("") || " · 未接线"
+                            : (activeReferenceCount ? ` · 可引用 ${activeReferenceCount}` : " · 未接线")}
                         {mentionTokenCount ? ` · @${mentionTokenCount}` : ""}
-                        {activeReferenceCount ? ` · 可引用 ${activeReferenceCount}` : " · 无可引用"}
                         {hasTextReferenceInBrief ? " · 含文本参考" : mentionTokenCount ? " · 文本未展开?" : ""}
-                        {hasCharacterReferenceInBrief ? " · 含角色" : ""}
                     </span>
                     <button
                         type="button"
@@ -349,14 +414,28 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                         onClick={submitPrompt}
                     />
                 </div>
-                <RowHandle side="left" top={composerHeight / 2} scale={scale} tone="idle" theme={theme} title="连接文本节点作为项目设定" onPointerDown={(event) => onConnectStart(event, "context", "target")} />
+                {STORYBOARD_INPUT_SLOTS.map((slot) => {
+                    const count = inputSlots?.[slot]?.length || 0;
+                    return (
+                        <SlotHandle
+                            key={slot}
+                            slot={slot}
+                            top={slotLocalTops[slot]}
+                            scale={scale}
+                            filled={count > 0}
+                            theme={theme}
+                            title={slotConnectTip(slot, count)}
+                            onPointerDown={(event) => onConnectStart(event, STORYBOARD_SLOT_HANDLE[slot], "target")}
+                        />
+                    );
+                })}
             </div>
             {rows.map((row, index) => {
                 const top = STORYBOARD_HEADER_HEIGHT + index * STORYBOARD_ROW_HEIGHT + STORYBOARD_ROW_HEIGHT / 2 - scrollTop;
                 if (top < STORYBOARD_HEADER_HEIGHT + 4 || top > STORYBOARD_HEADER_HEIGHT + tableHeight - 4) return null;
                 return (
                     <div key={`ports-${row.id}`}>
-                        <RowHandle side="left" top={top} scale={scale} tone={batchItemTone(batchItemByRowId.get(row.id)) || row.status} theme={theme} onPointerDown={(event) => onConnectStart(event, row.id, "target")} />
+                        <RowHandle side="left" top={top} scale={scale} tone={batchItemTone(batchItemByRowId.get(row.id)) || row.status} theme={theme} title="本镜额外参考" onPointerDown={(event) => onConnectStart(event, row.id, "target")} />
                         <RowHandle side="right" top={top} scale={scale} tone={batchItemTone(batchItemByRowId.get(row.id)) || row.status} theme={theme} onPointerDown={(event) => onConnectStart(event, row.id, "source")} />
                     </div>
                 );
@@ -368,7 +447,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                         data-canvas-no-zoom
                         role="dialog"
                         aria-modal="true"
-                        aria-label="自动分镜发送前 brief"
+                        aria-label="自动分镜发送前预览"
                         style={{ background: "rgba(0,0,0,0.48)" }}
                         onMouseDown={(event) => {
                             // 点遮罩关闭；点内容不关
@@ -383,7 +462,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                         onWheel={(event) => event.stopPropagation()}
                     >
                         <div
-                            className="ant-modal-content flex max-h-[min(82vh,760px)] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border shadow-2xl backdrop-blur-2xl"
+                            className="ant-modal-content flex max-h-[min(88vh,900px)] w-[min(860px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border shadow-2xl backdrop-blur-2xl"
                             style={{
                                 borderColor: theme.node.stroke,
                                 background: theme.node.panel,
@@ -394,12 +473,12 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             onClick={(event) => event.stopPropagation()}
                         >
                             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
-                                <div className="min-w-0 flex-1 text-sm font-semibold">自动分镜 · 发送前 brief</div>
+                                <div className="min-w-0 flex-1 text-sm font-semibold">自动分镜 · 发送前预览</div>
                                 <button
                                     type="button"
                                     className="grid size-8 place-items-center rounded-md outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
                                     style={{ color: theme.node.muted, "--tw-ring-color": theme.accent.primary } as CSSProperties}
-                                    aria-label="关闭 brief 预览"
+                                    aria-label="关闭预览"
                                     onMouseDown={(event) => event.stopPropagation()}
                                     onClick={(event) => {
                                         event.preventDefault();
@@ -412,30 +491,80 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             </div>
                             <div className="thin-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
                                 <div className="rounded-md border px-3 py-2 text-[11px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
-                                    这是点发送前会实际交给模型的 brief（已展开 @）。
-                                    {hasTextReferenceInBrief ? " 已检测到【文本参考】。" : mentionTokenCount ? " 有 @，但未见【文本参考】展开，请检查引用节点是否仍有正文。" : " 当前没有 @ 文本引用。"}
-                                    {hasCharacterReferenceInBrief ? " 已含角色参考。" : ""}
+                                    五槽输入白盒：正文进 plan；角色下游必送；背景/画风/道具下游默认可送可关；正文不进动作板/图/视频。
+                                    {hasTextReferenceInBrief ? " 已检测到【文本参考】。" : mentionTokenCount ? " 有 @，但未见【文本参考】展开。" : ""}
                                 </div>
+                                {slotSummary.length ? (
+                                    <div>
+                                        <div className="mb-1 text-xs font-medium opacity-70">输入槽</div>
+                                        <div className="grid gap-1.5 sm:grid-cols-2">
+                                            {slotSummary.map((item) => (
+                                                <div key={item.slot} className="rounded-md border px-2 py-1.5 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                                    <span className="font-medium" style={{ color: theme.node.text }}>{item.label}</span>
+                                                    {" · "}
+                                                    {item.count ? item.titles.join("、") + (item.count > item.titles.length ? ` 等${item.count}个` : "") : "未连接"}
+                                                    {item.slot === "story" ? "（下游不送）" : item.slot === "characters" ? "（下游必送）" : "（下游默认可关）"}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {inputSlots?.legacyContext?.length ? (
+                                            <div className="mt-1.5 text-[11px]" style={{ color: theme.accent.danger }}>
+                                                有 {inputSlots.legacyContext.length} 条旧连接未归类，请拖到正确输入口。
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                                 <div>
-                                    <div className="mb-1 text-xs font-medium opacity-70">将发送（@ 已展开）</div>
-                                    <pre className="thin-scrollbar max-h-[40vh] overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[12px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                    <div className="mb-1 text-xs font-medium opacity-70">① Brief（写入模板「剧情」变量，@ 已展开）</div>
+                                    <pre className="thin-scrollbar max-h-[22vh] overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[12px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
                                         {liveExpandedBrief.trim() || "（空）"}
                                     </pre>
+                                </div>
+                                <div>
+                                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium opacity-70">
+                                        <span>② 最终规划 Prompt（进模型）</span>
+                                        {plannerLoading ? <span style={{ color: theme.accent.primary }}>加载中…</span> : null}
+                                        {!plannerLoading && plannerMode ? (
+                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-normal" style={{ background: theme.node.fill, color: theme.node.muted, border: `1px solid ${theme.node.stroke}` }}>
+                                                偏好：{plannerMode === "append" ? "追加 append" : plannerMode === "rewrite" ? "重写 rewrite" : "继承平台模板 inherit"}
+                                            </span>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="ml-auto text-[10px] outline-none transition hover:opacity-80"
+                                            style={{ color: theme.accent.primary }}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                void loadPlannerPreview();
+                                            }}
+                                        >
+                                            刷新
+                                        </button>
+                                    </div>
+                                    {plannerError ? (
+                                        <div className="rounded-md border px-3 py-2 text-[12px] leading-5" style={{ borderColor: theme.accent.danger, color: theme.accent.danger, background: theme.node.fill }}>
+                                            {plannerError}
+                                        </div>
+                                    ) : (
+                                        <pre className="thin-scrollbar max-h-[38vh] overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[12px] leading-5" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                            {plannerLoading ? "正在 compile 规划 Prompt…" : (plannerPrompt.trim() || "（空）")}
+                                        </pre>
+                                    )}
                                 </div>
                                 {lastSubmissionPrompt ? (
                                     <div>
                                         <div className="mb-1 text-xs font-medium opacity-70">
-                                            上次已发送
+                                            上次已发送 brief
                                             {lastSubmissionAt ? ` · ${new Date(lastSubmissionAt).toLocaleString()}` : ""}
                                             {briefChangedFromLast ? " · 与当前不同" : " · 与当前相同"}
                                         </div>
-                                        <pre className="thin-scrollbar max-h-40 overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[11px] leading-5 opacity-80" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
+                                        <pre className="thin-scrollbar max-h-32 overflow-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-[11px] leading-5 opacity-80" style={{ borderColor: theme.node.stroke, background: theme.node.fill, color: theme.node.muted }}>
                                             {lastSubmissionPrompt}
                                         </pre>
                                     </div>
                                 ) : null}
                             </div>
-                            <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-3" style={{ borderColor: theme.node.stroke }}>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                                 <Button
                                     icon={<Copy className="size-3.5" />}
                                     onMouseDown={(event) => event.stopPropagation()}
@@ -444,7 +573,18 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                                         void copyLiveBrief();
                                     }}
                                 >
-                                    复制将发送
+                                    复制 Brief
+                                </Button>
+                                <Button
+                                    icon={<Copy className="size-3.5" />}
+                                    disabled={!plannerPrompt.trim()}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void copyPlannerPrompt();
+                                    }}
+                                >
+                                    复制规划 Prompt
                                 </Button>
                                 <Button
                                     onMouseDown={(event) => event.stopPropagation()}
@@ -713,6 +853,48 @@ function SmallButton({ title, children, onClick }: { title: string; children: Re
 
 function editorRow(shotNumber: number): StoryboardRow {
     return { id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, shotNumber, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], narrativeIntent: "", viewerPOV: "", performanceBlocking: "", shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", mustHave: [], optionalDetails: [], continuityOut: "", negativePrompt: "", referenceNodeIds: [], status: "idle" };
+}
+
+function slotConnectTip(slot: StoryboardInputSlot, count: number) {
+    const base = {
+        story: "正文：章节/剧情文本 → 仅自动分镜用，下游图视频默认不送",
+        characters: "角色：角色卡 → 分镜 + 下游图/视频必送",
+        background: "背景：场景文/图 → 分镜用；下游默认可送可关",
+        style: "画风：项目画风 → 自动分镜建议必连；下游默认可送可关",
+        props: "道具：道具/参考图 → 分镜资产；下游默认可送可关",
+    }[slot];
+    return count ? `${STORYBOARD_SLOT_LABEL[slot]} · 已连 ${count} · ${base}` : `${STORYBOARD_SLOT_LABEL[slot]} · ${base}`;
+}
+
+function SlotHandle({ slot, top, scale, filled, theme, title, onPointerDown }: {
+    slot: StoryboardInputSlot;
+    top: number;
+    scale: number;
+    filled: boolean;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    title: string;
+    onPointerDown: (event: ReactPointerEvent) => void;
+}) {
+    const inverseHitScale = 1 / Math.max(scale, 0.05);
+    const color = filled ? theme.accent.primary : theme.node.muted;
+    return (
+        <button
+            type="button"
+            aria-label={title}
+            title={title}
+            className="canvas-connection-handle absolute z-50 flex -translate-y-1/2 -translate-x-1/2 cursor-pointer items-center gap-0.5 rounded-full outline-none focus-visible:ring-2 left-0"
+            style={{ top, height: 28 * inverseHitScale, paddingLeft: 2 * inverseHitScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
+            onPointerDown={onPointerDown}
+        >
+            <span
+                className="pointer-events-none max-w-[36px] truncate rounded px-0.5 text-[9px] font-semibold leading-none"
+                style={{ color: theme.node.muted, transform: `scale(${inverseHitScale})`, transformOrigin: "right center" }}
+            >
+                {STORYBOARD_SLOT_LABEL[slot]}
+            </span>
+            <span className="block size-2.5 shrink-0 rounded-full border-2 shadow-sm transition-transform hover:scale-110" style={{ boxSizing: "border-box", borderColor: theme.node.panel, background: color }} />
+        </button>
+    );
 }
 
 function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { side: "left" | "right"; top: number; scale: number; tone?: StoryboardRow["status"]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; title?: string; onPointerDown: (event: ReactPointerEvent) => void }) {

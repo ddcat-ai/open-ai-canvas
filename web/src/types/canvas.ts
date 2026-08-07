@@ -30,6 +30,20 @@ export type CanvasToolMode = "move" | "box-select";
 export type StoryboardShotDuration = "auto" | "5" | "10" | "15" | "30";
 export type StoryboardShotCount = "auto" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type StoryboardVideoInputMode = "direct" | "keyframe";
+/** 分镜脚本节点五槽输入：正文 / 角色 / 背景 / 画风 / 道具 */
+export type StoryboardInputSlot = "story" | "characters" | "background" | "style" | "props";
+export type StoryboardDownstreamStage = "action_board" | "image" | "video";
+export type StoryboardInputPolicy = {
+    backgroundToActionBoard?: boolean;
+    backgroundToImage?: boolean;
+    backgroundToVideo?: boolean;
+    styleToActionBoard?: boolean;
+    styleToImage?: boolean;
+    styleToVideo?: boolean;
+    propsToActionBoard?: boolean;
+    propsToImage?: boolean;
+    propsToVideo?: boolean;
+};
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasGenerationBatchMode = "storyboard_image" | "storyboard_video" | "action_board";
 export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed" | "completed" | "cancelled";
@@ -249,6 +263,8 @@ export type CanvasNodeMetadata = {
     storyboardShotCount?: StoryboardShotCount;
     storyboardVideoInputMode?: StoryboardVideoInputMode;
     storyboardComposerHeight?: number;
+    /** 分镜五槽输入下游转发策略（角色恒送、正文恒不送下游） */
+    storyboardInputPolicy?: StoryboardInputPolicy;
     generationBatches?: CanvasGenerationBatch[];
     frame?: {
         collapsed: boolean;

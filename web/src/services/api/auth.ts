@@ -470,6 +470,26 @@ export function resetUserPromptCustomization(operation: string) {
     return request<{ ok: boolean }>(api.delete(`/settings/prompt-templates/${encodeURIComponent(operation)}`));
 }
 
+export type StoryboardPromptPreview = {
+    operation: string;
+    brief: string;
+    plannerPrompt: string;
+    customizationMode?: "inherit" | "append" | "rewrite" | string;
+};
+
+/** 与后端自动分镜同一 compile 路径，预览「分镜规划模板 + 用户偏好」后的完整 prompt。 */
+export function previewStoryboardPlannerPrompt(input: {
+    prompt: string;
+    requirements?: string;
+    canvasAssets?: Array<{ id: string; title: string; type: string; tags?: string[]; prompt?: string }>;
+    projectStyle: { presetId: string; title: string; prompt: string };
+    characters: Array<{ assetId: string; versionId: string; name: string; definition?: Record<string, unknown> }>;
+    shotDurationSeconds?: number;
+    shotCount?: number;
+}) {
+    return request<{ preview: StoryboardPromptPreview }>(api.post("/storyboard/prompt-preview", input));
+}
+
 export function getAdminOSSSetting() {
     return request<{ setting: AdminOSSSetting }>(api.get("/admin/settings/oss"));
 }

@@ -1,6 +1,6 @@
-import { getMediaBlob } from "@/services/file-storage";
+import { getMediaBlob, resolveMediaUrl } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
-import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { isResourceUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -104,20 +104,79 @@ async function createAndWaitGenerationTask({ projectId, mode, prompt, config, re
     return parseBackendGenerationResult(completed);
 }
 
+/** 从 url / storageKey 恢复 resource id（兼容 /api/resources/{id}/file 相对路径）。 */
+function resourceIdFromMediaRef(media: { storageKey?: string; url?: string }) {
+    const fromKey = resourceIdFromStorageKey(media.storageKey);
+    if (fromKey) return fromKey;
+    const url = String(media.url || "").trim();
+    if (!url) return "";
+    const match = url.match(/\/resources\/([^/?#]+)\/file/);
+    return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
+function mediaKindLabel(media: ReferenceVideo | ReferenceAudio) {
+    if (media.type?.startsWith("video/") || ("width" in media && "height" in media)) return "参考视频";
+    if (media.type?.startsWith("audio/")) return "参考音频";
+    return "参考媒体";
+}
+
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {
-    if (resourceIdFromStorageKey(media.storageKey)) return backendMediaReference(media, { storageKey: media.storageKey });
-    const url = media.url || "";
-    if (/^https?:\/\//i.test(url)) return backendMediaReference(media, { url });
+    // 1) 已是后端资源：只传 storageKey，由服务端 hydrate（local-h3 会读成 data URL 再 multipart）
+    const resourceId = resourceIdFromMediaRef(media);
+    if (resourceId) {
+        return backendMediaReference(media, { storageKey: resourceStorageKey(resourceId) });
+    }
+
+    const url = String(media.url || "").trim();
+    // 2) 公网 http(s)（排除本站 resource 代理，已在上面处理）
+    if (/^https?:\/\//i.test(url) && !isResourceUrl(url) && !url.includes("/resources/")) {
+        return backendMediaReference(media, { url });
+    }
+
+    // 3) 本地 blob / data / localforage key → 读出后上传为 resource
     let blob: Blob | null = null;
-    if (media.storageKey) blob = await getMediaBlob(media.storageKey);
-    if (!blob && (url.startsWith("blob:") || url.startsWith("data:"))) blob = await (await fetch(url)).blob();
-    if (!blob) throw new Error("参考媒体尚未保存，请重新上传后再生成");
+    if (media.storageKey) {
+        blob = await getMediaBlob(media.storageKey);
+    }
+    if (!blob && (url.startsWith("blob:") || url.startsWith("data:"))) {
+        try {
+            blob = await (await fetch(url)).blob();
+        } catch {
+            blob = null;
+        }
+    }
+    // local key 可能只在 resolveMediaUrl 里能重建 object URL
+    if (!blob && media.storageKey) {
+        const resolved = await resolveMediaUrl(media.storageKey, "");
+        if (resolved) {
+            try {
+                blob = await (await fetch(resolved)).blob();
+            } catch {
+                blob = null;
+            }
+        }
+    }
+    if (!blob) {
+        throw new Error(`${mediaKindLabel(media)}尚未保存，请重新上传后再生成`);
+    }
     try {
-        const kind: "video" | "audio" | "file" = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
-        const resource = await uploadResourceFile(blob, kind, { fileName: media.name, width: "width" in media ? media.width : undefined, height: "height" in media ? media.height : undefined, durationMs: media.durationMs });
-        return backendMediaReference(media, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || media.type || blob.type });
+        const kind: "video" | "audio" | "file" = blob.type.startsWith("video/") || media.type?.startsWith("video/")
+            ? "video"
+            : blob.type.startsWith("audio/") || media.type?.startsWith("audio/")
+              ? "audio"
+              : "file";
+        const resource = await uploadResourceFile(blob, kind, {
+            fileName: media.name,
+            width: "width" in media ? media.width : undefined,
+            height: "height" in media ? media.height : undefined,
+            durationMs: media.durationMs,
+        });
+        return backendMediaReference(media, {
+            storageKey: resourceStorageKey(resource.id),
+            type: resource.mimeType || media.type || blob.type,
+        });
     } catch (error) {
-        throw new Error(error instanceof Error ? `参考媒体上传失败：${error.message}` : "参考媒体上传失败");
+        throw new Error(error instanceof Error ? `${mediaKindLabel(media)}上传失败：${error.message}` : `${mediaKindLabel(media)}上传失败`);
     }
 }
 

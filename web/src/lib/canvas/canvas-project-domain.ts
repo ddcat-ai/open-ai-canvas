@@ -5,6 +5,7 @@ import type { NodeGenerationInput } from "@/components/canvas/canvas-node-genera
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { nearestStoryboardSlotHandle, storyboardSlotFromHandle, storyboardSlotHandleWorldY } from "@/lib/canvas/storyboard-input-slots";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import type { GenerationTask } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type ConnectionHandle, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
@@ -153,14 +154,19 @@ export function storyboardHandleAtY(node: CanvasNodeData, worldY: number, scroll
         const index = Math.max(0, Math.min(rows.length - 1, Math.floor((localY + scrollTop) / STORYBOARD_ROW_HEIGHT)));
         return `row:${rows[index].id}`;
     }
-    const composerTop = node.height - (node.metadata?.storyboardComposerHeight || 104);
-    if (worldY >= node.position.y + composerTop && worldY <= node.position.y + node.height) return "storyboard:context";
-    return undefined;
+    // composer 区：按 Y 吸附到最近的五槽口（禁止写死画风）
+    return nearestStoryboardSlotHandle(node, worldY) || undefined;
 }
 
 function storyboardHandleY(node: CanvasNodeData, handleId?: string, scrollTop = 0) {
     if (node.type !== CanvasNodeType.Script) return undefined;
-    if (handleId === "storyboard:context") return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
+    if (handleId === "storyboard:context" || handleId === "context") {
+        return node.position.y + node.height - (node.metadata?.storyboardComposerHeight || 104) / 2;
+    }
+    if (handleId?.startsWith("storyboard:")) {
+        const slot = storyboardSlotFromHandle(handleId);
+        if (slot && slot !== "legacy") return storyboardSlotHandleWorldY(node, slot);
+    }
     if (!handleId?.startsWith("row:")) return undefined;
     const rowId = handleId.slice(4);
     const index = (node.metadata?.storyboard?.rows || []).findIndex((row) => row.id === rowId);
@@ -183,8 +189,9 @@ export function normalizeConnection(firstNodeId: string, secondNodeId: string, n
 }
 
 export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: Pick<CanvasConnection, "fromNodeId" | "toNodeId" | "fromHandleId" | "toHandleId">) {
-    const fromStoryboardHandle = connection.fromHandleId?.startsWith("row:") || connection.fromHandleId === "storyboard:context";
-    const toStoryboardHandle = connection.toHandleId?.startsWith("row:") || connection.toHandleId === "storyboard:context";
+    const isScriptHandle = (handleId?: string) => Boolean(handleId && (handleId.startsWith("row:") || handleId.startsWith("storyboard:") || handleId === "context"));
+    const fromStoryboardHandle = isScriptHandle(connection.fromHandleId);
+    const toStoryboardHandle = isScriptHandle(connection.toHandleId);
     const scriptNodeId = fromStoryboardHandle ? connection.fromNodeId : toStoryboardHandle ? connection.toNodeId : null;
     const handleId = connection.fromHandleId || connection.toHandleId;
     const rowId = handleId?.startsWith("row:") ? handleId.slice(4) : null;
@@ -210,7 +217,9 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
                         ? { ...item, imageNodeId: linkedNode.type === CanvasNodeType.Image ? linkedNode.id : item.imageNodeId, videoNodeId: linkedNode.type === CanvasNodeType.Video ? linkedNode.id : item.videoNodeId }
                         : { ...item, referenceNodeIds: Array.from(new Set([...(item.referenceNodeIds || []), linkedNode.id])) }),
                     visibleColumns: storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
-                    referenceNodeIds: handleId === "storyboard:context" ? Array.from(new Set([...(storyboard?.referenceNodeIds || []), linkedNode.id])) : storyboard?.referenceNodeIds || [],
+                    referenceNodeIds: handleId && (handleId.startsWith("storyboard:") || handleId === "context")
+                        ? Array.from(new Set([...(storyboard?.referenceNodeIds || []), linkedNode.id]))
+                        : storyboard?.referenceNodeIds || [],
                 },
             },
         };

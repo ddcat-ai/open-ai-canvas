@@ -1158,6 +1158,7 @@ function InfiniteCanvasPage() {
         generateScriptRows,
         generateScriptVideos,
         generateVideoFromActionBoard,
+        previewScriptPlannerPrompt,
         removeScriptRow,
         replaceScriptRows,
         updateScriptRow,
@@ -1282,6 +1283,8 @@ function InfiniteCanvasPage() {
                     pipeline={pipeline}
                     scale={viewport.k}
                     mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || EMPTY_RESOURCE_REFERENCES}
+                    canvasNodes={nodesRef.current}
+                    canvasConnections={connectionsRef.current}
                     onOpen={() => setScriptEditorNodeId(contentNode.id)}
                     onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
                     onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
@@ -1299,6 +1302,7 @@ function InfiniteCanvasPage() {
                     onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
                     onPromptChange={(composerContent) => handleConfigNodeChange(contentNode.id, { composerContent })}
                     onGenerateScript={(prompt) => void generateScriptRows(contentNode.id, prompt)}
+                    onPreviewPlannerPrompt={(prompt) => previewScriptPlannerPrompt(contentNode.id, prompt)}
                     onModelChange={(model) => handleConfigNodeChange(contentNode.id, { model })}
                     onShotDurationChange={(duration: StoryboardShotDuration) => handleConfigNodeChange(contentNode.id, { storyboardShotDuration: duration })}
                     onShotCountChange={(count: StoryboardShotCount) => handleConfigNodeChange(contentNode.id, { storyboardShotCount: count })}
@@ -1309,7 +1313,12 @@ function InfiniteCanvasPage() {
                         const minHeight = storyboardMinNodeHeight(height);
                         if (contentNode.height < minHeight) handleNodeResize(contentNode.id, contentNode.width, minHeight);
                     }}
-                    onConnectStart={(event, rowId, handleType) => handleConnectStart(event, contentNode.id, handleType, rowId === "context" ? "storyboard:context" : `row:${rowId}`)}
+                    onConnectStart={(event, handleKey, handleType) => {
+                        const handleId = handleKey.startsWith("storyboard:") || handleKey.startsWith("row:")
+                            ? handleKey
+                            : `row:${handleKey}`;
+                        handleConnectStart(event, contentNode.id, handleType, handleId);
+                    }}
                     onScrollTopChange={(scrollTop) => setScriptScrollTopById((current) => current[contentNode.id] === scrollTop ? current : { ...current, [contentNode.id]: scrollTop })}
                 />
             );
@@ -1340,7 +1349,7 @@ function InfiniteCanvasPage() {
                 workspaceMode={workspaceMode}
             />
         );
-    }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, updateScriptRow, viewport.k, workspaceMode]);
+    }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, previewScriptPlannerPrompt, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, updateScriptRow, viewport.k, workspaceMode]);
 
     const handleCanvasNodeHoverStart = useCallback((nodeId: string) => {
         if (nodeDraggingRef.current) return;

@@ -47,7 +47,18 @@ export async function resolveMediaUrl(storageKey?: string, fallback = "") {
 
 export async function getMediaBlob(storageKey: string) {
     if (resourceIdFromStorageKey(storageKey)) return getCachedResourceBlob(storageKey);
-    return store.getItem<Blob>(storageKey);
+    const fromStore = await store.getItem<Blob>(storageKey);
+    if (fromStore) return fromStore;
+    // 同源会话里可能只剩 object URL（store 被淘汰/异常），尽量从内存 URL 再取回 blob。
+    const cachedUrl = objectUrls.get(storageKey);
+    if (cachedUrl) {
+        try {
+            return await (await fetch(cachedUrl)).blob();
+        } catch {
+            return null;
+        }
+    }
+    return null;
 }
 
 export async function setMediaBlob(storageKey: string, blob: Blob) {

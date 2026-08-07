@@ -3,7 +3,74 @@ package service
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
+
+func TestPreviewStoryboardPlannerPromptCompilesWithUserAppend(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:storyboard_preview?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}, &model.UserPromptCustomization{}, &model.PromptTemplate{}); err != nil {
+		t.Fatal(err)
+	}
+	user := &model.User{ID: "user-preview-1", Username: "preview", DisplayName: "Preview", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(user).Error; err != nil {
+		t.Fatal(err)
+	}
+	custom := &model.UserPromptCustomization{
+		ID:        "cust-1",
+		UserID:    user.ID,
+		Operation: promptOperationStoryboardPlan,
+		Mode:      promptCustomizationAppend,
+		Content:   "【测试偏好】必须强调喜剧反应镜头。",
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := db.Create(custom).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+	result, err := svc.PreviewStoryboardPlannerPrompt(user, StoryboardPromptPreviewRequest{
+		Prompt:       "男主推门进屋，看到桌上的信。",
+		Requirements: "输出可编辑分镜表",
+		ProjectStyle: storyboardProjectStyle{PresetID: "style-1", Title: "写实", Prompt: "电影感写实光影"},
+		Characters: []storyboardCharacterCard{{
+			AssetID: "char-1", VersionID: "ver-1", Name: "男主", Definition: map[string]any{"prompt": "黑发青年"},
+		}},
+		CanvasAssets: []storyboardAsset{{
+			ID: "text-1", Title: "设定", Type: "text", Prompt: "故事发生在雨夜公寓",
+		}},
+		ShotDurationSeconds: 5,
+		ShotCount:           3,
+	})
+	if err != nil {
+		t.Fatalf("PreviewStoryboardPlannerPrompt: %v", err)
+	}
+	if result.Operation != promptOperationStoryboardPlan {
+		t.Fatalf("operation = %s", result.Operation)
+	}
+	if result.CustomizationMode != promptCustomizationAppend {
+		t.Fatalf("customizationMode = %s", result.CustomizationMode)
+	}
+	if !strings.Contains(result.PlannerPrompt, "男主推门进屋") {
+		t.Fatalf("planner prompt missing brief: %s", result.PlannerPrompt)
+	}
+	if !strings.Contains(result.PlannerPrompt, "【测试偏好】必须强调喜剧反应镜头。") {
+		t.Fatalf("planner prompt missing user append preference: %s", result.PlannerPrompt)
+	}
+	if !strings.Contains(result.PlannerPrompt, "电影感写实光影") {
+		t.Fatalf("planner prompt missing project style: %s", result.PlannerPrompt)
+	}
+	if !strings.Contains(result.PlannerPrompt, "严格等于 5 秒") && !strings.Contains(result.PlannerPrompt, "5 秒") {
+		t.Fatalf("planner prompt missing duration rule: %s", result.PlannerPrompt)
+	}
+}
 
 func TestStoryboardCinematicQualityContractIncludesRequestedCountAndDuration(t *testing.T) {
 	contract := storyboardCinematicQualityContract(30, 7)

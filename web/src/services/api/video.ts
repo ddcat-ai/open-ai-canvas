@@ -165,11 +165,25 @@ async function pollLocalH3VideoTask(config: ResolvedAiConfig, task: VideoGenerat
 
 async function mediaReferenceToFile(media: ReferenceVideo | ReferenceAudio, kind: "video" | "audio") {
     let blob: Blob | null = null;
-    if (media.storageKey) blob = await getMediaBlob(media.storageKey);
-    if (!blob && media.url?.startsWith("blob:")) blob = await (await fetch(media.url)).blob();
-    if (!blob && media.url?.startsWith("data:")) blob = await (await fetch(media.url)).blob();
-    if (!blob && media.url && /^https?:\/\//i.test(media.url)) blob = (await axios.get<Blob>(media.url, { responseType: "blob" })).data;
-    if (!blob) throw new Error(`Local H3 ${kind === "video" ? "参考视频" : "参考音频"}读取失败`);
+    // resource: key 或从 /resources/{id}/file 恢复
+    const resourceMatch = String(media.url || "").match(/\/resources\/([^/?#]+)\/file/);
+    const storageKey = media.storageKey
+        || (resourceMatch?.[1] ? `resource:${decodeURIComponent(resourceMatch[1])}` : undefined);
+    if (storageKey) blob = await getMediaBlob(storageKey);
+    if (!blob && media.url?.startsWith("blob:")) {
+        try { blob = await (await fetch(media.url)).blob(); } catch { blob = null; }
+    }
+    if (!blob && media.url?.startsWith("data:")) {
+        try { blob = await (await fetch(media.url)).blob(); } catch { blob = null; }
+    }
+    if (!blob && media.url && (/^https?:\/\//i.test(media.url) || media.url.startsWith("/"))) {
+        try {
+            blob = (await axios.get<Blob>(media.url, { responseType: "blob", withCredentials: true })).data;
+        } catch {
+            blob = null;
+        }
+    }
+    if (!blob) throw new Error(`Local H3 ${kind === "video" ? "参考视频" : "参考音频"}尚未保存或无法读取，请重新上传后再生成`);
     const type = blob.type || (kind === "video" ? "video/mp4" : "audio/mpeg");
     const name = media.name || `${kind}-${media.id || "ref"}.${kind === "video" ? "mp4" : "mp3"}`;
     return new File([blob], name, { type });

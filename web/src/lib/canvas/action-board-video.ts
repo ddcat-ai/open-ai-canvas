@@ -1,4 +1,4 @@
-import type { CanvasNodeData } from "@/types/canvas";
+import type { CanvasNodeData, StoryboardRow } from "@/types/canvas";
 
 /** 动作板一键视频默认画幅：横屏 480p（避免落到全局 1:1 / 720p）。 */
 export const ACTION_BOARD_VIDEO_DEFAULT_SIZE = "854x480";
@@ -11,6 +11,85 @@ export type ActionBoardPromptMention = {
 };
 
 /**
+ * 12 宫格动作板出图 prompt：必须吃进分镜行的运镜 / 时间节拍 / 表演调度等字段，
+ * 不能只丢 plotDescription（否则格子只剩剧情摘要，动作拆分无时间轴）。
+ * 画风/角色正文不 bake 进这里——生成时靠连线再收集，避免重复。
+ */
+export function buildActionBoardImagePrompt(row: Pick<StoryboardRow,
+    | "shotNumber"
+    | "durationSeconds"
+    | "plotDescription"
+    | "dialogue"
+    | "characters"
+    | "narrativeIntent"
+    | "viewerPOV"
+    | "performanceBlocking"
+    | "shotSize"
+    | "emotion"
+    | "lightingAndAtmosphere"
+    | "audioEffects"
+    | "camera"
+    | "motion"
+    | "timeBeats"
+    | "imageGenerationPrompt"
+    | "videoMotionPrompt"
+    | "mustHave"
+    | "optionalDetails"
+    | "continuityOut"
+    | "negativePrompt"
+>) {
+    const shotHead = row.durationSeconds > 0
+        ? `镜头 ${row.shotNumber} · ${row.durationSeconds}s`
+        : `镜头 ${row.shotNumber}`;
+    const plot = (row.plotDescription || row.videoMotionPrompt || row.imageGenerationPrompt || "").trim()
+        || "根据镜头剧情补全动作";
+
+    const lines: string[] = [
+        "生成一张电影动作拆分 12 宫格参考图，严格 3 列 4 行，12 个格子清晰分隔，保持同一角色、服装、场景和光线连续。",
+        `${shotHead}：${plot}`,
+    ];
+
+    const push = (label: string, value?: string | string[]) => {
+        if (Array.isArray(value)) {
+            const joined = value.map((item) => String(item || "").trim()).filter(Boolean).join("、");
+            if (joined) lines.push(`${label}：${joined}`);
+            return;
+        }
+        const text = String(value || "").trim();
+        if (text) lines.push(`${label}：${text}`);
+    };
+
+    push("镜头意图", row.narrativeIntent);
+    push("观众视点", row.viewerPOV);
+    push("表演调度", row.performanceBlocking);
+    push("景别", row.shotSize);
+    push("情绪", row.emotion);
+    push("光影氛围", row.lightingAndAtmosphere);
+    push("镜头设计", row.camera);
+    push("运镜", row.motion);
+    push("时间节拍", row.timeBeats);
+    // 运动/首帧提示若与 plot 不同源，再补一段，避免只剩剧情句
+    if (row.videoMotionPrompt?.trim() && row.videoMotionPrompt.trim() !== plot) {
+        push("运动描述", row.videoMotionPrompt);
+    }
+    if (row.imageGenerationPrompt?.trim() && row.imageGenerationPrompt.trim() !== plot) {
+        push("画面关键帧", row.imageGenerationPrompt);
+    }
+    push("台词/旁白", row.dialogue);
+    push("音效（仅作节奏参考，画面不写字）", row.audioEffects);
+    push("出场角色", row.characters.map((item) => item.characterName).filter(Boolean));
+    push("必须包含", row.mustHave);
+    push("可选细节", row.optionalDetails);
+    push("连续性出口", row.continuityOut);
+    push("负面要求", row.negativePrompt);
+
+    lines.push(
+        "把上述时间节拍、运镜与表演调度落实到 12 格时间轴：从起势、推进、转折、落点到结束姿态按顺序展开；相邻格只推进一小步，机位/构图变化要能看出运镜方向；不要添加文字、边框标题、分格编号或额外画面。",
+    );
+    return lines.join("\n");
+}
+
+/**
  * 分区写 prompt（给视频模型看的自然语言，禁止 @[node:…] UI token）：
  * - 12 宫格：图1
  * - 角色：单独一节，名称列表；脸/服装一致性靠连线角色卡+参考图
@@ -21,6 +100,7 @@ export function buildActionBoardVideoPrompt(board: CanvasNodeData, mentions: Act
     const body = raw
         .replace(/^生成一张电影动作拆分\s*12\s*宫格参考图[^\n]*\n?/u, "")
         .replace(/^按时间顺序展示动作起势[^\n]*\n?/gmu, "")
+        .replace(/^把上述时间节拍、运镜与表演调度落实到[^\n]*\n?/gmu, "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
     const shotLabel = board.metadata?.shotIndex ? `镜头 ${board.metadata.shotIndex}` : (board.title || "动作板");

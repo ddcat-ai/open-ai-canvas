@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 func (s *Service) buildAgentStoryboardPlannerPrompt(userID string, brief string, requirements string, assets []storyboardAsset, projectStyle storyboardProjectStyle, characters []storyboardCharacterCard, shotDuration int, shotCount int) (string, error) {
@@ -13,6 +15,55 @@ func (s *Service) buildAgentStoryboardPlannerPrompt(userID string, brief string,
 		return "", err
 	}
 	return removeFixedMediaRestrictions(compiled.Content), nil
+}
+
+// StoryboardPromptPreview 与真实自动分镜任务使用同一 compile 路径，供前端发送前可视化。
+type StoryboardPromptPreviewRequest struct {
+	Prompt               string                    `json:"prompt"`
+	Requirements         string                    `json:"requirements"`
+	CanvasAssets         []storyboardAsset         `json:"canvasAssets"`
+	ProjectStyle         storyboardProjectStyle    `json:"projectStyle"`
+	Characters           []storyboardCharacterCard `json:"characters"`
+	ShotDurationSeconds  int                       `json:"shotDurationSeconds"`
+	ShotCount            int                       `json:"shotCount"`
+}
+
+type StoryboardPromptPreviewResult struct {
+	Operation     string `json:"operation"`
+	Brief         string `json:"brief"`
+	PlannerPrompt string `json:"plannerPrompt"`
+	// 便于 UI 标注：是否叠了用户偏好
+	CustomizationMode string `json:"customizationMode,omitempty"`
+}
+
+func (s *Service) PreviewStoryboardPlannerPrompt(user *model.User, req StoryboardPromptPreviewRequest) (*StoryboardPromptPreviewResult, error) {
+	if user == nil || user.ID == "" {
+		return nil, BadAuthRequest("请先登录")
+	}
+	brief := strings.TrimSpace(req.Prompt)
+	if brief == "" {
+		return nil, BadAuthRequest("请先填写分镜 brief")
+	}
+	if err := validateStoryboardContext(req.ProjectStyle, req.Characters); err != nil {
+		return nil, err
+	}
+	assets := req.CanvasAssets
+	plannerPrompt, err := s.buildAgentStoryboardPlannerPrompt(user.ID, brief, req.Requirements, assets, req.ProjectStyle, req.Characters, req.ShotDurationSeconds, req.ShotCount)
+	if err != nil {
+		return nil, err
+	}
+	mode := "inherit"
+	if customization, customizationErr := s.repo.UserPromptCustomization(user.ID, promptOperationStoryboardPlan); customizationErr == nil && customization != nil {
+		if customization.Mode == promptCustomizationAppend || customization.Mode == promptCustomizationRewrite {
+			mode = customization.Mode
+		}
+	}
+	return &StoryboardPromptPreviewResult{
+		Operation:         promptOperationStoryboardPlan,
+		Brief:             brief,
+		PlannerPrompt:     plannerPrompt,
+		CustomizationMode: mode,
+	}, nil
 }
 
 func (s *Service) buildStoryboardRepairPrompt(userID string, validationErr error, input agentStoryboardInput, original string) (string, error) {
