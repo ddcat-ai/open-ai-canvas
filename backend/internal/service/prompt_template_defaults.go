@@ -18,20 +18,20 @@ func defaultPromptDefinitions() []PromptOperationDefinition {
 	return []PromptOperationDefinition{
 		{
 			Operation: promptOperationStoryboardPlan, Label: "分镜规划", Category: "分镜", OutputType: "json", SchemaKey: "storyboard-plan/v3",
-			Description: "把剧情、项目画风和当前角色版本规划为可执行镜头。",
-			Variables: []PromptTemplateVariable{{Label: "项目名称", Placeholder: "{{项目名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}, {Label: "用户要求", Placeholder: "{{用户要求}}"}},
+			Description:    "把剧情、项目画风和当前角色版本规划为可执行镜头。",
+			Variables:      []PromptTemplateVariable{{Label: "项目名称", Placeholder: "{{项目名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}, {Label: "用户要求", Placeholder: "{{用户要求}}"}},
 			DefaultContent: defaultStoryboardPromptTemplate(),
 		},
 		{
 			Operation: promptOperationStoryboardRepair, Label: "分镜修复", Category: "分镜", OutputType: "json", SchemaKey: "storyboard-plan/v3",
-			Description: "修复模型返回的分镜结构、字段和镜头复杂度。",
-			Variables: []PromptTemplateVariable{{Label: "校验错误", Placeholder: "{{校验错误}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
+			Description:    "修复模型返回的分镜结构、字段和镜头复杂度。",
+			Variables:      []PromptTemplateVariable{{Label: "校验错误", Placeholder: "{{校验错误}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
 			DefaultContent: `你是影视分镜 JSON 修复导演。修复结构时必须保留剧情信息，通过拆镜或重新分配内容解决复杂度超限，不得用删除关键剧情掩盖错误。保持原项目的视觉媒介、角色身份、服装、道具和连续性，不要擅自改写画风。只修复校验错误和由此引发的镜头组织问题。`,
 		},
 		{
 			Operation: promptOperationStoryboardFirstFrame, Label: "分镜首帧", Category: "生成", OutputType: "text",
 			Description: "把单镜头结构转换为图片模型使用的首帧提示词。",
-			Variables: []PromptTemplateVariable{{Label: "项目视觉", Placeholder: "{{项目视觉}}"}, {Label: "首帧构图", Placeholder: "{{首帧构图}}"}, {Label: "表演起始状态", Placeholder: "{{表演起始状态}}"}, {Label: "负面要求", Placeholder: "{{负面要求}}"}},
+			Variables:   []PromptTemplateVariable{{Label: "项目视觉", Placeholder: "{{项目视觉}}"}, {Label: "首帧构图", Placeholder: "{{首帧构图}}"}, {Label: "表演起始状态", Placeholder: "{{表演起始状态}}"}, {Label: "负面要求", Placeholder: "{{负面要求}}"}},
 			DefaultContent: `生成单一、可执行的分镜首帧。严格继承项目视觉媒介和角色资产；画面明确主体左右位置、视线、前中后景、遮挡、视觉焦点、可信光源与材质。只描述静止首帧，不提前写后续运动，不添加画外人物、无来源光线、文字或水印。
 
 【项目视觉】
@@ -49,7 +49,7 @@ func defaultPromptDefinitions() []PromptOperationDefinition {
 		{
 			Operation: promptOperationStoryboardVideo, Label: "分镜视频", Category: "生成", OutputType: "text",
 			Description: "把单镜头结构转换为视频模型使用的紧凑执行提示词。",
-			Variables: []PromptTemplateVariable{{Label: "项目视觉", Placeholder: "{{项目视觉}}"}, {Label: "镜头意图", Placeholder: "{{镜头意图}}"}, {Label: "首帧构图", Placeholder: "{{首帧构图}}"}, {Label: "表演与调度", Placeholder: "{{表演与调度}}"}, {Label: "摄影机", Placeholder: "{{摄影机}}"}, {Label: "时间节拍", Placeholder: "{{时间节拍}}"}, {Label: "运动与结尾", Placeholder: "{{运动与结尾}}"}, {Label: "声音", Placeholder: "{{声音}}"}, {Label: "执行优先级", Placeholder: "{{执行优先级}}"}, {Label: "负面要求", Placeholder: "{{负面要求}}"}},
+			Variables:   []PromptTemplateVariable{{Label: "项目视觉", Placeholder: "{{项目视觉}}"}, {Label: "镜头意图", Placeholder: "{{镜头意图}}"}, {Label: "首帧构图", Placeholder: "{{首帧构图}}"}, {Label: "表演与调度", Placeholder: "{{表演与调度}}"}, {Label: "摄影机", Placeholder: "{{摄影机}}"}, {Label: "时间节拍", Placeholder: "{{时间节拍}}"}, {Label: "运动与结尾", Placeholder: "{{运动与结尾}}"}, {Label: "声音", Placeholder: "{{声音}}"}, {Label: "执行优先级", Placeholder: "{{执行优先级}}"}, {Label: "负面要求", Placeholder: "{{负面要求}}"}},
 			DefaultContent: `生成单一连续镜头的视频执行提示词。一个镜头只保留一个叙事目标、一个主运镜和一条主要动作链；摄影机运动必须有起点、动机和停止点。优先保证角色身份、表演、关键动作和连续性，次要环境效果可以简化。
 
 【项目视觉】
@@ -84,14 +84,14 @@ func defaultPromptDefinitions() []PromptOperationDefinition {
 		},
 		{
 			Operation: promptOperationCharacterExtract, Label: "角色卡提取", Category: "角色", OutputType: "json", SchemaKey: "character-breakdown/v1",
-			Description: "从章节正文提取需要跨镜头保持一致的角色资产。",
-			Variables: []PromptTemplateVariable{{Label: "项目名称", Placeholder: "{{项目名称}}"}, {Label: "章节名称", Placeholder: "{{章节名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
+			Description:    "从章节正文提取需要跨镜头保持一致的角色资产。",
+			Variables:      []PromptTemplateVariable{{Label: "项目名称", Placeholder: "{{项目名称}}"}, {Label: "章节名称", Placeholder: "{{章节名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
 			DefaultContent: `你是短剧角色资产导演。只提取章节中实际出场、发言或对剧情产生明确作用，并且后续制作需要保持视觉或声音一致的角色。忽略系统播报、纯物件、无身份群众和没有持续角色价值的一次性路人；合并同一角色的姓名、专属称谓和别名。正文未明确的信息必须写“正文未明确”，不得自行改变人物关系、时代背景或编造编号式姓名。角色设定要具体、稳定、可用于后续三视图和视频一致性控制。`,
 		},
 		{
 			Operation: promptOperationCharacterTurnaround, Label: "角色三视图", Category: "角色", OutputType: "text",
-			Description: "按当前角色版本和项目画风生成正、侧、背三视图。",
-			Variables: []PromptTemplateVariable{{Label: "角色名称", Placeholder: "{{角色名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}, {Label: "角色设定", Placeholder: "{{角色设定}}"}},
+			Description:    "按当前角色版本和项目画风生成正、侧、背三视图。",
+			Variables:      []PromptTemplateVariable{{Label: "角色名称", Placeholder: "{{角色名称}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}, {Label: "角色设定", Placeholder: "{{角色设定}}"}},
 			DefaultContent: `制作专业人物三视图设定表。画面严格分成三个等宽竖向区域，从左到右依次为正面全身、右侧面全身、背面全身。三个视角必须是同一角色、同一服装、同一发型、同一体型和同一比例，采用站立中性姿势，完整显示头顶到脚底。背景使用纯净中性浅色和均匀设定稿光线，只负责分离轮廓，不得改变项目画风的绘画或渲染媒介。禁止文字、边框、道具说明、表情变化和额外人物。`,
 		},
 	}

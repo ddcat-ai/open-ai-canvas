@@ -9,6 +9,7 @@ import (
 )
 
 func TestGeminiProviderCancellationAndConfirmation(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-goog-api-key") != "test-key" {
@@ -42,6 +43,7 @@ func TestGeminiProviderCancellationAndConfirmation(t *testing.T) {
 }
 
 func TestVolcengineArkProviderCancellationUsesDelete(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/api/v3/contents/generations/tasks/task-1" {
 			http.NotFound(w, r)

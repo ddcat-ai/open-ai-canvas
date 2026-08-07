@@ -349,7 +349,7 @@ func (s *Service) ConfirmProjectAssetCandidate(userID string, projectID string, 
 		if candidate.Category == model.AssetCategoryCharacter {
 			kind = "entity"
 			var characterPayload string
-				characterPayload, marshalErr = characterAssetPayload(assetID, versionID, candidate.Name, json.RawMessage(candidate.DetailsJSON), now, now)
+			characterPayload, marshalErr = characterAssetPayload(assetID, versionID, candidate.Name, json.RawMessage(candidate.DetailsJSON), now, now)
 			payload = []byte(characterPayload)
 		} else {
 			payload, marshalErr = json.Marshal(map[string]any{

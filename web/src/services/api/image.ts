@@ -23,10 +23,7 @@ export type ResponseToolCall = {
     thoughtSignature?: string;
 };
 
-export type ResponseInputMessage =
-    | AiTextMessage
-    | { type: "function_call"; call_id: string; name: string; arguments: string; thoughtSignature?: string }
-    | { role: "tool"; tool_call_id: string; content: string };
+export type ResponseInputMessage = AiTextMessage | { type: "function_call"; call_id: string; name: string; arguments: string; thoughtSignature?: string } | { role: "tool"; tool_call_id: string; content: string };
 
 export type ResponseFunctionTool = {
     type: "function";
@@ -46,10 +43,7 @@ export type ToolResponseResult = {
 type ToolChoice = "auto" | "required" | { type: "function"; name: string };
 type ResponseMessageContent = AiTextMessage["content"] | string;
 type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
-type ResponseInputItem =
-    | { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] }
-    | { type: "function_call"; call_id: string; name: string; arguments: string }
-    | { type: "function_call_output"; call_id: string; output: string };
+type ResponseInputItem = { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: "function_call_output"; call_id: string; output: string };
 type ResponseApiToolDefinition = {
     type: "function";
     name: string;
@@ -57,9 +51,7 @@ type ResponseApiToolDefinition = {
     parameters: Record<string, unknown>;
     strict?: boolean;
 };
-type ResponseApiOutputItem =
-    | { type?: "message"; content?: Array<{ type?: string; text?: string }> }
-    | { type?: "function_call"; id?: string; call_id?: string; name?: string; arguments?: string };
+type ResponseApiOutputItem = { type?: "message"; content?: Array<{ type?: string; text?: string }> } | { type?: "function_call"; id?: string; call_id?: string; name?: string; arguments?: string };
 type ResponseApiPayload = {
     id?: string;
     output?: ResponseApiOutputItem[];
@@ -211,7 +203,8 @@ function dimensionGCD(left: number, right: number) {
 function resolveImageRequestSize(profile: ImageCapabilityConfig, quality: string | undefined, size: string) {
     const request = imageSizeRequest(profile, size);
     if (!request) return undefined;
-    return { parameter: request.parameter, value: request.parameter === "size" ? resolveRequestSize(quality, request.value) : resolveAspectRatio(request.value) };
+    const value = request.parameter === "size" ? resolveRequestSize(quality, request.value) : resolveAspectRatio(request.value);
+    return value ? { parameter: request.parameter, value } : undefined;
 }
 
 function validateImageCapability(profile: ImageCapabilityConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
@@ -620,12 +613,7 @@ async function requestStreamingChatCompletion(config: AiConfig, body: Record<str
 }
 
 function toGeminiBody(config: AiConfig, messages: ResponseInputMessage[], extra?: Record<string, unknown>) {
-    const systemText = [
-        config.systemPrompt.trim(),
-        ...messages.flatMap((message) => (!("type" in message) && message.role === "system" ? [geminiTextContent(message.content)] : [])),
-    ]
-        .filter(Boolean)
-        .join("\n\n");
+    const systemText = [config.systemPrompt.trim(), ...messages.flatMap((message) => (!("type" in message) && message.role === "system" ? [geminiTextContent(message.content)] : []))].filter(Boolean).join("\n\n");
     const contents = toGeminiContents(messages.filter((message) => ("type" in message ? true : message.role !== "system")));
     return {
         contents,
@@ -685,10 +673,7 @@ function toGeminiToolOptions(tools: ResponseFunctionTool[], toolChoice: ToolChoi
         description: tool.function.description,
         parameters: tool.function.parameters,
     }));
-    const functionCallingConfig =
-        typeof toolChoice === "object"
-            ? { mode: "ANY", allowedFunctionNames: [toolChoice.name] }
-            : { mode: toolChoice === "required" ? "ANY" : "AUTO" };
+    const functionCallingConfig = typeof toolChoice === "object" ? { mode: "ANY", allowedFunctionNames: [toolChoice.name] } : { mode: toolChoice === "required" ? "ANY" : "AUTO" };
     return {
         tools: [{ functionDeclarations }],
         toolConfig: { functionCallingConfig },
@@ -849,9 +834,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                   ...(imageProfile.outputFormat.supported ? { output_format: IMAGE_OUTPUT_FORMAT } : {}),
                   ...(imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true" ? { background: "transparent" } : {}),
               };
-        const responseData = isVolcengineArk
-            ? await postVolcengineArkImage(requestConfig, payload, options)
-            : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
+        const responseData = isVolcengineArk ? await postVolcengineArkImage(requestConfig, payload, options) : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
         const images = parseImagePayload(responseData);
         return images;
     } catch (error) {
@@ -949,17 +932,33 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
             return answer;
         }
         if (requestConfig.interfaceType === "chat-completion") {
-            const answer = (await requestStreamingChatCompletion(requestConfig, {
-                model: requestConfig.model,
-                messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
-            }, onDelta, options)).content || "没有返回内容";
+            const answer =
+                (
+                    await requestStreamingChatCompletion(
+                        requestConfig,
+                        {
+                            model: requestConfig.model,
+                            messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                        },
+                        onDelta,
+                        options,
+                    )
+                ).content || "没有返回内容";
             if (answer === "没有返回内容") onDelta(answer);
             return answer;
         }
-        const answer = (await requestStreamingResponse(requestConfig, {
-            model: requestConfig.model,
-            input: toResponseInput(withSystemMessage(requestConfig, messages)),
-        }, onDelta, options)).content || "没有返回内容";
+        const answer =
+            (
+                await requestStreamingResponse(
+                    requestConfig,
+                    {
+                        model: requestConfig.model,
+                        input: toResponseInput(withSystemMessage(requestConfig, messages)),
+                    },
+                    onDelta,
+                    options,
+                )
+            ).content || "没有返回内容";
         if (answer === "没有返回内容") onDelta(answer);
         return answer;
     } catch (error) {
@@ -974,13 +973,18 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
             return await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages, toGeminiToolOptions(tools, toolChoice)), onDelta, options);
         }
         if (requestConfig.interfaceType === "chat-completion") {
-            return await requestStreamingChatCompletion(requestConfig, {
-                model: requestConfig.model,
-                messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
-                tools,
-                tool_choice: toChatCompletionToolChoice(toolChoice),
-                parallel_tool_calls: false,
-            }, onDelta, options);
+            return await requestStreamingChatCompletion(
+                requestConfig,
+                {
+                    model: requestConfig.model,
+                    messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                    tools,
+                    tool_choice: toChatCompletionToolChoice(toolChoice),
+                    parallel_tool_calls: false,
+                },
+                onDelta,
+                options,
+            );
         }
         return await requestStreamingResponse(
             requestConfig,
