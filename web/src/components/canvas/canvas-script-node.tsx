@@ -173,7 +173,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 <GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />
             </Modal> : null}
             <StoryboardMiniPipeline pipeline={pipeline} theme={theme} rows={rows} />
-            <div className="grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+            <div className="storyboard-header-gutter grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                 <HeaderCell borderColor={theme.node.stroke} align="center">序号</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke} align="center">时长</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>画面描述</HeaderCell>
