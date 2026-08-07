@@ -4715,6 +4715,15 @@
         scrollbar-width: auto;
     }
 
+    /* 表头与滚动行区共享同宽 scrollbar gutter，保证列线对齐；滚动条本身透明隐藏 */
+    .storyboard-header-gutter {
+        overflow-x: hidden;
+        overflow-y: scroll;
+        scrollbar-color: transparent transparent;
+        scrollbar-gutter: stable;
+        scrollbar-width: auto;
+    }
+
     .storyboard-scrollbar::-webkit-scrollbar {
         width: 12px;
     }
