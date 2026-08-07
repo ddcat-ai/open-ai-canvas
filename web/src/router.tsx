@@ -30,6 +30,7 @@ import WalletPage from "@/pages/wallet";
 import ProjectsPage from "@/pages/projects";
 import ProjectDetailPage from "@/pages/projects/detail";
 import SettingsPage from "@/pages/settings";
+import TestVoiceRecording from "@/pages/test-voice-recording";
 
 export const router = createBrowserRouter([
     {
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
             { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
             { path: "/wallet", element: <RequireAuth><RequireFeature feature="creditsEnabled"><WalletPage /></RequireFeature></RequireAuth> },
             { path: "/settings", element: <RequireAuth><SettingsPage /></RequireAuth> },
+            { path: "/test-voice-recording", element: <RequireAuth><TestVoiceRecording /></RequireAuth> },
             { path: "/projects", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectsPage /></RequireFeature></RequireAuth> },
             { path: "/projects/:projectId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
             { path: "/projects/:projectId/:view", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
