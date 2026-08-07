@@ -17,6 +17,7 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessionPollingAbort, resumeCinematicAgentSession } from "@/lib/canvas/canvas-agent-session";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
+import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { AgentChatEmptyState, AgentPanelChrome } from "./canvas-agent-panel-chrome";
 import { CanvasLocalAgentPanel } from "./canvas-local-agent-panel";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
@@ -781,6 +782,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                         onAddFiles={addImagesToCanvas}
                         left={
                             <>
+                                <VoiceRecordingButton
+                                    disabled={agentBusy}
+                                    onTranscribed={(text) => setPrompt((prev) => (prev.trim() ? `${prev} ${text}` : text))}
+                                />
                                 <AgentTextModelPicker config={effectiveConfig} value={effectiveConfig.textModel} onChange={(model) => updateConfig("textModel", model)} />
                                 {cinematicEntryActive ? <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>影视项目</span> : null}
                             </>

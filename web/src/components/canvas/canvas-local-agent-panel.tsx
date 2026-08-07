@@ -13,6 +13,7 @@ import { useCanvasAgentStore, type AgentAttachment, type AgentChatItem, type Age
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isProjectAgentReadTool, isProjectAgentToolName, runProjectAgentTool } from "@/services/api/project-agent-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
+import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { AgentChatEmptyState } from "./canvas-agent-panel-chrome";
 
 const PANEL_MOTION_SECONDS = 0.5;
@@ -562,7 +563,15 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
                         onSubmit={sendPrompt}
                         onAddFiles={addAttachments}
                         onRemoveAttachment={removeAttachment}
-                        left={attachments.length ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{formatBytes(attachmentPayloadBytes(attachments))} / 30MB</span> : null}
+                        left={
+                            <>
+                                <VoiceRecordingButton
+                                    disabled={!connected || sending || waiting}
+                                    onTranscribed={(text) => setAgentState({ prompt: prompt.trim() ? `${prompt} ${text}` : text })}
+                                />
+                                {attachments.length ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{formatBytes(attachmentPayloadBytes(attachments))} / 30MB</span> : null}
+                            </>
+                        }
                     />
                 </>
             )}
