@@ -149,9 +149,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const mediaBorderColor = isActive ? theme.accent.primary : isRelated && !isBatchChild ? theme.accent.primary : "transparent";
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
-    const cometDepth = hasMediaContent ? 6.8 : data.type === CanvasNodeType.Script ? 2.8 : 4.6;
-    const cometTranslate = hasMediaContent ? 6 : data.type === CanvasNodeType.Script ? 2.5 : 4;
-    const cometDisabled = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
+    const nodeHoverLocked = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -318,13 +316,12 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             />
+            {/* 画布节点不启用指针跟随 3D 位移，hover 反馈统一走 CSS 静态抬升，避免鼠标移动形成反馈震荡 */}
             <CometCard
                 containerClassName="overflow-visible"
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)] ${flushMediaContent ? "border-0" : "border"} ${isGeneratingNode ? "canvas-node-shell-generating" : ""}`}
-                rotateDepth={cometDepth}
-                translateDepth={cometTranslate}
-                disabled={cometDisabled}
-                glare={!isGeneratingNode}
+                disabled
+                data-canvas-node-hover-locked={nodeHoverLocked ? "true" : "false"}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
@@ -335,10 +332,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                             ? `0 0 0 1px ${theme.accent.primary}66, 0 0 0 4px ${theme.accent.primary}1a, 0 24px 72px ${theme.spatial.shadow}` // selected-primary：4px软色环 + resize handle
                             : isSelected || (isRelated && !isBatchChild)
                                 ? `0 0 0 2px ${theme.accent.primary}40, 0 22px 60px ${theme.spatial.shadow}` // selected：2px边框环
-                                : hovered
-                                    ? `0 16px 48px ${theme.spatial.shadow}` // hover：轻微抬升阴影
-                                    : undefined, // idle：无额外阴影
-                    transition: "border-color 120ms ease-out, box-shadow 150ms ease-out",
+                                : undefined, // idle：无额外阴影
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
