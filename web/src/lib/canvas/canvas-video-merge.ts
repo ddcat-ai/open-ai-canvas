@@ -1,5 +1,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import ffmpegCoreURL from "@ffmpeg/core?url";
+import ffmpegWasmURL from "@ffmpeg/core/wasm?url";
+import { fetchFile } from "@ffmpeg/util";
 import { getMediaBlob } from "@/services/file-storage";
 
 export type MergeVideoInput = { id: string; url?: string; storageKey?: string };
@@ -12,12 +14,14 @@ async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => void) {
     if (!ffmpegPromise) {
         ffmpegPromise = (async () => {
             const ffmpeg = new FFmpeg();
-            const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
             onProgress?.({ phase: "loading", progress: 0 });
-            await ffmpeg.load({
-                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-            });
+            try {
+                // 核心资产随前端同源发布，避免自部署环境首次合并依赖第三方 CDN。
+                await ffmpeg.load({ coreURL: ffmpegCoreURL, wasmURL: ffmpegWasmURL });
+            } catch (cause) {
+                ffmpeg.terminate();
+                throw new Error("视频合并工具加载失败，请刷新页面后重试", { cause });
+            }
             return ffmpeg;
         })();
     }

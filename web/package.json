@@ -16,6 +16,7 @@
         "@ant-design/icons": "^6.3.2",
         "@codemirror/lang-json": "^6.0.2",
         "@excalidraw/excalidraw": "0.18.1",
+        "@ffmpeg/core": "0.12.10",
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
         "@mediapipe/tasks-vision": "^1.0.1",
