@@ -31,6 +31,7 @@ export type CanvasToolMode = "move" | "box-select";
 export type StoryboardShotDuration = "auto" | "5" | "10" | "15" | "30";
 export type StoryboardShotCount = "auto" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type StoryboardVideoInputMode = "direct" | "keyframe";
+export type StoryboardViewMode = "table" | "card";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasGenerationBatchMode = "storyboard_image" | "storyboard_video" | "action_board";
 export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed" | "completed" | "cancelled";
@@ -236,6 +237,7 @@ export type CanvasNodeMetadata = {
     storyboardShotCount?: StoryboardShotCount;
     storyboardVideoInputMode?: StoryboardVideoInputMode;
     storyboardComposerHeight?: number;
+    storyboardViewMode?: StoryboardViewMode;
     generationBatches?: CanvasGenerationBatch[];
     frame?: {
         collapsed: boolean;
