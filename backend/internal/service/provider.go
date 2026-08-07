@@ -635,6 +635,9 @@ func systemChannelIDFromBaseURL(baseURL string) string {
 }
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
+		return runGrokImageTask(ctx, input)
+	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineJiMengImage) {
 		return runVolcengineJiMengImageTask(ctx, input)
 	}
@@ -718,6 +721,48 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+func runGrokImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	body, path, err := grokImageRequestBody(input)
+	if err != nil {
+		return nil, err
+	}
+	var payload imageResponse
+	if err := postJSON(ctx, input.Config, path, body, &payload); err != nil {
+		return nil, err
+	}
+	images, err := imageDataURLs(payload)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string, error) {
+	if input.Mask != nil {
+		return grokImageRequest{}, "", errors.New("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试")
+	}
+	body := grokImageRequest{Model: input.Config.Model, Prompt: withSystemPrompt(input.Config, input.Prompt), N: 1, ResponseFormat: "url"}
+	if len(input.ReferenceImages) == 0 {
+		return body, "/images/generations", nil
+	}
+	if len(input.ReferenceImages) != 1 {
+		return grokImageRequest{}, "", fmt.Errorf("Grok 图片编辑只支持 1 张参考图，当前连接了 %d 张", len(input.ReferenceImages))
+	}
+	imageURL, err := grokImageInputURL(input.ReferenceImages[0])
+	if err != nil {
+		return grokImageRequest{}, "", err
+	}
+	body.Image = &grokImageInput{URL: imageURL}
+	return body, "/images/edits", nil
+}
+
+func grokImageInputURL(media providerMedia) (string, error) {
+	if isPublicMediaURL(strings.TrimSpace(media.URL)) {
+		return strings.TrimSpace(media.URL), nil
+	}
+	return openAIImageInputURL(media)
 }
 
 const volcengineArkImageMaxPixels = 4624220
@@ -1909,7 +1954,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	}
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
-		"image": {"openai-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true},
+		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true},
 		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true},
 		"audio": {"openai-audio": true, "async-audio": true},
 	}

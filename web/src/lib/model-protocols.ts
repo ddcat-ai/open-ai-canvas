@@ -2,6 +2,7 @@ export type ModelProtocol =
     | "chat-completion"
     | "openai-response"
     | "openai-image"
+    | "grok-image"
     | "volcengine-ark-image"
     | "volcengine-jimeng-image"
     | "openai-audio"
@@ -30,6 +31,7 @@ export const MODEL_PROTOCOLS: ModelProtocolDefinition[] = [
     { value: "chat-completion", label: "OpenAI Chat Completions", capability: "text", create: "POST /v1/chat/completions", contentType: "application/json", media: "文本与多模态消息" },
     { value: "openai-response", label: "OpenAI Responses", capability: "text", create: "POST /v1/responses", contentType: "application/json", media: "文本与多模态输入" },
     { value: "openai-image", label: "OpenAI Images", capability: "image", create: "POST /v1/images/generations", contentType: "application/json / multipart", media: "生成、编辑与参考图" },
+    { value: "grok-image", label: "Grok Images", capability: "image", create: "POST /v1/images/generations / edits", contentType: "application/json", media: "文生图与单张 URL 参考图，不支持蒙版" },
     { value: "volcengine-ark-image", label: "火山方舟图片", capability: "image", create: "POST /api/v3/images/generations", contentType: "application/json", media: "文生图与 image 参考图，不支持蒙版" },
     { value: "volcengine-jimeng-image", label: "即梦官方图片", capability: "image", create: "POST CVSync2AsyncSubmitTask", poll: "POST CVSync2AsyncGetResult", contentType: "application/json + AK/SK 签名", media: "0-14 张参考图，模型标识填写 req_key" },
     { value: "openai-audio", label: "OpenAI Audio", capability: "audio", create: "POST /v1/audio/speech", contentType: "application/json", media: "文本转语音" },

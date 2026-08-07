@@ -74,7 +74,16 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         outputFormat: { supported: true },
         maxOutputs: 15,
     };
-    if (protocol === "volcengine-ark-image") {
+    if (protocol === "grok-image") {
+        image.references.maxImages = 1;
+        image.references.maskSupported = false;
+        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
+        image.quality = { supported: false, values: [], default: "auto" };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: true };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 1;
+    } else if (protocol === "volcengine-ark-image") {
         image.references.maskSupported = false;
         image.quality.supported = false;
         image.transparentBackground.supported = false;
@@ -89,7 +98,7 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.responseFormat.supported = false;
         image.outputFormat.supported = false;
     }
-    if (model.trim().toLowerCase().startsWith("grok-imagine-image")) {
+    if (protocol !== "grok-image" && model.trim().toLowerCase().startsWith("grok-imagine-image")) {
         image.references.maxImages = 0;
         image.references.maskSupported = false;
         image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
