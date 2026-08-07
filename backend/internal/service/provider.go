@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -34,6 +35,7 @@ type canvasGenerationInput struct {
 	Mask            *providerMedia         `json:"mask"`
 	Metadata        map[string]interface{} `json:"metadata"`
 	ImageCapability *ImageCapabilityConfig `json:"-"`
+	StreamText      bool                   `json:"-"` // 分镜请求使用上游 SSE 保活；最终结构仍在流结束后统一校验。
 	VideoCapability *VideoCapabilityConfig `json:"-"`
 }
 
@@ -855,13 +857,13 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 }
 
 func runLegacyTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
-	var payload map[string]interface{}
 	responseInput, err := textResponseInput(input)
 	if err != nil {
 		return nil, err
 	}
 	body := map[string]interface{}{"model": input.Config.Model, "input": responseInput}
-	if err := postJSON(ctx, input.Config, "/responses", body, &payload); err != nil {
+	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText)
+	if err != nil {
 		if !shouldFallbackTextToChat(err) {
 			return nil, err
 		}
@@ -871,37 +873,23 @@ func runLegacyTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 		}
 		return nil, fmt.Errorf("文本接口请求失败：Responses API %v；Chat Completions %v", err, chatErr)
 	}
-	text := stringField(payload, "output_text")
-	if text == "" {
-		text = extractResponseText(payload)
-	}
-	if text == "" {
-		return nil, errors.New("文本接口没有返回内容")
-	}
 	return map[string]interface{}{"mode": "text", "text": text}, nil
 }
 
 func runResponsesTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
-	var payload map[string]interface{}
 	responseInput, err := textResponseInput(input)
 	if err != nil {
 		return nil, err
 	}
-	if err := postJSON(ctx, input.Config, "/responses", map[string]interface{}{"model": input.Config.Model, "input": responseInput}, &payload); err != nil {
+	body := map[string]interface{}{"model": input.Config.Model, "input": responseInput}
+	text, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText)
+	if err != nil {
 		return nil, err
-	}
-	text := stringField(payload, "output_text")
-	if text == "" {
-		text = extractResponseText(payload)
-	}
-	if text == "" {
-		return nil, errors.New("文本接口没有返回内容")
 	}
 	return map[string]interface{}{"mode": "text", "text": text}, nil
 }
 
 func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
-	var payload map[string]interface{}
 	messages := []map[string]interface{}{}
 	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
 		messages = append(messages, map[string]interface{}{"role": "system", "content": systemPrompt})
@@ -912,12 +900,9 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 	}
 	messages = append(messages, map[string]interface{}{"role": "user", "content": userContent})
 	body := map[string]interface{}{"model": input.Config.Model, "messages": messages}
-	if err := postJSON(ctx, input.Config, "/chat/completions", body, &payload); err != nil {
+	text, err := requestTextProvider(ctx, input.Config, "/chat/completions", body, "chat-completion", input.StreamText)
+	if err != nil {
 		return nil, err
-	}
-	text := extractChatCompletionText(payload)
-	if text == "" {
-		return nil, errors.New("文本接口没有返回内容")
 	}
 	return map[string]interface{}{"mode": "text", "text": text}, nil
 }
@@ -2161,6 +2146,170 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 		}
 	}
 	return nil, fmt.Errorf("%s视频生成超时", providerName)
+}
+
+func requestTextProvider(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, stream bool) (string, error) {
+	if stream {
+		return postStreamingText(ctx, config, path, body, protocol)
+	}
+	var payload map[string]interface{}
+	if err := postJSON(ctx, config, path, body, &payload); err != nil {
+		return "", err
+	}
+	text := extractTextPayload(payload, protocol)
+	if text == "" {
+		return "", errors.New("文本接口没有返回内容")
+	}
+	return text, nil
+}
+
+func postStreamingText(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string) (string, error) {
+	// 只把分镜规划/修复切到上游 SSE，完整 JSON 仍在流结束后校验，避免半截结构污染画布。
+	body["stream"] = true
+	data, mimeType, err := postStreamingBinary(ctx, config, path, body)
+	if err != nil {
+		return "", err
+	}
+	if !strings.Contains(strings.ToLower(mimeType), "event-stream") {
+		var payload map[string]interface{}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return "", fmt.Errorf("流式文本接口返回格式无效：%w", err)
+		}
+		if err := validateTextPayload(payload); err != nil {
+			return "", err
+		}
+		text := extractTextPayload(payload, protocol)
+		if text == "" {
+			return "", errors.New("文本接口没有返回内容")
+		}
+		return text, nil
+	}
+	return parseTextEventStream(data, protocol)
+}
+
+func extractTextPayload(payload map[string]interface{}, protocol string) string {
+	if protocol == "responses" {
+		text := stringField(payload, "output_text")
+		if text == "" {
+			text = extractResponseText(payload)
+		}
+		return text
+	}
+	return extractChatCompletionText(payload)
+}
+
+func validateTextPayload(payload map[string]interface{}) error {
+	if code, ok := payload["code"].(float64); ok && code != 0 {
+		return errors.New(defaultString(stringField(payload, "msg"), "请求失败"))
+	}
+	if errValue, ok := payload["error"].(map[string]interface{}); ok {
+		if message := stringField(errValue, "message"); message != "" {
+			return errors.New(message)
+		}
+	}
+	return nil
+}
+
+func parseTextEventStream(data []byte, protocol string) (string, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 64<<10), len(data)+1)
+	var text strings.Builder
+	var eventName string
+	var dataLines []string
+
+	flush := func() error {
+		if len(dataLines) == 0 {
+			eventName = ""
+			return nil
+		}
+		raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
+		dataLines = nil
+		if raw == "" || raw == "[DONE]" {
+			eventName = ""
+			return nil
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			return fmt.Errorf("流式文本事件解析失败：%w", err)
+		}
+		if eventName == "error" {
+			if err := validateTextPayload(payload); err != nil {
+				return err
+			}
+			return errors.New("上游流式文本请求失败")
+		}
+		if err := validateTextPayload(payload); err != nil {
+			return err
+		}
+		if protocol == "responses" {
+			text.WriteString(stringField(payload, "delta"))
+		} else {
+			choices, _ := payload["choices"].([]interface{})
+			for _, choice := range choices {
+				record, _ := choice.(map[string]interface{})
+				delta, _ := record["delta"].(map[string]interface{})
+				text.WriteString(streamContentText(delta["content"]))
+			}
+		}
+		eventName = ""
+		return nil
+	}
+
+	for scanner.Scan() {
+		line := strings.TrimSuffix(scanner.Text(), "\r")
+		if line == "" {
+			if err := flush(); err != nil {
+				return "", err
+			}
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			value := strings.TrimPrefix(line, "data:")
+			dataLines = append(dataLines, strings.TrimPrefix(value, " "))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("读取流式文本响应失败：%w", err)
+	}
+	if err := flush(); err != nil {
+		return "", err
+	}
+	if text.Len() == 0 {
+		return "", errors.New("流式文本接口没有返回内容")
+	}
+	return text.String(), nil
+}
+
+func streamContentText(value interface{}) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	parts, ok := value.([]interface{})
+	if !ok {
+		return ""
+	}
+	var result strings.Builder
+	for _, part := range parts {
+		record, _ := part.(map[string]interface{})
+		result.WriteString(stringField(record, "text"))
+	}
+	return result.String()
+}
+
+func postStreamingBinary(ctx context.Context, config providerConfig, path string, body interface{}) ([]byte, string, error) {
+	data, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL(config.BaseURL, path), bytes.NewReader(data))
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	ApplyOutboundHeaders(req, config.Headers)
+	return doBinary(req)
 }
 
 func postJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {

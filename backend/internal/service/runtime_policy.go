@@ -119,7 +119,7 @@ func defaultRuntimePolicy() RuntimePolicySetting {
 			TextTimeoutMinutes:       8,
 			AudioTimeoutMinutes:      8,
 			VideoTimeoutMinutes:      30,
-			StoryboardTimeoutMinutes: 12,
+			StoryboardTimeoutMinutes: 20,
 			DefaultTimeoutMinutes:    10,
 		},
 		Request: RuntimeRequestPolicy{

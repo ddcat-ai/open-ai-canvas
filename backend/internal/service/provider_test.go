@@ -55,6 +55,60 @@ func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 	}
 }
 
+func TestParseTextEventStreamSupportsResponsesAndChat(t *testing.T) {
+	responses := []byte(`event: response.output_text.delta
+data: {"delta":"{\"title\":\"分镜\"}"}
+
+event: response.output_text.delta
+data: {"delta":"}"}
+
+data: [DONE]
+
+`)
+	if got, err := parseTextEventStream(responses, "responses"); err != nil || got != `{"title":"分镜"}` {
+		t.Fatalf("Responses stream = %q, err = %v", got, err)
+	}
+
+	chat := []byte(`data: {"choices":[{"delta":{"content":"第一镜"}}]}
+
+data: {"choices":[{"delta":{"content":"：远景"}}]}
+
+data: [DONE]
+
+`)
+	if got, err := parseTextEventStream(chat, "chat-completion"); err != nil || got != "第一镜：远景" {
+		t.Fatalf("Chat stream = %q, err = %v", got, err)
+	}
+}
+
+func TestPostStreamingTextSetsStreamHeaders(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Accept"); got != "text/event-stream" {
+			t.Errorf("Accept = %q", got)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		if stream, ok := body["stream"].(bool); !ok || !stream {
+			t.Errorf("stream body field = %#v", body["stream"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"流式分镜"}}]}
+
+data: [DONE]
+
+`))
+	}))
+	defer server.Close()
+
+	got, err := postStreamingText(context.Background(), providerConfig{BaseURL: server.URL, APIKey: "test-key"}, "/chat/completions", map[string]interface{}{"model": "test-model"}, "chat-completion")
+	if err != nil || got != "流式分镜" {
+		t.Fatalf("postStreamingText() = %q, err = %v", got, err)
+	}
+}
+
 func TestProviderHTTPErrorWarnsAboutUncertain524Billing(t *testing.T) {
 	message := (providerHTTPError{StatusCode: 524, Status: "524 A Timeout Occurred"}).Error()
 	if !strings.Contains(message, "可能仍在服务端执行并产生费用") || !strings.Contains(message, "请勿立即重试") {
