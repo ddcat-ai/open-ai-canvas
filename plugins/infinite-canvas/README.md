@@ -86,4 +86,4 @@ bun run dev
 CANVAS_URL=http://localhost:3000 npx -y @ddcat666/open-ai-canvas-agent
 ```
 
-手动排查时先从 Agent 输出或 `http://127.0.0.1:17371/config` 读取本地地址和 token，然后直接打开 `<画布网页地址>/canvas?mode=new&agentUrl=<Local URL>&agentToken=<Connect token>`。不要通过页面点击来新建画布；`mode=new` 会让网页自动创建具体画布并连接本地 Agent。
+手动排查时先从 Agent 输出或 `http://127.0.0.1:17371/config` 读取本地地址和 token，然后直接打开 `<画布网页地址>/canvas?mode=new&agentUrl=<Local URL>&agentToken=<Connect token>`。`agentToken` 仅作为一次性握手参数，页面连接成功后会被替换为短时会话并立即从地址栏移除，后续请求不再携带 token；不要通过页面点击来新建画布，`mode=new` 会让网页自动创建具体画布并连接本地 Agent。

@@ -1,9 +1,14 @@
 import express, { type NextFunction, type Request, type Response } from "express";
+import { randomBytes } from "node:crypto";
 
 import { DEFAULT_PORT, ensureCanvasWorkspace, loadConfig, saveConfig, updateCanvasWorkspace, type CanvasAgentConfig } from "./config.js";
 import { CanvasSession } from "./canvas-session.js";
 import { archiveCodexThread, listCodexThreads, readCodexThread, resumeCodexThread, runClaudeTurn, runCodexTurn, startCodexThread, summarizeCodexThread, verifyCodexThreadWorkspace, withAgentPrompt } from "./agents.js";
 import type { AgentAttachment } from "./types.js";
+
+const EVENT_SESSION_COOKIE = "canvas_agent_event_session";
+const EVENT_SESSION_TTL_MS = 10 * 60 * 1000;
+const eventSessions = new Map<string, number>();
 
 export function startHttpServer() {
     const config = loadConfig(true);
@@ -24,6 +29,16 @@ export function startHttpServer() {
     });
     app.get("/health", (_req, res) => res.json(session.health()));
     app.get("/config", (_req, res) => res.json({ ok: true, url: config.url, hasToken: true }));
+    app.post("/events/session", (req, res) => {
+        const header = req.headers["x-canvas-agent-token"];
+        const headerMatches = header === config.token || (Array.isArray(header) && header.includes(config.token));
+        if (!headerMatches) return void res.status(401).json({ ok: false, error: "invalid token" });
+        pruneEventSessions();
+        const sessionToken = randomBytes(24).toString("hex");
+        eventSessions.set(sessionToken, Date.now() + EVENT_SESSION_TTL_MS);
+        res.setHeader("Set-Cookie", `${EVENT_SESSION_COOKIE}=${sessionToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(EVENT_SESSION_TTL_MS / 1000)}`);
+        res.json({ ok: true });
+    });
     app.use((req, res, next) => {
         if (validToken(req, requestUrl(req, config), config.token)) return next();
         res.status(401).json({ ok: false, error: "invalid token" });
@@ -122,6 +137,7 @@ function requestUrl(req: Request, config: CanvasAgentConfig) {
 function setCors(req: Request, res: Response, url: URL, config: CanvasAgentConfig) {
     const origin = req.headers.origin;
     res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    if (origin) res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Access-Control-Allow-Headers", "content-type,x-canvas-agent-token");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Private-Network", "true");
@@ -135,7 +151,37 @@ function setCors(req: Request, res: Response, url: URL, config: CanvasAgentConfi
     return config.origins.includes(origin);
 }
 
-function validToken(req: Request, url: URL, token: string) {
+function validToken(req: Request, _url: URL, token: string) {
     const header = req.headers["x-canvas-agent-token"];
-    return url.searchParams.get("token") === token || header === token || (Array.isArray(header) && header.includes(token));
+    const headerMatches = header === token || (Array.isArray(header) && header.includes(token));
+    return headerMatches || validEventSession(sessionTokenFromCookie(req));
+}
+
+function sessionTokenFromCookie(req: Request) {
+    const cookie = req.headers.cookie || "";
+    for (const part of cookie.split(";")) {
+        const [name, ...rest] = part.trim().split("=");
+        if (name === EVENT_SESSION_COOKIE) return rest.join("=") || "";
+    }
+    return "";
+}
+
+function validEventSession(value: string) {
+    if (!value) return false;
+    const expiresAt = eventSessions.get(value);
+    if (!expiresAt) return false;
+    if (Date.now() > expiresAt) {
+        eventSessions.delete(value);
+        return false;
+    }
+    eventSessions.set(value, Date.now() + EVENT_SESSION_TTL_MS);
+    return true;
+}
+
+function pruneEventSessions() {
+    if (eventSessions.size < 100) return;
+    const now = Date.now();
+    for (const [key, expiresAt] of eventSessions) {
+        if (expiresAt <= now) eventSessions.delete(key);
+    }
 }

@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import { StyleProfileEditorModal } from "@/components/canvas/style-profile-editor-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
+import { scopedLocalStorage } from "@/lib/user-scope";
 import {
     compileCanvasStylePreset,
     customCanvasStylePreset,
@@ -515,14 +516,14 @@ export function CanvasStylePickerModal({ open, value, currentProfile, startInEdi
         const { preset } = item;
         const next = [preset.id, ...recentIds.filter((id) => id !== preset.id)].slice(0, 12);
         setRecentIds(next);
-        localStorage.setItem(STYLE_RECENT_KEY, JSON.stringify(next));
+        scopedLocalStorage.setItem(STYLE_RECENT_KEY, JSON.stringify(next));
         if (item.kind === "user") void touchStyleProfile(item.entity.id).then(() => queryClient.invalidateQueries({ queryKey: ["style-profiles"] })).catch((error) => message.warning(error instanceof Error ? error.message : "最近使用记录更新失败"));
         onSelect(preset);
     }
     function toggleSystemFavorite(presetId: string) {
         const next = systemFavoriteIds.includes(presetId) ? systemFavoriteIds.filter((id) => id !== presetId) : [presetId, ...systemFavoriteIds];
         setSystemFavoriteIds(next);
-        localStorage.setItem(STYLE_FAVORITES_KEY, JSON.stringify(next));
+        scopedLocalStorage.setItem(STYLE_FAVORITES_KEY, JSON.stringify(next));
     }
     function createNewStyle() {
         setEditor({ profile: blankUserStyle() });
@@ -601,7 +602,7 @@ export function CanvasStylePickerModal({ open, value, currentProfile, startInEdi
 
 function readStyleIds(key: string) {
     try {
-        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        const parsed = JSON.parse(scopedLocalStorage.getItem(key) || "[]");
         return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string").slice(0, 100) : [];
     } catch {
         return [];
