@@ -119,7 +119,7 @@ func defaultRuntimePolicy() RuntimePolicySetting {
 			TextTimeoutMinutes:       8,
 			AudioTimeoutMinutes:      8,
 			VideoTimeoutMinutes:      30,
-							StoryboardTimeoutMinutes: 15,
+							StoryboardTimeoutMinutes: 20, // 默认分镜任务超时提高到20分钟，避免腾讯1环境2分钟快速失败（已修改，详见runtime_policy.go:122）
 
 			DefaultTimeoutMinutes:    10,
 		},
