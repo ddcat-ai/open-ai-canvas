@@ -1,5 +1,5 @@
 import { Check, Clapperboard, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Plus, Settings2, Sparkles, Trash2, Video, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Dropdown, Input } from "antd";
 
@@ -105,20 +105,22 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
 }
 
 function ProjectPreview({ project }: { project: CanvasProject }) {
+    const [failedMediaKeys, setFailedMediaKeys] = useState<ReadonlySet<string>>(() => new Set());
     const mediaNodes = project.nodes
         .flatMap((node) => {
             if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return [];
             const url = getNodeMediaUrl(node);
-            return isPreviewUrl(url) ? [{ node, url }] : [];
+            const key = `${node.id}:${url}`;
+            return isPreviewUrl(url) && !failedMediaKeys.has(key) ? [{ node, url, key }] : [];
         });
     const media = mediaNodes.find(({ node }) => node.type === CanvasNodeType.Image) || mediaNodes[0];
     if (media) {
-        const { node, url } = media;
+        const { node, url, key } = media;
         return (
             <div className="canvas-project-media size-full">
                 {node.type === CanvasNodeType.Video
                     ? <div className="canvas-project-video size-full"><Video className="size-8" aria-label={node.title || "项目视频"} /></div>
-                    : <img src={url} alt={node.title || "项目图片"} loading="lazy" decoding="async" className="size-full min-h-0 object-cover" />}
+                    : <img src={url} alt="" loading="lazy" decoding="async" className="size-full min-h-0 object-cover" onError={() => setFailedMediaKeys((current) => { const next = new Set(current); next.add(key); return next; })} />}
             </div>
         );
     }
