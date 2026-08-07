@@ -35,6 +35,7 @@ import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-mo
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
+import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
 import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -431,6 +432,7 @@ function InfiniteCanvasPage() {
 
     const {
         assetPickerOpen,
+        closeUploadModal,
         closeAssetPicker,
         createImageAssetNode,
         fileDropActive,
@@ -442,12 +444,14 @@ function InfiniteCanvasPage() {
         handleImageInputChange,
         handleProjectAssetsInsert,
         handleProjectChapterInsert,
+        handleUploadFiles,
         handleUploadRequest,
         imageInputRef,
         openAssetsAtPosition,
         pasteAssistantImage,
         pasteSystemClipboard,
         startUploadStatus,
+        uploadModalOpen,
         uploadStatus,
     } = useCanvasUpload({
         canvasId: projectId,
@@ -1812,6 +1816,8 @@ function InfiniteCanvasPage() {
                         onSetAssetCategory={(nodeId, assetCategory) => handleConfigNodeChange(nodeId, { assetCategory })}
                         onToggleFrame={(node) => toggleFrameCollapsed(node.id)}
                     />
+
+                    <CanvasUploadModal open={uploadModalOpen} onClose={closeUploadModal} onUpload={handleUploadFiles} />
 
                     <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
 
