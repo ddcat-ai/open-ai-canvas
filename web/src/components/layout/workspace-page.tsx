@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export function WorkspacePage({ children, className, grid = false, fluid = false }: { children: ReactNode; className?: string; grid?: boolean; fluid?: boolean }) {
     return (
-        <main className={cn("app-user-content thin-scrollbar h-full overflow-y-auto text-foreground", grid && "app-workspace-grid", className)}>
+        <main className={cn("app-user-content app-workspace-scroll h-full overflow-y-auto text-foreground", grid && "app-workspace-grid", className)}>
             <div className={fluid ? "h-full w-full" : "w-full px-3 py-3 sm:px-4 sm:py-4 xl:px-5"}>{children}</div>
         </main>
     );
@@ -54,8 +54,9 @@ export function CollectionGrid({ children, className }: { children: ReactNode; c
 export function PaginationBar({ current, pageSize, total, onChange, pageSizeOptions = [20, 50, 100] }: { current: number; pageSize: number; total: number; onChange: (page: number, pageSize: number) => void; pageSizeOptions?: number[] }) {
     if (total <= pageSize && current === 1) return null;
     return (
-        <div className="app-pagination-bar sticky bottom-0 z-10 flex min-w-0 justify-end border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <div className="app-pagination-bar mt-4 flex min-h-10 min-w-0 items-center justify-end border-t border-border/70 px-2 py-1.5">
             <Pagination
+                size="small"
                 current={current}
                 pageSize={pageSize}
                 total={total}

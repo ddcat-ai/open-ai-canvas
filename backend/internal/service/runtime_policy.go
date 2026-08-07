@@ -15,13 +15,13 @@ import (
 const runtimePolicySettingKey = "runtime_policy"
 
 const (
-	maxRuntimeUploadMB   int64 = 999
-	maxRuntimeStorageGB  int64 = 999
-	maxRuntimeDataMB     int64 = 999_999
-	maxRuntimeCount      int64 = 999_999_999
-	maxRuntimeRate             = 999_999
-	maxRuntimeConcurrency      = 999
-	maxRuntimeTimeoutMinutes   = 9_999
+	maxRuntimeUploadMB       int64 = 999
+	maxRuntimeStorageGB      int64 = 999
+	maxRuntimeDataMB         int64 = 999_999
+	maxRuntimeCount          int64 = 999_999_999
+	maxRuntimeRate                 = 999_999
+	maxRuntimeConcurrency          = 999
+	maxRuntimeTimeoutMinutes       = 9_999
 )
 
 type RuntimeResourcePolicy struct {
@@ -52,27 +52,27 @@ type RuntimeTaskPolicy struct {
 }
 
 type RuntimeRequestPolicy struct {
-	TaskCreatePerMinute          int   `json:"taskCreatePerMinute"`
-	SessionCreatePerMinute       int   `json:"sessionCreatePerMinute"`
-	ResourceUploadPerMinute      int   `json:"resourceUploadPerMinute"`
-	ResourceImportPerMinute      int   `json:"resourceImportPerMinute"`
-	SessionFilePerMinute         int   `json:"sessionFilePerMinute"`
-	AssetWritePerMinute          int   `json:"assetWritePerMinute"`
-	CanvasWritePerMinute         int   `json:"canvasWritePerMinute"`
-	RegisterPerHour              int   `json:"registerPerHour"`
-	EmailCodePerHour             int   `json:"emailCodePerHour"`
-	LoginIPPerTenMinutes         int   `json:"loginIPPerTenMinutes"`
-	LoginAccountPerTenMinutes    int   `json:"loginAccountPerTenMinutes"`
-	SystemRelayPerMinute         int   `json:"systemRelayPerMinute"`
-	CustomRelayPerMinute         int   `json:"customRelayPerMinute"`
-	CustomRelayConcurrency       int   `json:"customRelayConcurrency"`
-	CustomRelayRequestMB         int64 `json:"customRelayRequestMB"`
-	CustomRelayResponseMB        int64 `json:"customRelayResponseMB"`
-	CustomRelayTimeoutMinutes    int   `json:"customRelayTimeoutMinutes"`
-	SystemRelayRequestMB         int64 `json:"systemRelayRequestMB"`
-	SystemRelayResponseMB        int64 `json:"systemRelayResponseMB"`
-	ChannelCircuitFailureCount   int   `json:"channelCircuitFailureCount"`
-	ChannelCircuitOpenSeconds    int   `json:"channelCircuitOpenSeconds"`
+	TaskCreatePerMinute        int   `json:"taskCreatePerMinute"`
+	SessionCreatePerMinute     int   `json:"sessionCreatePerMinute"`
+	ResourceUploadPerMinute    int   `json:"resourceUploadPerMinute"`
+	ResourceImportPerMinute    int   `json:"resourceImportPerMinute"`
+	SessionFilePerMinute       int   `json:"sessionFilePerMinute"`
+	AssetWritePerMinute        int   `json:"assetWritePerMinute"`
+	CanvasWritePerMinute       int   `json:"canvasWritePerMinute"`
+	RegisterPerHour            int   `json:"registerPerHour"`
+	EmailCodePerHour           int   `json:"emailCodePerHour"`
+	LoginIPPerTenMinutes       int   `json:"loginIPPerTenMinutes"`
+	LoginAccountPerTenMinutes  int   `json:"loginAccountPerTenMinutes"`
+	SystemRelayPerMinute       int   `json:"systemRelayPerMinute"`
+	CustomRelayPerMinute       int   `json:"customRelayPerMinute"`
+	CustomRelayConcurrency     int   `json:"customRelayConcurrency"`
+	CustomRelayRequestMB       int64 `json:"customRelayRequestMB"`
+	CustomRelayResponseMB      int64 `json:"customRelayResponseMB"`
+	CustomRelayTimeoutMinutes  int   `json:"customRelayTimeoutMinutes"`
+	SystemRelayRequestMB       int64 `json:"systemRelayRequestMB"`
+	SystemRelayResponseMB      int64 `json:"systemRelayResponseMB"`
+	ChannelCircuitFailureCount int   `json:"channelCircuitFailureCount"`
+	ChannelCircuitOpenSeconds  int   `json:"channelCircuitOpenSeconds"`
 }
 
 type RuntimePolicySetting struct {
@@ -119,7 +119,7 @@ func defaultRuntimePolicy() RuntimePolicySetting {
 			TextTimeoutMinutes:       8,
 			AudioTimeoutMinutes:      8,
 			VideoTimeoutMinutes:      30,
-			StoryboardTimeoutMinutes: 12,
+			StoryboardTimeoutMinutes: 20,
 			DefaultTimeoutMinutes:    10,
 		},
 		Request: RuntimeRequestPolicy{

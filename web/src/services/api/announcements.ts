@@ -1,6 +1,4 @@
-import axios from "axios";
-
-import type { BackendEnvelope } from "@/services/api/task-center";
+import { apiClient, request } from "@/services/api/request";
 
 export type AnnouncementLevel = "info" | "success" | "warning" | "critical";
 export type AnnouncementStatus = "active" | "closed";
@@ -30,13 +28,7 @@ export type AdminAnnouncementListParams = {
     limit?: number;
 };
 
-const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
-
-async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    const response = await promise;
-    if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-    return response.data.data;
-}
+const api = apiClient;
 
 export function getAnnouncementFeed() {
     return request<AnnouncementFeed>(api.get("/announcements"));

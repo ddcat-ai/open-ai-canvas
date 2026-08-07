@@ -1,4 +1,5 @@
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
+import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
 
 export type Position = {
     x: number;
@@ -51,7 +52,7 @@ export type CanvasGenerationBatchItemStatus = "waiting" | "submitting" | "queued
 export type CanvasImageGenerationType = "generation" | "edit";
 export type CanvasGenerationPath = "t2i" | "i2i" | "t2v" | "i2v" | "edit-mask" | "text" | "audio" | "unknown";
 export type CanvasReferenceRole = "auto" | "prompt_text" | "style_ref" | "subject_ref" | "first_frame" | "last_frame" | "motion_ref" | "audio_ref" | "character_ref";
-export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character" | "scene" | "storyboard" | "shot" | "final" | "styleboard" | "reference_set" | "action_board";
+export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character" | "scene" | "storyboard" | "shot" | "final" | "styleboard" | "reference_set" | "reference_video" | "action_board";
 export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat";
 export type CanvasSkillCategory = "writing" | "storyboard" | "image" | "video" | "utility";
 export type CanvasSkillOutputMode = "text" | "json" | "image_prompt" | "workflow";
@@ -199,6 +200,8 @@ export type CanvasNodeMetadata = {
     workflowTitle?: string;
     workflowDescription?: string;
     stylePresetId?: string;
+    styleProfileJson?: string;
+    styleExecutionPlan?: StyleExecutionPlan;
     chapterId?: string;
     chapterTitle?: string;
     shotIndex?: number;
@@ -255,6 +258,7 @@ export type CanvasNodeMetadata = {
     directorPreviewNodeId?: string;
     directorDepthNodeId?: string;
     directorNormalNodeId?: string;
+    directorClayVideoNodeId?: string;
     skillId?: string;
     skillVersion?: number;
     skillSnapshot?: CanvasSkillSnapshot;

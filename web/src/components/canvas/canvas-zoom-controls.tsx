@@ -76,7 +76,9 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
         {
             id: "zoom-precision",
             label: "精确缩放",
-            icon: <span className="flex items-baseline text-[var(--fs-micro)] font-bold tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[7px] opacity-55">%</span></span>,
+            wide: true,
+            quiet: true,
+            icon: <span className="inline-flex h-full items-center justify-center whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[var(--fs-micro)] font-medium leading-none opacity-50">%</span></span>,
             active: precisionOpen,
             onClick: () => setPrecisionOpen((value) => !value),
         },
@@ -86,7 +88,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-50" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {precisionOpen ? (
                     <motion.div
@@ -94,7 +96,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 9, scale: 0.96 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[50px] left-0 w-[220px] overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl"
+                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 w-[220px] overflow-hidden rounded-[var(--panel-radius)] border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />

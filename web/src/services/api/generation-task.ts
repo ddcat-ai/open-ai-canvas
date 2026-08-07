@@ -2,6 +2,7 @@ import { getMediaBlob, resolveMediaUrl } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { isResourceUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -203,6 +204,9 @@ function backendImageReference(image: ReferenceImage, override: Partial<Referenc
         dataUrl: "",
         url: override.url,
         storageKey: override.storageKey,
+        ...(image.bytes ? { bytes: image.bytes } : {}),
+        ...(image.width ? { width: image.width } : {}),
+        ...(image.height ? { height: image.height } : {}),
     };
 }
 
@@ -242,6 +246,7 @@ export function backendProviderConfig(config: AiConfig) {
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
         audioInstructions: config.audioInstructions,
+        capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
         systemPrompt: "",
     };
 }

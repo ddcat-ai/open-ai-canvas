@@ -83,8 +83,8 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     onOpen: () => void;
     onCreateImageNodes: () => void;
     onCreateVideoNodes: () => void;
-    onGenerateImages: () => void;
-    onGenerateVideos: () => void;
+    onGenerateImages: (rowIds: string[]) => void;
+    onGenerateVideos: (rowIds: string[]) => void;
     onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
     onMergeVideos: () => void;
     onCreateActionBoards: () => void;
@@ -237,29 +237,17 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                 <Clapperboard className="size-4" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>{node.title || "分镜脚本"}</span>
                 {batchSummary ? <span className="min-w-0 max-w-[42%] truncate text-[var(--fs-label)] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>{batchSummary}</span> : taskFeedback ? <span className="min-w-0 max-w-[38%] truncate text-[var(--fs-label)] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>{taskFeedback}</span> : null}
-                <span className="text-xs font-medium" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
-                {batch ? <>
-                    {hasFailedBatchItems ? <Tooltip title="重试失败项"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRetryBatch(batch.id); }} aria-label="重试失败项"><RefreshCw className="size-3.5" /></button></Tooltip> : null}
-                    {hasWaitingBatchItems ? <Tooltip title="停止剩余任务"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onStopBatch(batch.id); }} aria-label="停止剩余任务"><Square className="size-3.5" /></button></Tooltip> : null}
-                    <Popover placement="bottomRight" trigger="click" content={<GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />}><Tooltip title="查看详情"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label="查看批次详情"><ListTree className="size-3.5" /></button></Tooltip></Popover>
-                </> : null}
-                {simpleMode ? null : <Tooltip title="生成动作拆分 12 宫格"><button type="button" disabled={!rows.length || hasActiveBatchItems} className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCreateActionBoards(); }}><Grid3X3 className="size-3.5" /></button></Tooltip>}
-                {simpleMode ? null : <Tooltip title="全屏编辑"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(); }}><Expand className="size-3.5" /></button></Tooltip>}
+                <span className="text-[var(--fs-caption)] font-semibold tabular-nums" style={{ color: theme.node.muted }}>{rows.length} 镜 · {totalDuration}s</span>
+                <Tooltip title="全屏编辑"><button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(); }} aria-label="全屏编辑"><Expand className="size-3.5" /></button></Tooltip>
+                <Dropdown menu={{ items: moreMenuItems }} trigger={["click"]} placement="bottomRight">
+                    <button type="button" className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label="更多操作"><MoreHorizontal className="size-3.5" /></button>
+                </Dropdown>
             </div>
-            <StoryboardPipelineBar
-                pipeline={pipeline}
-                simpleMode={simpleMode}
-                disabled={!rows.length || node.metadata?.status === "loading" || hasActiveBatchItems}
-                theme={theme}
-                onCreateImageNodes={onCreateImageNodes}
-                onCreateVideoNodes={onCreateVideoNodes}
-                onGenerateImages={onGenerateImages}
-                onGenerateVideos={onGenerateVideos}
-                videoInputMode={videoInputMode}
-                onVideoInputModeChange={onVideoInputModeChange}
-                onMergeVideos={onMergeVideos}
-            />
-            <div className="grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+            {batch ? <Modal title="批次详情" open={batchDetailsOpen} onCancel={() => setBatchDetailsOpen(false)} footer={null} width={560} centered destroyOnHidden>
+                <GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />
+            </Modal> : null}
+            <StoryboardMiniPipeline pipeline={pipeline} theme={theme} rows={rows} />
+            <div className="storyboard-header-gutter grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                 <HeaderCell borderColor={theme.node.stroke} align="center">序号</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke} align="center">时长</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>画面描述</HeaderCell>
@@ -290,7 +278,14 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             <button type="button" disabled={rows.length <= 1} className="grid size-7 place-items-center rounded outline-none opacity-55 transition enabled:hover:bg-red-500/10 enabled:hover:opacity-100 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-20" style={{ color: theme.accent.danger, "--tw-ring-color": theme.accent.danger } as CSSProperties} title={rows.length <= 1 ? "至少保留一个镜头" : "删除镜头"} aria-label={`删除镜头 ${row.shotNumber}`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onRemoveRow(row.id); }}><Trash2 className="size-3.5" /></button>
                         </div>
                     </div>
-                )) : <button type="button" className="grid h-full min-h-24 w-full place-items-center text-sm" style={{ color: theme.node.muted }} onClick={(event) => { event.stopPropagation(); onAddRow(); }}>+ 添加第一个镜头</button>}
+                )) : (
+                    <button type="button" className="grid h-full min-h-36 w-full place-items-center" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onAddRow(); }}>
+                        <span className="flex flex-col items-center gap-2.5">
+                            <span className="text-sm font-bold">＋ 添加第一个镜头</span>
+                            <span className="text-[var(--fs-label)] font-medium" style={{ color: theme.node.faint }}>可先连接「故事梗概 / 项目画风」节点，或在下方输入提示词一键生成分镜表</span>
+                        </span>
+                    </button>
+                )}
             </div>
             <div className="flex h-9 shrink-0 items-center justify-center border-b" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                 <button type="button" className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ "--tw-ring-color": theme.node.muted } as CSSProperties} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onAddRow(); }}><Plus className="size-3.5" />添加行</button>
@@ -380,26 +375,26 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                             />
                         </div>
                     </Tooltip>
-                    {simpleMode ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>自动拆分 · 默认时长</span> : <Select<StoryboardShotCount>
-                        className="min-w-32"
+                    {simpleMode ? <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>自动拆分 · 时长自动</span> : <Select<StoryboardShotCount>
+                        className="min-w-24"
                         size="small"
                         value={shotCount}
                         disabled={node.metadata?.status === "loading"}
-                        options={[{ value: "auto", label: "分镜数量：自动拆分" }, ...Array.from({ length: 10 }, (_, index) => ({ value: String(index + 1) as StoryboardShotCount, label: `分镜数量：${index + 1}` }))]}
+                        options={[{ value: "auto", label: "自动拆分" }, ...Array.from({ length: 10 }, (_, index) => ({ value: String(index + 1) as StoryboardShotCount, label: `${index + 1} 镜` }))]}
                         popupMatchSelectWidth={false}
                         onChange={onShotCountChange}
                     />}
                     {simpleMode ? null : <Select<StoryboardShotDuration>
-                        className="min-w-36"
+                        className="min-w-24"
                         size="small"
                         value={shotDuration}
                         disabled={node.metadata?.status === "loading"}
                         options={[
-                            { value: "auto", label: "镜头：自动拆分" },
-                            { value: "5", label: "镜头：单个5S" },
-                            { value: "10", label: "镜头：单个10S" },
-                            { value: "15", label: "镜头：单个15S" },
-                            { value: "30", label: "镜头：单个30S" },
+                            { value: "auto", label: "时长自动" },
+                            { value: "5", label: "5 秒" },
+                            { value: "10", label: "10 秒" },
+                            { value: "15", label: "15 秒" },
+                            { value: "30", label: "30 秒" },
                         ]}
                         popupMatchSelectWidth={false}
                         onChange={onShotDurationChange}
@@ -620,71 +615,31 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     );
 }
 
-function StoryboardPipelineBar({ pipeline, simpleMode, disabled, theme, videoInputMode, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos }: {
-    pipeline: CanvasStoryboardPipelineProgress;
-    simpleMode: boolean;
-    disabled: boolean;
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    videoInputMode: StoryboardVideoInputMode;
-    onCreateImageNodes: () => void;
-    onCreateVideoNodes: () => void;
-    onGenerateImages: () => void;
-    onGenerateVideos: () => void;
-    onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
-    onMergeVideos: () => void;
-}) {
-    const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
-    const missingVideos = Math.max(0, pipeline.videos.total - pipeline.videos.created);
-    const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
-    return (
-        <div className="grid h-12 shrink-0 grid-cols-3 border-b" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <PipelineStageCell label={videoInputMode === "keyframe" ? "首帧" : "分镜图（可选）"} stage={pipeline.images} theme={theme}>
-                {simpleMode ? (
-                    <Button size="small" type="text" icon={<ImageIcon className="size-3" />} disabled={disabled || pipeline.images.incomplete === 0} onClick={onGenerateImages}>
-                        {pipeline.images.incomplete ? `生成 ${pipeline.images.incomplete} 张${videoInputMode === "keyframe" ? "首帧" : "分镜图"}` : `${videoInputMode === "keyframe" ? "首帧" : "分镜图"}已完成`}
-                    </Button>
-                ) : (
-                    <>
-                        <Button size="small" type="text" disabled={disabled || missingImages === 0} onClick={onCreateImageNodes}>{missingImages ? `创建 ${missingImages} 个图片节点` : "图片节点已创建"}</Button>
-                        <Button size="small" type="text" disabled={disabled || pipeline.images.incomplete === 0} onClick={onGenerateImages}>生成未完成的图片</Button>
-                    </>
-                )}
-            </PipelineStageCell>
-            <PipelineStageCell label="镜头视频" stage={pipeline.videos} theme={theme}>
-                <Segmented<StoryboardVideoInputMode>
-                    size="small"
-                    value={videoInputMode}
-                    options={[{ value: "direct", label: "直接生成" }, { value: "keyframe", label: "先做首帧" }]}
-                    onChange={onVideoInputModeChange}
-                />
-                {simpleMode ? (
-                    <Button size="small" type="text" icon={<Video className="size-3" />} disabled={disabled || pipeline.videos.incomplete === 0} onClick={onGenerateVideos}>
-                        {pipeline.videos.incomplete ? videoInputMode === "keyframe" ? "确认首帧并生成" : `生成 ${pipeline.videos.incomplete} 个镜头视频` : "镜头视频已完成"}
-                    </Button>
-                ) : (
-                    <>
-                        <Button size="small" type="text" disabled={disabled || missingVideos === 0} onClick={onCreateVideoNodes}>{missingVideos ? `创建 ${missingVideos} 个视频节点` : "视频节点已创建"}</Button>
-                        <Button size="small" type="text" disabled={disabled || pipeline.videos.incomplete === 0} onClick={onGenerateVideos}>{videoInputMode === "keyframe" ? "确认首帧并生成" : "生成未完成的视频"}</Button>
-                    </>
-                )}
-            </PipelineStageCell>
-            <PipelineStageCell label="合并成片" stage={pipeline.final} theme={theme} last>
-                <Button size="small" type={canMerge ? "primary" : "text"} icon={<Merge className="size-3" />} disabled={!canMerge} onClick={onMergeVideos}>
-                    {pipeline.final.success ? "成片已完成" : pipeline.successfulVideoNodeIds.length >= 2 ? `合并 ${pipeline.successfulVideoNodeIds.length} 段视频` : "至少完成 2 段视频"}
-                </Button>
-            </PipelineStageCell>
-        </div>
-    );
+function storyboardStepState(stage: StoryboardPipelineStage): "done" | "current" | "error" | "idle" {
+    if (stage.failed > 0 && stage.success === 0) return "error";
+    if (stage.success > 0) return "done";
+    if (stage.loading > 0 || stage.incomplete > 0) return "current";
+    return "idle";
 }
 
-function PipelineStageCell({ label, stage, theme, children, last = false }: { label: string; stage: StoryboardPipelineStage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; children: ReactNode; last?: boolean }) {
+function StoryboardMiniPipeline({ pipeline, theme, rows }: { pipeline: CanvasStoryboardPipelineProgress; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; rows: StoryboardRow[] }) {
+    const steps: Array<{ key: string; label: string; state: "done" | "current" | "error" | "idle"; hint: string }> = [
+        { key: "script", label: "分镜", state: rows.length > 0 ? "done" : "idle", hint: rows.length > 0 ? `${rows.length} 个镜头` : "待添加镜头" },
+        { key: "images", label: "分镜图（可选）", state: storyboardStepState(pipeline.images), hint: pipelineStatusLabel(pipeline.images) },
+        { key: "videos", label: "视频", state: storyboardStepState(pipeline.videos), hint: pipelineStatusLabel(pipeline.videos) },
+        { key: "final", label: "合并成片", state: pipeline.final.success > 0 ? "done" : pipeline.final.failed > 0 ? "error" : pipeline.final.loading > 0 || pipeline.successfulVideoNodeIds.length >= 2 ? "current" : "idle", hint: pipelineStatusLabel(pipeline.final) },
+    ];
     return (
-        <div className={`flex min-w-0 items-center gap-2 px-3 ${last ? "" : "border-r"}`} style={{ borderColor: theme.node.stroke }}>
-            <div className="min-w-[64px] shrink-0">
-                <div className="text-[var(--fs-label)] font-semibold">{label}</div>
-                <div className="text-[var(--fs-micro)] leading-3" style={{ color: stage.failed ? theme.accent.danger : theme.node.muted }}>{pipelineStatusLabel(stage)}</div>
-            </div>
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden [&_.ant-btn]:!h-7 [&_.ant-btn]:!px-2 [&_.ant-btn]:!text-[var(--fs-tiny)]">{children}</div>
+        <div className="flex h-9 shrink-0 items-center justify-center overflow-hidden border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            {steps.map((step, index) => (
+                <Fragment key={step.key}>
+                    {index > 0 ? <span className="mx-2.5 h-px min-w-3.5 flex-1 max-w-20" style={{ background: theme.node.stroke }} /> : null}
+                    <span className="flex items-center gap-1.5 whitespace-nowrap text-[var(--fs-tiny)]" title={step.hint} style={{ color: step.state === "done" ? theme.node.muted : step.state === "current" ? theme.accent.primary : step.state === "error" ? theme.accent.danger : theme.node.faint, fontWeight: step.state === "current" || step.state === "error" ? 700 : 500 }}>
+                        <span className="size-2 shrink-0 rounded-full" style={{ background: step.state === "done" ? theme.node.activeStroke : step.state === "current" ? theme.accent.primary : step.state === "error" ? theme.accent.danger : theme.node.stroke, boxShadow: step.state === "current" ? `0 0 0 3px ${theme.accent.primarySoft}` : undefined }} />
+                        {step.label}
+                    </span>
+                </Fragment>
+            ))}
         </div>
     );
 }
@@ -847,8 +802,8 @@ function HeaderCell({ children, borderColor, align = "left" }: { children: React
     return <span className={`flex h-full items-center border-r px-4 ${align === "center" ? "justify-center text-center" : "justify-start"}`} style={{ borderColor }}>{children}</span>;
 }
 
-function SmallButton({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
-    return <button type="button" className="grid size-7 shrink-0 place-items-center rounded opacity-65 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10" title={title} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClick(); }}>{children}</button>;
+function SmallButton({ title, children, onClick, disabled }: { title: string; children: ReactNode; onClick: () => void; disabled?: boolean }) {
+    return <button type="button" disabled={disabled} className="grid size-7 shrink-0 place-items-center rounded opacity-65 transition enabled:hover:bg-black/5 enabled:hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-25 dark:enabled:hover:bg-white/10" title={title} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClick(); }}>{children}</button>;
 }
 
 function editorRow(shotNumber: number): StoryboardRow {
@@ -905,7 +860,7 @@ function RowHandle({ side, top, scale, tone, theme, title, onPointerDown }: { si
             type="button"
             aria-label={title || `${side === "left" ? "输入" : "输出"}连接点`}
             title={title || `${side === "left" ? "引入参考" : "连接到图片、视频或生成节点"}`}
-            className={`canvas-connection-handle absolute z-50 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 ${side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"}`}
+            className={`canvas-connection-handle absolute z-[var(--node-z-handle)] flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 ${side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"}`}
             style={{ top, width: 32 * inverseHitScale, height: 32 * inverseHitScale, "--tw-ring-color": theme.accent.primary } as CSSProperties}
             onPointerDown={onPointerDown}
         >

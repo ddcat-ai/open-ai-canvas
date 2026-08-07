@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,15 +110,73 @@ func TestHydrateNewAPIChannel1ResourceUsesSignedOSSURL(t *testing.T) {
 	}
 }
 
-func TestHydrateNewAPIChannel1ResourceRejectsLocalStorage(t *testing.T) {
+func TestHydrateNewAPIChannel1ResourceUsesSignedLocalURL(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
 	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{Provider: "aliyun", PublicBaseURL: server.URL})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
 	resource := model.Resource{ID: "resource-local", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "local.png"}
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	err := svc.hydrateProviderMedia("user-1", &providerMedia{StorageKey: "resource:resource-local"}, true)
-	if err == nil || !strings.Contains(err.Error(), "启用 OSS") {
+	media := providerMedia{StorageKey: "resource:resource-local"}
+	if err := svc.hydrateProviderMedia("user-1", &media, true); err != nil {
 		t.Fatalf("hydrateProviderMedia() error = %v", err)
+	}
+	if !strings.HasPrefix(media.URL, server.URL+"/api/public/resources/resource-local/file?") || !strings.Contains(media.URL, "signature=") || media.DataURL != "" {
+		t.Fatalf("media = %#v", media)
+	}
+	stored, err := svc.repo.Resource("resource-local")
+	if err != nil || stored.Provider != "local" {
+		t.Fatalf("resource provider changed: %#v, %v", stored, err)
+	}
+}
+
+func TestPublicResourceSignatureRejectsExpiredAndAlteredLinks(t *testing.T) {
+	svc := newResourceTestService(t)
+	expires := strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10)
+	signature, err := svc.signPublicResource("resource-local", expires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.verifyPublicResourceSignature("resource-local", expires, signature); err != nil {
+		t.Fatalf("verifyPublicResourceSignature() error = %v", err)
+	}
+	if err := svc.verifyPublicResourceSignature("resource-other", expires, signature); err == nil {
+		t.Fatal("verifyPublicResourceSignature() accepted another resource ID")
+	}
+	expired := strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10)
+	expiredSignature, err := svc.signPublicResource("resource-local", expired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.verifyPublicResourceSignature("resource-local", expired, expiredSignature); err == nil {
+		t.Fatal("verifyPublicResourceSignature() accepted an expired link")
+	}
+}
+
+func TestUpdateOSSSettingRequiresLocalServerAddress(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	svc := newResourceTestService(t)
+	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+	if _, err := svc.UpdateOSSSetting(admin, OSSSettingRequest{Provider: "aliyun"}); err == nil || !strings.Contains(err.Error(), "服务器访问地址") {
+		t.Fatalf("UpdateOSSSetting() error = %v", err)
+	}
+	if _, err := svc.UpdateOSSSetting(admin, OSSSettingRequest{Provider: "aliyun", PublicBaseURL: server.URL + "/api"}); err == nil || !strings.Contains(err.Error(), "不要包含 /api") {
+		t.Fatalf("UpdateOSSSetting(/api) error = %v", err)
+	}
+	setting, err := svc.UpdateOSSSetting(admin, OSSSettingRequest{Provider: "aliyun", PublicBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if setting.Enabled || setting.PublicBaseURL != server.URL {
+		t.Fatalf("setting = %#v", setting)
 	}
 }
 

@@ -14,11 +14,13 @@ import (
 )
 
 var (
-	ErrInsufficientCredits  = errors.New("insufficient credits")
-	ErrRedeemCodeInvalid    = errors.New("redeem code invalid")
-	ErrActiveTaskLimit      = errors.New("active task limit reached")
-	ErrTaskNotRetryable     = errors.New("task is not retryable")
-	ErrBillingStateConflict = errors.New("billing state conflict")
+	ErrInsufficientCredits     = errors.New("insufficient credits")
+	ErrRedeemCodeInvalid       = errors.New("redeem code invalid")
+	ErrActiveTaskLimit         = errors.New("active task limit reached")
+	ErrTaskNotRetryable        = errors.New("task is not retryable")
+	ErrBillingStateConflict    = errors.New("billing state conflict")
+	ErrBillingUsageUnavailable = errors.New("billing usage unavailable")
+	ErrBillingUnderreserved    = errors.New("billing amount exceeds reservation")
 )
 
 // 先抢占唯一业务键再更新账户，确保注册和签到奖励在多实例并发下只入账一次。
@@ -222,7 +224,11 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		}
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
-			"started_at": nil, "completed_at": nil, "updated_at": time.Now(),
+			"text_draft": "", "started_at": nil, "completed_at": nil,
+			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
+			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
+			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
+			"lease_owner": "", "lease_expires_at": nil, "updated_at": time.Now(),
 		}
 		if order != nil {
 			updates["billing_order_id"] = order.ID
@@ -238,6 +244,9 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		}
 		if updated.RowsAffected != 1 {
 			return ErrTaskNotRetryable
+		}
+		if err := tx.Delete(&model.TaskTextDelta{}, "user_id = ? AND task_id = ?", userID, taskID).Error; err != nil {
+			return err
 		}
 		return tx.First(&task, "id = ? AND user_id = ?", taskID, userID).Error
 	})
@@ -262,6 +271,9 @@ func (r *Repository) ReserveBillingOrder(order *model.BillingOrder) error {
 }
 
 func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
+	if order.ReservedAmountMicrocredits <= 0 {
+		order.ReservedAmountMicrocredits = order.AmountMicrocredits
+	}
 	account := model.CreditAccount{UserID: order.UserID}
 	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
 		return err
@@ -363,6 +375,29 @@ func (r *Repository) TaskHasSuccessfulBillableCall(taskID string) (bool, error) 
 	return count > 0, err
 }
 
+type BillingUsage struct {
+	InputTokens  int64
+	OutputTokens int64
+	CachedTokens int64
+}
+
+func (r *Repository) BillingUsage(orderID string) (*BillingUsage, error) {
+	return billingUsage(r.db, orderID)
+}
+
+func billingUsage(db *gorm.DB, orderID string) (*BillingUsage, error) {
+	var log model.ApiCallLog
+	err := db.Where("billing_order_id = ? AND billable = ? AND status = ? AND usage_available = ?", orderID, true, model.ApiCallStatusSucceeded, true).
+		Order("created_at desc").First(&log).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrBillingUsageUnavailable
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &BillingUsage{InputTokens: log.InputTokens, OutputTokens: log.OutputTokens, CachedTokens: log.CachedTokens}, nil
+}
+
 func (r *Repository) RecordBillingResolution(id string, actorUserID string, note string) error {
 	return r.db.Model(&model.BillingOrder{}).Where("id = ?", id).Updates(map[string]any{
 		"resolved_by": actorUserID, "resolution_note": note, "updated_at": time.Now(),
@@ -403,6 +438,7 @@ func (r *Repository) MarkBillingRunning(id string) error {
 }
 
 func (r *Repository) MarkBillingUncertain(id string, errorText string) error {
+	// uncertain 保留冻结积分，直到人工核对；这里故意不自动结算或退款。
 	return r.db.Model(&model.BillingOrder{}).
 		Where("id = ? AND status IN ?", id, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).
 		Updates(map[string]any{"status": model.BillingStatusUncertain, "error": errorText, "updated_at": time.Now()}).Error
@@ -419,6 +455,67 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		}
 		if order.Status == model.BillingStatusRefunded {
 			return errors.New("billing order already refunded")
+		}
+		if order.BillingMode == "token" {
+			usage, err := billingUsage(tx, id)
+			if err != nil {
+				return err
+			}
+			reserved := order.ReservedAmountMicrocredits
+			if reserved <= 0 {
+				reserved = order.AmountMicrocredits
+			}
+			actual, err := tokenUsageAmount(order, usage)
+			if err != nil {
+				return err
+			}
+			if actual > reserved {
+				return ErrBillingUnderreserved
+			}
+			refund := reserved - actual
+			updated := tx.Model(&model.CreditAccount{}).
+				Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, reserved).
+				Updates(map[string]any{
+					"available_microcredits": gorm.Expr("available_microcredits + ?", refund),
+					"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", reserved),
+					"version":                gorm.Expr("version + 1"), "updated_at": time.Now(),
+				})
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return errors.New("reserved credit balance is inconsistent")
+			}
+			var account model.CreditAccount
+			if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+				return err
+			}
+			now := time.Now()
+			updates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now,
+				"actual_amount_microcredits": actual, "refunded_amount_microcredits": refund,
+				"input_tokens": usage.InputTokens, "output_tokens": usage.OutputTokens, "cached_tokens": usage.CachedTokens,
+				"usage_available": true}
+			if providerRequestID != "" {
+				updates["provider_request_id"] = providerRequestID
+			}
+			if err := tx.Model(&order).Updates(updates).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
+				AmountMicrocredits: -actual, ReservedDeltaMicrocredits: -reserved,
+				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
+				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene}).Error; err != nil {
+				return err
+			}
+			if refund > 0 {
+				if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerRefund,
+					AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund,
+					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
+					BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "Token 预授权差额退回"}).Error; err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 		updated := tx.Model(&model.CreditAccount{}).
 			Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, order.AmountMicrocredits).
@@ -438,7 +535,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			return err
 		}
 		now := time.Now()
-		orderUpdates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now}
+		orderUpdates := map[string]any{"status": model.BillingStatusSettled, "actual_amount_microcredits": order.AmountMicrocredits, "settled_at": &now, "updated_at": now}
 		if providerRequestID != "" {
 			orderUpdates["provider_request_id"] = providerRequestID
 		}
@@ -492,7 +589,8 @@ func (r *Repository) RefundBillingOrder(id string, errorText string) error {
 			return err
 		}
 		now := time.Now()
-		if err := tx.Model(&order).Updates(map[string]any{"status": model.BillingStatusRefunded, "error": errorText, "refunded_at": &now, "updated_at": now}).Error; err != nil {
+		updates := map[string]any{"status": model.BillingStatusRefunded, "error": errorText, "refunded_amount_microcredits": order.AmountMicrocredits, "refunded_at": &now, "updated_at": now}
+		if err := tx.Model(&order).Updates(updates).Error; err != nil {
 			return err
 		}
 		return tx.Create(&model.CreditLedgerEntry{
@@ -511,6 +609,41 @@ func (r *Repository) RefundBillingOrder(id string, errorText string) error {
 			Note:                       errorText,
 		}).Error
 	})
+}
+
+func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, error) {
+	if usage == nil {
+		return 0, ErrBillingUsageUnavailable
+	}
+	input := usage.InputTokens - usage.CachedTokens
+	if input < 0 {
+		input = 0
+	}
+	inputAmount, ok := safeTokenUsageProduct(input, order.InputTokenPriceMicrocredits)
+	if !ok {
+		return 0, errors.New("invalid token usage amount")
+	}
+	outputAmount, ok := safeTokenUsageProduct(usage.OutputTokens, order.OutputTokenPriceMicrocredits)
+	if !ok || inputAmount > 1<<63-1-outputAmount {
+		return 0, errors.New("invalid token usage amount")
+	}
+	cachedAmount, ok := safeTokenUsageProduct(usage.CachedTokens, order.CachedTokenPriceMicrocredits)
+	base := inputAmount + outputAmount
+	if !ok || base > 1<<63-1-cachedAmount {
+		return 0, errors.New("invalid token usage amount")
+	}
+	base += cachedAmount
+	if order.MultiplierBasisPoints <= 0 || base > (1<<63-1-9_999_999_999)/order.MultiplierBasisPoints {
+		return 0, errors.New("invalid token usage amount")
+	}
+	return (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000, nil
+}
+
+func safeTokenUsageProduct(tokens int64, price int64) (int64, bool) {
+	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
+		return 0, false
+	}
+	return tokens * price, true
 }
 
 func (r *Repository) AdjustCredits(userID string, actorUserID string, amount int64, note string) (*model.CreditAccount, error) {

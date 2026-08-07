@@ -6,6 +6,7 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudio } from "@/lib/canvas/canvas-project-generation";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
+import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -143,23 +144,25 @@ export function useCanvasGenerationExecutor({
             }
 
             const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, addedSkills);
-            const effectivePrompt = expandedPrompt.trim();
-            const { applySubmissionExclusions, buildGenerationSubmissionSnapshot } = await import("@/lib/canvas/canvas-generation-submission");
-            const submissionSnapshot = buildGenerationSubmissionSnapshot({
-                nodeId,
-                mode,
-                userPrompt: editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt,
-                nodes: nodesRef.current,
-                connections: connectionsRef.current,
-                excludedReferenceNodeIds: sourceNode?.metadata?.excludedReferenceNodeIds,
-                effectivePrompt,
-                model: generationConfig.model,
-                size: generationConfig.size,
-                seconds: generationConfig.videoSeconds,
-                vquality: generationConfig.vquality,
-            });
-            const generationContext = applySubmissionExclusions({ ...rawGenerationContext, prompt: effectivePrompt }, submissionSnapshot);
-            setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, submissionSnapshot } } : node)));
+            let effectivePrompt = expandedPrompt.trim();
+            let styleMetadata = {};
+            if (mode === "image" || mode === "video") {
+                try {
+                    const styleRuntime = resolveCanvasStyleExecution(nodesRef.current, sourceNode, effectivePrompt, generationConfig, mode);
+                    if (styleRuntime) {
+                        effectivePrompt = styleRuntime.prompt;
+                        styleMetadata = { styleProfileJson: styleRuntime.profileJson, styleExecutionPlan: styleRuntime.plan };
+                    }
+                } catch (error) {
+                    const errorDetails = generationErrorMessage(error);
+                    if (isPreparingEmptyImage) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, errorDetails } } : node)));
+                    finishGenerationRequest(nodeId, controller);
+                    setRunningNodeId(null);
+                    message.error(errorDetails);
+                    return;
+                }
+            }
+            const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
             if (mode === "audio" && generationContext.characterReferences.length) {
                 if (generationContext.characterReferences.length !== 1) {
                     finishGenerationRequest(nodeId, controller);
@@ -205,6 +208,7 @@ export function useCanvasGenerationExecutor({
                 generationContext,
                 controller,
                 editingTextNode,
+                styleMetadata,
                 setNodes,
                 setConnections,
                 setSelectedNodeIds,

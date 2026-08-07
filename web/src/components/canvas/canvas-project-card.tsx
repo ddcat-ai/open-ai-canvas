@@ -1,4 +1,5 @@
-import { Check, Clapperboard, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Settings2, Sparkles, Trash2, Video, X } from "lucide-react";
+import { Check, Clapperboard, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Plus, Settings2, Sparkles, Trash2, Video, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Dropdown, Input } from "antd";
 
@@ -10,7 +11,15 @@ import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resour
 import { resolveBackendApiUrl } from "@/stores/use-config-store";
 import { cn } from "@/lib/utils";
 
-export function CanvasProjectCard({ project, projectName, variant = "library" }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent" }) {
+export function CanvasCreateCard({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+    return <button type="button" className="app-canvas-create-card" disabled={disabled} onClick={onClick}>
+        <span className="app-canvas-create-preview"><Plus className="app-canvas-create-icon" /></span>
+        <span className="app-canvas-create-title">新建画布</span>
+        <span className="app-canvas-create-meta">从空白开始</span>
+    </button>;
+}
+
+export function CanvasProjectCard({ project, projectName, variant = "library", readOnly = false, footer }: { project: CanvasProject; projectName?: string; variant?: "library" | "recent"; readOnly?: boolean; footer?: ReactNode }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const renameProject = useCanvasStore((state) => state.renameProject);
@@ -32,11 +41,11 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
 
     const compact = variant === "recent";
     return (
-        <article className={cn("app-canvas-project-card group h-full cursor-pointer", compact ? "is-recent" : "is-library overflow-hidden rounded-lg border", selected && "is-selected")} onClick={() => !editing && open()}>
+        <article className={cn("app-canvas-project-card group h-full cursor-pointer", compact ? "is-recent" : "is-library", selected && "is-selected")} onClick={() => (!editing || readOnly) && open()}>
             <div className="app-canvas-project-preview relative">
                 <button
                     type="button"
-                    className={cn("block w-full overflow-hidden text-left", compact ? "aspect-[16/10]" : "aspect-video")}
+                    className={cn("canvas-project-preview-button block w-full overflow-hidden text-left", compact ? "aspect-[16/10]" : "aspect-video")}
                     onClick={(event) => {
                         event.stopPropagation();
                         open();
@@ -44,34 +53,34 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                 >
                     <ProjectPreview project={project} />
                 </button>
-                {!compact ? <span className={`absolute left-2.5 top-2.5 grid size-6 place-items-center rounded-md border border-black/10 bg-white/90 shadow-sm backdrop-blur transition-opacity dark:border-white/10 dark:bg-stone-900/90 ${selected ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox size-3.5" aria-label={`选择 ${project.title}`} /></span> : null}
-                <span className="absolute bottom-2 right-2 rounded-md border border-white/15 bg-stone-950/80 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium text-white backdrop-blur-xl">{project.nodes.length} 节点</span>
+                {!compact && !readOnly ? <span className={`canvas-project-select ${selected ? "is-visible" : ""}`} onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} className="app-canvas-project-checkbox" aria-label={`选择 ${project.title}`} /></span> : null}
+                <div className="canvas-project-cover-meta" aria-hidden="true"><span className="canvas-project-node-count">{project.nodes.length} 节点</span></div>
             </div>
 
-            <div className={cn("app-canvas-project-body", compact ? "px-1 pb-1 pt-2.5" : "px-3 py-2.5")}>
-                <div className="flex min-h-7 items-center justify-between gap-2">
-                {editing ? (
-                    <Input className="min-w-0" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
-                ) : (
-                    <button
-                        type="button"
-                        className="min-w-0 flex-1 cursor-pointer text-left focus-visible:outline-none"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            open();
-                        }}
-                    >
-                        <h2 className="truncate text-[var(--fs-body)] font-semibold leading-5 text-foreground">{project.title}</h2>
-                    </button>
-                )}
-                    {editing ? (
-                        <div className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                            <button type="button" className="grid size-7 place-items-center rounded-md hover:bg-black/5 dark:hover:bg-white/10" onClick={saveTitle} aria-label="保存名称"><Check className="size-3.5" /></button>
-                            <button type="button" className="grid size-7 place-items-center rounded-md hover:bg-black/5 dark:hover:bg-white/10" onClick={stopEditing} aria-label="取消重命名"><X className="size-3.5" /></button>
-                        </div>
+            <div className={cn("app-canvas-project-body", compact ? "is-compact" : "")}>
+                <div className="canvas-project-heading-row">
+                    {editing && !readOnly ? (
+                        <Input className="canvas-project-title-input" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
                     ) : (
-                        <div className="flex shrink-0 items-center" onClick={(event) => event.stopPropagation()}>
-                            <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/38 transition-colors hover:bg-foreground/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/10" onClick={() => startEditing(project.id, project.title)} aria-label={`重命名 ${project.title}`} title="重命名"><Pencil className="size-3.5" /></button>
+                        <button
+                            type="button"
+                            className="canvas-project-title-button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                open();
+                            }}
+                        >
+                            <h2>{project.title}</h2>
+                        </button>
+                    )}
+                    {editing && !readOnly ? (
+                        <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
+                            <button type="button" onClick={saveTitle} aria-label="保存名称"><Check className="size-3.5" /></button>
+                            <button type="button" onClick={stopEditing} aria-label="取消重命名"><X className="size-3.5" /></button>
+                        </div>
+                    ) : !readOnly ? (
+                        <div className="canvas-project-actions" onClick={(event) => event.stopPropagation()}>
+                            <button type="button" onClick={() => startEditing(project.id, project.title)} aria-label={`重命名 ${project.title}`} title="重命名"><Pencil className="size-3.5" /></button>
                             <Dropdown
                                 trigger={["click"]}
                                 menu={{
@@ -83,17 +92,13 @@ export function CanvasProjectCard({ project, projectName, variant = "library" }:
                                     ],
                                 }}
                             >
-                                <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/38 transition-colors hover:bg-foreground/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/10" aria-label={`${project.title} 画布操作`} title="更多操作"><MoreHorizontal className="size-4" /></button>
+                                <button type="button" aria-label={`${project.title} 画布操作`} title="更多操作"><MoreHorizontal className="size-4" /></button>
                             </Dropdown>
                         </div>
-                    )}
+                    ) : null}
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-label)] leading-4 text-foreground/52">
-                    <span className="truncate">{projectName || "自由画布"}</span>
-                    <span className="shrink-0 text-foreground/28" aria-hidden="true">·</span>
-                    <span className="shrink-0 tabular-nums">{project.connections.length} 条连线</span>
-                </div>
-                <p className="mt-1 text-[var(--fs-tiny)] leading-4 tabular-nums text-foreground/38">更新于 {formatProjectTime(project.updatedAt)}</p>
+                <div className="canvas-project-stats"><span>{projectName || "自由画布"}</span><span aria-hidden="true">·</span><time dateTime={project.updatedAt}>{formatProjectTime(project.updatedAt)}</time></div>
+                {footer ? <div className="canvas-project-card-footer" onClick={(event) => event.stopPropagation()}>{footer}</div> : null}
             </div>
         </article>
     );
@@ -110,25 +115,25 @@ function ProjectPreview({ project }: { project: CanvasProject }) {
     if (media) {
         const { node, url } = media;
         return (
-            <div className="size-full bg-stone-900">
+            <div className="canvas-project-media size-full">
                 {node.type === CanvasNodeType.Video
-                    ? <div className="flex size-full items-center justify-center bg-stone-900 text-stone-300"><Video className="size-8" aria-label={node.title || "项目视频"} /></div>
+                    ? <div className="canvas-project-video size-full"><Video className="size-8" aria-label={node.title || "项目视频"} /></div>
                     : <img src={url} alt={node.title || "项目图片"} loading="lazy" decoding="async" className="size-full min-h-0 object-cover" />}
             </div>
         );
     }
     const nodes = project.nodes.slice(0, 8);
-    if (!nodes.length) return <div className="flex size-full items-center justify-center bg-stone-100 text-xs text-stone-400 dark:bg-stone-900 dark:text-stone-500">空白画布</div>;
+    if (!nodes.length) return <div className="canvas-project-empty size-full"><Plus className="canvas-project-empty-icon" /><span>空白画布</span><small>等待第一幕</small></div>;
     const previewNodes = buildNodePreviewLayout(nodes);
 
     return (
-        <div className="relative size-full overflow-hidden bg-stone-100/80 bg-[linear-gradient(rgba(17,24,39,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(17,24,39,.05)_1px,transparent_1px)] bg-[size:20px_20px] dark:bg-stone-950/80 dark:bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)]">
+        <div className="canvas-project-preview-canvas relative size-full overflow-hidden">
             {previewNodes.map(({ node, style }) => {
                 const presentation = getNodePresentation(node);
                 return (
-                    <span key={node.id} className="absolute flex min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-stone-300/90 bg-white/90 px-2 text-left shadow-sm backdrop-blur-sm dark:border-stone-700 dark:bg-stone-900/92" style={style}>
-                        <span className="grid size-5 shrink-0 place-items-center text-stone-500 dark:text-stone-300">{presentation.icon}</span>
-                        <span className="min-w-0 truncate text-[var(--fs-micro)] font-semibold text-stone-700 dark:text-stone-200">{node.title || presentation.label}</span>
+                    <span key={node.id} className="canvas-project-preview-node absolute flex min-w-0 items-center gap-1.5 overflow-hidden" style={style}>
+                        <span className="canvas-project-preview-node-icon">{presentation.icon}</span>
+                        <span className="canvas-project-preview-node-label">{node.title || presentation.label}</span>
                     </span>
                 );
             })}
@@ -186,5 +191,15 @@ function isPreviewUrl(value?: string) {
 }
 
 function formatProjectTime(value: string) {
-    return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return "刚刚修改";
+    const elapsed = Math.max(0, Date.now() - timestamp);
+    const minutes = Math.floor(elapsed / 60000);
+    if (minutes < 1) return "刚刚修改";
+    if (minutes < 60) return `${minutes} 分钟前修改`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} 小时前修改`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} 天前修改`;
+    return new Date(value).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }) + " 修改";
 }

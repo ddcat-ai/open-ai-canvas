@@ -161,7 +161,7 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
             {props.selectedNodeBounds && !props.selectionBox && !props.isNodeDragging ? (
                 <div
                     ref={props.selectionBoundsElementRef}
-                    className="pointer-events-none absolute z-[65] rounded-xl"
+                    className="pointer-events-none absolute z-[var(--z-panel-floating)] rounded-xl"
                     style={{
                         left: props.selectedNodeBounds.left - 12 / viewportScale,
                         top: props.selectedNodeBounds.top - 12 / viewportScale,

@@ -18,6 +18,14 @@ func TestAuthorizeSystemProxyAllowsConfiguredGenerationModel(t *testing.T) {
 	}
 }
 
+func TestAuthorizeSystemProxyAllowsGrokImageJSONEdits(t *testing.T) {
+	channel := &model.ModelChannel{APIFormat: "openai", ModelsJSON: `["grok-imagine-image"]`}
+	body := []byte(`{"model":"grok-imagine-image","prompt":"edit"}`)
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceGrokImage, http.MethodPost, "/images/edits", "application/json", body); err != nil {
+		t.Fatalf("authorizeSystemProxy() error = %v", err)
+	}
+}
+
 func TestAuthorizeCustomRelayAllowsModelsAndAgentEndpoints(t *testing.T) {
 	tests := []struct {
 		method      string
@@ -30,6 +38,7 @@ func TestAuthorizeCustomRelayAllowsModelsAndAgentEndpoints(t *testing.T) {
 		{method: http.MethodPost, target: "https://api.example.com/v1/chat/completions", apiFormat: "openai", contentType: "application/json; charset=utf-8"},
 		{method: http.MethodPost, target: "https://api.example.com/v1/audio/speech", apiFormat: "openai", contentType: "application/json"},
 		{method: http.MethodPost, target: "https://api.example.com/v1/images/edits", apiFormat: "openai", contentType: "multipart/form-data; boundary=test"},
+		{method: http.MethodPost, target: "https://api.example.com/v1/images/edits", apiFormat: "openai", contentType: "application/json"},
 		{method: http.MethodPost, target: "https://api.example.com/v1/videos", apiFormat: "openai", contentType: "application/json"},
 		{method: http.MethodPost, target: "https://api.example.com/v1/videos", apiFormat: "openai", contentType: "multipart/form-data; boundary=test"},
 		{method: http.MethodGet, target: "https://api.example.com/v1/videos/task-1/content", apiFormat: "openai"},

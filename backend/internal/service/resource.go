@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -57,26 +58,105 @@ func (s *Service) Resource(userID string, id string) (*model.Resource, error) {
 	return resource, err
 }
 
-// DirectResourceURL 先校验资源归属，再为私有 OSS 对象签发短时下载地址；本地资源继续由应用流式读取。
+// DirectResourceURL 先校验资源归属，再按实际存储位置签发短时下载地址。
 func (s *Service) DirectResourceURL(userID string, id string) (string, error) {
 	resource, err := s.repo.ResourceForUser(userID, id)
 	if err != nil {
 		return "", err
 	}
+	return s.directResourceURL(resource, time.Now().Add(directResourceURLTTL))
+}
+
+func (s *Service) directResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
+	if resource == nil {
+		return "", errors.New("资源不存在")
+	}
 	if resource.Status != model.ResourceStatusReady {
 		return "", BadAuthRequest("资源尚未上传完成")
 	}
 	if resource.Provider == "local" {
-		return "", BadAuthRequest("当前资源未存储在 OSS")
+		return s.signedPublicResourceURL(resource.ID, expiresAt)
 	}
-	setting, err := s.ossSettingForResource(userID, resource)
+	setting, err := s.ossSettingForResource(resource.UserID, resource)
 	if err != nil {
 		return "", err
 	}
 	setting.Provider = firstNonEmpty(resource.Provider, setting.Provider)
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
-	return signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(directResourceURLTTL))
+	return signedOSSObjectURL(setting, resource.ObjectKey, expiresAt)
+}
+
+func (s *Service) signedPublicResourceURL(resourceID string, expiresAt time.Time) (string, error) {
+	baseURL, err := s.publicResourceBaseURL()
+	if err != nil {
+		return "", err
+	}
+	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
+	signature, err := s.signPublicResource(resourceID, expires)
+	if err != nil {
+		return "", err
+	}
+	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/api/public/resources/" + url.PathEscape(resourceID) + "/file"
+	query := baseURL.Query()
+	query.Set("expires", expires)
+	query.Set("signature", signature)
+	baseURL.RawQuery = query.Encode()
+	return baseURL.String(), nil
+}
+
+func (s *Service) verifyPublicResourceSignature(resourceID string, expires string, signature string) error {
+	if strings.TrimSpace(signature) == "" || !decimalDigits(expires) {
+		return Forbidden("匿名下载链接无效")
+	}
+	expiresAt, err := strconv.ParseInt(expires, 10, 64)
+	if err != nil || time.Now().UTC().Unix() > expiresAt {
+		return Forbidden("匿名下载链接已过期")
+	}
+	expected, err := s.signPublicResource(resourceID, expires)
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(expected), []byte(signature)) {
+		return Forbidden("匿名下载链接无效")
+	}
+	return nil
+}
+
+func (s *Service) signPublicResource(resourceID string, expires string) (string, error) {
+	key, err := s.settingsEncryptionKey()
+	if err != nil {
+		return "", err
+	}
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(resourceID + "\n" + expires))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
+}
+
+func (s *Service) publicResourceBaseURL() (*url.URL, error) {
+	_, setting, err := s.readOSSSetting()
+	if err != nil {
+		return nil, err
+	}
+	raw := firstNonEmpty(setting.PublicBaseURL, os.Getenv("CANVAS_PUBLIC_BASE_URL"))
+	if raw == "" {
+		return nil, BadAuthRequest("服务器本地存储尚未配置服务器访问地址")
+	}
+	return validatePublicResourceBaseURL(raw)
+}
+
+func validatePublicResourceBaseURL(raw string) (*url.URL, error) {
+	parsed, err := ValidateOutboundURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, BadAuthRequest("服务器访问地址不能包含查询参数或片段")
+	}
+	if strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/api") {
+		return nil, BadAuthRequest("服务器访问地址请填写根地址，不要包含 /api")
+	}
+	return parsed, nil
 }
 
 func (s *Service) UploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64) (*model.Resource, error) {
@@ -166,6 +246,20 @@ func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string
 		return nil, err
 	}
 	return s.openResourceRange(userID, resource, rangeHeader)
+}
+
+func (s *Service) OpenPublicResourceRange(id string, expires string, signature string, rangeHeader string) (*ResourceStream, error) {
+	resource, err := s.repo.Resource(id)
+	if err != nil {
+		return nil, Forbidden("匿名下载链接无效")
+	}
+	if resource.Provider != "local" {
+		return nil, Forbidden("匿名下载链接无效")
+	}
+	if err := s.verifyPublicResourceSignature(resource.ID, expires, signature); err != nil {
+		return nil, err
+	}
+	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
 func (s *Service) openResourceRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {

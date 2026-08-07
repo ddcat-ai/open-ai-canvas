@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ChannelInterfaceType = ModelProtocol;
@@ -31,8 +32,12 @@ export type ModelChannel = {
         displayName?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
-        billingMode: "fixed_request" | "per_second";
+        billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
+        inputTokenPriceMicrocredits?: number;
+        outputTokenPriceMicrocredits?: number;
+        cachedTokenPriceMicrocredits?: number;
+        capabilityConfig?: ModelCapabilityConfig;
     }>;
 };
 
@@ -276,8 +281,9 @@ export const useConfigStore = create<ConfigStore>()(
     ),
 );
 
-export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot) {
-    const persistedConfig = (snapshot.config || {}) as Partial<AiConfig>;
+export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefined = {}) {
+    // 坏存储/旧版本快照可能是 undefined 或缺 config，兜底为 defaultConfig，保证渲染不崩溃
+    const persistedConfig = (snapshot?.config || {}) as Partial<AiConfig>;
     const config = { ...defaultConfig, ...persistedConfig };
     const hasPersistedChannels = Array.isArray(persistedConfig.channels);
     if (!hasPersistedChannels) config.channels = [];
@@ -488,7 +494,7 @@ export function defaultBaseUrlForChannelInterface(interfaceType?: ChannelInterfa
     if (interfaceType === "apimart-video") return "https://api.apimart.ai/v1";
     // 本地 MiniMax H3 薄网关；可按局域网改 IP。
     if (interfaceType === "local-h3-video") return "http://192.168.119.105:18787";
-    if (interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "";
+    if (interfaceType === "grok-image" || interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "";
     return OPENAI_BASE_URL;
 }
 

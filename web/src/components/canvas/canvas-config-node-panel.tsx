@@ -7,6 +7,7 @@ import { configuredModelMatchesCapability, defaultConfig, modelOptionName, resol
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -45,7 +46,9 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     const mode = node.metadata?.generationMode || "image";
     const simpleMode = workspaceMode === "simple";
     const config = buildNodeConfig(globalConfig, node, mode);
-    const operationOptions = node.metadata?.videoEditOperation === "concat" ? [...videoOperationOptions, { label: "合并成片", value: "concat" as const }] : videoOperationOptions;
+    const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, config.model).image! : undefined;
+    const videoProfile = mode === "video" ? modelCapabilityConfigFor(config, config.model).video! : undefined;
+    const operationOptions = videoProfile ? videoOperationOptions.filter((item) => videoProfile.operations.includes(item.value) || item.value === "concat") : videoOperationOptions;
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
     const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? count : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
@@ -53,7 +56,12 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     const chipStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
-    const canGenerate = hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput);
+    const capabilityError = imageProfile
+        ? imageCapabilityError(imageProfile, node.metadata?.composerContent ?? node.metadata?.prompt ?? "", inputSummary)
+        : videoProfile
+          ? videoCapabilityError(videoProfile, config.videoSeconds, node.metadata?.composerContent ?? node.metadata?.prompt ?? "", inputSummary, node.metadata?.videoEditOperation)
+          : "";
+    const canGenerate = (hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput)) && !capabilityError;
 
     return (
         <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
@@ -153,6 +161,8 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 </div>
             )}
 
+            {capabilityError ? <div className="mb-2 rounded-md px-2 py-1.5 text-[var(--fs-tiny)]" style={{ background: theme.accent.danger + "18", color: theme.accent.danger }}>{capabilityError}</div> : null}
+
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
@@ -213,21 +223,25 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = node.metadata?.model;
     const model = storedModel && configuredModelMatchesCapability(globalConfig, storedModel, mode) ? storedModel : defaultModel && configuredModelMatchesCapability(globalConfig, defaultModel, mode) ? defaultModel : fallbackModel;
+    const imageProfile = mode === "image" ? modelCapabilityConfigFor(globalConfig, model).image! : undefined;
+    const normalizedImage = imageProfile ? normalizeImageValue(imageProfile, { size: node.metadata?.size || globalConfig.size || defaultConfig.size, quality: node.metadata?.quality || globalConfig.quality || defaultConfig.quality, transparentBackground: node.metadata?.transparentBackground || globalConfig.transparentBackground, count: String(node.metadata?.count || globalConfig.canvasImageCount || globalConfig.count || defaultConfig.count) }) : undefined;
+    const videoProfile = mode === "video" ? modelCapabilityConfigFor(globalConfig, model).video! : undefined;
+    const normalizedVideo = videoProfile ? normalizeVideoValue(videoProfile, { seconds: node.metadata?.seconds || globalConfig.videoSeconds || defaultConfig.videoSeconds, ratio: node.metadata?.size || globalConfig.size || defaultConfig.size, resolution: node.metadata?.vquality || globalConfig.vquality || defaultConfig.vquality }) : undefined;
     return {
         ...globalConfig,
         model,
-        quality: node.metadata?.quality || globalConfig.quality || defaultConfig.quality,
-        size: node.metadata?.size || globalConfig.size || defaultConfig.size,
-        transparentBackground: (node.metadata?.transparentBackground || globalConfig.transparentBackground) === "true" ? "true" : "false",
-        videoSeconds: normalizeVideoDuration(node.metadata?.seconds || globalConfig.videoSeconds || defaultConfig.videoSeconds),
-        vquality: normalizeVideoResolution(node.metadata?.vquality || globalConfig.vquality || defaultConfig.vquality),
-        videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio || defaultConfig.videoGenerateAudio,
-        videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
+        quality: normalizedImage?.quality || node.metadata?.quality || globalConfig.quality || defaultConfig.quality,
+        size: normalizedImage?.size || normalizedVideo?.ratio || node.metadata?.size || globalConfig.size || defaultConfig.size,
+        transparentBackground: normalizedImage?.transparentBackground || ((node.metadata?.transparentBackground || globalConfig.transparentBackground) === "true" ? "true" : "false"),
+        videoSeconds: normalizedVideo?.seconds || normalizeVideoDuration(node.metadata?.seconds || globalConfig.videoSeconds || defaultConfig.videoSeconds),
+        vquality: normalizedVideo?.resolution.replace(/p$/i, "") || normalizeVideoResolution(node.metadata?.vquality || globalConfig.vquality || defaultConfig.vquality),
+        videoGenerateAudio: videoProfile?.generateAudio.supported ? node.metadata?.generateAudio || globalConfig.videoGenerateAudio || String(videoProfile.generateAudio.default) : "false",
+        videoWatermark: videoProfile?.watermark.supported ? node.metadata?.watermark || globalConfig.videoWatermark || String(videoProfile.watermark.default) : "false",
         audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice || defaultConfig.audioVoice,
         audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat || defaultConfig.audioFormat,
         audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed || defaultConfig.audioSpeed,
         audioInstructions: node.metadata?.audioInstructions || globalConfig.audioInstructions || defaultConfig.audioInstructions,
-        count: String(node.metadata?.count || (mode === "image" ? globalConfig.canvasImageCount || globalConfig.count : globalConfig.count) || defaultConfig.count),
+        count: normalizedImage?.count || String(node.metadata?.count || (mode === "image" ? globalConfig.canvasImageCount || globalConfig.count : globalConfig.count) || defaultConfig.count),
     };
 }
 
@@ -236,6 +250,21 @@ function videoConfigPatch(key: keyof AiConfig, value: string) {
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
     return { [key]: value };
+}
+
+function videoCapabilityError(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, seconds: string, prompt: string, input: CanvasConfigNodePanelProps["inputSummary"], operation?: string) {
+    if (!videoDurationAllowed(profile, Number(seconds))) return "当前模型不支持该视频时长";
+    if (Array.from(prompt).length > profile.references.promptMaxChars) return `提示词超过模型限制（最多 ${profile.references.promptMaxChars} 字）`;
+    if (input.imageCount > profile.references.maxImages || input.videoCount > profile.references.maxVideos || input.audioCount > profile.references.maxAudios) return "参考素材数量超过当前模型限制";
+    const resolvedOperation = operation || (input.audioCount > 0 && input.imageCount === 0 && input.videoCount === 0 ? "audio_to_video" : input.videoCount > 0 ? "extend" : input.imageCount > 0 ? "image_to_video" : "text_to_video");
+    if (!profile.operations.includes(resolvedOperation)) return "当前模型不支持该生成模式";
+    return "";
+}
+
+function imageCapabilityError(profile: ImageCapabilityConfig, prompt: string, input: CanvasConfigNodePanelProps["inputSummary"]) {
+    if (Array.from(prompt).length > profile.references.promptMaxChars) return `提示词超过模型限制（最多 ${profile.references.promptMaxChars} 字）`;
+    if (input.imageCount > profile.references.maxImages) return `当前图片模型最多支持 ${profile.references.maxImages} 张参考图`;
+    return "";
 }
 
 function audioConfigPatch(key: CanvasAudioSettingKey, value: string) {

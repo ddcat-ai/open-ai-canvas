@@ -20,9 +20,12 @@ export function FullScreenLoader({ label = "正在恢复创作空间", detail = 
             initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: aceternityMotion.duration.state, ease: aceternityMotion.easing.enter }}
-            className={cn("fixed inset-0 z-[1200] grid min-h-dvh place-items-center overflow-hidden bg-[#f5f6f8] px-6 text-stone-950 dark:bg-[#0b0c0f] dark:text-white", className)}
+            className={cn("fixed inset-0 z-[var(--loader-z)] grid min-h-dvh place-items-center overflow-hidden bg-[#f5f6f8] px-6 text-stone-950 dark:bg-[#0b0c0f] dark:text-white", className)}
         >
-            <div aria-hidden className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.045)_1px,transparent_1px)] bg-[size:44px_44px] dark:bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)]" />
+            <div
+                aria-hidden
+                className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.045)_1px,transparent_1px)] bg-[size:44px_44px] dark:bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)]"
+            />
             <div aria-hidden className="absolute inset-0 overflow-hidden opacity-70">
                 {[0, 1, 2].map((index) => (
                     <motion.span
@@ -46,7 +49,7 @@ export function FullScreenLoader({ label = "正在恢复创作空间", detail = 
                     />
                     <motion.span
                         aria-hidden
-                        className="absolute inset-3 rounded-[22px] border border-amber-500/30 dark:border-amber-300/22"
+                        className="absolute inset-3 rounded-[var(--panel-radius-wide-tight)] border border-amber-500/30 dark:border-amber-300/22"
                         animate={reducedMotion ? undefined : { rotate: -360 }}
                         transition={{ duration: 4.1, repeat: Infinity, ease: "linear" }}
                         style={{ clipPath: "polygon(32% 0, 100% 0, 100% 100%, 98% 100%, 98% 2px, 32% 2px)" }}

@@ -1,16 +1,12 @@
-import axios from "axios";
-
 import { generationErrorMessage } from "@/lib/generation-error";
+import { apiClient, request, type BackendEnvelope } from "@/services/api/request";
+
+export type { BackendEnvelope } from "@/services/api/request";
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type TaskBillingStatus = "reserved" | "running" | "settled" | "refunded" | "uncertain";
+export type ProviderCancelStatus = "requested" | "confirmed" | "uncertain";
 export type AgentSessionStatus = "active" | "completed" | "failed";
-
-export type BackendEnvelope<T> = {
-    code: number;
-    data: T;
-    msg: string;
-};
 
 export type GenerationTask = {
     id: string;
@@ -25,11 +21,17 @@ export type GenerationTask = {
     provider?: string;
     model?: string;
     providerRequestId?: string;
+    providerCancelStatus?: ProviderCancelStatus;
+    providerCancelError?: string;
+    providerCancelAttempts?: number;
+    providerCancelRequestedAt?: string;
+    providerCancelledAt?: string;
     errorCode?: string;
     previewUrl?: string;
     previewKind?: "image" | "video";
     inputJson?: string;
     resultJson?: string;
+    textDraft?: string;
     error?: string;
     attempts: number;
     startedAt?: string;
@@ -55,6 +57,23 @@ export type ProviderTaskQueryResult = {
     providerStatus: string;
     recovered: boolean;
     billingSettled: boolean;
+};
+
+export type TaskTextDelta = {
+    id: string;
+    taskId: string;
+    sequence: number;
+    content: string;
+    byteCount: number;
+    createdAt: string;
+    expiresAt: string;
+};
+
+export type TaskTextReplay = {
+    deltas: TaskTextDelta[];
+    textDraft?: string;
+    finalText?: string;
+    complete: boolean;
 };
 
 export type AgentSession = {
@@ -92,7 +111,7 @@ export type SessionFile = {
     sessionId: string;
     fileName: string;
     mimeType: string;
-	size: number;
+    size: number;
     createdAt: string;
 };
 
@@ -133,30 +152,17 @@ export type CreateTaskInput = {
     input?: Record<string, unknown>;
 };
 
-const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
-
-async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    try {
-        const response = await promise;
-        if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-        return response.data.data;
-    } catch (error) {
-        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
-            throw new Error(error.response?.data?.msg || error.message || "请求失败");
-        }
-        throw error;
-    }
-}
+const api = apiClient;
 
 export function createAgentSession(input: CreateSessionInput) {
-    return request<AgentSessionDetail>(api.post("/create_session", input)).then((detail) => {
+    return request<AgentSessionDetail>(api.post("/sessions", input)).then((detail) => {
         detail.tasks.forEach((task) => notifyCanvasTaskCreated(task));
         return detail;
     });
 }
 
 export function queryAgentSession(id: string) {
-    return request<AgentSessionDetail>(api.get(`/query_session/${encodeURIComponent(id)}`));
+    return request<AgentSessionDetail>(api.get(`/sessions/${encodeURIComponent(id)}`));
 }
 
 export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback = "后端影视 Agent 会话失败") {
@@ -172,14 +178,14 @@ export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback 
 }
 
 export function downloadSessionResults(id: string) {
-    return request<TaskResult[]>(api.get(`/download_results/${encodeURIComponent(id)}`));
+    return request<TaskResult[]>(api.get(`/sessions/${encodeURIComponent(id)}/results`));
 }
 
 export function uploadAgentFile(sessionId: string, file: File) {
     const formData = new FormData();
     formData.append("sessionId", sessionId);
     formData.append("file", file);
-    return request<SessionFile>(api.post("/upload_file", formData));
+    return request<SessionFile>(api.post("/files", formData));
 }
 
 export function createGenerationTask(input: CreateTaskInput) {
@@ -195,8 +201,16 @@ export function listGenerationTasks(limit = 30, options?: { projectId?: string; 
     return request<GenerationTask[]>(api.get("/tasks", { params: { limit, projectId: options?.projectId, activeOnly: options?.activeOnly || undefined } }));
 }
 
-export function queryGenerationTask(id: string) {
-    return request<GenerationTask>(api.get(`/tasks/${encodeURIComponent(id)}`));
+export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
+    return request<GenerationTask>(api.get(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal }));
+}
+
+export function appendTaskTextDelta(id: string, content: string) {
+    return request<TaskTextDelta>(api.post(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content }));
+}
+
+export function queryTaskTextReplay(id: string, after = 0) {
+    return request<TaskTextReplay>(api.get(`/tasks/${encodeURIComponent(id)}/text-deltas`, { params: { after } }));
 }
 
 export function retryGenerationTask(id: string) {
@@ -225,7 +239,7 @@ export async function waitForGenerationTask(id: string, options?: { signal?: Abo
             if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
             let task: GenerationTask;
             try {
-                task = await queryGenerationTask(id);
+                task = await queryGenerationTask(id, { signal: options?.signal });
                 lastTask = task;
                 lastQueryError = undefined;
                 options?.onTaskUpdate?.(task);

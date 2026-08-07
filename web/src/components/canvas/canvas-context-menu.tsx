@@ -1,12 +1,13 @@
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, Check, ChevronRight, Clapperboard, Clipboard, Copy, FolderOpen, FolderPlus, Image as ImageIcon, Layers3, Link2, Maximize2, Music2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Type, Undo2, Upload, UserRound, Video } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Clipboard, Copy, FolderOpen, FolderPlus, Image as ImageIcon, Layers3, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
 
+import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
-import { CanvasCreateCommandGrid, type CanvasCreateCommand } from "@/components/canvas/canvas-create-command-grid";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
+import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { canvasReferenceRoleLabel } from "@/lib/canvas/canvas-generation-submission";
 import { CanvasNodeType, type CanvasNodeData, type CanvasReferenceRole, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
@@ -33,6 +34,7 @@ type CanvasNodeContextMenuProps = {
     canPaste: boolean;
     onClose: () => void;
     onAddNode: (type: CanvasNodeType) => void;
+    onChooseStyle: () => void;
     onOpenDirector: (position: Position) => void;
     onUpload: () => void;
     onOpenAssets: () => void;
@@ -78,6 +80,7 @@ export function CanvasNodeContextMenu({
     canPaste,
     onClose,
     onAddNode,
+    onChooseStyle,
     onOpenDirector,
     onUpload,
     onOpenAssets,
@@ -155,6 +158,7 @@ export function CanvasNodeContextMenu({
         <>
             <SpotlightSurface
                 spotlightColor={theme.toolbar.itemHover}
+                data-canvas-context-menu
                 initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97, x: -3, y: -3 }}
                 animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                 transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
@@ -269,6 +273,7 @@ export function CanvasNodeContextMenu({
                         isProjectLinked={isProjectLinked}
                         reducedMotion={Boolean(reducedMotion)}
                         onAddNode={(type) => runAction(() => onAddNode(type))}
+                        onChooseStyle={() => runAction(onChooseStyle)}
                         onOpenDirector={() => runAction(() => onOpenDirector(menu.position))}
                         onUpload={() => runAction(onUpload)}
                         onOpenAssets={() => runAction(onOpenAssets)}
@@ -280,27 +285,35 @@ export function CanvasNodeContextMenu({
     );
 }
 
-function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, reducedMotion, onAddNode, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; reducedMotion: boolean; onAddNode: (type: CanvasNodeType) => void; onOpenDirector: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void }) {
+function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, reducedMotion, onAddNode, onChooseStyle, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; reducedMotion: boolean; onAddNode: (type: CanvasNodeType) => void; onChooseStyle: () => void; onOpenDirector: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const left = getSubmenuLeft(parentPosition.left);
-    const simpleMode = workspaceMode === "simple";
-    const nodeCommands: CanvasCreateCommand[] = [
-        { id: "text", label: "文本", icon: <Type />, onClick: () => onAddNode(CanvasNodeType.Text) },
-        { id: "drawing", label: "绘图", icon: <Pencil />, onClick: () => onAddNode(CanvasNodeType.Drawing) },
-        { id: "script", label: "分镜脚本", icon: <Clapperboard />, badge: "核心", onClick: () => onAddNode(CanvasNodeType.Script) },
-        ...(!simpleMode ? [{ id: "frame", label: "背板", icon: <PanelTop />, onClick: () => onAddNode(CanvasNodeType.Frame) }] : []),
-        { id: "image", label: "图片", icon: <ImageIcon />, onClick: () => onAddNode(CanvasNodeType.Image) },
-        { id: "video", label: "视频", icon: <Video />, onClick: () => onAddNode(CanvasNodeType.Video) },
-        ...(!simpleMode ? [
-            { id: "director", label: "导演台", icon: <Layers3 />, badge: "3D", onClick: onOpenDirector },
-            { id: "audio", label: "音频", icon: <Music2 />, onClick: () => onAddNode(CanvasNodeType.Audio) },
-        ] : []),
-    ];
-    const resourceCommands: CanvasCreateCommand[] = [
-        { id: "upload", label: "上传文件", icon: <Upload />, onClick: onUpload },
-        ...(isProjectLinked ? [{ id: "project-character", label: "添加角色卡", icon: <UserRound />, onClick: onOpenProjectCharacters }] : []),
-        ...(!isProjectLinked ? [{ id: "assets", label: "素材库", icon: <FolderOpen />, onClick: onOpenAssets }] : []),
-    ];
+    const createContext: AddNodeMenuContext = {
+        workspaceMode,
+        isProjectLinked,
+        handlers: {
+            onAddText: () => onAddNode(CanvasNodeType.Text),
+            onAddImage: () => onAddNode(CanvasNodeType.Image),
+            onAddVideo: () => onAddNode(CanvasNodeType.Video),
+            onAddAudio: () => onAddNode(CanvasNodeType.Audio),
+            onAddScript: () => onAddNode(CanvasNodeType.Script),
+            onAddFrame: () => onAddNode(CanvasNodeType.Frame),
+            onAddDrawing: () => onAddNode(CanvasNodeType.Drawing),
+            onChooseStyle,
+            onOpenDirector,
+            onUpload,
+            onOpenMyAssets: onOpenAssets,
+            onOpenProjectCharacters,
+        },
+    };
+    const commands: CanvasCreateCommand[] = resolveAddNodeMenuCommands(createContext).map((command) => ({
+        id: command.id,
+        label: command.label,
+        icon: command.icon,
+        badge: command.badge,
+        section: command.section,
+        onClick: () => command.run(createContext),
+    }));
 
     return (
         <SpotlightSurface
@@ -315,13 +328,7 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, re
             onPointerDown={(event) => event.stopPropagation()}
         >
             <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />
-            <div>
-                <MenuHeader title="添加节点" />
-                <MenuSection label="创作节点" />
-                <CanvasCreateCommandGrid commands={nodeCommands} />
-                <MenuSection label="导入资源" />
-                <CanvasCreateCommandGrid commands={resourceCommands} variant="resource" />
-            </div>
+            <CanvasCreateMenu commands={commands} />
         </SpotlightSurface>
     );
 }
@@ -352,7 +359,7 @@ function MenuButton({ icon, label, detail, shortcut, badge, chevron = false, act
             onClick={onClick}
         >
             <span className="canvas-menu-item-icon grid size-7 shrink-0 place-items-center rounded-md border opacity-75 group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: danger ? `${theme.accent.danger}12` : theme.spatial.surface, borderColor: danger ? `${theme.accent.danger}33` : theme.toolbar.border, color: danger ? theme.accent.danger : theme.node.text }}>{icon}</span>
-            <span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-xs font-medium"><span className="truncate">{label}</span>{badge ? <span className="rounded-full border px-1 py-0.5 text-[7px] font-bold" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{badge}</span> : null}</span>{detail ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{detail}</span> : null}</span>
+            <span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-xs font-medium"><span className="truncate">{label}</span>{badge ? <span className="rounded-full border px-1 py-0.5 text-[var(--fs-nano)] font-bold" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{badge}</span> : null}</span>{detail ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{detail}</span> : null}</span>
             {shortcut ? <span className="shrink-0 text-[var(--fs-micro)] opacity-38">{shortcut}</span> : null}
             {chevron ? <ChevronRight className="size-3 shrink-0 opacity-45 transition-transform group-hover:translate-x-0.5" /> : null}
         </button>

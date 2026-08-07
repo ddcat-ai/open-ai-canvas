@@ -45,7 +45,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     { value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 256, sendOnEnter = true, onContentSizeChange, ...props },
     forwardedRef,
 ) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const rawTheme = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);

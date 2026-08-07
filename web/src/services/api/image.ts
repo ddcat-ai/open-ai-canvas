@@ -9,6 +9,7 @@ import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
+import { imageSizeRequest, modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
@@ -22,10 +23,7 @@ export type ResponseToolCall = {
     thoughtSignature?: string;
 };
 
-export type ResponseInputMessage =
-    | AiTextMessage
-    | { type: "function_call"; call_id: string; name: string; arguments: string; thoughtSignature?: string }
-    | { role: "tool"; tool_call_id: string; content: string };
+export type ResponseInputMessage = AiTextMessage | { type: "function_call"; call_id: string; name: string; arguments: string; thoughtSignature?: string } | { role: "tool"; tool_call_id: string; content: string };
 
 export type ResponseFunctionTool = {
     type: "function";
@@ -45,10 +43,7 @@ export type ToolResponseResult = {
 type ToolChoice = "auto" | "required" | { type: "function"; name: string };
 type ResponseMessageContent = AiTextMessage["content"] | string;
 type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
-type ResponseInputItem =
-    | { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] }
-    | { type: "function_call"; call_id: string; name: string; arguments: string }
-    | { type: "function_call_output"; call_id: string; output: string };
+type ResponseInputItem = { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: "function_call_output"; call_id: string; output: string };
 type ResponseApiToolDefinition = {
     type: "function";
     name: string;
@@ -56,9 +51,7 @@ type ResponseApiToolDefinition = {
     parameters: Record<string, unknown>;
     strict?: boolean;
 };
-type ResponseApiOutputItem =
-    | { type?: "message"; content?: Array<{ type?: string; text?: string }> }
-    | { type?: "function_call"; id?: string; call_id?: string; name?: string; arguments?: string };
+type ResponseApiOutputItem = { type?: "message"; content?: Array<{ type?: string; text?: string }> } | { type?: "function_call"; id?: string; call_id?: string; name?: string; arguments?: string };
 type ResponseApiPayload = {
     id?: string;
     output?: ResponseApiOutputItem[];
@@ -191,6 +184,34 @@ function resolveRequestSize(quality: string | undefined, size: string) {
     }
     if (value.includes(":")) return resolveSize(quality, value);
     throw new Error("图像尺寸格式不支持，请使用 auto、9:16 或 1024x1024");
+}
+
+function resolveAspectRatio(value: string) {
+    const normalized = value.trim().toLowerCase().replace("×", "x");
+    if (normalized.includes(":")) return normalized;
+    const dimensions = parseImageDimensions(normalized);
+    if (!dimensions) throw new Error("图像比例格式不支持，请使用 3:4 或 1024x1360");
+    const divisor = dimensionGCD(dimensions.width, dimensions.height);
+    return `${dimensions.width / divisor}:${dimensions.height / divisor}`;
+}
+
+function dimensionGCD(left: number, right: number) {
+    while (right) [left, right] = [right, left % right];
+    return Math.max(1, left);
+}
+
+function resolveImageRequestSize(profile: ImageCapabilityConfig, quality: string | undefined, size: string) {
+    const request = imageSizeRequest(profile, size);
+    if (!request) return undefined;
+    const value = request.parameter === "size" ? resolveRequestSize(quality, request.value) : resolveAspectRatio(request.value);
+    return value ? { parameter: request.parameter, value } : undefined;
+}
+
+function validateImageCapability(profile: ImageCapabilityConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
+    if (Array.from(prompt).length > profile.references.promptMaxChars) throw new Error(`提示词超过当前模型限制（最多 ${profile.references.promptMaxChars} 字）`);
+    if (references.length > profile.references.maxImages) throw new Error(`当前图片模型最多支持 ${profile.references.maxImages} 张参考图`);
+    if (mask && !profile.references.maskSupported) throw new Error("当前图片模型不支持蒙版编辑");
+    if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");
 }
 
 function normalizeVolcengineArkImageSize(size: string | undefined) {
@@ -592,12 +613,7 @@ async function requestStreamingChatCompletion(config: AiConfig, body: Record<str
 }
 
 function toGeminiBody(config: AiConfig, messages: ResponseInputMessage[], extra?: Record<string, unknown>) {
-    const systemText = [
-        config.systemPrompt.trim(),
-        ...messages.flatMap((message) => (!("type" in message) && message.role === "system" ? [geminiTextContent(message.content)] : [])),
-    ]
-        .filter(Boolean)
-        .join("\n\n");
+    const systemText = [config.systemPrompt.trim(), ...messages.flatMap((message) => (!("type" in message) && message.role === "system" ? [geminiTextContent(message.content)] : []))].filter(Boolean).join("\n\n");
     const contents = toGeminiContents(messages.filter((message) => ("type" in message ? true : message.role !== "system")));
     return {
         contents,
@@ -657,10 +673,7 @@ function toGeminiToolOptions(tools: ResponseFunctionTool[], toolChoice: ToolChoi
         description: tool.function.description,
         parameters: tool.function.parameters,
     }));
-    const functionCallingConfig =
-        typeof toolChoice === "object"
-            ? { mode: "ANY", allowedFunctionNames: [toolChoice.name] }
-            : { mode: toolChoice === "required" ? "ANY" : "AUTO" };
+    const functionCallingConfig = typeof toolChoice === "object" ? { mode: "ANY", allowedFunctionNames: [toolChoice.name] } : { mode: toolChoice === "required" ? "ANY" : "AUTO" };
     return {
         tools: [{ functionDeclarations }],
         toolConfig: { functionCallingConfig },
@@ -788,7 +801,10 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
+    validateImageCapability(imageProfile, prompt, []);
+    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const n = Number(normalizedImage.count);
     if (requestConfig.apiFormat === "gemini") {
         try {
             return await requestGeminiImages(requestConfig, prompt, [], n, options);
@@ -796,31 +812,47 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
+    if (requestConfig.interfaceType === "grok-image") {
+        try {
+            const responseData = await postChannelJSON<ImageApiResponse>(
+                requestConfig,
+                aiApiUrl(requestConfig, "/images/generations"),
+                {
+                    model: requestConfig.model,
+                    prompt: withSystemPrompt(requestConfig, prompt),
+                    n,
+                    response_format: "url",
+                },
+                options,
+            );
+            return parseImagePayload(responseData);
+        } catch (error) {
+            throw new Error(readAxiosError(error, "Grok 图片生成失败"));
+        }
+    }
+    const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
     const isVolcengineArk = requestConfig.interfaceType === "volcengine-ark-image";
-    const normalizedRequestSize = isVolcengineArk ? normalizeVolcengineArkImageSize(requestSize) : requestSize;
+    const normalizedRequestSize = requestSize?.parameter === "size" && isVolcengineArk ? { ...requestSize, value: normalizeVolcengineArkImageSize(requestSize.value)! } : requestSize;
     try {
         const payload = isVolcengineArk
             ? {
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
-                  ...(normalizedRequestSize ? { size: normalizedRequestSize } : {}),
+                  ...(normalizedRequestSize ? { [normalizedRequestSize.parameter]: normalizedRequestSize.value } : {}),
               }
             : {
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
                   ...(quality ? { quality } : {}),
-                  ...(requestSize ? { size: requestSize } : {}),
-                  response_format: "b64_json",
-                  output_format: IMAGE_OUTPUT_FORMAT,
-                  ...(config.transparentBackground === "true" ? { background: "transparent" } : {}),
+                  ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
+                  ...(imageProfile.responseFormat.supported ? { response_format: "b64_json" } : {}),
+                  ...(imageProfile.outputFormat.supported ? { output_format: IMAGE_OUTPUT_FORMAT } : {}),
+                  ...(imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true" ? { background: "transparent" } : {}),
               };
-        const responseData = isVolcengineArk
-            ? await postVolcengineArkImage(requestConfig, payload, options)
-            : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
+        const responseData = isVolcengineArk ? await postVolcengineArkImage(requestConfig, payload, options) : await postChannelJSON<ImageApiResponse>(requestConfig, aiApiUrl(requestConfig, "/images/generations"), payload, options);
         const images = parseImagePayload(responseData);
         return images;
     } catch (error) {
@@ -839,10 +871,19 @@ async function postChannelJSON<T>(config: ReturnType<typeof resolveModelRequestC
     ).data;
 }
 
+async function grokImageInputURL(image: ReferenceImage) {
+    const candidate = image.url?.trim() || "";
+    if (/^https?:\/\//i.test(candidate)) return candidate;
+    return imageToDataUrl(image);
+}
+
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
+    validateImageCapability(imageProfile, prompt, references, mask);
+    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     if (requestConfig.apiFormat === "gemini") {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
@@ -852,10 +893,33 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
+    if (requestConfig.interfaceType === "grok-image") {
+        if (mask) throw new Error("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试");
+        if (references.length !== 1) throw new Error("Grok 图片编辑必须提供且仅支持 1 张参考图");
+        try {
+            const imageUrl = await grokImageInputURL(references[0]);
+            const response = await postChannelJSON<ImageApiResponse>(
+                requestConfig,
+                aiApiUrl(requestConfig, "/images/edits"),
+                {
+                    model: requestConfig.model,
+                    prompt: withSystemPrompt(requestConfig, requestPrompt),
+                    image: { url: imageUrl },
+                    n,
+                    response_format: "url",
+                },
+                options,
+            );
+            return parseImagePayload(response);
+        } catch (error) {
+            throw new Error(readAxiosError(error, "Grok 图片编辑失败"));
+        }
+    }
     if (requestConfig.interfaceType === "volcengine-ark-image") {
         if (mask) throw new Error("火山方舟图片协议不支持蒙版编辑，请移除蒙版后重试");
-        const quality = normalizeQuality(config.quality);
-        const requestSize = normalizeVolcengineArkImageSize(resolveRequestSize(quality, config.size));
+        const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+        const sizeRequest = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
+        const requestSize = sizeRequest?.parameter === "size" ? { ...sizeRequest, value: normalizeVolcengineArkImageSize(sizeRequest.value)! } : sizeRequest;
         try {
             const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
             const response = await postVolcengineArkImage(
@@ -864,7 +928,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     n,
-                    ...(requestSize ? { size: requestSize } : {}),
+                    ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
                     ...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
                 },
                 options,
@@ -874,22 +938,22 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             throw new Error(readAxiosError(error, "火山方舟图片生成失败"));
         }
     }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
+    const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
     const formData = new FormData();
     formData.set("model", requestConfig.model);
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
-    formData.set("response_format", "b64_json");
-    formData.set("output_format", IMAGE_OUTPUT_FORMAT);
-    if (config.transparentBackground === "true") {
+    if (imageProfile.responseFormat.supported) formData.set("response_format", "b64_json");
+    if (imageProfile.outputFormat.supported) formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+    if (imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true") {
         formData.set("background", "transparent");
     }
     if (quality) {
         formData.set("quality", quality);
     }
     if (requestSize) {
-        formData.set("size", requestSize);
+        formData.set(requestSize.parameter, requestSize.value);
     }
     const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => formData.append("image", file));
@@ -914,17 +978,33 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
             return answer;
         }
         if (requestConfig.interfaceType === "chat-completion") {
-            const answer = (await requestStreamingChatCompletion(requestConfig, {
-                model: requestConfig.model,
-                messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
-            }, onDelta, options)).content || "没有返回内容";
+            const answer =
+                (
+                    await requestStreamingChatCompletion(
+                        requestConfig,
+                        {
+                            model: requestConfig.model,
+                            messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                        },
+                        onDelta,
+                        options,
+                    )
+                ).content || "没有返回内容";
             if (answer === "没有返回内容") onDelta(answer);
             return answer;
         }
-        const answer = (await requestStreamingResponse(requestConfig, {
-            model: requestConfig.model,
-            input: toResponseInput(withSystemMessage(requestConfig, messages)),
-        }, onDelta, options)).content || "没有返回内容";
+        const answer =
+            (
+                await requestStreamingResponse(
+                    requestConfig,
+                    {
+                        model: requestConfig.model,
+                        input: toResponseInput(withSystemMessage(requestConfig, messages)),
+                    },
+                    onDelta,
+                    options,
+                )
+            ).content || "没有返回内容";
         if (answer === "没有返回内容") onDelta(answer);
         return answer;
     } catch (error) {
@@ -939,13 +1019,18 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
             return await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages, toGeminiToolOptions(tools, toolChoice)), onDelta, options);
         }
         if (requestConfig.interfaceType === "chat-completion") {
-            return await requestStreamingChatCompletion(requestConfig, {
-                model: requestConfig.model,
-                messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
-                tools,
-                tool_choice: toChatCompletionToolChoice(toolChoice),
-                parallel_tool_calls: false,
-            }, onDelta, options);
+            return await requestStreamingChatCompletion(
+                requestConfig,
+                {
+                    model: requestConfig.model,
+                    messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                    tools,
+                    tool_choice: toChatCompletionToolChoice(toolChoice),
+                    parallel_tool_calls: false,
+                },
+                onDelta,
+                options,
+            );
         }
         return await requestStreamingResponse(
             requestConfig,

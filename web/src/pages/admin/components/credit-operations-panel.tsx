@@ -195,7 +195,17 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
                 </div>
             ),
         },
-        { title: "冻结积分", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
+        { title: "预授权积分", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
+        {
+            title: "实际结算 / 用量",
+            width: 190,
+            render: (_, order) => order.billingMode === "token" ? (
+                <div className="text-xs leading-5">
+                    <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "待 usage 结算"}</div>
+                    <div className="text-foreground/50">输入 {order.inputTokens} · 输出 {order.outputTokens} · 缓存 {order.cachedTokens}</div>
+                </div>
+            ) : <span className="tabular-nums">{order.status === "settled" ? formatCredits(order.actualAmountMicrocredits || order.amountMicrocredits) : "--"}</span>,
+        },
         {
             title: "状态",
             dataIndex: "status",
@@ -414,7 +424,7 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
                                 setPageSize(nextPageSize);
                             },
                         }}
-                        scroll={{ x: 1200 }}
+                        scroll={{ x: 1390 }}
                     />
                 </TableSurface>
             </section>

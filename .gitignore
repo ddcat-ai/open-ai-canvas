@@ -17,6 +17,10 @@ dist/
 *.sqlite3
 *.bak
 *.tmp
+/*.drawio.bkp
+/prompt-preferences-*-before.png
+/prompt*-before.png
+assets/prototypes/.*.drawio.bkp
 .settings-key
 .DS_Store
 .idea/

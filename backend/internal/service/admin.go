@@ -114,12 +114,16 @@ type PublicModelChannel struct {
 }
 
 type PublicChannelModelPrice struct {
-	Model                 string                     `json:"model"`
-	DisplayName           string                     `json:"displayName"`
-	Capability            string                     `json:"capability"`
-	Protocol              model.ChannelInterfaceType `json:"protocol"`
-	BillingMode           string                     `json:"billingMode"`
-	UnitPriceMicrocredits int64                      `json:"unitPriceMicrocredits"`
+	Model                        string                     `json:"model"`
+	DisplayName                  string                     `json:"displayName"`
+	Capability                   string                     `json:"capability"`
+	Protocol                     model.ChannelInterfaceType `json:"protocol"`
+	BillingMode                  string                     `json:"billingMode"`
+	UnitPriceMicrocredits        int64                      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                      `json:"cachedTokenPriceMicrocredits"`
+	CapabilityConfig             *ModelCapabilityConfig     `json:"capabilityConfig,omitempty"`
 }
 
 func (s *Service) RequireAdmin(user *model.User) error {
@@ -260,7 +264,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		return nil, err
 	}
 	return &AdminUser{
-		User:                   *user,
+		User:                  *user,
 		AvailableMicrocredits: account.AvailableMicrocredits,
 		ReservedMicrocredits:  account.ReservedMicrocredits,
 	}, nil
@@ -364,6 +368,9 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 		}
 	}
 	if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
+		return err
+	}
+	if err := s.repo.DeleteUserTaskTextDeltas(user.ID); err != nil {
 		return err
 	}
 	// 有资金流水后必须保留用户主体，删除入口改为停用并清除全部登录态。
@@ -727,7 +734,7 @@ func mergeChannelRequest(req ChannelRequest, channel model.ModelChannel) Channel
 
 func validChannelInterfaceType(value model.ChannelInterfaceType) bool {
 	switch value {
-	case model.ChannelInterfaceChatCompletion, model.ChannelInterfaceOpenAIResponse, model.ChannelInterfaceOpenAIImage, model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceOpenAIAudio, model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceAPIMartVideo, model.ChannelInterfaceLocalH3Video, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo:
+	case model.ChannelInterfaceChatCompletion, model.ChannelInterfaceOpenAIResponse, model.ChannelInterfaceOpenAIImage, model.ChannelInterfaceGrokImage, model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceOpenAIAudio, model.ChannelInterfaceAsyncAudio, model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceAPIMartVideo, model.ChannelInterfaceLocalH3Video, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo:
 		return true
 	default:
 		return false
@@ -743,7 +750,8 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		}
 		models = append(models, item.ModelKey)
 		if item.Enabled && item.PriceConfigured {
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits})
+			capabilityConfig, _ := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
 		}
 	}
 	if len(models) == 0 {

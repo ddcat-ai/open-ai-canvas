@@ -118,7 +118,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
         {
             id: "asset-tray-toggle",
             label: open ? "收起素材空间" : `打开素材空间，共 ${(showLibrary ? assetImages.length : 0) + canvasImages.length} 项`,
-            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[6px] font-bold leading-3" style={{ background: theme.accent.primary, color: "#ffffff" }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
+            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[var(--fs-nano)] font-bold leading-3" style={{ background: theme.accent.primary, color: "#ffffff" }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
             active: open,
             onClick: () => setOpen((value) => !value),
         },
@@ -133,7 +133,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                         animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
                         exit={{ opacity: 0, y: 14, scale: 0.95, rotateX: 3 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[50px] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[18px] border p-2.5 backdrop-blur-2xl"
+                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, height: safeTrayHeight, minHeight: Math.min(TRAY_MIN_HEIGHT, getMaxTrayHeight()), maxHeight: "calc(100vh - 6rem)", boxShadow: `0 32px 100px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />

@@ -99,8 +99,13 @@ type ResolveBillingBatchFailure struct {
 }
 
 type ResolveBillingBatchResult struct {
-	ResolvedCount int                           `json:"resolvedCount"`
+	ResolvedCount int                          `json:"resolvedCount"`
 	Failed        []ResolveBillingBatchFailure `json:"failed"`
+}
+
+type tokenBillingEstimate struct {
+	InputTokens  int64
+	OutputTokens int64
 }
 
 func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {
@@ -444,10 +449,14 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 		capability = capabilityFromTaskType(task.Type)
 	}
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
-	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]))
+	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]), estimateTaskTokens(input))
 }
 
 func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
+	return s.ReserveProxyBillingWithBody(userID, channelID, modelKey, capability, scene, idempotencyKey, quantity, nil)
+}
+
+func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64, requestBody []byte) (*model.BillingOrder, error) {
 	enabled, err := s.FeatureEnabled(FeatureCredits)
 	if err != nil {
 		return nil, err
@@ -458,7 +467,7 @@ func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey 
 	if strings.TrimSpace(idempotencyKey) == "" {
 		idempotencyKey = newID()
 	}
-	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity)
+	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity, estimateProxyTokens(requestBody))
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +480,7 @@ func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey 
 	return order, nil
 }
 
-func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64) (*model.BillingOrder, error) {
+func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate) (*model.BillingOrder, error) {
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, BadAuthRequest("当前系统渠道模型未配置或已停用")
@@ -486,6 +495,7 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 		return nil, BadAuthRequest("即梦视频仅支持 5 秒或 10 秒，请调整视频时长")
 	}
 	quantity := int64(1)
+	amount := int64(0)
 	switch item.BillingMode {
 	case "fixed_request":
 	case "per_second":
@@ -496,6 +506,14 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 			return nil, BadAuthRequest("视频生成时长无效，无法按秒计费")
 		}
 		quantity = requestedQuantity
+	case "token":
+		if item.Capability != "text" || capability != "text" {
+			return nil, BadAuthRequest("Token 计费仅适用于文本生成")
+		}
+		if tokenEstimate.InputTokens <= 0 || tokenEstimate.OutputTokens <= 0 {
+			return nil, BadAuthRequest("无法估算文本 Token 用量")
+		}
+		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
 		return nil, BadAuthRequest("当前模型计费方式暂不支持")
 	}
@@ -507,7 +525,11 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 	if configured := policy.ModelMultiplierBPS[modelKey]; configured > 0 {
 		multiplierBPS = configured
 	}
-	amount, err := creditAmount(item.UnitPriceMicrocredits, quantity, multiplierBPS)
+	if item.BillingMode == "token" {
+		amount, err = tokenEstimateAmount(item, tokenEstimate, multiplierBPS)
+	} else {
+		amount, err = creditAmount(item.UnitPriceMicrocredits, quantity, multiplierBPS)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -516,8 +538,76 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 		ChannelID: channelID, ChannelModelID: item.ID, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: item.BillingMode, PriceVersion: item.PriceVersion,
 		UnitPriceMicrocredits: item.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
+		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
+		OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
 		Status: model.BillingStatusReserved,
 	}, nil
+}
+
+func estimateTaskTokens(input map[string]any) tokenBillingEstimate {
+	encoded, _ := json.Marshal(input)
+	return tokenBillingEstimate{InputTokens: estimatedTokens(encoded), OutputTokens: maxOutputTokens(input)}
+}
+
+func estimateProxyTokens(body []byte) tokenBillingEstimate {
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	return tokenBillingEstimate{InputTokens: estimatedTokens(body), OutputTokens: maxOutputTokens(payload)}
+}
+
+func estimatedTokens(value []byte) int64 {
+	count := int64((len([]rune(string(value))) + 3) / 4)
+	if count < 1 {
+		return 1
+	}
+	return count
+}
+
+func maxOutputTokens(payload map[string]any) int64 {
+	for _, key := range []string{"max_output_tokens", "max_tokens", "maxOutputTokens"} {
+		value, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(payload[key])), 10, 64)
+		if err == nil && value > 0 {
+			if value > 131072 {
+				return 131072
+			}
+			return value
+		}
+	}
+	if config, ok := payload["config"].(map[string]any); ok {
+		return maxOutputTokens(config)
+	}
+	return 4096
+}
+
+// Token 单价按每百万 Token 配置；预授权使用输入价估算缓存 Token，真实结算再按 usage 拆分。
+func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate, multiplierBPS int64) (int64, error) {
+	if item == nil || estimate.InputTokens <= 0 || estimate.OutputTokens <= 0 || multiplierBPS <= 0 {
+		return 0, errors.New("Token 计费参数无效")
+	}
+	inputAmount, ok := safeTokenProduct(estimate.InputTokens, item.InputTokenPriceMicrocredits)
+	if !ok {
+		return 0, errors.New("Token 计费金额溢出")
+	}
+	outputAmount, ok := safeTokenProduct(estimate.OutputTokens, item.OutputTokenPriceMicrocredits)
+	if !ok || inputAmount > 1<<63-1-outputAmount {
+		return 0, errors.New("Token 计费金额溢出")
+	}
+	base := inputAmount + outputAmount
+	if base > (1<<63-1-9_999_999_999)/multiplierBPS {
+		return 0, errors.New("Token 计费金额溢出")
+	}
+	amount := (base*multiplierBPS + 9_999_999_999) / 10_000_000_000
+	if amount <= 0 {
+		return 0, errors.New("Token 计费金额必须大于 0")
+	}
+	return amount, nil
+}
+
+func safeTokenProduct(tokens int64, price int64) (int64, bool) {
+	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
+		return 0, false
+	}
+	return tokens * price, true
 }
 
 func billingQuantity(capability string, value any) int64 {

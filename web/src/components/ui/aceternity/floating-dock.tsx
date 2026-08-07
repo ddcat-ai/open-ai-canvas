@@ -10,6 +10,8 @@ export type FloatingDockCommand = {
     label: string;
     displayLabel?: string;
     icon: ReactNode;
+    wide?: boolean;
+    quiet?: boolean;
     onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
     active?: boolean;
     disabled?: boolean;
@@ -52,6 +54,8 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
     const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
     const reducedMotion = useReducedMotion();
     const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+    // 窄屏下 dock 按钮总宽易超出可用宽度：此时允许横向滚动并禁用放大（放大依赖 overflow-visible，与滚动互斥）
+    const [narrow, setNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
 
     useEffect(() => {
         const media = window.matchMedia("(pointer: coarse)");
@@ -61,7 +65,15 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
         return () => media.removeEventListener("change", update);
     }, []);
 
-    const motionEnabled = !reducedMotion && !coarsePointer;
+    useEffect(() => {
+        const update = () => setNarrow(window.innerWidth < 768);
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+    }, []);
+
+    // scrollable 场景（触屏或窄屏）禁用放大并允许横向滚动，保证按钮始终可达
+    const scrollable = coarsePointer || narrow;
+    const motionEnabled = !reducedMotion && !scrollable;
     const metrics = coarsePointer ? TOUCH_DOCK_METRICS[size] : DOCK_METRICS[size];
 
     return (
@@ -70,20 +82,33 @@ export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(functi
             role="toolbar"
             aria-label={ariaLabel}
             className={cn(
-                "aceternity-floating-dock flex overflow-visible",
+                "aceternity-floating-dock flex",
+                scrollable ? "overflow-x-auto" : "overflow-visible",
                 showLabels ? "items-center" : "items-end",
                 embedded ? "shadow-none" : "border backdrop-blur-2xl",
                 showLabels
                     ? embedded
-                        ? size === "compact" ? "h-9 gap-0.5 px-0.5" : "h-10 gap-0.5 px-0.5"
-                        : size === "compact" ? "h-10 gap-0.5 rounded-[13px] px-1.5" : "h-11 gap-0.5 rounded-[15px] px-2"
+                        ? size === "compact"
+                            ? "h-9 gap-0.5 px-0.5"
+                            : "h-10 gap-0.5 px-0.5"
+                        : size === "compact"
+                          ? "h-10 gap-0.5 rounded-[var(--dock-radius-compact)] px-1.5"
+                          : "h-11 gap-0.5 rounded-[var(--dock-radius-tight)] px-2"
                     : coarsePointer
-                    ? embedded
-                        ? size === "compact" ? "h-10 gap-1 px-0.5" : "h-11 gap-1 px-0.5"
-                        : size === "compact" ? "h-11 gap-1 rounded-[15px] px-1.5 pb-1" : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
-                    : embedded
-                        ? size === "compact" ? "h-8 gap-0.5 px-0.5 pb-0.5" : "h-9 gap-0.5 px-0.5 pb-0.5"
-                        : size === "compact" ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1" : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
+                      ? embedded
+                          ? size === "compact"
+                              ? "h-10 gap-1 px-0.5"
+                              : "h-11 gap-1 px-0.5"
+                          : size === "compact"
+                            ? "h-11 gap-1 rounded-[var(--dock-radius-tight)] px-1.5 pb-1"
+                            : "h-12 gap-1 rounded-[var(--panel-radius)] px-2 pb-1"
+                      : embedded
+                        ? size === "compact"
+                            ? "h-8 gap-0.5 px-0.5 pb-0.5"
+                            : "h-9 gap-0.5 px-0.5 pb-0.5"
+                        : size === "compact"
+                          ? "h-8 gap-0.5 rounded-[var(--r-lg)] px-1 pb-1"
+                          : "h-10 gap-0.5 rounded-[var(--dock-radius)] px-1.5 pb-1",
                 className,
             )}
             style={style}
@@ -159,7 +184,10 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
     const iconTarget = useTransform(distance, (value) => proximitySize(value, metrics.icon, metrics.iconMagnified, metrics.distance, motionEnabled));
     const itemSize = useSpring(itemTarget, aceternityMotion.spring.dock);
     const iconSize = useSpring(iconTarget, aceternityMotion.spring.dock);
+    // 鼠标点击产生的 focus 不能阻塞提示收起，只有键盘可见焦点才持续显示提示。
     const showTooltip = !showLabel && (hovered || focused) && !command.disabled;
+    // scrollable 场景自定义 tooltip 会被 overflow 裁剪，用原生 title 兜底
+    const nativeTitle = !motionEnabled ? command.label : undefined;
 
     if (showLabel) {
         return (
@@ -170,7 +198,11 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                     aria-expanded={command.expands ? command.active || undefined : undefined}
                     aria-pressed={command.expands ? undefined : command.active || undefined}
                     disabled={command.disabled}
-                    className={cn("aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none", command.active && "is-active", command.danger && "is-danger")}
+                    className={cn(
+                        "aceternity-dock-command is-labeled group inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--dock-item-radius)] border-0 px-2.5 outline-none",
+                        command.active && "is-active",
+                        command.danger && "is-danger",
+                    )}
                     whileTap={!command.disabled ? { scale: 0.96 } : undefined}
                     transition={aceternityMotion.spring.dock}
                     onMouseEnter={() => setHovered(true)}
@@ -187,24 +219,26 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
     }
 
     return (
-        <motion.span ref={ref} className="relative block shrink-0" style={{ width: itemSize, height: itemSize }}>
+        <motion.span ref={ref} className={cn("relative block shrink-0", command.wide && "min-w-[var(--dock-precision-width)]")} style={{ width: itemSize, height: itemSize }}>
             {/* 放大项留在 Flex 流内，由布局推开邻项，保持 Aceternity Floating Dock 的空间关系。 */}
             <motion.button
                 type="button"
                 aria-label={command.label}
+                title={nativeTitle}
                 aria-expanded={command.expands ? command.active || undefined : undefined}
                 aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
-                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.active && "is-active", command.danger && "is-danger")}
+                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.quiet && "is-quiet", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
                 transition={aceternityMotion.spring.dock}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
-                onFocus={() => setFocused(true)}
+                onFocus={(event) => setFocused(event.currentTarget.matches(":focus-visible"))}
                 onBlur={() => setFocused(false)}
+                onMouseDown={() => setFocused(false)}
                 onClick={command.onClick}
             >
-                <motion.span className="grid place-items-center" style={{ width: iconSize, height: iconSize }}>
+                <motion.span className={cn("grid place-items-center", command.wide && "w-full")} style={command.wide ? { height: iconSize } : { width: iconSize, height: iconSize }}>
                     {command.icon}
                 </motion.span>
                 <AnimatePresence>
@@ -212,9 +246,12 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                         <motion.span
                             initial={{ opacity: 0, y: 7, scale: 0.94 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.96, transition: { duration: 0 } }}
                             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                            className={cn("aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[140] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl", compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]")}
+                            className={cn(
+                                "aceternity-dock-tooltip pointer-events-none absolute left-1/2 z-[var(--dock-tooltip-z)] -translate-x-1/2 whitespace-nowrap border font-medium shadow-xl backdrop-blur-xl",
+                                compact ? "-top-7 rounded-md px-1.5 py-0.5 text-[var(--fs-micro)]" : "-top-8 rounded-md px-2 py-1 text-[var(--fs-tiny)]",
+                            )}
                         >
                             {command.label}
                         </motion.span>

@@ -1,17 +1,21 @@
 import { runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
-import type { AiConfig } from "@/stores/use-config-store";
+import { resolveStyleExecutionPlan, serializeStyleProfile, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
+import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
-type ProjectStylePrompt = { id: string; title: string; prompt: string };
+type ProjectStylePrompt = { id: string; title: string; prompt: string; profile?: StyleProfileSnapshot };
 
 export async function generateCharacterTurnaround(input: { projectId: string; assetId: string; versionId: string; name: string; definition: Record<string, unknown>; projectStyle?: ProjectStylePrompt; config: AiConfig }) {
     const promptTemplateVariables = characterTurnaroundVariables(input.name, input.definition, input.projectStyle);
+    const requestConfig = resolveModelRequestConfig(input.config, input.config.imageModel || input.config.model);
+    const styleExecutionPlan = input.projectStyle?.profile ? resolveStyleExecutionPlan(input.projectStyle.profile, { mode: "image", model: requestConfig.model, interfaceType: requestConfig.interfaceType || requestConfig.apiFormat }) : undefined;
+    if (styleExecutionPlan?.status === "blocked") throw new Error(`项目画风与当前图片模型不兼容：${styleExecutionPlan.warnings.join("；")}`);
     await runBackendCanvasGenerationTask({
         projectId: input.projectId,
         nodeId: `character-turnaround:${input.assetId}`,
         mode: "image",
         prompt: "使用当前启用的角色三视图模板。",
         config: { ...input.config, model: input.config.imageModel || input.config.model, count: "1" },
-        metadata: { operation: "character_turnaround", promptTemplateOperation: "character_turnaround", promptTemplateVariables, characterAssetId: input.assetId, stylePresetId: input.projectStyle?.id, resolvedCharacterVersions: [{ assetId: input.assetId, versionId: input.versionId }] },
+        metadata: { operation: "character_turnaround", promptTemplateOperation: "character_turnaround", promptTemplateVariables, characterAssetId: input.assetId, stylePresetId: input.projectStyle?.id, styleProfileJson: input.projectStyle?.profile ? serializeStyleProfile(input.projectStyle.profile) : undefined, styleExecutionPlan, resolvedCharacterVersions: [{ assetId: input.assetId, versionId: input.versionId }] },
     });
 }
 

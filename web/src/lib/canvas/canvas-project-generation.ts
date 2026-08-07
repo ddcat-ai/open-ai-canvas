@@ -7,6 +7,7 @@ import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
+import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -279,12 +280,14 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = node?.metadata?.model;
     const model = storedModel && configuredModelMatchesCapability(config, storedModel, mode) ? storedModel : defaultModel && configuredModelMatchesCapability(config, defaultModel, mode) ? defaultModel : fallbackModel;
+    const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
+    const normalizedImage = imageProfile ? normalizeImageValue(imageProfile, { quality: node?.metadata?.quality || config.quality || defaultConfig.quality, size: node?.metadata?.size || config.size || defaultConfig.size, transparentBackground: node?.metadata?.transparentBackground || config.transparentBackground, count: String(node?.metadata?.count || config.canvasImageCount || config.count || defaultConfig.count) }) : undefined;
     return {
         ...config,
         model,
-        quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
-        size: node?.metadata?.size || config.size || defaultConfig.size,
-        transparentBackground: (node?.metadata?.transparentBackground || config.transparentBackground) === "true" ? "true" : "false",
+        quality: normalizedImage?.quality || node?.metadata?.quality || config.quality || defaultConfig.quality,
+        size: normalizedImage?.size || node?.metadata?.size || config.size || defaultConfig.size,
+        transparentBackground: normalizedImage?.transparentBackground || ((node?.metadata?.transparentBackground || config.transparentBackground) === "true" ? "true" : "false"),
         videoSeconds: normalizeVideoDuration(node?.metadata?.seconds || config.videoSeconds || defaultConfig.videoSeconds),
         vquality: normalizeVideoResolution(node?.metadata?.vquality || config.vquality || defaultConfig.vquality),
         videoGenerateAudio: node?.metadata?.generateAudio || config.videoGenerateAudio || defaultConfig.videoGenerateAudio,
@@ -293,7 +296,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         audioFormat: node?.metadata?.audioFormat || config.audioFormat || defaultConfig.audioFormat,
         audioSpeed: node?.metadata?.audioSpeed || config.audioSpeed || defaultConfig.audioSpeed,
         audioInstructions: node?.metadata?.audioInstructions || config.audioInstructions || defaultConfig.audioInstructions,
-        count: String(node?.metadata?.count || (mode === "image" ? config.canvasImageCount || config.count : config.count) || defaultConfig.count),
+        count: normalizedImage?.count || String(node?.metadata?.count || (mode === "image" ? config.canvasImageCount || config.count : config.count) || defaultConfig.count),
     };
 }
 
