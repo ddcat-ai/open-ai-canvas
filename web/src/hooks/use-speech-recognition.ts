@@ -60,6 +60,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
     const { lang = "zh-CN" } = options;
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
     const finalTextRef = useRef("");
+    const interimTextRef = useRef("");
     const stopResolveRef = useRef<((text: string) => void) | null>(null);
     const stopTimerRef = useRef<number | null>(null);
     const [supported] = useState(() => Boolean(getSpeechRecognition()));
@@ -72,21 +73,25 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             return;
         }
         finalTextRef.current = "";
+        interimTextRef.current = "";
         const recognition = new Constructor();
         recognition.lang = lang;
         recognition.continuous = true;
-        recognition.interimResults = false;
+        recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.onstart = () => setError(null);
         recognition.onresult = (event) => {
             let text = finalTextRef.current;
+            let interim = interimTextRef.current;
             for (let i = 0; i < event.results.length; i += 1) {
                 const result = event.results[i];
-                if (result.isFinal && result[0]?.transcript) {
-                    text = [text, result[0].transcript.trim()].filter(Boolean).join(" ");
-                }
+                const transcript = result[0]?.transcript?.trim();
+                if (!transcript) continue;
+                if (result.isFinal) text = [text, transcript].filter(Boolean).join(" ");
+                else interim = transcript;
             }
             finalTextRef.current = text;
+            interimTextRef.current = interim;
         };
         recognition.onerror = (event) => {
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -106,7 +111,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             }
             const resolve = stopResolveRef.current;
             stopResolveRef.current = null;
-            resolve?.(finalTextRef.current);
+            resolve?.(finalTextRef.current.trim() || interimTextRef.current.trim());
         };
         recognitionRef.current = recognition;
         recognition.start();
@@ -124,7 +129,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             stopTimerRef.current = window.setTimeout(() => {
                 if (stopResolveRef.current) {
                     stopResolveRef.current = null;
-                    resolve(finalTextRef.current);
+                    resolve(finalTextRef.current.trim() || interimTextRef.current.trim());
                 }
             }, 1500);
             try {
@@ -135,7 +140,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
                     stopTimerRef.current = null;
                 }
                 stopResolveRef.current = null;
-                resolve(finalTextRef.current);
+                resolve(finalTextRef.current.trim() || interimTextRef.current.trim());
             }
         });
     }, []);
@@ -155,6 +160,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             } catch { /* ignore */ }
         }
         finalTextRef.current = "";
+        interimTextRef.current = "";
     }, []);
 
     useEffect(() => cancel, [cancel]);

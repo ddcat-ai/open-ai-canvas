@@ -5,8 +5,10 @@ import { Check, Mic, Square, X } from "lucide-react";
 import { AudioWaveform } from "./audio-waveform";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
+import { transcribeAudio } from "@/services/api/audio";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useEffectiveConfig } from "@/stores/use-config-store";
 
 type VoiceRecordingInlineProps = {
     /** 转写完成回调，返回转写文本 */
@@ -23,6 +25,7 @@ type TranscribeState = "idle" | "transcribing" | "done" | "error";
  */
 export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecordingInlineProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const effectiveConfig = useEffectiveConfig();
     const {
         state,
         waveform,
@@ -66,9 +69,18 @@ export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecording
         stopRequestedRef.current = true;
         setTranscribeState("transcribing");
         setTranscribeError("");
-        const text = await stopSpeech();
-        void stopRecording();
-        const trimmed = text.trim();
+        const [text, blob] = await Promise.all([stopSpeech(), stopRecording()]);
+        let trimmed = text.trim();
+        if (!trimmed && blob) {
+            try {
+                trimmed = await transcribeAudio(effectiveConfig, blob);
+            } catch (error) {
+                setTranscribeError(error instanceof Error ? error.message : "语音转写失败，请重试");
+                setTranscribeState("error");
+                stopRequestedRef.current = false;
+                return;
+            }
+        }
         if (!trimmed) {
             setTranscribeError("未识别到语音内容，请重试");
             setTranscribeState("error");
