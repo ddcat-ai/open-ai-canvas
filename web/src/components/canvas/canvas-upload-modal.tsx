@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { App, Button, Modal, Upload, type UploadFile } from "antd";
-import { FileImage, Film, Music2, UploadCloud } from "lucide-react";
+import { FileImage, Film, Music2, UploadCloud, X } from "lucide-react";
 
 import { isAudioFile } from "@/lib/canvas/canvas-project-generation";
 
@@ -71,13 +71,10 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                             return Upload.LIST_IGNORE;
                         }}
                         onChange={({ fileList: nextFileList }) => setFileList(nextFileList)}
-                        onRemove={() => !uploading}
-                        showUploadList={{ showPreviewIcon: false, showDownloadIcon: false, showRemoveIcon: !uploading }}
-                        classNames={{ list: "thin-scrollbar" }}
+                        showUploadList={false}
                         styles={{
                             root: { display: "block", width: "100%" },
                             trigger: { borderColor: "var(--border)", borderRadius: "var(--r-lg)", background: "var(--workspace-surface)" },
-                            list: { maxHeight: 184, overflowY: "auto" },
                         }}
                     >
                         <div className="flex min-h-48 flex-col items-center justify-center px-6 py-8 text-center">
@@ -93,6 +90,29 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                             </div>
                         </div>
                     </Upload.Dragger>
+
+                    {fileList.length ? (
+                        <div className="thin-scrollbar mt-3 flex max-h-52 flex-wrap gap-3 overflow-y-auto" aria-label="已选文件">
+                            {fileList.map((file) => (
+                                <article key={file.uid} className="group w-24 min-w-0 overflow-hidden rounded-lg bg-muted">
+                                    <div className="relative aspect-square overflow-hidden bg-muted">
+                                        <CanvasUploadFilePreview file={file} />
+                                        <button
+                                            type="button"
+                                            title={`移除 ${file.name}`}
+                                            aria-label={`移除 ${file.name}`}
+                                            disabled={uploading}
+                                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-md bg-black/60 text-white transition-opacity hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() => setFileList((current) => current.filter((item) => item.uid !== file.uid))}
+                                        >
+                                            <X className="size-3.5" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                    <div className="truncate px-2 py-1.5 text-[var(--fs-micro)] text-foreground/70" title={file.name}>{file.name}</div>
+                                </article>
+                            ))}
+                        </div>
+                    ) : null}
                 </section>
 
                 <footer className="flex h-14 shrink-0 items-center justify-between border-t border-border px-4">
@@ -106,6 +126,30 @@ export function CanvasUploadModal({ open, onClose, onUpload }: CanvasUploadModal
                 </footer>
             </div>
         </Modal>
+    );
+}
+
+function CanvasUploadFilePreview({ file }: { file: UploadFile }) {
+    const source = file.originFileObj;
+    const [previewUrl, setPreviewUrl] = useState("");
+
+    useEffect(() => {
+        if (!source || (!source.type.startsWith("image/") && !source.type.startsWith("video/"))) return;
+        const objectUrl = URL.createObjectURL(source);
+        setPreviewUrl(objectUrl);
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [source]);
+
+    if (source?.type.startsWith("image/") && previewUrl) {
+        return <img src={previewUrl} alt={`预览：${file.name}`} className="size-full object-cover" />;
+    }
+    if (source?.type.startsWith("video/") && previewUrl) {
+        return <video src={previewUrl} aria-label={`预览：${file.name}`} muted playsInline preload="metadata" className="size-full object-cover" />;
+    }
+    return (
+        <div className="grid size-full place-items-center text-foreground/45">
+            {source && isAudioFile(source) ? <Music2 className="size-7" aria-hidden="true" /> : <FileImage className="size-7" aria-hidden="true" />}
+        </div>
     );
 }
 
