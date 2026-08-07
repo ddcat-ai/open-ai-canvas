@@ -131,9 +131,10 @@ type agentStoryboardInput struct {
 }
 
 type storyboardProjectStyle struct {
-	PresetID string `json:"presetId"`
-	Title    string `json:"title"`
-	Prompt   string `json:"prompt"`
+	PresetID    string `json:"presetId"`
+	Title       string `json:"title"`
+	Prompt      string `json:"prompt"`
+	ProfileJSON string `json:"profileJson,omitempty"`
 }
 
 type storyboardCharacterCard struct {
@@ -1079,7 +1080,7 @@ func (s *Service) processTask(ctx context.Context, task model.Task) (map[string]
 		return s.processStoryboardRowsTask(ctx, task)
 	}
 	if strings.HasPrefix(task.Type, "canvas_") || canRunProviderTask(task) {
-		result, err := s.processCanvasGenerationTask(ctx, task.UserID, task.Type, task.Prompt, task.InputJSON)
+		result, err := s.processCanvasGenerationTask(ctx, task.UserID, task.ProjectID, task.Type, task.Prompt, task.InputJSON)
 		return result, nil, err
 	}
 	if task.Type == "agent_storyboard" {
@@ -1341,6 +1342,11 @@ func validateStoryboardContext(projectStyle storyboardProjectStyle, characters [
 	if strings.TrimSpace(projectStyle.PresetID) == "" || strings.TrimSpace(projectStyle.Title) == "" || strings.TrimSpace(projectStyle.Prompt) == "" {
 		return errors.New("请先设置项目画风，再生成分镜")
 	}
+	if strings.TrimSpace(projectStyle.ProfileJSON) != "" {
+		if _, err := validateStyleProfileJSON(projectStyle.ProfileJSON); err != nil {
+			return err
+		}
+	}
 	for _, character := range characters {
 		if strings.TrimSpace(character.AssetID) == "" || strings.TrimSpace(character.VersionID) == "" || strings.TrimSpace(character.Name) == "" {
 			return errors.New("角色卡缺少当前资产版本，请刷新角色资产后再生成分镜")
@@ -1505,7 +1511,7 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 	ops := []map[string]any{
 		nodeOpWithMetadata(scriptID, "text", "剧本 · "+shortTitle(plan.Title, 24), 0, 0, map[string]any{"workflowKind": "script", "workflowTitle": "剧本", "status": "success", "content": strings.Join([]string{plan.Title, "", plan.Logline, "", task.Prompt}, "\n")}),
 		nodeOpWithMetadata(sceneID, "text", "场景设定", sceneX, 0, map[string]any{"workflowKind": "scene", "workflowTitle": "场景", "status": "success", "content": listContent("场景", plan.Locations)}),
-		nodeOpWithMetadata(styleID, "text", "项目画风 · "+shortTitle(projectStyle.Title, 24), styleX, 0, map[string]any{"workflowKind": "styleboard", "workflowTitle": "项目画风", "workflowDescription": plan.StyleGuide, "stylePresetId": projectStyle.PresetID, "status": "success", "content": projectStyle.Prompt, "prompt": projectStyle.Prompt}),
+		nodeOpWithMetadata(styleID, "text", "项目画风 · "+shortTitle(projectStyle.Title, 24), styleX, 0, map[string]any{"workflowKind": "styleboard", "workflowTitle": "项目画风", "workflowDescription": plan.StyleGuide, "stylePresetId": projectStyle.PresetID, "styleProfileJson": projectStyle.ProfileJSON, "status": "success", "content": projectStyle.Prompt, "prompt": projectStyle.Prompt}),
 		nodeOpWithMetadata(referenceID, "text", "参考素材组", 0, 270, map[string]any{"workflowKind": "reference_set", "workflowTitle": "参考素材组", "status": "success", "content": storyboardAssetsContent(assets)}),
 		nodeOpWithMetadata(finalID, "video", "成片 · 待生成", styleX, 270, map[string]any{"workflowKind": "final", "workflowTitle": "成片", "status": "idle"}),
 		connectOp(scriptID, sceneID),

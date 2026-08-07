@@ -9,6 +9,7 @@ import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
+import { imageSizeRequest, modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
@@ -191,6 +192,33 @@ function resolveRequestSize(quality: string | undefined, size: string) {
     }
     if (value.includes(":")) return resolveSize(quality, value);
     throw new Error("图像尺寸格式不支持，请使用 auto、9:16 或 1024x1024");
+}
+
+function resolveAspectRatio(value: string) {
+    const normalized = value.trim().toLowerCase().replace("×", "x");
+    if (normalized.includes(":")) return normalized;
+    const dimensions = parseImageDimensions(normalized);
+    if (!dimensions) throw new Error("图像比例格式不支持，请使用 3:4 或 1024x1360");
+    const divisor = dimensionGCD(dimensions.width, dimensions.height);
+    return `${dimensions.width / divisor}:${dimensions.height / divisor}`;
+}
+
+function dimensionGCD(left: number, right: number) {
+    while (right) [left, right] = [right, left % right];
+    return Math.max(1, left);
+}
+
+function resolveImageRequestSize(profile: ImageCapabilityConfig, quality: string | undefined, size: string) {
+    const request = imageSizeRequest(profile, size);
+    if (!request) return undefined;
+    return { parameter: request.parameter, value: request.parameter === "size" ? resolveRequestSize(quality, request.value) : resolveAspectRatio(request.value) };
+}
+
+function validateImageCapability(profile: ImageCapabilityConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
+    if (Array.from(prompt).length > profile.references.promptMaxChars) throw new Error(`提示词超过当前模型限制（最多 ${profile.references.promptMaxChars} 字）`);
+    if (references.length > profile.references.maxImages) throw new Error(`当前图片模型最多支持 ${profile.references.maxImages} 张参考图`);
+    if (mask && !profile.references.maskSupported) throw new Error("当前图片模型不支持蒙版编辑");
+    if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");
 }
 
 function normalizeVolcengineArkImageSize(size: string | undefined) {
@@ -788,7 +816,10 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
+    validateImageCapability(imageProfile, prompt, []);
+    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const n = Number(normalizedImage.count);
     if (requestConfig.apiFormat === "gemini") {
         try {
             return await requestGeminiImages(requestConfig, prompt, [], n, options);
@@ -796,27 +827,27 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
+    const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
     const isVolcengineArk = requestConfig.interfaceType === "volcengine-ark-image";
-    const normalizedRequestSize = isVolcengineArk ? normalizeVolcengineArkImageSize(requestSize) : requestSize;
+    const normalizedRequestSize = requestSize?.parameter === "size" && isVolcengineArk ? { ...requestSize, value: normalizeVolcengineArkImageSize(requestSize.value)! } : requestSize;
     try {
         const payload = isVolcengineArk
             ? {
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
-                  ...(normalizedRequestSize ? { size: normalizedRequestSize } : {}),
+                  ...(normalizedRequestSize ? { [normalizedRequestSize.parameter]: normalizedRequestSize.value } : {}),
               }
             : {
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
                   ...(quality ? { quality } : {}),
-                  ...(requestSize ? { size: requestSize } : {}),
-                  response_format: "b64_json",
-                  output_format: IMAGE_OUTPUT_FORMAT,
-                  ...(config.transparentBackground === "true" ? { background: "transparent" } : {}),
+                  ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
+                  ...(imageProfile.responseFormat.supported ? { response_format: "b64_json" } : {}),
+                  ...(imageProfile.outputFormat.supported ? { output_format: IMAGE_OUTPUT_FORMAT } : {}),
+                  ...(imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true" ? { background: "transparent" } : {}),
               };
         const responseData = isVolcengineArk
             ? await postVolcengineArkImage(requestConfig, payload, options)
@@ -842,7 +873,10 @@ async function postChannelJSON<T>(config: ReturnType<typeof resolveModelRequestC
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
+    validateImageCapability(imageProfile, prompt, references, mask);
+    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     if (requestConfig.apiFormat === "gemini") {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
@@ -854,8 +888,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     }
     if (requestConfig.interfaceType === "volcengine-ark-image") {
         if (mask) throw new Error("火山方舟图片协议不支持蒙版编辑，请移除蒙版后重试");
-        const quality = normalizeQuality(config.quality);
-        const requestSize = normalizeVolcengineArkImageSize(resolveRequestSize(quality, config.size));
+        const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+        const sizeRequest = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
+        const requestSize = sizeRequest?.parameter === "size" ? { ...sizeRequest, value: normalizeVolcengineArkImageSize(sizeRequest.value)! } : sizeRequest;
         try {
             const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
             const response = await postVolcengineArkImage(
@@ -864,7 +899,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     n,
-                    ...(requestSize ? { size: requestSize } : {}),
+                    ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
                     ...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
                 },
                 options,
@@ -874,22 +909,22 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             throw new Error(readAxiosError(error, "火山方舟图片生成失败"));
         }
     }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
+    const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
+    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
     const formData = new FormData();
     formData.set("model", requestConfig.model);
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
-    formData.set("response_format", "b64_json");
-    formData.set("output_format", IMAGE_OUTPUT_FORMAT);
-    if (config.transparentBackground === "true") {
+    if (imageProfile.responseFormat.supported) formData.set("response_format", "b64_json");
+    if (imageProfile.outputFormat.supported) formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+    if (imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true") {
         formData.set("background", "transparent");
     }
     if (quality) {
         formData.set("quality", quality);
     }
     if (requestSize) {
-        formData.set("size", requestSize);
+        formData.set(requestSize.parameter, requestSize.value);
     }
     const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => formData.append("image", file));

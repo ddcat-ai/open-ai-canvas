@@ -4,7 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowUpRight, BookOpenText, ChevronLeft, ChevronRight, Crosshair, FolderKanban, GripVertical, Images, LocateFixed, LoaderCircle, Palette, Plus, Search, Settings2, X } from "lucide-react";
 import { Link } from "react-router";
 
-import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { getProject, getProjectUnit, type ProjectDetail, type ProjectUnit } from "@/services/api/projects";
 
 export const CANVAS_PROJECT_CHAPTER_DND_TYPE = "application/x-infinite-canvas-project-chapter";
@@ -30,7 +30,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
     const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase("zh-CN"));
     const projectQuery = useQuery({ queryKey: ["project", projectId], queryFn: () => getProject(projectId), enabled: Boolean(projectId) && !detail });
     const projectDetail = detail || projectQuery.data;
-    const style = resolveCanvasStylePreset(projectDetail?.project.stylePresetId);
+    const style = resolveProjectCanvasStyle(projectDetail?.project.stylePresetId, projectDetail?.project.styleProfileJson);
     const mediaAssetCount = projectDetail?.assets.filter((asset) => asset.mediaType === "image" || asset.mediaType === "video").length || 0;
     const orderedUnits = useMemo(() => projectDetail?.units.slice().sort((left, right) => left.position - right.position) || [], [projectDetail?.units]);
     const visibleUnits = useMemo(() => {

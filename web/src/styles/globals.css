@@ -601,6 +601,12 @@
     --modal-shadow: var(--shadow-2xl);
     --modal-padding: var(--space-5);      /* 20px */
 
+    /* Style Center / Editor */
+    --style-center-height: min(780px, 84dvh);
+    --style-editor-mobile-preview-height: 220px;
+    --style-center-sidebar-width: 184px;
+    --style-center-search-width: 320px;
+
     /* Panel 组件（侧边面板，对应 #98 五层体系 L2）*/
     --panel-radius: var(--r-2xl);         /* 16px */
     --panel-padding: var(--space-4);      /* 16px */
@@ -3834,7 +3840,9 @@
 
     /* 画风选择器自身就是完整工作区表面，移除 AntD 外壳避免形成双层厚边。 */
     .canvas-style-picker-modal .ant-modal-container,
-    .canvas-style-detail-modal .ant-modal-container {
+    .canvas-style-detail-modal .ant-modal-container,
+    .style-profile-editor-modal .ant-modal-container,
+    .style-asset-binding-modal .ant-modal-container {
         overflow: hidden;
         border: var(--stroke-1) solid var(--border) !important;
         border-radius: var(--r-2xl) !important;
@@ -3843,17 +3851,228 @@
     }
 
     .canvas-style-picker-modal .ant-modal-body,
-    .canvas-style-detail-modal .ant-modal-body {
+    .canvas-style-detail-modal .ant-modal-body,
+    .style-profile-editor-modal .ant-modal-body,
+    .style-asset-binding-modal .ant-modal-body {
         padding: 0 !important;
     }
 
     .canvas-style-picker-modal .ant-modal-close,
-    .canvas-style-detail-modal .ant-modal-close {
-        top: var(--space-2);
-        right: var(--space-2);
+    .canvas-style-detail-modal .ant-modal-close,
+    .style-profile-editor-modal .ant-modal-close,
+    .style-asset-binding-modal .ant-modal-close {
+        top: var(--space-4);
+        right: var(--space-4);
+        width: var(--space-8);
+        height: var(--space-8);
+        border-radius: var(--r-md);
         color: var(--cn-text);
-        background: color-mix(in srgb, var(--cn-spatial-elevated) 84%, transparent);
+        background: color-mix(in srgb, var(--cn-spatial-elevated) 72%, transparent);
         backdrop-filter: blur(var(--space-2));
+    }
+
+    .canvas-style-picker-modal .ant-modal-close:hover,
+    .canvas-style-detail-modal .ant-modal-close:hover,
+    .style-profile-editor-modal .ant-modal-close:hover,
+    .style-asset-binding-modal .ant-modal-close:hover {
+        background: color-mix(in srgb, var(--foreground) 10%, var(--cn-spatial-elevated));
+    }
+
+    .canvas-style-library-body {
+        max-height: 76dvh;
+    }
+
+    .canvas-style-center-shell,
+    .style-profile-editor-modal .ant-modal-body > div {
+        height: var(--style-center-height);
+    }
+
+    .style-center-search {
+        width: min(var(--style-center-search-width), 50vw);
+    }
+
+    .style-center-workspace {
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .style-center-sidebar {
+        max-height: 132px;
+        overscroll-behavior: contain;
+    }
+
+    .style-center-primary-nav,
+    .style-center-category-nav {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .style-center-primary-nav::-webkit-scrollbar,
+    .style-center-category-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .style-center-nav-item,
+    .style-center-category-item {
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    }
+
+    .style-center-nav-item:hover,
+    .style-center-category-item:hover {
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        color: color-mix(in srgb, var(--foreground) 82%, transparent);
+    }
+
+    .style-center-nav-item.is-active,
+    .style-center-category-item.is-active {
+        background: color-mix(in srgb, var(--foreground) 9%, transparent);
+        color: var(--foreground);
+    }
+
+    .style-center-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: var(--space-3);
+        overscroll-behavior: contain;
+    }
+
+    .style-center-card {
+        transition: border-color var(--motion-dur-fast) var(--motion-ease-out), transform var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .style-center-card:not(.is-active):hover {
+        border-color: color-mix(in srgb, var(--foreground) 24%, transparent) !important;
+        transform: translateY(-1px);
+    }
+
+    .style-center-card-cover {
+        display: block;
+        width: 100%;
+        height: clamp(150px, 14vw, 220px);
+        flex: 0 0 auto;
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    }
+
+    .style-center-card-cover img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .style-center-card:hover .style-center-card-cover img {
+        transform: scale(1.015);
+    }
+
+    .style-center-favorite-action {
+        border: var(--stroke-1) solid color-mix(in srgb, var(--color-neutral-0) 12%, transparent);
+        background: color-mix(in srgb, var(--color-neutral-950) 70%, transparent);
+        color: color-mix(in srgb, var(--color-neutral-0) 78%, transparent);
+        backdrop-filter: blur(var(--space-2));
+        transition: background-color var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .style-center-favorite-action:hover,
+    .style-center-favorite-action.is-active {
+        background: color-mix(in srgb, var(--color-neutral-950) 84%, transparent);
+        color: var(--color-neutral-0);
+    }
+
+    .style-center-icon-action {
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        transition: background-color var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .style-center-icon-action:hover {
+        background: color-mix(in srgb, var(--foreground) 7%, transparent);
+        color: var(--foreground);
+    }
+
+    .style-center-icon-action.is-danger:hover {
+        background: color-mix(in srgb, var(--palette-status-error) 10%, transparent);
+        color: var(--palette-status-error);
+    }
+
+    .style-center-apply-button.ant-btn {
+        border-color: color-mix(in srgb, var(--workspace-accent) 34%, var(--border));
+        background: color-mix(in srgb, var(--workspace-accent) 8%, transparent);
+        color: var(--workspace-accent);
+        box-shadow: none;
+        font-weight: 560;
+    }
+
+    .style-center-apply-button.ant-btn:not(:disabled):hover {
+        border-color: var(--workspace-accent);
+        background: color-mix(in srgb, var(--workspace-accent) 14%, transparent);
+        color: var(--workspace-accent);
+    }
+
+    .style-center-apply-button.ant-btn.is-current,
+    .style-center-apply-button.ant-btn:disabled {
+        border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    }
+
+    .style-center-nav-item:focus-visible,
+    .style-center-category-item:focus-visible,
+    .style-center-icon-action:focus-visible,
+    .style-center-favorite-action:focus-visible,
+    .style-profile-editor-tab:focus-visible {
+        box-shadow: inset 0 0 0 var(--stroke-2) var(--ring);
+    }
+
+    .style-profile-editor-tabs {
+        min-height: var(--space-12);
+    }
+
+    .style-profile-editor-tab::after {
+        position: absolute;
+        right: var(--space-3);
+        bottom: 0;
+        left: var(--space-3);
+        height: var(--stroke-2);
+        background: transparent;
+        content: "";
+    }
+
+    .style-profile-editor-tab.is-active::after {
+        background: var(--workspace-accent);
+    }
+
+    .style-profile-editor-workspace {
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .style-profile-editor-preview {
+        max-height: var(--style-editor-mobile-preview-height);
+    }
+
+    @media (min-width: 1024px) {
+        .style-center-workspace {
+            grid-template-columns: var(--style-center-sidebar-width) minmax(0, 1fr);
+            grid-template-rows: minmax(0, 1fr);
+        }
+
+        .style-center-sidebar {
+            max-height: none;
+        }
+
+        .style-center-primary-nav,
+        .style-center-category-nav {
+            overflow-x: visible;
+        }
+
+        .style-profile-editor-workspace {
+            grid-template-rows: minmax(0, 1fr);
+        }
+
+        .style-profile-editor-preview {
+            max-height: none;
+        }
+    }
+
+    .canvas-style-detail-shell {
+        max-height: 84dvh;
     }
 
     .canvas-toolbar-settings-modal {

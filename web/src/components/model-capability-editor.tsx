@@ -1,7 +1,7 @@
 import { Input, InputNumber, Segmented, Select, Switch } from "antd";
 import type { ReactNode } from "react";
 
-import { defaultModelCapabilityConfig, type ModelCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol } from "@/lib/model-protocols";
 
 const ratioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
@@ -21,10 +21,15 @@ type Props = {
     value?: ModelCapabilityConfig;
     onChange?: (value: ModelCapabilityConfig) => void;
     protocol?: ModelProtocol;
+    capability?: "image" | "video";
+    model?: string;
     disabled?: boolean;
 };
 
-export function ModelCapabilityEditor({ value, onChange, protocol, disabled = false }: Props) {
+export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", disabled = false }: Props) {
+    if (capability === "image") {
+        return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} />;
+    }
     const profile = value?.video || defaultModelCapabilityConfig(protocol).video!;
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
@@ -89,6 +94,66 @@ export function ModelCapabilityEditor({ value, onChange, protocol, disabled = fa
     );
 }
 
+function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol">) {
+    const profile = value?.image || defaultImageCapabilityConfig(protocol, model);
+    const update = (patch: Partial<ImageCapabilityConfig>) => onChange?.({ version: 1, image: { ...profile, ...patch } });
+    const updateReferences = (patch: Partial<ImageCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
+    const updateSize = (patch: Partial<ImageCapabilityConfig["size"]>) => update({ size: { ...profile.size, ...patch } });
+    const updateQuality = (patch: Partial<ImageCapabilityConfig["quality"]>) => update({ quality: { ...profile.quality, ...patch } });
+
+    return (
+        <div className="space-y-3 rounded-md border border-border/70 bg-muted/10 p-3">
+            <div className="flex items-center justify-between gap-3">
+                <div><div className="text-sm font-medium">图片能力参数</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">生成界面和后端请求都会按此处裁剪参数</div></div>
+                <span className="text-[var(--fs-tiny)] text-foreground/40">当前模型独立生效</span>
+            </div>
+
+            <CapabilityGroup title="输入与输出限制">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <NumberField label="提示词字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(promptMaxChars) => updateReferences({ promptMaxChars: promptMaxChars || 1 })} />
+                    <NumberField label="最大参考图" value={profile.references.maxImages} min={0} disabled={disabled} onChange={(maxImages) => updateReferences({ maxImages: maxImages || 0 })} />
+                    <NumberField label="单图上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={disabled} onChange={(maxImageBytes) => updateReferences({ maxImageBytes: mbToBytes(maxImageBytes) })} />
+                    <NumberField label="单次生成张数" value={profile.maxOutputs} min={1} disabled={disabled} onChange={(maxOutputs) => update({ maxOutputs: maxOutputs || 1 })} />
+                </div>
+                <ParameterField label="蒙版编辑" description="允许调用图片编辑接口并提交 mask" supported={profile.references.maskSupported} disabled={disabled} onChange={(maskSupported) => updateReferences({ maskSupported })} />
+            </CapabilityGroup>
+
+            <CapabilityGroup title="尺寸参数">
+                <Segmented
+                    block
+                    disabled={disabled}
+                    value={profile.size.parameter}
+                    options={[{ label: "不发送", value: "none" }, { label: "size", value: "size" }, { label: "aspect_ratio", value: "aspect_ratio" }]}
+                    onChange={(value) => {
+                        const parameter = value as ImageCapabilityConfig["size"]["parameter"];
+                        updateSize(parameter === "none" ? { parameter, values: [], default: "auto", allowCustom: false } : { parameter, values: profile.size.values.length ? profile.size.values : ["1:1"], default: profile.size.default === "auto" ? "1:1" : profile.size.default });
+                    }}
+                />
+                {profile.size.parameter !== "none" ? <>
+                    <Field label="支持值"><Select mode="tags" className="w-full" disabled={disabled} value={profile.size.values} tokenSeparators={[","]} placeholder="例如 1:1、1024x1024" onChange={(values) => updateSize({ values, default: values.includes(profile.size.default) || profile.size.allowCustom ? profile.size.default : values[0] || "auto" })} /></Field>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        <Field label="默认值"><Select className="w-full" disabled={disabled} value={profile.size.default} options={profile.size.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateSize({ default: defaultValue })} /></Field>
+                        <ParameterField label="允许自定义" description="允许用户输入支持值之外的尺寸" supported={profile.size.allowCustom} disabled={disabled} onChange={(allowCustom) => updateSize({ allowCustom })} />
+                    </div>
+                </> : null}
+            </CapabilityGroup>
+
+            <CapabilityGroup title="可选生成参数">
+                <ParameterField label="图片质量" description="发送 quality 参数" supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
+                {profile.quality.supported ? <div className="grid gap-2 sm:grid-cols-2">
+                    <Field label="质量支持值"><Select mode="tags" className="w-full" disabled={disabled} value={profile.quality.values} tokenSeparators={[","]} onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })} /></Field>
+                    <Field label="默认质量"><Select className="w-full" disabled={disabled} value={profile.quality.default} options={profile.quality.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateQuality({ default: defaultValue })} /></Field>
+                </div> : null}
+                <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                    <ParameterField label="response_format" description="发送 b64_json 响应格式" supported={profile.responseFormat.supported} disabled={disabled} onChange={(supported) => update({ responseFormat: { supported } })} />
+                    <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
+                </div>
+            </CapabilityGroup>
+        </div>
+    );
+}
+
 function CapabilityGroup({ title, children }: { title: string; children: ReactNode }) {
     return <section className="space-y-2"><div className="text-xs font-semibold text-foreground/65">{title}</div>{children}</section>;
 }
@@ -103,6 +168,10 @@ function NumberField({ label, value, min, disabled, onChange }: { label: string;
 
 function BooleanField({ label, value, disabled, onChange }: { label: string; value: { supported: boolean; default: boolean }; disabled: boolean; onChange: (value: { supported: boolean; default: boolean }) => void }) {
     return <div className="flex items-center justify-between rounded-md border border-border/60 px-2.5 py-2"><div><div className="text-xs font-medium">{label}</div><div className="text-[var(--fs-tiny)] text-foreground/45">支持该参数</div></div><div className="flex items-center gap-2"><Switch size="small" disabled={disabled} checked={value.supported} onChange={(supported) => onChange({ ...value, supported })} /><Switch size="small" disabled={disabled || !value.supported} checked={value.default} onChange={(defaultValue) => onChange({ ...value, default: defaultValue })} /></div></div>;
+}
+
+function ParameterField({ label, description, supported, disabled, onChange }: { label: string; description: string; supported: boolean; disabled: boolean; onChange: (supported: boolean) => void }) {
+    return <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border/60 px-2.5 py-2"><div className="min-w-0"><div className="truncate text-xs font-medium">{label}</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/45">{description}</div></div><Switch size="small" disabled={disabled} checked={supported} onChange={onChange} /></div>;
 }
 
 function bytesToMB(value: number) {

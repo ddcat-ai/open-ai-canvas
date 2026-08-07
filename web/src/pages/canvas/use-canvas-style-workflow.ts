@@ -1,11 +1,15 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 
 import type { CanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
+import { createStyleProfileSnapshot, serializeStyleProfile } from "@/lib/canvas/style-profile";
+import { updateProject as updateDomainProject } from "@/services/api/projects";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 
 type UseCanvasStyleWorkflowOptions = {
+    domainProjectId?: string;
     nodesRef: { current: CanvasNodeData[] };
     selectedNodeIdsRef: { current: Set<string> };
     getCanvasCenter: () => Position;
@@ -17,6 +21,7 @@ type UseCanvasStyleWorkflowOptions = {
 };
 
 export function useCanvasStyleWorkflow({
+    domainProjectId,
     nodesRef,
     selectedNodeIdsRef,
     getCanvasCenter,
@@ -27,8 +32,9 @@ export function useCanvasStyleWorkflow({
     setStylePickerOpen,
 }: UseCanvasStyleWorkflowOptions) {
     const { message } = App.useApp();
+    const queryClient = useQueryClient();
 
-    const selectCanvasStyle = useCallback((preset: CanvasStylePreset) => {
+    const applyCanvasStyle = useCallback((preset: CanvasStylePreset, profileJson: string) => {
         const current = nodesRef.current.find((node) => node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "styleboard");
         const metadata: CanvasNodeMetadata = {
             content: preset.prompt,
@@ -38,6 +44,7 @@ export function useCanvasStyleWorkflow({
             workflowTitle: "项目画风",
             workflowDescription: preset.description,
             stylePresetId: preset.id,
+            styleProfileJson: profileJson,
             fontSize: 14,
         };
         let styleNode: CanvasNodeData;
@@ -61,5 +68,27 @@ export function useCanvasStyleWorkflow({
         message.success(`已应用“${preset.title}”画风`);
     }, [getCanvasCenter, message, nodesRef, selectedNodeIdsRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setStylePickerOpen]);
 
-    return { selectCanvasStyle };
+    const persistStyleMutation = useMutation({
+        mutationFn: ({ preset, profileJson }: { preset: CanvasStylePreset; profileJson: string }) => {
+            if (!domainProjectId) throw new Error("画布尚未关联项目");
+            return updateDomainProject(domainProjectId, { stylePresetId: preset.id, styleProfileJson });
+        },
+        onSuccess: (_project, { preset, profileJson }) => {
+            applyCanvasStyle(preset, profileJson);
+            void queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "项目画风保存失败"),
+    });
+
+    const selectCanvasStyle = useCallback((preset: CanvasStylePreset) => {
+        if (persistStyleMutation.isPending) return;
+        const profileJson = serializeStyleProfile(preset.profile || createStyleProfileSnapshot(preset));
+        if (!domainProjectId) {
+            applyCanvasStyle(preset, profileJson);
+            return;
+        }
+        persistStyleMutation.mutate({ preset, profileJson });
+    }, [applyCanvasStyle, domainProjectId, persistStyleMutation]);
+
+    return { selectCanvasStyle, styleApplying: persistStyleMutation.isPending };
 }

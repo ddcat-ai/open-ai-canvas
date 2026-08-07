@@ -5,6 +5,7 @@ export type StoryboardGenerationContext = {
         presetId: string;
         title: string;
         prompt: string;
+        profileJson?: string;
     };
     characters: Array<{
         assetId: string;
@@ -30,6 +31,7 @@ export function resolveStoryboardGenerationContext(nodes: CanvasNodeData[]): Sto
             presetId: stylePresetId,
             title: styleNode.title.replace(/^(?:项目)?画风\s*[·：:]?\s*/, "").trim() || styleNode.title,
             prompt: stylePrompt,
+            profileJson: styleNode.metadata?.styleProfileJson,
         },
         characters: characterNodes.map((node) => ({
             assetId: node.metadata!.characterAssetId!.trim(),

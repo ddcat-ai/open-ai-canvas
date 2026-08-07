@@ -244,6 +244,7 @@ func migrations() []tableMigration {
 		migrateTable[model.VoiceProfile]("voice_profiles"),
 		migrateTable[model.CharacterVoiceBinding]("character_voice_bindings"),
 		migrateTable[model.Project]("projects"),
+		migrateTable[model.StyleProfile]("style_profiles"),
 		migrateTable[model.ProjectUnit]("project_units"),
 		migrateTable[model.CanvasUnitLink]("canvas_unit_links"),
 		migrateTable[model.Shot]("shots"),

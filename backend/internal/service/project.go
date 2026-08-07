@@ -12,22 +12,24 @@ import (
 )
 
 type CreateProjectRequest struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	AspectRatio   string `json:"aspectRatio"`
-	SourceType    string `json:"sourceType"`
-	Description   string `json:"description"`
-	StylePresetID string `json:"stylePresetId"`
+	Name             string `json:"name"`
+	Type             string `json:"type"`
+	AspectRatio      string `json:"aspectRatio"`
+	SourceType       string `json:"sourceType"`
+	Description      string `json:"description"`
+	StylePresetID    string `json:"stylePresetId"`
+	StyleProfileJSON string `json:"styleProfileJson"`
 }
 
 type UpdateProjectRequest struct {
-	Name          string  `json:"name"`
-	Type          string  `json:"type"`
-	AspectRatio   string  `json:"aspectRatio"`
-	SourceType    string  `json:"sourceType"`
-	Description   *string `json:"description"`
-	StylePresetID *string `json:"stylePresetId"`
-	Status        string  `json:"status"`
+	Name             string  `json:"name"`
+	Type             string  `json:"type"`
+	AspectRatio      string  `json:"aspectRatio"`
+	SourceType       string  `json:"sourceType"`
+	Description      *string `json:"description"`
+	StylePresetID    *string `json:"stylePresetId"`
+	StyleProfileJSON *string `json:"styleProfileJson"`
+	Status           string  `json:"status"`
 }
 
 type CreateProjectUnitRequest struct {
@@ -175,8 +177,16 @@ func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.
 	if sourceType == "" {
 		sourceType = "blank"
 	}
+	styleProfileJSON, err := validateStyleProfileJSON(req.StyleProfileJSON)
+	if err != nil {
+		return model.Project{}, BadAuthRequest(err.Error())
+	}
+	stylePresetID := strings.TrimSpace(req.StylePresetID)
+	if err := validateStyleProfilePreset(stylePresetID, styleProfileJSON); err != nil {
+		return model.Project{}, BadAuthRequest(err.Error())
+	}
 	now := time.Now()
-	project := model.Project{ID: newID(), UserID: userID, Name: name, Type: projectType, AspectRatio: aspectRatio, SourceType: sourceType, Description: strings.TrimSpace(req.Description), StylePresetID: strings.TrimSpace(req.StylePresetID), Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
+	project := model.Project{ID: newID(), UserID: userID, Name: name, Type: projectType, AspectRatio: aspectRatio, SourceType: sourceType, Description: strings.TrimSpace(req.Description), StylePresetID: stylePresetID, StyleProfileJSON: styleProfileJSON, Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateProject(&project); err != nil {
 		return model.Project{}, err
 	}
@@ -211,6 +221,16 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 	}
 	if req.StylePresetID != nil {
 		project.StylePresetID = strings.TrimSpace(*req.StylePresetID)
+	}
+	if req.StyleProfileJSON != nil {
+		styleProfileJSON, profileErr := validateStyleProfileJSON(*req.StyleProfileJSON)
+		if profileErr != nil {
+			return model.Project{}, BadAuthRequest(profileErr.Error())
+		}
+		project.StyleProfileJSON = styleProfileJSON
+	}
+	if err := validateStyleProfilePreset(project.StylePresetID, project.StyleProfileJSON); err != nil {
+		return model.Project{}, BadAuthRequest(err.Error())
 	}
 	if status := model.ProjectStatus(strings.TrimSpace(req.Status)); status != "" {
 		if status != model.ProjectStatusActive && status != model.ProjectStatusArchived {

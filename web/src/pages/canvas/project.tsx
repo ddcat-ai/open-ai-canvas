@@ -27,7 +27,8 @@ import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asse
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
+import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
@@ -398,31 +399,35 @@ function InfiniteCanvasPage() {
     });
 
     useEffect(() => {
-        const preset = resolveCanvasStylePreset(linkedProjectQuery.data?.project.stylePresetId);
+        const project = linkedProjectQuery.data?.project;
+        const preset = resolveProjectCanvasStyle(project?.stylePresetId, project?.styleProfileJson);
         if (!projectLoaded || !preset) return;
+        const profile = resolveStyleProfile(project?.stylePresetId, project?.styleProfileJson, preset.profile || createStyleProfileSnapshot(preset));
+        if (!profile) return;
         const current = nodesRef.current.find((node) => node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "styleboard");
         const nextMetadata = {
-            content: preset.prompt,
-            prompt: preset.prompt,
+            content: profile.prompt,
+            prompt: profile.prompt,
             status: NODE_STATUS_SUCCESS,
             workflowKind: "styleboard" as const,
             workflowTitle: "项目画风",
-            workflowDescription: preset.description,
-            stylePresetId: preset.id,
+            workflowDescription: profile.description,
+            stylePresetId: profile.presetId,
+            styleProfileJson: serializeStyleProfile(profile),
             fontSize: 14,
             locked: true,
         };
         if (current) {
-            if (current.metadata?.stylePresetId === preset.id && current.metadata?.content === preset.prompt && current.metadata?.locked) return;
-            setNodes((nodes) => nodes.map((node) => (node.id === current.id ? { ...node, title: `项目画风 · ${preset.title}`, metadata: { ...node.metadata, ...nextMetadata } } : node)));
+            if (current.metadata?.stylePresetId === profile.presetId && current.metadata?.content === profile.prompt && current.metadata?.styleProfileJson === nextMetadata.styleProfileJson && current.metadata?.locked) return;
+            setNodes((nodes) => nodes.map((node) => (node.id === current.id ? { ...node, title: `项目画风 · ${profile.title}`, metadata: { ...node.metadata, ...nextMetadata } } : node)));
             return;
         }
         const node = createCanvasNode(CanvasNodeType.Text, getCanvasCenter(), nextMetadata);
-        node.title = `项目画风 · ${preset.title}`;
+        node.title = `项目画风 · ${profile.title}`;
         node.width = 420;
         node.height = 240;
         setNodes((nodes) => [...nodes, node]);
-    }, [getCanvasCenter, linkedProjectQuery.data?.project.stylePresetId, projectLoaded, setNodes]);
+    }, [getCanvasCenter, linkedProjectQuery.data?.project, projectLoaded, setNodes]);
 
     const {
         assetPickerOpen,
@@ -816,7 +821,8 @@ function InfiniteCanvasPage() {
         focusSelection: fitCanvasSelection,
     });
 
-    const { selectCanvasStyle } = useCanvasStyleWorkflow({
+    const { selectCanvasStyle, styleApplying } = useCanvasStyleWorkflow({
+        domainProjectId: currentProject?.projectId,
         nodesRef,
         selectedNodeIdsRef,
         getCanvasCenter,
@@ -1432,7 +1438,7 @@ function InfiniteCanvasPage() {
 
                     <CanvasShareModal projectId={projectId} open={shareModalOpen} onClose={() => setShareModalOpen(false)} beforeCreate={saveCanvasProject} />
 
-                    <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
+                    <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} applying={styleApplying} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
                     <div className="relative flex min-h-0 min-w-0 flex-1">
                         <div className="relative min-w-0 flex-1 overflow-hidden">

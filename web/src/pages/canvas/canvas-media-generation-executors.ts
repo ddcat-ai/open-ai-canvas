@@ -29,6 +29,7 @@ export async function executeVideoGeneration({
     finishGenerationRequest,
     bindGenerationTask,
     registerPendingNodeIds,
+    styleMetadata,
 }: CanvasGenerationExecution) {
     const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
     const isEmptyVideoNode = sourceNode?.type === CanvasNodeType.Video && !sourceNode.metadata?.content;
@@ -58,6 +59,7 @@ export async function executeVideoGeneration({
             watermark: generationConfig.videoWatermark,
             references: generationReferenceUrls(generationContext),
             ...videoGenerationMetadata,
+            ...styleMetadata,
         },
     };
     registerPendingNodeIds([videoId]);
@@ -84,7 +86,7 @@ export async function executeVideoGeneration({
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
     try {
-        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoices: generationContext.resolvedCharacterVoices, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...videoGenerationMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
+        const result = await runBackendCanvasGenerationTask({ projectId, nodeId: videoId, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoices: generationContext.resolvedCharacterVoices, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...videoGenerationMetadata, ...styleMetadata }, onTaskCreated: (task) => bindGenerationTask(videoId, task) });
         if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
         const video = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);

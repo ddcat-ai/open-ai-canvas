@@ -7,7 +7,7 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
-import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import {
     bindProjectCharacterVoice,
@@ -121,7 +121,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             const model = effectiveConfig.imageModel || effectiveConfig.model;
             const config = { ...effectiveConfig, model };
             if (!isAiConfigReady(config, model)) throw new Error("请先在设置中配置可用的图片模型");
-            const projectStyle = resolveCanvasStylePreset(detail.project.stylePresetId);
+            const projectStyle = resolveProjectCanvasStyle(detail.project.stylePresetId, detail.project.styleProfileJson);
             await generateCharacterTurnaround({ projectId: detail.project.id, assetId: asset.id, versionId: asset.character.versionId, name: asset.title, definition: asset.character.definition, projectStyle, config });
             return getProjectCharacter(detail.project.id, asset.id);
         },

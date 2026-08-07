@@ -137,7 +137,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
-	if capability == "video" {
+	if capability == "image" || capability == "video" {
 		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
@@ -193,7 +193,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.OutputTokenPriceMicrocredits = req.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = req.CachedTokenPriceMicrocredits
 	item.PriceConfigured = req.PriceConfigured
-	if capability == "video" {
+	if capability == "image" || capability == "video" {
 		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
@@ -234,7 +234,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if err != nil {
 		return nil, err
 	}
-	if capability == "video" {
+	if capability == "image" || capability == "video" {
 		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
@@ -283,6 +283,13 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			AudioSpeed:         "1",
 		},
 		Metadata: map[string]interface{}{},
+	}
+	if capability == "image" {
+		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		input.ImageCapability = profile.Image
 	}
 
 	// 测试复用真实生成协议、运行时并发和熔断策略，但不创建用户任务或计费订单。

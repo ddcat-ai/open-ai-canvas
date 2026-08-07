@@ -5,6 +5,7 @@ import { Button } from "antd";
 
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -26,11 +27,16 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const panelRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
-    const quality = config.quality || "auto";
-    const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const activeSize = config.size || "auto";
-    const transparentLabel = config.transparentBackground === "true" ? " · 透明" : "";
-    const summary = showCount ? `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)} · ${count} 张${transparentLabel}` : `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)}${transparentLabel}`;
+    const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image!;
+    const normalized = normalizeImageValue(profile, config);
+    const summaryParts = [
+        ...(profile.size.parameter !== "none" ? [imageSizeLabel(normalized.size)] : []),
+        ...(profile.quality.supported ? [imageQualityLabel(normalized.quality)] : []),
+        ...(showCount && profile.maxOutputs > 1 ? [`${normalized.count} 张`] : []),
+        ...(profile.transparentBackground.supported && normalized.transparentBackground === "true" ? ["透明"] : []),
+    ];
+    const summary = summaryParts.join(" · ");
+    const hasSettings = profile.size.parameter !== "none" || profile.quality.supported || profile.transparentBackground.supported || (showCount && profile.maxOutputs > 1);
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);
@@ -60,6 +66,8 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     }, [onOpenChange, open]);
 
     const panel = open && buttonRect ? <ImageSettingsPortal buttonRect={buttonRect} panelRef={panelRef} placement={placement} theme={theme} config={config} showCount={showCount} onConfigChange={onConfigChange} /> : null;
+
+    if (!hasSettings) return null;
 
     return (
         <>

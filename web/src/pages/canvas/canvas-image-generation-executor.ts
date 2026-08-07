@@ -34,6 +34,7 @@ export async function executeImageGeneration({
     startGenerationRequest,
     finishGenerationRequest,
     bindGenerationTask,
+    styleMetadata,
     showError,
     registerPendingNodeIds,
 }: CanvasGenerationExecution) {
@@ -86,6 +87,7 @@ export async function executeImageGeneration({
             batchUsesReferenceImages: referenceImages.length > 0,
             primaryImageId: undefined,
             ...generationMetadata,
+            ...styleMetadata,
             imageBatchExpanded: count > 1 ? true : undefined,
             generationErrorCode: undefined,
             failedPromptFingerprint: undefined,
@@ -98,7 +100,7 @@ export async function executeImageGeneration({
         position: imageGenerationChildPosition(rootNode.position, rootNode.width, outputNodeSize, index),
         width: outputNodeSize.width,
         height: outputNodeSize.height,
-        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined, ...generationMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
+        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined, ...generationMetadata, ...styleMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
     }));
     const batchConnections = directCopiedBatch
         ? childIds.map((childId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: childId }))
@@ -145,7 +147,7 @@ export async function executeImageGeneration({
                     config: { ...generationConfig, count: "1" },
                     referenceImages,
                     signal: controller.signal,
-                    metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables },
+                    metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...styleMetadata },
                     onTaskCreated: (task) => bindGenerationTask(targetId, task),
                 });
                 const image = result.images?.[0];
