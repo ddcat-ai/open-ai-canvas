@@ -7,7 +7,7 @@
         "dev": "vite --host 0.0.0.0 --port 3000",
         "build": "tsc --noEmit && vite build",
         "typecheck": "tsc --noEmit",
-        "test": "bun test test/agent-prompt-cache.test.ts test/canvas-document.test.ts test/canvas-drawing-engine.test.ts test/canvas-generation-layout.test.ts test/canvas-leafer-viewport.test.ts test/client-id.test.ts",
+        "test": "bun test test/agent-prompt-cache.test.ts test/canvas-character-reference.test.ts test/canvas-document.test.ts test/canvas-drawing-engine.test.ts test/canvas-generation-layout.test.ts test/canvas-leafer-viewport.test.ts test/client-id.test.ts",
         "start": "vite preview --host 0.0.0.0 --port 3000",
         "format": "prettier --write .",
         "format:check": "prettier --check ."
