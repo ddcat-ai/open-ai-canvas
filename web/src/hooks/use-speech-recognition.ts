@@ -61,10 +61,17 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
     const finalTextRef = useRef("");
     const interimTextRef = useRef("");
+    const lastResultIndexRef = useRef(0);
     const stopResolveRef = useRef<((text: string) => void) | null>(null);
     const stopTimerRef = useRef<number | null>(null);
     const [supported] = useState(() => Boolean(getSpeechRecognition()));
     const [error, setError] = useState<SpeechRecognitionError | null>(null);
+
+    const currentText = useCallback(() => {
+        const final = finalTextRef.current.trim();
+        const interim = interimTextRef.current.trim();
+        return final ? (interim ? `${final} ${interim}` : final) : interim;
+    }, []);
 
     const start = useCallback(() => {
         const Constructor = getSpeechRecognition();
@@ -74,6 +81,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         }
         finalTextRef.current = "";
         interimTextRef.current = "";
+        lastResultIndexRef.current = 0;
         const recognition = new Constructor();
         recognition.lang = lang;
         recognition.continuous = true;
@@ -81,17 +89,19 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         recognition.maxAlternatives = 1;
         recognition.onstart = () => setError(null);
         recognition.onresult = (event) => {
-            let text = finalTextRef.current;
-            let interim = interimTextRef.current;
-            for (let i = 0; i < event.results.length; i += 1) {
-                const result = event.results[i];
+            // 浏览器每次回调都会携带完整结果列表，只处理新增的条目，避免最终文本重复追加。
+            for (let index = lastResultIndexRef.current; index < event.results.length; index += 1) {
+                const result = event.results[index];
                 const transcript = result[0]?.transcript?.trim();
                 if (!transcript) continue;
-                if (result.isFinal) text = [text, transcript].filter(Boolean).join(" ");
-                else interim = transcript;
+                if (result.isFinal) {
+                    finalTextRef.current = [finalTextRef.current, transcript].filter(Boolean).join(" ");
+                    interimTextRef.current = "";
+                } else {
+                    interimTextRef.current = transcript;
+                }
             }
-            finalTextRef.current = text;
-            interimTextRef.current = interim;
+            lastResultIndexRef.current = event.results.length;
         };
         recognition.onerror = (event) => {
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -111,27 +121,31 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             }
             const resolve = stopResolveRef.current;
             stopResolveRef.current = null;
-            resolve?.(finalTextRef.current.trim() || interimTextRef.current.trim());
+            resolve?.(currentText());
         };
         recognitionRef.current = recognition;
-        recognition.start();
-    }, [lang]);
+        try {
+            recognition.start();
+        } catch {
+            setError({ code: "start-failed", message: "语音识别启动失败，请重试" });
+        }
+    }, [currentText, lang]);
 
     const stop = useCallback((): Promise<string> => {
         return new Promise((resolve) => {
             const recognition = recognitionRef.current;
             if (!recognition) {
-                resolve(finalTextRef.current);
+                resolve(currentText());
                 return;
             }
             stopResolveRef.current = resolve;
-            // 兜底：部分浏览器 stop() 后 onend 可能不触发，超时后返回已识别文本
+            // 兜底：部分浏览器 stop() 后 onend 触发较慢，预留足够时间等最终结果，避免提前判空。
             stopTimerRef.current = window.setTimeout(() => {
                 if (stopResolveRef.current) {
                     stopResolveRef.current = null;
-                    resolve(finalTextRef.current.trim() || interimTextRef.current.trim());
+                    resolve(currentText());
                 }
-            }, 1500);
+            }, 5000);
             try {
                 recognition.stop();
             } catch {
@@ -140,10 +154,10 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
                     stopTimerRef.current = null;
                 }
                 stopResolveRef.current = null;
-                resolve(finalTextRef.current.trim() || interimTextRef.current.trim());
+                resolve(currentText());
             }
         });
-    }, []);
+    }, [currentText]);
 
     const cancel = useCallback(() => {
         if (stopTimerRef.current !== null) {
@@ -161,6 +175,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         }
         finalTextRef.current = "";
         interimTextRef.current = "";
+        lastResultIndexRef.current = 0;
     }, []);
 
     useEffect(() => cancel, [cancel]);

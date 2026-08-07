@@ -868,7 +868,7 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
     const options = useMemo(() => Array.from(new Set([value, ...selectableModelsByCapability(config, "text")].filter(Boolean))), [config, value]);
     const current = value || "";
     return (
-        <div className="min-w-0 max-w-[240px]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="min-w-0 max-w-[240px] shrink-0" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <Select<string>
                 size="small"
                 variant="borderless"

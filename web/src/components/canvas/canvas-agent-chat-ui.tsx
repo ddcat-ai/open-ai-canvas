@@ -229,8 +229,8 @@ export function AgentChatComposer({
                     style={{ color: theme.node.text }}
                     placeholder={placeholder}
                 />
-                <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 flex-1 items-center gap-1">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                         {onAddFiles ? (
                             <>
                                 <input ref={fileInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
@@ -238,7 +238,7 @@ export function AgentChatComposer({
                                     event.target.value = "";
                                 }} />
                                 <Tooltip title="上传图片">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
+                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8 !shrink-0" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
                                 </Tooltip>
                             </>
                         ) : null}
