@@ -1135,7 +1135,7 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 	if err != nil {
 		return nil, nil, err
 	}
-	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config})
+	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config, StreamText: true})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1150,7 +1150,7 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 		if promptErr != nil {
 			return nil, nil, promptErr
 		}
-		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config})
+		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
 		if repairErr != nil {
 			return nil, nil, fmt.Errorf("分镜结构修复失败：%w", repairErr)
 		}
@@ -1191,7 +1191,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 	if err != nil {
 		return nil, nil, err
 	}
-	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config})
+	result, err := runTextTask(ctx, canvasGenerationInput{Mode: "text", Prompt: plannerPrompt, Config: config, StreamText: true})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1206,7 +1206,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 		if promptErr != nil {
 			return nil, nil, promptErr
 		}
-		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config})
+		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
 		if repairErr != nil {
 			return nil, nil, fmt.Errorf("分镜结构修复失败：%w", repairErr)
 		}
