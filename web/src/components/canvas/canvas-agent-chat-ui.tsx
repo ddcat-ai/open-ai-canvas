@@ -230,7 +230,7 @@ export function AgentChatComposer({
                     placeholder={placeholder}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-1">
                         {onAddFiles ? (
                             <>
                                 <input ref={fileInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
@@ -244,7 +244,7 @@ export function AgentChatComposer({
                         ) : null}
                         {left}
                     </div>
-                    <Button type="primary" className="!h-8 !w-8 !min-w-8 !rounded-md !p-0" disabled={!canSubmit} icon={sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />} onClick={() => void onSubmit()} aria-label="发送" />
+                    <Button type="primary" className="!h-8 !w-8 !min-w-8 !shrink-0 !rounded-md !p-0" disabled={!canSubmit} icon={sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />} onClick={() => void onSubmit()} aria-label="发送" />
                 </div>
             </div>
         </div>

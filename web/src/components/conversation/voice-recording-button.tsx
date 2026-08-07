@@ -27,7 +27,7 @@ export function VoiceRecordingButton({ onTranscribed, disabled }: VoiceRecording
                 <Button
                     type="text"
                     shape="circle"
-                    className="!h-8 !w-8 !min-w-8"
+                    className="!h-8 !w-8 !min-w-8 !shrink-0"
                     disabled={disabled}
                     style={{ color: theme.node.muted }}
                     icon={<Mic className="size-4" />}
