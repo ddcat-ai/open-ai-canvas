@@ -1201,7 +1201,6 @@ function InfiniteCanvasPage() {
                         onGenerateImages={(rowIds) => void generateScriptImages(contentNode.id, rowIds)}
                         onGenerateVideos={(rowIds) => (contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds))}
                         onVideoInputModeChange={(storyboardVideoInputMode) => handleConfigNodeChange(contentNode.id, { storyboardVideoInputMode })}
-                        onViewModeChange={(storyboardViewMode) => handleConfigNodeChange(contentNode.id, { storyboardViewMode })}
                         onMergeVideos={() => void mergeVideosByIds(pipeline.successfulVideoNodeIds)}
                         onCreateActionBoards={() => void createScriptActionBoards(contentNode.id)}
                         onRetryBatch={(batchId) => retryFailedBatchItems(contentNode.id, batchId)}
