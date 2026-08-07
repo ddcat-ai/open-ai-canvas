@@ -280,7 +280,7 @@ func validateCustomRelayHost(host string) error {
 
 func resolveOutboundHost(ctx context.Context, host string) ([]net.IP, error) {
 	host = normalizeOutboundHost(host)
-	return resolveOutboundHostWithPolicy(ctx, host, allowPrivateUpstreams() || allowedPrivateUpstreamHost(host))
+	return resolveOutboundHostWithPolicy(ctx, host, allowedPrivateUpstreamHost(host))
 }
 
 func resolveCustomRelayHost(ctx context.Context, host string) ([]net.IP, error) {
@@ -343,11 +343,6 @@ func blockedCustomRelayIP(ip net.IP) bool {
 		}
 	}
 	return false
-}
-
-func allowPrivateUpstreams() bool {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS")))
-	return value == "1" || value == "true" || value == "yes"
 }
 
 // allowedPrivateUpstreamHost lets operators pin only explicitly trusted upstream

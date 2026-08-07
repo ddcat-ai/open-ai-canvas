@@ -40,7 +40,6 @@ func TestCustomRelayForwardsOpenAIRequestWithoutBrowserHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 	useCustomRelayTestClient(t, upstream.Client())
-	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 
 	request := httptest.NewRequest(http.MethodGet, "/api/ai/custom", nil)

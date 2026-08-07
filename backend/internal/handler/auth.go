@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -802,6 +803,25 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		status = model.ApiCallStatusFailed
 	}
 	responseLimit := policy.Request.SystemRelayResponseMB << 20
+	if isSystemStreamingResponse(resp) {
+		c.Header("Content-Type", resp.Header.Get("Content-Type"))
+		c.Header("Cache-Control", "no-cache, no-transform")
+		c.Header("X-Accel-Buffering", "no")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Status(resp.StatusCode)
+		c.Writer.WriteHeaderNow()
+		streamErr := copySystemProxyStream(c, resp.Body, responseLimit)
+		if streamErr != nil {
+			status = model.ApiCallStatusFailed
+			errorText = streamErr.Error()
+			_ = svc.MarkBillingUncertain(billingOrderID, "系统渠道流式响应中断，费用状态待核对")
+			logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
+			return
+		}
+		logErr := logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
+		settleSystemProxyBilling(svc, billingOrderID, status, statusCode, logErr)
+		return
+	}
 	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
 	if readErr != nil {
 		status = model.ApiCallStatusFailed
@@ -817,6 +837,48 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		return
 	}
 	logErr := logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
+	settleSystemProxyBilling(svc, billingOrderID, status, statusCode, logErr)
+	for _, key := range []string{"Content-Type", "Cache-Control", "Content-Disposition"} {
+		if value := resp.Header.Get(key); value != "" {
+			c.Header(key, value)
+		}
+	}
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
+}
+
+func isSystemStreamingResponse(resp *http.Response) bool {
+	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	return mediaType == "text/event-stream"
+}
+
+func copySystemProxyStream(c *gin.Context, source io.Reader, maxBytes int64) error {
+	buffer := make([]byte, 32<<10)
+	var written int64
+	for written < maxBytes {
+		read, err := source.Read(buffer)
+		if read > 0 {
+			remaining := maxBytes - written
+			if int64(read) > remaining {
+				read = int(remaining)
+			}
+			if _, writeErr := c.Writer.Write(buffer[:read]); writeErr != nil {
+				return writeErr
+			}
+			c.Writer.Flush()
+			written += int64(read)
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func settleSystemProxyBilling(svc *service.Service, billingOrderID string, status model.ApiCallStatus, statusCode int, logErr error) {
 	if status == model.ApiCallStatusSucceeded {
 		if logErr != nil {
 			_ = svc.MarkBillingUncertain(billingOrderID, "上游成功但调用日志写入失败，费用状态待核对")
@@ -828,13 +890,6 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	} else {
 		_ = svc.RefundBilling(billingOrderID, "上游明确返回失败")
 	}
-	for _, key := range []string{"Content-Type", "Cache-Control", "Content-Disposition"} {
-		if value := resp.Header.Get(key); value != "" {
-			c.Header(key, value)
-		}
-	}
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
 }
 
 func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID string, capability string, protocol model.ChannelInterfaceType, method string, path string, target string, body []byte, contentType string, status model.ApiCallStatus, statusCode int, duration time.Duration, errorText string, concurrencyLimit int) model.ApiCallLog {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestVolcengineJiMengImageTaskUsesSignedAsyncProtocol(t *testing.T) {
-	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Authorization"), "Credential=AKID/") {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))

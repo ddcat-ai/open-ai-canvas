@@ -153,8 +153,14 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 	if !setting.Enabled {
 		return "", Forbidden("Linux.do 登录尚未启用")
 	}
-	state := randomToken()
-	verifier := randomToken()
+	state, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	verifier, err := randomToken()
+	if err != nil {
+		return "", err
+	}
 	challengeBytes := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
 	if err := s.repo.CreateOAuthState(&model.OAuthState{

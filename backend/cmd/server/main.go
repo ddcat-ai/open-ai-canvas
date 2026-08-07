@@ -126,9 +126,13 @@ func cors() gin.HandlerFunc {
 			return
 		}
 		if origin != "" {
-			c.Header("Access-Control-Allow-Origin", origin)
-			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+			if corsWildcardEnabled() {
+				c.Header("Access-Control-Allow-Origin", "*")
+			} else {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Access-Control-Allow-Credentials", "true")
+				c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+			}
 		}
 		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
@@ -139,6 +143,15 @@ func cors() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func corsWildcardEnabled() bool {
+	for _, allowed := range strings.Split(os.Getenv("CANVAS_CORS_ORIGINS"), ",") {
+		if strings.TrimSpace(allowed) == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func allowedOrigin(c *gin.Context, origin string) bool {

@@ -263,7 +263,10 @@ func (s *Service) createAuthSession(user *model.User) (*AuthSessionResult, error
 	if err != nil {
 		return nil, err
 	}
-	token := randomToken()
+	token, err := randomToken()
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	session := model.AuthSession{
 		ID:        newID(),
@@ -293,12 +296,12 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func randomToken() string {
+func randomToken() (string, error) {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return newID() + newID()
+		return "", errors.New("生成随机会话令牌失败")
 	}
-	return hex.EncodeToString(b[:])
+	return hex.EncodeToString(b[:]), nil
 }
 
 func parseSessionCookie(value string) (string, string) {
