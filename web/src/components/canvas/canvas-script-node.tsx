@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { App, Button, Checkbox, Input, InputNumber, Modal, Popover, Segmented, Select, Table, Tooltip } from "antd";
+import { App, Button, Checkbox, Dropdown, Input, InputNumber, Modal, Popover, Segmented, Select, Table, Tooltip } from "antd";
+import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Eye, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Eye, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
@@ -134,11 +135,39 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const hasFailedBatchItems = Boolean(batch?.items.some((item) => item.status === "failed"));
     const hasWaitingBatchItems = Boolean(batch?.items.some((item) => item.status === "waiting" || item.status === "submitting"));
     const hasActiveBatchItems = Boolean(batch?.items.some((item) => item.status === "waiting" || item.status === "submitting" || item.status === "queued" || item.status === "running"));
+    const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
     const taskFeedback = node.metadata?.status === "loading"
         ? `${node.metadata.taskStage || "正在创建任务"}${typeof node.metadata.taskProgress === "number" ? ` · ${node.metadata.taskProgress}%` : ""}`
         : node.metadata?.status === "error" ? generationErrorMessage(node.metadata.errorDetails) : "";
     const lastSubmissionPrompt = node.metadata?.lastStoryboardSubmissionPrompt?.trim() || "";
     const lastSubmissionAt = node.metadata?.lastStoryboardSubmissionAt;
+    const pipelineDisabled = !rows.length || node.metadata?.status === "loading" || hasActiveBatchItems;
+    const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
+    const missingVideos = Math.max(0, pipeline.videos.total - pipeline.videos.created);
+    const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
+    const allRowIds = pipeline.rows.map((item) => item.row.id);
+    const moreMenuItems: MenuProps["items"] = [
+        { key: "generate-images", icon: <ImageIcon className="size-3.5" />, label: "生成未完成分镜图", disabled: pipelineDisabled || pipeline.images.incomplete === 0, onClick: () => onGenerateImages(allRowIds) },
+        { key: "generate-videos", icon: <Video className="size-3.5" />, label: "生成未完成视频", disabled: pipelineDisabled || pipeline.videos.incomplete === 0, onClick: () => onGenerateVideos(allRowIds) },
+        { key: "merge", icon: <Merge className="size-3.5" />, label: pipeline.final.success ? "成片已完成" : pipeline.successfulVideoNodeIds.length >= 2 ? `合并 ${pipeline.successfulVideoNodeIds.length} 段视频` : "合并成片（至少 2 段视频）", disabled: !canMerge, onClick: () => onMergeVideos() },
+        { type: "divider" },
+        { key: "video-input", icon: <Film className="size-3.5" />, label: "视频输入模式", children: [
+            { key: "video-input-direct", label: videoInputMode === "direct" ? "✓ 直接生成" : "直接生成", onClick: () => onVideoInputModeChange("direct") },
+            { key: "video-input-keyframe", label: videoInputMode === "keyframe" ? "✓ 先做首帧" : "先做首帧", onClick: () => onVideoInputModeChange("keyframe") },
+        ] },
+        ...(!simpleMode ? [
+            { type: "divider" as const },
+            { key: "create-image-nodes", icon: <Grid3X3 className="size-3.5" />, label: missingImages ? `创建 ${missingImages} 个图片节点` : "图片节点已创建", disabled: pipelineDisabled || missingImages === 0, onClick: () => onCreateImageNodes() },
+            { key: "create-video-nodes", icon: <Film className="size-3.5" />, label: missingVideos ? `创建 ${missingVideos} 个视频节点` : "视频节点已创建", disabled: pipelineDisabled || missingVideos === 0, onClick: () => onCreateVideoNodes() },
+            { key: "action-boards", icon: <Grid3X3 className="size-3.5" />, label: "生成动作拆分 12 宫格", disabled: !rows.length || hasActiveBatchItems, onClick: () => onCreateActionBoards() },
+        ] : []),
+        ...(batch ? [
+            { type: "divider" as const },
+            { key: "retry", icon: <RefreshCw className="size-3.5" />, label: "重试失败项", disabled: !hasFailedBatchItems, onClick: () => onRetryBatch(batch.id) },
+            { key: "stop", icon: <Square className="size-3.5" />, label: "停止剩余任务", disabled: !hasWaitingBatchItems, onClick: () => onStopBatch(batch.id) },
+            { key: "details", icon: <ListTree className="size-3.5" />, label: "查看批次详情", onClick: () => setBatchDetailsOpen(true) },
+        ] : []),
+    ];
     const liveExpandedBrief = useMemo(
         () => expandStoryboardTextMentions(prompt, mentionReferences),
         [mentionReferences, prompt],

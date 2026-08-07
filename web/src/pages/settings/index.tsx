@@ -13,6 +13,7 @@ import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from 
 import {
     createModelChannel,
     defaultBaseUrlForApiFormat,
+    defaultBaseUrlForChannelInterface,
     defaultConfig,
     filterModelsByCapability,
     modelOptionsFromChannels,

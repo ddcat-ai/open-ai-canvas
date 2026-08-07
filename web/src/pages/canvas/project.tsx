@@ -1230,6 +1230,7 @@ function InfiniteCanvasPage() {
             }
             if (contentNode.type === CanvasNodeType.Script) {
                 const pipeline = deriveStoryboardPipelineProgress(contentNode, nodesRef.current, connectionsRef.current);
+                const rowIds = pipeline.rows.map((item) => item.row.id);
                 return (
                     <CanvasScriptNodeContent
                         node={contentNode}
@@ -1237,11 +1238,17 @@ function InfiniteCanvasPage() {
                         pipeline={pipeline}
                         scale={viewport.k}
                         mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || EMPTY_RESOURCE_REFERENCES}
+                        canvasNodes={nodesRef.current}
+                        canvasConnections={connectionsRef.current}
                         onOpen={() => setScriptEditorNodeId(contentNode.id)}
                         onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
                         onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
-                        onGenerateImages={(rowIds) => void generateScriptImages(contentNode.id, rowIds)}
-                        onGenerateVideos={(rowIds) => (contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds))}
+                        onGenerateImages={(ids) => void generateScriptImages(contentNode.id, ids?.length ? ids : rowIds)}
+                        onGenerateVideos={(ids) => {
+                            const targetIds = ids?.length ? ids : rowIds;
+                            if (contentNode.metadata?.storyboardVideoInputMode === "keyframe") void generateScriptVideos(contentNode.id, targetIds);
+                            else void createAndGenerateScriptVideos(contentNode.id, targetIds);
+                        }}
                         onVideoInputModeChange={(storyboardVideoInputMode) => handleConfigNodeChange(contentNode.id, { storyboardVideoInputMode })}
                         onMergeVideos={() => void mergeVideosByIds(pipeline.successfulVideoNodeIds)}
                         onCreateActionBoards={() => void createScriptActionBoards(contentNode.id)}
@@ -1254,6 +1261,7 @@ function InfiniteCanvasPage() {
                         onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
                         onPromptChange={(composerContent) => handleConfigNodeChange(contentNode.id, { composerContent })}
                         onGenerateScript={(prompt) => void generateScriptRows(contentNode.id, prompt)}
+                        onPreviewPlannerPrompt={(prompt) => previewScriptPlannerPrompt(contentNode.id, prompt)}
                         onModelChange={(model) => handleConfigNodeChange(contentNode.id, { model })}
                         onShotDurationChange={(duration: StoryboardShotDuration) => handleConfigNodeChange(contentNode.id, { storyboardShotDuration: duration })}
                         onShotCountChange={(count: StoryboardShotCount) => handleConfigNodeChange(contentNode.id, { storyboardShotCount: count })}
@@ -1264,7 +1272,12 @@ function InfiniteCanvasPage() {
                             const minHeight = storyboardMinNodeHeight(height);
                             if (contentNode.height < minHeight) handleNodeResize(contentNode.id, contentNode.width, minHeight);
                         }}
-                        onConnectStart={(event, rowId, handleType) => handleConnectStart(event, contentNode.id, handleType, rowId === "context" ? "storyboard:context" : `row:${rowId}`)}
+                        onConnectStart={(event, handleKey, handleType) => {
+                            const handleId = handleKey.startsWith("storyboard:") || handleKey.startsWith("row:")
+                                ? handleKey
+                                : `row:${handleKey}`;
+                            handleConnectStart(event, contentNode.id, handleType, handleId);
+                        }}
                         onScrollTopChange={(scrollTop) => setScriptScrollTopById((current) => (current[contentNode.id] === scrollTop ? current : { ...current, [contentNode.id]: scrollTop }))}
                     />
                 );
@@ -1283,77 +1296,19 @@ function InfiniteCanvasPage() {
             return (
                 <CanvasConfigNodePanel
                     node={contentNode}
-                    batch={visibleGenerationBatch(contentNode)}
-                    pipeline={pipeline}
-                    scale={viewport.k}
-                    mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || EMPTY_RESOURCE_REFERENCES}
-                    canvasNodes={nodesRef.current}
-                    canvasConnections={connectionsRef.current}
-                    onOpen={() => setScriptEditorNodeId(contentNode.id)}
-                    onCreateImageNodes={() => createScriptImageNodes(contentNode.id)}
-                    onCreateVideoNodes={() => createScriptVideoNodes(contentNode.id)}
-                    onGenerateImages={() => void generateScriptImages(contentNode.id, rowIds)}
-                    onGenerateVideos={() => contentNode.metadata?.storyboardVideoInputMode === "keyframe" ? void generateScriptVideos(contentNode.id, rowIds) : void createAndGenerateScriptVideos(contentNode.id, rowIds)}
-                    onVideoInputModeChange={(storyboardVideoInputMode) => handleConfigNodeChange(contentNode.id, { storyboardVideoInputMode })}
-                    onMergeVideos={() => void mergeVideosByIds(pipeline.successfulVideoNodeIds)}
-                    onCreateActionBoards={() => void createScriptActionBoards(contentNode.id)}
-                    onRetryBatch={(batchId) => retryFailedBatchItems(contentNode.id, batchId)}
-                    onRetryBatchItem={(batchId, itemId) => retryFailedBatchItems(contentNode.id, batchId, itemId)}
-                    onStopBatch={(batchId) => stopRemainingBatchItems(contentNode.id, batchId)}
-                    onCancelBatchItem={(batchId, itemId) => cancelSubmittedBatchItem(contentNode.id, batchId, itemId)}
-                    onAddRow={() => addScriptRow(contentNode.id)}
-                    onRemoveRow={(rowId) => removeScriptRow(contentNode.id, rowId)}
-                    onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
-                    onPromptChange={(composerContent) => handleConfigNodeChange(contentNode.id, { composerContent })}
-                    onGenerateScript={(prompt) => void generateScriptRows(contentNode.id, prompt)}
-                    onPreviewPlannerPrompt={(prompt) => previewScriptPlannerPrompt(contentNode.id, prompt)}
-                    onModelChange={(model) => handleConfigNodeChange(contentNode.id, { model })}
-                    onShotDurationChange={(duration: StoryboardShotDuration) => handleConfigNodeChange(contentNode.id, { storyboardShotDuration: duration })}
-                    onShotCountChange={(count: StoryboardShotCount) => handleConfigNodeChange(contentNode.id, { storyboardShotCount: count })}
+                    isRunning={runningNodeId === contentNode.id}
+                    inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
+                    onConfigChange={handleConfigNodeChange}
+                    onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
+                    onStop={confirmStopGeneration}
+                    onGenerate={(nodeId) => {
+                        const target = nodesRef.current.find((item) => item.id === nodeId);
+                        void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
+                    }}
                     workspaceMode={workspaceMode}
-                    onComposerHeightChange={(height) => {
-                        if (contentNode.metadata?.storyboardComposerHeight === height) return;
-                        handleConfigNodeChange(contentNode.id, { storyboardComposerHeight: height });
-                        const minHeight = storyboardMinNodeHeight(height);
-                        if (contentNode.height < minHeight) handleNodeResize(contentNode.id, contentNode.width, minHeight);
-                    }}
-                    onConnectStart={(event, handleKey, handleType) => {
-                        const handleId = handleKey.startsWith("storyboard:") || handleKey.startsWith("row:")
-                            ? handleKey
-                            : `row:${handleKey}`;
-                        handleConnectStart(event, contentNode.id, handleType, handleId);
-                    }}
-                    onScrollTopChange={(scrollTop) => setScriptScrollTopById((current) => current[contentNode.id] === scrollTop ? current : { ...current, [contentNode.id]: scrollTop })}
                 />
             );
-        }
-        if (contentNode.metadata?.directorSceneId) {
-            return (
-                <CanvasDirectorNodePanel
-                    node={contentNode}
-                    scene={currentProject?.directorScenes?.find((scene) => scene.id === contentNode.metadata?.directorSceneId) || null}
-                    previewUrl={nodesRef.current.find((item) => item.id === contentNode.metadata?.directorPreviewNodeId)?.metadata?.content}
-                    professional={workspaceMode === "professional"}
-                    onOpen={() => openDirectorWorkbench(contentNode.id)}
-                />
-            );
-        }
-        return (
-            <CanvasConfigNodePanel
-                node={contentNode}
-                isRunning={runningNodeId === contentNode.id}
-                inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
-                onConfigChange={handleConfigNodeChange}
-                onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
-                onStop={confirmStopGeneration}
-                onGenerate={(nodeId) => {
-                    const target = nodesRef.current.find((item) => item.id === nodeId);
-                    void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
-                }}
-                workspaceMode={workspaceMode}
-            />
-        );
-    }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, previewScriptPlannerPrompt, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, updateScriptRow, viewport.k, workspaceMode]);
+        }, [addScriptRow, cancelSubmittedBatchItem, configInputsById, confirmStopGeneration, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, currentProject?.directorScenes, generateScriptImages, generateScriptRows, generateScriptVideos, handleConfigNodeChange, handleConnectStart, handleGenerateNode, handleNodeResize, mentionReferencesByNodeId, mergeVideosByIds, openDirectorWorkbench, openStoryInput, previewScriptPlannerPrompt, removeScriptRow, retryFailedBatchItems, runningNodeId, stopRemainingBatchItems, updateScriptRow, viewport.k, workspaceMode]);
 
     const handleCanvasNodeHoverStart = useCallback(
         (nodeId: string) => {
@@ -1517,7 +1472,7 @@ function InfiniteCanvasPage() {
                 {mergeVideoProgress ? <CanvasMergeStatusToast progress={mergeVideoProgress} theme={theme} /> : null}
                 {lastAgentChange ? <CanvasAgentChangeToast change={lastAgentChange} theme={theme} onView={viewLastAgentChange} onUndo={() => { undoAgentOps(); }} onClose={dismissLastAgentChange} /> : null}
 
-                <CanvasNodeHoverToolbar
+                <CanvasNodeToolbar
                     node={isNodeDragging || nodeImageSettingsOpen || emotionNodeId ? null : toolbarNode}
                     workspaceMode={workspaceMode}
                     viewport={viewport}
@@ -1622,6 +1577,7 @@ function InfiniteCanvasPage() {
                     onEditText={openTextNodeEditor}
                     onOpenDrawing={openDrawingNode}
                     onGenerateImage={generateImageFromTextNode}
+                    onChooseStyle={() => setStylePickerOpen(true)}
                     onCopyContent={(node) => { void copyNodeContentToClipboard(node); }}
                     onCopyMediaUrl={(node) => { void copyNodeMediaUrlToClipboard(node); }}
                     onSetAssetCategory={(nodeId, assetCategory) => handleConfigNodeChange(nodeId, { assetCategory })}
@@ -1647,17 +1603,20 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                {drawingNode ? <Suspense fallback={<div className="fixed inset-0 z-[var(--z-toast)] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
-                    <CanvasDrawingEditorModal
-                        node={drawingNode}
-                        projectId={projectId}
-                        open={Boolean(drawingNode)}
-                        onClose={() => setDrawingNodeId(null)}
-                        onSaved={(nodeId, summary) => {
-                            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, drawingEngine: summary.engine, drawingRevision: summary.revision, drawingUpdatedAt: summary.updatedAt, drawingShapeCount: summary.shapeCount, drawingPageCount: summary.pageCount } } : node));
-                            message.success("绘图已保存");
-                        }}
-                    />
+                {drawingNode ? (
+                    <Suspense fallback={<div className="fixed inset-0 z-[var(--z-toast)] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}><WorkspaceState icon="loading" title="正在加载绘图编辑器" description="正在准备绘图画布。" /></div>}>
+                        <CanvasDrawingEditorModal
+                            node={drawingNode}
+                            projectId={projectId}
+                            open={Boolean(drawingNode)}
+                            onClose={() => setDrawingNodeId(null)}
+                            onSaved={(nodeId, summary) => {
+                                setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, drawingEngine: summary.engine, drawingRevision: summary.revision, drawingUpdatedAt: summary.updatedAt, drawingShapeCount: summary.shapeCount, drawingPageCount: summary.pageCount } } : node));
+                                message.success("绘图已保存");
+                            }}
+                        />
+                    </Suspense>
+                ) : null}
 
                 <CanvasScriptEditor
                     node={activeScriptNode}
@@ -1962,6 +1921,7 @@ function InfiniteCanvasPage() {
                         onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
                         onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
                         onGenerateImage={generateImageFromTextNode}
+                        onGenerateVideoFromActionBoard={(node) => generateVideoFromActionBoard(node.id)}
                         onUpload={(node) => handleUploadRequest(node.id)}
                         onDownload={downloadNodeImage}
                         onSaveAsset={(node) => void saveNodeAsset(node)}
