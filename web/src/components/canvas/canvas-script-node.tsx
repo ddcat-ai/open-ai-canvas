@@ -322,10 +322,10 @@ function StoryboardMiniPipeline({ pipeline, theme, rows }: { pipeline: CanvasSto
         { key: "final", label: "合并成片", state: pipeline.final.success > 0 ? "done" : pipeline.final.failed > 0 ? "error" : pipeline.final.loading > 0 || pipeline.successfulVideoNodeIds.length >= 2 ? "current" : "idle", hint: pipelineStatusLabel(pipeline.final) },
     ];
     return (
-        <div className="flex h-9 shrink-0 items-center overflow-hidden border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="flex h-9 shrink-0 items-center justify-center overflow-hidden border-b px-4" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             {steps.map((step, index) => (
                 <Fragment key={step.key}>
-                    {index > 0 ? <span className="mx-2.5 h-px min-w-3.5 flex-1" style={{ background: theme.node.stroke }} /> : null}
+                    {index > 0 ? <span className="mx-2.5 h-px min-w-3.5 flex-1 max-w-20" style={{ background: theme.node.stroke }} /> : null}
                     <span className="flex items-center gap-1.5 whitespace-nowrap text-[var(--fs-tiny)]" title={step.hint} style={{ color: step.state === "done" ? theme.node.muted : step.state === "current" ? theme.accent.primary : step.state === "error" ? theme.accent.danger : theme.node.faint, fontWeight: step.state === "current" || step.state === "error" ? 700 : 500 }}>
                         <span className="size-2 shrink-0 rounded-full" style={{ background: step.state === "done" ? theme.node.activeStroke : step.state === "current" ? theme.accent.primary : step.state === "error" ? theme.accent.danger : theme.node.stroke, boxShadow: step.state === "current" ? `0 0 0 3px ${theme.accent.primarySoft}` : undefined }} />
                         {step.label}
