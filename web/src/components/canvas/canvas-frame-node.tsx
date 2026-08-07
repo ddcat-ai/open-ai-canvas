@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight, Video } from "lucide-react";
 
-import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING } from "@/lib/canvas/canvas-frame";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -156,13 +155,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
             onMouseEnter={() => onHoverStart?.(data.id)}
             onMouseLeave={() => onHoverEnd?.(data.id)}
         >
-            <CometCard
-                containerClassName="h-full w-full"
-                className="canvas-frame-shell overflow-hidden rounded-[var(--dock-radius)] border"
-                rotateDepth={2.4}
-                translateDepth={2}
-                disabled={Boolean(dragOffset) || !collapsed || editing || scale < 0.32}
-                glare={collapsed}
+            <div
+                className="canvas-frame-shell h-full w-full overflow-hidden rounded-[var(--dock-radius)] border"
                 style={{
                     background: active ? theme.frame.activeFill : theme.frame.fill,
                     borderColor: active ? theme.frame.activeStroke : theme.frame.stroke,
@@ -222,7 +216,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                 </div>
 
                 {collapsed ? <FramePreview nodes={childNodes} frame={data} theme={theme} /> : null}
-            </CometCard>
+            </div>
             {!readOnly && !collapsed && isSelected && !data.metadata?.locked ? (
                 <>
                     <ResizeHandle corner="top-left" scale={scale} theme={theme} onMouseDown={startResize} />

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Clock3, FileText, Image as ImageIcon, LoaderCircle, Lock, Maximize2, Music2, Pencil, Play, Plus, RefreshCw, Replace, Settings2, Square, Star, Type, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { formatBytes } from "@/lib/image-utils";
@@ -149,9 +148,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     const mediaBorderColor = isActive ? theme.accent.primary : isRelated && !isBatchChild ? theme.accent.primary : "transparent";
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
-    const cometDepth = hasMediaContent ? 6.8 : data.type === CanvasNodeType.Script ? 2.8 : 4.6;
-    const cometTranslate = hasMediaContent ? 6 : data.type === CanvasNodeType.Script ? 2.5 : 4;
-    const cometDisabled = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -318,13 +314,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             />
-            <CometCard
-                containerClassName="overflow-visible"
+            <div
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)] ${flushMediaContent ? "border-0" : "border"} ${isGeneratingNode ? "canvas-node-shell-generating" : ""}`}
-                rotateDepth={cometDepth}
-                translateDepth={cometTranslate}
-                disabled={cometDisabled}
-                glare={!isGeneratingNode}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
@@ -502,7 +493,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
                     <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
                 </> : null}
-            </CometCard>
+            </div>
 
             {!readOnly && data.type !== CanvasNodeType.Script ? <ConnectionSideRail side="left" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
             {!readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config ? <ConnectionSideRail side="right" scale={scale} visible={hovered} theme={theme} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}

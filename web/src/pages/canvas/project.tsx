@@ -1079,7 +1079,7 @@ function InfiniteCanvasPage() {
         handleGenerateNode,
     });
 
-    const { addScriptRow, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, generateScriptImages, generateScriptRows, generateScriptVideos, removeScriptRow, replaceScriptRows, updateScriptRow } =
+    const { addScriptRow, createAndGenerateScriptVideos, createScriptActionBoards, createScriptImageNodes, createScriptVideoNodes, generateScriptImages, generateScriptRows, generateScriptVideos, removeScriptRow, replaceScriptRows, stopScriptGeneration, updateScriptRow } =
         useCanvasStoryboard({
             projectId,
             nodesRef,
@@ -1216,6 +1216,7 @@ function InfiniteCanvasPage() {
                         onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
                         onPromptChange={(composerContent) => handleConfigNodeChange(contentNode.id, { composerContent })}
                         onGenerateScript={(prompt) => void generateScriptRows(contentNode.id, prompt)}
+                        onStopScript={() => stopScriptGeneration(contentNode.id)}
                         onModelChange={(model) => handleConfigNodeChange(contentNode.id, { model })}
                         onShotDurationChange={(duration: StoryboardShotDuration) => handleConfigNodeChange(contentNode.id, { storyboardShotDuration: duration })}
                         onShotCountChange={(count: StoryboardShotCount) => handleConfigNodeChange(contentNode.id, { storyboardShotCount: count })}

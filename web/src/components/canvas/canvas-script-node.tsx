@@ -60,7 +60,7 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "负面要求", value: "negativePrompt" },
 ];
 
-export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
+export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionReferences, onOpen, onCreateImageNodes, onCreateVideoNodes, onGenerateImages, onGenerateVideos, onVideoInputModeChange, onMergeVideos, onCreateActionBoards, onRetryBatch, onRetryBatchItem, onStopBatch, onCancelBatchItem, onAddRow, onRemoveRow, onUpdateRow, onPromptChange, onGenerateScript, onStopScript, onModelChange, onShotDurationChange, onShotCountChange, onComposerHeightChange, onConnectStart, onScrollTopChange, workspaceMode = "professional" }: {
     node: CanvasNodeData;
     batch?: CanvasGenerationBatch;
     pipeline: CanvasStoryboardPipelineProgress;
@@ -83,6 +83,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     onUpdateRow: (rowId: string, patch: Partial<StoryboardRow>) => void;
     onPromptChange: (prompt: string) => void;
     onGenerateScript: (prompt: string) => void;
+    onStopScript: () => void;
     onModelChange: (model: string) => void;
     onShotDurationChange: (duration: StoryboardShotDuration) => void;
     onShotCountChange: (count: StoryboardShotCount) => void;
@@ -96,6 +97,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const generationConfig = buildGenerationConfig(effectiveConfig, node, "text");
     const simpleMode = workspaceMode === "simple";
     const rows = node.metadata?.storyboard?.rows || [];
+    const scriptLoading = node.metadata?.status === "loading";
     const [prompt, setPrompt] = useState(node.metadata?.composerContent || "");
     const [scrollTop, setScrollTop] = useState(0);
     const composerHeightChangeRef = useRef(onComposerHeightChange);
@@ -144,7 +146,7 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     ];
     const submitPrompt = () => {
         const value = prompt.trim();
-        if (value && node.metadata?.status !== "loading") onGenerateScript(value);
+        if (value && !scriptLoading) onGenerateScript(value);
     };
     useLayoutEffect(() => {
         composerHeightChangeRef.current = onComposerHeightChange;
@@ -283,12 +285,11 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
                     />}
                     <Button
                         shape="circle"
-                        icon={<Send className="size-4" />}
-                        disabled={!prompt.trim() || node.metadata?.status === "loading"}
-                        loading={node.metadata?.status === "loading"}
-                        style={{ background: theme.toolbar.itemHover, borderColor: theme.node.stroke, color: theme.node.text }}
+                        icon={scriptLoading ? <Square className="size-4" /> : <Send className="size-4" />}
+                        disabled={!scriptLoading && !prompt.trim()}
+                        style={{ background: theme.toolbar.itemHover, borderColor: scriptLoading ? theme.accent.danger : theme.node.stroke, color: scriptLoading ? theme.accent.danger : theme.node.text }}
                         onMouseDown={(event) => event.stopPropagation()}
-                        onClick={submitPrompt}
+                        onClick={scriptLoading ? onStopScript : submitPrompt}
                     />
                 </div>
                 <RowHandle side="left" top={composerHeight / 2} scale={scale} tone="idle" theme={theme} title="连接文本节点作为项目设定" onPointerDown={(event) => onConnectStart(event, "context", "target")} />

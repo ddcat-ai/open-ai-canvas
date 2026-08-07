@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
 
@@ -110,6 +110,28 @@ export function useCanvasStoryboard({
         replaceScriptRows(nodeId, rows);
     }, [nodesRef, replaceScriptRows]);
 
+    const scriptTaskControllersRef = useRef(new Map<string, AbortController>());
+
+    const stopScriptGeneration = useCallback((nodeId: string) => {
+        modal.confirm({
+            title: "停止生成分镜？",
+            content: "当前分镜脚本生成任务会被中断，已经生成完成的镜头内容会保留。",
+            okText: "停止生成",
+            cancelText: "继续生成",
+            okButtonProps: { danger: true },
+            onOk: () => {
+                const controller = scriptTaskControllersRef.current.get(nodeId);
+                if (controller) {
+                    controller.abort();
+                    return;
+                }
+                // 任务可能刚结束或尚未挂载，直接恢复节点为可重新提交状态。
+                setNodes((current) => current.map((node) => node.id === nodeId && node.metadata?.status === NODE_STATUS_LOADING ? { ...node, metadata: resetGenerationTaskMetadata(node.metadata, NODE_STATUS_IDLE) } : node));
+                message.info("当前没有正在执行的生成任务");
+            },
+        });
+    }, [message, modal, setNodes]);
+
     const generateScriptRows = useCallback(async (nodeId: string, prompt: string) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
         if (!scriptNode || !prompt.trim()) return;
@@ -131,6 +153,13 @@ export function useCanvasStoryboard({
             return;
         }
         setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined } } : node));
+        const previousController = scriptTaskControllersRef.current.get(nodeId);
+        if (previousController) {
+            previousController.abort();
+            scriptTaskControllersRef.current.delete(nodeId);
+        }
+        const controller = new AbortController();
+        scriptTaskControllersRef.current.set(nodeId, controller);
         try {
             const task = await createGenerationTask({
                 projectId,
@@ -152,6 +181,7 @@ export function useCanvasStoryboard({
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(task), status: NODE_STATUS_LOADING } } : node));
             const completed = await waitForGenerationTask(task.id, {
                 initialTask: task,
+                signal: controller.signal,
                 onTaskUpdate: (next) => setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(next), status: NODE_STATUS_LOADING } } : node)),
             });
             const result = storyboardRowsFromTask(completed);
@@ -173,10 +203,17 @@ export function useCanvasStoryboard({
             message.success(`已生成 ${result.rows.length} 个镜头`);
             return true;
         } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+                setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: resetGenerationTaskMetadata(node.metadata, NODE_STATUS_IDLE) } : node));
+                message.success("已停止生成");
+                return false;
+            }
             const details = generationErrorMessage(error);
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : node));
             message.error(details);
             return false;
+        } finally {
+            if (scriptTaskControllersRef.current.get(nodeId) === controller) scriptTaskControllersRef.current.delete(nodeId);
         }
     }, [connectionsRef, effectiveConfig, isAiConfigReady, message, nodesRef, projectId, setNodes]);
 
@@ -486,6 +523,7 @@ export function useCanvasStoryboard({
         generateScriptVideos,
         removeScriptRow,
         replaceScriptRows,
+        stopScriptGeneration,
         updateScriptRow,
         updateScriptRows,
     };
