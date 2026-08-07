@@ -1,4 +1,5 @@
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
+import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
 
 export type Position = {
     x: number;
@@ -170,6 +171,8 @@ export type CanvasNodeMetadata = {
     workflowTitle?: string;
     workflowDescription?: string;
     stylePresetId?: string;
+    styleProfileJson?: string;
+    styleExecutionPlan?: StyleExecutionPlan;
     chapterId?: string;
     chapterTitle?: string;
     shotIndex?: number;

@@ -38,6 +38,70 @@ func normalizeImageQuality(value string) string {
 	}
 }
 
+func imageParameterSupported(profile *ImageCapabilityConfig, parameter string) bool {
+	if profile == nil {
+		return true
+	}
+	if parameter == "response_format" {
+		return profile.ResponseFormat.Supported
+	}
+	return profile.OutputFormat.Supported
+}
+
+func imageQualitySupported(profile *ImageCapabilityConfig) bool {
+	return profile == nil || profile.Quality.Supported
+}
+
+func imageTransparentBackgroundSupported(profile *ImageCapabilityConfig) bool {
+	return profile == nil || profile.TransparentBackground.Supported
+}
+
+func imageSizeParameter(profile *ImageCapabilityConfig, value string) (string, string) {
+	if profile == nil {
+		return "size", normalizePixelSize(value)
+	}
+	value = strings.TrimSpace(value)
+	if value == "" || value == "auto" {
+		value = strings.TrimSpace(profile.Size.Default)
+	}
+	switch profile.Size.Parameter {
+	case "size":
+		return "size", normalizePixelSize(value)
+	case "aspect_ratio":
+		return "aspect_ratio", normalizeImageAspectRatio(value)
+	default:
+		return "", ""
+	}
+}
+
+func normalizeImageAspectRatio(value string) string {
+	value = strings.TrimSpace(strings.ToLower(strings.ReplaceAll(value, "×", "x")))
+	if strings.Contains(value, ":") {
+		return value
+	}
+	parts := strings.Split(value, "x")
+	if len(parts) != 2 {
+		return ""
+	}
+	width, widthErr := strconv.Atoi(parts[0])
+	height, heightErr := strconv.Atoi(parts[1])
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return ""
+	}
+	divisor := imageDimensionGCD(width, height)
+	return strconv.Itoa(width/divisor) + ":" + strconv.Itoa(height/divisor)
+}
+
+func imageDimensionGCD(left int, right int) int {
+	for right != 0 {
+		left, right = right, left%right
+	}
+	if left < 1 {
+		return 1
+	}
+	return left
+}
+
 func normalizePixelSize(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || value == "auto" {

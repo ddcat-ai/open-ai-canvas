@@ -24,7 +24,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
             protocol: defaultProtocolForModel(channel, model),
             billingMode: "fixed_request" as const,
             unitPriceMicrocredits: 0,
-            capabilityConfig: defaultModelCapabilityConfig(defaultProtocolForModel(channel, model)),
+            capabilityConfig: defaultModelCapabilityConfig(defaultProtocolForModel(channel, model), model),
         };
         const next = [...(channel.modelCosts || []).filter((item) => item.model !== model), { ...current, ...patch, model }];
         onChange(next.filter((item) => channel.models.includes(item.model)));
@@ -125,7 +125,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         protocol: nextProtocol,
                                         capability: nextCapability,
                                         billingMode: nextCapability === "video" ? activeBillingMode : "fixed_request",
-                                        capabilityConfig: nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol) : undefined,
+                                        capabilityConfig: nextCapability === "image" || nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
                                     });
                                 }}
                             />
@@ -135,7 +135,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                             <ProtocolCardPicker
                                 capability={activeCapability}
                                 value={activeProtocol}
-                                onChange={(nextProtocol) => updateCost(activeModel, { protocol: nextProtocol, capabilityConfig: activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol) : undefined })}
+                                onChange={(nextProtocol) => updateCost(activeModel, { protocol: nextProtocol, capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined })}
                             />
                         </section>
                         {activeCapability === "video" ? (
@@ -167,8 +167,8 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                 </div>
                             </div>
                         ) : null}
-                        {activeCapability === "video" ? (
-                            <ModelCapabilityEditor value={activeModelCost?.capabilityConfig || defaultModelCapabilityConfig(activeProtocol)} protocol={activeProtocol} onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })} />
+                        {activeCapability === "image" || activeCapability === "video" ? (
+                            <ModelCapabilityEditor capability={activeCapability} model={activeModel} value={activeModelCost?.capabilityConfig || defaultModelCapabilityConfig(activeProtocol, activeModel)} protocol={activeProtocol} onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })} />
                         ) : null}
                     </div>
                 ) : null}

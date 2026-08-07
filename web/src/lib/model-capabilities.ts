@@ -2,7 +2,34 @@ import type { ModelProtocol } from "@/lib/model-protocols";
 
 export type ModelCapabilityConfig = {
     version: number;
+    image?: ImageCapabilityConfig;
     video?: VideoCapabilityConfig;
+};
+
+export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
+
+export type ImageCapabilityConfig = {
+    references: {
+        promptMaxChars: number;
+        maxImages: number;
+        maxImageBytes: number;
+        maskSupported: boolean;
+    };
+    size: {
+        parameter: ImageSizeParameter;
+        values: string[];
+        default: string;
+        allowCustom: boolean;
+    };
+    quality: {
+        supported: boolean;
+        values: string[];
+        default: string;
+    };
+    transparentBackground: { supported: boolean; default: boolean };
+    responseFormat: { supported: boolean };
+    outputFormat: { supported: boolean };
+    maxOutputs: number;
 };
 
 export type VideoCapabilityConfig = {
@@ -35,7 +62,47 @@ export type VideoCapabilityConfig = {
     defaultOperation: string;
 };
 
-export function defaultModelCapabilityConfig(protocol?: ModelProtocol): ModelCapabilityConfig {
+const defaultImageSizes = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"];
+
+export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
+    const image: ImageCapabilityConfig = {
+        references: { promptMaxChars: 32000, maxImages: 16, maxImageBytes: 30 * 1024 * 1024, maskSupported: true },
+        size: { parameter: "size", values: [...defaultImageSizes], default: "1:1", allowCustom: true },
+        quality: { supported: true, values: ["auto", "low", "medium", "high"], default: "auto" },
+        transparentBackground: { supported: true, default: false },
+        responseFormat: { supported: true },
+        outputFormat: { supported: true },
+        maxOutputs: 15,
+    };
+    if (protocol === "volcengine-ark-image") {
+        image.references.maskSupported = false;
+        image.quality.supported = false;
+        image.transparentBackground.supported = false;
+        image.responseFormat.supported = false;
+        image.outputFormat.supported = false;
+    }
+    if (protocol === "volcengine-jimeng-image") {
+        image.references.maxImages = 14;
+        image.references.maskSupported = false;
+        image.quality.supported = false;
+        image.transparentBackground.supported = false;
+        image.responseFormat.supported = false;
+        image.outputFormat.supported = false;
+    }
+    if (model.trim().toLowerCase().startsWith("grok-imagine-image")) {
+        image.references.maxImages = 0;
+        image.references.maskSupported = false;
+        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
+        image.quality = { supported: false, values: [], default: "auto" };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: true };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 1;
+    }
+    return image;
+}
+
+export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: 1000,
@@ -73,7 +140,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol): ModelCap
         video.generateAudio = { supported: true, default: true };
     }
     if (protocol === "volcengine-ark-video") video.watermark = { supported: true, default: false };
-    return { version: 1, video };
+    return { version: 1, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 
 export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
@@ -82,7 +149,33 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const modelName = separator >= 0 ? model.slice(separator + 2) : model;
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
-    return cost?.capabilityConfig || defaultModelCapabilityConfig(cost?.protocol);
+    const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
+    return cost?.capabilityConfig
+        ? { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video: cost.capabilityConfig.video || fallback.video }
+        : fallback;
+}
+
+export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
+    const size = normalizeImageSizeSetting(profile, value.size);
+    const quality = profile.quality.supported && profile.quality.values.includes(value.quality || "") ? value.quality! : profile.quality.default || "auto";
+    const count = String(Math.max(1, Math.min(profile.maxOutputs, Math.floor(Math.abs(Number(value.count)) || 1))));
+    const transparentBackground = profile.transparentBackground.supported && value.transparentBackground === "true" ? "true" : "false";
+    return { size, quality, count, transparentBackground };
+}
+
+export function normalizeImageSizeSetting(profile: ImageCapabilityConfig, value?: string) {
+    if (profile.size.parameter === "none") return "auto";
+    const candidate = value?.trim() || profile.size.default;
+    if (profile.size.allowCustom || profile.size.values.includes(candidate)) return candidate;
+    return profile.size.default || profile.size.values[0] || "auto";
+}
+
+export function imageSizeRequest(profile: ImageCapabilityConfig, value?: string) {
+    const parameter = profile.size.parameter;
+    if (parameter === "none") return undefined;
+    const normalized = normalizeImageSizeSetting(profile, value);
+    if (!normalized || normalized === "auto") return undefined;
+    return { parameter, value: normalized };
 }
 
 export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { seconds?: string; ratio?: string; resolution?: string }) {

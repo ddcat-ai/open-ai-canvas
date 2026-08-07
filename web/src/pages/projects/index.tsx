@@ -7,6 +7,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { CollectionGrid, ListToolbar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveCanvasStylePreset } from "@/components/canvas/canvas-style-picker-modal";
+import { parseStyleProfile } from "@/lib/canvas/style-profile";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
 import { createProject, listProjects, type ProjectSummary } from "@/services/api/projects";
 
@@ -43,7 +44,7 @@ export default function ProjectsPage() {
         const normalizedKeyword = keyword.trim().toLowerCase();
         return [...(query.data?.projects || [])]
             .filter(({ project }) => status === "all" || project.status === status)
-            .filter(({ project }) => !normalizedKeyword || `${project.name} ${project.description} ${project.stylePresetId} ${resolveCanvasStylePreset(project.stylePresetId)?.title || ""}`.toLowerCase().includes(normalizedKeyword))
+            .filter(({ project }) => !normalizedKeyword || `${project.name} ${project.description} ${project.stylePresetId} ${parseStyleProfile(project.styleProfileJson)?.title || resolveCanvasStylePreset(project.stylePresetId)?.title || ""}`.toLowerCase().includes(normalizedKeyword))
             .sort((left, right) => {
                 if (sort === "name") return left.project.name.localeCompare(right.project.name, "zh-CN");
                 if (sort === "progress") return projectSummaryCompletion(right) - projectSummaryCompletion(left);
@@ -106,7 +107,7 @@ export default function ProjectsPage() {
 function ProjectRow({ row }: { row: ProjectSummary }) {
     const completion = projectSummaryCompletion(row);
     const stage = projectSummaryStage(row);
-    const styleTitle = resolveCanvasStylePreset(row.project.stylePresetId)?.title || (row.project.stylePresetId ? "自定义画风" : "未设置画风");
+    const styleTitle = parseStyleProfile(row.project.styleProfileJson)?.title || resolveCanvasStylePreset(row.project.stylePresetId)?.title || (row.project.stylePresetId ? "自定义画风" : "未设置画风");
     return (
         <Link to={`/projects/${row.project.id}/overview`} className="library-card project-library-card group">
             <span className="project-library-cover"><span className="project-library-cover-icon"><FolderKanban className="size-7" /></span><span className="project-library-cover-ratio">{row.project.aspectRatio}</span><span className="project-library-cover-stage">{stage.label}</span></span>

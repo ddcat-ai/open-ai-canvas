@@ -6,6 +6,7 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudio } from "@/lib/canvas/canvas-project-generation";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
+import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -143,7 +144,24 @@ export function useCanvasGenerationExecutor({
             }
 
             const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, addedSkills);
-            const effectivePrompt = expandedPrompt.trim();
+            let effectivePrompt = expandedPrompt.trim();
+            let styleMetadata = {};
+            if (mode === "image" || mode === "video") {
+                try {
+                    const styleRuntime = resolveCanvasStyleExecution(nodesRef.current, sourceNode, effectivePrompt, generationConfig, mode);
+                    if (styleRuntime) {
+                        effectivePrompt = styleRuntime.prompt;
+                        styleMetadata = { styleProfileJson: styleRuntime.profileJson, styleExecutionPlan: styleRuntime.plan };
+                    }
+                } catch (error) {
+                    const errorDetails = generationErrorMessage(error);
+                    if (isPreparingEmptyImage) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, errorDetails } } : node)));
+                    finishGenerationRequest(nodeId, controller);
+                    setRunningNodeId(null);
+                    message.error(errorDetails);
+                    return;
+                }
+            }
             const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
             if (mode === "audio" && generationContext.characterReferences.length) {
                 if (generationContext.characterReferences.length !== 1) {
@@ -190,6 +208,7 @@ export function useCanvasGenerationExecutor({
                 generationContext,
                 controller,
                 editingTextNode,
+                styleMetadata,
                 setNodes,
                 setConnections,
                 setSelectedNodeIds,

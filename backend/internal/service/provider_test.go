@@ -999,8 +999,61 @@ func TestProcessTaskValidatesInterfaceBeforeHydratingMedia(t *testing.T) {
 		ReferenceImages: []providerMedia{{StorageKey: "resource:missing"}},
 	}
 	raw, _ := json.Marshal(input)
-	_, err := (&Service{}).processCanvasGenerationTask(context.Background(), "user-1", "video_generate", "", string(raw))
+	_, err := (&Service{}).processCanvasGenerationTask(context.Background(), "user-1", "", "video_generate", "", string(raw))
 	if err == nil || !strings.Contains(err.Error(), "不支持video生成") {
 		t.Fatalf("processCanvasGenerationTask() error = %v", err)
+	}
+}
+
+func TestResolveGenerationStyleExecutionUsesValidatedPromptAssets(t *testing.T) {
+	enabled := true
+	profile := styleProfileDocument{
+		Prompt:          "base style",
+		ExecutionPolicy: "compatible-fallback",
+		Assets: []styleProfileAsset{
+			{ID: "prompt-1", Kind: "prompt", Title: "色彩约束", Provider: "builtin", Enabled: &enabled, Status: "validated", PromptFragment: "muted palette", TriggerWords: []string{"soft light"}},
+			{ID: "lora-1", Kind: "lora", Title: "东方角色 LoRA", Provider: "liblib", Enabled: &enabled, Status: "validated", SourceID: "model-1"},
+		},
+	}
+	prompt, status, warnings := resolveGenerationStyleExecution(profile, "image-model", "openai-image")
+	if prompt != "base style\nmuted palette\nsoft light" {
+		t.Fatalf("resolveGenerationStyleExecution() prompt = %q", prompt)
+	}
+	if status != "degraded" || len(warnings) != 1 || !strings.Contains(warnings[0], "LoRA") {
+		t.Fatalf("resolveGenerationStyleExecution() status = %q, warnings = %#v", status, warnings)
+	}
+}
+
+func TestResolveGenerationStyleExecutionStrictPolicyBlocksUnsupportedAsset(t *testing.T) {
+	profile := styleProfileDocument{
+		Prompt:          "base style",
+		ExecutionPolicy: "strict-assets",
+		Assets:          []styleProfileAsset{{ID: "reference-1", Kind: "reference", Title: "项目参考图", Provider: "project", Status: "validated", ReferenceResourceIDs: []string{"resource-1"}}},
+	}
+	_, status, warnings := resolveGenerationStyleExecution(profile, "image-model", "openai-image")
+	if status != "blocked" || len(warnings) != 1 {
+		t.Fatalf("resolveGenerationStyleExecution() status = %q, warnings = %#v", status, warnings)
+	}
+}
+
+func TestResolveGenerationStyleExecutionSkipsPromptAssetForOtherModel(t *testing.T) {
+	profile := styleProfileDocument{
+		Prompt:          "base style",
+		ExecutionPolicy: "compatible-fallback",
+		Assets: []styleProfileAsset{{
+			ID: "template-1", Kind: "template", Title: "专用模板", Provider: "workflow", Status: "validated",
+			BaseModels: []string{"supported-model"}, PromptFragment: "must not be injected",
+		}},
+	}
+	prompt, status, warnings := resolveGenerationStyleExecution(profile, "other-model", "openai-image")
+	if prompt != "base style" || status != "degraded" || len(warnings) != 1 {
+		t.Fatalf("resolveGenerationStyleExecution() prompt = %q, status = %q, warnings = %#v", prompt, status, warnings)
+	}
+}
+
+func TestEquivalentStyleProfileJSONIgnoresObjectKeyOrder(t *testing.T) {
+	equal, err := equivalentStyleProfileJSON(`{"schemaVersion":1,"presetId":"style-1","assets":[]}`, `{"assets":[],"presetId":"style-1","schemaVersion":1}`)
+	if err != nil || !equal {
+		t.Fatalf("equivalentStyleProfileJSON() equal = %v, err = %v", equal, err)
 	}
 }

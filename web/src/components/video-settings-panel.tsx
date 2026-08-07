@@ -35,8 +35,6 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     }
 
     const seconds = normalizeVideoDuration(config.videoSeconds);
-    const secondOptions = videoDurationOptions(profile);
-    const durationColumns = secondOptions.length + (profile.duration.selection === "range" ? 1 : 0);
     const size = normalizeVideoSizeValue(config.size);
     const dimensions = readSizeDimensions(size);
     const resolution = normalizeVideoResolutionValue(config.vquality);
@@ -84,14 +82,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${durationColumns}, minmax(0, 1fr))` }}>
-                        {secondOptions.map((value) => (
-                            <OptionPill key={value} selected={seconds === String(value)} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>
-                                {value}s
-                            </OptionPill>
-                        ))}
-                        {profile.duration.selection === "range" ? <DurationInput value={Number(seconds)} min={profile.duration.min || VIDEO_DURATION_MIN} max={profile.duration.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} /> : null}
-                    </div>
+                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 {profile.generateAudio.supported || profile.watermark.supported ? <SettingGroup title="输出" color={theme.node.muted}><div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>{profile.generateAudio.supported ? <SwitchRow label="生成声音" checked={generateAudio} theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} /> : null}{profile.watermark.supported ? <SwitchRow label="添加水印" checked={watermark} theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} /> : null}</div></SettingGroup> : null}
             </div>
@@ -111,9 +102,7 @@ function JiMengVideoSettingsPanel({ config, profile, onConfigChange, theme, show
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        {videoDurationOptions(profile).map((value) => <OptionPill key={value} selected={seconds === String(value)} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>{value}s</OptionPill>)}
-                    </div>
+                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
             </div>
         </ImageSettingsTheme>
@@ -127,8 +116,6 @@ function SeedanceVideoSettingsPanel({ config, profile, onConfigChange, theme, sh
     const duration = normalizeSeedanceDuration(config.videoSeconds);
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
     const watermark = boolConfig(config.videoWatermark, profile.watermark.default);
-    const durationOptions = videoDurationOptions(profile);
-    const durationColumns = durationOptions.length + (profile.duration.selection === "range" ? 1 : 0);
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -171,14 +158,7 @@ function SeedanceVideoSettingsPanel({ config, profile, onConfigChange, theme, sh
                     </div>
                 </SettingGroup>
                 <SettingGroup title="时长" color={theme.node.muted}>
-                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${durationColumns}, minmax(0, 1fr))` }}>
-                        {durationOptions.map((value) => (
-                            <OptionPill key={value} selected={duration === value} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>
-                                {value}s
-                            </OptionPill>
-                        ))}
-                        {profile.duration.selection === "range" ? <DurationInput value={duration} min={profile.duration.min || VIDEO_DURATION_MIN} max={profile.duration.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} /> : null}
-                    </div>
+                    <VideoDurationControl profile={profile} value={duration} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 <SettingGroup title="输出" color={theme.node.muted}>
                     <div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
@@ -255,7 +235,7 @@ function DurationInput({ value, min, max, theme, onChange }: { value: number; mi
     };
 
     return (
-        <label className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border text-[var(--fs-label)]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <label className="flex h-8 w-20 shrink-0 items-center overflow-hidden rounded-md border text-[var(--fs-label)]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border, color: theme.node.text }}>
             <input
                 key={`${min}-${value}`}
                 type="number"
@@ -274,6 +254,56 @@ function DurationInput({ value, min, max, theme, onChange }: { value: number; mi
             <span className="shrink-0 px-1.5" style={{ color: theme.node.muted }}>秒</span>
         </label>
     );
+}
+
+function VideoDurationControl({ profile, value, theme, onChange }: { profile: VideoCapabilityConfig; value: number; theme: CanvasTheme; onChange: (value: number) => void }) {
+    if (profile.duration.selection === "range") {
+        const min = profile.duration.min || VIDEO_DURATION_MIN;
+        const max = Math.max(min, profile.duration.max || min);
+        const step = Math.max(1, profile.duration.step || 1);
+        const normalized = normalizeDurationValue(value, profile.duration.default, min, max, step);
+        return <DurationRangeControl value={normalized} min={min} max={max} step={step} theme={theme} onChange={onChange} />;
+    }
+
+    const options = videoDurationOptions(profile);
+    return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
+        {options.map((option) => <OptionPill key={option} selected={normalizedNumber(value) === option} theme={theme} onClick={() => onChange(option)}>{option}s</OptionPill>)}
+    </div>;
+}
+
+function DurationRangeControl({ value, min, max, step, theme, onChange }: { value: number; min: number; max: number; step: number; theme: CanvasTheme; onChange: (value: number) => void }) {
+    return <div className="space-y-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                aria-label="视频时长（秒）"
+                className="video-duration-range h-8 min-w-0 flex-1"
+                style={{ accentColor: theme.accent.primary }}
+                onChange={(event) => onChange(Number(event.target.value))}
+                onMouseDown={(event) => event.stopPropagation()}
+            />
+            <DurationInput value={value} min={min} max={max} theme={theme} onChange={onChange} />
+        </div>
+        <div className="flex justify-between px-0.5 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+            <span>{min}s</span>
+            <span>{max}s</span>
+        </div>
+    </div>;
+}
+
+function normalizeDurationValue(value: number, fallback: number, min: number, max: number, step: number) {
+    const candidate = Number.isFinite(value) ? value : fallback;
+    const clamped = Math.min(max, Math.max(min, Math.floor(candidate)));
+    const maxStep = Math.max(0, Math.floor((max - min) / step));
+    return min + Math.min(maxStep, Math.max(0, Math.round((clamped - min) / step))) * step;
+}
+
+function normalizedNumber(value: number) {
+    return Number.isFinite(value) ? Math.floor(value) : 0;
 }
 
 function SizePreview({ width, height, color }: { width: number; height: number; color: string }) {
