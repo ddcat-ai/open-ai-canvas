@@ -124,6 +124,15 @@ function normalizeQuality(quality: string) {
     return QUALITY_BASE[normalized] ? normalized : undefined;
 }
 
+/** grok2api / xAI Imagine：画布 quality 映射为 resolution（1k/2k）。 */
+function normalizeGrokImageResolution(quality: string | undefined) {
+    const value = (quality || "").trim().toLowerCase();
+    if (!value || value === "auto") return undefined;
+    if (value === "1k" || value === "low" || value === "standard") return "1k";
+    if (value === "2k" || value === "medium" || value === "hd" || value === "high" || value === "4k") return "2k";
+    return undefined;
+}
+
 /** Map "quality + ratio" to an explicit pixel dimension like "3840x2160". */
 function resolveSize(quality: string | undefined, ratio: string): string {
     const parsedRatio = parseImageRatio(ratio);
@@ -814,6 +823,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     }
     if (requestConfig.interfaceType === "grok-image") {
         try {
+            const size = normalizedImage.size && normalizedImage.size !== "auto" ? normalizedImage.size : undefined;
+            const aspectRatio = size?.includes(":") ? size : undefined;
+            const resolution = normalizeGrokImageResolution(normalizedImage.quality);
             const responseData = await postChannelJSON<ImageApiResponse>(
                 requestConfig,
                 aiApiUrl(requestConfig, "/images/generations"),
@@ -822,6 +834,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                     prompt: withSystemPrompt(requestConfig, prompt),
                     n,
                     response_format: "url",
+                    ...(size ? { size } : {}),
+                    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+                    ...(resolution ? { resolution } : {}),
                 },
                 options,
             );
@@ -898,6 +913,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
         if (references.length !== 1) throw new Error("Grok 图片编辑必须提供且仅支持 1 张参考图");
         try {
             const imageUrl = await grokImageInputURL(references[0]);
+            const size = normalizedImage.size && normalizedImage.size !== "auto" ? normalizedImage.size : undefined;
+            const aspectRatio = size?.includes(":") ? size : undefined;
+            const resolution = normalizeGrokImageResolution(normalizedImage.quality);
             const response = await postChannelJSON<ImageApiResponse>(
                 requestConfig,
                 aiApiUrl(requestConfig, "/images/edits"),
@@ -907,6 +925,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     image: { url: imageUrl },
                     n,
                     response_format: "url",
+                    ...(size ? { size } : {}),
+                    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+                    ...(resolution ? { resolution } : {}),
                 },
                 options,
             );

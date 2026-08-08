@@ -10,6 +10,8 @@ const qualityOptions = [
     { value: "high", label: "高" },
     { value: "medium", label: "中" },
     { value: "low", label: "低" },
+    { value: "1k", label: "1K" },
+    { value: "2k", label: "2K" },
 ];
 const DIMENSION_STEP = 16;
 
@@ -78,8 +80,8 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
             >
                 {showTitle ? <div className="text-base font-semibold">图像设置</div> : null}
                 {profile.quality.supported ? <div className="space-y-2">
-                    <SettingTitle color={theme.node.muted}>质量</SettingTitle>
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <SettingTitle color={theme.node.muted}>{isGrokResolutionQuality(profile) ? "分辨率" : "质量"}</SettingTitle>
+                    <div className={`grid gap-1.5 ${activeQualityOptions.length <= 2 ? "grid-cols-2" : "grid-cols-4"}`}>
                         {activeQualityOptions.map((item) => (
                             <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
                                 {item.label}
@@ -181,7 +183,12 @@ export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; ch
 }
 
 export function imageQualityLabel(value: string) {
-    return ({ auto: "自动", high: "高", medium: "中", low: "低" } as Record<string, string>)[value] || "默认";
+    return ({ auto: "自动", high: "高", medium: "中", low: "低", "1k": "1K", "2k": "2K" } as Record<string, string>)[value] || value || "默认";
+}
+
+function isGrokResolutionQuality(profile: ImageCapabilityConfig) {
+    const values = profile.quality.values.map((item) => item.toLowerCase());
+    return values.includes("1k") || values.includes("2k");
 }
 
 export function imageSizeLabel(size: string) {
