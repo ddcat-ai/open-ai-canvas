@@ -20,11 +20,16 @@ export function CanvasProjectAssetModal({ open, detail, initialCategory = "all",
     const [inserting, setInserting] = useState(false);
     const items = useMemo(() => {
         const mediaById = new Map(mediaAssets.map((asset) => [asset.id, asset]));
-        return (detail?.assets || []).flatMap((asset): ProjectPickerItem[] => {
+        const projectItems = (detail?.assets || []).flatMap((asset): ProjectPickerItem[] => {
             if (asset.category === "character" && asset.character) return [{ id: asset.id, category: "character", character: asset }];
             const media = mediaById.get(asset.id);
             return media && media.kind !== "model" && media.kind !== "entity" ? [{ id: asset.id, category: asset.category || media.category || "other", media }] : [];
         });
+        if (projectItems.length) return projectItems;
+        // 自由画布（未关联短剧项目）或项目资产为空/后端未返回时，回退到本地素材库，避免弹窗空白
+        return mediaAssets
+            .filter((asset) => asset.kind !== "model" && asset.kind !== "entity")
+            .map((media) => ({ id: media.id, category: media.category || "other", media }));
     }, [detail?.assets, mediaAssets]);
     const categories = useMemo(() => ["all", ...Array.from(new Set(items.map((item) => item.category)))], [items]);
     const visible = category === "all" ? items : items.filter((item) => item.category === category);
@@ -47,7 +52,7 @@ export function CanvasProjectAssetModal({ open, detail, initialCategory = "all",
             <header className="flex h-12 shrink-0 items-center justify-between border-b border-border py-0 pl-4 pr-12"><h2 className="text-sm font-semibold">引用项目角色与资产</h2><span className="text-[var(--fs-label)] text-foreground/42">已选 {selectedIds.size} 项</span></header>
             <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[150px_minmax(0,1fr)] sm:grid-rows-1">
                 <nav className="thin-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-border p-2 sm:block sm:overflow-y-auto sm:border-b-0 sm:border-r" aria-label="项目资产分类">{categories.map((item) => <button key={item} type="button" onClick={() => setCategory(item)} className={`flex h-11 min-w-[104px] shrink-0 items-center justify-between rounded-md px-2 text-xs sm:w-full sm:min-w-0 ${category === item ? "bg-foreground/[.08] font-medium" : "text-foreground/55 hover:bg-foreground/[.04]"}`}><span>{categoryLabels[item] || "其他"}</span><span className="min-w-5 rounded bg-foreground/[.05] px-1 text-center text-[var(--fs-tiny)] tabular-nums">{item === "all" ? items.length : items.filter((asset) => asset.category === item).length}</span></button>)}</nav>
-                <div className="thin-scrollbar min-h-0 overflow-y-auto p-3">{visible.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visible.map((item) => <ProjectAssetCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggle(item.id)} />)}</div> : <WorkspaceState icon="assets" compact className="h-full" title="此分类没有可引用资产" description="先在项目角色与资产中完成角色确认或素材关联。" />}</div>
+                <div className="thin-scrollbar min-h-0 overflow-y-auto p-3">{visible.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visible.map((item) => <ProjectAssetCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggle(item.id)} />)}</div> : <WorkspaceState icon="assets" compact className="h-full" title="此分类没有可引用资产" description={detail ? "先在项目角色与资产中完成角色确认或素材关联。" : "当前为自由画布，下方展示本地素材库；也可先上传素材后再引用。"} />}</div>
             </div>
             <footer className="flex h-12 shrink-0 items-center justify-between border-t border-border px-3"><span className="text-[var(--fs-tiny)] text-foreground/42">角色引用会在生成时解析当前角色版本</span><div className="flex gap-2"><Button size="small" onClick={onClose}>取消</Button><Button size="small" type="primary" disabled={!selectedIds.size} loading={inserting} onClick={() => void insert()}>引入 {selectedIds.size || ""} 项</Button></div></footer>
         </div>

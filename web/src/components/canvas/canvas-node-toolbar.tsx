@@ -42,6 +42,8 @@ type CanvasNodeToolbarProps = {
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onExtractVideoLastFrame: (node: CanvasNodeData) => void;
+    onSubtitles: (node: CanvasNodeData) => void;
+    onTimeline: (node: CanvasNodeData) => void;
     extractingVideoFrame: boolean;
     onReversePrompt: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
@@ -103,6 +105,8 @@ export function CanvasNodeToolbar({
     onAngle,
     onViewImage,
     onExtractVideoLastFrame,
+    onSubtitles,
+    onTimeline,
     extractingVideoFrame,
     onReversePrompt,
     onRetry,
@@ -240,7 +244,7 @@ export function CanvasNodeToolbar({
         onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
         onNodeSplit: onSplit, onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
         onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
-        onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
+        onNodeSubtitles: onSubtitles, onNodeTimeline: onTimeline, onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
     const nodeHoverCtx: ToolContext = {

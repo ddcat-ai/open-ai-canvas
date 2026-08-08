@@ -10,7 +10,7 @@ export type MergeVideoProgress = { phase: "loading" | "reading" | "encoding"; pr
 let ffmpegPromise: Promise<FFmpeg> | null = null;
 
 // ffmpeg 只在用户明确合并视频时加载，避免把 wasm 和 worker 放进画布首屏包体。
-async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => void) {
+export async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => void) {
     if (!ffmpegPromise) {
         ffmpegPromise = (async () => {
             const ffmpeg = new FFmpeg();
