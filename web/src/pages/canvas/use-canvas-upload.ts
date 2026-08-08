@@ -17,6 +17,7 @@ import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData, type ContextMenuState, type Position } from "@/types/canvas";
+import type { TimelineDirectMedia } from "@/types/timeline";
 import type { CanvasUploadStatus } from "./canvas-project-feedback";
 
 type UseCanvasUploadOptions = {
@@ -330,6 +331,85 @@ export function useCanvasUpload({
         return true;
     }, [createAudioFileNode, createImageFileNode, createVideoFileNode, getCanvasCenter, message, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds]);
 
+    // 时间线专用：把本地音视频文件上传为直连媒体（仅时间线作用域，不创建画布节点），返回媒体描述数组。
+    const uploadTimelineMedia = useCallback(async (files: File[]): Promise<TimelineDirectMedia[]> => {
+        const supportedFiles = files.filter((file) => file.type.startsWith("video/") || isAudioFile(file));
+        if (!supportedFiles.length) {
+            message.warning("请选择视频、MP3 或 WAV 文件");
+            return [];
+        }
+        const created: TimelineDirectMedia[] = [];
+        for (const file of supportedFiles) {
+            try {
+                if (isAudioFile(file)) {
+                    const audio = await uploadMediaFile(file, "audio");
+                    created.push({
+                        id: `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        kind: "audio",
+                        title: file.name,
+                        storageKey: audio.storageKey,
+                        url: audio.url,
+                        durationMs: audio.durationMs,
+                        bytes: audio.bytes,
+                        mimeType: audio.mimeType,
+                    });
+                } else {
+                    const video = await uploadMediaFile(file, "video");
+                    created.push({
+                        id: `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        kind: "video",
+                        title: file.name,
+                        storageKey: video.storageKey,
+                        url: video.url,
+                        width: video.width,
+                        height: video.height,
+                        durationMs: video.durationMs,
+                        bytes: video.bytes,
+                        mimeType: video.mimeType,
+                    });
+                }
+            } catch (error) {
+                message.error(error instanceof Error ? `素材上传失败：${error.message}` : "素材上传失败");
+            }
+        }
+        if (created.length) message.success(`已上传 ${created.length} 个素材到时间线`);
+        return created;
+    }, [message]);
+
+    // 组装能力闭环：把时间线合成结果（MP4 Blob）上传并创建为新的视频节点放回画布，
+    // 复用上传/持久化/选中逻辑，新节点可继续编辑字幕与样式。
+    const createVideoNodeFromBlob = useCallback(async (blob: Blob, title: string): Promise<CanvasNodeData | null> => {
+        const progress = startUploadStatus("合成视频片段", "上传合成结果", domainProjectId ? 4 : 3);
+        try {
+            progress.update("上传到服务器并同步资源", 2);
+            const video = await uploadMediaFile(blob, "video");
+            progress.update("更新画布节点", 3);
+            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+            const center = getCanvasCenter();
+            const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            const node = {
+                id,
+                type: CanvasNodeType.Video,
+                title,
+                position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
+                width: size.width,
+                height: size.height,
+                metadata: { ...videoMetadata(video), status: NODE_STATUS_SUCCESS },
+            } satisfies CanvasNodeData;
+            setNodes((current) => [...current, node]);
+            selectInsertedNode(id, "preserve");
+            if (domainProjectId) progress.update("写入项目资产", 4);
+            const persisted = await persistMediaNode(node);
+            progress.done(persisted ? "已生成新视频片段并加入项目资产" : "已生成新视频片段，项目资产待重试");
+            return node;
+        } catch (error) {
+            const details = error instanceof Error ? error.message : "合成视频片段失败";
+            progress.fail(details);
+            message.error(details);
+            return null;
+        }
+    }, [domainProjectId, getCanvasCenter, message, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
+
     const replaceNodeMedia = useCallback(async (nodeId: string, file: File) => {
         const currentNode = nodesRef.current.find((node) => node.id === nodeId);
         if (!currentNode) return false;
@@ -632,20 +712,21 @@ export function useCanvasUpload({
         return { id, type: CanvasNodeType.Image, title: payload.title.slice(0, 32) || "Generated Image", position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }), prompt: payload.title, assetId: payload.assetId } } satisfies CanvasNodeData;
     }, []);
 
-    const handleAssetInsert = useCallback(async (payload: InsertAssetPayload) => {
+    const handleAssetInsert = useCallback(async (payload: InsertAssetPayload, options: { openDialog?: boolean } = {}): Promise<CanvasNodeData | null> => {
         const center = assetInsertPositionRef.current || getCanvasCenter();
         try {
             const node = await createAssetPayloadNode(payload, center);
             setNodes((current) => [...current, node]);
-            selectInsertedNode(node.id, payload.kind === "image" || payload.kind === "video" ? "open" : "preserve");
+            selectInsertedNode(node.id, options.openDialog === false ? "preserve" : payload.kind === "image" || payload.kind === "video" ? "open" : "preserve");
+            closeAssetPicker();
+            return node;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "素材插入失败");
-            return;
+            return null;
         }
-        closeAssetPicker();
     }, [closeAssetPicker, createAssetPayloadNode, getCanvasCenter, message, selectInsertedNode, setNodes]);
 
-    const handleProjectAssetsInsert = useCallback(async (payloads: InsertAssetPayload[], position?: Position) => {
+    const handleProjectAssetsInsert = useCallback(async (payloads: InsertAssetPayload[], position?: Position): Promise<CanvasNodeData[]> => {
         const origin = position || getCanvasCenter();
         try {
             const created = await Promise.all(payloads.map((payload, index) => createAssetPayloadNode(payload, {
@@ -657,6 +738,7 @@ export function useCanvasUpload({
             setSelectedConnectionId(null);
             setDialogNodeId(null);
             message.success(`已引入 ${created.length} 项项目资产`);
+            return created;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "项目资产引入失败");
             throw error;
@@ -666,6 +748,8 @@ export function useCanvasUpload({
     return {
         assetPickerOpen,
         closeAssetPicker,
+        createVideoNodeFromBlob,
+        createAssetPayloadNode,
         createImageAssetNode,
         fileDropActive,
         handleAssetInsert,
@@ -686,6 +770,7 @@ export function useCanvasUpload({
         startUploadStatus,
         uploadModalOpen,
         uploadStatus,
+        uploadTimelineMedia,
     };
 }
 

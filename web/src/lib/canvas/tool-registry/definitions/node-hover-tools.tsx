@@ -1,4 +1,4 @@
-import { Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import { Captions, Clapperboard, Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
@@ -192,6 +192,30 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultOrder: 140,
         applicable: isVideo,
         run: (ctx) => ctx.handlers.onNodeUpload(ctx.node!),
+    },
+    {
+        id: "subtitles",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "编辑字幕",
+        displayLabel: "字幕",
+        icon: <Captions className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 145,
+        applicable: (ctx) => hasVideo(ctx),
+        run: (ctx) => ctx.handlers.onNodeSubtitles(ctx.node!),
+    },
+    {
+        id: "timeline",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "时间线编辑",
+        displayLabel: "时间线",
+        icon: <Clapperboard className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 148,
+        applicable: (ctx) => hasVideo(ctx) || hasAudio(ctx),
+        run: (ctx) => ctx.handlers.onNodeTimeline(ctx.node!),
     },
     {
         id: "uploadAudio",
