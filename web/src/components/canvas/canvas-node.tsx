@@ -18,6 +18,8 @@ import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-refer
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
 import { VideoPlayer } from "@/components/video-player";
+import { createDefaultSubtitleStyle } from "@/types/timeline";
+import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -901,7 +903,34 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
 
 function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRendererProps) {
     const playWhenReadyRef = useRef(false);
+    const playerBoxRef = useRef<HTMLDivElement>(null);
     const { url, loading, load } = useNodeResourceUrl(node, false);
+    const subtitleEntries = node.metadata?.subtitleEntries || [];
+    const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
+    const [currentTimeMs, setCurrentTimeMs] = useState(0);
+    const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+
+    // 视频元素由 vidstack 内部创建，直接监听原生事件取分辨率；只有存在字幕时才跟踪播放时间，避免无字幕节点频繁重渲染。
+    useEffect(() => {
+        const box = playerBoxRef.current;
+        const video = box?.querySelector("video");
+        if (!video) return;
+        const handleLoadedMetadata = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) setVideoSize({ width: video.videoWidth, height: video.videoHeight });
+        };
+        video.addEventListener("loadedmetadata", handleLoadedMetadata);
+        handleLoadedMetadata();
+        if (!subtitleEntries.length) {
+            return () => video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        }
+        const handleTimeUpdate = () => setCurrentTimeMs(Math.round(video.currentTime * 1000));
+        video.addEventListener("timeupdate", handleTimeUpdate);
+        return () => {
+            video.removeEventListener("timeupdate", handleTimeUpdate);
+            video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        };
+    }, [subtitleEntries.length, url]);
+
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
@@ -912,7 +941,35 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRender
     if (!url) {
         return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存视频" : "加载并缓存视频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;
     }
-    return <VideoPlayer src={url} mimeType={node.metadata?.mimeType} title={node.title || "视频"} preload={reduceMediaEffects ? "none" : "metadata"} autoPlay={playWhenReadyRef.current} onCanPlay={() => { playWhenReadyRef.current = false; }} brandColor={theme.accent.primary} className="h-full w-full rounded-[var(--node-radius)] bg-black" dataCanvasNoZoom compactControls />;
+
+    // 视频画面按实际分辨率等比适配节点盒子，字幕叠加层与画面同框，不在黑边上错位。
+    const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
+    const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
+    const fitWidth = Math.round(fitHeight * sourceRatio);
+    const activeEntry = subtitleEntries.find((entry) => currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs);
+    const activeHighlight = activeEntry ? (node.metadata?.subtitleHighlights || []).find((item) => item.entryIndex === activeEntry.index) : undefined;
+
+    return (
+        <div ref={playerBoxRef} className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[var(--node-radius)] bg-black">
+            <div className="relative" style={{ width: fitWidth, height: Math.round(fitHeight) }}>
+                <VideoPlayer
+                    src={url}
+                    mimeType={node.metadata?.mimeType}
+                    title={node.title || "视频"}
+                    preload={reduceMediaEffects ? "none" : "metadata"}
+                    autoPlay={playWhenReadyRef.current}
+                    onCanPlay={() => { playWhenReadyRef.current = false; }}
+                    brandColor={theme.accent.primary}
+                    className="h-full w-full rounded-[var(--node-radius)] bg-black"
+                    dataCanvasNoZoom
+                    compactControls
+                />
+                {activeEntry && activeEntry.text.trim() ? (
+                    <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} />
+                ) : null}
+            </div>
+        </div>
+    );
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
