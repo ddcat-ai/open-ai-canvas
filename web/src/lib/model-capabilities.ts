@@ -77,8 +77,14 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     if (protocol === "grok-image") {
         image.references.maxImages = 1;
         image.references.maskSupported = false;
-        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
-        image.quality = { supported: false, values: [], default: "auto" };
+        // grok2api / xAI Imagine：size→aspect_ratio，quality→resolution(1k/2k)。
+        image.size = {
+            parameter: "aspect_ratio",
+            values: ["1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2"],
+            default: "1:1",
+            allowCustom: false,
+        };
+        image.quality = { supported: true, values: ["1k", "2k"], default: "2k" };
         image.transparentBackground = { supported: false, default: false };
         image.responseFormat = { supported: true };
         image.outputFormat = { supported: false };
@@ -101,8 +107,13 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     if (protocol !== "grok-image" && model.trim().toLowerCase().startsWith("grok-imagine-image")) {
         image.references.maxImages = 0;
         image.references.maskSupported = false;
-        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
-        image.quality = { supported: false, values: [], default: "auto" };
+        image.size = {
+            parameter: "aspect_ratio",
+            values: ["1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2"],
+            default: "1:1",
+            allowCustom: false,
+        };
+        image.quality = { supported: true, values: ["1k", "2k"], default: "2k" };
         image.transparentBackground = { supported: false, default: false };
         image.responseFormat = { supported: true };
         image.outputFormat = { supported: false };
