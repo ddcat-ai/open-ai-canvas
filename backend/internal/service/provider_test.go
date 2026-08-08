@@ -1162,3 +1162,83 @@ func TestEquivalentStyleProfileJSONIgnoresObjectKeyOrder(t *testing.T) {
 		t.Fatalf("equivalentStyleProfileJSON() equal = %v, err = %v", equal, err)
 	}
 }
+
+func TestRunNovitaVideoTaskDownloadsSucceededVideo(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	paths := make([]string, 0, 3)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.String())
+		switch r.Method + " " + r.URL.Path {
+		case "POST /video/create":
+			if auth := r.Header.Get("Authorization"); auth != "Bearer test-key" {
+				t.Errorf("Authorization = %q", auth)
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if body["model"] != "kling2.5_turbo_pro_t2v" || body["prompt"] != "make it move" || body["duration"] != "5" || body["aspect_ratio"] != "16:9" {
+				t.Errorf("body = %#v", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"task_id":"novita-task-1"}`))
+		case "GET /async/task-result":
+			if r.URL.Query().Get("task_id") != "novita-task-1" {
+				t.Errorf("task_id = %q", r.URL.Query().Get("task_id"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"task":{"status":"TASK_STATUS_SUCCEED"},"videos":[{"video_url":"` + server.URL + `/video.mp4"}]}`))
+		case "GET /video.mp4":
+			if authorization := r.Header.Get("Authorization"); authorization != "" {
+				t.Errorf("file Authorization = %q, want empty", authorization)
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	result, err := runVideoTask(context.Background(), canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "kling2.5_turbo_pro_t2v", InterfaceType: "novita-video", VideoSeconds: "5", Size: "16:9"},
+	})
+	if err != nil {
+		t.Fatalf("runVideoTask() error = %v", err)
+	}
+	video := result["video"].(map[string]interface{})
+	if video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
+		t.Fatalf("video = %#v", video)
+	}
+	want := "POST /video/create,GET /async/task-result?task_id=novita-task-1,GET /video.mp4"
+	if got := strings.Join(paths, ","); got != want {
+		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunNovitaVideoTaskReturnsFailureReason(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "POST /video/create":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"task_id":"novita-task-2"}`))
+		case "GET /async/task-result":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"task":{"status":"TASK_STATUS_FAILED","reason":"content violates policy"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, err := runVideoTask(context.Background(), canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "kling2.5_turbo_pro_t2v", InterfaceType: "novita-video"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "content violates policy") {
+		t.Fatalf("runVideoTask() error = %v, want reason in message", err)
+	}
+}

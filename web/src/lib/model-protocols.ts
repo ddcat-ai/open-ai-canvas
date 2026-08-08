@@ -13,7 +13,8 @@ export type ModelProtocol =
     | "xai-video"
     | "volcengine-ark-video"
     | "volcengine-jimeng-video"
-    | "gemini-veo";
+    | "gemini-veo"
+    | "novita-video";
 
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
 
@@ -59,6 +60,7 @@ export const MODEL_PROTOCOLS: ModelProtocolDefinition[] = [
     },
     { value: "volcengine-jimeng-video", label: "即梦官方视频", capability: "video", create: "POST CVSync2AsyncSubmitTask", poll: "POST CVSync2AsyncGetResult", contentType: "application/json + AK/SK 签名", media: "文本或一张首帧图，模型标识填写 req_key" },
     { value: "gemini-veo", label: "Gemini Veo", capability: "video", create: "POST /v1beta/models/{model}:predictLongRunning", poll: "GET /v1beta/{operation_name}", contentType: "application/json", media: "文本与单张起始图" },
+    { value: "novita-video", label: "Novita 视频", capability: "video", create: "POST /v3/video/create", poll: "GET /v3/async/task-result?task_id={id}", contentType: "application/json", media: "文本或单张起始图" },
 ];
 
 export const MODEL_PROTOCOL_OPTIONS = protocolGroups(MODEL_PROTOCOLS.filter((item) => !item.value.startsWith("volcengine-jimeng-")));

@@ -175,6 +175,12 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceXAIVideo:
 		video.GenerateAudio = VideoBooleanConfig{Supported: false, Default: false}
+	case model.ChannelInterfaceNovitaVideo:
+		video.References.MaxImages, video.References.MaxImageBytes = 1, 10*1024*1024
+		video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{5, 10}, Default: 5}
+		video.Ratios = []string{"16:9", "9:16", "1:1"}
+		video.Resolutions = []string{"1080p"}
+		video.DefaultResolution = "1080p"
 	}
 	return &ModelCapabilityConfig{Version: 1, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }
