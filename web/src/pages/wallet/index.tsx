@@ -118,7 +118,7 @@ export default function WalletPage() {
     ];
 
     return (
-        <main className="app-user-content app-workspace-scroll relative h-full overflow-y-auto text-foreground">
+        <main className="app-user-content app-workspace-scroll library-page wallet-library-page relative h-full overflow-y-auto text-foreground">
             <div className="relative mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
                 <motion.header initial={reducedMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="app-page-header flex flex-wrap items-start justify-between gap-4 pb-6">
                     <div className="flex items-center gap-3">
@@ -138,7 +138,7 @@ export default function WalletPage() {
                     </div>
                 </motion.header>
 
-                <section className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+                <section className="library-feature-grid mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
                     <CometCard rotateDepth={2.2} translateDepth={2} glare={!reducedMotion} className="credit-balance-card overflow-hidden rounded-lg border">
                         <div className="flex min-h-[210px] flex-col justify-between p-5 sm:p-6">
                             <div className="flex items-start justify-between gap-4">
@@ -162,7 +162,7 @@ export default function WalletPage() {
                         </div>
                     </CometCard>
 
-                    <motion.div initial={reducedMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="app-workspace-surface flex flex-col rounded-lg border p-5 backdrop-blur-xl sm:p-6">
+                    <motion.div initial={reducedMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="wallet-redeem-panel app-workspace-surface flex flex-col rounded-lg border p-5 backdrop-blur-xl sm:p-6">
                         <div className="flex items-start gap-3">
                             <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-400/10 text-amber-600 dark:text-amber-300">
                                 <TicketCheck className="size-4" />
@@ -186,7 +186,7 @@ export default function WalletPage() {
                     </motion.div>
                 </section>
 
-                <section className="app-workspace-surface mt-9 rounded-lg border p-4 backdrop-blur-xl sm:p-5">
+                <section className="wallet-ledger-panel app-workspace-surface mt-9 rounded-lg border p-4 backdrop-blur-xl sm:p-5">
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <h2 className="text-base font-semibold">积分流水</h2>

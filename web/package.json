@@ -6,6 +6,8 @@
     "scripts": {
         "dev": "vite --host 0.0.0.0 --port 3000",
         "build": "tsc --noEmit && vite build",
+        "typecheck": "tsc --noEmit",
+        "test": "bun test test/agent-prompt-cache.test.ts test/canvas-character-reference.test.ts test/canvas-document.test.ts test/canvas-drawing-engine.test.ts test/canvas-generation-layout.test.ts test/canvas-leafer-viewport.test.ts test/client-id.test.ts",
         "start": "vite preview --host 0.0.0.0 --port 3000",
         "format": "prettier --write .",
         "format:check": "prettier --check ."
@@ -14,9 +16,10 @@
         "@ant-design/icons": "^6.3.2",
         "@codemirror/lang-json": "^6.0.2",
         "@excalidraw/excalidraw": "0.18.1",
+        "@ffmpeg/core": "0.12.10",
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
-        "@mediapipe/tasks-vision": "^0.10.35",
+        "@mediapipe/tasks-vision": "^1.0.1",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.6.1",
         "@tanstack/react-query": "^5.101.2",

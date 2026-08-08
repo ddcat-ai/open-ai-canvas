@@ -162,8 +162,8 @@ export default function SkillsPage() {
 
     return (
         <>
-            <WorkspacePage>
-                <PageHeader icon="skills" title="技能库" meta={<span className="text-xs text-foreground/45">{total} 个技能</span>} actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => void openEditor()}>创建技能</Button>} />
+            <WorkspacePage className="library-page skills-library-page" grid>
+                <PageHeader icon="skills" title="技能库" description="把常用的提示词、角色设定和创作方法收进自己的工具架。" meta={<span className="text-xs text-foreground/45">{total} 个技能</span>} actions={null} />
 
                 <div className="mt-1 flex flex-col border-b border-border/75 xl:flex-row xl:items-end xl:justify-between">
                     <nav className="thin-scrollbar -mb-px flex min-w-0 overflow-x-auto" aria-label="技能库范围" role="tablist">
@@ -186,7 +186,7 @@ export default function SkillsPage() {
                         })}
                     </nav>
 
-                    <div className="flex min-w-0 flex-wrap items-center gap-2 py-2.5 xl:flex-nowrap xl:justify-end">
+                    <div className="library-toolbar-controls flex min-w-0 flex-wrap items-center gap-2 py-2.5 xl:flex-nowrap xl:justify-end">
                         <Input className="w-full sm:!w-72" prefix={<Search className="size-4 text-foreground/38" />} value={search} allowClear placeholder="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
                         <Select className="w-[136px]" value={tag} options={[{ value: "all", label: "全部分类" }, ...categories]} onChange={(value) => { setTag(value); setPage(1); }} />
                         <Select className="w-[124px]" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
@@ -206,7 +206,8 @@ export default function SkillsPage() {
                                     <h2 id={`skill-category-${group.value}`} className="text-sm font-medium text-foreground/62">{group.label}</h2>
                                     <span className="text-[var(--fs-label)] text-foreground/32">{group.skills.length} 个</span>
                                 </div>
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                                <div className="library-grid skill-library-grid">
+                                    {groupedSkills[0] === group ? <button type="button" className="library-create-card" onClick={() => void openEditor()}><span className="library-create-cover"><Plus className="size-8" /></span><span className="library-create-title">创建技能</span><span className="library-create-meta">把一套方法变成可复用能力</span></button> : null}
                                     {group.skills.map((skill) => <SkillCard key={skill.skill_id} skill={skill} loading={mutatingID === skill.skill_id} onOpen={() => void openSkill(skill)} onAdd={() => void toggleAdded(skill)} onLike={() => void toggleLiked(skill)} onEdit={() => void openEditor(skill)} onDelete={() => confirmDelete(skill)} />)}
                                 </div>
                             </section>
@@ -238,10 +239,10 @@ export default function SkillsPage() {
 
 function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; loading: boolean; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
     return (
-        <article className="flex h-[178px] min-w-0 flex-col rounded-md border border-border/55 bg-[color:var(--workspace-surface-strong)] p-4 transition-[border-color,box-shadow,background-color] duration-200 hover:border-border hover:bg-[color:var(--workspace-surface)] hover:shadow-sm">
-            <div className="flex min-h-8 items-start gap-3">
-                <button type="button" className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
-                    <h3 className="line-clamp-1 text-[var(--fs-body-lg)] font-semibold leading-6">{skill.skill_name}</h3>
+        <article className={`library-card skill-library-card group${skill.is_added ? " is-added" : ""}`}>
+            <div className="skill-card-top">
+                <button type="button" className="skill-card-title-button" onClick={onOpen}>
+                    <h3>{skill.skill_name}</h3>
                 </button>
                 {skill.is_owner ? (
                     <Dropdown
@@ -254,33 +255,39 @@ function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: 
                             onClick: ({ key }) => key === "edit" ? onEdit() : onDelete(),
                         }}
                     >
-                        <button type="button" aria-label="技能操作" className="-mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground/42 transition-colors hover:bg-foreground/[.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <button type="button" aria-label="技能操作" className="skill-card-more">
                             <MoreHorizontal className="size-4" />
                         </button>
                     </Dropdown>
-                ) : (
-                    <Tooltip title={`${skill.is_added ? "从我的技能移除" : "加入我的技能"} · ${formatSkillCount(skill.added_count)} 人已加入`}>
-                        <button type="button" disabled={loading} aria-label={skill.is_added ? "从我的技能移除" : "加入我的技能"} className={`-mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait ${skill.is_added ? "bg-foreground/[.08] text-foreground" : "text-foreground/70 hover:bg-foreground/[.07] hover:text-foreground"}`} onClick={onAdd}>
-                            {loading ? <LoaderCircle className="size-4 animate-spin" /> : skill.is_added ? <Check className="size-4" /> : <Plus className="size-4" />}
-                        </button>
-                    </Tooltip>
-                )}
+                ) : null}
             </div>
-            <button type="button" className="mt-1 min-h-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onOpen}>
-                <p className="line-clamp-3 text-xs leading-5 text-foreground/52">{skill.description || "暂无技能简介"}</p>
+            <button type="button" className="skill-card-description" onClick={onOpen}>
+                <p>{skill.description || "暂无技能简介"}</p>
             </button>
-            <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-border/45 pt-3 text-[var(--fs-label)] text-foreground/42">
-                <button type="button" disabled={loading} className="inline-flex shrink-0 items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait" aria-label={skill.is_like ? "取消收藏" : "收藏"} onClick={onLike}>
+            <div className="skill-card-footer">
+                <button type="button" disabled={loading} className="skill-card-like" aria-label={skill.is_like ? "取消收藏" : "收藏"} onClick={onLike}>
                     <Heart className={`size-3.5 ${skill.is_like ? "fill-current text-rose-500" : ""}`} />
                     <span>{formatSkillCount(skill.like_count)}</span>
                 </button>
-                <span className="truncate">来自 · {skill.effective_user.name || "未知用户"}</span>
-                {skill.is_private ? <span className="ml-auto shrink-0 text-foreground/55">仅自己</span> : null}
+                <span className="skill-card-author">{skill.effective_user.name || "未知用户"}</span>
+                {skill.is_private ? <span className="skill-card-flag">仅自己</span> : null}
             </div>
+            {/* 加入是这个页面的主行为，给它完整的按钮 + 文案 + 已加入人数，不再藏在角落的加号里。 */}
+            {skill.is_owner
+                ? <div className="skill-card-action"><span className="skill-card-owner-flag">我创建的</span><span className="skill-card-added-count">{formatSkillCount(skill.added_count)} 人已加入</span></div>
+                : (
+                    <div className="skill-card-action">
+                        <button type="button" disabled={loading} className={`skill-card-join${skill.is_added ? " is-added" : ""}`} onClick={onAdd}>
+                            {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : skill.is_added ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+                            <span>{skill.is_added ? "已加入" : "加入我的技能库"}</span>
+                        </button>
+                        <Tooltip title={`${formatSkillCount(skill.added_count)} 人已加入`}><span className="skill-card-added-count">{formatSkillCount(skill.added_count)}</span></Tooltip>
+                    </div>
+                )}
         </article>
     );
 }
 
 function SkillSkeleton() {
-    return <div className="grid grid-cols-1 gap-3 py-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[178px] animate-pulse rounded-md border border-border/45 bg-foreground/[.035]" />)}</div>;
+    return <div className="library-grid skill-library-grid py-6">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-[218px] animate-pulse rounded-[var(--r-xl)] bg-foreground/[.035]" />)}</div>;
 }

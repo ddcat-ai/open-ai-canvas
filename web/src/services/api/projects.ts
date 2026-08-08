@@ -1,8 +1,6 @@
-import axios from "axios";
+import { apiClient, request } from "@/services/api/request";
 
-import type { BackendEnvelope } from "@/services/api/task-center";
-
-const api = axios.create({ baseURL: import.meta.env.VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true });
+const api = apiClient;
 
 export type Project = {
     id: string;
@@ -13,6 +11,7 @@ export type Project = {
     sourceType: string;
     description: string;
     stylePresetId: string;
+    styleProfileJson?: string;
     status: "active" | "archived" | string;
     revision: number;
     createdAt: string;
@@ -167,16 +166,6 @@ export type ProjectDetail = {
     assetCandidates: ProjectAssetCandidate[];
 };
 
-async function request<T>(promise: Promise<{ data: BackendEnvelope<T> }>) {
-    try {
-        const response = await promise;
-        if (response.data.code !== 0) throw new Error(response.data.msg || "请求失败");
-        return response.data.data;
-    } catch (error) {
-        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data?.msg || error.message || "请求失败");
-        throw error;
-    }
-}
 
 export function listProjects() {
     return request<{ projects: ProjectSummary[] }>(api.get("/projects"));
@@ -186,11 +175,11 @@ export function getProject(id: string) {
     return request<ProjectDetail>(api.get(`/projects/${encodeURIComponent(id)}`));
 }
 
-export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string }) {
+export function createProject(input: { name: string; type: string; aspectRatio: string; sourceType: string; description?: string; stylePresetId?: string; styleProfileJson?: string }) {
     return request<{ project: Project }>(api.post("/projects", input));
 }
 
-export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "stylePresetId" | "status">>) {
+export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "stylePresetId" | "styleProfileJson" | "status">>) {
     return request<{ project: Project }>(api.patch(`/projects/${encodeURIComponent(projectId)}`, input));
 }
 

@@ -5,8 +5,8 @@ import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal
 
 export default function NotFound() {
     return (
-        <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-            <main className="flex h-full min-h-0 items-center justify-center overflow-y-auto bg-background px-6 py-10 text-stone-900 dark:text-stone-100">
+        <div className="app-workspace-page flex h-dvh flex-col overflow-hidden text-foreground">
+            <main className="app-workspace-page flex h-full min-h-0 items-center justify-center overflow-y-auto px-6 py-10 text-foreground">
                 <section className="w-full max-w-md text-center">
                     <WorkspaceSignalIcon variant="empty" size="lg" className="mx-auto mb-5" />
                     <div className="mb-2 text-xs font-semibold tabular-nums text-foreground/45">404</div>

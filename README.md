@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.34-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.43-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
 </p>
 
@@ -110,6 +110,82 @@ curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/script
 该快速脚本仍依赖 GHCR 容器包的可见性。容器包尚未公开时，必须先执行 `docker login ghcr.io`，或在直接运行脚本时提供 `GHCR_USERNAME` 和 `GHCR_TOKEN` 环境变量完成登录；未配置凭据时请使用上方推荐的源码构建脚本。默认使用 `latest` 标签，固定版本或修改端口可在首次执行后编辑 `/opt/open-ai-canvas/.env`，然后重新执行脚本。
 
 部署配置和 PostgreSQL 密码保存在 `/opt/open-ai-canvas/.env`，不要发送给他人，也不要删除 `backend-data`、`postgres-data` 和 `redis-data` 数据卷。数据卷持久化不等于备份，请定期备份 PostgreSQL 和上传文件。直接使用 IP 访问仅适合首次配置；公网长期使用必须绑定域名并配置 HTTPS。
+
+## 生产环境文本 SSE
+
+文本任务事件流是登录态接口 `GET /api/tasks/:id/text-events`。它只发送当前用户有权限访问的文本任务增量，响应类型为 `text/event-stream`；事件 `delta` 的 `id` 是单调递增的文本序号，`terminal` 表示任务已经成功、失败或取消。生产反向代理必须对这一条路径关闭响应缓冲和缓存，并允许长时间读取；不要把这些设置复制到所有 `/api/` 请求上。
+
+### Nginx
+
+如果 Docker Compose 的网页容器暴露在本机 `3000` 端口，在 HTTPS server 中加入以下规则，并放在通用 `/api/` 规则之前。`proxy_pass` 也可以按你的部署拓扑改成实际网页入口；不要把后端 `8080` 直接暴露到公网。
+
+```nginx
+location ~ ^/api/tasks/[^/]+/text-events$ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_buffering off;
+    proxy_cache off;
+    gzip off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}
+```
+
+项目镜像内的 `nginx.conf` 已包含同等规则，并只对 `/api/tasks/<id>/text-events` 关闭缓冲。外层 Nginx 和镜像内 Nginx 都存在时，两层都要保留该路径的流式设置；任一层重新缓冲都会让浏览器看起来直到任务结束才收到增量。
+
+### Caddy
+
+Caddy 终止 HTTPS 后，将网页入口转发到 Compose 暴露的 `3000` 端口。`flush_interval -1` 让事件立即下发，长 `read_timeout` 防止长文本任务被网关主动断开：
+
+```caddyfile
+canvas.example.com {
+    @textEvents path_regexp textEvents ^/api/tasks/[^/]+/text-events$
+    reverse_proxy @textEvents 127.0.0.1:3000 {
+        flush_interval -1
+        transport http {
+            read_timeout 1h
+        }
+        header_up X-Forwarded-Proto {scheme}
+        header_down Cache-Control "no-cache, no-transform"
+    }
+
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+HTTPS 不是可选项：事件流使用登录 Cookie，用户配置的模型凭据也会参与请求；公网浏览器到反向代理的链路必须使用 HTTPS，并保留 `Host`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。反向代理到网页容器可以使用隔离的 Compose 内网 HTTP。不要通过放宽 CORS、关闭鉴权或把 `Last-Event-ID` 放进 URL 来解决断线问题。
+
+### Docker 与健康检查
+
+`docker-compose.deploy.yml` / `docker-compose.server.yml` 只需要对外暴露网页容器的 `3000`；后端 `8080` 留在 Compose 网络内。部署后先确认容器健康：
+
+```bash
+sudo docker compose --env-file .env -f docker-compose.deploy.yml -f docker-compose.build.yml ps
+curl -fsS https://canvas.example.com/api/health
+```
+
+网页容器和后端镜像都带健康检查：网页检查 `/`，后端检查 `/api/health`。健康检查只能证明 HTTP 入口可用，不能证明代理正在逐事件转发；SSE 仍需按下面的命令验证。
+
+### 断线恢复与排障
+
+客户端重连时可以发送 `Last-Event-ID: <最后收到的序号>`，也可以使用 `?after=<序号>`；查询参数优先。服务端只返回 `sequence > after` 的 `delta`，因此同一段文本不会因为重连重复拼接。游标来自 SSE `id`，不是任务 ID。成功任务的增量保留 24 小时，失败或取消任务保留 7 天；超出保留期时应读取任务详情中的最终正文或失败草稿。
+
+在已登录浏览器中复制 `open_ai_canvas_session` Cookie 后，可用 `curl -N` 检查首字节和增量是否在任务运行期间到达：
+
+```bash
+curl -N --http1.1 \
+  -H 'Accept: text/event-stream' \
+  -H 'Last-Event-ID: 0' \
+  -b 'open_ai_canvas_session=<登录 Cookie>' \
+  'https://canvas.example.com/api/tasks/<task-id>/text-events'
+```
+
+正常输出会先出现 `: connected`，随后是带 `id` 的 `event: delta`，最后是 `event: terminal`。如果只在任务结束后一次性出现全部内容，检查每一层是否仍有 `proxy_buffering on`、缓存规则或 gzip；如果长时间没有任何字节，检查 `proxy_read_timeout`、HTTPS 连接和后端容器日志。该排障命令只针对文本事件流，其他 API 仍使用默认缓存、安全和超时策略。
 
 ## 本地开发
 

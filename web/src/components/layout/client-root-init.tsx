@@ -12,6 +12,21 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
 
     useEffect(() => {
+        const interactiveSelector = 'button, [role="button"], a, [class*="card"], [class*="Card"]';
+        const blurPointerFocus = (event: PointerEvent) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            const target = event.target instanceof Element ? event.target.closest<HTMLElement>(interactiveSelector) : null;
+            if (!target || target.hasAttribute("disabled") || target.getAttribute("aria-disabled") === "true") return;
+            // 浏览器可能把鼠标点击误判为 :focus-visible；下一帧只清掉这次指针点击产生的焦点。
+            window.requestAnimationFrame(() => {
+                if (document.activeElement === target) target.blur();
+            });
+        };
+        document.addEventListener("pointerdown", blurPointerFocus, true);
+        return () => document.removeEventListener("pointerdown", blurPointerFocus, true);
+    }, []);
+
+    useEffect(() => {
         if (handledConfigParams.current) return;
         const searchParams = new URLSearchParams(window.location.search);
         const baseUrl = searchParams.get("baseUrl") || searchParams.get("baseurl");

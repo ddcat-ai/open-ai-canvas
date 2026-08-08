@@ -1,34 +1,42 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
-import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Box3, Color, Group, Mesh, MeshDepthMaterial, MeshNormalMaterial, Object3D, PerspectiveCamera, Scene, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
-import { GLTFLoader } from "three-stdlib";
+import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { AnimationClip, AnimationMixer, Box3, Bone, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, Quaternion, Scene, SkeletonHelper, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
+import type { Material } from "three";
+import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
-import { interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, interpolateDirectorBoneRotation, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
 import { resolveMediaUrl } from "@/services/file-storage";
-import type { DirectorCamera, DirectorLight, DirectorObject, DirectorRenderMode, DirectorScene, DirectorTransform } from "@/types/director";
+import type { DirectorCamera, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
 
 export type DirectorViewportHandle = {
     capture: (mode: DirectorRenderMode) => Promise<Blob>;
+    recordVideo: (duration: number, fps: number) => Promise<Blob>;
     readCameraTransform: () => DirectorTransform | null;
 };
 
 type DirectorViewportProps = {
     scene: DirectorScene;
     selectedObjectId: string | null;
+    selectedBone: string | null;
     transformMode: "translate" | "rotate" | "scale";
     renderMode: DirectorRenderMode;
     playhead: number;
     onSelectObject: (id: string | null) => void;
+    onSelectBone: (bone: string | null) => void;
     onObjectTransform: (id: string, transform: DirectorTransform) => void;
+    onBoneTransform: (id: string, bone: string, rotation: DirectorQuat) => void;
+    onActorRigReady: (id: string, rig: DirectorRig, animations: AnimationClip[]) => void;
 };
 
-type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: PerspectiveCamera };
+type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; suspendDisplayMaterialOverride: () => () => void };
 
 export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewportProps>(function DirectorViewport(props, ref) {
     const captureContext = useRef<CaptureContext | null>(null);
+    const onCaptureContext = useCallback((context: CaptureContext) => { captureContext.current = context; }, []);
     useImperativeHandle(ref, () => ({
         capture: (mode) => captureFrame(captureContext.current, mode),
+        recordVideo: (duration, fps) => recordCanvas(captureContext.current, duration, fps),
         readCameraTransform: () => {
             const camera = captureContext.current?.camera;
             return camera ? { position: camera.position.toArray() as DirectorTransform["position"], rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z], scale: [1, 1, 1] } : null;
@@ -45,21 +53,30 @@ export const DirectorViewport = forwardRef<DirectorViewportHandle, DirectorViewp
             onPointerMissed={() => props.onSelectObject(null)}
         >
             <Suspense fallback={null}>
-                <DirectorSceneContent {...props} onCaptureContext={(context) => (captureContext.current = context)} />
+                <DirectorSceneContent {...props} onCaptureContext={onCaptureContext} />
             </Suspense>
         </Canvas>
     );
 });
 
-function DirectorSceneContent({ scene, selectedObjectId, transformMode, renderMode, playhead, onSelectObject, onObjectTransform, onCaptureContext }: DirectorViewportProps & { onCaptureContext: (context: CaptureContext) => void }) {
+function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext }: DirectorViewportProps & { onCaptureContext: (context: CaptureContext) => void }) {
     const { gl, camera, scene: threeScene, invalidate } = useThree();
     const [transforming, setTransforming] = useState(false);
+    const displayClayRestoreRef = useRef<(() => void) | null>(null);
     const shot = scene.shots.find((item) => item.id === scene.activeShotId) || scene.shots[0];
     const activeCamera = scene.cameras.find((item) => item.id === shot?.cameraId) || scene.cameras[0];
+    const suspendDisplayMaterialOverride = useCallback(() => {
+        const suspended = Boolean(displayClayRestoreRef.current);
+        displayClayRestoreRef.current?.();
+        displayClayRestoreRef.current = null;
+        return () => {
+            if (suspended) displayClayRestoreRef.current = applyClaySceneMaterials(threeScene);
+        };
+    }, [threeScene]);
 
     useEffect(() => {
-        onCaptureContext({ gl, camera: camera as PerspectiveCamera, scene: threeScene });
-    }, [camera, gl, onCaptureContext, threeScene]);
+        onCaptureContext({ gl, camera: camera as PerspectiveCamera, scene: threeScene, suspendDisplayMaterialOverride });
+    }, [camera, gl, onCaptureContext, suspendDisplayMaterialOverride, threeScene]);
 
     useEffect(() => {
         threeScene.background = new Color(scene.background);
@@ -67,14 +84,17 @@ function DirectorSceneContent({ scene, selectedObjectId, transformMode, renderMo
     }, [invalidate, scene.background, threeScene]);
 
     useEffect(() => {
-        const material = renderMode === "depth" ? new MeshDepthMaterial() : renderMode === "normal" ? new MeshNormalMaterial() : null;
+        const material = renderMode === "depth" ? new MeshDepthMaterial() : renderMode === "normal" ? new MeshNormalMaterial() : renderMode === "pose" ? new MeshBasicMaterial({ color: "#ffffff", wireframe: true }) : null;
+        if (renderMode === "clay") displayClayRestoreRef.current = applyClaySceneMaterials(threeScene);
         threeScene.overrideMaterial = material;
         invalidate();
         return () => {
             if (threeScene.overrideMaterial === material) threeScene.overrideMaterial = null;
+            displayClayRestoreRef.current?.();
+            displayClayRestoreRef.current = null;
             material?.dispose();
         };
-    }, [invalidate, renderMode, threeScene]);
+    }, [invalidate, renderMode, scene.objects, threeScene]);
 
     return (
         <>
@@ -91,11 +111,15 @@ function DirectorSceneContent({ scene, selectedObjectId, transformMode, renderMo
                     key={object.id}
                     object={object}
                     selected={selectedObjectId === object.id}
+                    selectedBone={selectedObjectId === object.id ? selectedBone : null}
                     transformMode={transformMode}
                     playhead={playhead}
                     onSelect={() => onSelectObject(object.id)}
+                    onSelectBone={(bone) => { onSelectObject(object.id); onSelectBone(bone); }}
                     onTransforming={setTransforming}
                     onTransform={(transform) => onObjectTransform(object.id, transform)}
+                    onBoneTransform={(bone, rotation) => onBoneTransform(object.id, bone, rotation)}
+                    onActorRigReady={(rig, animations) => onActorRigReady(object.id, rig, animations)}
                 />
             ))}
             <OrbitControls makeDefault enabled={!transforming} target={activeCamera?.target || [0, 1, 0]} minDistance={0.6} maxDistance={80} />
@@ -121,7 +145,7 @@ function CameraSync({ camera, playhead }: { camera?: DirectorCamera; playhead: n
     return null;
 }
 
-function DirectorObjectView({ object, selected, transformMode, playhead, onSelect, onTransforming, onTransform }: { object: DirectorObject; selected: boolean; transformMode: DirectorViewportProps["transformMode"]; playhead: number; onSelect: () => void; onTransforming: (value: boolean) => void; onTransform: (transform: DirectorTransform) => void }) {
+function DirectorObjectView({ object, selected, selectedBone, transformMode, playhead, onSelect, onSelectBone, onTransforming, onTransform, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; transformMode: DirectorViewportProps["transformMode"]; playhead: number; onSelect: () => void; onSelectBone: (bone: string | null) => void; onTransforming: (value: boolean) => void; onTransform: (transform: DirectorTransform) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
     const groupRef = useRef<Group>(null);
     const transform = interpolateDirectorTransform(object.transform, object.keyframes, playhead);
     const content = (
@@ -135,7 +159,7 @@ function DirectorObjectView({ object, selected, transformMode, playhead, onSelec
                 onSelect();
             }}
         >
-            <DirectorObjectVisual object={object} selected={selected} />
+            <DirectorObjectVisual object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />
         </group>
     );
     if (!selected) return content;
@@ -156,10 +180,9 @@ function DirectorObjectView({ object, selected, transformMode, playhead, onSelec
     );
 }
 
-function DirectorObjectVisual({ object, selected }: { object: DirectorObject; selected: boolean }) {
-    if (object.kind === "model" && object.url) return <DirectorModel object={object} selected={selected} />;
+function DirectorObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
+    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <DirectorModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} />;
     if (object.kind === "billboard" && object.url) return <DirectorBillboard object={object} selected={selected} />;
-    if (object.primitive === "character") return <DirectorCharacter object={object} selected={selected} />;
     const material = <meshStandardMaterial color={selected ? "#2f8cff" : object.color} roughness={0.68} metalness={0.05} />;
     return (
         <mesh castShadow={object.castShadow} receiveShadow={object.receiveShadow}>
@@ -169,54 +192,213 @@ function DirectorObjectVisual({ object, selected }: { object: DirectorObject; se
     );
 }
 
-function DirectorCharacter({ object, selected }: { object: DirectorObject; selected: boolean }) {
-    const color = selected ? "#2f8cff" : object.color;
-    const pose = characterPose(object.pose || "stand");
-    return (
-        <group>
-            <mesh castShadow position={[0, 1.55, 0]}><sphereGeometry args={[0.24, 24, 18]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>
-            <mesh castShadow position={[0, 1.05, 0]}><capsuleGeometry args={[0.28, 0.65, 8, 16]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>
-            <Limb position={[-0.34, 1.16, 0]} rotation={pose.leftArm} color={color} />
-            <Limb position={[0.34, 1.16, 0]} rotation={pose.rightArm} color={color} />
-            <Limb position={[-0.17, 0.43, 0]} rotation={pose.leftLeg} color={color} length={0.82} />
-            <Limb position={[0.17, 0.43, 0]} rotation={pose.rightLeg} color={color} length={0.82} />
-        </group>
-    );
-}
-
-function Limb({ position, rotation, color, length = 0.68 }: { position: [number, number, number]; rotation: [number, number, number]; color: string; length?: number }) {
-    return <mesh castShadow position={position} rotation={rotation}><capsuleGeometry args={[0.09, length, 6, 12]} /><meshStandardMaterial color={color} roughness={0.76} /></mesh>;
-}
-
-function DirectorModel({ object, selected }: { object: DirectorObject; selected: boolean }) {
+function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady }: { object: DirectorObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: DirectorQuat) => void; onActorRigReady: (rig: DirectorRig, animations: AnimationClip[]) => void }) {
     const [model, setModel] = useState<Object3D | null>(null);
+    const [animations, setAnimations] = useState<AnimationClip[]>([]);
+    const [rig, setRig] = useState<DirectorRig | null>(null);
+    const [restRotations, setRestRotations] = useState<Partial<Record<DirectorHumanoidBone, DirectorQuat>>>({});
+    const mixerRef = useRef<AnimationMixer | null>(null);
+    const onActorRigReadyRef = useRef(onActorRigReady);
+    const invalidate = useThree((state) => state.invalidate);
+    const helper = useMemo(() => model ? new SkeletonHelper(model) : null, [model]);
+    const selectedBoneObject = selectedBone && rig?.boneMap[selectedBone as DirectorHumanoidBone] ? model?.getObjectByName(rig.boneMap[selectedBone as DirectorHumanoidBone]!) : null;
+    const motion = object.motionClips?.find((item) => item.id === object.activeMotionClipId);
+    const activeAnimation = motion ? animations.find((item) => item.name === motion.sourceAnimation) : undefined;
+    const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
+
+    useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
+
     useEffect(() => {
         let active = true;
         const loader = new GLTFLoader();
-        void resolveMediaUrl(object.storageKey, object.url).then((url) => loader.load(url, (gltf) => {
+        void resolveMediaUrl(object.storageKey, modelUrl).then((url) => loader.load(url, (gltf) => {
             if (!active) return;
-            const next = gltf.scene.clone(true);
-            const bounds = new Box3().setFromObject(next);
-            const size = bounds.getSize(new Vector3());
-            const maxSize = Math.max(size.x, size.y, size.z, 0.001);
-            next.scale.multiplyScalar(2 / maxSize);
-            const centered = new Box3().setFromObject(next);
-            const center = centered.getCenter(new Vector3());
-            next.position.sub(center);
-            next.position.y -= centered.min.y - center.y;
-            next.traverse((child) => {
-                const mesh = child as Mesh;
-                if (!mesh.isMesh) return;
-                mesh.castShadow = object.castShadow;
-                mesh.receiveShadow = object.receiveShadow;
-            });
-            applyHumanoidPose(next, object.pose || "stand");
+            const next = SkeletonUtils.clone(gltf.scene);
+            normalizeModel(next, object.castShadow, object.receiveShadow);
+            const nextRig = inferDirectorRig(next, gltf.animations.map((clip) => clip.name));
+            if (object.kind === "actor" || object.primitive === "character") applyActorReferenceMaterial(next, object.color);
+            mixerRef.current = new AnimationMixer(next);
+            setRig(nextRig);
+            setRestRotations(readRigRestRotations(next, nextRig));
+            setAnimations(gltf.animations);
             setModel(next);
+            onActorRigReadyRef.current(nextRig, gltf.animations);
         }, undefined, () => active && setModel(null)));
-        return () => { active = false; };
-    }, [object.castShadow, object.pose, object.receiveShadow, object.storageKey, object.url]);
-    if (!model) return <mesh castShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color={selected ? "#2f8cff" : "#e39145"} wireframe /></mesh>;
-    return <primitive object={model} />;
+        return () => {
+            active = false;
+            mixerRef.current?.stopAllAction();
+            mixerRef.current = null;
+        };
+    }, [modelUrl, object.kind, object.storageKey]);
+
+    useEffect(() => {
+        if (!model) return;
+        model.traverse((child) => {
+            const mesh = child as Mesh;
+            if (!mesh.isMesh) return;
+            mesh.castShadow = object.castShadow;
+            mesh.receiveShadow = object.receiveShadow;
+        });
+        invalidate();
+    }, [invalidate, model, object.castShadow, object.receiveShadow]);
+
+    useEffect(() => {
+        if (!model || (object.kind !== "actor" && object.primitive !== "character")) return;
+        updateActorReferenceColor(model, object.color);
+        invalidate();
+    }, [invalidate, model, object.color, object.kind]);
+
+    useEffect(() => {
+        if (!model || !mixerRef.current) return;
+        const mixer = mixerRef.current;
+        mixer.stopAllAction();
+        if (!activeAnimation) return;
+        mixer.clipAction(activeAnimation).setLoop(motion?.loop ? LoopRepeat : LoopOnce, motion?.loop ? Infinity : 1).play();
+        return () => {
+            mixer.stopAllAction();
+        };
+    }, [activeAnimation, model, motion?.loop]);
+
+    useEffect(() => {
+        if (!model || !mixerRef.current) return;
+        if (activeAnimation && motion) {
+            const localTime = Math.max(0, playhead - motion.start) * motion.playbackRate;
+            const clipDuration = motion.duration || activeAnimation.duration;
+            mixerRef.current.setTime(motion.loop && clipDuration > 0 ? localTime % clipDuration : localTime);
+        }
+        applyDirectorBoneTracks(model, object, playhead, rig, restRotations, Boolean(activeAnimation && motion));
+        helper?.updateMatrixWorld(true);
+        invalidate();
+    }, [activeAnimation, helper, invalidate, model, motion, object.boneOverrides, object.boneTracks, object.pose, playhead, restRotations, rig]);
+
+    useFrame(() => {
+        if (selectedBoneObject && selected) selectedBoneObject.updateMatrixWorld(true);
+    });
+
+    if (!model) return <DirectorMannequin color={object.color} selected={selected} />;
+    return <group>
+        <primitive object={model} />
+        {selected && helper ? <primitive object={helper} /> : null}
+        {selected && rig ? Object.entries(rig.boneMap).filter(([, name]) => Boolean(name)).map(([bone, name]) => <BoneController key={bone} bone={model.getObjectByName(name!)} model={model} selected={selectedBone === bone} onSelect={() => onSelectBone(bone)} />) : null}
+        {selected && selectedBoneObject ? <TransformControls object={selectedBoneObject} mode="rotate" size={0.55} onMouseUp={() => onBoneTransform(selectedBone!, selectedBoneObject.quaternion.toArray() as DirectorQuat)} /> : null}
+    </group>;
+}
+
+function DirectorMannequin({ color, selected }: { color: string; selected: boolean }) {
+    const resolvedColor = selected ? new Color(color).lerp(new Color("#78a9ff"), 0.18).getStyle() : color;
+    const joints: DirectorVec3[] = [[0, 1.72, 0], [0, 1.48, 0], [-0.3, 1.4, 0], [0.3, 1.4, 0], [-0.32, 1.05, 0], [0.32, 1.05, 0], [-0.33, 0.72, 0], [0.33, 0.72, 0], [-0.13, 0.88, 0], [0.13, 0.88, 0], [-0.13, 0.46, 0], [0.13, 0.46, 0], [-0.13, 0.05, 0], [0.13, 0.05, 0]];
+    const bones: Array<[DirectorVec3, DirectorVec3]> = [[joints[0], joints[1]], [joints[1], joints[2]], [joints[1], joints[3]], [joints[2], joints[4]], [joints[4], joints[6]], [joints[3], joints[5]], [joints[5], joints[7]], [joints[1], [0, 0.92, 0]], [[0, 0.92, 0], joints[8]], [[0, 0.92, 0], joints[9]], [joints[8], joints[10]], [joints[10], joints[12]], [joints[9], joints[11]], [joints[11], joints[13]]];
+    return <group>
+        {bones.map(([from, to], index) => <LoadingBone key={`bone-${index}`} from={from} to={to} color={resolvedColor} />)}
+        {joints.map((position, index) => <mesh key={`joint-${index}`} position={position}><sphereGeometry args={[index === 0 ? 0.11 : 0.04, 12, 8]} /><meshBasicMaterial color={resolvedColor} transparent opacity={0.72} /></mesh>)}
+    </group>;
+}
+
+function LoadingBone({ from, to, color }: { from: DirectorVec3; to: DirectorVec3; color: string }) {
+    const start = useMemo(() => new Vector3(...from), [from]);
+    const end = useMemo(() => new Vector3(...to), [to]);
+    const direction = useMemo(() => end.clone().sub(start), [end, start]);
+    const midpoint = useMemo(() => start.clone().add(end).multiplyScalar(0.5), [end, start]);
+    const rotation = useMemo(() => new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction.clone().normalize()), [direction]);
+    return <mesh position={midpoint} quaternion={rotation}><cylinderGeometry args={[0.025, 0.025, direction.length(), 8]} /><meshBasicMaterial color={color} transparent opacity={0.62} /></mesh>;
+}
+
+function BoneController({ bone, model, selected, onSelect }: { bone: Object3D | undefined; model: Object3D; selected: boolean; onSelect: () => void }) {
+    const ref = useRef<Group>(null);
+    const world = useMemo(() => new Vector3(), []);
+    useFrame(() => {
+        if (!bone || !ref.current) return;
+        bone.getWorldPosition(world);
+        model.worldToLocal(world);
+        ref.current.position.copy(world);
+    });
+    if (!bone) return null;
+    return <group ref={ref} onPointerDown={(event) => { event.stopPropagation(); onSelect(); }}><mesh><sphereGeometry args={[selected ? 0.07 : 0.045, 12, 8]} /><meshBasicMaterial color={selected ? "#f0b36a" : "#78a9ff"} depthTest={false} transparent opacity={selected ? 1 : 0.75} /></mesh></group>;
+}
+
+function normalizeModel(root: Object3D, castShadow: boolean, receiveShadow: boolean) {
+    root.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(root, true);
+    const size = bounds.getSize(new Vector3());
+    const maxSize = Math.max(size.x, size.y, size.z, 0.001);
+    root.scale.multiplyScalar(2 / maxSize);
+    root.updateMatrixWorld(true);
+    const centered = new Box3().setFromObject(root, true);
+    const center = centered.getCenter(new Vector3());
+    root.position.sub(center);
+    root.position.y -= centered.min.y - center.y;
+    root.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = castShadow;
+        mesh.receiveShadow = receiveShadow;
+    });
+}
+
+function applyActorReferenceMaterial(root: Object3D, color: string) {
+    const material = new MeshStandardMaterial({ color, roughness: 0.74, metalness: 0.02 });
+    root.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh) return;
+        mesh.material = material;
+        mesh.userData.directorActor = true;
+        mesh.userData.directorActorMaterial = material;
+    });
+}
+
+function updateActorReferenceColor(root: Object3D, color: string) {
+    root.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh || !mesh.userData.directorActor) return;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => {
+            if (material instanceof MeshStandardMaterial) material.color.set(color);
+        });
+    });
+}
+
+function readRigRestRotations(root: Object3D, rig: DirectorRig) {
+    return Object.fromEntries(Object.entries(rig.boneMap).flatMap(([bone, name]) => {
+        const target = name ? root.getObjectByName(name) : null;
+        return target ? [[bone, target.quaternion.toArray() as DirectorQuat]] : [];
+    })) as Partial<Record<DirectorHumanoidBone, DirectorQuat>>;
+}
+
+function inferDirectorRig(root: Object3D, animationNames: string[]): DirectorRig {
+    const names = new Map<string, string>();
+    root.traverse((child) => { if (child instanceof Bone) names.set(normalizeBoneName(child.name), child.name); });
+    const patterns: Record<DirectorHumanoidBone, RegExp[]> = {
+        root: [/^root$/, /armature/], hips: [/hips|pelvis/, /mixamorig.*hip/], spine: [/spine1?$|lowerback/], chest: [/spine2|chest|upperback/], neck: [/neck/], head: [/head/],
+        leftShoulder: [/leftshoulder|shoulder_l|mixamorigleftshoulder/], leftUpperArm: [/leftupperarm|leftarm|upperarm_l|mixamorigleftarm/], leftLowerArm: [/leftforearm|leftlowerarm|forearm_l|mixamorigleftforearm/], leftHand: [/lefthand|hand_l|mixamoriglefthand/],
+        rightShoulder: [/rightshoulder|shoulder_r|mixamorigrightshoulder/], rightUpperArm: [/rightupperarm|rightarm|upperarm_r|mixamorigrightarm/], rightLowerArm: [/rightforearm|rightlowerarm|forearm_r|mixamorigrightforearm/], rightHand: [/righthand|hand_r|mixamorigrighthand/],
+        leftUpperLeg: [/leftupleg|leftthigh|thigh_l|mixamorigleftupleg/], leftLowerLeg: [/leftleg|leftcalf|calf_l|mixamorigleftleg/], leftFoot: [/leftfoot|foot_l|mixamorigleftfoot/], rightUpperLeg: [/rightupleg|rightthigh|thigh_r|mixamorigrightupleg/], rightLowerLeg: [/rightleg|rightcalf|calf_r|mixamorigrightleg/], rightFoot: [/rightfoot|foot_r|mixamorigrightfoot/],
+    };
+    const boneMap = Object.fromEntries(Object.entries(patterns).map(([bone, candidates]) => [bone, candidates.map((pattern) => [...names.entries()].find(([normalized]) => pattern.test(normalized))?.[1]).find(Boolean)]).filter(([, name]) => Boolean(name))) as DirectorRig["boneMap"];
+    return { status: Object.keys(boneMap).length >= 8 ? "ready" : "unmapped", boneMap, animationNames };
+}
+
+function normalizeBoneName(name: string) {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function applyDirectorBoneTracks(model: Object3D, object: DirectorObject, playhead: number, rig: DirectorRig | null, restRotations: Partial<Record<DirectorHumanoidBone, DirectorQuat>>, hasActiveMotion: boolean) {
+    if (!rig) return;
+    const poseDeltas = hasActiveMotion ? {} : directorPoseBoneDeltas(object.pose || "stand");
+    Object.entries(rig.boneMap).forEach(([bone, name]) => {
+        const target = name ? model.getObjectByName(name) : null;
+        if (!target) return;
+        const humanoidBone = bone as DirectorHumanoidBone;
+        if (!hasActiveMotion) {
+            const rest = restRotations[humanoidBone];
+            if (rest) target.quaternion.copy(new Quaternion(...rest));
+            const delta = poseDeltas[humanoidBone];
+            if (delta) target.quaternion.multiply(new Quaternion(...delta));
+        }
+        const override = object.boneOverrides?.[bone as DirectorHumanoidBone];
+        const track = object.boneTracks?.find((item) => item.bone === bone);
+        const rotation = track ? interpolateDirectorBoneRotation(override || target.quaternion.toArray() as DirectorQuat, track.keyframes, playhead) : override;
+        if (rotation) target.quaternion.copy(new Quaternion(...rotation));
+    });
 }
 
 function DirectorBillboard({ object, selected }: { object: DirectorObject; selected: boolean }) {
@@ -242,46 +424,69 @@ function DirectorLightView({ light }: { light: DirectorLight }) {
     return <directionalLight position={position} color={light.color} intensity={light.intensity} castShadow={light.castShadow} shadow-mapSize-width={1024} shadow-mapSize-height={1024} />;
 }
 
-function characterPose(pose: NonNullable<DirectorObject["pose"]>): Record<"leftArm" | "rightArm" | "leftLeg" | "rightLeg", [number, number, number]> {
-    if (pose === "walk") return { leftArm: [0.35, 0, 0.18], rightArm: [-0.35, 0, -0.18], leftLeg: [-0.24, 0, 0.08], rightLeg: [0.24, 0, -0.08] };
-    if (pose === "run") return { leftArm: [0.7, 0, 0.35], rightArm: [-0.7, 0, -0.35], leftLeg: [-0.55, 0, 0.12], rightLeg: [0.55, 0, -0.12] };
-    if (pose === "sit") return { leftArm: [0.15, 0, 0.05], rightArm: [0.15, 0, -0.05], leftLeg: [1.1, 0, 0], rightLeg: [1.1, 0, 0] };
-    if (pose === "action") return { leftArm: [1.1, 0.2, 0.5], rightArm: [-0.7, -0.2, -0.5], leftLeg: [-0.35, 0, 0.2], rightLeg: [0.45, 0, -0.15] };
-    return { leftArm: [0, 0, 0.08], rightArm: [0, 0, -0.08], leftLeg: [0, 0, 0], rightLeg: [0, 0, 0] };
-}
-
-function applyHumanoidPose(root: Object3D, pose: NonNullable<DirectorObject["pose"]>) {
-    const rotations = humanoidBoneRotations(pose);
-    root.traverse((child) => {
-        const name = child.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const entry = rotations.find(([pattern]) => pattern.test(name));
-        if (entry) child.rotation.set(...entry[1]);
-    });
-}
-
-function humanoidBoneRotations(pose: NonNullable<DirectorObject["pose"]>): Array<[RegExp, [number, number, number]]> {
-    const values = characterPose(pose);
-    return [
-        [/left(upper)?arm|upperarmleft|mixamorigleftarm/, values.leftArm],
-        [/right(upper)?arm|upperarmright|mixamorigrightarm/, values.rightArm],
-        [/left(up)?leg|upperlegleft|mixamorigleftupleg/, values.leftLeg],
-        [/right(up)?leg|upperlegright|mixamorigrightupleg/, values.rightLeg],
-        [/spine|chest/, pose === "action" ? [0.08, 0.18, -0.08] : [0, 0, 0]],
-    ];
-}
-
 async function captureFrame(context: CaptureContext | null, mode: DirectorRenderMode) {
     if (!context) throw new Error("3D 视口尚未就绪");
     const { gl, scene, camera } = context;
+    const resumeDisplayMaterialOverride = context.suspendDisplayMaterialOverride();
     const previous = scene.overrideMaterial;
-    const override = mode === "depth" ? new MeshDepthMaterial() : mode === "normal" ? new MeshNormalMaterial() : null;
-    scene.overrideMaterial = override;
-    gl.render(scene, camera);
-    const blob = await canvasToBlob(gl.domElement);
-    scene.overrideMaterial = previous;
-    override?.dispose();
-    gl.render(scene, camera);
-    return blob;
+    const override = mode === "depth" ? new MeshDepthMaterial() : mode === "normal" ? new MeshNormalMaterial() : mode === "pose" ? new MeshBasicMaterial({ color: "#ffffff", wireframe: true }) : null;
+    const restoreClayMaterials = mode === "clay" ? applyClaySceneMaterials(scene) : null;
+    try {
+        scene.overrideMaterial = override;
+        gl.render(scene, camera);
+        return await canvasToBlob(gl.domElement);
+    } finally {
+        scene.overrideMaterial = previous;
+        restoreClayMaterials?.();
+        override?.dispose();
+        resumeDisplayMaterialOverride();
+        gl.render(scene, camera);
+    }
+}
+
+async function recordCanvas(context: CaptureContext | null, duration: number, fps: number) {
+    if (!context) throw new Error("3D 视口尚未就绪");
+    if (!context.gl.domElement.captureStream || typeof MediaRecorder === "undefined") throw new Error("当前浏览器不支持视频录制，请导出帧序列");
+    const resumeDisplayMaterialOverride = context.suspendDisplayMaterialOverride();
+    const previousMaterial = context.scene.overrideMaterial;
+    const restoreClayMaterials = applyClaySceneMaterials(context.scene);
+    context.scene.overrideMaterial = null;
+    context.gl.render(context.scene, context.camera);
+    const stream = context.gl.domElement.captureStream(fps);
+    const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: Blob[] = [];
+    const result = new Promise<Blob>((resolve, reject) => {
+        recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+        recorder.onerror = () => reject(new Error("白膜视频录制失败"));
+        recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" }));
+    });
+    recorder.start();
+    window.setTimeout(() => recorder.stop(), Math.max(250, duration * 1000 + 120));
+    try {
+        return await result;
+    } finally {
+        stream.getTracks().forEach((track) => track.stop());
+        restoreClayMaterials();
+        context.scene.overrideMaterial = previousMaterial;
+        resumeDisplayMaterialOverride();
+        context.gl.render(context.scene, context.camera);
+    }
+}
+
+function applyClaySceneMaterials(scene: Scene) {
+    const clayMaterial = new MeshStandardMaterial({ color: "#d6d9dd", roughness: 0.88, metalness: 0 });
+    const originals: Array<{ mesh: Mesh; material: Material | Material[] }> = [];
+    scene.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh || mesh.userData.directorActor) return;
+        originals.push({ mesh, material: mesh.material });
+        mesh.material = clayMaterial;
+    });
+    return () => {
+        originals.forEach(({ mesh, material }) => { mesh.material = material; });
+        clayMaterial.dispose();
+    };
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement) {

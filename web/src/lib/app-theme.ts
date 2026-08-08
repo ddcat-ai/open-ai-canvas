@@ -33,16 +33,17 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
     const elevatedBackground = dark ? "rgba(31, 31, 32, 0.96)" : "rgba(255, 255, 255, 0.96)";
     const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
     const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
-    const focusShadow = dark ? "0 0 0 3px rgba(255, 255, 255, 0.12)" : "0 0 0 3px rgba(17, 17, 17, 0.08)";
+    // 黑白主题使用边框表达焦点，避免输入控件周围出现蓝紫色光圈。
+    const focusShadow = "none";
     // 暗色界面的黑白主按钮与选择控件分色，避免开关轨道、勾选符号和滑块融成一片。
     const selectionControl = dark
         ? {
-              active: "#4657c5",
+              active: "#ffffff",
               border: "rgba(255, 255, 255, 0.3)",
               disabledBackground: "rgba(255, 255, 255, 0.06)",
-              focus: "rgba(116, 133, 238, 0.28)",
-              hover: "#7485ee",
-              primary: "#5b6ee1",
+              focus: "transparent",
+              hover: "#e5e5e5",
+              primary: "#f5f5f5",
               surface: "rgba(255, 255, 255, 0.035)",
           }
         : null;
@@ -180,7 +181,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 multipleItemHeight: 24,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
-                activeOutlineColor: dark ? "rgba(255, 255, 255, 0.12)" : "rgba(17, 17, 17, 0.08)",
+                activeOutlineColor: "transparent",
                 optionActiveBg: color.selectActiveBg,
                 optionSelectedBg: color.selectSelectedBg,
                 optionSelectedColor: color.selectText,

@@ -125,7 +125,7 @@ export function AdminPageFrame({ title, description, actions, back, children }: 
 
 function MobileAdminNavigation() {
     return (
-        <nav className="hide-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 bg-background px-3 py-2 lg:hidden" aria-label="管理后台分区">
+        <nav className="app-workspace-navigation hide-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 px-3 py-2 lg:hidden" aria-label="管理后台分区">
             {adminNavigation.flatMap((group) => group.items).map((item) => (
                 <NavLink key={item.path} to={item.path} end={item.path === "/admin"} className={({ isActive }) => cn("app-workspace-nav-link flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors", isActive ? "is-active font-medium" : "text-foreground/60 hover:bg-foreground/[.05] hover:text-foreground")}>
                     {item.icon}<span>{item.label}</span>

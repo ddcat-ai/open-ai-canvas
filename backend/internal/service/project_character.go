@@ -46,15 +46,15 @@ type CharacterRepresentationSummary struct {
 }
 
 type VoiceProfileSummary struct {
-	ID                   string   `json:"id"`
-	Name                 string   `json:"name"`
-	Provider             string   `json:"provider"`
-	VoiceKey             string   `json:"voiceKey"`
-	Language             string   `json:"language"`
-	Timbre               string   `json:"timbre"`
-	SampleResourceID     string   `json:"sampleResourceId,omitempty"`
-	CompatibleModels     []string `json:"compatibleModels"`
-	Status               string   `json:"status"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Provider         string   `json:"provider"`
+	VoiceKey         string   `json:"voiceKey"`
+	Language         string   `json:"language"`
+	Timbre           string   `json:"timbre"`
+	SampleResourceID string   `json:"sampleResourceId,omitempty"`
+	CompatibleModels []string `json:"compatibleModels"`
+	Status           string   `json:"status"`
 }
 
 type CharacterVoiceSummary struct {

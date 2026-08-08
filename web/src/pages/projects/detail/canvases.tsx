@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { App, Button, Popconfirm, Select, Tooltip } from "antd";
-import { ArrowUpRight, Film, Link2, Unlink, X } from "lucide-react";
-import { Link } from "react-router";
+import { Link2, Unlink, X } from "lucide-react";
 
+import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { linkCanvasUnit, unlinkCanvasProject, unlinkCanvasUnit } from "@/services/api/projects";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 
-import { formatTime, type ProjectDetailViewProps } from "./shared";
+import { type ProjectDetailViewProps } from "./shared";
 
 export default function ProjectCanvasesView({ detail, refreshProject }: ProjectDetailViewProps) {
     const { message } = App.useApp();
@@ -44,36 +44,58 @@ export default function ProjectCanvasesView({ detail, refreshProject }: ProjectD
     return (
         <div>
             {canvases.length ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,360px))] justify-start gap-3">
-                    {canvases.map((canvas, index) => {
+                <div className="project-library-grid library-grid">
+                    {canvases.map((canvas) => {
                         const links = linksByCanvas[canvas.id] || [];
                         const linkedUnits = links.map((link) => detail.units.find((unit) => unit.id === link.unitId)).filter(Boolean);
                         const unlinkedUnits = detail.units.filter((unit) => !links.some((link) => link.unitId === unit.id));
+                        const project = toCanvasProject(canvas, detail.project.id, localCanvases.find((item) => item.id === canvas.id));
                         return (
-                            <article key={canvas.id} className="min-w-0 overflow-hidden rounded-lg border border-border/80 bg-background">
-                                <Link to={`/canvas/${canvas.id}`} className="group relative block h-24 overflow-hidden border-b border-border/70 bg-[#111827] p-3 text-white">
-                                    <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-                                    <div className="relative flex h-full flex-col justify-between"><div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-[var(--fs-tiny)] text-white/55"><Film className="size-3" />画布 {String(index + 1).padStart(2, "0")}</span><ArrowUpRight className="size-3.5 text-white/45 group-hover:text-[var(--workspace-accent)]" /></div><div><div className="truncate text-[var(--fs-body)] font-semibold">{canvas.title}</div><div className="mt-0.5 text-[var(--fs-micro)] text-white/48">更新于 {formatTime(canvas.updatedAt)}</div></div></div>
-                                </Link>
-                                <div className="p-2.5">
-                                    <div className="flex items-center justify-between"><span className="text-[var(--fs-tiny)] font-medium text-foreground/48">关联章节</span><span className="text-[var(--fs-micro)] tabular-nums text-foreground/38">{linkedUnits.length} 个</span></div>
-                                    <div className="mt-1.5 flex min-h-6 max-h-12 flex-wrap gap-1 overflow-y-auto">
-                                        {linkedUnits.length ? linkedUnits.map((unit) => (
-                                            <span key={unit!.id} className="inline-flex h-5 max-w-full items-center gap-1 rounded bg-[var(--workspace-accent-soft)] pl-1.5 pr-0.5 text-[var(--fs-micro)] text-[var(--workspace-accent)]"><span className="truncate">{String(unit!.position + 1).padStart(2, "0")} · {unit!.title}</span><Tooltip title="解除章节关联"><button type="button" className="grid size-4 shrink-0 place-items-center rounded hover:bg-foreground/[.07]" aria-label={`解除${unit!.title}关联`} onClick={() => unlinkUnitMutation.mutate({ canvasId: canvas.id, unitId: unit!.id })}><X className="size-3" /></button></Tooltip></span>
-                                        )) : <span className="py-0.5 text-[var(--fs-tiny)] text-foreground/38">尚未关联章节</span>}
+                            <CanvasProjectCard
+                                key={canvas.id}
+                                project={project}
+                                projectName={detail.project.name}
+                                readOnly
+                                footer={
+                                    <div className="border-t border-border/60 pt-2.5">
+                                        <div className="flex items-center justify-between"><span className="text-[var(--fs-tiny)] font-medium text-foreground/48">关联章节</span><span className="text-[var(--fs-micro)] tabular-nums text-foreground/38">{linkedUnits.length} 个</span></div>
+                                        <div className="mt-1.5 flex min-h-6 max-h-12 flex-wrap gap-1 overflow-y-auto">
+                                            {linkedUnits.length ? linkedUnits.map((unit) => (
+                                                <span key={unit!.id} className="inline-flex h-5 max-w-full items-center gap-1 rounded bg-[var(--workspace-accent-soft)] pl-1.5 pr-0.5 text-[var(--fs-micro)] text-[var(--workspace-accent)]"><span className="truncate">{String(unit!.position + 1).padStart(2, "0")} · {unit!.title}</span><Tooltip title="解除章节关联"><button type="button" className="grid size-4 shrink-0 place-items-center rounded hover:bg-foreground/[.07]" aria-label={`解除${unit!.title}关联`} onClick={() => unlinkUnitMutation.mutate({ canvasId: canvas.id, unitId: unit!.id })}><X className="size-3" /></button></Tooltip></span>
+                                            )) : <span className="py-0.5 text-[var(--fs-tiny)] text-foreground/38">尚未关联章节</span>}
+                                        </div>
+                                        <div className="mt-1.5 flex items-center gap-1.5">
+                                            <Select size="small" className="min-w-0 flex-1" placeholder={unlinkedUnits.length ? "关联更多章节" : "全部章节已关联"} disabled={!unlinkedUnits.length} options={unlinkedUnits.map((unit) => ({ label: `${String(unit.position + 1).padStart(2, "0")} · ${unit.title}`, value: unit.id }))} onChange={(unitId) => { setLinkingCanvasId(canvas.id); linkMutation.mutate({ canvasId: canvas.id, unitId }); }} loading={linkMutation.isPending && linkingCanvasId === canvas.id} suffixIcon={<Link2 className="size-3.5" />} />
+                                            <Popconfirm title="解除画布与项目的关系？" description="画布文档不会删除，之后仍可在“画布”中打开。" okText="解除关系" cancelText="取消" okButtonProps={{ danger: true, loading: unlinkProjectMutation.isPending }} onConfirm={() => unlinkProjectMutation.mutate(canvas.id)}>
+                                                <Tooltip title="解除项目关系"><Button size="small" type="text" danger icon={<Unlink className="size-3.5" />} aria-label="解除项目关系" /></Tooltip>
+                                            </Popconfirm>
+                                        </div>
                                     </div>
-                                    <div className="mt-1.5 flex items-center gap-1.5 border-t border-border/60 pt-2">
-                                        <Select size="small" className="min-w-0 flex-1" placeholder={unlinkedUnits.length ? "关联更多章节" : "全部章节已关联"} disabled={!unlinkedUnits.length} options={unlinkedUnits.map((unit) => ({ label: `${String(unit.position + 1).padStart(2, "0")} · ${unit.title}`, value: unit.id }))} onChange={(unitId) => { setLinkingCanvasId(canvas.id); linkMutation.mutate({ canvasId: canvas.id, unitId }); }} loading={linkMutation.isPending && linkingCanvasId === canvas.id} suffixIcon={<Link2 className="size-3.5" />} />
-                                        <Popconfirm title="解除画布与项目的关系？" description="画布文档不会删除，之后仍可在“画布”中打开。" okText="解除关系" cancelText="取消" okButtonProps={{ danger: true, loading: unlinkProjectMutation.isPending }} onConfirm={() => unlinkProjectMutation.mutate(canvas.id)}>
-                                            <Tooltip title="解除项目关系"><Button size="small" type="text" danger icon={<Unlink className="size-3.5" />} aria-label="解除项目关系" /></Tooltip>
-                                        </Popconfirm>
-                                    </div>
-                                </div>
-                            </article>
+                                }
+                            />
                         );
                     })}
                 </div>
             ) : <WorkspaceState icon="canvas" title="还没有项目画布" description="使用右上角的新建画布开始创作。" />}
         </div>
     );
+}
+
+function toCanvasProject(canvas: { id: string; title: string; createdAt: string; updatedAt: string }, projectId: string, local?: CanvasProject): CanvasProject {
+    if (local) return { ...local, title: canvas.title || local.title, updatedAt: canvas.updatedAt || local.updatedAt };
+    return {
+        id: canvas.id,
+        projectId,
+        title: canvas.title,
+        createdAt: canvas.createdAt,
+        updatedAt: canvas.updatedAt,
+        nodes: [],
+        connections: [],
+        chatSessions: [],
+        activeChatId: null,
+        backgroundMode: "dots",
+        showImageInfo: true,
+        viewport: { x: 0, y: 0, k: 1 },
+        directorScenes: [],
+    };
 }

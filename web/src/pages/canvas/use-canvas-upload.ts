@@ -40,6 +40,9 @@ export type StartCanvasUploadStatus = (title: string, detail: string, total?: nu
 };
 
 const NODE_STATUS_SUCCESS = "success" as const;
+const BATCH_UPLOAD_COLUMNS = 3;
+const BATCH_UPLOAD_COLUMN_GAP = 380;
+const BATCH_UPLOAD_ROW_GAP = 300;
 
 export function useCanvasUpload({
     canvasId,
@@ -63,6 +66,7 @@ export function useCanvasUpload({
     const statusTimersRef = useRef<Set<number>>(new Set());
     const fileDragDepthRef = useRef(0);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+    const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<CanvasUploadStatus | null>(null);
     const [fileDropActive, setFileDropActive] = useState(false);
 
@@ -133,12 +137,12 @@ export function useCanvasUpload({
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
             progress.done(persisted ? "图片已添加到画布" : "图片已添加，项目资产待重试");
-            return true;
+            return id;
         } catch (error) {
             const details = error instanceof Error ? error.message : "图片上传失败";
             progress.fail(details);
             message.error(details);
-            return false;
+            return null;
         }
     }, [domainProjectId, message, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
@@ -193,10 +197,12 @@ export function useCanvasUpload({
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
             progress.done(persisted ? "视频已添加到画布" : "视频已添加，项目资产待重试");
+            return id;
         } catch (error) {
             const details = error instanceof Error ? error.message : "视频上传失败";
             progress.fail(details);
             message.error(details);
+            return null;
         }
     }, [domainProjectId, message, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
@@ -214,10 +220,12 @@ export function useCanvasUpload({
             if (domainProjectId) progress.update("写入项目资产", 4);
             const persisted = await persistMediaNode(node);
             progress.done(persisted ? "音频已添加到画布" : "音频已添加，项目资产待重试");
+            return id;
         } catch (error) {
             const details = error instanceof Error ? error.message : "音频上传失败";
             progress.fail(details);
             message.error(details);
+            return null;
         }
     }, [domainProjectId, message, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
@@ -267,6 +275,10 @@ export function useCanvasUpload({
 
     const handleUploadRequest = useCallback((nodeId?: string, position?: Position) => {
         uploadTargetRef.current = { nodeId, position };
+        if (!nodeId) {
+            setUploadModalOpen(true);
+            return;
+        }
         const target = nodeId ? nodesRef.current.find((node) => node.id === nodeId) : null;
         if (imageInputRef.current) {
             imageInputRef.current.accept = target?.type === CanvasNodeType.Image
@@ -279,6 +291,44 @@ export function useCanvasUpload({
         }
         imageInputRef.current?.click();
     }, [nodesRef]);
+
+    const closeUploadModal = useCallback(() => {
+        uploadTargetRef.current = null;
+        setUploadModalOpen(false);
+    }, []);
+
+    const handleUploadFiles = useCallback(async (files: File[]) => {
+        const supportedFiles = files.filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/") || isAudioFile(file));
+        if (!supportedFiles.length) {
+            message.warning("请选择图片、视频、MP3 或 WAV 文件");
+            return false;
+        }
+        const center = uploadTargetRef.current?.position || getCanvasCenter();
+        const columns = Math.min(BATCH_UPLOAD_COLUMNS, supportedFiles.length);
+        const originX = center.x - ((columns - 1) * BATCH_UPLOAD_COLUMN_GAP) / 2;
+        const createdIds: string[] = [];
+        for (let index = 0; index < supportedFiles.length; index += 1) {
+            const file = supportedFiles[index];
+            const position = {
+                x: originX + (index % columns) * BATCH_UPLOAD_COLUMN_GAP,
+                y: center.y + Math.floor(index / columns) * BATCH_UPLOAD_ROW_GAP,
+            };
+            const createdId = await (isAudioFile(file)
+                ? createAudioFileNode(file, position)
+                : file.type.startsWith("video/")
+                  ? createVideoFileNode(file, position)
+                  : createImageFileNode(file, position));
+            if (createdId) createdIds.push(createdId);
+        }
+        if (!createdIds.length) return false;
+        setSelectedNodeIds(new Set(createdIds));
+        setSelectedConnectionId(null);
+        setDialogNodeId(null);
+        const failedCount = supportedFiles.length - createdIds.length;
+        if (failedCount) message.warning(`已添加 ${createdIds.length} 个文件，${failedCount} 个上传失败`);
+        else message.success(`已添加 ${createdIds.length} 个文件到画布`);
+        return true;
+    }, [createAudioFileNode, createImageFileNode, createVideoFileNode, getCanvasCenter, message, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds]);
 
     const replaceNodeMedia = useCallback(async (nodeId: string, file: File) => {
         const currentNode = nodesRef.current.find((node) => node.id === nodeId);
@@ -626,12 +676,15 @@ export function useCanvasUpload({
         handleImageInputChange,
         handleProjectAssetsInsert,
         handleProjectChapterInsert,
+        handleUploadFiles,
         handleUploadRequest,
         imageInputRef,
+        closeUploadModal,
         openAssetsAtPosition,
         pasteAssistantImage,
         pasteSystemClipboard,
         startUploadStatus,
+        uploadModalOpen,
         uploadStatus,
     };
 }

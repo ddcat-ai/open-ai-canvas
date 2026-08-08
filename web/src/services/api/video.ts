@@ -6,6 +6,7 @@ import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/fil
 import { getResourceOSSUrl } from "@/services/api/resources";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
+import { modelCapabilityConfigFor, videoDurationAllowed } from "@/lib/model-capabilities";
 import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { buildApiUrl, isSystemProxyBaseUrl, modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -60,6 +61,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     const selectedModel = (config.model || config.videoModel).trim();
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     assertVideoConfig(requestConfig, requestConfig.model);
+    assertVideoCapability(modelCapabilityConfigFor(config, selectedModel).video!, prompt, references, videoReferences, audioReferences, config.videoSeconds);
     if (requestConfig.interfaceType === "newapi-channel-2") {
         return createVideoGenerationsTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
@@ -78,6 +80,21 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     return createOpenAIVideoTask(requestConfig, selectedModel, prompt, references, options);
 }
 
+function assertVideoCapability(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], seconds: string) {
+    if (Array.from(prompt).length > profile.references.promptMaxChars) throw new Error(`提示词超过当前模型限制（最多 ${profile.references.promptMaxChars} 字）`);
+    if (references.length > profile.references.maxImages || videoReferences.length > profile.references.maxVideos || audioReferences.length > profile.references.maxAudios) throw new Error("参考素材数量超过当前模型限制");
+    if (!videoDurationAllowed(profile, Number(seconds))) throw new Error("视频时长不在当前模型支持范围内");
+    if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");
+    for (const video of videoReferences) {
+        if (profile.references.maxVideoBytes > 0 && (video.bytes || 0) > profile.references.maxVideoBytes) throw new Error("参考视频文件超过当前模型大小限制");
+        if (profile.references.maxVideoDurationSeconds > 0 && (video.durationMs || 0) > profile.references.maxVideoDurationSeconds * 1000) throw new Error("参考视频时长超过当前模型限制");
+    }
+    for (const audio of audioReferences) {
+        if (profile.references.maxAudioBytes > 0 && (audio.bytes || 0) > profile.references.maxAudioBytes) throw new Error("参考音频文件超过当前模型大小限制");
+        if (profile.references.maxAudioDurationSeconds > 0 && (audio.durationMs || 0) > profile.references.maxAudioDurationSeconds * 1000) throw new Error("参考音频时长超过当前模型限制");
+    }
+}
+
 export async function pollVideoGenerationTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
@@ -94,13 +111,14 @@ async function createVideoGenerationsTask(config: ResolvedAiConfig, model: strin
         Promise.all(videoReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
         Promise.all(audioReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
     ]);
+    const profile = modelCapabilityConfigFor(config, model).video!;
     const payload = {
         model: modelOptionName(model),
         prompt: prompt.trim(),
         seconds: normalizeVideoSeconds(config.videoSeconds),
         aspect_ratio: normalizeVideoSize(config.size) || "16:9",
         resolution: normalizeVideoResolution(config.vquality),
-        generate_audio: boolConfig(config.videoGenerateAudio, true),
+        ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
         ...(imageUrls.length ? { image_urls: imageUrls } : {}),
         ...(videoUrls.length ? { video_urls: videoUrls } : {}),
         ...(audioUrls.length ? { audio_urls: audioUrls } : {}),
@@ -385,14 +403,15 @@ async function buildSeedanceAgentPlanPayload(config: ResolvedAiConfig, model: st
     }
     const content = config.interfaceType === "volcengine-ark-video" ? await buildVolcengineArkContent(prompt, references, videoReferences, audioReferences) : await buildSeedanceContent(config, prompt, references, videoReferences, audioReferences);
     if (!content.length) throw new Error("请输入视频提示词，或连接参考图片/视频/音频");
+    const profile = modelCapabilityConfigFor(config, model).video!;
     return {
         model: modelOptionName(model),
         content,
         ratio: normalizeSeedanceRatio(config.size),
         resolution: normalizeSeedanceResolution(config.vquality, modelOptionName(model)),
         duration: normalizeSeedanceDuration(config.videoSeconds),
-        generate_audio: boolConfig(config.videoGenerateAudio, true),
-        watermark: boolConfig(config.videoWatermark, false),
+        ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
+        ...(profile.watermark.supported ? { watermark: boolConfig(config.videoWatermark, profile.watermark.default) } : {}),
     };
 }
 
@@ -426,12 +445,13 @@ async function buildSeedanceVideosPayload(config: AiConfig, model: string, promp
     const audioUrls = await Promise.all(audioReferences.slice(0, SEEDANCE_REFERENCE_LIMITS.audios).map(resolveSeedanceVideosMediaUrl));
     const ratio = normalizeSeedanceRatio(config.size);
     const duration = normalizeSeedanceDuration(config.videoSeconds);
+    const profile = modelCapabilityConfigFor(config, model).video!;
     return {
         model: modelOptionName(model),
         prompt: buildSeedanceVideosPromptText(prompt, imageUrls.length, videoUrls.length, audioUrls.length),
         aspect_ratio: ratio === "adaptive" ? "16:9" : ratio,
         duration,
-        generate_audio: boolConfig(config.videoGenerateAudio, true),
+        ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
         ...(imageUrls[0] ? { image_url: imageUrls[0] } : {}),
         ...(imageUrls.length > 1 ? { reference_image_urls: imageUrls.slice(1) } : {}),
         ...(videoUrls.length ? { reference_videos: videoUrls } : {}),

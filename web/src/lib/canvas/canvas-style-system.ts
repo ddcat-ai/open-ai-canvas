@@ -1,3 +1,5 @@
+import type { StyleProfileSnapshot } from "@/lib/canvas/style-profile";
+
 export type ProjectStyleWorldId = "xianxia" | "urban" | "historical" | "suspense" | "science-fiction" | "pastoral";
 export type ProjectStyleToneId = "epic" | "dark" | "light-comedy" | "romantic" | "healing";
 export type ProjectStyleMediumId = "live-action" | "3d-anime" | "3d-cartoon" | "2d-guoman" | "ink";
@@ -19,6 +21,7 @@ export type CanvasStylePreset = {
     prompt: string;
     imageUrl: string;
     selection?: ProjectStyleSelection;
+    profile?: StyleProfileSnapshot;
 };
 
 type StyleOption<T extends string> = {
@@ -251,7 +254,7 @@ export function compileCanvasStylePreset(selection: ProjectStyleSelection): Canv
     const character = compatibleCharacters.find((item) => item.id === selection.character) || compatibleCharacters[0];
     const resolvedSelection = { ...selection, character: character.id };
     const title = `${world.label} · ${tone.label} · ${medium.label}`;
-    return {
+    const preset = {
         id: styleSelectionId(resolvedSelection),
         title,
         category: `${world.label} / ${medium.label}`,
@@ -273,6 +276,23 @@ export function compileCanvasStylePreset(selection: ProjectStyleSelection): Canv
             `【全局禁用】${world.forbidden}；${tone.forbidden}；${medium.forbidden}；${character.forbidden}。`,
             STYLE_SCOPE,
         ].join("\n"),
+    } satisfies CanvasStylePreset;
+    return { ...preset, profile: createBuiltinStyleProfile(preset) };
+}
+
+function createBuiltinStyleProfile(preset: Omit<CanvasStylePreset, "profile">): StyleProfileSnapshot {
+    return {
+        schemaVersion: 1,
+        presetId: preset.id,
+        title: preset.title,
+        description: preset.description,
+        tags: [...preset.tags],
+        prompt: preset.prompt,
+        selection: preset.selection ? { ...preset.selection } : undefined,
+        assets: [],
+        executionPolicy: "compatible-fallback",
+        source: "builtin",
+        revision: 1,
     };
 }
 

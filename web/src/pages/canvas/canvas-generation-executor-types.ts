@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { NodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
+import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
 
 export type CanvasGenerationExecutorDependencies = {
@@ -29,5 +30,6 @@ export type CanvasGenerationExecution = CanvasGenerationExecutorDependencies & {
     generationContext: NodeGenerationContext;
     controller: AbortController;
     editingTextNode: boolean;
+    styleMetadata: { styleProfileJson?: string; styleExecutionPlan?: StyleExecutionPlan };
     registerPendingNodeIds: (nodeIds: string[]) => void;
 };

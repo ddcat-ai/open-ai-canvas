@@ -3,21 +3,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { createPortal } from "react-dom";
 import { LoaderCircle, ScanFace, SquareDashedMousePointer, X } from "lucide-react";
 
-import {
-    CanvasNodeEmotionPanel,
-    type CanvasEmotionCharacter,
-    type CanvasImageEmotionPayload,
-} from "@/components/canvas/canvas-node-emotion-panel";
+import { CanvasNodeEmotionPanel, type CanvasEmotionCharacter, type CanvasImageEmotionPayload } from "@/components/canvas/canvas-node-emotion-panel";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasThemes } from "@/lib/canvas-theme";
-import {
-    buildEmotionImageArtifacts,
-    buildEmotionPrompt,
-    neutralEmotionPreset,
-    type CanvasEmotionPreset,
-    type CanvasFaceBox,
-} from "@/lib/canvas/canvas-emotion";
+import { buildEmotionImageArtifacts, buildEmotionPrompt, neutralEmotionPreset, type CanvasEmotionPreset, type CanvasFaceBox } from "@/lib/canvas/canvas-emotion";
 import { detectCanvasFaces } from "@/lib/canvas/canvas-face-detection";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -141,16 +131,7 @@ export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, 
                 }}
                 onFaceSelect={selectFace}
             />
-            <SelectionToolbar
-                node={node}
-                viewport={viewport}
-                containerRef={containerRef}
-                status={status}
-                faceCount={faces.length}
-                error={error}
-                onManualSelect={beginManualSelection}
-                onClose={onClose}
-            />
+            <SelectionToolbar node={node} viewport={viewport} containerRef={containerRef} status={status} faceCount={faces.length} error={error} onManualSelect={beginManualSelection} onClose={onClose} />
             <AnimatePresence>
                 {activeCharacter && (status === "editing" || status === "generating") ? (
                     <EmotionPanelOverlay node={node} viewport={viewport} containerRef={containerRef}>
@@ -163,7 +144,10 @@ export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, 
                             preset={preset}
                             generating={status === "generating"}
                             error={error}
-                            onSelectCharacter={(id) => { setActiveCharacterId(id); setError(""); }}
+                            onSelectCharacter={(id) => {
+                                setActiveCharacterId(id);
+                                setError("");
+                            }}
                             onManualSelect={beginManualSelection}
                             onPresetChange={setPreset}
                             onClose={onClose}
@@ -177,7 +161,21 @@ export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, 
     );
 }
 
-function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageHeight, faces, characters, activeCharacterId, status, manualDraft, onManualDraftChange, onManualComplete, onFaceSelect }: {
+function FaceSelectionOverlay({
+    node,
+    viewport,
+    containerRef,
+    imageWidth,
+    imageHeight,
+    faces,
+    characters,
+    activeCharacterId,
+    status,
+    manualDraft,
+    onManualDraftChange,
+    onManualComplete,
+    onFaceSelect,
+}: {
     node: CanvasNodeData;
     viewport: ViewportTransform;
     containerRef: RefObject<HTMLDivElement | null>;
@@ -209,39 +207,71 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
             data-canvas-no-zoom
             className={`absolute z-[var(--z-modal)] overflow-hidden rounded-[var(--r-2xl)] ${status === "manual" ? "cursor-crosshair touch-none" : "pointer-events-none"}`}
             style={{ left: 0, top: 0, width: node.width * viewport.k, height: node.height * viewport.k }}
-            onPointerDown={status === "manual" ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const start = pointerPosition(event);
-                dragStartRef.current = start;
-                onManualDraftChange({ id: `manual-${Date.now()}`, x: start.x, y: start.y, width: 0, height: 0, source: "manual" });
-            } : undefined}
-            onPointerMove={status === "manual" ? (event) => {
-                const start = dragStartRef.current;
-                if (!start) return;
-                const current = pointerPosition(event);
-                onManualDraftChange({ id: manualDraft?.id || `manual-${Date.now()}`, x: Math.min(start.x, current.x), y: Math.min(start.y, current.y), width: Math.abs(current.x - start.x), height: Math.abs(current.y - start.y), source: "manual" });
-            } : undefined}
-            onPointerUp={status === "manual" ? (event) => {
-                const start = dragStartRef.current;
-                dragStartRef.current = null;
-                if (!start) return;
-                const current = pointerPosition(event);
-                const box = { id: manualDraft?.id || `manual-${Date.now()}`, x: Math.min(start.x, current.x), y: Math.min(start.y, current.y), width: Math.abs(current.x - start.x), height: Math.abs(current.y - start.y), source: "manual" as const };
-                if (box.width >= Math.max(18, imageWidth * 0.025) && box.height >= Math.max(18, imageHeight * 0.025)) onManualComplete(box);
-                else onManualDraftChange(null);
-            } : undefined}
-            onPointerCancel={status === "manual" ? () => {
-                dragStartRef.current = null;
-                onManualDraftChange(null);
-            } : undefined}
+            onPointerDown={
+                status === "manual"
+                    ? (event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          const start = pointerPosition(event);
+                          dragStartRef.current = start;
+                          onManualDraftChange({ id: `manual-${Date.now()}`, x: start.x, y: start.y, width: 0, height: 0, source: "manual" });
+                      }
+                    : undefined
+            }
+            onPointerMove={
+                status === "manual"
+                    ? (event) => {
+                          const start = dragStartRef.current;
+                          if (!start) return;
+                          const current = pointerPosition(event);
+                          onManualDraftChange({
+                              id: manualDraft?.id || `manual-${Date.now()}`,
+                              x: Math.min(start.x, current.x),
+                              y: Math.min(start.y, current.y),
+                              width: Math.abs(current.x - start.x),
+                              height: Math.abs(current.y - start.y),
+                              source: "manual",
+                          });
+                      }
+                    : undefined
+            }
+            onPointerUp={
+                status === "manual"
+                    ? (event) => {
+                          const start = dragStartRef.current;
+                          dragStartRef.current = null;
+                          if (!start) return;
+                          const current = pointerPosition(event);
+                          const box = {
+                              id: manualDraft?.id || `manual-${Date.now()}`,
+                              x: Math.min(start.x, current.x),
+                              y: Math.min(start.y, current.y),
+                              width: Math.abs(current.x - start.x),
+                              height: Math.abs(current.y - start.y),
+                              source: "manual" as const,
+                          };
+                          if (box.width >= Math.max(18, imageWidth * 0.025) && box.height >= Math.max(18, imageHeight * 0.025)) onManualComplete(box);
+                          else onManualDraftChange(null);
+                      }
+                    : undefined
+            }
+            onPointerCancel={
+                status === "manual"
+                    ? () => {
+                          dragStartRef.current = null;
+                          onManualDraftChange(null);
+                      }
+                    : undefined
+            }
         >
             <svg aria-hidden className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${imageWidth} ${imageHeight}`} preserveAspectRatio="none">
                 <defs>
                     <mask id={`emotion-face-mask-${node.id}`}>
                         <rect width={imageWidth} height={imageHeight} fill="white" />
-                        {faces.map((face) => <rect key={face.id} x={face.x} y={face.y} width={face.width} height={face.height} rx={Math.min(face.width, face.height) * 0.16} fill="black" />)}
+                        {faces.map((face) => (
+                            <rect key={face.id} x={face.x} y={face.y} width={face.width} height={face.height} rx={Math.min(face.width, face.height) * 0.16} fill="black" />
+                        ))}
                         {manualDraft ? <rect x={manualDraft.x} y={manualDraft.y} width={manualDraft.width} height={manualDraft.height} rx={Math.min(manualDraft.width, manualDraft.height) * 0.12} fill="black" /> : null}
                     </mask>
                 </defs>
@@ -256,23 +286,69 @@ function FaceSelectionOverlay({ node, viewport, containerRef, imageWidth, imageH
                         type="button"
                         aria-label={selected ? `选择${selected.name}` : "选择此人脸"}
                         className={`absolute rounded-[var(--r-md)] border-2 ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
-                        style={{ left: `${(face.x / imageWidth) * 100}%`, top: `${(face.y / imageHeight) * 100}%`, width: `${(face.width / imageWidth) * 100}%`, height: `${(face.height / imageHeight) * 100}%`, borderColor: active ? theme.accent.primary : "rgba(255,255,255,.94)", boxShadow: active ? `0 0 0 3px ${theme.accent.primarySoft}, 0 8px 24px rgba(0,0,0,.24)` : "0 8px 20px rgba(0,0,0,.18)" }}
+                        style={{
+                            left: `${(face.x / imageWidth) * 100}%`,
+                            top: `${(face.y / imageHeight) * 100}%`,
+                            width: `${(face.width / imageWidth) * 100}%`,
+                            height: `${(face.height / imageHeight) * 100}%`,
+                            borderColor: active ? theme.accent.primary : "rgba(255,255,255,.94)",
+                            boxShadow: active ? `0 0 0 3px ${theme.accent.primarySoft}, 0 8px 24px rgba(0,0,0,.24)` : "0 8px 20px rgba(0,0,0,.18)",
+                        }}
                         whileHover={{ scale: 1.025 }}
                         whileTap={{ scale: 0.985 }}
                         transition={aceternityMotion.spring.dock}
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => { event.stopPropagation(); onFaceSelect(face); }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onFaceSelect(face);
+                        }}
                     >
-                        {selected ? <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold text-white" style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)" }}>{selected.name}</span> : null}
+                        {selected ? (
+                            <span
+                                className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold text-white"
+                                style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)" }}
+                            >
+                                {selected.name}
+                            </span>
+                        ) : null}
                     </motion.button>
                 );
             })}
-            {manualDraft ? <div className="pointer-events-none absolute rounded-[var(--r-md)] border-2 border-dashed border-white" style={{ left: `${(manualDraft.x / imageWidth) * 100}%`, top: `${(manualDraft.y / imageHeight) * 100}%`, width: `${(manualDraft.width / imageWidth) * 100}%`, height: `${(manualDraft.height / imageHeight) * 100}%`, boxShadow: "0 0 0 3px rgba(255,255,255,.16)" }} /> : null}
+            {manualDraft ? (
+                <div
+                    className="pointer-events-none absolute rounded-[var(--r-md)] border-2 border-dashed border-white"
+                    style={{
+                        left: `${(manualDraft.x / imageWidth) * 100}%`,
+                        top: `${(manualDraft.y / imageHeight) * 100}%`,
+                        width: `${(manualDraft.width / imageWidth) * 100}%`,
+                        height: `${(manualDraft.height / imageHeight) * 100}%`,
+                        boxShadow: "0 0 0 3px rgba(255,255,255,.16)",
+                    }}
+                />
+            ) : null}
         </div>
     );
 }
 
-function SelectionToolbar({ node, viewport, containerRef, status, faceCount, error, onManualSelect, onClose }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; status: WorkspaceStatus; faceCount: number; error: string; onManualSelect: () => void; onClose: () => void }) {
+function SelectionToolbar({
+    node,
+    viewport,
+    containerRef,
+    status,
+    faceCount,
+    error,
+    onManualSelect,
+    onClose,
+}: {
+    node: CanvasNodeData;
+    viewport: ViewportTransform;
+    containerRef: RefObject<HTMLDivElement | null>;
+    status: WorkspaceStatus;
+    faceCount: number;
+    error: string;
+    onManualSelect: () => void;
+    onClose: () => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const toolbarRef = useRef<HTMLDivElement>(null);
@@ -287,16 +363,29 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -5, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel}
-            className="aceternity-floating-panel absolute z-[var(--z-modal-overlay)] flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-[15px] border px-2 backdrop-blur-2xl"
+            className="aceternity-floating-panel absolute z-[var(--z-modal-overlay)] flex h-12 w-[420px] max-w-[calc(100%_-_24px)] items-center rounded-[var(--dock-radius-tight)] border px-2 backdrop-blur-2xl"
             style={{ left: 12, top: 76, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 22px 60px ${theme.spatial.shadow}` }}
             onPointerDown={(event) => event.stopPropagation()}
         >
             <div className="flex size-full items-center">
-                <button type="button" aria-label="关闭情绪调节" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}><X className="size-4" /></button>
+                <button type="button" aria-label="关闭情绪调节" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}>
+                    <X className="size-4" />
+                </button>
                 <span className="mx-2 h-5 w-px" style={{ background: theme.toolbar.border }} />
-                <span className="grid size-8 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>{status === "detecting" ? <LoaderCircle className="size-4 animate-spin" /> : <ScanFace className="size-4" />}</span>
+                <span className="grid size-8 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover }}>
+                    {status === "detecting" ? <LoaderCircle className="size-4 animate-spin" /> : <ScanFace className="size-4" />}
+                </span>
                 <span className="min-w-0 flex-1 truncate px-2 text-[var(--fs-label)] font-medium leading-none">{label}</span>
-                {status !== "detecting" ? <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-label)] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onManualSelect}><SquareDashedMousePointer className="size-3.5" />手动框选</button> : null}
+                {status !== "detecting" ? (
+                    <button
+                        type="button"
+                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-label)] font-medium leading-none transition hover:bg-black/5 dark:hover:bg-white/10"
+                        onClick={onManualSelect}
+                    >
+                        <SquareDashedMousePointer className="size-3.5" />
+                        手动框选
+                    </button>
+                ) : null}
             </div>
         </SpotlightSurface>
     );
@@ -305,10 +394,20 @@ function SelectionToolbar({ node, viewport, containerRef, status, faceCount, err
 function EmotionPanelOverlay({ node, viewport, containerRef, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
     useScreenAnchor(panelRef, node, viewport, containerRef, (next, container) => panelScreenRect(node, next, container, panelRef.current));
-    return <div ref={panelRef} data-canvas-no-zoom className="absolute z-[var(--z-modal-overlay)] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>{children}</div>;
+    return (
+        <div ref={panelRef} data-canvas-no-zoom className="absolute z-[var(--z-modal-overlay)] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>
+            {children}
+        </div>
+    );
 }
 
-function useScreenAnchor(ref: RefObject<HTMLElement | null>, node: CanvasNodeData, viewport: ViewportTransform, containerRef: RefObject<HTMLDivElement | null>, resolve: (viewport: ViewportTransform, container: HTMLDivElement) => { left: number; top: number; width?: number; height?: number }) {
+function useScreenAnchor(
+    ref: RefObject<HTMLElement | null>,
+    node: CanvasNodeData,
+    viewport: ViewportTransform,
+    containerRef: RefObject<HTMLDivElement | null>,
+    resolve: (viewport: ViewportTransform, container: HTMLDivElement) => { left: number; top: number; width?: number; height?: number },
+) {
     const resolveRef = useRef(resolve);
     resolveRef.current = resolve;
     useLayoutEffect(() => {
@@ -327,7 +426,10 @@ function useScreenAnchor(ref: RefObject<HTMLElement | null>, node: CanvasNodeDat
         observer.observe(container);
         observer.observe(element);
         const unsubscribe = subscribeCanvasViewportPreview(container, update);
-        return () => { observer.disconnect(); unsubscribe(); };
+        return () => {
+            observer.disconnect();
+            unsubscribe();
+        };
     }, [containerRef, node.height, node.id, node.metadata?.freeResize, node.position.x, node.position.y, node.width, ref, viewport]);
 }
 
@@ -351,9 +453,7 @@ function toolbarScreenRect(node: CanvasNodeData, viewport: ViewportTransform, co
     const viewportTop = container.scrollTop;
     const left = clamp(nodeRect.left + nodeRect.width / 2 - width / 2, viewportLeft + 12, Math.max(viewportLeft + 12, viewportLeft + container.clientWidth - width - 12));
     const above = nodeRect.top - height - 10;
-    const top = above >= viewportTop + 72
-        ? above
-        : clamp(nodeRect.top + nodeRect.height + 10, viewportTop + 72, Math.max(viewportTop + 72, viewportTop + container.clientHeight - height - 12));
+    const top = above >= viewportTop + 72 ? above : clamp(nodeRect.top + nodeRect.height + 10, viewportTop + 72, Math.max(viewportTop + 72, viewportTop + container.clientHeight - height - 12));
     return { left, top };
 }
 

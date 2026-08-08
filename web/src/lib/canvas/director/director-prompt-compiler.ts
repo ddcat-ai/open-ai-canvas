@@ -1,4 +1,5 @@
 import type { DirectorCamera, DirectorObject, DirectorScene, DirectorShot } from "@/types/director";
+import { directorColorLabel, directorPoseLabel } from "@/lib/canvas/director/director-scene";
 
 const shotSizeLabels: Record<DirectorShot["shotSize"], string> = {
     extreme_wide: "大远景",
@@ -25,10 +26,12 @@ const cameraMoveLabels: Record<DirectorShot["cameraMove"], string> = {
 export function compileDirectorPrompt(scene: DirectorScene, shot: DirectorShot) {
     const camera = scene.cameras.find((item) => item.id === shot.cameraId) || scene.cameras[0];
     const visibleObjects = scene.objects.filter((item) => item.visible);
+    const actors = visibleObjects.filter((item) => item.kind === "actor" || item.primitive === "character");
     return [
         shot.prompt.trim(),
         `镜头设计：${shotSizeLabels[shot.shotSize]}，${cameraMoveLabels[shot.cameraMove]}，时长 ${formatNumber(shot.duration)} 秒。`,
         camera ? cameraPrompt(camera) : "",
+        actors.length ? `角色颜色映射：${actors.map((actor) => `${directorColorLabel(actor.color)}人偶（${actor.color}）代表${actor.name}`).join("；")}。生成视频时严格按颜色识别角色，不交换人物身份。` : "",
         visibleObjects.length ? `空间调度：${visibleObjects.map(objectPrompt).join("；")}。` : "",
         `灯光：${scene.lights.map((light) => `${light.name}${formatNumber(light.intensity)}强度${light.color}`).join("，")}。`,
         "保持角色、道具、空间方向、光线方向和镜头轴线连续，遵循真实摄影机透视与物理遮挡。",
@@ -48,12 +51,9 @@ function cameraPrompt(camera: DirectorCamera) {
 
 function objectPrompt(object: DirectorObject) {
     const [x, y, z] = object.transform.position;
-    const pose = object.pose ? `，姿势${poseLabel(object.pose)}` : "";
-    return `${object.name}位于 (${formatNumber(x)}, ${formatNumber(y)}, ${formatNumber(z)})${pose}`;
-}
-
-function poseLabel(pose: NonNullable<DirectorObject["pose"]>) {
-    return { neutral: "自然", stand: "站立", walk: "行走", run: "奔跑", sit: "坐姿", action: "动作姿态" }[pose];
+    const pose = object.pose ? `，姿势${directorPoseLabel(object.pose)}` : "";
+    const color = object.kind === "actor" || object.primitive === "character" ? `，${directorColorLabel(object.color)}参考人偶` : "";
+    return `${object.name}${color}位于 (${formatNumber(x)}, ${formatNumber(y)}, ${formatNumber(z)})${pose}`;
 }
 
 function formatNumber(value: number) {

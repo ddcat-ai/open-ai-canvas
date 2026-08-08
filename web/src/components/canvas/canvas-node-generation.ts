@@ -467,6 +467,7 @@ function readReferenceAudio(node: CanvasNodeData): ReferenceAudio | null {
         type: node.metadata.mimeType || "audio/mpeg",
         url: node.metadata.content,
         storageKey: node.metadata.storageKey,
+        bytes: node.metadata.bytes,
         durationMs: node.metadata.durationMs,
     };
 }

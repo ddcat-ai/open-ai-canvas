@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
@@ -42,15 +43,20 @@ type ImageSettingsPanelProps = {
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3 }: ImageSettingsPanelProps) {
     const [snapDimensionToStep, setSnapDimensionToStep] = useState(true);
-    const quality = config.quality || "auto";
-    const transparentBackground = config.transparentBackground === "true";
-    const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const activeSize = config.size || "auto";
-    const selectedAspect = aspectOptions.find((item) => (item.size || item.value) === activeSize || item.value === activeSize);
+    const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image!;
+    const normalized = normalizeImageValue(profile, config);
+    const quality = normalized.quality;
+    const transparentBackground = normalized.transparentBackground === "true";
+    const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
+    const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
+    const activeSize = normalized.size;
+    const availableAspects = aspectOptions.filter((item) => imageOptionAllowed(profile, item));
+    const selectedAspect = availableAspects.find((item) => imageOptionValue(profile, item) === activeSize || item.value === activeSize);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
+    const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
     const selectAspect = (value: string) => {
         const option = aspectOptions.find((item) => item.value === value);
-        onConfigChange("size", option?.size || option?.value || "auto");
+        onConfigChange("size", option ? imageOptionValue(profile, option) : "auto");
     };
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 1024));
@@ -71,17 +77,17 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 }}
             >
                 {showTitle ? <div className="text-base font-semibold">图像设置</div> : null}
-                <div className="space-y-2">
+                {profile.quality.supported ? <div className="space-y-2">
                     <SettingTitle color={theme.node.muted}>质量</SettingTitle>
                     <div className="grid grid-cols-4 gap-1.5">
-                        {qualityOptions.map((item) => (
+                        {activeQualityOptions.map((item) => (
                             <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
                                 {item.label}
                             </OptionPill>
                         ))}
                     </div>
-                </div>
-                <div className="flex items-center justify-between gap-3">
+                </div> : null}
+                {profile.transparentBackground.supported ? <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                         <SettingTitle color={theme.node.muted}>透明背景</SettingTitle>
                         <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
@@ -95,29 +101,29 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             onChange={(checked) => onConfigChange("transparentBackground", checked ? "true" : "false")}
                         />
                     </span>
-                </div>
-                <div className="space-y-2">
+                </div> : null}
+                {profile.size.parameter !== "none" ? <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
                         <SettingTitle color={theme.node.muted}>尺寸</SettingTitle>
-                        <div className="flex items-center gap-2">
+                        {profile.size.allowCustom ? <div className="flex items-center gap-2">
                             <span className="text-xs font-medium" style={{ color: theme.node.muted }}>
                                 16倍数对齐
                             </span>
                             <span title="输入完成后自动向上补成 16 的倍数" onMouseDown={(event) => event.stopPropagation()}>
                                 <Switch size="small" checked={snapDimensionToStep} onChange={setSnapDimensionToStep} />
                             </span>
-                        </div>
+                        </div> : null}
                     </div>
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                    {profile.size.allowCustom ? <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
                         <DimensionInput prefix="W" value={dimensions.width} disabled={activeSize === "auto"} theme={theme} alignToStep={snapDimensionToStep} onChange={(value) => updateDimension("width", value)} />
                         <span className="text-sm opacity-45">↔</span>
                         <DimensionInput prefix="H" value={dimensions.height} disabled={activeSize === "auto"} theme={theme} alignToStep={snapDimensionToStep} onChange={(value) => updateDimension("height", value)} />
-                    </div>
-                </div>
-                <div className="space-y-2">
+                    </div> : null}
+                </div> : null}
+                {availableAspects.length ? <div className="space-y-2">
                     <SettingTitle color={theme.node.muted}>宽高比</SettingTitle>
                     <div className="grid grid-cols-4 gap-1.5 min-[380px]:grid-cols-5">
-                        {aspectOptions.map((item) => (
+                        {availableAspects.map((item) => (
                             <button
                                 key={item.value}
                                 type="button"
@@ -131,23 +137,34 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             </button>
                         ))}
                     </div>
-                </div>
-                {showCount ? (
+                </div> : null}
+                {showCount && effectiveMaxCount > 1 ? (
                     <div className="space-y-2">
                         <SettingTitle color={theme.node.muted}>生成张数</SettingTitle>
                         <div className="grid grid-cols-4 gap-1.5">
-                            {Array.from({ length: quickCount }, (_, index) => index + 1).map((value) => (
+                            {Array.from({ length: Math.min(quickCount, effectiveMaxCount) }, (_, index) => index + 1).map((value) => (
                                 <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>
                                     {value}
                                 </OptionPill>
                             ))}
-                            <CountInput value={count} quickCount={quickCount} max={maxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value || 1))} />
+                            <CountInput value={count} quickCount={quickCount} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value || 1))} />
                         </div>
                     </div>
                 ) : null}
             </div>
         </ImageSettingsTheme>
     );
+}
+
+function imageOptionAllowed(profile: ImageCapabilityConfig, option: (typeof aspectOptions)[number]) {
+    if (profile.size.parameter === "none") return false;
+    if (profile.size.allowCustom && profile.size.values.length === 0) return true;
+    return [option.value, option.size, option.width && option.height ? `${option.width}x${option.height}` : ""].filter(Boolean).some((value) => profile.size.values.includes(String(value)));
+}
+
+function imageOptionValue(profile: ImageCapabilityConfig, option: (typeof aspectOptions)[number]) {
+    const candidates = [option.size, option.value, option.width && option.height ? `${option.width}x${option.height}` : ""].filter(Boolean).map(String);
+    return candidates.find((value) => profile.size.values.includes(value)) || option.size || option.value || "auto";
 }
 
 export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; children: ReactNode }) {
