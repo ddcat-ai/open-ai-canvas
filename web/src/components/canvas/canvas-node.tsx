@@ -18,6 +18,8 @@ import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-refer
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
 import { VideoPlayer } from "@/components/video-player";
+import { createDefaultSubtitleStyle } from "@/types/timeline";
+import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -149,9 +151,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const mediaBorderColor = isActive ? theme.accent.primary : isRelated && !isBatchChild ? theme.accent.primary : "transparent";
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
-    const cometDepth = hasMediaContent ? 6.8 : data.type === CanvasNodeType.Script ? 2.8 : 4.6;
-    const cometTranslate = hasMediaContent ? 6 : data.type === CanvasNodeType.Script ? 2.5 : 4;
-    const cometDisabled = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
+    const nodeHoverLocked = reduceMediaEffects || Boolean(dragOffset) || isEditingContent || isEditingTitle || isGeneratingNode || scale < 0.32 || batchClosing || batchOpening;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -318,13 +318,12 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             />
+            {/* 画布节点不启用指针跟随 3D 位移，hover 反馈统一走 CSS 静态抬升，避免鼠标移动形成反馈震荡 */}
             <CometCard
                 containerClassName="overflow-visible"
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)] ${flushMediaContent ? "border-0" : "border"} ${isGeneratingNode ? "canvas-node-shell-generating" : ""}`}
-                rotateDepth={cometDepth}
-                translateDepth={cometTranslate}
-                disabled={cometDisabled}
-                glare={!isGeneratingNode}
+                disabled
+                data-canvas-node-hover-locked={nodeHoverLocked ? "true" : "false"}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
@@ -335,10 +334,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                             ? `0 0 0 1px ${theme.accent.primary}66, 0 0 0 4px ${theme.accent.primary}1a, 0 24px 72px ${theme.spatial.shadow}` // selected-primary：4px软色环 + resize handle
                             : isSelected || (isRelated && !isBatchChild)
                                 ? `0 0 0 2px ${theme.accent.primary}40, 0 22px 60px ${theme.spatial.shadow}` // selected：2px边框环
-                                : hovered
-                                    ? `0 16px 48px ${theme.spatial.shadow}` // hover：轻微抬升阴影
-                                    : undefined, // idle：无额外阴影
-                    transition: "border-color 120ms ease-out, box-shadow 150ms ease-out",
+                                : undefined, // idle：无额外阴影
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -907,7 +903,34 @@ function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded
 
 function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRendererProps) {
     const playWhenReadyRef = useRef(false);
+    const playerBoxRef = useRef<HTMLDivElement>(null);
     const { url, loading, load } = useNodeResourceUrl(node, false);
+    const subtitleEntries = node.metadata?.subtitleEntries || [];
+    const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
+    const [currentTimeMs, setCurrentTimeMs] = useState(0);
+    const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+
+    // 视频元素由 vidstack 内部创建，直接监听原生事件取分辨率；只有存在字幕时才跟踪播放时间，避免无字幕节点频繁重渲染。
+    useEffect(() => {
+        const box = playerBoxRef.current;
+        const video = box?.querySelector("video");
+        if (!video) return;
+        const handleLoadedMetadata = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) setVideoSize({ width: video.videoWidth, height: video.videoHeight });
+        };
+        video.addEventListener("loadedmetadata", handleLoadedMetadata);
+        handleLoadedMetadata();
+        if (!subtitleEntries.length) {
+            return () => video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        }
+        const handleTimeUpdate = () => setCurrentTimeMs(Math.round(video.currentTime * 1000));
+        video.addEventListener("timeupdate", handleTimeUpdate);
+        return () => {
+            video.removeEventListener("timeupdate", handleTimeUpdate);
+            video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        };
+    }, [subtitleEntries.length, url]);
+
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
@@ -918,7 +941,35 @@ function VideoNodeContent({ node, theme, reduceMediaEffects }: NodeContentRender
     if (!url) {
         return <DeferredMediaLoad icon={loading ? <LoaderCircle className="size-5 animate-spin" /> : <Play className="size-5 fill-current" />} label={loading ? "正在缓存视频" : "加载并缓存视频"} disabled={loading} onClick={() => { playWhenReadyRef.current = true; void load(); }} />;
     }
-    return <VideoPlayer src={url} mimeType={node.metadata?.mimeType} title={node.title || "视频"} preload={reduceMediaEffects ? "none" : "metadata"} autoPlay={playWhenReadyRef.current} onCanPlay={() => { playWhenReadyRef.current = false; }} brandColor={theme.accent.primary} className="h-full w-full rounded-[var(--node-radius)] bg-black" dataCanvasNoZoom compactControls />;
+
+    // 视频画面按实际分辨率等比适配节点盒子，字幕叠加层与画面同框，不在黑边上错位。
+    const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
+    const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
+    const fitWidth = Math.round(fitHeight * sourceRatio);
+    const activeEntry = subtitleEntries.find((entry) => currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs);
+    const activeHighlight = activeEntry ? (node.metadata?.subtitleHighlights || []).find((item) => item.entryIndex === activeEntry.index) : undefined;
+
+    return (
+        <div ref={playerBoxRef} className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[var(--node-radius)] bg-black">
+            <div className="relative" style={{ width: fitWidth, height: Math.round(fitHeight) }}>
+                <VideoPlayer
+                    src={url}
+                    mimeType={node.metadata?.mimeType}
+                    title={node.title || "视频"}
+                    preload={reduceMediaEffects ? "none" : "metadata"}
+                    autoPlay={playWhenReadyRef.current}
+                    onCanPlay={() => { playWhenReadyRef.current = false; }}
+                    brandColor={theme.accent.primary}
+                    className="h-full w-full rounded-[var(--node-radius)] bg-black"
+                    dataCanvasNoZoom
+                    compactControls
+                />
+                {activeEntry && activeEntry.text.trim() ? (
+                    <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} />
+                ) : null}
+            </div>
+        </div>
+    );
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {

@@ -33,6 +33,15 @@
 | <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
 | <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 快乐机艺术小组，一支跨学科的艺术创作团队，持续探索数字+艺术的全新表达形式。 | 暂无 |
 
+## 团队成员
+
+| 头像 | 昵称 | 邮箱 | 个性签名 |
+| --- | --- | --- | --- |
+| <img src="assets/user-sikongyue.png" alt="爱笑的毛毛虫" width="80"> | 爱笑的毛毛虫<br><sub>用户名：sikongyue</sub> | [315515767@qq.com](mailto:315515767@qq.com) | 正在啃 main 分支，争取下次 merge 的时候变成蝴蝶 |
+| <img src="assets/user-delve.jpg" alt="delve-s" width="80"> | delve-s | [3013141136@qq.com](mailto:3013141136@qq.com) | 我亦无他，惟手熟尔 |
+| <img src="assets/user-CyrusAuyeung.jpg" alt="CyrusAuyeung" width="80"> | CyrusAuyeung | [cyrusauyeungho@gmail.com](mailto:cyrusauyeungho@gmail.com) | HKUST(GZ) UG |
+| <img src="assets/user-nz.jpg" alt="奶大佬" width="80"> | 奶大佬 | [1304634970@qq.com](mailto:1304634970@qq.com) | 人生就是要不断的探索 |
+
 ## 主要功能
 
 - **自由画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
@@ -268,13 +277,5 @@ docker compose -f docker-compose.local.yml up -d --build
 ## 上游致谢与二次开发
 
 本项目基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) `v0.5.0`（提交 `568f0f1838df8de31fe885a4e130e2f346dd14ab`）进行二次开发。上游项目由 `basketikun` 维护，该基线提交作者为 `HouYunFei`；上游作者和贡献者继续保留其对应代码的权利与署名。
-
-当前二次开发由 `ddcat` 维护，主要改动包括：
-
-- 新增 Go/Gin/GORM/PostgreSQL/SQLite 多用户后端、登录会话、管理员后台、异步任务中心和用量分析。
-- 新增私有 OSS、后端资源存储、跨设备画布与素材同步、公开只读分享和资源归属校验。
-- 扩展文本、图片、视频和音频生成，增加影视分镜、短剧流水线、角色参考与 3D 导演台。
-- 重构画布工作区、交互状态和 Aceternity 风格空间 UI，并增强 Canvas Agent 与 Codex App 插件。
-- 收敛上游代理、任务密钥、上传额度、日志脱敏和公网部署安全边界。
 
 漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [AGPL-3.0](LICENSE) 协议。

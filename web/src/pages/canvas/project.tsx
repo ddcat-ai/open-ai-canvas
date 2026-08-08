@@ -30,6 +30,10 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
+import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
+import { CanvasTimelineDialog } from "@/components/canvas/canvas-timeline-dialog";
+import { syncNodeSubtitlesToTimeline } from "@/lib/timeline/timeline-build";
+import type { TimelineDirectMedia } from "@/types/timeline";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
@@ -40,7 +44,7 @@ import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
-import { AssetPickerModal } from "@/components/canvas/asset-picker-modal";
+import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
@@ -186,6 +190,8 @@ function InfiniteCanvasPage() {
     const [projectAssetInitialCategory, setProjectAssetInitialCategory] = useState("all");
     const [projectAssetInsertPosition, setProjectAssetInsertPosition] = useState<Position | undefined>();
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
+    const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
+    const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
@@ -304,6 +310,7 @@ function InfiniteCanvasPage() {
     });
     const linkedProjectId = shortDramaEnabled ? currentProject?.projectId || "" : "";
     const linkedProjectQuery = useQuery({ queryKey: ["project", linkedProjectId], queryFn: () => getProject(linkedProjectId), enabled: Boolean(linkedProjectId) });
+    const refetchLinkedProject = linkedProjectQuery.refetch;
     useEffect(() => {
         if (!projectLoaded || !linkedProjectQuery.data) return;
         setNodes((current) => refreshCanvasCharacterReferenceNodes(current, linkedProjectQuery.data.assets));
@@ -434,6 +441,7 @@ function InfiniteCanvasPage() {
         assetPickerOpen,
         closeUploadModal,
         closeAssetPicker,
+        createVideoNodeFromBlob,
         createImageAssetNode,
         fileDropActive,
         handleAssetInsert,
@@ -452,6 +460,7 @@ function InfiniteCanvasPage() {
         pasteSystemClipboard,
         startUploadStatus,
         uploadModalOpen,
+        uploadTimelineMedia,
         uploadStatus,
     } = useCanvasUpload({
         canvasId: projectId,
@@ -467,11 +476,100 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
     });
 
-    const openProjectAssets = useCallback((initialCategory = "all", position?: Position) => {
-        setProjectAssetInitialCategory(initialCategory);
-        setProjectAssetInsertPosition(position);
-        setProjectAssetOpen(true);
-    }, []);
+    // 时间线弹窗内新增素材的回填通道：素材库/上传创建节点后由弹窗通过 ref 加入草稿。
+    const timelineAddNodeRef = useRef<((node: CanvasNodeData) => void) | null>(null);
+    // 时间线作用域直连媒体入轨通道：素材库/项目资产/本地上传不落画布，仅加入时间线草稿。
+    const timelineMediaAddRef = useRef<((media: TimelineDirectMedia) => void) | null>(null);
+    // 素材库与项目资产弹窗的插入作用域：时间线弹窗内打开时为 timeline，其余为 canvas。
+    const [assetInsertScope, setAssetInsertScope] = useState<"canvas" | "timeline">("canvas");
+    const [projectAssetScope, setProjectAssetScope] = useState<"canvas" | "timeline">("canvas");
+
+    // InsertAssetPayload → 直连媒体：仅音视频支持直接入轨；图片/文本/角色返回 null（避免在画布重复出现）。
+    const payloadToTimelineMedia = (payload: InsertAssetPayload): TimelineDirectMedia | null => {
+        const randomSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        if (payload.kind === "video") {
+            return {
+                id: payload.assetId || `asset-${randomSuffix}`,
+                kind: "video",
+                title: payload.title,
+                storageKey: payload.storageKey,
+                url: payload.url,
+                width: payload.width,
+                height: payload.height,
+                durationMs: payload.durationMs,
+                bytes: payload.bytes,
+                mimeType: payload.mimeType,
+            };
+        }
+        if (payload.kind === "audio") {
+            return { id: payload.assetId || `asset-${randomSuffix}`, kind: "audio", title: payload.title, storageKey: payload.storageKey, url: payload.url, durationMs: payload.durationMs, bytes: payload.bytes, mimeType: payload.mimeType };
+        }
+        return null;
+    };
+
+    const handleTimelineAssetInsert = useCallback(
+        async (payload: InsertAssetPayload) => {
+            if (assetInsertScope === "timeline") {
+                const media = payloadToTimelineMedia(payload);
+                if (media) {
+                    timelineMediaAddRef.current?.(media);
+                    closeAssetPicker();
+                } else {
+                    message.info("图片/文本素材暂不支持直接入轨，请先在画布中添加节点");
+                }
+                return;
+            }
+            const node = await handleAssetInsert(payload, { openDialog: false });
+            if (node) timelineAddNodeRef.current?.(node);
+        },
+        [assetInsertScope, closeAssetPicker, handleAssetInsert],
+    );
+
+    // 项目资产库引入到时间线：复用现有引入逻辑，把创建出的节点回填到弹窗草稿。
+    const handleTimelineProjectAssetsInsert = useCallback(
+        async (payloads: InsertAssetPayload[]) => {
+            if (projectAssetScope === "timeline") {
+                let inserted = 0;
+                for (const payload of payloads) {
+                    const media = payloadToTimelineMedia(payload);
+                    if (media) {
+                        timelineMediaAddRef.current?.(media);
+                        inserted += 1;
+                    }
+                }
+                if (inserted < payloads.length) message.info("图片/文本/角色素材暂不支持直接入轨，仅音视频素材已加入时间线");
+                return;
+            }
+            const created = await handleProjectAssetsInsert(payloads, projectAssetInsertPosition);
+            created.forEach((node) => timelineAddNodeRef.current?.(node));
+        },
+        [handleProjectAssetsInsert, message, projectAssetInsertPosition, projectAssetScope],
+    );
+
+    const openProjectAssets = useCallback(
+        (initialCategory = "all", position?: Position, scope: "canvas" | "timeline" = "canvas") => {
+            setProjectAssetScope(scope);
+            setProjectAssetInitialCategory(initialCategory);
+            setProjectAssetInsertPosition(position);
+            setProjectAssetOpen(true);
+            // 资产与项目实时同步：打开弹窗前刷新关联短剧项目资产，避免缓存导致资产列表空白/过期。
+            if (linkedProjectId) void refetchLinkedProject();
+        },
+        [linkedProjectId, refetchLinkedProject],
+    );
+
+    // 素材库打开入口：画布作用域（工具栏/空态/侧栏）与时间线作用域（时间线弹窗）分别标记插入目标。
+    const openCanvasAssetLibrary = useCallback(
+        (position?: Position) => {
+            setAssetInsertScope("canvas");
+            openAssetsAtPosition(position);
+        },
+        [openAssetsAtPosition],
+    );
+    const openTimelineAssetLibrary = useCallback(() => {
+        setAssetInsertScope("timeline");
+        openAssetsAtPosition();
+    }, [openAssetsAtPosition]);
     const closeProjectAssets = useCallback(() => {
         setProjectAssetOpen(false);
         setProjectAssetInsertPosition(undefined);
@@ -536,6 +634,7 @@ function InfiniteCanvasPage() {
             setCharacterReferenceNodeId(clearDeletedId);
             setDrawingNodeId(clearDeletedId);
             setInfoNodeId(clearDeletedId);
+            setSubtitleNodeId(clearDeletedId);
             setCropNodeId(clearDeletedId);
             setMaskEditNodeId(clearDeletedId);
             setAnnotationNodeId(clearDeletedId);
@@ -774,6 +873,8 @@ function InfiniteCanvasPage() {
         dialogNodeId,
     });
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
+    const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
+    const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
     const drawingNode = drawingNodeId ? nodeById.get(drawingNodeId) || null : null;
@@ -889,6 +990,7 @@ function InfiniteCanvasPage() {
         setTextEditorNodeId(null);
         setDrawingNodeId(null);
         setInfoNodeId(null);
+        setSubtitleNodeId(null);
         setCropNodeId(null);
         setMaskEditNodeId(null);
         setAnnotationNodeId(null);
@@ -1596,7 +1698,7 @@ function InfiniteCanvasPage() {
                                     onBackgroundModeChange={setBackgroundMode}
                                     onShowImageInfoChange={setShowImageInfo}
                                     onOpenMyAssets={() => {
-                                        openAssetsAtPosition();
+                                        openCanvasAssetLibrary();
                                     }}
                                     onOpenProjectCharacters={() => openProjectAssets("character")}
                                 />
@@ -1738,6 +1840,8 @@ function InfiniteCanvasPage() {
                         }}
                         onViewImage={(node) => setPreviewNodeId(node.id)}
                         onExtractVideoLastFrame={(node) => void extractVideoLastFrame(node)}
+                        onSubtitles={(node) => setSubtitleNodeId(node.id)}
+                        onTimeline={(node) => setTimelineNodeId(node.id)}
                         extractingVideoFrame={toolbarNode?.id === extractingVideoFrameNodeId}
                         onReversePrompt={createImageReversePromptNodes}
                         onRetry={(node) => void handleRetryNode(node)}
@@ -1790,7 +1894,7 @@ function InfiniteCanvasPage() {
                         onChooseStyle={() => setStylePickerOpen(true)}
                         onOpenDirector={createDirectorShot}
                         onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
-                        onOpenAssets={openAssetsAtPosition}
+                        onOpenAssets={openCanvasAssetLibrary}
                         onOpenProjectCharacters={(position) => openProjectAssets("character", position)}
                         onUndo={undoCanvas}
                         onRedo={redoCanvas}
@@ -1821,6 +1925,52 @@ function InfiniteCanvasPage() {
                     <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
 
                     <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} onMetadataChange={handleConfigNodeChange} />
+
+                    {subtitleNode ? (
+                        <CanvasSubtitleDialog
+                            node={subtitleNode}
+                            open={Boolean(subtitleNode)}
+                            projectId={projectId}
+                            config={effectiveConfig}
+                            onClose={() => setSubtitleNodeId(null)}
+                            onSave={(nodeId, patch) => {
+                                handleConfigNodeChange(nodeId, patch);
+                                const currentTimeline = currentProject?.timeline;
+                                if (currentTimeline) {
+                                    const next = syncNodeSubtitlesToTimeline(currentTimeline, nodeId, patch.subtitleEntries || []);
+                                    if (next !== currentTimeline) updateProject(projectId, { timeline: next });
+                                }
+                            }}
+                        />
+                    ) : null}
+
+                    {timelineNode ? (
+                        <CanvasTimelineDialog
+                            node={timelineNode}
+                            open={Boolean(timelineNode)}
+                            nodes={nodes}
+                            timeline={currentProject?.timeline || null}
+                            onClose={() => setTimelineNodeId(null)}
+                            onOpenSubtitleDialog={(subNodeId) => {
+                                setTimelineNodeId(null);
+                                setSubtitleNodeId(subNodeId);
+                            }}
+                            onSave={(next) => updateProject(projectId, { timeline: next })}
+                            onSaveSubtitles={(subNodeId, entries) =>
+                                handleConfigNodeChange(subNodeId, {
+                                    subtitleEntries: entries,
+                                    ...(entries.length ? {} : { subtitleHighlights: [] }),
+                                    subtitleUpdatedAt: new Date().toISOString(),
+                                })
+                            }
+                            onOpenAssetLibrary={openTimelineAssetLibrary}
+                            onOpenProjectAssets={() => openProjectAssets("all", undefined, "timeline")}
+                            onUploadLocalFiles={uploadTimelineMedia}
+                            addNodeToTimelineRef={timelineAddNodeRef}
+                            addMediaToTimelineRef={timelineMediaAddRef}
+                            onCreateAssembledNode={createVideoNodeFromBlob}
+                        />
+                    ) : null}
 
                     <CanvasCharacterReferenceModal node={characterReferenceNode} open={Boolean(characterReferenceNode)} onClose={() => setCharacterReferenceNodeId(null)} />
 
@@ -1957,14 +2107,8 @@ function InfiniteCanvasPage() {
                         onConfirmClear={clearCanvas}
                     />
 
-                    <AssetPickerModal open={assetPickerOpen} onInsert={handleAssetInsert} onClose={closeAssetPicker} />
-                    <CanvasProjectAssetModal
-                        open={projectAssetOpen}
-                        detail={linkedProjectQuery.data}
-                        initialCategory={projectAssetInitialCategory}
-                        onClose={closeProjectAssets}
-                        onInsert={(payloads) => handleProjectAssetsInsert(payloads, projectAssetInsertPosition)}
-                    />
+                    <AssetPickerModal open={assetPickerOpen} onInsert={handleTimelineAssetInsert} onClose={closeAssetPicker} />
+                    <CanvasProjectAssetModal open={projectAssetOpen} detail={linkedProjectQuery.data} initialCategory={projectAssetInitialCategory} onClose={closeProjectAssets} onInsert={handleTimelineProjectAssetsInsert} />
                     {codexCompactAgent && !assistantMounted ? (
                         <CanvasLocalAgentPanel headless snapshot={agentSnapshot} canUndoOps={canUndoAgentOps} undoOpsCount={agentUndoCount} onApplyOps={applyAgentOps} onUndoOps={undoAgentOps} autoConnect={codexAutoConnect} />
                     ) : null}

@@ -57,7 +57,7 @@ func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 
 func TestParseTextEventStreamSupportsResponsesAndChat(t *testing.T) {
 	responses := []byte(`event: response.output_text.delta
-data: {"delta":"{\"title\":\"分镜\"}"}
+data: {"delta":"{\"title\":\"分镜\""}
 
 event: response.output_text.delta
 data: {"delta":"}"}
@@ -159,6 +159,7 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 }
 
 func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/edits" {
 			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
@@ -193,6 +194,40 @@ func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	images, _ := result["images"].([]map[string]string)
 	if len(images) != 1 || images[0]["dataUrl"] != "https://example.com/result.png" {
 		t.Fatalf("images = %#v", result["images"])
+	}
+}
+
+func TestGrokImageRequestBodyMapsAspectRatio(t *testing.T) {
+	body, path, err := grokImageRequestBody(canvasGenerationInput{
+		Prompt: "a cat",
+		Config: providerConfig{Model: "grok-imagine-image", InterfaceType: "grok-image", Size: "9:16", Quality: "2k"},
+	})
+	if err != nil {
+		t.Fatalf("grokImageRequestBody() error = %v", err)
+	}
+	if path != "/images/generations" {
+		t.Fatalf("path = %q", path)
+	}
+	if body.AspectRatio != "9:16" || body.Size != "9:16" || body.Resolution != "2k" {
+		t.Fatalf("body = %#v", body)
+	}
+	if got := normalizeGrokImageAspectRatio("1280x720"); got != "16:9" {
+		t.Fatalf("normalize 1280x720 = %q", got)
+	}
+	if got := normalizeGrokImageAspectRatio("720x1280"); got != "9:16" {
+		t.Fatalf("normalize 720x1280 = %q", got)
+	}
+}
+
+func TestNormalizeGrokImageResolution(t *testing.T) {
+	if got := normalizeGrokImageResolution("1k"); got != "1k" {
+		t.Fatalf("1k = %q", got)
+	}
+	if got := normalizeGrokImageResolution("high"); got != "2k" {
+		t.Fatalf("high = %q", got)
+	}
+	if got := normalizeGrokImageResolution("auto"); got != "" {
+		t.Fatalf("auto = %q", got)
 	}
 }
 

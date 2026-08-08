@@ -647,6 +647,7 @@
     --node-active-glow-strong: 0 0 0 6px var(--cn-active-stroke-soft);
     --node-shadow: var(--shadow-sm);
     --node-shadow-hover: var(--shadow-md);
+    --node-hover-lift: var(--space-1);   /* 4px 节点 hover 静态抬升 */
     --node-shadow-selected: var(--shadow-lg);
     --node-shadow-selected-primary: var(--shadow-xl);
     --node-shadow-active: var(--shadow-2xl);
@@ -5308,15 +5309,27 @@
         transition: transform 160ms var(--motion-ease-out);
     }
 
-    .canvas-node-shell {
+    .canvas-node-shell,
+    .canvas-frame-shell {
         transition:
-            border-color 160ms ease,
-            box-shadow 160ms ease,
-            background-color 160ms ease;
+            border-color var(--motion-state) var(--ease-aceternity),
+            box-shadow var(--motion-state) var(--ease-aceternity),
+            background-color var(--motion-state) var(--ease-aceternity),
+            transform var(--motion-panel) var(--ease-aceternity);
     }
 
     .canvas-node-shell.aceternity-comet-card {
         box-shadow: 0 18px 48px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
+    }
+
+    .canvas-node-shell.aceternity-comet-card:hover,
+    .canvas-frame-shell:hover {
+        transform: translateY(var(--node-hover-lift));
+    }
+
+    .canvas-node-shell[data-canvas-node-hover-locked="true"],
+    .canvas-frame-shell[data-canvas-frame-hover-locked="true"] {
+        transform: none !important;
     }
 
     .canvas-node-shell.aceternity-comet-card:hover {
@@ -5332,8 +5345,10 @@
     }
 
     [data-canvas-viewport-interacting="true"] .canvas-node-shell,
+    [data-canvas-viewport-interacting="true"] .canvas-frame-shell,
     [data-canvas-viewport-interacting="true"] .aceternity-comet-card {
         transition: none !important;
+        transform: none !important;
     }
 
     /* 静止期用最终倍率重新排版 DOM，避免 Windows Chromium 复用交互期的低分辨率合成纹理。 */
@@ -5487,7 +5502,9 @@
     .aceternity-comet-card,
     .aceternity-dock-command,
     .aceternity-floating-panel,
-    .canvas-menu-item {
+    .canvas-menu-item,
+    .canvas-node-shell,
+    .canvas-frame-shell {
         transform: none !important;
         transition-duration: 0.01ms !important;
     }

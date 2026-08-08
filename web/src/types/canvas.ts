@@ -1,5 +1,6 @@
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
+import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
 
 export type Position = {
     x: number;
@@ -228,6 +229,10 @@ export type CanvasNodeMetadata = {
     directorDepthNodeId?: string;
     directorNormalNodeId?: string;
     directorClayVideoNodeId?: string;
+    subtitleEntries?: SrtEntry[];
+    subtitleHighlights?: SubtitleHighlight[];
+    subtitleStyle?: SubtitleStyle;
+    subtitleUpdatedAt?: string;
     skillId?: string;
     skillVersion?: number;
     skillSnapshot?: CanvasSkillSnapshot;

@@ -124,13 +124,16 @@ export function useCanvasGenerationExecutor({
             }
 
             let rawGenerationContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>>;
+            // 视频文本只保留输入框内容；连接的媒体仍作为结构化参考传递。
+            const promptOnly = mode === "video";
             try {
                 rawGenerationContext = await hydrateNodeGenerationContext(
-                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt),
+                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, promptOnly),
                     projectId,
                     domainProjectId,
                     mode,
                     mode === "video" && supportsVideoReferenceAudio(generationConfig),
+                    !promptOnly,
                 );
             } catch (error) {
                 const errorDetails = generationErrorMessage(error);
@@ -143,10 +146,10 @@ export function useCanvasGenerationExecutor({
                 return;
             }
 
-            const expandedPrompt = expandSkillMentions(rawGenerationContext.prompt, addedSkills);
+            const expandedPrompt = promptOnly ? rawGenerationContext.prompt : expandSkillMentions(rawGenerationContext.prompt, addedSkills);
             let effectivePrompt = expandedPrompt.trim();
             let styleMetadata = {};
-            if (mode === "image" || mode === "video") {
+            if (mode === "image") {
                 try {
                     const styleRuntime = resolveCanvasStyleExecution(nodesRef.current, sourceNode, effectivePrompt, generationConfig, mode);
                     if (styleRuntime) {

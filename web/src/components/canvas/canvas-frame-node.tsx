@@ -156,19 +156,17 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
             onMouseEnter={() => onHoverStart?.(data.id)}
             onMouseLeave={() => onHoverEnd?.(data.id)}
         >
+            {/* 帧节点同样禁用指针跟随 3D 位移，hover 使用 CSS 静态抬升 */}
             <CometCard
                 containerClassName="h-full w-full"
                 className="canvas-frame-shell overflow-hidden rounded-[var(--dock-radius)] border"
-                rotateDepth={2.4}
-                translateDepth={2}
-                disabled={Boolean(dragOffset) || !collapsed || editing || scale < 0.32}
-                glare={collapsed}
+                disabled
+                data-canvas-frame-hover-locked={!collapsed || editing || Boolean(dragOffset) || scale < 0.32 ? "true" : "false"}
                 style={{
                     background: active ? theme.frame.activeFill : theme.frame.fill,
                     borderColor: active ? theme.frame.activeStroke : theme.frame.stroke,
                     borderWidth: 1 / Math.max(scale, 0.05),
                     boxShadow: isSelected ? `0 0 0 ${1 / Math.max(scale, 0.05)}px ${theme.frame.activeStroke}33, 0 24px 72px ${theme.spatial.shadow}` : `0 18px 54px ${theme.spatial.shadow}`,
-                    transition: "background-color 120ms ease-out, border-color 120ms ease-out",
                 }}
             >
                 <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-center gap-1.5 px-1.5" style={{ height: FRAME_HEADER_HEIGHT, color: theme.node.text }}>
