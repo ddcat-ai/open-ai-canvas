@@ -746,7 +746,15 @@ func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string
 	if input.Mask != nil {
 		return grokImageRequest{}, "", errors.New("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试")
 	}
-	body := grokImageRequest{Model: input.Config.Model, Prompt: withSystemPrompt(input.Config, input.Prompt), N: 1, ResponseFormat: "url"}
+	body := grokImageRequest{
+		Model:          input.Config.Model,
+		Prompt:         withSystemPrompt(input.Config, input.Prompt),
+		N:              1,
+		ResponseFormat: "url",
+		Size:           strings.TrimSpace(input.Config.Size),
+		AspectRatio:    normalizeGrokImageAspectRatio(input.Config.Size),
+		Resolution:     normalizeGrokImageResolution(input.Config.Quality),
+	}
 	if len(input.ReferenceImages) == 0 {
 		return body, "/images/generations", nil
 	}
@@ -759,6 +767,70 @@ func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string
 	}
 	body.Image = &grokImageInput{URL: imageURL}
 	return body, "/images/edits", nil
+}
+
+// normalizeGrokImageResolution 把画布 quality（1k/2k/high…）映射为 grok2api / xAI 的 resolution。
+func normalizeGrokImageResolution(quality string) string {
+	raw := strings.ToLower(strings.TrimSpace(quality))
+	switch raw {
+	case "", "auto":
+		return ""
+	case "1k", "1K", "low", "standard":
+		return "1k"
+	case "2k", "2K", "medium", "hd", "high":
+		return "2k"
+	case "4k":
+		// xAI Imagine 图片通常最高 2k；超出则夹到 2k，避免上游拒参。
+		return "2k"
+	default:
+		// 已是 1k/2k 等上游字面量时原样放行（大小写统一小写 k）
+		if raw == "1k" || raw == "2k" {
+			return raw
+		}
+		return ""
+	}
+}
+
+// normalizeGrokImageAspectRatio 把画布 size（如 1280x720 / 9:16）转成 grok2api / xAI 接受的 aspect_ratio。
+func normalizeGrokImageAspectRatio(size string) string {
+	raw := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(size, "×", "x")))
+	if raw == "" || raw == "auto" {
+		return ""
+	}
+	if strings.Contains(raw, ":") {
+		switch raw {
+		case "1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2", "9:19.5", "19.5:9", "1:2", "2:1":
+			return raw
+		}
+	}
+	parts := strings.Split(raw, "x")
+	if len(parts) != 2 {
+		return ""
+	}
+	w, wErr := strconv.Atoi(parts[0])
+	h, hErr := strconv.Atoi(parts[1])
+	if wErr != nil || hErr != nil || w <= 0 || h <= 0 {
+		return ""
+	}
+	if w == h {
+		return "1:1"
+	}
+	// 常见画布尺寸映射
+	ratio := float64(w) / float64(h)
+	switch {
+	case w*9 == h*16 || (ratio >= 1.7 && ratio <= 1.8):
+		return "16:9"
+	case h*9 == w*16 || (ratio > 0 && ratio <= 1.0/1.7 && ratio >= 1.0/1.8):
+		return "9:16"
+	case w*3 == h*4 || (ratio > 1.2 && ratio < 1.4):
+		return "4:3"
+	case h*3 == w*4 || (ratio > 0.7 && ratio < 0.85):
+		return "3:4"
+	case w > h:
+		return "16:9"
+	default:
+		return "9:16"
+	}
 }
 
 func grokImageInputURL(media providerMedia) (string, error) {
@@ -2689,8 +2761,8 @@ func imageDataURLs(payload imageResponse) ([]map[string]string, error) {
 			images = append(images, map[string]string{"dataUrl": "data:image/png;base64," + b64})
 			continue
 		}
-		if url, ok := item["url"].(string); ok && url != "" {
-			images = append(images, map[string]string{"dataUrl": url})
+		if raw, ok := item["url"].(string); ok && strings.TrimSpace(raw) != "" {
+			images = append(images, map[string]string{"dataUrl": strings.TrimSpace(raw)})
 		}
 	}
 	if len(images) == 0 {
