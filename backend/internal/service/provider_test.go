@@ -57,7 +57,7 @@ func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 
 func TestParseTextEventStreamSupportsResponsesAndChat(t *testing.T) {
 	responses := []byte(`event: response.output_text.delta
-data: {"delta":"{\"title\":\"分镜\"}"}
+data: {"delta":"{\"title\":\"分镜\""}
 
 event: response.output_text.delta
 data: {"delta":"}"}
@@ -159,6 +159,7 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 }
 
 func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/images/edits" {
 			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
