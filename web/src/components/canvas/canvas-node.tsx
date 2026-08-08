@@ -325,6 +325,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 translateDepth={cometTranslate}
                 disabled={cometDisabled}
                 glare={!isGeneratingNode}
+                motionTransforms={false}
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,

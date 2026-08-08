@@ -218,6 +218,45 @@ func TestGrokImageRequestBodyPrefersPublicURL(t *testing.T) {
 	}
 }
 
+func TestGrokImageRequestBodyMapsAspectRatioAndResolution(t *testing.T) {
+	body, path, err := grokImageRequestBody(canvasGenerationInput{
+		Config: providerConfig{Model: "grok-imagine-image", InterfaceType: "grok-image", Size: "9:16", Quality: "2k"},
+	})
+	if err != nil {
+		t.Fatalf("grokImageRequestBody() error = %v", err)
+	}
+	if path != "/images/generations" || body.AspectRatio != "9:16" || body.Resolution != "2k" {
+		t.Fatalf("path = %q, aspect_ratio = %q, resolution = %q", path, body.AspectRatio, body.Resolution)
+	}
+}
+
+func TestGrokImageRequestBodyUsesCapabilityDefaultsForAutoValues(t *testing.T) {
+	profile := DefaultImageCapabilityConfig("grok-image", "grok-imagine-image")
+	input := canvasGenerationInput{
+		Config:          providerConfig{Model: "grok-imagine-image", InterfaceType: "grok-image", Size: "auto", Quality: "auto"},
+		ImageCapability: profile,
+	}
+	if err := validateImageTask(profile, input); err != nil {
+		t.Fatalf("validateImageTask() error = %v", err)
+	}
+	body, _, err := grokImageRequestBody(input)
+	if err != nil {
+		t.Fatalf("grokImageRequestBody() error = %v", err)
+	}
+	if body.AspectRatio != "1:1" || body.Resolution != "1k" {
+		t.Fatalf("aspect_ratio = %q, resolution = %q", body.AspectRatio, body.Resolution)
+	}
+}
+
+func TestNormalizeGrokImageResolution(t *testing.T) {
+	if got := normalizeGrokImageResolution("2K"); got != "2k" {
+		t.Fatalf("normalizeGrokImageResolution(2K) = %q, want 2k", got)
+	}
+	if got := normalizeGrokImageResolution("high"); got != "" {
+		t.Fatalf("normalizeGrokImageResolution(high) = %q, want empty", got)
+	}
+}
+
 func TestNormalizePixelSizeConvertsCanvasAspectRatios(t *testing.T) {
 	tests := map[string]string{
 		"1:1":  "1024x1024",

@@ -57,6 +57,8 @@ type grokImageRequest struct {
 	Prompt         string          `json:"prompt"`
 	Image          *grokImageInput `json:"image,omitempty"`
 	N              int             `json:"n"`
+	AspectRatio    string          `json:"aspect_ratio,omitempty"`
+	Resolution     string          `json:"resolution,omitempty"`
 	ResponseFormat string          `json:"response_format"`
 }
 

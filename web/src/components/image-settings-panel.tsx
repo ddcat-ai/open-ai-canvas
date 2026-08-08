@@ -7,6 +7,8 @@ import { type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
     { value: "auto", label: "自动" },
+    { value: "1k", label: "1K" },
+    { value: "2k", label: "2K" },
     { value: "high", label: "高" },
     { value: "medium", label: "中" },
     { value: "low", label: "低" },
@@ -78,7 +80,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
             >
                 {showTitle ? <div className="text-base font-semibold">图像设置</div> : null}
                 {profile.quality.supported ? <div className="space-y-2">
-                    <SettingTitle color={theme.node.muted}>质量</SettingTitle>
+                    <SettingTitle color={theme.node.muted}>{profile.quality.values.length > 0 && profile.quality.values.every((value) => /^\d+k$/i.test(value)) ? "分辨率" : "质量"}</SettingTitle>
                     <div className="grid grid-cols-4 gap-1.5">
                         {activeQualityOptions.map((item) => (
                             <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
@@ -181,7 +183,7 @@ export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; ch
 }
 
 export function imageQualityLabel(value: string) {
-    return ({ auto: "自动", high: "高", medium: "中", low: "低" } as Record<string, string>)[value] || "默认";
+    return ({ auto: "自动", "1k": "1K", "2k": "2K", high: "高", medium: "中", low: "低" } as Record<string, string>)[value] || "默认";
 }
 
 export function imageSizeLabel(size: string) {
