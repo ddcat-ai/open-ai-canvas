@@ -196,6 +196,40 @@ func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	}
 }
 
+func TestGrokImageRequestBodyMapsAspectRatio(t *testing.T) {
+	body, path, err := grokImageRequestBody(canvasGenerationInput{
+		Prompt: "a cat",
+		Config: providerConfig{Model: "grok-imagine-image", InterfaceType: "grok-image", Size: "9:16", Quality: "2k"},
+	})
+	if err != nil {
+		t.Fatalf("grokImageRequestBody() error = %v", err)
+	}
+	if path != "/images/generations" {
+		t.Fatalf("path = %q", path)
+	}
+	if body.AspectRatio != "9:16" || body.Size != "9:16" || body.Resolution != "2k" {
+		t.Fatalf("body = %#v", body)
+	}
+	if got := normalizeGrokImageAspectRatio("1280x720"); got != "16:9" {
+		t.Fatalf("normalize 1280x720 = %q", got)
+	}
+	if got := normalizeGrokImageAspectRatio("720x1280"); got != "9:16" {
+		t.Fatalf("normalize 720x1280 = %q", got)
+	}
+}
+
+func TestNormalizeGrokImageResolution(t *testing.T) {
+	if got := normalizeGrokImageResolution("1k"); got != "1k" {
+		t.Fatalf("1k = %q", got)
+	}
+	if got := normalizeGrokImageResolution("high"); got != "2k" {
+		t.Fatalf("high = %q", got)
+	}
+	if got := normalizeGrokImageResolution("auto"); got != "" {
+		t.Fatalf("auto = %q", got)
+	}
+}
+
 func TestGrokImageRequestBodyRejectsMaskAndMultipleReferences(t *testing.T) {
 	if _, _, err := grokImageRequestBody(canvasGenerationInput{Config: providerConfig{InterfaceType: "grok-image"}, Mask: &providerMedia{DataURL: testReferenceImageDataURL}}); err == nil || !strings.Contains(err.Error(), "不支持蒙版") {
 		t.Fatalf("mask error = %v", err)
