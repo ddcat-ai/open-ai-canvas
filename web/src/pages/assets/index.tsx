@@ -1,4 +1,4 @@
-import { Copy, Download, FileUp, MoreHorizontal, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
+import { CheckCheck, Copy, Download, FileUp, MoreHorizontal, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Drawer, Dropdown, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 
@@ -95,6 +95,8 @@ export default function AssetsPage() {
             return assetSearchText(asset).includes(query);
         });
     }, [validAssets, keyword, kindFilter, categoryFilter]);
+    const filteredAssetIds = useMemo(() => filteredAssets.map((asset) => asset.id), [filteredAssets]);
+    const allFilteredSelected = filteredAssetIds.length > 0 && filteredAssetIds.every((id) => selectedIds.includes(id));
 
     const visibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -283,6 +285,7 @@ export default function AssetsPage() {
                         {selectedAssets.length ? (
                             <div className="mt-3 flex min-h-10 flex-wrap items-center gap-2 border-y border-border/75 py-2 text-xs">
                                 <strong className="mr-auto font-medium">已选择 {selectedAssets.length} 个素材</strong>
+                                <Button size="small" icon={<CheckCheck className="size-3.5" />} disabled={allFilteredSelected} onClick={() => setSelectedIds((current) => Array.from(new Set([...current, ...filteredAssetIds])))}>全选</Button>
                                 <Button size="small" onClick={() => setSelectedIds([])}>取消选择</Button>
                                 <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void exportSelectedAssets()}>导出</Button>
                                 <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => setBatchDeleteOpen(true)}>删除</Button>
