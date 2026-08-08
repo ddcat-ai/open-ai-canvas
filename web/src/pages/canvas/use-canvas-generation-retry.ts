@@ -86,15 +86,16 @@ export function useCanvasGenerationRetry({ projectId, domainProjectId, addedSkil
             }
             let rawContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>> | null;
             try {
-                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt);
-                rawContext = hasSavedImageMetadata && !baseContext.characterReferences.length ? null : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig));
+                const promptOnly = retryMode === "video";
+                const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt, promptOnly);
+                rawContext = hasSavedImageMetadata && !baseContext.characterReferences.length ? null : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig), !promptOnly);
             } catch (error) {
                 const failure = generationFailureMetadata(error, retryPromptSource);
                 message.error(failure.errorDetails);
                 setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, ...failure } } : item)));
                 return;
             }
-            const context = rawContext ? { ...rawContext, prompt: expandSkillMentions(rawContext.prompt, addedSkills) } : null;
+            const context = rawContext ? { ...rawContext, prompt: retryMode === "video" ? rawContext.prompt : expandSkillMentions(rawContext.prompt, addedSkills) } : null;
             const prompt = (context?.characterReferences.length ? context.prompt : savedImageMetadata?.prompt || context?.prompt || "").trim();
             if (!prompt) {
                 message.warning("找不到提示词，无法重试");
@@ -102,9 +103,9 @@ export function useCanvasGenerationRetry({ projectId, domainProjectId, addedSkil
             }
             let mediaPrompt = prompt;
             let styleMetadata = {};
-            if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) {
+            if (node.type === CanvasNodeType.Image) {
                 try {
-                    const runtime = resolveCanvasStyleExecution(nodesRef.current, sourceNode, prompt, generationConfig, node.type === CanvasNodeType.Image ? "image" : "video");
+                    const runtime = resolveCanvasStyleExecution(nodesRef.current, sourceNode, prompt, generationConfig, "image");
                     if (runtime) {
                         mediaPrompt = runtime.prompt;
                         styleMetadata = { styleProfileJson: runtime.profileJson, styleExecutionPlan: runtime.plan };

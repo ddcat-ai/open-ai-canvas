@@ -162,8 +162,12 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		input.Prompt = fallbackPrompt
 	}
+	if input.Mode == "" && strings.HasPrefix(taskType, "video_") {
+		input.Mode = "video"
+	}
 	promptTemplateOperation := metadataString(input.Metadata, "promptTemplateOperation")
-	if promptTemplateOperation != "" {
+	// 视频节点的最终 Prompt 只取输入框内容，不能被分镜模板替换；图片和文本仍沿用模板能力。
+	if input.Mode != "video" && promptTemplateOperation != "" {
 		values := metadataStringValues(input.Metadata["promptTemplateVariables"])
 		compiled, compileErr := s.compilePrompt(userID, promptTemplateOperation, values)
 		if compileErr != nil {
@@ -174,15 +178,12 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("prompt is required")
 	}
-	if input.Mode == "" && strings.HasPrefix(taskType, "video_") {
-		input.Mode = "video"
-	}
 	config, err := s.resolveProviderConfig(input.Config)
 	if err != nil {
 		return nil, err
 	}
 	input.Config = config
-	if (input.Mode == "image" || input.Mode == "video") && input.Metadata != nil {
+	if input.Mode == "image" && input.Metadata != nil {
 		if err := s.applyGenerationStyleProfile(userID, taskProjectID, &input); err != nil {
 			return nil, err
 		}
