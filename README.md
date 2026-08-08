@@ -37,6 +37,7 @@
 
 | 头像 | 昵称 | 邮箱 | 个性签名 |
 | --- | --- | --- | --- |
+| <img src="assets/user-sikongyue.png" alt="爱笑的毛毛虫" width="80"> | 爱笑的毛毛虫<br><sub>用户名：sikongyue</sub> | [315515767@qq.com](mailto:315515767@qq.com) | 正在啃 main 分支，争取下次 merge 的时候变成蝴蝶 |
 | <img src="assets/user-delve.jpg" alt="delve-s" width="80"> | delve-s | [3013141136@qq.com](mailto:3013141136@qq.com) | 我亦无他，惟手熟尔 |
 | <img src="assets/user-CyrusAuyeung.jpg" alt="CyrusAuyeung" width="80"> | CyrusAuyeung | [cyrusauyeungho@gmail.com](mailto:cyrusauyeungho@gmail.com) | HKUST(GZ) UG |
 | <img src="assets/user-nz.jpg" alt="奶大佬" width="80"> | 奶大佬 | [1304634970@qq.com](mailto:1304634970@qq.com) | 人生就是要不断的探索 |
