@@ -124,6 +124,11 @@ function normalizeQuality(quality: string) {
     return QUALITY_BASE[normalized] ? normalized : undefined;
 }
 
+function normalizeGrokImageResolution(quality: string | undefined) {
+    const value = quality?.trim().toLowerCase();
+    return value === "1k" || value === "2k" ? value : undefined;
+}
+
 /** Map "quality + ratio" to an explicit pixel dimension like "3840x2160". */
 function resolveSize(quality: string | undefined, ratio: string): string {
     const parsedRatio = parseImageRatio(ratio);
@@ -813,6 +818,8 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         }
     }
     if (requestConfig.interfaceType === "grok-image") {
+        const requestSize = resolveImageRequestSize(imageProfile, undefined, normalizedImage.size);
+        const resolution = normalizeGrokImageResolution(normalizedImage.quality);
         try {
             const responseData = await postChannelJSON<ImageApiResponse>(
                 requestConfig,
@@ -821,6 +828,8 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, prompt),
                     n,
+                    ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
+                    ...(resolution ? { resolution } : {}),
                     response_format: "url",
                 },
                 options,
@@ -896,6 +905,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (requestConfig.interfaceType === "grok-image") {
         if (mask) throw new Error("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试");
         if (references.length !== 1) throw new Error("Grok 图片编辑必须提供且仅支持 1 张参考图");
+        const requestSize = resolveImageRequestSize(imageProfile, undefined, normalizedImage.size);
+        const resolution = normalizeGrokImageResolution(normalizedImage.quality);
         try {
             const imageUrl = await grokImageInputURL(references[0]);
             const response = await postChannelJSON<ImageApiResponse>(
@@ -906,6 +917,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     image: { url: imageUrl },
                     n,
+                    ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
+                    ...(resolution ? { resolution } : {}),
                     response_format: "url",
                 },
                 options,

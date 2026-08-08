@@ -747,6 +747,22 @@ func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string
 		return grokImageRequest{}, "", errors.New("Grok 图片协议不支持蒙版编辑，请移除蒙版后重试")
 	}
 	body := grokImageRequest{Model: input.Config.Model, Prompt: withSystemPrompt(input.Config, input.Prompt), N: 1, ResponseFormat: "url"}
+	size := input.Config.Size
+	quality := input.Config.Quality
+	if input.ImageCapability != nil {
+		if strings.TrimSpace(size) == "" || strings.EqualFold(strings.TrimSpace(size), "auto") {
+			size = input.ImageCapability.Size.Default
+		}
+		if strings.TrimSpace(quality) == "" || strings.EqualFold(strings.TrimSpace(quality), "auto") {
+			quality = input.ImageCapability.Quality.Default
+		}
+	}
+	if aspectRatio := normalizeGrokImageAspectRatio(size); aspectRatio != "" {
+		body.AspectRatio = aspectRatio
+	}
+	if resolution := normalizeGrokImageResolution(quality); resolution != "" {
+		body.Resolution = resolution
+	}
 	if len(input.ReferenceImages) == 0 {
 		return body, "/images/generations", nil
 	}
@@ -759,6 +775,26 @@ func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string
 	}
 	body.Image = &grokImageInput{URL: imageURL}
 	return body, "/images/edits", nil
+}
+
+func normalizeGrokImageAspectRatio(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "1:1", "9:16", "16:9", "4:3", "3:4":
+		return normalized
+	default:
+		return ""
+	}
+}
+
+func normalizeGrokImageResolution(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "1k", "2k":
+		return normalized
+	default:
+		return ""
+	}
 }
 
 func grokImageInputURL(media providerMedia) (string, error) {

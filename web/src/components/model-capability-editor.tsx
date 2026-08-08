@@ -100,6 +100,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
     const updateReferences = (patch: Partial<ImageCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateSize = (patch: Partial<ImageCapabilityConfig["size"]>) => update({ size: { ...profile.size, ...patch } });
     const updateQuality = (patch: Partial<ImageCapabilityConfig["quality"]>) => update({ quality: { ...profile.quality, ...patch } });
+    const qualityKindLabel = profile.quality.values.length > 0 && profile.quality.values.every((value) => /^\d+k$/i.test(value)) ? "分辨率" : "图片质量";
 
     return (
         <div className="space-y-3 rounded-md border border-border/70 bg-muted/10 p-3">
@@ -139,10 +140,10 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
             </CapabilityGroup>
 
             <CapabilityGroup title="可选生成参数">
-                <ParameterField label="图片质量" description="发送 quality 参数" supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
+                <ParameterField label={qualityKindLabel} description={qualityKindLabel === "分辨率" ? "发送 resolution 参数" : "发送 quality 参数"} supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
                 {profile.quality.supported ? <div className="grid gap-2 sm:grid-cols-2">
-                    <Field label="质量支持值"><Select mode="tags" className="w-full" disabled={disabled} value={profile.quality.values} tokenSeparators={[","]} onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })} /></Field>
-                    <Field label="默认质量"><Select className="w-full" disabled={disabled} value={profile.quality.default} options={profile.quality.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateQuality({ default: defaultValue })} /></Field>
+                    <Field label={`${qualityKindLabel}支持值`}><Select mode="tags" className="w-full" disabled={disabled} value={profile.quality.values} tokenSeparators={[","]} onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })} /></Field>
+                    <Field label={`默认${qualityKindLabel}`}><Select className="w-full" disabled={disabled} value={profile.quality.default} options={profile.quality.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateQuality({ default: defaultValue })} /></Field>
                 </div> : null}
                 <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
                 <div className="grid gap-2 sm:grid-cols-2">

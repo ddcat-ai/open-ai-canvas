@@ -109,8 +109,8 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 	case model.ChannelInterfaceGrokImage:
 		image.References.MaxImages = 1
 		image.References.MaskSupported = false
-		image.Size = ImageSizeConfig{Parameter: "none", Values: []string{}, Default: "auto", AllowCustom: false}
-		image.Quality = ImageQualityConfig{Supported: false, Values: []string{}, Default: "auto"}
+		image.Size = ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"1:1", "9:16", "16:9", "4:3", "3:4"}, Default: "1:1", AllowCustom: false}
+		image.Quality = ImageQualityConfig{Supported: true, Values: []string{"1k", "2k"}, Default: "1k"}
 		image.TransparentBackground = VideoBooleanConfig{Supported: false, Default: false}
 		image.ResponseFormat = ParameterSupport{Supported: true}
 		image.OutputFormat = ParameterSupport{Supported: false}
@@ -423,10 +423,12 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 	if input.Mask != nil && !profile.References.MaskSupported {
 		return BadAuthRequest("当前图片模型不支持蒙版编辑")
 	}
-	if profile.Size.Parameter != "none" && !profile.Size.AllowCustom && strings.TrimSpace(input.Config.Size) != "" && !containsCapabilityString(profile.Size.Values, input.Config.Size) {
+	size := strings.TrimSpace(input.Config.Size)
+	if profile.Size.Parameter != "none" && !profile.Size.AllowCustom && size != "" && !strings.EqualFold(size, "auto") && !containsCapabilityString(profile.Size.Values, size) {
 		return BadAuthRequest("图片尺寸不在当前模型支持范围内")
 	}
-	if profile.Quality.Supported && strings.TrimSpace(input.Config.Quality) != "" && !containsCapabilityString(profile.Quality.Values, input.Config.Quality) {
+	quality := strings.TrimSpace(input.Config.Quality)
+	if profile.Quality.Supported && quality != "" && !strings.EqualFold(quality, "auto") && !containsCapabilityString(profile.Quality.Values, quality) {
 		return BadAuthRequest("图片质量不在当前模型支持范围内")
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count))

@@ -77,8 +77,8 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     if (protocol === "grok-image") {
         image.references.maxImages = 1;
         image.references.maskSupported = false;
-        image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
-        image.quality = { supported: false, values: [], default: "auto" };
+        image.size = { parameter: "aspect_ratio", values: ["1:1", "9:16", "16:9", "4:3", "3:4"], default: "1:1", allowCustom: false };
+        image.quality = { supported: true, values: ["1k", "2k"], default: "1k" };
         image.transparentBackground = { supported: false, default: false };
         image.responseFormat = { supported: true };
         image.outputFormat = { supported: false };
