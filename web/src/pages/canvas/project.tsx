@@ -31,6 +31,7 @@ import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-pick
 import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
+import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
 import { CanvasTimelineDialog } from "@/components/canvas/canvas-timeline-dialog";
 import { syncNodeSubtitlesToTimeline } from "@/lib/timeline/timeline-build";
 import type { TimelineDirectMedia } from "@/types/timeline";
@@ -583,16 +584,23 @@ function InfiniteCanvasPage() {
         generatePortraitTextureNode,
         cropImageNode,
         cropNodeId,
+        closeSegmentDialog,
+        extractAudioFromVideo,
         extractVideoLastFrame,
         extractingVideoFrameNodeId,
         generateAngleNode,
         generateEmotionNode,
+        handleSegmentConfirm,
         maskEditImageNode,
         maskEditNodeId,
         mergeSelectedVideos,
         mergeVideosByIds,
         mergeVideoProgress,
         saveAnnotatedImageNode,
+        segmentDialogMode,
+        segmentDialogNodeId,
+        segmentRunningMode,
+        setSegmentDialogNodeId,
         setAngleNodeId,
         setEmotionNodeId,
         setAnnotationNodeId,
@@ -602,10 +610,12 @@ function InfiniteCanvasPage() {
         setUpscaleNodeId,
         splitImageNode,
         splitNodeId,
+        trimVideoAndRegenerate,
         upscaleImageNode,
         upscaleNodeId,
     } = useCanvasMediaTools({
         projectId,
+        domainProjectId: linkedProjectId,
         nodesRef,
         connectionsRef,
         selectedNodeIdsRef,
@@ -622,6 +632,7 @@ function InfiniteCanvasPage() {
         startGenerationRequest,
         finishGenerationRequest,
         bindGenerationTask,
+        onGenerateVideoNode: (nodeId, mode, prompt) => generateNodeRef.current?.(nodeId, mode, prompt),
     });
 
     const handleNodesDeleted = useCallback(
@@ -635,6 +646,7 @@ function InfiniteCanvasPage() {
             setDrawingNodeId(clearDeletedId);
             setInfoNodeId(clearDeletedId);
             setSubtitleNodeId(clearDeletedId);
+            setSegmentDialogNodeId(clearDeletedId);
             setCropNodeId(clearDeletedId);
             setMaskEditNodeId(clearDeletedId);
             setAnnotationNodeId(clearDeletedId);
@@ -656,7 +668,7 @@ function InfiniteCanvasPage() {
             }
             cleanupCanvasFiles({ projectId, nodes: nextNodes, chatSessions });
         },
-        [chatSessions, cleanupCanvasFiles, message, projectId, setAngleNodeId, setAnnotationNodeId, setCropNodeId, setEmotionNodeId, setMaskEditNodeId, setSplitNodeId, setUpscaleNodeId, setRunningNodeId],
+        [chatSessions, cleanupCanvasFiles, message, projectId, setAngleNodeId, setAnnotationNodeId, setCropNodeId, setEmotionNodeId, setMaskEditNodeId, setSegmentDialogNodeId, setSplitNodeId, setUpscaleNodeId, setRunningNodeId],
     );
 
     const {
@@ -875,6 +887,7 @@ function InfiniteCanvasPage() {
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
     const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
     const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
+    const segmentNode = segmentDialogNodeId ? nodeById.get(segmentDialogNodeId) || null : null;
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
     const drawingNode = drawingNodeId ? nodeById.get(drawingNodeId) || null : null;
@@ -1840,9 +1853,13 @@ function InfiniteCanvasPage() {
                         }}
                         onViewImage={(node) => setPreviewNodeId(node.id)}
                         onExtractVideoLastFrame={(node) => void extractVideoLastFrame(node)}
+                        onExtractAudioFromVideo={(node) => void extractAudioFromVideo(node)}
+                        onTrimVideoRegenerate={(node) => void trimVideoAndRegenerate(node)}
                         onSubtitles={(node) => setSubtitleNodeId(node.id)}
                         onTimeline={(node) => setTimelineNodeId(node.id)}
                         extractingVideoFrame={toolbarNode?.id === extractingVideoFrameNodeId}
+                        extractingAudio={segmentRunningMode === "audio"}
+                        trimmingVideo={segmentRunningMode === "video"}
                         onReversePrompt={createImageReversePromptNodes}
                         onRetry={(node) => void handleRetryNode(node)}
                         onToggleFreeResize={(node) => toggleNodeFreeResize(node.id)}
@@ -1941,6 +1958,20 @@ function InfiniteCanvasPage() {
                                     if (next !== currentTimeline) updateProject(projectId, { timeline: next });
                                 }
                             }}
+                        />
+                    ) : null}
+
+                    {segmentNode && segmentDialogMode ? (
+                        <CanvasVideoSegmentDialog
+                            node={segmentNode}
+                            nodes={nodes}
+                            connections={connections}
+                            open={Boolean(segmentNode && segmentDialogMode)}
+                            mode={segmentDialogMode}
+                            config={effectiveConfig}
+                            timeline={currentProject?.timeline || null}
+                            onClose={closeSegmentDialog}
+                            onConfirm={(params) => void handleSegmentConfirm(segmentNode, params)}
                         />
                     ) : null}
 
