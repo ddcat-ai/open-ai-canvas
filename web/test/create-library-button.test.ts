@@ -24,5 +24,19 @@ describe("creation library button", () => {
         expect(source.slice(uploadStart, uploadEnd)).not.toContain("setAttachments");
         expect(source).toContain("onUpload={uploadLibraryAssets}");
         expect(source).not.toContain("onUpload={() => fileInputRef.current?.click()}");
+        expect(source).toContain("上传后保存到素材库");
+        expect(source).toContain("正在保存到素材库，完成后会自动选中");
+        expect(source).toContain("个素材已上传到素材库并自动选中");
+    });
+
+    test("previews prompt reference images without removing them", () => {
+        const createSource = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
+        const canvasSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-prompt-panel.tsx"), "utf8");
+
+        expect(createSource).toContain('className="creation-chat-attachment-preview"');
+        expect(createSource).toContain("<CreationMediaPreviewModal url={previewUrl} type={previewType}");
+        expect(canvasSource).toContain("canPreview ? setImagePreview(reference) : onInsert(reference)");
+        expect(canvasSource).toContain("<AntImage");
+        expect(canvasSource).toContain("onClick={() => onInsert(reference)}");
     });
 });
