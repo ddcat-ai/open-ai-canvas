@@ -42,9 +42,13 @@ type CanvasNodeToolbarProps = {
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onExtractVideoLastFrame: (node: CanvasNodeData) => void;
+    onExtractAudioFromVideo: (node: CanvasNodeData) => void;
+    onTrimVideoRegenerate: (node: CanvasNodeData) => void;
     onSubtitles: (node: CanvasNodeData) => void;
     onTimeline: (node: CanvasNodeData) => void;
     extractingVideoFrame: boolean;
+    extractingAudio: boolean;
+    trimmingVideo: boolean;
     onReversePrompt: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
@@ -105,9 +109,13 @@ export function CanvasNodeToolbar({
     onAngle,
     onViewImage,
     onExtractVideoLastFrame,
+    onExtractAudioFromVideo,
+    onTrimVideoRegenerate,
     onSubtitles,
     onTimeline,
     extractingVideoFrame,
+    extractingAudio,
+    trimmingVideo,
     onReversePrompt,
     onRetry,
     onToggleFreeResize,
@@ -243,7 +251,7 @@ export function CanvasNodeToolbar({
         onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeUpload: onUpload, onNodeDownload: onDownload,
         onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
         onNodeSplit: onSplit, onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
-        onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
+        onNodeExtractVideoLastFrame: onExtractVideoLastFrame, onNodeExtractAudioFromVideo: onExtractAudioFromVideo, onNodeTrimVideoRegenerate: onTrimVideoRegenerate, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
         onNodeSubtitles: onSubtitles, onNodeTimeline: onTimeline, onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
@@ -259,6 +267,8 @@ export function CanvasNodeToolbar({
         node,
         nodeMetadata: node.metadata,
         extractingVideoFrame,
+        extractingAudio,
+        trimmingVideo,
         mergingVideos: false,
         addPanelOpen: false,
         appearancePanelOpen: false,
