@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, SlidersHorizontal, Square, UserRound, Video } from "lucide-react";
-import { Button, Modal, Tooltip } from "antd";
+import { Button, Image as AntImage, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { configuredModelMatchesCapability, defaultConfig, modelOptionName, resolveModelChannel, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -372,30 +372,63 @@ function modeDisplayName(mode: CanvasNodeGenerationMode) {
 
 function ConnectedReferenceShelf({ references, theme, onInsert }: { references: CanvasResourceReference[]; theme: CanvasTheme; onInsert: (reference: CanvasResourceReference) => void }) {
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill");
+    const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
     if (!activeReferences.length) return null;
 
     return (
-        <div className="thin-scrollbar flex h-[42px] shrink-0 min-w-0 items-center gap-1.5 overflow-x-auto px-2.5 pt-1.5" role="group" aria-label="已连接素材">
-            {activeReferences.map((reference, index) => (
-                <button
-                    key={reference.id}
-                    type="button"
-                    className="group relative size-[34px] shrink-0 overflow-hidden rounded-md text-left transition hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
-                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
-                    title={`插入 @${reference.label}`}
-                    aria-label={`插入 @${reference.label}`}
-                    onClick={() => onInsert(reference)}
-                >
-                    <span className="block size-full overflow-hidden rounded-md">
-                        <ReferenceThumbnail reference={reference} />
-                    </span>
-                    <span className="absolute left-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-[var(--fs-micro)] font-semibold text-white backdrop-blur-sm">{index + 1}</span>
-                    <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
-                        <AtSign className="size-2" />
-                    </span>
-                </button>
-            ))}
-        </div>
+        <>
+            <div className="thin-scrollbar flex h-[42px] shrink-0 min-w-0 items-center gap-1.5 overflow-x-auto px-2.5 pt-1.5" role="group" aria-label="已连接素材">
+                {activeReferences.map((reference, index) => {
+                    const canPreview = (reference.kind === "image" || reference.kind === "character") && Boolean(reference.previewUrl);
+                    return (
+                        <span key={reference.id} className="relative size-[34px] shrink-0">
+                            <button
+                                type="button"
+                                className={`group relative size-full overflow-hidden rounded-md text-left transition hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0${canPreview ? " cursor-zoom-in" : ""}`}
+                                style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
+                                title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
+                                aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
+                                onClick={() => canPreview ? setImagePreview(reference) : onInsert(reference)}
+                            >
+                                <span className="block size-full overflow-hidden rounded-md">
+                                    <ReferenceThumbnail reference={reference} />
+                                </span>
+                                <span className="absolute left-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-[var(--fs-micro)] font-semibold text-white backdrop-blur-sm">{index + 1}</span>
+                                {canPreview ? <span className="absolute bottom-0.5 left-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><Maximize2 className="size-2" /></span> : null}
+                                {!canPreview ? <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><AtSign className="size-2" /></span> : null}
+                            </button>
+                            {canPreview ? (
+                                <button
+                                    type="button"
+                                    className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm transition hover:bg-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
+                                    style={{ outlineColor: theme.node.activeStroke }}
+                                    title={`插入 @${reference.label}`}
+                                    aria-label={`插入 @${reference.label}`}
+                                    onClick={() => onInsert(reference)}
+                                >
+                                    <AtSign className="size-2" />
+                                </button>
+                            ) : null}
+                        </span>
+                    );
+                })}
+            </div>
+            {imagePreview?.previewUrl ? (
+                <AntImage
+                    src={imagePreview.previewUrl}
+                    alt={imagePreview.title || imagePreview.label}
+                    style={{ display: "none" }}
+                    preview={{
+                        open: true,
+                        movable: true,
+                        minScale: 0.5,
+                        maxScale: 12,
+                        scaleStep: 0.25,
+                        onOpenChange: (open) => !open && setImagePreview(null),
+                    }}
+                />
+            ) : null}
+        </>
     );
 }
 

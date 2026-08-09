@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from "react";
 import localforage from "localforage";
 import { App, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowUp, Check, ChevronDown, Clock3, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Upload, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Upload, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Link } from "react-router";
 
@@ -299,6 +299,7 @@ export default function CreatePage() {
         }));
         const assetIds = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
         const failed = settled.filter((entry) => entry.status === "rejected");
+        if (assetIds.length) toast.success(`${assetIds.length} 个素材已上传到素材库并自动选中`);
         if (failed.length) toast.error(`${failed.length} 个素材上传失败，请重试`);
         return assetIds;
     };
@@ -575,6 +576,7 @@ function CreationAssetLibraryModal({ open, assets, mode, selectedIds, onClose, o
     const [keyword, setKeyword] = useState("");
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [uploading, setUploading] = useState(false);
+    const [uploadingCount, setUploadingCount] = useState(0);
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const mediaAssets = useMemo(() => assets.filter((asset): asset is Extract<Asset, { kind: "image" | "video" }> => asset.kind === "image" || asset.kind === "video"), [assets]);
     const categories = useMemo(() => ["all", ...Array.from(new Set(mediaAssets.map((asset) => asset.category || "other")))], [mediaAssets]);
@@ -600,6 +602,9 @@ function CreationAssetLibraryModal({ open, assets, mode, selectedIds, onClose, o
     };
     const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
         if (!event.target.files || uploading) return;
+        const fileCount = event.target.files.length;
+        if (!fileCount) return;
+        setUploadingCount(fileCount);
         setUploading(true);
         try {
             const assetIds = await onUpload(event.target.files);
@@ -607,19 +612,20 @@ function CreationAssetLibraryModal({ open, assets, mode, selectedIds, onClose, o
         } finally {
             event.target.value = "";
             setUploading(false);
+            setUploadingCount(0);
         }
     };
     const selectedAssets = mediaAssets.filter((asset) => selected.has(asset.id) && (mode === "video" || asset.kind === "image"));
     const count = category === "all" ? mediaAssets.length : mediaAssets.filter((asset) => (asset.category || "other") === category).length;
 
-    return <Modal open={open} footer={null} title={null} destroyOnHidden onCancel={onClose} width="min(980px, calc(100vw - 24px))" className="creation-asset-library-modal" styles={{ container: { padding: 0 }, body: { padding: 0 } }}>
+    return <Modal open={open} footer={null} title={null} destroyOnHidden closable={!uploading} maskClosable={!uploading} keyboard={!uploading} onCancel={() => { if (!uploading) onClose(); }} width="min(980px, calc(100vw - 24px))" className="creation-asset-library-modal" styles={{ container: { padding: 0 }, body: { padding: 0 } }}>
         <div className="creation-library-shell">
             <div className="creation-library-toolbar"><div className="creation-library-toolbar-title"><span>参考内容</span><strong>素材库</strong></div><div className="creation-library-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索素材名称或标签" aria-label="搜索素材" /></div><span className="creation-library-toolbar-count">已选 {selectedAssets.length} · {count} 个素材</span></div>
             <div className="creation-library-body">
                 <nav className="creation-library-categories" aria-label="素材分类">{categories.map((item) => <button key={item} type="button" className={category === item ? "is-active" : ""} onClick={() => setCategory(item)}><span>{creationAssetCategoryLabels[item] || "其他"}</span><em>{item === "all" ? mediaAssets.length : mediaAssets.filter((asset) => (asset.category || "other") === item).length}</em></button>)}</nav>
                 <div className="creation-library-grid-wrap"><div className="creation-library-grid">{visibleAssets.length ? visibleAssets.map((asset) => <CreationLibraryCard key={asset.id} asset={asset} selected={selected.has(asset.id)} disabled={mode !== "video" && asset.kind === "video"} onToggle={() => toggle(asset)} />) : <div className="creation-library-empty"><FolderOpen /><strong>这个分类还没有素材</strong><span>换个分类，或从底部上传一份新素材。</span></div>}</div></div>
             </div>
-            <footer className="creation-library-footer"><input ref={uploadInputRef} type="file" hidden accept={mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={handleUpload} /><button type="button" className="creation-library-upload" onClick={() => uploadInputRef.current?.click()} disabled={uploading}><Upload /><span><strong>{uploading ? "正在上传素材" : "找不到素材，手动上传"}</strong><small>支持图片{mode === "video" ? "和视频" : ""}，可一次选择多个文件</small></span></button><div className="creation-library-actions"><button type="button" onClick={onClose}>取消</button><button type="button" className="is-primary" disabled={!selectedAssets.length} onClick={() => onConfirm(selectedAssets)}><Check />使用已选素材{selectedAssets.length ? `（${selectedAssets.length}）` : ""}</button></div></footer>
+            <footer className="creation-library-footer"><input ref={uploadInputRef} type="file" hidden accept={mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={handleUpload} /><button type="button" className="creation-library-upload" onClick={() => uploadInputRef.current?.click()} disabled={uploading} aria-busy={uploading} aria-live="polite">{uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}<span><strong>{uploading ? `正在上传 ${uploadingCount} 个素材` : "上传新素材"}</strong><small>{uploading ? "正在保存到素材库，完成后会自动选中" : `支持图片${mode === "video" ? "和视频" : ""}，上传后保存到素材库`}</small></span></button><div className="creation-library-actions"><button type="button" onClick={onClose} disabled={uploading}>取消</button><button type="button" className="is-primary" disabled={uploading || !selectedAssets.length} onClick={() => onConfirm(selectedAssets)}><Check />使用已选素材{selectedAssets.length ? `（${selectedAssets.length}）` : ""}</button></div></footer>
         </div>
     </Modal>;
 }
@@ -748,6 +754,8 @@ type ComposerProps = {
 };
 
 function CreationComposer(props: ComposerProps) {
+    const [previewUrl, setPreviewUrl] = useState("");
+    const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const canSubmit = Boolean(props.prompt.trim()) && !props.busy;
     const placeholder = props.mode === "text"
         ? "描述你的故事、角色或想继续讨论的创意"
@@ -764,7 +772,11 @@ function CreationComposer(props: ComposerProps) {
             <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
-                {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => <div key={item.id} className="creation-chat-attachment">{isVideoAttachment(item) ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} /> }<button type="button" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>)}</div> : null}
+                {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => {
+                    const isVideo = isVideoAttachment(item);
+                    const url = isVideo ? item.url : item.previewUrl;
+                    return <div key={item.id} className="creation-chat-attachment"><button type="button" className="creation-chat-attachment-preview" onClick={() => { setPreviewType(isVideo ? "video" : "image"); setPreviewUrl(url); }} aria-label={`放大预览 ${item.name}`} disabled={!url}>{isVideo ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} />}<span aria-hidden="true"><Maximize2 /></span></button><button type="button" className="creation-chat-attachment-remove" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>;
+                })}</div> : null}
             </div>
         </div>
         <footer className="creation-chat-dock">
@@ -781,6 +793,7 @@ function CreationComposer(props: ComposerProps) {
             </div>
             {props.busy ? <button type="button" className="creation-chat-submit is-stopping" onClick={props.onStop} aria-label="停止生成"><Square className="size-3.5 fill-current" /></button> : <button type="button" className="creation-chat-submit" disabled={!canSubmit} onClick={props.onSubmit} aria-label="发送"><ArrowUp className="size-4" /></button>}
         </footer>
+        <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
     </section>;
 }
 
