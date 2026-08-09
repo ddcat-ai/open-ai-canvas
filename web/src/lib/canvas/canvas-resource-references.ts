@@ -52,6 +52,22 @@ export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData
     return [];
 }
 
+/** 收集节点自身及其上游链路中的视频节点，用于时间线片段导入定位真正的视频源。 */
+export function collectUpstreamVideoNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): CanvasNodeData[] {
+    const queue = [nodeId];
+    const visited = new Set<string>();
+    const result: CanvasNodeData[] = [];
+    while (queue.length) {
+        const currentId = queue.shift()!;
+        if (visited.has(currentId)) continue;
+        visited.add(currentId);
+        const node = nodes.find((item) => item.id === currentId);
+        if (node?.type === CanvasNodeType.Video && Boolean(node.metadata?.content || node.metadata?.storageKey)) result.push(node);
+        connections.filter((connection) => connection.toNodeId === currentId).forEach((connection) => queue.push(connection.fromNodeId));
+    }
+    return result;
+}
+
 function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     return connections
         .filter((connection) => connection.toNodeId === nodeId)

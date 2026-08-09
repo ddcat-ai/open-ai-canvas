@@ -696,6 +696,7 @@
     /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
     --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
     --canvas-panel-width: min(332px, calc(100vw - 24px)); /* 浮动面板默认宽度（活动任务等）*/
+    --video-segment-preview-max-height: min(46vh, 480px);
 
     /* Prompt 面板（对应 #98 决策2 渐进式三区）*/
     --prompt-panel-max-height: min(70vh, 640px);
@@ -3419,17 +3420,19 @@
     .library-page .app-page-header p { max-width: 560px; }
 
     /* 页面头部按钮优化 - 去除重边框 */
-    .library-page .app-page-header .ant-btn,
-    .canvas-library-page .app-page-header .ant-btn {
+    html:not(.dark) .library-page .app-page-header .ant-btn,
+    html:not(.dark) .canvas-library-page .app-page-header .ant-btn {
         border: 1px solid rgba(17, 17, 17, 0.08) !important;
         background: #ffffff !important;
+        color: #171717 !important;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
         transition: all 180ms ease-out !important;
     }
-    .library-page .app-page-header .ant-btn:hover,
-    .canvas-library-page .app-page-header .ant-btn:hover {
+    html:not(.dark) .library-page .app-page-header .ant-btn:hover,
+    html:not(.dark) .canvas-library-page .app-page-header .ant-btn:hover {
         border-color: rgba(17, 17, 17, 0.12) !important;
         background: #ffffff !important;
+        color: #171717 !important;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
         transform: translateY(-1px);
     }
