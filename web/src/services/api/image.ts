@@ -216,8 +216,7 @@ function resolveImageRequestSize(profile: ImageCapabilityConfig, quality: string
     return value ? { parameter: request.parameter, value } : undefined;
 }
 
-function validateImageCapability(profile: ImageCapabilityConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
-    if (Array.from(prompt).length > profile.references.promptMaxChars) throw new Error(`提示词超过当前模型限制（最多 ${profile.references.promptMaxChars} 字）`);
+function validateImageCapability(profile: ImageCapabilityConfig, references: ReferenceImage[], mask?: ReferenceImage) {
     if (references.length > profile.references.maxImages) throw new Error(`当前图片模型最多支持 ${profile.references.maxImages} 张参考图`);
     if (mask && !profile.references.maskSupported) throw new Error("当前图片模型不支持蒙版编辑");
     if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");
@@ -811,7 +810,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
-    validateImageCapability(imageProfile, prompt, []);
+    validateImageCapability(imageProfile, []);
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
     if (requestConfig.apiFormat === "gemini") {
@@ -896,7 +895,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
-    validateImageCapability(imageProfile, prompt, references, mask);
+    validateImageCapability(imageProfile, references, mask);
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);

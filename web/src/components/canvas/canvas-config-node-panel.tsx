@@ -57,9 +57,9 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
     const capabilityError = imageProfile
-        ? imageCapabilityError(imageProfile, node.metadata?.composerContent ?? node.metadata?.prompt ?? "", inputSummary)
+        ? imageCapabilityError(imageProfile, inputSummary)
         : videoProfile
-          ? videoCapabilityError(videoProfile, config.videoSeconds, node.metadata?.composerContent ?? node.metadata?.prompt ?? "", inputSummary, node.metadata?.videoEditOperation)
+          ? videoCapabilityError(videoProfile, config.videoSeconds, inputSummary, node.metadata?.videoEditOperation)
           : "";
     const canGenerate = (hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput)) && !capabilityError;
 
@@ -252,17 +252,15 @@ function videoConfigPatch(key: keyof AiConfig, value: string) {
     return { [key]: value };
 }
 
-function videoCapabilityError(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, seconds: string, prompt: string, input: CanvasConfigNodePanelProps["inputSummary"], operation?: string) {
+function videoCapabilityError(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, seconds: string, input: CanvasConfigNodePanelProps["inputSummary"], operation?: string) {
     if (!videoDurationAllowed(profile, Number(seconds))) return "当前模型不支持该视频时长";
-    if (Array.from(prompt).length > profile.references.promptMaxChars) return `提示词超过模型限制（最多 ${profile.references.promptMaxChars} 字）`;
     if (input.imageCount > profile.references.maxImages || input.videoCount > profile.references.maxVideos || input.audioCount > profile.references.maxAudios) return "参考素材数量超过当前模型限制";
     const resolvedOperation = operation || (input.audioCount > 0 && input.imageCount === 0 && input.videoCount === 0 ? "audio_to_video" : input.videoCount > 0 ? "extend" : input.imageCount > 0 ? "image_to_video" : "text_to_video");
     if (!profile.operations.includes(resolvedOperation)) return "当前模型不支持该生成模式";
     return "";
 }
 
-function imageCapabilityError(profile: ImageCapabilityConfig, prompt: string, input: CanvasConfigNodePanelProps["inputSummary"]) {
-    if (Array.from(prompt).length > profile.references.promptMaxChars) return `提示词超过模型限制（最多 ${profile.references.promptMaxChars} 字）`;
+function imageCapabilityError(profile: ImageCapabilityConfig, input: CanvasConfigNodePanelProps["inputSummary"]) {
     if (input.imageCount > profile.references.maxImages) return `当前图片模型最多支持 ${profile.references.maxImages} 张参考图`;
     return "";
 }

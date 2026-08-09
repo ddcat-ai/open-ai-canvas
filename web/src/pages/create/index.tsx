@@ -314,28 +314,12 @@ export default function CreatePage() {
             toast.error("当前模型不支持所选视频时长，请重新选择");
             return;
         }
-        if (mode === "video" && Array.from(text).length > videoProfile.references.promptMaxChars) {
-            toast.error(`提示词超过当前模型限制（最多 ${videoProfile.references.promptMaxChars} 字）`);
-            return;
-        }
-        if (mode === "image" && Array.from(text).length > imageProfile.references.promptMaxChars) {
-            toast.error(`提示词超过当前模型限制（最多 ${imageProfile.references.promptMaxChars} 字）`);
-            return;
-        }
         const settings = { ratio, seconds, quality, videoQuality, count };
         const references = selectedCreationReferences(text, mentionReferences);
         // 后端对图片和视频使用不同的参考字段；这里先拆分，避免媒体类型在写入任务时被误判。
         const referenceImages = attachments.filter(isImageAttachment);
         const referenceVideos = attachments.filter(isVideoAttachment);
         const expandedPrompt = expandCreationPrompt(text, references, attachments);
-        if (mode === "video" && Array.from(expandedPrompt).length > videoProfile.references.promptMaxChars) {
-            toast.error(`引用展开后提示词超过当前模型限制（最多 ${videoProfile.references.promptMaxChars} 字）`);
-            return;
-        }
-        if (mode === "image" && Array.from(expandedPrompt).length > imageProfile.references.promptMaxChars) {
-            toast.error(`引用展开后提示词超过当前模型限制（最多 ${imageProfile.references.promptMaxChars} 字）`);
-            return;
-        }
         const referenceMetadata = creationReferenceMetadata(references);
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
@@ -744,7 +728,7 @@ function CreationComposer(props: ComposerProps) {
             <input ref={props.fileInputRef} type="file" hidden accept={props.mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={props.onFileChange} />
             <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} maxLength={props.mode === "video" ? props.videoProfile.references.promptMaxChars : props.mode === "image" ? props.imageProfile.references.promptMaxChars : undefined} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
+                <CanvasResourceMentionTextarea value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.variant === "empty" ? emptyPlaceholder : placeholder} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
                 {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => <div key={item.id} className="creation-chat-attachment">{isVideoAttachment(item) ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} /> }<button type="button" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>)}</div> : null}
             </div>
         </div>
