@@ -28,11 +28,38 @@ type channelModelsPayload struct {
 }
 
 type channelModelItem struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	SupportedEndpointTypes []string `json:"supported_endpoint_types"`
 }
 
 func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]string, error) {
+	items, err := s.FetchChannelModelCatalog(ctx, actor, input)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(items))
+	models := make([]string, 0, len(items))
+	for _, item := range items {
+		name := strings.TrimSpace(item.ID)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		models = append(models, name)
+	}
+	sort.Strings(models)
+	return models, nil
+}
+
+// ChannelModelCatalogItem 是前端自定义渠道拉取模型目录后的最小合同；
+// supportedEndpointTypes 由上游 /models 返回，前端据此推导能力与协议，不依赖模型名猜测。
+type ChannelModelCatalogItem struct {
+	ID                     string   `json:"id"`
+	SupportedEndpointTypes []string `json:"supportedEndpointTypes,omitempty"`
+}
+
+func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]ChannelModelCatalogItem, error) {
 	if actor == nil || strings.TrimSpace(actor.ID) == "" {
 		return nil, Unauthorized("请先登录")
 	}
@@ -99,17 +126,33 @@ func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, inp
 		items = payload.Models
 	}
 	seen := make(map[string]bool, len(items))
-	models := make([]string, 0, len(items))
+	catalog := make([]ChannelModelCatalogItem, 0, len(items))
 	for _, item := range items {
 		name := strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(item.ID, item.Name)), "models/")
 		if name == "" || seen[name] {
 			continue
 		}
 		seen[name] = true
-		models = append(models, name)
+		catalog = append(catalog, ChannelModelCatalogItem{ID: name, SupportedEndpointTypes: normalizeCatalogEndpointTypes(item.SupportedEndpointTypes)})
 	}
-	sort.Strings(models)
-	return models, nil
+	sort.Slice(catalog, func(left int, right int) bool {
+		return catalog[left].ID < catalog[right].ID
+	})
+	return catalog, nil
+}
+
+func normalizeCatalogEndpointTypes(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		item := strings.TrimSpace(value)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		normalized = append(normalized, item)
+	}
+	return normalized
 }
 
 func channelModelsUpstreamError(err error) error {

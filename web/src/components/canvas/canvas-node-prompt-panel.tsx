@@ -388,14 +388,22 @@ function ConnectedReferenceShelf({ references, theme, onInsert }: { references: 
                                 style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
                                 title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
                                 aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
-                                onClick={() => canPreview ? setImagePreview(reference) : onInsert(reference)}
+                                onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
                             >
                                 <span className="block size-full overflow-hidden rounded-md">
                                     <ReferenceThumbnail reference={reference} />
                                 </span>
                                 <span className="absolute left-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-[var(--fs-micro)] font-semibold text-white backdrop-blur-sm">{index + 1}</span>
-                                {canPreview ? <span className="absolute bottom-0.5 left-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><Maximize2 className="size-2" /></span> : null}
-                                {!canPreview ? <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm"><AtSign className="size-2" /></span> : null}
+                                {canPreview ? (
+                                    <span className="absolute bottom-0.5 left-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                                        <Maximize2 className="size-2" />
+                                    </span>
+                                ) : null}
+                                {!canPreview ? (
+                                    <span className="absolute bottom-0.5 right-0.5 grid size-3.5 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                                        <AtSign className="size-2" />
+                                    </span>
+                                ) : null}
                             </button>
                             {canPreview ? (
                                 <button
