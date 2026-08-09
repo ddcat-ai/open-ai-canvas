@@ -1145,22 +1145,9 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 		err = validateStoryboardPlan(plan, 0, 0, input.Characters)
 	}
 	if err != nil {
-		_ = s.repo.UpdateTaskProgress(task.ID, "修复分镜结构", 55)
-		repairPrompt, promptErr := s.buildStoryboardRepairPrompt(task.UserID, err, input, text)
-		if promptErr != nil {
-			return nil, nil, promptErr
-		}
-		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
-		if repairErr != nil {
-			return nil, nil, fmt.Errorf("分镜结构修复失败：%w", repairErr)
-		}
-		repairedText, _ := repaired["text"].(string)
-		plan, err = parseAgentStoryboardPlan(repairedText)
-		if err == nil {
-			err = validateStoryboardPlan(plan, 0, 0, input.Characters)
-		}
+		plan, err = s.repairStoryboardPlan(ctx, task, input, config, text, err, 0, 0)
 		if err != nil {
-			return nil, nil, fmt.Errorf("分镜模型结构修复后仍不合法：%w", err)
+			return nil, nil, err
 		}
 	}
 	return s.buildAgentStoryboardResult(task, plan, assets, input.ProjectStyle)
@@ -1201,22 +1188,9 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 		err = validateStoryboardPlan(plan, input.ShotDuration, input.ShotCount, input.Characters)
 	}
 	if err != nil {
-		_ = s.repo.UpdateTaskProgress(task.ID, "修复分镜结构", 55)
-		repairPrompt, promptErr := s.buildStoryboardRepairPrompt(task.UserID, err, input, text)
-		if promptErr != nil {
-			return nil, nil, promptErr
-		}
-		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
-		if repairErr != nil {
-			return nil, nil, fmt.Errorf("分镜结构修复失败：%w", repairErr)
-		}
-		repairedText, _ := repaired["text"].(string)
-		plan, err = parseAgentStoryboardPlan(repairedText)
-		if err == nil {
-			err = validateStoryboardPlan(plan, input.ShotDuration, input.ShotCount, input.Characters)
-		}
+		plan, err = s.repairStoryboardPlan(ctx, task, input, config, text, err, input.ShotDuration, input.ShotCount)
 		if err != nil {
-			return nil, nil, fmt.Errorf("分镜模型结构修复后仍不合法：%w", err)
+			return nil, nil, err
 		}
 	}
 	rows := make([]map[string]any, 0, len(plan.Shots))
@@ -1249,6 +1223,35 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 		})
 	}
 	return map[string]interface{}{"title": plan.Title, "rows": rows}, nil, nil
+}
+
+const maxStoryboardRepairAttempts = 2
+
+func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, input agentStoryboardInput, config providerConfig, originalText string, validationErr error, shotDuration int, shotCount int) (agentStoryboardPlan, error) {
+	currentText := originalText
+	currentErr := validationErr
+	for attempt := 1; attempt <= maxStoryboardRepairAttempts; attempt++ {
+		_ = s.repo.UpdateTaskProgress(task.ID, "修复分镜结构", 55+attempt*10)
+		repairPrompt, promptErr := s.buildStoryboardRepairPrompt(task.UserID, task.Prompt, currentErr, input, currentText)
+		if promptErr != nil {
+			return agentStoryboardPlan{}, promptErr
+		}
+		repaired, repairErr := runTextTask(withProviderRequestKind(ctx, "repair"), canvasGenerationInput{Mode: "text", Prompt: repairPrompt, Config: config, StreamText: true})
+		if repairErr != nil {
+			return agentStoryboardPlan{}, fmt.Errorf("分镜结构修复失败：%w", repairErr)
+		}
+		repairedText, _ := repaired["text"].(string)
+		plan, parseErr := parseAgentStoryboardPlan(repairedText)
+		if parseErr == nil {
+			parseErr = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters)
+		}
+		if parseErr == nil {
+			return plan, nil
+		}
+		currentText = repairedText
+		currentErr = parseErr
+	}
+	return agentStoryboardPlan{}, fmt.Errorf("分镜模型结构修复后仍不合法：%w", currentErr)
 }
 
 func providerConfigReady(config providerConfig) bool {
