@@ -259,6 +259,16 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		videoSeconds = "5"
 		videoSecondsValue = 5
 	}
+	imageSize, imageQuality := "", ""
+	var imageProfile *ImageCapabilityConfig
+	if capability == "image" {
+		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		imageProfile = profile.Image
+		imageSize, imageQuality = imageTestDefaults(imageProfile)
+	}
 	input := canvasGenerationInput{
 		Mode:   capability,
 		Prompt: prompt,
@@ -271,8 +281,8 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			SecretKey:          channel.SecretKey,
 			Headers:            headers,
 			Model:              modelKey,
-			Size:               map[string]string{"image": "1024x1024", "video": "16:9"}[capability],
-			Quality:            "auto",
+			Size:               map[string]string{"image": imageSize, "video": "16:9"}[capability],
+			Quality:            imageQuality,
 			Count:              "1",
 			VideoSeconds:       videoSeconds,
 			VQuality:           "720",
@@ -285,11 +295,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		Metadata: map[string]interface{}{},
 	}
 	if capability == "image" {
-		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
-		if normalizeErr != nil {
-			return nil, normalizeErr
-		}
-		input.ImageCapability = profile.Image
+		input.ImageCapability = imageProfile
 	}
 
 	// 测试复用真实生成协议、运行时并发和熔断策略，但不创建用户任务或计费订单。
@@ -318,6 +324,22 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		return nil, &AuthError{Status: status, Message: "模型测试失败：" + truncateRunes(err.Error(), 1000)}
 	}
 	return &AdminChannelModelTestResult{DurationMs: time.Since(startedAt).Milliseconds()}, nil
+}
+
+// 模型测试必须使用当前模型声明的默认参数，避免固定分辨率 SKU 被通用 1K 测试值误伤。
+func imageTestDefaults(profile *ImageCapabilityConfig) (string, string) {
+	if profile == nil {
+		return "1024x1024", "auto"
+	}
+	size := ""
+	if profile.Size.Parameter != "none" {
+		size = strings.TrimSpace(profile.Size.Default)
+	}
+	quality := ""
+	if profile.Quality.Supported {
+		quality = strings.TrimSpace(profile.Quality.Default)
+	}
+	return size, quality
 }
 
 func normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModelRequest) (string, string, model.ChannelInterfaceType, error) {
