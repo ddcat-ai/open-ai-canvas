@@ -11,19 +11,11 @@ export type CanvasTimelineSegmentItem = {
     sourceUrl?: string;
 };
 
-export type TimelineImportResult =
-    | { ok: true; segments: CanvasTimelineSegmentItem[] }
-    | { ok: false; error: string };
+export type TimelineImportResult = { ok: true; segments: CanvasTimelineSegmentItem[] } | { ok: false; error: string };
 
 const MIN_TIMELINE_SEGMENT_MS = 100;
 
-export function buildTimelineImportSegments(
-    node: CanvasNodeData,
-    nodes: CanvasNodeData[],
-    connections: CanvasConnection[],
-    timeline: TimelineProject | null | undefined,
-    durationMs: number,
-): TimelineImportResult {
+export function buildTimelineImportSegments(node: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[], timeline: TimelineProject | null | undefined, durationMs: number): TimelineImportResult {
     const candidateNodes = collectUpstreamVideoNodes(node.id, nodes, connections);
     const matchesCandidate = (clip: TimelineClip, candidate: CanvasNodeData) => {
         if (candidate.id === clip.nodeId) return true;
@@ -46,14 +38,16 @@ export function buildTimelineImportSegments(
         const sourceDurationMs = matchedNode?.metadata?.durationMs || durationMs;
         const endMs = sourceDurationMs > 0 ? Math.min(sourceDurationMs, rawEndMs) : rawEndMs;
         if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return [];
-        return [{
-            id: `timeline-${clip.id}`,
-            startMs,
-            endMs,
-            sourceNodeId: matchedNode?.id,
-            sourceStorageKey: clip.directMedia?.storageKey || matchedNode?.metadata?.storageKey,
-            sourceUrl: clip.directMedia?.url || matchedNode?.metadata?.content,
-        }];
+        return [
+            {
+                id: `timeline-${clip.id}`,
+                startMs,
+                endMs,
+                sourceNodeId: matchedNode?.id,
+                sourceStorageKey: clip.directMedia?.storageKey || matchedNode?.metadata?.storageKey,
+                sourceUrl: clip.directMedia?.url || matchedNode?.metadata?.content,
+            },
+        ];
     });
     if (!segments.length) return { ok: false, error: "时间线片段数据不完整，请先在时间线中重新分割或保存" };
     return { ok: true, segments };

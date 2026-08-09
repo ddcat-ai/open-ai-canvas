@@ -283,11 +283,29 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                                             <span className="w-14 shrink-0 text-xs font-medium">片段 {index + 1}</span>
                                             <div className="flex min-w-0 items-center gap-1">
                                                 <span className="shrink-0 text-xs opacity-60">起点</span>
-                                                <InputNumber size="small" min={0} max={Math.max(0, durationSec - 0.1)} step={0.1} value={segment.startMs / 1000} onChange={(value) => updateSegment(segment.id, { startMs: Math.round((value ?? 0) * 1000) })} className="w-full" aria-label={`片段 ${index + 1} 起点（秒）`} />
+                                                <InputNumber
+                                                    size="small"
+                                                    min={0}
+                                                    max={Math.max(0, durationSec - 0.1)}
+                                                    step={0.1}
+                                                    value={segment.startMs / 1000}
+                                                    onChange={(value) => updateSegment(segment.id, { startMs: Math.round((value ?? 0) * 1000) })}
+                                                    className="w-full"
+                                                    aria-label={`片段 ${index + 1} 起点（秒）`}
+                                                />
                                             </div>
                                             <div className="flex min-w-0 items-center gap-1">
                                                 <span className="shrink-0 text-xs opacity-60">终点</span>
-                                                <InputNumber size="small" min={0} max={Math.max(0, durationSec)} step={0.1} value={segment.endMs / 1000} onChange={(value) => updateSegment(segment.id, { endMs: Math.round((value ?? 0) * 1000) })} className="w-full" aria-label={`片段 ${index + 1} 终点（秒）`} />
+                                                <InputNumber
+                                                    size="small"
+                                                    min={0}
+                                                    max={Math.max(0, durationSec)}
+                                                    step={0.1}
+                                                    value={segment.endMs / 1000}
+                                                    onChange={(value) => updateSegment(segment.id, { endMs: Math.round((value ?? 0) * 1000) })}
+                                                    className="w-full"
+                                                    aria-label={`片段 ${index + 1} 终点（秒）`}
+                                                />
                                             </div>
                                             <Button size="small" type="text" danger icon={<Trash2 className="size-3.5" />} aria-label={`删除片段 ${index + 1}`} onClick={() => removeSegment(segment.id)} />
                                         </div>
@@ -313,12 +331,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
 
                         <label className="block">
                             <div className="mb-1.5 text-sm font-medium">生成提示词</div>
-                            <Input.TextArea
-                                autoSize={{ minRows: 2, maxRows: 4 }}
-                                value={prompt}
-                                placeholder="描述要生成的视频内容，例如：保持画面主体与镜头，重新生成这一段视频"
-                                onChange={(event) => setPrompt(event.target.value)}
-                            />
+                            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} value={prompt} placeholder="描述要生成的视频内容，例如：保持画面主体与镜头，重新生成这一段视频" onChange={(event) => setPrompt(event.target.value)} />
                             <div className="mt-1 text-xs opacity-45">每个片段都会生成独立片段节点和新生成结果节点；片段将作为参考视频送入所选模型，时长需符合模型参考视频限制（Seedance 单段 2-15 秒）。</div>
                         </label>
                     </div>
@@ -331,18 +344,41 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                         <div className="flex items-center gap-2">
                             <span className="opacity-60">起点</span>
                             <InputNumber size="small" min={0} max={Math.max(0, durationSec - 0.1)} step={0.1} value={startSec} onChange={(value) => setStartSec(value ?? 0)} className="w-28" aria-label="片段起点（秒）" />
-                            <Button size="small" type="text" icon={<SkipBack className="size-3.5" />} aria-label="跳转到起点" onClick={() => { if (videoRef.current) videoRef.current.currentTime = startSec; }} />
+                            <Button
+                                size="small"
+                                type="text"
+                                icon={<SkipBack className="size-3.5" />}
+                                aria-label="跳转到起点"
+                                onClick={() => {
+                                    if (videoRef.current) videoRef.current.currentTime = startSec;
+                                }}
+                            />
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="opacity-60">终点</span>
                             <InputNumber size="small" min={0} max={Math.max(0, durationSec)} step={0.1} value={endSec} onChange={(value) => setEndSec(value ?? 0)} className="w-28" aria-label="片段终点（秒）" />
-                            <Button size="small" type="text" icon={<SkipForward className="size-3.5" />} aria-label="跳转到终点" onClick={() => { if (videoRef.current) videoRef.current.currentTime = endSec; }} />
+                            <Button
+                                size="small"
+                                type="text"
+                                icon={<SkipForward className="size-3.5" />}
+                                aria-label="跳转到终点"
+                                onClick={() => {
+                                    if (videoRef.current) videoRef.current.currentTime = endSec;
+                                }}
+                            />
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="opacity-60">片段</span>
                             <span>{formatSegmentTime((rangeMs.endMs - rangeMs.startMs) / 1000)}</span>
                         </div>
-                        <Button size="small" disabled={!durationSec} onClick={() => { setStartSec(0); setEndSec(durationSec); }}>
+                        <Button
+                            size="small"
+                            disabled={!durationSec}
+                            onClick={() => {
+                                setStartSec(0);
+                                setEndSec(durationSec);
+                            }}
+                        >
                             使用全部
                         </Button>
                         <div className="w-full text-xs opacity-45">提取的 MP3 会保存到素材库，并生成一个音频节点放在当前视频节点下游。</div>

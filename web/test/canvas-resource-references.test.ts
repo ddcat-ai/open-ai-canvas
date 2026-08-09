@@ -38,11 +38,7 @@ describe("collectUpstreamVideoNodes", () => {
         const target = videoNode("target-video");
         const text = textNode("script");
         const nodes = [target, segment, source, text];
-        const connections = [
-            connection("source-video", "segment-video"),
-            connection("segment-video", "target-video"),
-            connection("script", "segment-video"),
-        ];
+        const connections = [connection("source-video", "segment-video"), connection("segment-video", "target-video"), connection("script", "segment-video")];
         expect(collectUpstreamVideoNodes("target-video", nodes, connections).map((node) => node.id)).toEqual(["target-video", "segment-video", "source-video"]);
     });
 

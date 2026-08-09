@@ -41,9 +41,16 @@ async function readVideoSourceBlob(source: VideoSegmentSource) {
     throw new Error("找不到视频素材，请重新上传后再操作");
 }
 
-async function runSegmentJob(source: VideoSegmentSource, range: VideoSegmentRange, durationMs: number | undefined, buildArgs: (startSec: string, durationSec: string) => string[], onProgress?: (progress: VideoSegmentProgress) => void, outputType = "video/mp4") {
+async function runSegmentJob(
+    source: VideoSegmentSource,
+    range: VideoSegmentRange,
+    durationMs: number | undefined,
+    buildArgs: (startSec: string, durationSec: string) => string[],
+    onProgress?: (progress: VideoSegmentProgress) => void,
+    outputType = "video/mp4",
+) {
     assertValidRange(range, durationMs);
-    const ffmpeg = await loadFFmpeg(({ phase, progress }) => onProgress?.({ phase: phase === "loading" ? "loading" : "reading", progress, }));
+    const ffmpeg = await loadFFmpeg(({ phase, progress }) => onProgress?.({ phase: phase === "loading" ? "loading" : "reading", progress }));
     const blob = await readVideoSourceBlob(source);
     onProgress?.({ phase: "reading", progress: 45 });
     await ffmpeg.writeFile(INPUT_NAME, await fetchFile(blob));
