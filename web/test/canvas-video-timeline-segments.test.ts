@@ -57,11 +57,12 @@ describe("buildTimelineImportSegments", () => {
         const source = videoNode("source-video", "源视频");
         const target = videoNode("target-video", "结果");
         const nodes = [target, source];
+        const connections = [connection("source-video", "target-video")];
         const oldTimeline: TimelineProject = {
             ...timeline,
             clips: [{ ...timeline.clips[0], nodeId: "legacy-source-id" }],
         };
-        const result = buildTimelineImportSegments(target, nodes, [], oldTimeline, 10_000);
+        const result = buildTimelineImportSegments(target, nodes, connections, oldTimeline, 10_000);
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.segments[0].sourceNodeId).toBe("source-video");
