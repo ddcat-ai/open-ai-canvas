@@ -1,4 +1,4 @@
-import { Captions, Clapperboard, Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import { AudioLines, Captions, Clapperboard, Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
@@ -72,6 +72,32 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
         disabled: (ctx) => ctx.extractingVideoFrame,
         run: (ctx) => ctx.handlers.onNodeExtractVideoLastFrame(ctx.node!),
+    },
+    {
+        id: "extractAudio",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: (ctx) => ctx.extractingAudio ? "正在提取声音为 MP3" : "提取声音为 MP3",
+        displayLabel: (ctx) => ctx.extractingAudio ? "提取中" : "提取音频",
+        icon: (ctx) => ctx.extractingAudio ? <LoaderCircle className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 42,
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
+        disabled: (ctx) => ctx.extractingAudio || ctx.trimmingVideo,
+        run: (ctx) => ctx.handlers.onNodeExtractAudioFromVideo(ctx.node!),
+    },
+    {
+        id: "trimRegenerate",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: (ctx) => ctx.trimmingVideo ? "正在截取片段" : "按段截取并重生成",
+        displayLabel: (ctx) => ctx.trimmingVideo ? "截取中" : "截取重生成",
+        icon: (ctx) => ctx.trimmingVideo ? <LoaderCircle className="size-3.5 animate-spin" /> : <Scissors className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 44,
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
+        disabled: (ctx) => ctx.extractingAudio || ctx.trimmingVideo,
+        run: (ctx) => ctx.handlers.onNodeTrimVideoRegenerate(ctx.node!),
     },
     {
         id: "saveAsset",
