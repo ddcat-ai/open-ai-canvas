@@ -603,22 +603,24 @@ function mergeFetchedModelCosts(channel: ModelChannel, catalog: ChannelModelCata
     const existingByModel = new Map((channel.modelCosts || []).map((cost) => [cost.model, cost]));
     const next: ChannelModelCost[] = [];
     for (const item of catalog) {
-        const catalogProtocol = protocolForModelCatalog(item.supportedEndpointTypes) || channel.interfaceType;
-        const catalogCapability = catalogProtocol ? modelProtocolCapability(catalogProtocol) : undefined;
         const existing = existingByModel.get(item.id);
+        const inferredProtocol = protocolForModelCatalog(item.supportedEndpointTypes);
         if (existing) {
-            if (catalogProtocol && existing.protocol !== catalogProtocol) {
+            if (inferredProtocol && existing.protocol !== inferredProtocol) {
+                const inferredCapability = modelProtocolCapability(inferredProtocol);
                 next.push({
                     ...existing,
-                    protocol: catalogProtocol,
-                    capability: catalogCapability || existing.capability,
-                    capabilityConfig: catalogCapability === "image" || catalogCapability === "video" ? defaultModelCapabilityConfig(catalogProtocol, item.id) : undefined,
+                    protocol: inferredProtocol,
+                    capability: inferredCapability || existing.capability,
+                    capabilityConfig: inferredCapability === "image" || inferredCapability === "video" ? defaultModelCapabilityConfig(inferredProtocol, item.id) : undefined,
                 });
                 continue;
             }
             next.push(existing);
             continue;
         }
+        const catalogProtocol = inferredProtocol || channel.interfaceType;
+        const catalogCapability = catalogProtocol ? modelProtocolCapability(catalogProtocol) : undefined;
         if (!catalogProtocol || !catalogCapability) continue;
         next.push({
             model: item.id,
