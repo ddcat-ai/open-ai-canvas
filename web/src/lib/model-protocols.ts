@@ -86,6 +86,19 @@ export function modelProtocolCapability(value?: string) {
     return modelProtocolDefinition(value)?.capability;
 }
 
+export function protocolForModelCatalog(endpointTypes: string[] = []): ModelProtocol | undefined {
+    const normalized = new Set(endpointTypes.map((value) => value.trim().toLowerCase()));
+    if (normalized.has("openai-chat") || normalized.has("chat-completion") || normalized.has("chat")) return "chat-completion";
+    if (normalized.has("openai-response") || normalized.has("responses")) return "openai-response";
+    if (normalized.has("openai-image") || normalized.has("image")) return "openai-image";
+    if (normalized.has("openai-video") || normalized.has("video")) return "newapi-channel-2";
+    if (normalized.has("openai-audio") || normalized.has("audio")) return "openai-audio";
+    if (normalized.has("grok-image")) return "grok-image";
+    if (normalized.has("gemini-veo") || normalized.has("gemini-video") || normalized.has("veo")) return "gemini-veo";
+    if (normalized.has("volcengine-ark-video") || normalized.has("volcengine-ark")) return "volcengine-ark-video";
+    return undefined;
+}
+
 export function modelProtocolSummary(value?: string) {
     const protocol = modelProtocolDefinition(value);
     if (!protocol) return "保存模型时选择协议后，将在这里显示实际请求方式。";

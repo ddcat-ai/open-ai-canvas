@@ -26,7 +26,7 @@ func RegisterChannelModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		// handler 不接触上游响应细节，密钥校验和模型目录解析统一收敛到 service。
-		models, err := svc.FetchChannelModels(c.Request.Context(), user, input)
+		models, err := svc.FetchChannelModelCatalog(c.Request.Context(), user, input)
 		if err != nil {
 			failService(c, err)
 			return

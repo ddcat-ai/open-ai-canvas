@@ -276,6 +276,7 @@ export function useCanvasStoryboard({
         if (!scriptNode || !rows.length) return;
         const videoSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
         const startLeft = scriptNode.position.x + scriptNode.width + 120;
+        const videoModel = buildGenerationConfig(effectiveConfig, undefined, "video").model;
         const nextNodes = [...nodesRef.current];
         const nextConnections = [...connectionsRef.current];
         const videoNodeByRowId = new Map<string, string>();
@@ -286,14 +287,14 @@ export function useCanvasStoryboard({
             if (existingIndex >= 0) {
                 const existing = nextNodes[existingIndex];
                 const existingMetadata = existing.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing.metadata);
-                nextNodes[existingIndex] = { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" } };
+                nextNodes[existingIndex] = { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" } };
                 storyboardRowReferenceNodeIds(scriptNode, row, nextNodes, nextConnections, false).forEach((referenceId) => {
                     if (!nextConnections.some((connection) => connection.fromNodeId === referenceId && connection.toNodeId === existing.id)) nextConnections.push({ id: nanoid(), fromNodeId: referenceId, toNodeId: existing.id });
                 });
                 videoNodeByRowId.set(row.id, existing.id);
                 return;
             }
-            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: startLeft + videoSpec.width / 2, y: scriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "text_to_video", status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
+            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: startLeft + videoSpec.width / 2, y: scriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, composerContent: prompt, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "text_to_video", status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
             videoNode.title = `镜头 ${row.shotNumber} · 视频`;
             nextNodes.push(videoNode);
             nextConnections.push({ id: nanoid(), fromNodeId: scriptNode.id, toNodeId: videoNode.id, fromHandleId: `row:${row.id}` });
@@ -320,7 +321,7 @@ export function useCanvasStoryboard({
         setNodes(nextNodes);
         setConnections(nextConnections);
         if (!silent) message.success(createdCount ? `已创建 ${createdCount} 个视频节点` : "已同步现有视频节点的提示词");
-    }, [connectionsRef, message, nodesRef, setConnections, setNodes]);
+    }, [connectionsRef, effectiveConfig, message, nodesRef, setConnections, setNodes]);
 
     const createAndGenerateScriptVideos = useCallback(async (nodeId: string, rowIds?: string[]) => {
         const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
@@ -358,7 +359,7 @@ export function useCanvasStoryboard({
         const targetById = new Map(targets.map((target) => [target.videoNode.id, target]));
         const nextNodes = nodesRef.current.map((node) => {
             const target = targetById.get(node.id);
-            return target ? { ...node, metadata: { ...node.metadata, prompt: target.prompt, composerContent: target.prompt, ...storyboardPromptTemplateMetadata(target.row, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, videoStartFrameNodeId: undefined } } : node;
+            return target ? { ...node, metadata: { ...node.metadata, prompt: target.prompt, composerContent: target.prompt, model: videoModel, ...storyboardPromptTemplateMetadata(target.row, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, videoStartFrameNodeId: undefined } } : node;
         });
         const dedicatedFirstFrameConnections = new Set(targets
             .filter((target) => Boolean(target.row.imageNodeId))
@@ -453,8 +454,8 @@ export function useCanvasStoryboard({
             const existing = row.videoNodeId ? nextNodes.find((node) => node.id === row.videoNodeId && node.type === CanvasNodeType.Video) : undefined;
             const existingMetadata = existing?.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing?.metadata);
             const videoNode = existing
-                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, videoStartFrameNodeId: row.imageNodeId, seconds: String(row.durationSeconds) } }
-                : createCanvasNode(CanvasNodeType.Video, { x: startX, y: currentScriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "image_to_video", videoStartFrameNodeId: row.imageNodeId, status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
+                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent: prompt, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, videoStartFrameNodeId: row.imageNodeId, seconds: String(row.durationSeconds) } }
+                : createCanvasNode(CanvasNodeType.Video, { x: startX, y: currentScriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "image_to_video", videoStartFrameNodeId: row.imageNodeId, status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
             if (!existing) {
                 videoNode.title = `镜头 ${row.shotNumber} · 视频`;
                 nextNodes.push(videoNode);

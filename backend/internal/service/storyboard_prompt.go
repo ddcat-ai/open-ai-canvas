@@ -15,8 +15,8 @@ func (s *Service) buildAgentStoryboardPlannerPrompt(userID string, brief string,
 	return removeFixedMediaRestrictions(compiled.Content), nil
 }
 
-func (s *Service) buildStoryboardRepairPrompt(userID string, validationErr error, input agentStoryboardInput, original string) (string, error) {
-	values := storyboardPromptValues("", input.Requirements, input.CanvasAssets, input.ProjectStyle, input.Characters, input.ShotDuration, input.ShotCount)
+func (s *Service) buildStoryboardRepairPrompt(userID string, brief string, validationErr error, input agentStoryboardInput, original string) (string, error) {
+	values := storyboardPromptValues(brief, input.Requirements, input.CanvasAssets, input.ProjectStyle, input.Characters, input.ShotDuration, input.ShotCount)
 	values["校验错误"] = validationErr.Error()
 	values["原始输出"] = original
 	compiled, err := s.compilePrompt(userID, promptOperationStoryboardRepair, values)

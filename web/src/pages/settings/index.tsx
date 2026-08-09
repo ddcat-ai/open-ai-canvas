@@ -8,7 +8,9 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { refreshSystemChannels } from "@/lib/user-session";
-import { fetchChannelModels } from "@/services/api/image";
+import { fetchChannelModels, type ChannelModelCatalogItem } from "@/services/api/image";
+import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
+import { modelProtocolCapability, protocolForModelCatalog } from "@/lib/model-protocols";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import {
     createModelChannel,
@@ -166,8 +168,8 @@ export default function SettingsPage() {
         }
         setChannelLoading(channel.id, true);
         try {
-            const models = await fetchChannelModels(channel, true);
-            if (!models.length) {
+            const result = await fetchChannelModels(channel, true);
+            if (!result.models.length) {
                 message.warning(`${channel.name || "当前渠道"}未返回模型，已保留现有手工模型`);
                 return;
             }
@@ -179,7 +181,7 @@ export default function SettingsPage() {
                 return;
             }
             updateChannels(
-                latestConfig.channels.map((item) => (item.id === channel.id ? { ...item, models } : item)),
+                latestConfig.channels.map((item) => (item.id === channel.id ? { ...item, models: result.models, modelCosts: mergeFetchedModelCosts(item, result.catalog) } : item)),
                 latestConfig,
             );
             message.success(`${latestChannel.name || "当前渠道"}模型列表已更新`);
@@ -203,27 +205,30 @@ export default function SettingsPage() {
             const results = await Promise.all(
                 runnable.map(async (channel) => {
                     try {
-                        const models = await fetchChannelModels(channel, true);
-                        return { channel, models, error: "" };
+                        const result = await fetchChannelModels(channel, true);
+                        return { channel, result, error: "" };
                     } catch (error) {
-                        return { channel, models: [] as string[], error: error instanceof Error ? error.message : "读取失败" };
+                        return { channel, result: { models: [], catalog: [] }, error: error instanceof Error ? error.message : "读取失败" };
                     }
                 }),
             );
             const latestConfig = useConfigStore.getState().config;
             const successful = results.filter((item) => {
                 const latestChannel = latestConfig.channels.find((channel) => channel.id === item.channel.id);
-                return Boolean(item.models.length && latestChannel && channelConnectionSignature(latestChannel) === channelConnectionSignature(item.channel));
+                return Boolean(item.result.models.length && latestChannel && channelConnectionSignature(latestChannel) === channelConnectionSignature(item.channel));
             });
             const stale = results.filter((item) => {
                 const latestChannel = latestConfig.channels.find((channel) => channel.id === item.channel.id);
-                return Boolean(item.models.length && (!latestChannel || channelConnectionSignature(latestChannel) !== channelConnectionSignature(item.channel)));
+                return Boolean(item.result.models.length && (!latestChannel || channelConnectionSignature(latestChannel) !== channelConnectionSignature(item.channel)));
             });
-            const failed = results.filter((item) => !item.models.length);
+            const failed = results.filter((item) => !item.result.models.length);
             if (successful.length) {
-                const modelMap = new Map(successful.map((item) => [item.channel.id, item.models] as const));
+                const resultMap = new Map(successful.map((item) => [item.channel.id, item.result] as const));
                 updateChannels(
-                    latestConfig.channels.map((channel) => (modelMap.has(channel.id) ? { ...channel, models: modelMap.get(channel.id) || channel.models } : channel)),
+                    latestConfig.channels.map((channel) => {
+                        const fetched = resultMap.get(channel.id);
+                        return fetched ? { ...channel, models: fetched.models, modelCosts: mergeFetchedModelCosts(channel, fetched.catalog) } : channel;
+                    }),
                     latestConfig,
                 );
                 message.success(`已更新 ${successful.length} 个渠道的模型`);
@@ -588,6 +593,45 @@ function normalizeDefaultModel(value: string, options: string[]) {
 
 function normalizeImageCount(value: string) {
     return String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || Number(defaultConfig.canvasImageCount)))));
+}
+
+type ChannelModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
+
+// 拉取模型目录时按上游 supported_endpoint_types 推导协议和能力；
+// 保留已有定价，但目录端点类型与旧配置冲突时自动纠正协议，避免模型名猜测和 multipart 错配。
+function mergeFetchedModelCosts(channel: ModelChannel, catalog: ChannelModelCatalogItem[]): ChannelModelCost[] {
+    const existingByModel = new Map((channel.modelCosts || []).map((cost) => [cost.model, cost]));
+    const next: ChannelModelCost[] = [];
+    for (const item of catalog) {
+        const existing = existingByModel.get(item.id);
+        const inferredProtocol = protocolForModelCatalog(item.supportedEndpointTypes);
+        if (existing) {
+            if (inferredProtocol && existing.protocol !== inferredProtocol) {
+                const inferredCapability = modelProtocolCapability(inferredProtocol);
+                next.push({
+                    ...existing,
+                    protocol: inferredProtocol,
+                    capability: inferredCapability || existing.capability,
+                    capabilityConfig: inferredCapability === "image" || inferredCapability === "video" ? defaultModelCapabilityConfig(inferredProtocol, item.id) : undefined,
+                });
+                continue;
+            }
+            next.push(existing);
+            continue;
+        }
+        const catalogProtocol = inferredProtocol || channel.interfaceType;
+        const catalogCapability = catalogProtocol ? modelProtocolCapability(catalogProtocol) : undefined;
+        if (!catalogProtocol || !catalogCapability) continue;
+        next.push({
+            model: item.id,
+            capability: catalogCapability,
+            protocol: catalogProtocol,
+            billingMode: "fixed_request",
+            unitPriceMicrocredits: 0,
+            capabilityConfig: catalogCapability === "image" || catalogCapability === "video" ? defaultModelCapabilityConfig(catalogProtocol, item.id) : undefined,
+        });
+    }
+    return next;
 }
 
 function uniqueModels(models: string[]) {

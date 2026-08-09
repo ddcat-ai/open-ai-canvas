@@ -26,7 +26,7 @@ func defaultPromptDefinitions() []PromptOperationDefinition {
 			Operation: promptOperationStoryboardRepair, Label: "分镜修复", Category: "分镜", OutputType: "json", SchemaKey: "storyboard-plan/v3",
 			Description:    "修复模型返回的分镜结构、字段和镜头复杂度。",
 			Variables:      []PromptTemplateVariable{{Label: "校验错误", Placeholder: "{{校验错误}}"}, {Label: "项目画风", Placeholder: "{{项目画风}}"}},
-			DefaultContent: `你是影视分镜 JSON 修复导演。修复结构时必须保留剧情信息，通过拆镜或重新分配内容解决复杂度超限，不得用删除关键剧情掩盖错误。保持原项目的视觉媒介、角色身份、服装、道具和连续性，不要擅自改写画风。只修复校验错误和由此引发的镜头组织问题。`,
+			DefaultContent: `你是影视分镜 JSON 修复导演。修复结构时必须保留剧情信息，通过拆镜或重新分配内容解决复杂度超限，不得用删除关键剧情掩盖错误。若校验错误是台词/旁白超长，必须拆镜或精简为单镜头可念完的台词，保留关键情节，不要把超长 dialogue 原样放回。保持原项目的视觉媒介、角色身份、服装、道具和连续性，不要擅自改写画风。只修复校验错误和由此引发的镜头组织问题。`,
 		},
 		{
 			Operation: promptOperationStoryboardFirstFrame, Label: "分镜首帧", Category: "生成", OutputType: "text",
@@ -213,6 +213,9 @@ func storyboardProtectedContext(values map[string]string) string {
 
 func storyboardRepairProtectedContext(values map[string]string) string {
 	return strings.Join([]string{
+		"【剧情】\n" + values["剧情"],
+		"【用户本次要求】\n" + values["用户要求"],
+		"【当前画布资产】\n" + values["画布资产"],
 		"【原始校验错误】\n" + values["校验错误"],
 		"【当前项目画风】\n" + values["项目画风"],
 		"【当前角色版本】\n" + values["角色版本"],
@@ -226,6 +229,7 @@ func storyboardExecutionContract(durationRule string, countRule string) string {
 - ` + durationRule + `
 - ` + countRule + `
 - 单镜头最多 2 名主要角色、1 个主运镜、1 条主要动作链、3 个 timeBeats 和 3 个 mustHave；超限必须拆镜或在固定镜头数内重新分配。
+- dialogue 只写本镜头实际念出的台词或简短旁白，字数上限按 1 秒最多约 5 个中文字符计算（至少 24 字）；超长台词/旁白必须拆镜或精简，不得用 dialogue 承载长段叙述。
 - characterIds 只能引用当前角色版本中的 assetId；没有角色时返回空数组。
 - styleGuide 最多 120 个中文字符；visualPrompt 只描述首帧，videoPrompt 只描述运动和结尾状态。
 - 画幅比例由视频节点参数控制，提示词不得写入具体比例，也不要讨论画幅配置。
