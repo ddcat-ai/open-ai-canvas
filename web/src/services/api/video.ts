@@ -61,7 +61,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     const selectedModel = (config.model || config.videoModel).trim();
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     assertVideoConfig(requestConfig, requestConfig.model);
-    assertVideoCapability(modelCapabilityConfigFor(config, selectedModel).video!, prompt, references, videoReferences, audioReferences, config.videoSeconds);
+    assertVideoCapability(modelCapabilityConfigFor(config, selectedModel).video!, references, videoReferences, audioReferences, config.videoSeconds);
     if (requestConfig.interfaceType === "newapi-channel-2") {
         return createVideoGenerationsTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
@@ -80,8 +80,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     return createOpenAIVideoTask(requestConfig, selectedModel, prompt, references, options);
 }
 
-function assertVideoCapability(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], seconds: string) {
-    if (Array.from(prompt).length > profile.references.promptMaxChars) throw new Error(`提示词超过当前模型限制（最多 ${profile.references.promptMaxChars} 字）`);
+function assertVideoCapability(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], seconds: string) {
     if (references.length > profile.references.maxImages || videoReferences.length > profile.references.maxVideos || audioReferences.length > profile.references.maxAudios) throw new Error("参考素材数量超过当前模型限制");
     if (!videoDurationAllowed(profile, Number(seconds))) throw new Error("视频时长不在当前模型支持范围内");
     if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -355,9 +354,6 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 }
 
 func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInput) error {
-	if utf8.RuneCountInString(input.Prompt) > profile.References.PromptMaxChars {
-		return BadAuthRequest(fmt.Sprintf("提示词超过当前模型限制（最多 %d 字）", profile.References.PromptMaxChars))
-	}
 	if len(input.ReferenceImages) > profile.References.MaxImages || len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
 		return BadAuthRequest("参考素材数量超过当前模型限制")
 	}
@@ -409,9 +405,6 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInput) error {
 	if profile == nil {
 		return nil
-	}
-	if utf8.RuneCountInString(input.Prompt) > profile.References.PromptMaxChars {
-		return BadAuthRequest(fmt.Sprintf("提示词超过当前模型限制（最多 %d 字）", profile.References.PromptMaxChars))
 	}
 	if len(input.ReferenceImages) > profile.References.MaxImages {
 		return BadAuthRequest(fmt.Sprintf("当前图片模型最多支持 %d 张参考图", profile.References.MaxImages))
