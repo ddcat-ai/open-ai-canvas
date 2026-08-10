@@ -833,7 +833,10 @@ func grokImageInputURL(media providerMedia) (string, error) {
 	return openAIImageInputURL(media)
 }
 
-const volcengineArkImageMaxPixels = 4624220
+const (
+	volcengineArkImageMinPixels = 3686400
+	volcengineArkImageMaxPixels = 4624220
+)
 
 func runVolcengineArkImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	if input.Mask != nil {
@@ -896,12 +899,26 @@ func normalizeVolcengineArkImageSize(value string) string {
 	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
 		return size
 	}
-	if int64(width)*int64(height) <= volcengineArkImageMaxPixels {
+	pixels := int64(width) * int64(height)
+	if pixels >= volcengineArkImageMinPixels && pixels <= volcengineArkImageMaxPixels {
 		return size
 	}
-	scale := math.Sqrt(float64(volcengineArkImageMaxPixels) / (float64(width) * float64(height)))
-	width = int(math.Floor(float64(width)*scale/2)) * 2
-	height = int(math.Floor(float64(height)*scale/2)) * 2
+	targetPixels := volcengineArkImageMaxPixels
+	round := math.Floor
+	if pixels < volcengineArkImageMinPixels {
+		targetPixels = volcengineArkImageMinPixels
+		round = math.Ceil
+	}
+	scale := math.Sqrt(float64(targetPixels) / float64(pixels))
+	width = int(round(float64(width)*scale/2)) * 2
+	height = int(round(float64(height)*scale/2)) * 2
+	for width > 2 && height > 2 && int64(width)*int64(height) < volcengineArkImageMinPixels {
+		if width >= height {
+			width += 2
+		} else {
+			height += 2
+		}
+	}
 	for width > 2 && height > 2 && int64(width)*int64(height) > volcengineArkImageMaxPixels {
 		if width >= height {
 			width -= 2

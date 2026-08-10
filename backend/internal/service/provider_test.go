@@ -142,8 +142,29 @@ func TestVolcengineArkImageBodyUsesJSONReferencesAndDownscalesSize(t *testing.T)
 	}
 	width, _ := strconv.Atoi(parts[0])
 	height, _ := strconv.Atoi(parts[1])
-	if width%2 != 0 || height%2 != 0 || int64(width)*int64(height) > volcengineArkImageMaxPixels {
+	if width%2 != 0 || height%2 != 0 || int64(width)*int64(height) < volcengineArkImageMinPixels || int64(width)*int64(height) > volcengineArkImageMaxPixels {
 		t.Fatalf("downscaled size = %q", size)
+	}
+}
+
+func TestVolcengineArkImageBodyUpscalesPresetBelowMinimumPixels(t *testing.T) {
+	body, err := volcengineArkImageBody(canvasGenerationInput{
+		Prompt: "vertical image",
+		Config: providerConfig{Model: "doubao-seedream-test", Size: "9:16"},
+	})
+	if err != nil {
+		t.Fatalf("volcengineArkImageBody() error = %v", err)
+	}
+	size, _ := body["size"].(string)
+	parts := strings.Split(size, "x")
+	if len(parts) != 2 {
+		t.Fatalf("size = %q", size)
+	}
+	width, _ := strconv.Atoi(parts[0])
+	height, _ := strconv.Atoi(parts[1])
+	pixels := int64(width) * int64(height)
+	if width%2 != 0 || height%2 != 0 || pixels < volcengineArkImageMinPixels || pixels > volcengineArkImageMaxPixels {
+		t.Fatalf("normalized size = %q", size)
 	}
 }
 
