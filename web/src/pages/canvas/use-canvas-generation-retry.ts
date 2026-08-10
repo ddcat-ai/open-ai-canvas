@@ -15,6 +15,7 @@ import {
     findRetrySourceNode,
     generationReferenceUrls,
     isGenerationCanceled,
+    limitCanvasImageReferences,
     resolveMetadataReferences,
     resolveStoredReferenceImages,
     runBackendCanvasGenerationTask,
@@ -140,7 +141,7 @@ export function useCanvasGenerationRetry({ projectId, domainProjectId, addedSkil
                 message.error("参考图片已丢失，无法继续重试");
                 return;
             }
-            const retryImages = retryReferenceImages || [];
+            const retryImages = retryMode === "image" ? limitCanvasImageReferences(generationConfig, retryReferenceImages || []) : retryReferenceImages || [];
             const storedVideoImages = node.type === CanvasNodeType.Video && !context?.referenceImages.length ? await resolveStoredReferenceImages(node.metadata?.references) : [];
             if (storedVideoImages === null) {
                 markMissingReferences(node.id, setNodes);
