@@ -447,7 +447,25 @@ func (s *Service) PublicSystemChannels() ([]PublicModelChannel, error) {
 }
 
 func (s *Service) SystemChannel(id string) (*model.ModelChannel, error) {
-	return s.repo.SystemChannel(id)
+	channel, err := s.repo.SystemChannel(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.decryptSystemChannelSecrets(channel); err != nil {
+		return nil, err
+	}
+	return channel, nil
+}
+
+func (s *Service) adminSystemChannel(id string) (*model.ModelChannel, error) {
+	channel, err := s.repo.AdminSystemChannel(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.decryptSystemChannelSecrets(channel); err != nil {
+		return nil, err
+	}
+	return channel, nil
 }
 
 func (s *Service) AdminSystemChannelPage(actor *model.User, query AdminListQuery) (*AdminChannelPage, error) {
@@ -488,6 +506,9 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 	if err != nil {
 		return nil, err
 	}
+	if err := s.encryptSystemChannelSecrets(&channel); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Create(&channel); err != nil {
 		return nil, err
 	}
@@ -510,6 +531,9 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err != nil {
 		return nil, err
 	}
+	if err := s.decryptSystemChannelSecrets(channel); err != nil {
+		return nil, err
+	}
 	req = mergeChannelRequest(req, *channel)
 	next, err := channelFromRequest(req, *channel)
 	if err != nil {
@@ -525,6 +549,9 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if req.SecretKey == "" {
 		next.SecretKey = channel.SecretKey
 	}
+	if err := s.encryptSystemChannelSecrets(&next); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Save(&next); err != nil {
 		return nil, err
 	}
@@ -537,6 +564,34 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	}
 	public := publicChannel(next, true, items)
 	return &public, nil
+}
+
+func (s *Service) encryptSystemChannelSecrets(channel *model.ModelChannel) error {
+	apiKey, err := s.encryptSettingSecret(channel.APIKey)
+	if err != nil {
+		return err
+	}
+	secretKey, err := s.encryptSettingSecret(channel.SecretKey)
+	if err != nil {
+		return err
+	}
+	channel.APIKey = apiKey
+	channel.SecretKey = secretKey
+	return nil
+}
+
+func (s *Service) decryptSystemChannelSecrets(channel *model.ModelChannel) error {
+	apiKey, err := s.decryptSettingSecret(channel.APIKey)
+	if err != nil {
+		return err
+	}
+	secretKey, err := s.decryptSettingSecret(channel.SecretKey)
+	if err != nil {
+		return err
+	}
+	channel.APIKey = apiKey
+	channel.SecretKey = secretKey
+	return nil
 }
 
 func (s *Service) DeleteSystemChannel(actor *model.User, id string) error {
