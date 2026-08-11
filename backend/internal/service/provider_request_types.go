@@ -40,12 +40,13 @@ type seedanceVideosRequest struct {
 }
 
 type xaiVideoRequest struct {
-	Model       string         `json:"model"`
-	Prompt      string         `json:"prompt"`
-	Duration    int            `json:"duration"`
-	AspectRatio string         `json:"aspect_ratio"`
-	Resolution  string         `json:"resolution"`
-	Image       *xaiVideoImage `json:"image,omitempty"`
+	Model           string          `json:"model"`
+	Prompt          string          `json:"prompt"`
+	Duration        int             `json:"duration"`
+	AspectRatio     string          `json:"aspect_ratio"`
+	Resolution      string          `json:"resolution"`
+	Image           *xaiVideoImage  `json:"image,omitempty"`
+	ReferenceImages []xaiVideoImage `json:"reference_images,omitempty"`
 }
 
 type xaiVideoImage struct {
