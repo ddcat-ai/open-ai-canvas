@@ -1064,6 +1064,16 @@ func TestNewAPIChannel2SingleImageModelsRequireOneReference(t *testing.T) {
 	}
 }
 
+func TestNewAPIChannel2RejectsAudioWithoutReferenceVideo(t *testing.T) {
+	_, err := newAPIChannel2VideoRequestBody(canvasGenerationInput{
+		Config:          providerConfig{Model: "grok-image-video", VideoSeconds: "6"},
+		ReferenceAudios: []providerMedia{{ID: "audio-1", URL: "https://example.com/reference.mp3"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "必须同时提供至少 1 个参考视频") {
+		t.Fatalf("newAPIChannel2VideoRequestBody() error = %v", err)
+	}
+}
+
 func TestNewAPIChannel2SingleImageModelUsesReferenceForStaleTextToVideoMetadata(t *testing.T) {
 	body, err := newAPIChannel2VideoRequestBody(canvasGenerationInput{
 		Config:          providerConfig{Model: "grok-video-1.5", VideoSeconds: "6"},
