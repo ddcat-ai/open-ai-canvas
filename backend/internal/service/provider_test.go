@@ -691,7 +691,7 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 	}
 }
 
-func TestXAIVideoBodyUsesOfficialImageShapeAndNormalizesSettings(t *testing.T) {
+func TestXAIVideoBodyWithoutStartFramePutsAllImagesIntoReferenceImages(t *testing.T) {
 	body, err := xaiVideoRequestBody(canvasGenerationInput{
 		Prompt: "make it move",
 		Config: providerConfig{
@@ -701,31 +701,69 @@ func TestXAIVideoBodyUsesOfficialImageShapeAndNormalizesSettings(t *testing.T) {
 			Size:          "1024x1792",
 			VQuality:      "1080",
 		},
-		ReferenceImages: []providerMedia{{ID: "image-1", DataURL: testReferenceImageDataURL}},
-		Metadata:        map[string]interface{}{"videoEditOperation": "image_to_video"},
-	})
-	if err != nil {
-		t.Fatalf("grokVideoBody() error = %v", err)
-	}
-	if body.Duration != 20 || body.AspectRatio != "9:16" || body.Resolution != "1080p" {
-		t.Fatalf("xAI settings = %#v", body)
-	}
-	if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
-		t.Fatalf("image = %#v", body.Image)
-	}
-}
-
-func TestXAIVideoBodyRejectsMultipleStartImages(t *testing.T) {
-	_, err := xaiVideoRequestBody(canvasGenerationInput{
-		Config: providerConfig{Model: "grok-imagine-video-1.5", InterfaceType: "xai-video"},
 		ReferenceImages: []providerMedia{
 			{ID: "image-1", DataURL: testReferenceImageDataURL},
 			{ID: "image-2", DataURL: testReferenceImageDataURL},
 		},
 		Metadata: map[string]interface{}{"videoEditOperation": "image_to_video"},
 	})
+	if err != nil {
+		t.Fatalf("xaiVideoRequestBody() error = %v", err)
+	}
+	if body.Duration != 20 || body.AspectRatio != "9:16" || body.Resolution != "1080p" {
+		t.Fatalf("xAI settings = %#v", body)
+	}
+	if body.Image != nil {
+		t.Fatalf("image should be nil without start frame, got %#v", body.Image)
+	}
+	if len(body.ReferenceImages) != 2 || body.ReferenceImages[0].URL != testReferenceImageDataURL || body.ReferenceImages[1].URL != testReferenceImageDataURL {
+		t.Fatalf("reference_images = %#v", body.ReferenceImages)
+	}
+}
+
+func TestXAIVideoBodyWithStartFrameKeepsOfficialImageShape(t *testing.T) {
+	body, err := xaiVideoRequestBody(canvasGenerationInput{
+		Config: providerConfig{Model: "grok-imagine-video-1.5", InterfaceType: "xai-video"},
+		ReferenceImages: []providerMedia{
+			{ID: "image-1", DataURL: testReferenceImageDataURL},
+		},
+		Metadata: map[string]interface{}{"videoEditOperation": "image_to_video", "videoStartFrameNodeId": "image-1"},
+	})
+	if err != nil {
+		t.Fatalf("xaiVideoRequestBody() error = %v", err)
+	}
+	if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
+		t.Fatalf("image = %#v", body.Image)
+	}
+	if len(body.ReferenceImages) != 0 {
+		t.Fatalf("reference_images = %#v", body.ReferenceImages)
+	}
+}
+
+func TestXAIVideoBodyWithStartFrameRejectsMultipleImages(t *testing.T) {
+	_, err := xaiVideoRequestBody(canvasGenerationInput{
+		Config: providerConfig{Model: "grok-imagine-video-1.5", InterfaceType: "xai-video"},
+		ReferenceImages: []providerMedia{
+			{ID: "image-1", DataURL: testReferenceImageDataURL},
+			{ID: "image-2", DataURL: testReferenceImageDataURL},
+		},
+		Metadata: map[string]interface{}{"videoEditOperation": "image_to_video", "videoStartFrameNodeId": "image-1"},
+	})
 	if err == nil || !strings.Contains(err.Error(), "只支持 1 张起始图") {
-		t.Fatalf("grokVideoBody() error = %v", err)
+		t.Fatalf("xaiVideoRequestBody() error = %v", err)
+	}
+}
+
+func TestXAIVideoBodyWithMissingStartFrameImageErrors(t *testing.T) {
+	_, err := xaiVideoRequestBody(canvasGenerationInput{
+		Config: providerConfig{Model: "grok-imagine-video-1.5", InterfaceType: "xai-video"},
+		ReferenceImages: []providerMedia{
+			{ID: "image-2", DataURL: testReferenceImageDataURL},
+		},
+		Metadata: map[string]interface{}{"videoEditOperation": "image_to_video", "videoStartFrameNodeId": "image-1"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "首帧参考图未包含") {
+		t.Fatalf("xaiVideoRequestBody() error = %v", err)
 	}
 }
 
