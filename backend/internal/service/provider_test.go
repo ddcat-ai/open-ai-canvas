@@ -208,8 +208,20 @@ func TestGrokImageRequestBodyMapsAspectRatio(t *testing.T) {
 	if path != "/images/generations" {
 		t.Fatalf("path = %q", path)
 	}
-	if body.AspectRatio != "9:16" || body.Size != "9:16" || body.Resolution != "2k" {
+	if body.AspectRatio != "9:16" || body.Resolution != "2k" {
 		t.Fatalf("body = %#v", body)
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	// Grok 使用 aspect_ratio；测试锁定请求 JSON，防止非法 size 字段再次混入。
+	if _, exists := payload["size"]; exists {
+		t.Fatalf("request body must not contain size: %s", encoded)
 	}
 	if got := normalizeGrokImageAspectRatio("1280x720"); got != "16:9" {
 		t.Fatalf("normalize 1280x720 = %q", got)
