@@ -750,7 +750,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                             {agentBusy ? <AgentWorkingMessage theme={theme} /> : null}
                         </>
                     ) : (
-                        <AgentChatEmptyState theme={theme} nodeCount={contextSummary.nodeCount} onSelect={setPrompt} />
+                        <AgentChatEmptyState theme={theme} nodeCount={contextSummary.nodeCount} onSelect={(text) => { setPrompt(text); void sendMessage(text, messages); }} />
                     )}
                 </div>
             )}

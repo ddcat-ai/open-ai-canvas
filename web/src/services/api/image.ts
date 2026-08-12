@@ -387,6 +387,11 @@ function toChatCompletionToolChoice(toolChoice: ToolChoice) {
     return typeof toolChoice === "object" ? { type: "function", function: { name: toolChoice.name } } : toolChoice;
 }
 
+function isToolChoiceCompatibilityError(error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    return /tool[_\s-]?choice|thinking\s+mode/i.test(message);
+}
+
 function parseChatCompletionPayload(payload: ChatCompletionPayload): ToolResponseResult {
     if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "请求失败");
     if (payload.error?.message) throw new Error(payload.error.message);
@@ -997,7 +1002,7 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
             if (answer === "没有返回内容") onDelta(answer);
             return answer;
         }
-        if (requestConfig.interfaceType === "chat-completion") {
+        if (requestConfig.interfaceType === "chat-completion" || !requestConfig.interfaceType) {
             const answer =
                 (
                     await requestStreamingChatCompletion(
@@ -1038,19 +1043,31 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
         if (requestConfig.apiFormat === "gemini") {
             return await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages, toGeminiToolOptions(tools, toolChoice)), onDelta, options);
         }
-        if (requestConfig.interfaceType === "chat-completion") {
-            return await requestStreamingChatCompletion(
-                requestConfig,
-                {
-                    model: requestConfig.model,
-                    messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
-                    tools,
-                    tool_choice: toChatCompletionToolChoice(toolChoice),
-                    parallel_tool_calls: false,
-                },
-                onDelta,
-                options,
-            );
+        if (requestConfig.interfaceType === "chat-completion" || !requestConfig.interfaceType) {
+            const chatPayload: Record<string, unknown> = {
+                model: requestConfig.model,
+                messages: toChatCompletionMessages(withSystemMessage(requestConfig, messages)),
+                tools,
+                tool_choice: toChatCompletionToolChoice(toolChoice),
+                parallel_tool_calls: false,
+            };
+            try {
+                return await requestStreamingChatCompletion(requestConfig, chatPayload, onDelta, options);
+            } catch (error) {
+                if (!isToolChoiceCompatibilityError(error)) throw error;
+
+                // 部分 OpenAI 兼容上游仅支持 auto，思考模式则可能要求完全省略该字段。
+                if (toolChoice !== "auto") {
+                    try {
+                        return await requestStreamingChatCompletion(requestConfig, { ...chatPayload, tool_choice: toChatCompletionToolChoice("auto") }, onDelta, options);
+                    } catch (autoError) {
+                        if (!isToolChoiceCompatibilityError(autoError)) throw autoError;
+                    }
+                }
+                const { tool_choice: _ignored, ...withoutToolChoice } = chatPayload;
+                void _ignored;
+                return await requestStreamingChatCompletion(requestConfig, withoutToolChoice, onDelta, options);
+            }
         }
         return await requestStreamingResponse(
             requestConfig,

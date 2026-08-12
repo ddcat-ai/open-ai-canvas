@@ -103,10 +103,10 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
     if (collapsed) {
         return (
             <aside className="relative z-[var(--z-panel)] hidden w-11 shrink-0 flex-col items-center border-r border-border bg-background/94 py-2 backdrop-blur-xl lg:flex">
-                <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="展开项目侧栏" aria-label="展开项目侧栏" onClick={() => setCollapsed(false)}>
+                <button type="button" className="grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-surface-hover" title="展开项目侧栏" aria-label="展开项目侧栏" onClick={() => setCollapsed(false)}>
                     <ChevronRight className="size-4" />
                 </button>
-                <Link to={`/projects/${projectId}/canvases`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-foreground/[.06]" title="返回项目画布列表">
+                <Link to={`/projects/${projectId}/canvases`} className="mt-2 grid size-7 place-items-center rounded-md text-foreground/55 hover:bg-surface-hover" title="返回项目画布列表">
                     <FolderKanban className="size-4" />
                 </Link>
             </aside>
@@ -120,7 +120,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     <FolderKanban className="size-3.5 shrink-0" />
                     <span className="truncate">{projectDetail?.project.name || "项目空间"}</span>
                 </Link>
-                <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-foreground/45 hover:bg-foreground/[.06]" title="收起项目侧栏" aria-label="收起项目侧栏" onClick={() => setCollapsed(true)}>
+                <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-foreground/45 hover:bg-surface-hover" title="收起项目侧栏" aria-label="收起项目侧栏" onClick={() => setCollapsed(true)}>
                     <ChevronLeft className="size-4" />
                 </button>
             </header>
@@ -131,7 +131,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                         <Palette className="size-3.5" />
                         项目画风
                     </span>
-                    <Link to={`/projects/${projectId}/settings`} className="grid size-6 place-items-center rounded text-foreground/35 hover:bg-foreground/[.06] hover:text-foreground" title="编辑项目画风" aria-label="编辑项目画风">
+                    <Link to={`/projects/${projectId}/settings`} className="grid size-6 place-items-center rounded text-foreground/35 hover:bg-surface-hover hover:text-foreground" title="编辑项目画风" aria-label="编辑项目画风">
                         <Settings2 className="size-3.5" />
                     </Link>
                 </div>
@@ -139,7 +139,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                     type="button"
                     disabled={!style}
                     onClick={onLocateStyle}
-                    className="group flex h-11 w-full items-center gap-2 rounded-md px-1.5 text-left hover:bg-foreground/[.045] disabled:cursor-default disabled:hover:bg-transparent"
+                    className="group flex h-11 w-full items-center gap-2 rounded-md px-1.5 text-left hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
                     title={style ? "定位画布中的项目画风节点" : "项目尚未设置画风"}
                 >
                     {style ? (
@@ -164,7 +164,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                         剧情章节 <span className="tabular-nums text-foreground/32">{orderedUnits.length.toLocaleString("zh-CN")}</span>
                     </span>
                     {selectedId ? (
-                        <button type="button" onClick={revealSelectedChapter} className="grid size-6 place-items-center rounded text-foreground/35 hover:bg-foreground/[.06] hover:text-foreground" title="回到当前章节" aria-label="回到当前章节">
+                        <button type="button" onClick={revealSelectedChapter} className="grid size-6 place-items-center rounded text-foreground/35 hover:bg-surface-hover hover:text-foreground" title="回到当前章节" aria-label="回到当前章节">
                             <Crosshair className="size-3.5" />
                         </button>
                     ) : null}
@@ -183,7 +183,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                             aria-label="搜索项目章节"
                         />
                         {query ? (
-                            <button type="button" onClick={() => setQuery("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-foreground/[.06] hover:text-foreground" aria-label="清空章节搜索">
+                            <button type="button" onClick={() => setQuery("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" aria-label="清空章节搜索">
                                 <X className="size-3" />
                             </button>
                         ) : null}
@@ -208,7 +208,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
                                                 event.dataTransfer.setData(CANVAS_PROJECT_CHAPTER_DND_TYPE, JSON.stringify(payload));
                                                 event.dataTransfer.effectAllowed = "copy";
                                             }}
-                                            className={`group flex h-9 cursor-grab items-center gap-1 rounded-md px-1 text-xs active:cursor-grabbing ${active ? "bg-foreground/[.08]" : "hover:bg-foreground/[.045]"}`}
+                                            className={`group flex h-9 cursor-grab items-center gap-1 rounded-md px-1 text-xs active:cursor-grabbing ${active ? "bg-surface-active" : "hover:bg-surface-hover"}`}
                                         >
                                             <GripVertical className="size-3.5 shrink-0 text-foreground/22" />
                                             <button
@@ -295,7 +295,7 @@ function ChapterPreview({
                     <div className="text-[var(--fs-tiny)] tabular-nums text-foreground/38">第 {chapterNumber.toLocaleString("zh-CN")} 章</div>
                     <h2 className="mt-0.5 truncate text-sm font-semibold">{unit.title}</h2>
                 </div>
-                <button type="button" onClick={onClose} className="grid size-6 shrink-0 place-items-center rounded text-foreground/38 hover:bg-foreground/[.06] hover:text-foreground" aria-label="关闭章节预览">
+                <button type="button" onClick={onClose} className="grid size-6 shrink-0 place-items-center rounded text-foreground/38 hover:bg-surface-hover hover:text-foreground" aria-label="关闭章节预览">
                     <X className="size-3.5" />
                 </button>
             </header>
@@ -312,7 +312,7 @@ function ChapterPreview({
                 >
                     {adding ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}添加到画布
                 </button>
-                <Link to={`/projects/${projectId}/chapters/${unit.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-foreground/62 hover:bg-foreground/[.06] hover:text-foreground">
+                <Link to={`/projects/${projectId}/chapters/${unit.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground">
                     打开编辑器
                     <ArrowUpRight className="size-3.5" />
                 </Link>
