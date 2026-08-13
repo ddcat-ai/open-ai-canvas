@@ -491,7 +491,7 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, requirePublicURL bool) error {
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
 		if requirePublicURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
-			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到 OSS 或提供公网素材地址")
+			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
 		}
 		return nil
 	}
@@ -1813,7 +1813,7 @@ func videoGenerationsMediaURL(media providerMedia) (string, error) {
 	if isPublicMediaURL(value) || strings.HasPrefix(value, "data:") {
 		return value, nil
 	}
-	return "", errors.New("NewAPI Video Generations 的参考素材需要公网 URL；私有素材请先保存到 OSS")
+	return "", errors.New("NewAPI Video Generations 的参考素材需要公网 URL；私有素材请先保存到对象存储")
 }
 
 func normalizeNewAPIChannel2Ratio(value string, modelName string) string {
@@ -1968,7 +1968,7 @@ func newAPIChannel1VideoBody(input canvasGenerationInput) (map[string]interface{
 func newAPIChannel1MediaURL(media providerMedia) (string, error) {
 	value := strings.TrimSpace(media.URL)
 	if !isPublicMediaURL(value) {
-		return "", errors.New("NewAPI 媒体任务的参考素材必须使用公网 HTTP(S) URL，请启用 OSS 或提供公网素材地址")
+		return "", errors.New("NewAPI 媒体任务的参考素材必须使用公网 HTTP(S) URL，请启用对象存储或提供公网素材地址")
 	}
 	if _, err := ValidateOutboundURL(value); err != nil {
 		return "", err

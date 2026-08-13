@@ -153,7 +153,7 @@ async function pollVideoGenerationsTask(config: ResolvedAiConfig, task: VideoGen
 async function resolveVideoGenerationsUrl(value: string | undefined, storageKey?: string) {
     if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
     if (isPublicMediaUrl(value || "")) return String(value);
-    throw new Error("NewAPI Video Generations 的参考素材需要公网 URL；请先把素材保存到 OSS");
+    throw new Error("NewAPI Video Generations 的参考素材需要公网 URL；请先把素材保存到对象存储");
 }
 
 type GeminiVeoOperation = {
@@ -433,7 +433,7 @@ async function buildVolcengineArkContent(prompt: string, references: ReferenceIm
 async function resolveVolcengineArkReferenceUrl(value: string | undefined, storageKey?: string) {
     if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
     if (isPublicMediaUrl(value || "") || String(value || "").startsWith("asset://")) return String(value);
-    throw new Error("火山方舟视频参考素材需要公网 URL 或 asset:// 素材 ID；请先将本地素材保存到 OSS");
+    throw new Error("火山方舟视频参考素材需要公网 URL 或 asset:// 素材 ID；请先将本地素材保存到对象存储");
 }
 
 async function buildSeedanceVideosPayload(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[]) {
