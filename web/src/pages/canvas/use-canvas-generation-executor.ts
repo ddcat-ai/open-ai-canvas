@@ -35,6 +35,7 @@ type UseCanvasGenerationExecutorOptions = {
     startGenerationRequest: (targetNodeId: string, originNodeId: string, runningId?: string, controller?: AbortController) => AbortController;
     finishGenerationRequest: (targetNodeId: string, controller: AbortController) => void;
     bindGenerationTask: (targetNodeId: string, task: GenerationTask) => void;
+    applyGenerationTaskResult: (targetNodeId: string, task: GenerationTask) => Promise<void>;
 };
 
 const NODE_STATUS_IDLE = "idle" as const;
@@ -44,6 +45,9 @@ const NODE_STATUS_ERROR = "error" as const;
 export type CanvasNodeGenerationOptions = {
     controller?: AbortController;
     waitForTaskCapacity?: boolean;
+    context?: { conversationId?: string; messageId?: string };
+    retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
+    onTaskUpdate?: (task: GenerationTask) => void;
 };
 
 export function useCanvasGenerationExecutor({
@@ -61,6 +65,7 @@ export function useCanvasGenerationExecutor({
     startGenerationRequest,
     finishGenerationRequest,
     bindGenerationTask,
+    applyGenerationTaskResult,
 }: UseCanvasGenerationExecutorOptions) {
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
@@ -224,6 +229,8 @@ export function useCanvasGenerationExecutor({
                 controller,
                 editingTextNode,
                 styleMetadata,
+                taskContext: options?.context,
+                retryContext: options?.retryContext,
                 setNodes,
                 setConnections,
                 setSelectedNodeIds,
@@ -231,7 +238,11 @@ export function useCanvasGenerationExecutor({
                 setDialogNodeId,
                 startGenerationRequest,
                 finishGenerationRequest,
-                bindGenerationTask,
+                bindGenerationTask: (targetNodeId: string, task: GenerationTask) => {
+                    bindGenerationTask(targetNodeId, task);
+                    options?.onTaskUpdate?.(task);
+                },
+                applyGenerationTaskResult,
                 showError: (content: string) => message.error(content),
                 registerPendingNodeIds: (nodeIds: string[]) => {
                     pendingNodeIds = nodeIds;
@@ -267,7 +278,7 @@ export function useCanvasGenerationExecutor({
                 setRunningNodeId(null);
             }
         },
-        [addedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
+        [addedSkills, applyGenerationTaskResult, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
 }
 

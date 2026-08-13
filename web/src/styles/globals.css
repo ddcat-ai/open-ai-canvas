@@ -7039,6 +7039,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 
 .creation-results { width: 100%; }
 .creation-user-message {
+    position: relative;
     max-width: min(62%, 640px);
     margin: 0 0 42px auto;
     border-radius: 14px 14px 5px 14px;
@@ -7049,6 +7050,12 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     line-height: 1.7;
     white-space: pre-wrap;
 }
+.creation-user-message-prompt { padding-right: 22px; }
+.creation-user-message-copy { position: absolute; top: 8px; right: 8px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 6px; background: transparent; padding: 0; color: var(--creation-faint); cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+.creation-user-message-copy:hover { background: rgba(255, 255, 255, .08); color: var(--creation-text); }
+.creation-user-message-copy:focus-visible { outline: 2px solid var(--creation-text); outline-offset: 2px; }
+.creation-user-message-copy svg { width: 13px; height: 13px; }
+html:not(.dark) .creation-user-message-copy:hover { background: rgba(28, 32, 37, .08); }
 
 .creation-user-message-references { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .creation-user-message-reference { display: inline-flex; min-width: 0; max-width: 180px; height: 25px; align-items: center; gap: 5px; border-radius: 6px; background: rgba(255, 255, 255, .075); padding: 0 7px; color: var(--creation-muted); font-size: 10px; line-height: 1; }

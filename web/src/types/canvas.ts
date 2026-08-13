@@ -208,11 +208,28 @@ export type CanvasNodeMetadata = {
     actionBoardRows?: number;
     actionBoardColumns?: number;
     taskId?: string;
+    taskClientOperationId?: string;
+    retryOf?: string;
+    attemptGroupId?: string;
     taskStatus?: "queued" | "running" | "succeeded" | "failed" | "cancelled" | string;
     taskProgress?: number;
     taskStage?: string;
+    taskProvider?: string;
+    taskErrorCode?: string;
+    taskOfficialStatus?: "pending" | "processing" | "completed" | "failed" | "cancelled";
+    taskReceiptRecorded?: boolean;
     taskCreatedAt?: string;
     taskUpdatedAt?: string;
+    generationEffectKeys?: string[];
+    agentGenerationContinuation?: {
+        id: string;
+        taskId: string;
+        conversationId?: string;
+        messageId?: string;
+        source?: "online" | "local";
+        status: "pending" | "completed" | "failed";
+        effectKey?: string;
+    };
     sessionId?: string;
     videoEditOperation?: CanvasVideoEditOperation;
     videoCameraMoveId?: string;
@@ -351,6 +368,7 @@ export type CanvasAssistantSession = {
     title: string;
     messages: CanvasAssistantMessage[];
     pendingBackendSession?: CanvasAssistantPendingBackendSession;
+    generationEffectKeys?: string[];
     createdAt: string;
     updatedAt: string;
 };

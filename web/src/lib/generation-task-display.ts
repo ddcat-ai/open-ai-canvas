@@ -8,6 +8,38 @@ export const statusLabel: Record<TaskStatus, string> = {
     cancelled: "已取消",
 };
 
+type GenerationTaskDisplayTarget = Pick<GenerationTask, "provider" | "status" | "stage" | "officialStatus"> & Partial<Pick<GenerationTask, "errorCode">>;
+
+export function isGenerationTaskSubmissionUncertain(task: GenerationTaskDisplayTarget) {
+    return task.provider === "dreamina-cli"
+        && (task.stage === "submission_unknown" || task.errorCode === "dreamina_submission_unknown");
+}
+
+export function generationTaskStatusLabel(task: GenerationTaskDisplayTarget) {
+    if (isGenerationTaskSubmissionUncertain(task)) return "提交结果待确认";
+    if (task.provider === "dreamina-cli" && task.stage === "submitting") return "正在提交";
+    if (task.provider === "dreamina-cli" && task.officialStatus === "pending") return "官方排队中";
+    if (task.provider === "dreamina-cli" && task.officialStatus === "processing") return "生成中";
+    if (task.provider === "dreamina-cli" && task.officialStatus === "completed") return "官方已完成";
+    if (task.provider === "dreamina-cli" && task.status === "running" && task.stage === "submitted") return "状态待更新";
+    return statusLabel[task.status];
+}
+
+export function generationTaskStageLabel(task: GenerationTaskDisplayTarget) {
+    if (isGenerationTaskSubmissionUncertain(task)) return "为避免重复扣费，未自动重试";
+    if (task.provider === "dreamina-cli" && task.stage === "submitting") return "正在提交，等待官方确认";
+    if (task.provider === "dreamina-cli" && task.officialStatus) return `官方返回状态：${task.officialStatus}`;
+    if (task.provider === "dreamina-cli" && task.status === "running" && task.stage === "submitted") return "已提交，等待状态更新";
+    if (task.stage === "generating") return "生成中";
+    if (task.stage === "queued") return "排队中";
+    return task.stage || generationTaskStatusLabel(task);
+}
+
+export function generationTaskShowsProgress(task: GenerationTaskDisplayTarget) {
+    if (isGenerationTaskSubmissionUncertain(task)) return false;
+    return !(task.provider === "dreamina-cli" && task.status === "running" && (task.stage === "submitting" || task.stage === "submitted"));
+}
+
 export const operationOptions = [
     { label: "Agent 会话：拆解影视工作流", value: "agent_session" },
     { label: "文生视频", value: "text_to_video" },

@@ -2,11 +2,9 @@ import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canGenerateImageInPlace, findAvailableGenerationGroupPosition, imageGenerationChildPosition, imageGenerationGroupSize } from "@/lib/canvas/canvas-generation-layout";
-import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { fitNodeSize, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
-import { buildImageGenerationMetadata, getGenerationCount, isGenerationCanceled, limitCanvasImageReferences, runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
+import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { buildImageGenerationMetadata, getGenerationCount, isGenerationCanceled, limitCanvasImageReferences, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, generationFailureMetadata, type GenerationFailureMetadata } from "@/lib/generation-error";
-import { uploadImage } from "@/services/image-storage";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
@@ -34,7 +32,10 @@ export async function executeImageGeneration({
     startGenerationRequest,
     finishGenerationRequest,
     bindGenerationTask,
+    applyGenerationTaskResult,
     styleMetadata,
+    taskContext,
+    retryContext,
     showError,
     registerPendingNodeIds,
 }: CanvasGenerationExecution) {
@@ -139,32 +140,49 @@ export async function executeImageGeneration({
     await Promise.all(
         targetIds.map(async (targetId) => {
             try {
-                const result = await runBackendCanvasGenerationTask({
+                await runCanvasGenerationTaskToConsumer({
                     projectId,
                     nodeId: targetId,
+                    ...retryContext,
                     mode: "image",
                     prompt: effectivePrompt,
                     config: { ...generationConfig, count: "1" },
                     referenceImages,
                     signal: controller.signal,
-                    metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...styleMetadata },
-                    onTaskCreated: (task) => bindGenerationTask(targetId, task),
+                    metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...styleMetadata },
+                }, {
+                    bindTask: (task) => bindGenerationTask(targetId, task),
+                    consumeTask: (task) => applyGenerationTaskResult(targetId, task),
                 });
-                const image = result.images?.[0];
-                if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
-                const uploaded = await uploadImage(image.dataUrl);
-                const imageSize = imageSizeSource ? outputNodeSize : fitNodeSize(uploaded.width, uploaded.height, outputNodeSize.width, outputNodeSize.height);
-                setNodes((current) => {
-                    const root = directCopiedBatch ? undefined : current.find((node) => node.id === rootId);
-                    return current.map((node) => {
-                        if (node.id !== targetId && (!root || node.id !== rootId)) return node;
-                        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-                        const geometry = node.metadata?.locked ? {} : { position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 }, width: imageSize.width, height: imageSize.height };
-                        if (node.id === rootId && (targetId === rootId || !root?.metadata?.primaryImageId)) return { ...node, ...geometry, metadata: { ...node.metadata, ...imageMetadata(uploaded), primaryImageId: targetId } };
-                        if (node.id === targetId) return { ...node, ...geometry, metadata: { ...node.metadata, ...imageMetadata(uploaded) } };
-                        return node;
+                if (targetId !== rootId && !directCopiedBatch) {
+                    setNodes((current) => {
+                        const child = current.find((node) => node.id === targetId);
+                        const root = current.find((node) => node.id === rootId);
+                        if (!child?.metadata?.content || !root || root.metadata?.primaryImageId) return current;
+                        const center = { x: root.position.x + root.width / 2, y: root.position.y + root.height / 2 };
+                        const geometry = root.metadata?.locked ? {} : {
+                            width: child.width,
+                            height: child.height,
+                            position: { x: center.x - child.width / 2, y: center.y - child.height / 2 },
+                        };
+                        return current.map((node) => node.id === rootId ? {
+                            ...node,
+                            ...geometry,
+                            metadata: {
+                                ...node.metadata,
+                                content: child.metadata?.content,
+                                storageKey: child.metadata?.storageKey,
+                                mimeType: child.metadata?.mimeType,
+                                bytes: child.metadata?.bytes,
+                                naturalWidth: child.metadata?.naturalWidth,
+                                naturalHeight: child.metadata?.naturalHeight,
+                                assetId: child.metadata?.assetId,
+                                primaryImageId: targetId,
+                                status: NODE_STATUS_SUCCESS,
+                            },
+                        } : node);
                     });
-                });
+                }
                 hasSuccess = true;
                 if (isConfigNode) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
                 return true;

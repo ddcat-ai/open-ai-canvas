@@ -4,10 +4,12 @@ import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
-import type { GenerationTask } from "@/services/api/task-center";
+import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
 import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { applyGenerationConsumerEffect, generationEffectApplied } from "@/services/generation-consumer-dedupe";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export function generationTaskInput(task: GenerationTask) {
@@ -123,6 +125,56 @@ export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], 
         updated: true,
         nodeId: node.id,
         node: updatedNode,
+    };
+}
+
+export async function applyMaterializedGenerationTaskResultToNodes(
+    nodes: CanvasNodeData[],
+    task: GenerationTask,
+    output: GenerationTaskOutput,
+    effectKey: string,
+    targetNodeId?: string,
+) {
+    const node = findGenerationTaskNode(nodes, task, targetNodeId);
+    if (!node) return { nodes, updated: false, nodeId: "", node: null };
+    if (generationEffectApplied(node.metadata || {}, effectKey)) {
+        return { nodes, updated: true, nodeId: node.id, node };
+    }
+    const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === output.materializedAssetId);
+    if (!asset) throw new Error("生成任务输出素材不存在");
+    const result = parseBackendGenerationResult(task);
+    if (asset.kind === "image") {
+        const images = [...(result.images || [])];
+        images[output.outputIndex] = {
+            dataUrl: asset.data.dataUrl || asset.coverUrl,
+            storageKey: asset.data.storageKey,
+            width: asset.data.width,
+            height: asset.data.height,
+            bytes: asset.data.bytes,
+            mimeType: asset.data.mimeType,
+        };
+        result.images = images;
+    } else if (asset.kind === "video") {
+        result.video = { dataUrl: asset.data.url, ...asset.data };
+    } else if (asset.kind === "audio") {
+        result.audio = { dataUrl: asset.data.url, ...asset.data };
+    } else {
+        throw new Error("生成任务输出素材类型不支持画布节点");
+    }
+    const updatedNode = await buildGenerationTaskNodeResult(node, { ...task, resultJson: JSON.stringify(result) }, nodes);
+    const durableNode = {
+        ...updatedNode,
+        metadata: applyGenerationConsumerEffect(
+            { ...updatedNode.metadata, assetId: asset.id },
+            effectKey,
+            (metadata) => metadata,
+        ).value,
+    };
+    return {
+        nodes: nodes.map((item) => (item.id === node.id ? durableNode : item)),
+        updated: true,
+        nodeId: node.id,
+        node: durableNode,
     };
 }
 

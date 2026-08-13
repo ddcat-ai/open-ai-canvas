@@ -9,6 +9,10 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
 import { imageToDataUrl } from "@/services/image-storage";
+import { persistCanvasGenerationEffect } from "@/services/canvas-generation-consumer";
+import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
+import { applyGenerationConsumerEffect, generationEffectApplied } from "@/services/generation-consumer-dedupe";
+import { activeGenerationConsumerController } from "@/services/generation-consumer-lifecycle";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -74,6 +78,7 @@ const CANVAS_OP_SCHEMA = {
         nodeId: { type: "string" },
         mode: GENERATION_MODE_SCHEMA,
         prompt: { type: "string" },
+        retry: { type: "boolean" },
     },
     required: ["type"],
     additionalProperties: false,
@@ -116,7 +121,7 @@ const ONLINE_AGENT_TOOLS: ResponseFunctionTool[] = [
     toolDefinition("canvas_connect_nodes", "批量连接节点。", { connections: { type: "array", minItems: 1, items: { type: "object", properties: { fromNodeId: { type: "string" }, toNodeId: { type: "string" } }, required: ["fromNodeId", "toNodeId"], additionalProperties: false } } }, ["connections"]),
     toolDefinition("canvas_select_nodes", "设置当前选中节点。", { ids: { type: "array", items: { type: "string" } } }, ["ids"]),
     toolDefinition("canvas_set_viewport", "调整画布视口。", { viewport: VIEWPORT_SCHEMA }, ["viewport"]),
-    toolDefinition("canvas_run_generation", "触发指定节点生成，通常用于配置节点或文本/图片/视频/音频节点。", { nodeId: { type: "string" }, mode: GENERATION_MODE_SCHEMA, prompt: { type: "string" } }, ["nodeId"]),
+    toolDefinition("canvas_run_generation", "触发指定节点生成；对已有生成任务明确重试时传 retry=true。", { nodeId: { type: "string" }, mode: GENERATION_MODE_SCHEMA, prompt: { type: "string" }, retry: { type: "boolean" } }, ["nodeId"]),
 ];
 type OnlineAgentTab = "setup" | "chat" | "history" | "log";
 type OnlineAgentLog = { id: string; time: string; title: string; data?: unknown };
@@ -135,7 +140,7 @@ type CanvasAssistantPanelProps = {
     activeSessionId: string | null;
     onSelectNodeIds: (ids: Set<string>) => void;
     onSessionsChange: (sessions: CanvasAssistantSession[], activeSessionId: string | null) => void;
-    onApplyOps: (ops?: CanvasAgentOp[]) => CanvasAgentSnapshot;
+    onApplyOps: (ops?: CanvasAgentOp[], context?: { conversationId?: string; messageId?: string; source?: "online" | "local" }) => Promise<CanvasAgentSnapshot>;
     canUndoOps: boolean;
     undoOpsCount: number;
     onUndoOps: () => CanvasAgentSnapshot | null;
@@ -167,17 +172,20 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
     const [onlineLogs, setOnlineLogs] = useState<OnlineAgentLog[]>([]);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
     const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
+    const localSessionsRef = useRef(localSessions);
     const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
     const applyingExternalSessionsRef = useRef(false);
     const chatListRef = useRef<HTMLDivElement>(null);
     const snapshotRef = useRef(snapshot);
     const pendingToolContextRef = useRef(new Map<string, PendingOnlineToolContext>());
     const cinematicSessionControllersRef = useRef(new Map<string, AbortController>());
+    const generationConsumerControllerRef = useRef(new AbortController());
 
     useEffect(() => {
         if (!sessions.length) return;
         if (sessions === localSessions && activeSessionId === localActiveSessionId) return;
         applyingExternalSessionsRef.current = true;
+        localSessionsRef.current = sessions;
         setLocalSessions(sessions);
         setLocalActiveSessionId(activeSessionId);
     }, [activeSessionId, sessions]);
@@ -186,10 +194,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         snapshotRef.current = snapshot;
     }, [snapshot]);
 
-    useEffect(() => () => {
-        // 收起面板或刷新页面时只停止前端查询，后台任务由下次挂载根据持久化 ID 继续接管。
-        cinematicSessionControllersRef.current.forEach((controller) => controller.abort());
-        cinematicSessionControllersRef.current.clear();
+    useEffect(() => {
+        generationConsumerControllerRef.current = activeGenerationConsumerController(generationConsumerControllerRef.current);
+        return () => {
+            // 收起面板或刷新页面时只停止前端查询，后台任务由下次挂载根据持久化 ID 继续接管。
+            cinematicSessionControllersRef.current.forEach((controller) => controller.abort());
+            cinematicSessionControllersRef.current.clear();
+            generationConsumerControllerRef.current.abort();
+        };
     }, []);
 
     useEffect(() => {
@@ -225,7 +237,15 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
     }, [selectedNodeKey]);
 
     const updateSession = (sessionId: string, updater: (session: CanvasAssistantSession) => CanvasAssistantSession) => {
-        setLocalSessions((prev) => prev.map((session) => (session.id === sessionId ? updater(session) : session)));
+        const next = localSessionsRef.current.map((session) => (session.id === sessionId ? updater(session) : session));
+        localSessionsRef.current = next;
+        setLocalSessions(next);
+        return next;
+    };
+
+    const hasAgentGenerationEffect = (sessionId: string, effectKey?: string) => {
+        const session = localSessionsRef.current.find((candidate) => candidate.id === sessionId);
+        return Boolean(session && generationEffectApplied(session, effectKey));
     };
 
     const appendMessage = (sessionId: string, message: CanvasAssistantMessage) => {
@@ -273,13 +293,13 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         }));
     };
 
-    const completeCinematicSession = (sessionId: string, backendSessionId: string, ops: CanvasAgentOp[], recovered = false) => {
-        updateSession(sessionId, (session) => {
+    const completeCinematicSession = (sessionId: string, backendSessionId: string, ops: CanvasAgentOp[], recovered = false, effectKey?: string) => {
+        return updateSession(sessionId, (session) => {
             const pending = session.pendingBackendSession;
             if (pending?.id !== backendSessionId) return session;
             const completedAt = new Date().toISOString();
             const summary = summarizeCanvasAgentOps(ops) || "影视项目已写回当前画布。";
-            return {
+            const completed = {
                 ...session,
                 pendingBackendSession: undefined,
                 messages: upsertAssistantMessage(session.messages, {
@@ -291,6 +311,9 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                 }),
                 updatedAt: completedAt,
             };
+            return effectKey
+                ? applyGenerationConsumerEffect(completed, effectKey, (current) => current).value
+                : completed;
         });
     };
 
@@ -344,7 +367,11 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                     },
                 },
             );
-            return { backendSessionId: detail.session.id, ops: requireOps(JSON.parse(cinematicAgentSessionOpsJson(detail))) };
+            return {
+                backendSessionId: detail.session.id,
+                ops: requireOps(JSON.parse(cinematicAgentSessionOpsJson(detail))),
+                continuationTask: [...detail.tasks].reverse().find((task) => task.status === "succeeded"),
+            };
         } catch (error) {
             if (backendSessionId && !isAgentSessionPollingAbort(error)) failCinematicSession(sessionId, backendSessionId, error);
             throw error;
@@ -437,6 +464,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                 addOnlineLog(`Agent Tool Loop ${loop.step} 结束`, { reply: result.content });
             }
         } catch (error) {
+            if (isAgentSessionPollingAbort(error)) return;
             addOnlineLog("请求失败", error instanceof Error ? error.message : error);
             appendMessage(sessionId, { id: nanoid(), role: "error", title: "操作失败", text: error instanceof Error ? error.message : "操作失败" });
         } finally {
@@ -491,10 +519,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         upsertMessage(sessionId, { id: assistantId, role: "assistant", text: next.content || streamed || toolResults.map((item) => toolResultText(item.result)).join("\n") || "工具已执行。" });
     };
 
-    const executeOps = (ops: CanvasAgentOp[]) => {
+    const executeOps = async (ops: CanvasAgentOp[], context?: { conversationId?: string; messageId?: string; source?: "online" | "local" }) => {
         const beforeSnapshot = snapshotRef.current;
         const before = snapshotSignature(beforeSnapshot);
-        const next = onApplyOps(ops);
+        const next = await onApplyOps(ops, context);
         snapshotRef.current = next;
         const ranGeneration = ops.some((op) => op.type === "run_generation" && Boolean(op.nodeId));
         const changed = before !== snapshotSignature(next) || ranGeneration;
@@ -502,7 +530,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         return { changed, ops, ranGeneration, noopReason, before: JSON.parse(before), after: JSON.parse(snapshotSignature(next)) };
     };
 
-    const executeOnlineTool = async (sessionId: string, name: string, args: Record<string, unknown>): Promise<OnlineToolResult> => {
+    const executeOnlineTool = async (sessionId: string, name: string, args: Record<string, unknown>, messageId?: string): Promise<OnlineToolResult> => {
         const current = snapshotRef.current;
         try {
             if (name === "canvas_get_state") return { ok: true, message: describeCanvasSnapshot(current), data: compactSnapshot(current) };
@@ -513,17 +541,37 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             }
             if (name === "canvas_create_cinematic_session") {
                 const cinematic = await runCinematicSession(sessionId, requireString(args.prompt, "prompt"), current, effectiveConfig);
-                try {
-                    const result = executeOps(cinematic.ops);
-                    completeCinematicSession(sessionId, cinematic.backendSessionId, cinematic.ops);
-                    return { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || "后端影视 Agent 已写回画布。" : result.noopReason, data: result };
-                } catch (error) {
-                    failCinematicSession(sessionId, cinematic.backendSessionId, error);
-                    throw error;
+                let continuationResult: OnlineToolResult | undefined;
+                const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
+                    try {
+                        if (hasAgentGenerationEffect(sessionId, effectKey)) return;
+                        const result = await executeOps(cinematic.ops);
+                        const durableSessions = completeCinematicSession(sessionId, cinematic.backendSessionId, cinematic.ops, false, effectKey);
+                        if (effectKey) {
+                            await persistCanvasGenerationEffect({
+                                projectId,
+                                effectKey,
+                                nodes: snapshotRef.current.nodes,
+                                connections: snapshotRef.current.connections,
+                                chatSessions: durableSessions,
+                                activeChatId: localActiveSessionId,
+                            });
+                        }
+                        continuationResult = { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || "后端影视 Agent 已写回画布。" : result.noopReason, data: result };
+                    } catch (error) {
+                        failCinematicSession(sessionId, cinematic.backendSessionId, error);
+                        throw error;
+                    }
+                };
+                if (cinematic.continuationTask) {
+                    await consumeGenerationTaskAgent(cinematic.continuationTask, cinematic.backendSessionId, applyContinuation, { signal: generationConsumerControllerRef.current.signal });
+                } else {
+                    await applyContinuation();
                 }
+                return continuationResult ?? { ok: true, message: "后端影视 Agent 已完成。" };
             }
             const ops = onlineToolToOps(name, args, current, effectiveConfig);
-            const result = executeOps(ops);
+            const result = await executeOps(ops, { source: "online", conversationId: sessionId, messageId: messageId || sessionId });
             return { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(ops) || "画布操作已执行。" : result.noopReason, data: result };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
@@ -533,7 +581,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
 
     const executeOnlineToolCall = async (sessionId: string, toolCall: ResponseToolCall): Promise<OnlineExecutedToolCall> => {
         try {
-            const result = await executeOnlineTool(sessionId, toolCall.function.name, parseToolArguments(toolCall.function.arguments));
+            const result = await executeOnlineTool(sessionId, toolCall.function.name, parseToolArguments(toolCall.function.arguments), toolCall.id);
             return { toolCallId: toolCall.id, name: toolCall.function.name, result };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
@@ -578,6 +626,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             pendingToolContextRef.current.delete(messageId);
             await continueOnlineToolLoopAfterResults(session.id, assistantId, previousMessages, toolCalls, results, pendingContext?.step || Number(detail.step) || 1);
         } catch (error) {
+            if (isAgentSessionPollingAbort(error)) return;
             addOnlineLog("工具续跑失败", error instanceof Error ? error.message : error);
             appendMessage(session.id, { id: nanoid(), role: "error", title: "操作失败", text: error instanceof Error ? error.message : "操作失败" });
         } finally {
@@ -634,10 +683,28 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
             const cinematic = await runCinematicSession(session.id, value, snapshotRef.current, effectiveConfig, (createdId) => {
                 backendSessionId = createdId;
             });
-            const next = onApplyOps(cinematic.ops);
-            snapshotRef.current = next;
-            completeCinematicSession(session.id, cinematic.backendSessionId, cinematic.ops);
-            setCinematicEntryActive(false);
+            const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
+                if (hasAgentGenerationEffect(session.id, effectKey)) return;
+                const next = await onApplyOps(cinematic.ops);
+                snapshotRef.current = next;
+                const durableSessions = completeCinematicSession(session.id, cinematic.backendSessionId, cinematic.ops, false, effectKey);
+                if (effectKey) {
+                    await persistCanvasGenerationEffect({
+                        projectId,
+                        effectKey,
+                        nodes: next.nodes,
+                        connections: next.connections,
+                        chatSessions: durableSessions,
+                        activeChatId: session.id,
+                    });
+                }
+                setCinematicEntryActive(false);
+            };
+            if (cinematic.continuationTask) {
+                await consumeGenerationTaskAgent(cinematic.continuationTask, cinematic.backendSessionId, applyContinuation, { signal: generationConsumerControllerRef.current.signal });
+            } else {
+                await applyContinuation();
+            }
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) return;
             if (backendSessionId) failCinematicSession(session.id, backendSessionId, error);
@@ -656,9 +723,28 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
         try {
             const detail = await resumeCinematicAgentSession(pending.id, { signal: controller.signal });
             const ops = requireOps(JSON.parse(cinematicAgentSessionOpsJson(detail)));
-            executeOps(ops);
-            completeCinematicSession(sessionId, pending.id, ops, true);
-            addOnlineLog("后端影视 Agent 会话恢复完成", { backendSessionId: pending.id });
+            const continuationTask = [...detail.tasks].reverse().find((task) => task.status === "succeeded");
+            const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
+                if (hasAgentGenerationEffect(sessionId, effectKey)) return;
+                await executeOps(ops);
+                const durableSessions = completeCinematicSession(sessionId, pending.id, ops, true, effectKey);
+                if (effectKey) {
+                    await persistCanvasGenerationEffect({
+                        projectId,
+                        effectKey,
+                        nodes: snapshotRef.current.nodes,
+                        connections: snapshotRef.current.connections,
+                        chatSessions: durableSessions,
+                        activeChatId: sessionId,
+                    });
+                }
+                addOnlineLog("后端影视 Agent 会话恢复完成", { backendSessionId: pending.id });
+            };
+            if (continuationTask) {
+                await consumeGenerationTaskAgent(continuationTask, pending.id, applyContinuation, { signal: controller.signal });
+            } else {
+                await applyContinuation();
+            }
         } catch (error) {
             if (!isAgentSessionPollingAbort(error)) {
                 failCinematicSession(sessionId, pending.id, error);
@@ -1131,7 +1217,7 @@ function parseToolArguments(value: string) {
     }
 }
 
-function onlineToolToOps(name: string, input: Record<string, unknown>, snapshot: CanvasAgentSnapshot, config: AiConfig): CanvasAgentOp[] {
+export function onlineToolToOps(name: string, input: Record<string, unknown>, snapshot: CanvasAgentSnapshot, config: AiConfig): CanvasAgentOp[] {
     if (name === "canvas_apply_ops") return requireOps(input.ops);
     if (name === "canvas_create_node") {
         const nodeType = requireNodeType(input.nodeType);
@@ -1168,7 +1254,7 @@ function onlineToolToOps(name: string, input: Record<string, unknown>, snapshot:
     if (name === "canvas_connect_nodes") return requireRecordArray(input.connections, "connections").map((connection) => ({ type: "connect_nodes", fromNodeId: requireString(connection.fromNodeId, "fromNodeId"), toNodeId: requireString(connection.toNodeId, "toNodeId") }));
     if (name === "canvas_select_nodes") return [{ type: "select_nodes", ids: requireStringArray(input.ids, "ids") }];
     if (name === "canvas_set_viewport") return [{ type: "set_viewport", viewport: requireViewport(input.viewport) }];
-    if (name === "canvas_run_generation") return [runGenerationOp(requireString(input.nodeId, "nodeId"), generationMode(input.mode), stringOptional(input.prompt))];
+    if (name === "canvas_run_generation") return [runGenerationOp(requireString(input.nodeId, "nodeId"), generationMode(input.mode), stringOptional(input.prompt), input.retry === true)];
     throw new Error(`不支持的工具：${name}`);
 }
 
@@ -1238,8 +1324,8 @@ function generationNodeType(mode: "text" | "image" | "video" | "audio") {
     return CanvasNodeType.Image;
 }
 
-function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string): CanvasAgentOp {
-    return { type: "run_generation", nodeId, mode, prompt };
+function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string, retry?: boolean): CanvasAgentOp {
+    return { type: "run_generation", nodeId, mode, prompt, ...(retry ? { retry: true } : {}) };
 }
 
 function isWritableToolCall(call: ResponseToolCall) {
@@ -1353,7 +1439,7 @@ function toCanvasAgentOp(value: unknown): CanvasAgentOp {
     if (type === "connect_nodes") return { type, id: stringOptional(item.id), fromNodeId: requireString(item.fromNodeId, "fromNodeId"), toNodeId: requireString(item.toNodeId, "toNodeId") };
     if (type === "set_viewport") return { type, viewport: requireViewport(item.viewport) };
     if (type === "select_nodes") return { type, ids: requireStringArray(item.ids, "ids") };
-    if (type === "run_generation") return { type, nodeId: requireString(item.nodeId, "nodeId"), mode: generationMode(item.mode), prompt: stringOptional(item.prompt) };
+    if (type === "run_generation") return { type, nodeId: requireString(item.nodeId, "nodeId"), mode: generationMode(item.mode), prompt: stringOptional(item.prompt), ...(item.retry === true ? { retry: true } : {}) };
     throw new Error("不支持的画布操作类型");
 }
 

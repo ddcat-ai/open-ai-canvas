@@ -8,8 +8,10 @@ import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } f
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { formatBytes } from "@/lib/image-utils";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
+import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
+import type { GenerationTask } from "@/services/api/task-center";
 import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { storyboardMinNodeHeight } from "./canvas-script-node";
@@ -586,13 +588,23 @@ function DrawingContent({ node, theme, drawingProjectId }: NodeContentRendererPr
 
 function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<NodeContentRendererProps, "node" | "theme" | "onCancelTask" | "onOpenTaskDetails">) {
     const taskId = node.metadata?.taskId;
-    const progress = typeof node.metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(node.metadata.taskProgress))) : null;
-    const statusLabel = taskStatusLabel(node.metadata?.taskStatus);
+    const displayTask = {
+        provider: node.metadata?.taskProvider,
+        status: (node.metadata?.taskStatus || "running") as GenerationTask["status"],
+        stage: node.metadata?.taskStage,
+        officialStatus: node.metadata?.taskOfficialStatus,
+        errorCode: node.metadata?.taskErrorCode,
+    };
+    const submissionUncertain = Boolean(taskId) && isGenerationTaskSubmissionUncertain(displayTask);
+    const showsProgress = Boolean(taskId) && generationTaskShowsProgress(displayTask);
+    const progress = showsProgress && typeof node.metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(node.metadata.taskProgress))) : null;
+    const statusLabel = taskId ? generationTaskStatusLabel(displayTask) : "等待任务状态";
+    const stageLabel = taskId ? generationTaskStageLabel(displayTask) : "正在创建任务";
     const elapsed = useTaskElapsed(node.metadata?.taskCreatedAt);
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
-            <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[var(--fs-tiny)] font-semibold">{node.metadata?.taskStage || (taskId ? "任务处理中" : "正在创建任务")}</span>
+            {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
+            <span className="text-[var(--fs-tiny)] font-semibold">{stageLabel}</span>
             {taskId ? (
                 <div className="flex w-full max-w-[210px] flex-col items-center gap-1.5">
                     <div className="max-w-full truncate text-[var(--fs-label)] font-medium" style={{ color: theme.node.text }}>
@@ -609,7 +621,7 @@ function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<N
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
                         <button type="button" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[var(--fs-tiny)] font-medium transition hover:brightness-110" style={{ background: theme.toolbar.itemHover, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpenTaskDetails?.(node); }}><FileText className="size-3" />详情</button>
-                        <button type="button" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[var(--fs-tiny)] font-medium transition hover:brightness-110" style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCancelTask?.(node); }}><Square className="size-2.5 fill-current" />取消</button>
+                        {!submissionUncertain ? <button type="button" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[var(--fs-tiny)] font-medium transition hover:brightness-110" style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCancelTask?.(node); }}><Square className="size-2.5 fill-current" />取消</button> : null}
                     </div>
                 </div>
             ) : null}
@@ -647,10 +659,24 @@ function shortTaskId(id: string) {
 
 function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry">) {
     const moderationFailure = node.metadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(node.metadata?.errorDetails);
+    const errorDisplayTask = {
+        provider: node.metadata?.taskProvider,
+        status: (node.metadata?.taskStatus || "failed") as GenerationTask["status"],
+        stage: node.metadata?.taskStage,
+        officialStatus: node.metadata?.taskOfficialStatus,
+        errorCode: node.metadata?.taskErrorCode,
+    };
+    const submissionUncertain = isGenerationTaskSubmissionUncertain(errorDisplayTask);
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
-            <div className="text-xs leading-5" style={{ color: theme.accent.danger }}>{generationErrorMessage(node.metadata?.errorDetails)}</div>
-            {moderationFailure ? (
+            <div className="text-xs leading-5" style={{ color: submissionUncertain ? theme.node.text : theme.accent.danger }}>
+                {submissionUncertain ? generationTaskStatusLabel(errorDisplayTask) : generationErrorMessage(node.metadata?.errorDetails)}
+            </div>
+            {submissionUncertain ? (
+                <div className="rounded-md border px-3 py-2 text-[var(--fs-label)] leading-4" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.node.muted }}>
+                    {generationTaskStageLabel(errorDisplayTask)}
+                </div>
+            ) : moderationFailure ? (
                 <div className="rounded-md border px-3 py-2 text-[var(--fs-label)] leading-4" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.node.muted }}>
                     修改节点提示词后，可重新点击生成。
                 </div>

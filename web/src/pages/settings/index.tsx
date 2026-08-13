@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Select, Tag, Tooltip } from "antd";
-import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, SquareTerminal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -18,17 +18,20 @@ import {
     filterModelsByCapability,
     modelOptionsFromChannels,
     useConfigStore,
+    useEffectiveConfig,
     type AiConfig,
     type ModelChannel,
 } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
+import { LocalCliSettings } from "./local-cli-settings";
 import { ModelDefaultGrid } from "./model-default-grid";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 
-type ConfigSectionKey = "channels" | "models" | "preferences" | "prompts" | "storage";
+type ConfigSectionKey = "local-cli" | "channels" | "models" | "preferences" | "prompts" | "storage";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
+    { key: "local-cli", label: "本机工具", description: "连接 Runtime 与 OAuth CLI", icon: <SquareTerminal className="size-4" /> },
     { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
@@ -38,7 +41,7 @@ const configSections: Array<{ key: ConfigSectionKey; label: string; description:
 
 type UserChannelConnection = "openai" | "gemini";
 
-function isConfigSection(value: string | null): value is ConfigSectionKey {
+export function isConfigSection(value: string | null): value is ConfigSectionKey {
     return configSections.some((section) => section.key === value);
 }
 
@@ -60,6 +63,7 @@ export default function SettingsPage() {
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
     const [collapsedChannelIds, setCollapsedChannelIds] = useState<Set<string>>(new Set());
     const config = useConfigStore((state) => state.config);
+    const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
@@ -284,6 +288,11 @@ export default function SettingsPage() {
                         <div className={`settings-surface-card ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
                     {([
                     {
+                        key: "local-cli",
+                        label: "本机工具",
+                        children: <SettingsPane><LocalCliSettings /></SettingsPane>,
+                    },
+                    {
                         key: "channels",
                         label: "渠道",
                         children: (
@@ -457,7 +466,7 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                                 <div className="settings-section-card">
-                                    <ModelDefaultGrid config={config} onChange={(key, model) => updateConfig(key, model)} />
+                                    <ModelDefaultGrid config={effectiveConfig} onChange={(key, model) => updateConfig(key, model)} />
                                 </div>
                             </SettingsPane>
                         ),

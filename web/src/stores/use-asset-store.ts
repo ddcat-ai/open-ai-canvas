@@ -2,9 +2,11 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
-import { localForageStorage } from "@/lib/localforage-storage";
+import { localForageStorage, localForageStorageForScope } from "@/lib/localforage-storage";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
+import { insertOrReturnGenerationAsset } from "@/services/generation-asset-repository";
 
 export type AssetKind = "text" | "image" | "video" | "audio" | "model" | "entity";
 export type AssetCategory = "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "other";
@@ -44,6 +46,7 @@ type AssetStore = {
     hydrated: boolean;
     assets: Asset[];
     addAsset: (asset: NewAsset) => string;
+    addGenerationAsset: (effectKey: string, asset: NewAsset) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
     replaceAssets: (assets: Asset[]) => void;
@@ -51,6 +54,35 @@ type AssetStore = {
 };
 
 export const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+
+let assetPersistenceTail = Promise.resolve();
+let assetWriteScopeOverride: string | undefined;
+const assetOperations = new Set<Promise<unknown>>();
+
+function persistAssetStateForScope(name: string, value: StorageValue<AssetStore>, scope: string) {
+    // scope 在入队时冻结；排队期间账号切换不能把旧账号快照写入新账号命名空间。
+    const storage = localForageStorageForScope(scope);
+    const pending = assetPersistenceTail.then(async () => {
+        await storage.setItem(name, JSON.stringify(value));
+    });
+    assetPersistenceTail = pending.catch(() => undefined);
+    return pending;
+}
+
+function persistAssetState(name: string, value: StorageValue<AssetStore>) {
+    return persistAssetStateForScope(name, value, assetWriteScopeOverride ?? getActiveUserScope());
+}
+
+function trackAssetOperation<T>(operation: Promise<T>) {
+    assetOperations.add(operation);
+    void operation.finally(() => assetOperations.delete(operation)).catch(() => undefined);
+    return operation;
+}
+
+export async function flushAssetStorePersistence() {
+    while (assetOperations.size) await Promise.all([...assetOperations]);
+    await assetPersistenceTail;
+}
 
 const assetStorage: PersistStorage<AssetStore> = {
     getItem: async (name) => {
@@ -77,9 +109,14 @@ const assetStorage: PersistStorage<AssetStore> = {
         );
         return parsed;
     },
-    setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
+    setItem: persistAssetState,
     removeItem: (name) => localForageStorage.removeItem(name),
 };
+
+async function generationAssetId(effectKey: string) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(effectKey));
+    return `generation_${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
 
 export const useAssetStore = create<AssetStore>()(
     persist(
@@ -91,6 +128,40 @@ export const useAssetStore = create<AssetStore>()(
                 const id = nanoid();
                 set((state) => ({ assets: [{ ...asset, id, createdAt: now, updatedAt: now } as Asset, ...state.assets] }));
                 return id;
+            },
+            addGenerationAsset: (effectKey, asset) => {
+                const scope = getActiveUserScope();
+                return trackAssetOperation((async () => {
+                    const id = await generationAssetId(effectKey);
+                    return insertOrReturnGenerationAsset<Asset>({
+                        effectKey,
+                        assetId: id,
+                        createAsset: () => {
+                            const now = new Date().toISOString();
+                            return {
+                                ...asset,
+                                id,
+                                createdAt: now,
+                                updatedAt: now,
+                                metadata: { ...asset.metadata, generationEffectKey: effectKey },
+                            } as Asset;
+                        },
+                        updateAssets: (updater) => {
+                            const previousScope = assetWriteScopeOverride;
+                            assetWriteScopeOverride = scope;
+                            try {
+                                set((state) => ({ assets: updater(state.assets) }));
+                            } finally {
+                                assetWriteScopeOverride = previousScope;
+                            }
+                        },
+                        readAssets: () => get().assets,
+                        persistAssets: (assets) => persistAssetStateForScope(ASSET_STORE_KEY, {
+                            state: { assets } as StorageValue<AssetStore>["state"],
+                            version: 0,
+                        }, scope),
+                    });
+                })());
             },
             updateAsset: (id, patch) =>
                 set((state) => ({

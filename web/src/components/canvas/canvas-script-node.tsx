@@ -10,11 +10,13 @@ import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { pipelineStatusLabel, type CanvasStoryboardPipelineProgress, type StoryboardPipelineStage } from "@/lib/canvas/canvas-storyboard-progress";
 import { generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
+import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchItemStatus, CanvasNodeData, CanvasNodeStatus, CanvasWorkspaceMode, StoryboardColumn, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
+import type { TaskStatus } from "@/services/api/task-center";
 
 export const STORYBOARD_ROW_HEIGHT = 48;
 export const STORYBOARD_HEADER_HEIGHT = 124;
@@ -111,8 +113,19 @@ export function CanvasScriptNodeContent({ node, batch, pipeline, scale, mentionR
     const hasFailedBatchItems = Boolean(batch?.items.some((item) => item.status === "failed"));
     const hasWaitingBatchItems = Boolean(batch?.items.some((item) => item.status === "waiting" || item.status === "submitting"));
     const hasActiveBatchItems = Boolean(batch?.items.some((item) => item.status === "waiting" || item.status === "submitting" || item.status === "queued" || item.status === "running"));
+    const taskStatus = node.metadata?.taskStatus;
+    const displayStatus: TaskStatus = taskStatus === "queued" || taskStatus === "succeeded" || taskStatus === "failed" || taskStatus === "cancelled" ? taskStatus : "running";
+    const displayTask = node.metadata?.taskId ? {
+        provider: node.metadata.taskProvider,
+        status: displayStatus,
+        stage: node.metadata.taskStage,
+        officialStatus: node.metadata.taskOfficialStatus,
+        errorCode: node.metadata.taskErrorCode,
+    } : null;
     const taskFeedback = node.metadata?.status === "loading"
-        ? `${node.metadata.taskStage || "正在创建任务"}${typeof node.metadata.taskProgress === "number" ? ` · ${node.metadata.taskProgress}%` : ""}`
+        ? displayTask
+            ? `${generationTaskStageLabel(displayTask)}${generationTaskShowsProgress(displayTask) && typeof node.metadata.taskProgress === "number" ? ` · ${node.metadata.taskProgress}%` : ""}`
+            : "正在创建任务"
         : node.metadata?.status === "error" ? generationErrorMessage(node.metadata.errorDetails) : "";
     const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);

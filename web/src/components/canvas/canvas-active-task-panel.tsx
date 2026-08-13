@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { formatCredits } from "@/constant/credits";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { formatTaskKind, statusLabel } from "@/lib/generation-task-display";
+import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "@/lib/generation-task-display";
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -109,7 +109,8 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
 }
 
 function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, creditsEnabled }: { task: GenerationTask; now: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; expanded: boolean; onToggle: () => void; reducedMotion: boolean; creditsEnabled: boolean }) {
-    const progress = typeof task.progress === "number" ? Math.max(0, Math.min(100, Math.round(task.progress))) : task.status === "queued" ? 0 : undefined;
+    const showsProgress = generationTaskShowsProgress(task);
+    const progress = showsProgress && typeof task.progress === "number" ? Math.max(0, Math.min(100, Math.round(task.progress))) : showsProgress && task.status === "queued" ? 0 : undefined;
     const startedAt = task.startedAt || task.createdAt;
     const elapsedMs = Math.max(0, now - parseTime(startedAt));
     const durationLabel = `${task.status === "queued" ? "已等待" : "已运行"} ${formatDuration(elapsedMs)}`;
@@ -132,14 +133,14 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
                     <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
                             <span className="truncate text-xs font-semibold" title={formatTaskKind(task)}>{formatTaskKind(task)}</span>
-                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>{statusLabel[task.status]}</span>
+                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>{generationTaskStatusLabel(task)}</span>
                         </span>
-                        <span className="mt-1 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} title={task.stage || statusLabel[task.status]}>{task.stage || statusLabel[task.status]}</span>
+                        <span className="mt-1 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} title={generationTaskStageLabel(task)}>{generationTaskStageLabel(task)}</span>
                     </span>
                     {expanded ? <ChevronUp className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} /> : <ChevronDown className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} />}
                 </div>
 
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
+                {showsProgress ? <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
                     {progress !== undefined ? (
                         <motion.div
                             className="relative h-full rounded-full overflow-hidden"
@@ -166,7 +167,7 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
                             style={{ background: statusTone }}
                         />
                     )}
-                </div>
+                </div> : null}
 
                 {/* 进度百分比显示（对应 #98 决策3：列表视图）*/}
                 {progress !== undefined && task.status === "running" ? (
@@ -194,7 +195,7 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
                     >
                         <div className="flex items-center justify-between gap-2">
                             <span>当前阶段</span>
-                            <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>{task.stage || statusLabel[task.status]}</span>
+                            <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>{generationTaskStageLabel(task)}</span>
                         </div>
                     </motion.div>
                 ) : null}

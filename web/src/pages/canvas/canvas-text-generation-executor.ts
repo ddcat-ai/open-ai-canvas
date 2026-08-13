@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { getGenerationCount, runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
+import { getGenerationCount, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
@@ -24,9 +24,11 @@ export async function executeTextGeneration({
     startGenerationRequest,
     finishGenerationRequest,
     bindGenerationTask,
+    applyGenerationTaskResult,
     registerPendingNodeIds,
+    taskContext,
+    retryContext,
 }: CanvasGenerationExecution) {
-    let streamed = "";
     const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
     const isDirectTextTarget = sourceNode?.type === CanvasNodeType.Text && !sourceNode.metadata?.content?.trim() && !editingTextNode;
     const textCount = isConfigNode || (isDirectTextTarget && sourceNode?.metadata?.count) ? getGenerationCount(generationConfig.count) : 1;
@@ -56,29 +58,30 @@ export async function executeTextGeneration({
     const textTargetIds = generateInPlace ? [nodeId, ...childIds] : childIds;
     textTargetIds.forEach((targetNodeId) => startGenerationRequest(targetNodeId, nodeId, nodeId, controller));
     const answers = await Promise.all(
-        textTargetIds.map((targetNodeId) => {
-            let localStreamed = "";
-            return runBackendCanvasGenerationTask({ projectId, nodeId: targetNodeId, mode: "text", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, signal: controller.signal, metadata: { sourceNodeId: nodeId, resolvedCharacterVersions: generationContext.resolvedCharacterVersions }, onTaskCreated: (task) => bindGenerationTask(targetNodeId, task) })
-                .then((result) => {
-                    localStreamed = result.text || "";
-                    streamed = localStreamed;
-                    if (!isConfigNode) setNodes((current) => current.map((node) => (node.id === targetNodeId ? { ...node, type: CanvasNodeType.Text, metadata: { ...node.metadata, content: localStreamed, richText: undefined, status: NODE_STATUS_LOADING } } : node)));
-                    return { nodeId: targetNodeId, content: localStreamed };
-                })
-                .finally(() => finishGenerationRequest(targetNodeId, controller));
-        }),
+        textTargetIds.map((targetNodeId) => (
+            runCanvasGenerationTaskToConsumer({
+                projectId,
+                nodeId: targetNodeId,
+                ...retryContext,
+                mode: "text",
+                prompt: effectivePrompt,
+                config: generationConfig,
+                referenceImages: generationContext.referenceImages,
+                referenceVideos: generationContext.referenceVideos,
+                signal: controller.signal,
+                metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions },
+            }, {
+                bindTask: (task) => bindGenerationTask(targetNodeId, task),
+                consumeTask: (task) => applyGenerationTaskResult(targetNodeId, task),
+            }).then(() => ({ nodeId: targetNodeId }))
+                .finally(() => finishGenerationRequest(targetNodeId, controller))
+        )),
     );
     if (controller.signal.aborted) return;
-    const answerByNodeId = new Map(answers.map((item) => [item.nodeId, item.content]));
-    setNodes((current) =>
-        current.map((node) =>
-            childIds.includes(node.id)
-                ? { ...node, metadata: { ...node.metadata, content: answerByNodeId.get(node.id) || streamed, richText: undefined, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } }
-                : node.id === nodeId && isConfigNode
-                  ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } }
-                  : node.id === nodeId && !editingTextNode
-                    ? { ...node, type: CanvasNodeType.Text, title: effectivePrompt.slice(0, 32) || "Generated Text", metadata: { ...node.metadata, content: answerByNodeId.get(node.id) || streamed, richText: undefined, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } }
-                    : node,
-        ),
-    );
+    void answers;
+    if (isConfigNode) {
+        setNodes((current) => current.map((node) => node.id === nodeId
+            ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } }
+            : node));
+    }
 }

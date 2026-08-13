@@ -2,6 +2,8 @@ import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
+import { localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -29,6 +31,28 @@ type BackendGenerationTaskOptions = {
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
+    localIdempotencyKey?: string;
+    localResumeOnly?: boolean;
+    clientOperationId?: string;
+    retryOf?: string;
+    retryContextsByBatchIndex?: Array<{ retryOf: string; attemptGroupId: string; clientOperationId: string }>;
+    attemptGroupId?: string;
+};
+
+export type GenerationTaskDependencies = {
+    createTask: typeof createGenerationTask;
+    waitTask: typeof waitForGenerationTask;
+    runLocal: (input: LocalDreaminaGenerationInput, signal?: AbortSignal, onTaskUpdate?: (task: LocalDreaminaGenerationTask) => void) => ReturnType<typeof runLocalDreaminaGenerationTask>;
+    createId: () => string;
+    now: () => string;
+};
+
+const defaultDependencies: GenerationTaskDependencies = {
+    createTask: createGenerationTask,
+    waitTask: waitForGenerationTask,
+    runLocal: (input, signal, onTaskUpdate) => runLocalDreaminaGenerationTask(input, { onTaskUpdate }, signal),
+    createId: () => crypto.randomUUID(),
+    now: () => new Date().toISOString(),
 };
 
 type PreparedGenerationReferences = {
@@ -51,22 +75,201 @@ export async function runBackendGenerationTask({
     signal,
     metadata,
     onTaskUpdate,
-}: BackendGenerationTaskOptions) {
+    localIdempotencyKey,
+    localResumeOnly,
+    clientOperationId,
+    retryOf,
+    attemptGroupId,
+}: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies = defaultDependencies) {
     throwIfAborted(signal);
+    if (isLocalDreaminaModel(config.model)) {
+        return await runLocalDreaminaGeneration({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId }, dependencies);
+    }
     const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
-    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, signal, metadata, onTaskUpdate }, prepared);
+    return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, signal, metadata, onTaskUpdate }, prepared, dependencies);
 }
 
-export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }) {
+export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
+    if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
+    if (isLocalDreaminaModel(options.config.model)) {
+        return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => {
+            const retryContext = options.retryContextsByBatchIndex?.[batchIndex];
+            return runLocalDreaminaGeneration({
+                ...options,
+                config: { ...options.config, count: "1" },
+                metadata: { ...options.metadata, batchIndex, batchCount: count },
+                localIdempotencyKey: options.localIdempotencyKey ? `${options.localIdempotencyKey}:${batchIndex + 1}` : undefined,
+                clientOperationId: retryContext?.clientOperationId ?? (options.clientOperationId ? `${options.clientOperationId}:${batchIndex + 1}` : undefined),
+                retryOf: retryContext?.retryOf ?? options.retryOf,
+                attemptGroupId: retryContext?.attemptGroupId ?? options.attemptGroupId,
+            }, dependencies);
+        }));
+    }
     const prepared = await prepareGenerationReferences(options);
     throwIfAborted(options.signal);
     return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => createAndWaitGenerationTask({
         ...options,
         metadata: { ...options.metadata, batchIndex, batchCount: count },
-    }, prepared)));
+    }, prepared, dependencies)));
+}
+
+async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies): Promise<BackendGenerationResult> {
+    if (options.mode !== "image" && options.mode !== "video") throw new Error("即梦 CLI 仅支持图片或视频生成");
+    const runtimeId = stripLocalDreaminaTaskPrefix(options.localIdempotencyKey || options.clientOperationId || dependencies.createId());
+    const clientOperationId = options.clientOperationId ?? runtimeId;
+    const context = localTaskContext(options);
+    const timestamp = dependencies.now();
+    const task: GenerationTask = {
+        id: localDreaminaTaskId(runtimeId),
+        clientOperationId,
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+        type: `canvas_${options.mode}`,
+        status: "running",
+        stage: "submitting",
+        prompt: options.prompt,
+        operation: generationOperation(options),
+        provider: "dreamina-cli",
+        model: options.config.model,
+        attempts: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        startedAt: timestamp,
+        clientContext: generationClientContext(context),
+        ...(context.retryOf ? { retryOf: context.retryOf } : {}),
+        ...(context.attemptGroupId ? { attemptGroupId: context.attemptGroupId } : {}),
+    };
+    options.onTaskUpdate?.(task);
+    try {
+        const references = await localGenerationReferences(
+            [...(options.referenceImages ?? []), ...(options.mask ? [options.mask] : [])],
+            options.referenceVideos ?? [],
+            options.referenceAudios ?? [],
+        );
+        const resolution = options.mode === "video" ? options.config.vquality : options.config.quality;
+        const result = await dependencies.runLocal({
+            model: options.config.model as `local:dreamina-cli:${string}`,
+            mode: options.mode,
+            prompt: options.prompt,
+            settings: {
+                aspect: options.config.size,
+                resolution,
+                ...(options.mode === "video" ? { duration: Number(options.config.videoSeconds) } : { count: Number(options.config.count) }),
+            },
+            references,
+            resumeOnly: options.localResumeOnly,
+            idempotencyKey: runtimeId,
+            clientOperationId,
+            context,
+        }, options.signal, (runtimeTask) => options.onTaskUpdate?.(projectLocalDreaminaTask(runtimeTask, task)));
+        const completedAt = dependencies.now();
+        options.onTaskUpdate?.({ ...task, status: "succeeded", progress: 100, stage: "local_cli_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt });
+        return result;
+    } catch (error) {
+        const completedAt = dependencies.now();
+        const cancelled = isGenerationTaskCancelled(error, options.signal);
+        const localWaitStopped = error instanceof LocalDreaminaGenerationClientError && error.code === LOCAL_DREAMINA_WAIT_STOPPED_CODE;
+        const localErrorCode = error instanceof LocalDreaminaGenerationClientError ? error.code : undefined;
+        options.onTaskUpdate?.({
+            ...task,
+            status: cancelled ? "cancelled" : "failed",
+            stage: cancelled ? "local_cli_cancelled" : "local_cli_failed",
+            completedAt,
+            updatedAt: completedAt,
+            ...(localWaitStopped ? { errorCode: error.code, error: error.message } : !cancelled ? {
+                ...(localErrorCode ? { errorCode: localErrorCode } : {}),
+                error: error instanceof Error ? error.message : "即梦本机生成失败",
+            } : {}),
+        });
+        throw error;
+    }
+}
+
+function generationOperation(options: BackendGenerationTaskOptions) {
+    if (options.mode !== "video") return options.mode;
+    const imageCount = options.referenceImages?.length ?? 0;
+    if ((options.referenceVideos?.length ?? 0) > 0 || (options.referenceAudios?.length ?? 0) > 0 || imageCount > 2) return "reference_to_video";
+    if (imageCount > 0) return "image_to_video";
+    return "text_to_video";
+}
+
+export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {
+    if (error instanceof LocalDreaminaGenerationClientError && error.code === "dreamina_submission_unknown") return false;
+    return signal?.aborted === true || (error instanceof Error && error.name === "AbortError")
+        || (error instanceof LocalDreaminaGenerationClientError && error.code === LOCAL_DREAMINA_WAIT_STOPPED_CODE);
+}
+
+
+async function localGenerationReferences(images: ReferenceImage[], videos: ReferenceVideo[], audios: ReferenceAudio[]): Promise<LocalDreaminaGenerationInput["references"]> {
+    const imageReferences = await Promise.all(images.map(async (image) => {
+        const source = image.dataUrl || image.url;
+        if (!source && !image.storageKey) throw new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦图片参考素材不可用", 400);
+        const blob = image.storageKey ? await getImageBlob(image.storageKey) : await (await fetch(source!)).blob();
+        if (!blob || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw invalidLocalReference();
+        return {
+            kind: "image" as const,
+            mimeType: blob.type as "image/png" | "image/jpeg" | "image/webp",
+            bytes: new Uint8Array(await blob.arrayBuffer()),
+            metadata: compactReferenceMetadata({ name: image.name, width: image.width, height: image.height }),
+        };
+    }));
+    const mediaReferences = async (items: Array<ReferenceVideo | ReferenceAudio>, kind: "video" | "audio") => Promise.all(items.map(async (media) => {
+        const source = media.url || "";
+        const blob = media.storageKey ? await getMediaBlob(media.storageKey)
+            : source ? await (await fetch(source)).blob() : null;
+        const allowed = kind === "video"
+            ? ["video/mp4", "video/quicktime", "video/webm"]
+            : ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/flac"];
+        if (!blob || !allowed.includes(blob.type)) throw invalidLocalReference();
+        return {
+            kind,
+            mimeType: blob.type,
+            bytes: new Uint8Array(await blob.arrayBuffer()),
+            metadata: compactReferenceMetadata({
+                name: media.name,
+                ...("width" in media ? { width: media.width, height: media.height } : {}),
+                durationMs: media.durationMs,
+            }),
+        };
+    }));
+    const references = [...imageReferences, ...await mediaReferences(videos, "video"), ...await mediaReferences(audios, "audio")] as LocalDreaminaGenerationInput["references"];
+    if (references.reduce((total, reference) => total + reference.bytes.byteLength, 0) > 20 * 1024 * 1024) throw invalidLocalReference();
+    return references;
+}
+
+function invalidLocalReference() {
+    return new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦参考素材无效", 400);
+}
+
+function compactReferenceMetadata(metadata: Record<string, string | number | undefined>) {
+    return Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined));
+}
+
+function localTaskContext(options: BackendGenerationTaskOptions): Extract<LocalDreaminaGenerationInput["context"], { scope: "scoped" }> {
+    const metadata = options.metadata ?? {};
+    return {
+        scope: "scoped",
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+        ...(typeof metadata.nodeId === "string" ? { nodeId: metadata.nodeId } : {}),
+        ...(typeof metadata.conversationId === "string" ? { conversationId: metadata.conversationId } : {}),
+        ...(typeof metadata.messageId === "string" ? { messageId: metadata.messageId } : {}),
+        ...(typeof metadata.batchIndex === "number" ? { batchIndex: metadata.batchIndex } : {}),
+        ...(typeof metadata.batchCount === "number" ? { batchCount: metadata.batchCount } : {}),
+        ...(options.retryOf ? { retryOf: options.retryOf } : {}),
+        ...(options.attemptGroupId ? { attemptGroupId: options.attemptGroupId } : {}),
+    };
+}
+
+function generationClientContext(context: Extract<LocalDreaminaGenerationInput["context"], { scope: "scoped" }>) {
+    const { conversationId, messageId, nodeId, batchIndex, batchCount } = context;
+    if (!conversationId && !messageId && !nodeId && batchIndex === undefined && batchCount === undefined) return undefined;
+    return { ...(conversationId ? { conversationId } : {}), ...(messageId ? { messageId } : {}), ...(nodeId ? { nodeId } : {}), ...(batchIndex !== undefined ? { batchIndex } : {}), ...(batchCount !== undefined ? { batchCount } : {}) };
+}
+
+function isLocalDreaminaModel(model: string) {
+    return /^local:dreamina-cli:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(model.trim());
 }
 
 function throwIfAborted(signal?: AbortSignal) {
@@ -81,9 +284,10 @@ async function prepareGenerationReferences({ referenceImages = [], referenceVide
     return { referenceImages: preparedImages, referenceVideos: preparedVideos, referenceAudios: preparedAudios, mask: preparedMask };
 }
 
-async function createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages = [], signal, metadata, onTaskUpdate }: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences) {
-    const videoOperation = String(metadata?.videoEditOperation || (referenceImages.length ? "image_to_video" : "text_to_video"));
-    const task = await createGenerationTask({
+async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
+    const { projectId, mode, prompt, config, signal, metadata, onTaskUpdate } = options;
+    const videoOperation = generationOperation(options);
+    const task = await dependencies.createTask({
         ...(projectId ? { projectId } : {}),
         type: `canvas_${mode}`,
         operation: mode === "video" ? videoOperation : mode,
@@ -101,7 +305,7 @@ async function createAndWaitGenerationTask({ projectId, mode, prompt, config, re
         },
     });
     onTaskUpdate?.(task);
-    const completed = await waitForGenerationTask(task.id, { signal, initialTask: task, onTaskUpdate });
+    const completed = await dependencies.waitTask(task.id, { signal, initialTask: task, onTaskUpdate });
     return parseBackendGenerationResult(completed);
 }
 

@@ -4,8 +4,12 @@ import { App } from "antd";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { navigateToSettings } from "@/lib/settings-navigation";
+import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-model-store";
+import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
+    useLocalRuntimeBootstrap();
+    useLocalDreaminaModelBootstrap();
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);

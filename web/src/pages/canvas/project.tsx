@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
+import { readLocalRuntimeBootstrapState } from "@/services/local-runtime-bootstrap";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
@@ -11,7 +12,9 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { refreshCanvasCharacterReferenceNodes } from "@/lib/canvas/canvas-character-reference";
+import { shouldAutoConnectCanvasRuntime } from "@/lib/canvas/local-runtime-connection";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { flushCanvasStorePersistence } from "@/stores/canvas/use-canvas-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { App } from "antd";
@@ -60,6 +63,7 @@ import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
 import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
 import { createCanvasNode, getInputSummary, isHiddenBatchChild, persistCanvasWorkspaceMode, readCanvasWorkspaceMode } from "@/lib/canvas/canvas-project-domain";
+import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
@@ -82,7 +86,7 @@ import { useCanvasStyleWorkflow } from "./use-canvas-style-workflow";
 import { useCanvasDirector } from "./use-canvas-director";
 import { useCanvasGeneration } from "./use-canvas-generation";
 import { useCanvasGenerationBatches } from "./use-canvas-generation-batches";
-import { useCanvasGenerationExecutor } from "./use-canvas-generation-executor";
+import { useCanvasGenerationExecutor, type CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
 import { useCanvasGenerationRetry } from "./use-canvas-generation-retry";
 import { useCanvasHistory } from "./use-canvas-history";
 import { useCanvasKeyboard } from "./use-canvas-keyboard";
@@ -143,7 +147,7 @@ export default function CanvasPage() {
 function InfiniteCanvasPage() {
     const { message } = App.useApp();
     const params = useParams<{ id: string }>();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const projectId = params.id || "";
     const localAgentConnected = useCanvasAgentStore((state) => state.connected);
     const localAgentActivity = useCanvasAgentStore((state) => state.activity);
@@ -151,11 +155,13 @@ function InfiniteCanvasPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     const didInitialCenterRef = useRef(false);
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const assetHandoffRef = useRef("");
 
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const assets = useAssetStore((state) => state.assets);
+    const assetsHydrated = useAssetStore((state) => state.hydrated);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const defaultDrawingEngine = useUserStore((state) => state.drawingEngine.defaultEngine);
@@ -199,8 +205,8 @@ function InfiniteCanvasPage() {
     const [scriptScrollTopById, setScriptScrollTopById] = useState<Record<string, number>>({});
     const [directorNodeId, setDirectorNodeId] = useState<string | null>(null);
     const [versionCompareRootId, setVersionCompareRootId] = useState<string | null>(null);
-    const codexAutoConnect = ["new", "recent", "choose"].includes(searchParams.get("mode") || "");
-    const codexCompactAgent = codexAutoConnect && searchParams.has("agentUrl");
+    const codexAutoConnect = shouldAutoConnectCanvasRuntime(searchParams);
+    const codexCompactAgent = codexAutoConnect && readLocalRuntimeBootstrapState().legacyDeepLinkRejected;
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [shortcutRequestNonce, setShortcutRequestNonce] = useState(0);
@@ -255,7 +261,7 @@ function InfiniteCanvasPage() {
     const connectionsRef = useRef(connections);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
     const viewportRef = useRef(viewport);
-    const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => Promise<void>) | null>(null);
+    const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => Promise<void>) | null>(null);
 
     const { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas } = useCanvasHistory({
         projectLoaded,
@@ -318,17 +324,17 @@ function InfiniteCanvasPage() {
     }, [linkedProjectQuery.data, projectLoaded, setNodes]);
     const canvasContext = useMemo(() => summarizeCanvasContext(nodes, selectedNodeIds, linkedProjectQuery.data?.units), [linkedProjectQuery.data?.units, nodes, selectedNodeIds]);
 
-    const { bindGenerationTask, cancelNodeTask, confirmStopGeneration, finishGenerationRequest, openNodeTaskDetails, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } =
+    const { applyGenerationTaskResult, bindGenerationTask, cancelNodeTask, confirmStopGeneration, finishGenerationRequest, openNodeTaskDetails, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } =
         useCanvasGeneration({ projectId, domainProjectId: linkedProjectId, projectLoaded, nodes, nodesRef, setNodes });
 
     useEffect(() => {
-        if (!projectLoaded || !["new", "recent", "choose"].includes(searchParams.get("mode") || "")) return;
-        if (searchParams.has("agentUrl")) {
+        if (!projectLoaded || !codexAutoConnect) return;
+        if (codexCompactAgent) {
             setAgentMode("local");
             return;
         }
         openAgent("local");
-    }, [openAgent, projectLoaded, searchParams, setAgentMode]);
+    }, [codexAutoConnect, codexCompactAgent, openAgent, projectLoaded, setAgentMode]);
 
     // 沉浸专注进入时收起智能体与小地图、重置 Dock 唤出态；仅响应「进入」瞬间，避免关闭专注内主动唤出的面板。
     const prevFocusModeRef = useRef(focusMode);
@@ -476,6 +482,40 @@ function InfiniteCanvasPage() {
         setContextMenu,
         setDialogNodeId,
     });
+
+    useEffect(() => {
+        if (!projectLoaded || !assetsHydrated || searchParams.get("mode") !== "handoff") return;
+        const attempt = canvasAssetHandoffAttempt(assets, searchParams);
+        const { assetIds, payloads } = attempt;
+        if (!assetIds.length) return;
+        const assetReadiness = assetIds.map((assetId) => {
+            const asset = assets.find((candidate) => candidate.id === assetId);
+            return `${assetId}:${asset?.kind || "missing"}`;
+        }).join("|");
+        const handoffKey = `${projectId}:${assetReadiness}`;
+        if (assetHandoffRef.current === handoffKey) return;
+        assetHandoffRef.current = handoffKey;
+
+        if (attempt.kind === "retry") return;
+        const pendingPayloads = uninsertedCanvasAssetHandoffPayloads(nodesRef.current, payloads);
+        const persistHandoff = async (createdNodes: CanvasNodeData[]) => {
+            const finalized = await finalizeCanvasAssetHandoff({
+                searchParams,
+                currentNodes: nodesRef.current,
+                createdNodes,
+                persist: async (nextNodes) => {
+                    nodesRef.current = nextNodes;
+                    updateProject(projectId, { nodes: nextNodes });
+                    await flushCanvasStorePersistence();
+                },
+            });
+            setSearchParams(finalized.searchParams, { replace: true });
+        };
+        const insertion = pendingPayloads.length ? handleProjectAssetsInsert(pendingPayloads) : Promise.resolve([] as CanvasNodeData[]);
+        void insertion.then(persistHandoff).catch(() => {
+            assetHandoffRef.current = "";
+        });
+    }, [assets, assetsHydrated, handleProjectAssetsInsert, message, nodesRef, projectId, projectLoaded, searchParams, setSearchParams, updateProject]);
 
     // 时间线弹窗内新增素材的回填通道：素材库/上传创建节点后由弹窗通过 ref 加入草稿。
     const timelineAddNodeRef = useRef<((node: CanvasNodeData) => void) | null>(null);
@@ -1192,6 +1232,7 @@ function InfiniteCanvasPage() {
         startGenerationRequest,
         finishGenerationRequest,
         bindGenerationTask,
+        applyGenerationTaskResult,
     });
     useEffect(() => {
         generateNodeRef.current = handleGenerateNode;
@@ -1228,6 +1269,7 @@ function InfiniteCanvasPage() {
         startGenerationRequest,
         finishGenerationRequest,
         bindGenerationTask,
+        applyGenerationTaskResult,
     });
 
     const generateImageFromTextNode = useCallback(

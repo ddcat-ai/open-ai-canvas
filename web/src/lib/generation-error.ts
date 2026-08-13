@@ -22,6 +22,9 @@ export function generationFailureMetadata(error: unknown, prompt: string): Gener
 }
 
 export function generationErrorMessage(error: unknown) {
+    const stableCode = generationErrorCode(error);
+    const stableMessage = stableCode ? DREAMINA_SUBMIT_ERROR_MESSAGES[stableCode] : undefined;
+    if (stableMessage) return stableMessage;
     const raw = rawGenerationError(error);
     if (isContentModerationError(raw)) return CONTENT_MODERATION_MESSAGE;
 
@@ -36,6 +39,22 @@ export function generationErrorMessage(error: unknown) {
         if (hasHttpStatus(raw, 500, 502, 503, 504) || containsInfrastructureDetails(raw)) return NETWORK_ERROR_MESSAGE;
     }
     return displayMessage || DEFAULT_GENERATION_ERROR_MESSAGE;
+}
+
+export const DREAMINA_SUBMIT_ERROR_MESSAGES: Record<string, string> = {
+    dreamina_submit_spawn_failed: "无法启动官方即梦 CLI，任务尚未提交。",
+    dreamina_submit_exit_nonzero: "官方即梦 CLI 未接受本次提交，任务没有自动重试。",
+    dreamina_submit_timeout: "等待官方即梦 CLI 确认提交超时，为避免重复扣费，任务没有自动重试。",
+    dreamina_submit_receipt_missing: "官方即梦 CLI 未返回任务凭证，为避免重复扣费，任务没有自动重试。",
+    dreamina_submission_unknown: "提交结果待确认，为避免重复扣费未自动重试。",
+};
+
+export function generationErrorCode(error: unknown) {
+    if (error && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string") {
+        const code = (error as { code: string }).code;
+        if (/^(?:dreamina|local_generation|origin)_[a-z0-9_]{2,80}$/.test(code)) return code;
+    }
+    return undefined;
 }
 
 export function isContentModerationError(value: unknown) {

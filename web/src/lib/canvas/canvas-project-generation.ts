@@ -1,6 +1,6 @@
 import { type GenerationTask } from "@/services/api/task-center";
-import { backendProviderConfig, runBackendGenerationTask } from "@/services/api/generation-task";
-import { defaultConfig, modelMatchesCapability, modelOptionName, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { backendProviderConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
+import { configuredModelMatchesCapability, defaultConfig, modelMatchesCapability, modelOptionName, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
@@ -29,6 +29,9 @@ export async function runBackendCanvasGenerationTask({
     signal,
     metadata,
     onTaskCreated,
+    clientOperationId,
+    retryOf,
+    attemptGroupId,
 }: {
     projectId: string;
     nodeId: string;
@@ -42,7 +45,10 @@ export async function runBackendCanvasGenerationTask({
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
     onTaskCreated?: (task: GenerationTask) => void;
-}) {
+    clientOperationId?: string;
+    retryOf?: string;
+    attemptGroupId?: string;
+}, dependencies?: GenerationTaskDependencies) {
     const normalizedReferenceImages = mode === "image" ? limitCanvasImageReferences(config, referenceImages) : referenceImages;
     return runBackendGenerationTask({
         projectId,
@@ -56,7 +62,10 @@ export async function runBackendCanvasGenerationTask({
         signal,
         metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
         onTaskUpdate: onTaskCreated,
-    });
+        clientOperationId,
+        retryOf,
+        attemptGroupId,
+    }, dependencies);
 }
 
 // Canvas references can include a scene frame plus multiple character turnarounds. Keep
@@ -69,13 +78,74 @@ export function limitCanvasImageReferences(config: AiConfig, referenceImages: Re
 
 export { backendProviderConfig };
 
+const generationOperationLocks = new Map<string, Promise<unknown>>();
+
+export function runGenerationOperationOnce<T>(clientOperationId: string | undefined, operation: () => Promise<T>): Promise<T> {
+    if (!clientOperationId) return operation();
+    const existing = generationOperationLocks.get(clientOperationId) as Promise<T> | undefined;
+    if (existing) return existing;
+    const running = operation().finally(() => {
+        if (generationOperationLocks.get(clientOperationId) === running) generationOperationLocks.delete(clientOperationId);
+    });
+    generationOperationLocks.set(clientOperationId, running);
+    return running;
+}
+
+export async function runCanvasGenerationTaskToConsumer(
+    input: Parameters<typeof runBackendCanvasGenerationTask>[0],
+    dependencies: {
+        bindTask(task: GenerationTask): void;
+        consumeTask(task: GenerationTask): Promise<void>;
+        runTask?: (options: Parameters<typeof runBackendCanvasGenerationTask>[0]) => ReturnType<typeof runBackendCanvasGenerationTask>;
+    },
+) {
+    return runGenerationOperationOnce(input.clientOperationId, async () => {
+        let completedTask: GenerationTask | undefined;
+        const result = await (dependencies.runTask ?? runBackendCanvasGenerationTask)({
+            ...input,
+            onTaskCreated: (task) => {
+                input.onTaskCreated?.(task);
+                dependencies.bindTask(task);
+                if (task.status === "succeeded") completedTask = task;
+            },
+        });
+        if (!completedTask) throw new Error("生成任务缺少成功终态");
+        await dependencies.consumeTask(completedTask);
+        return result;
+    });
+}
+
+export type GenerationRetryContext = {
+    retryOf: string;
+    attemptGroupId: string;
+    clientOperationId: string;
+};
+
+export async function createGenerationRetryContext(retryOf: string, attemptGroupId = retryOf): Promise<GenerationRetryContext> {
+    const bytes = new TextEncoder().encode(`generation-retry\0${attemptGroupId}\0${retryOf}`);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return { retryOf, attemptGroupId, clientOperationId: `retry:${hex}` };
+}
+
+export function createGenerationBatchRetryContexts(taskIds: readonly string[], attemptGroupId: string) {
+    return Promise.all(taskIds.map((taskId) => createGenerationRetryContext(taskId, attemptGroupId)));
+}
+
 export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata {
     const progress = normalizeTaskProgress(task.progress, task.status);
     return {
         taskId: task.id,
+        taskClientOperationId: task.clientOperationId,
+        retryOf: task.retryOf,
+        attemptGroupId: task.attemptGroupId,
         taskStatus: task.status,
         taskProgress: progress,
         taskStage: task.stage,
+        taskProvider: task.provider,
+        taskErrorCode: task.errorCode,
+        taskOfficialStatus: task.officialStatus,
+        taskReceiptRecorded: task.receiptRecorded,
         taskCreatedAt: task.createdAt || task.created_at,
         taskUpdatedAt: task.updatedAt || task.updated_at,
     };
@@ -91,9 +161,16 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
         failedPromptFingerprint: undefined,
     };
     delete next.taskId;
+    delete next.taskClientOperationId;
+    delete next.retryOf;
+    delete next.attemptGroupId;
     delete next.taskStatus;
     delete next.taskProgress;
     delete next.taskStage;
+    delete next.taskProvider;
+    delete next.taskErrorCode;
+    delete next.taskOfficialStatus;
+    delete next.taskReceiptRecorded;
     delete next.taskCreatedAt;
     delete next.taskUpdatedAt;
     return next;
@@ -316,7 +393,7 @@ export function resolveCanvasGenerationModel(config: AiConfig, model: string | u
     if (!model) return "";
     const normalized = normalizeModelOptionValue(model, config.channels);
     if (!normalized) return "";
-    return modelMatchesCapability(modelOptionName(normalized), mode) ? normalized : "";
+    return configuredModelMatchesCapability(config, normalized, mode) || modelMatchesCapability(modelOptionName(normalized), mode) ? normalized : "";
 }
 
 export function supportsVideoReferenceAudio(config: AiConfig) {
