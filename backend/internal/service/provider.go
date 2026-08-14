@@ -751,9 +751,9 @@ func grokImageRequestBody(input canvasGenerationInput) (grokImageRequest, string
 		Prompt:         withSystemPrompt(input.Config, input.Prompt),
 		N:              1,
 		ResponseFormat: "url",
-		Size:           strings.TrimSpace(input.Config.Size),
-		AspectRatio:    normalizeGrokImageAspectRatio(input.Config.Size),
-		Resolution:     normalizeGrokImageResolution(input.Config.Quality),
+		// Grok 图片协议用 aspect_ratio 表达画布比例；同时发送 size 会被上游按 OpenAI 枚举校验并拒绝。
+		AspectRatio: normalizeGrokImageAspectRatio(input.Config.Size),
+		Resolution:  normalizeGrokImageResolution(input.Config.Quality),
 	}
 	if len(input.ReferenceImages) == 0 {
 		return body, "/images/generations", nil
