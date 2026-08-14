@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasConnectionError } from "../src/lib/canvas/canvas-connection-policy";
+import { buildGenerationConfig, resolveCanvasGenerationModel } from "../src/lib/canvas/canvas-project-generation";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { groupModelsByDisplayName, modelCompatibilityError, modelGroupReferenceLimits, resolveCompatibleModel } from "../src/lib/model-selection";
 import { defaultConfig, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
@@ -52,6 +53,15 @@ function node(id: string, type: CanvasNodeType, generationMode?: "image" | "vide
 }
 
 describe("逻辑模型选择", () => {
+    test("后台标注的视频模型不因内部标识缺少视频关键词而回退", () => {
+        const config = policyConfig();
+        const selectedModel = config.videoModels[0]!;
+        const videoNode = { ...node("video", CanvasNodeType.Video), metadata: { model: selectedModel } };
+
+        expect(resolveCanvasGenerationModel(config, selectedModel, "video")).toBe(selectedModel);
+        expect(buildGenerationConfig(config, videoNode, "video").model).toBe(selectedModel);
+    });
+
     test("同渠道同显示名称合并为一个逻辑模型", () => {
         const config = policyConfig();
         const groups = groupModelsByDisplayName(config, config.videoModels);

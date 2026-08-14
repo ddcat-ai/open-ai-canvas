@@ -35,6 +35,7 @@ export async function executeVideoGeneration({
     const isEmptyVideoNode = sourceNode?.type === CanvasNodeType.Video && !sourceNode.metadata?.content;
     const isExistingVideoNode = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
     const videoId = isEmptyVideoNode ? nodeId : nanoid();
+    const versionRootId = isExistingVideoNode && sourceNode ? sourceNode.metadata?.versionOfNodeId || sourceNode.id : undefined;
     const parent = sourceNode?.position || { x: 0, y: 0 };
     const videoGenerationMetadata = buildVideoGenerationMetadata(sourceNode, generationContext);
     const videoNode: CanvasNodeData = {
@@ -63,17 +64,19 @@ export async function executeVideoGeneration({
         },
     };
     registerPendingNodeIds([videoId]);
+    // 待生成版本先加入版本族，但只有成功结果才能替换当前主版本。
     setNodes((current) => {
         if (isEmptyVideoNode) return current.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node));
         if (!isExistingVideoNode || !sourceNode) return [...current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode];
-        const rootId = sourceNode.metadata?.versionOfNodeId || sourceNode.id;
+        const rootId = versionRootId!;
         const nextLabel = nextCanvasVersionLabel(rootId, current);
+        const hasPrimaryVersion = current.some((node) => (node.metadata?.versionOfNodeId || node.id) === rootId && node.metadata?.versionPrimary);
         return [
             ...current.map((node) => {
                 if ((node.metadata?.versionOfNodeId || node.id) !== rootId) return node;
-                return { ...node, metadata: { ...node.metadata, versionOfNodeId: rootId, versionLabel: node.metadata?.versionLabel || "A", versionPrimary: false, status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status } };
+                return { ...node, metadata: { ...node.metadata, versionOfNodeId: rootId, versionLabel: node.metadata?.versionLabel || "A", versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id), status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status } };
             }),
-            { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: true } },
+            { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: false } },
         ];
     });
     // 重新生成已有视频时，新节点继承源视频的上游连接，与源视频保持并行关系，而不是作为其下游子节点。
@@ -91,9 +94,10 @@ export async function executeVideoGeneration({
         const video = await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
         setNodes((current) => current.map((node) => {
-            if (node.id !== videoId) return node;
+            const isVersionSibling = Boolean(versionRootId && (node.metadata?.versionOfNodeId || node.id) === versionRootId);
+            if (node.id !== videoId) return isVersionSibling ? { ...node, metadata: { ...node.metadata, versionPrimary: false } } : node;
             const geometry = node.metadata?.locked ? {} : { width: videoSize.width, height: videoSize.height, position: { x: node.position.x + node.width / 2 - videoSize.width / 2, y: node.position.y + node.height / 2 - videoSize.height / 2 } };
-            return { ...node, ...geometry, metadata: { ...node.metadata, ...videoMetadata(video), prompt: effectivePrompt, model: generationConfig.model, size: generationConfig.size, seconds: generationConfig.videoSeconds, vquality: generationConfig.vquality, generateAudio: generationConfig.videoGenerateAudio, watermark: generationConfig.videoWatermark, references: generationReferenceUrls(generationContext), ...videoGenerationMetadata } };
+            return { ...node, ...geometry, metadata: { ...node.metadata, ...videoMetadata(video), prompt: effectivePrompt, model: generationConfig.model, size: generationConfig.size, seconds: generationConfig.videoSeconds, vquality: generationConfig.vquality, generateAudio: generationConfig.videoGenerateAudio, watermark: generationConfig.videoWatermark, references: generationReferenceUrls(generationContext), ...videoGenerationMetadata, ...(versionRootId ? { versionPrimary: true } : {}) } };
         }));
     } finally {
         finishGenerationRequest(videoId, controller);
