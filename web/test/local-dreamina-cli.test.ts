@@ -51,12 +51,16 @@ describe("signed Dreamina CLI lifecycle client", () => {
 
     test("projects bounded lifecycle status without preserving injected messages", async () => {
         const module = await import("../src/services/local-dreamina-cli");
-        const result = await module.getDreaminaStatus({
-            request: async () => jsonResponse({
-                ok: true,
-                status: { ...installedStatus(), message: `${privateCanary} C:\\Users\\owner\\Profile` },
-            }),
-        }, { now: () => fixedNow });
+        const result = await module.getDreaminaStatus(
+            {
+                request: async () =>
+                    jsonResponse({
+                        ok: true,
+                        status: { ...installedStatus(), message: `${privateCanary} C:\\Users\\owner\\Profile` },
+                    }),
+            },
+            { now: () => fixedNow },
+        );
 
         expect(result).toEqual({
             provider: "dreamina-cli",
@@ -73,51 +77,71 @@ describe("signed Dreamina CLI lifecycle client", () => {
 
     test("projects only a bounded numeric Dreamina credit balance for authenticated status", async () => {
         const module = await import("../src/services/local-dreamina-cli");
-        const result = await module.getDreaminaStatus({
-            request: async () => jsonResponse({
-                ok: true,
-                status: { ...authenticatedStatus(), totalCredit: 24_940 },
-            }),
-        }, { now: () => fixedNow });
+        const result = await module.getDreaminaStatus(
+            {
+                request: async () =>
+                    jsonResponse({
+                        ok: true,
+                        status: { ...authenticatedStatus(), totalCredit: 24_940 },
+                    }),
+            },
+            { now: () => fixedNow },
+        );
 
         expect(result.totalCredit).toBe(24_940);
 
         for (const totalCredit of [-1, 1.5, "24940", null, Number.MAX_SAFE_INTEGER]) {
-            await expect(module.getDreaminaStatus({
-                request: async () => jsonResponse({
-                    ok: true,
-                    status: { ...authenticatedStatus(), totalCredit },
-                }),
-            }, { now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_response_invalid" });
+            await expect(
+                module.getDreaminaStatus(
+                    {
+                        request: async () =>
+                            jsonResponse({
+                                ok: true,
+                                status: { ...authenticatedStatus(), totalCredit },
+                            }),
+                    },
+                    { now: () => fixedNow },
+                ),
+            ).rejects.toMatchObject({ code: "dreamina_response_invalid" });
         }
 
-        await expect(module.getDreaminaStatus({
-            request: async () => jsonResponse({
-                ok: true,
-                status: { ...installedStatus(), totalCredit: 24_940 },
-            }),
-        }, { now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_response_invalid" });
+        await expect(
+            module.getDreaminaStatus(
+                {
+                    request: async () =>
+                        jsonResponse({
+                            ok: true,
+                            status: { ...installedStatus(), totalCredit: 24_940 },
+                        }),
+                },
+                { now: () => fixedNow },
+            ),
+        ).rejects.toMatchObject({ code: "dreamina_response_invalid" });
     });
 
     test("keeps official pending verification fields and rejects state contradictions", async () => {
         const module = await import("../src/services/local-dreamina-cli");
         const expiresAt = new Date(fixedNow + 60_000).toISOString();
-        const pending = await module.loginDreamina({
-            request: async () => jsonResponse({
-                ok: true,
-                status: {
-                    provider: "dreamina-cli",
-                    state: "login_pending",
-                    installed: true,
-                    authenticated: false,
-                    code: "dreamina_login_pending",
-                    message: privateCanary,
-                    verificationUri: "https://jimeng.jianying.com/ai-tool/cli-auth?verification_uri=https%3A%2F%2Fjimeng.jianying.com%2Fpassport%2Fopen",
-                    userCode: "ABCD-EFGH",
-                    expiresAt,
-                },
-            }),
-        }, { now: () => fixedNow });
+        const pending = await module.loginDreamina(
+            {
+                request: async () =>
+                    jsonResponse({
+                        ok: true,
+                        status: {
+                            provider: "dreamina-cli",
+                            state: "login_pending",
+                            installed: true,
+                            authenticated: false,
+                            code: "dreamina_login_pending",
+                            message: privateCanary,
+                            verificationUri: "https://jimeng.jianying.com/ai-tool/cli-auth?verification_uri=https%3A%2F%2Fjimeng.jianying.com%2Fpassport%2Fopen",
+                            userCode: "ABCD-EFGH",
+                            expiresAt,
+                        },
+                    }),
+            },
+            { now: () => fixedNow },
+        );
 
         expect(pending).toMatchObject({
             state: "login_pending",
@@ -127,30 +151,45 @@ describe("signed Dreamina CLI lifecycle client", () => {
         });
         expect(JSON.stringify(pending)).not.toContain(privateCanary);
 
-        await expect(module.getDreaminaStatus({
-            request: async () => jsonResponse({
-                ok: true,
-                status: { ...installedStatus(), state: "authenticated", authenticated: true },
-            }),
-        }, { now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_response_invalid" });
+        await expect(
+            module.getDreaminaStatus(
+                {
+                    request: async () =>
+                        jsonResponse({
+                            ok: true,
+                            status: { ...installedStatus(), state: "authenticated", authenticated: true },
+                        }),
+                },
+                { now: () => fixedNow },
+            ),
+        ).rejects.toMatchObject({ code: "dreamina_response_invalid" });
     });
 
     test("maps unknown Runtime errors and oversized bodies to stable public failures", async () => {
         const module = await import("../src/services/local-dreamina-cli");
-        const privateError = module.getDreaminaStatus({
-            request: async () => jsonResponse({ ok: false, code: "private_error", message: privateCanary }, 500),
-        }, { now: () => fixedNow });
+        const privateError = module.getDreaminaStatus(
+            {
+                request: async () => jsonResponse({ ok: false, code: "private_error", message: privateCanary }, 500),
+            },
+            { now: () => fixedNow },
+        );
         await expect(privateError).rejects.toMatchObject({
             code: "dreamina_internal_error",
             message: "Dreamina CLI 请求失败",
         });
         await expect(privateError).rejects.not.toThrow(privateCanary);
 
-        await expect(module.getDreaminaStatus({
-            request: async () => new Response(JSON.stringify({ ok: true, status: installedStatus(), privateCanary }), {
-                headers: { "content-length": String(70 * 1024) },
-            }),
-        }, { now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_response_invalid" });
+        await expect(
+            module.getDreaminaStatus(
+                {
+                    request: async () =>
+                        new Response(JSON.stringify({ ok: true, status: installedStatus(), privateCanary }), {
+                            headers: { "content-length": String(70 * 1024) },
+                        }),
+                },
+                { now: () => fixedNow },
+            ),
+        ).rejects.toMatchObject({ code: "dreamina_response_invalid" });
     });
 
     test("cancellation and deadlines abort the in-flight signed request", async () => {
@@ -158,19 +197,30 @@ describe("signed Dreamina CLI lifecycle client", () => {
         const cancelled = new AbortController();
         cancelled.abort();
         let calls = 0;
-        await expect(module.getDreaminaStatus({
-            request: async () => {
-                calls++;
-                return jsonResponse({ ok: true, status: installedStatus() });
-            },
-        }, { signal: cancelled.signal, now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_cancelled" });
+        await expect(
+            module.getDreaminaStatus(
+                {
+                    request: async () => {
+                        calls++;
+                        return jsonResponse({ ok: true, status: installedStatus() });
+                    },
+                },
+                { signal: cancelled.signal, now: () => fixedNow },
+            ),
+        ).rejects.toMatchObject({ code: "dreamina_cancelled" });
         expect(calls).toBe(0);
 
-        await expect(module.getDreaminaStatus({
-            request: async (_path, init) => await new Promise<Response>((_resolve, reject) => {
-                init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
-            }),
-        }, { timeoutMs: 5, now: () => fixedNow })).rejects.toMatchObject({ code: "dreamina_timeout" });
+        await expect(
+            module.getDreaminaStatus(
+                {
+                    request: async (_path, init) =>
+                        await new Promise<Response>((_resolve, reject) => {
+                            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+                        }),
+                },
+                { timeoutMs: 5, now: () => fixedNow },
+            ),
+        ).rejects.toMatchObject({ code: "dreamina_timeout" });
     });
 });
 

@@ -7,9 +7,11 @@ const privateCanary = "runtime-private-canary";
 
 test("Runtime status projects only exact public module descriptors", async () => {
     const module = await import("../src/services/local-runtime").catch(() => ({}));
-    const readStatus = (module as {
-        readLocalRuntimeStatus?: (client: RuntimeTransport) => Promise<unknown>;
-    }).readLocalRuntimeStatus;
+    const readStatus = (
+        module as {
+            readLocalRuntimeStatus?: (client: RuntimeTransport) => Promise<unknown>;
+        }
+    ).readLocalRuntimeStatus;
     expect(typeof readStatus).toBe("function");
     if (!readStatus) return;
 
@@ -55,9 +57,11 @@ test("Runtime status projects only exact public module descriptors", async () =>
 
 test("Runtime status rejects sensitive or contradictory response fields without echoing them", async () => {
     const module = await import("../src/services/local-runtime").catch(() => ({}));
-    const readStatus = (module as {
-        readLocalRuntimeStatus?: (client: RuntimeTransport) => Promise<unknown>;
-    }).readLocalRuntimeStatus;
+    const readStatus = (
+        module as {
+            readLocalRuntimeStatus?: (client: RuntimeTransport) => Promise<unknown>;
+        }
+    ).readLocalRuntimeStatus;
     expect(typeof readStatus).toBe("function");
     if (!readStatus) return;
 
@@ -96,9 +100,11 @@ test("Runtime status rejects sensitive or contradictory response fields without 
 
 test("Runtime store automatically connects and reads descriptors without storing endpoint or bearer data", async () => {
     const module = await import("../src/stores/use-local-runtime-store").catch(() => ({}));
-    const createStore = (module as {
-        createLocalRuntimeStore?: (dependencies: unknown) => RuntimeStore;
-    }).createLocalRuntimeStore;
+    const createStore = (
+        module as {
+            createLocalRuntimeStore?: (dependencies: unknown) => RuntimeStore;
+        }
+    ).createLocalRuntimeStore;
     expect(typeof createStore).toBe("function");
     if (!createStore) return;
 
@@ -148,7 +154,9 @@ test("Runtime store replaces a stale signed session after Runtime restart before
                     session: { sessionId: `session-${connects}`, keyId: "k".repeat(43), scopes: ["runtime:status"], expiresAt: "2099-01-01T00:00:00.000Z" },
                 };
             },
-            revokeLocalSession() { revocations += 1; },
+            revokeLocalSession() {
+                revocations += 1;
+            },
             async request() {
                 statusReads += 1;
                 if (statusReads === 1) throw new LocalRuntimeClientError("session_required", "stale", 401);
@@ -170,7 +178,9 @@ test("Runtime store exposes an actionable reconnect message without origin or au
     const store = module.createLocalRuntimeStore({
         client: {
             connect: async () => ({ state: "origin_not_trusted" as const, runtimeVersion: 2 }),
-            request: async () => { throw new Error("must not read Runtime status"); },
+            request: async () => {
+                throw new Error("must not read Runtime status");
+            },
         },
         timeoutMs: 1_000,
     });
@@ -187,9 +197,11 @@ test("Runtime store exposes an actionable reconnect message without origin or au
 
 test("Runtime store ignores an older connection result after a newer request succeeds", async () => {
     const module = await import("../src/stores/use-local-runtime-store").catch(() => ({}));
-    const createStore = (module as {
-        createLocalRuntimeStore?: (dependencies: unknown) => RuntimeStore;
-    }).createLocalRuntimeStore;
+    const createStore = (
+        module as {
+            createLocalRuntimeStore?: (dependencies: unknown) => RuntimeStore;
+        }
+    ).createLocalRuntimeStore;
     expect(typeof createStore).toBe("function");
     if (!createStore) return;
 
@@ -200,16 +212,19 @@ test("Runtime store ignores an older connection result after a newer request suc
     let calls = 0;
     const store = createStore({
         client: {
-            connect: async () => calls++ === 0 ? await first : ({
-                state: "connected" as const,
-                runtimeVersion: 2,
-                session: {
-                    sessionId: "public-session-handle",
-                    keyId: "k".repeat(43),
-                    scopes: ["runtime:status"],
-                    expiresAt: "2026-08-10T00:10:00.000Z",
-                },
-            }),
+            connect: async () =>
+                calls++ === 0
+                    ? await first
+                    : {
+                          state: "connected" as const,
+                          runtimeVersion: 2,
+                          session: {
+                              sessionId: "public-session-handle",
+                              keyId: "k".repeat(43),
+                              scopes: ["runtime:status"],
+                              expiresAt: "2026-08-10T00:10:00.000Z",
+                          },
+                      },
             request: async () => runtimeStatusResponse(),
         },
         timeoutMs: 1_000,
@@ -251,9 +266,10 @@ test("Runtime store exposes a bounded timeout instead of hanging", async () => {
     const module = await import("../src/stores/use-local-runtime-store");
     const store = module.createLocalRuntimeStore({
         client: {
-            connect: async (signal?: AbortSignal) => await new Promise((_resolve, reject) => {
-                signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
-            }),
+            connect: async (signal?: AbortSignal) =>
+                await new Promise((_resolve, reject) => {
+                    signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+                }),
             request: async () => runtimeStatusResponse(),
         },
         timeoutMs: 5,
@@ -271,15 +287,12 @@ test("Runtime store exposes a bounded timeout instead of hanging", async () => {
 test("the application root starts local Runtime discovery before provider catalogs bootstrap", async () => {
     const source = await fs.readFile(new URL("../src/components/layout/client-root-init.tsx", import.meta.url), "utf8");
     expect(source).toContain("useLocalRuntimeBootstrap");
-    expect(source.indexOf("useLocalRuntimeBootstrap()")) .toBeLessThan(source.indexOf("useLocalDreaminaModelBootstrap()"));
+    expect(source.indexOf("useLocalRuntimeBootstrap()")).toBeLessThan(source.indexOf("useLocalDreaminaModelBootstrap()"));
 });
 
 test("Runtime bootstrap schedules one connect and aborts it on cleanup", async () => {
-    const module = await import("../src/stores/use-local-runtime-store") as {
-        startLocalRuntimeBootstrap?: (
-            connect: (signal?: AbortSignal) => Promise<void>,
-            schedule: (run: () => void) => () => void,
-        ) => () => void;
+    const module = (await import("../src/stores/use-local-runtime-store")) as {
+        startLocalRuntimeBootstrap?: (connect: (signal?: AbortSignal) => Promise<void>, schedule: (run: () => void) => () => void) => () => void;
     };
     expect(typeof module.startLocalRuntimeBootstrap).toBe("function");
     if (!module.startLocalRuntimeBootstrap) return;
@@ -288,8 +301,15 @@ test("Runtime bootstrap schedules one connect and aborts it on cleanup", async (
     let cancelled = 0;
     const signals: AbortSignal[] = [];
     const cleanup = module.startLocalRuntimeBootstrap(
-        async (signal) => { if (signal) signals.push(signal); },
-        (run) => { scheduled = run; return () => { cancelled += 1; }; },
+        async (signal) => {
+            if (signal) signals.push(signal);
+        },
+        (run) => {
+            scheduled = run;
+            return () => {
+                cancelled += 1;
+            };
+        },
     );
     expect(signals).toHaveLength(0);
     scheduled?.();

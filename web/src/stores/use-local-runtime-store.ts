@@ -1,26 +1,10 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import {
-    readLocalRuntimeStatus,
-    type LocalRuntimeModuleDescriptor,
-    type LocalRuntimeStatus,
-    type LocalRuntimeTransport,
-} from "@/services/local-runtime";
-import {
-    LocalRuntimeClientError,
-    LocalRuntimeSessionClient,
-    type LocalRuntimeConnection,
-} from "@/services/local-runtime-session";
+import { readLocalRuntimeStatus, type LocalRuntimeModuleDescriptor, type LocalRuntimeStatus, type LocalRuntimeTransport } from "@/services/local-runtime";
+import { LocalRuntimeClientError, LocalRuntimeSessionClient, type LocalRuntimeConnection } from "@/services/local-runtime-session";
 
-export type LocalRuntimeConnectionState =
-    | "idle"
-    | "connecting"
-    | "connected"
-    | "origin_not_trusted"
-    | "unreachable"
-    | "incompatible"
-    | "runtime_error";
+export type LocalRuntimeConnectionState = "idle" | "connecting" | "connected" | "origin_not_trusted" | "unreachable" | "incompatible" | "runtime_error";
 
 type LocalRuntimeSessionTransport = LocalRuntimeTransport & {
     connect(signal?: AbortSignal): Promise<LocalRuntimeConnection>;
@@ -70,10 +54,13 @@ export function createLocalRuntimeStore(dependencies: LocalRuntimeStoreDependenc
             const cancel = () => controller.abort();
             if (signal?.aborted) controller.abort();
             else signal?.addEventListener("abort", cancel, { once: true });
-            const timer = setTimeout(() => {
-                timedOut = true;
-                controller.abort();
-            }, Math.max(1, dependencies.timeoutMs ?? DEFAULT_TIMEOUT_MS));
+            const timer = setTimeout(
+                () => {
+                    timedOut = true;
+                    controller.abort();
+                },
+                Math.max(1, dependencies.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+            );
 
             const previous = get();
             set({
@@ -99,8 +86,7 @@ export function createLocalRuntimeStore(dependencies: LocalRuntimeStoreDependenc
                 try {
                     status = await readLocalRuntimeStatus(client(), controller.signal);
                 } catch (error) {
-                    if (!(error instanceof LocalRuntimeClientError)
-                        || (error.code !== "session_required" && error.code !== "scope_denied")) throw error;
+                    if (!(error instanceof LocalRuntimeClientError) || (error.code !== "session_required" && error.code !== "scope_denied")) throw error;
                     client().revokeLocalSession?.();
                     const reconnected = await client().connect(controller.signal);
                     if (reconnected.state !== "connected") throw error;
@@ -163,7 +149,10 @@ export function startLocalRuntimeBootstrap(
         started = true;
         void connect(controller.signal);
     });
-    return () => { cancelScheduled(); controller.abort(); };
+    return () => {
+        cancelScheduled();
+        controller.abort();
+    };
 }
 
 export function useLocalRuntimeBootstrap() {
@@ -179,15 +168,7 @@ function connectionFailure(error: unknown, timedOut: boolean) {
         if (error.code === "origin_not_trusted") {
             return { connection: "origin_not_trusted" as const, error: "本机连接需要重新建立" };
         }
-        if ([
-            "browser_key_invalid",
-            "challenge_invalid",
-            "origin_invalid",
-            "runtime_incompatible",
-            "runtime_response_invalid",
-            "signature_invalid",
-            "webcrypto_unavailable",
-        ].includes(error.code)) {
+        if (["browser_key_invalid", "challenge_invalid", "origin_invalid", "runtime_incompatible", "runtime_response_invalid", "signature_invalid", "webcrypto_unavailable"].includes(error.code)) {
             return { connection: "incompatible" as const, error: error.message };
         }
         return { connection: "runtime_error" as const, error: error.message };

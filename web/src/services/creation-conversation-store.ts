@@ -16,27 +16,23 @@ export type StoredCreationConversation = {
     messages: PendingCreationMessage[];
 };
 
-export function updateCreationConversationSnapshot<T extends { id: string }>(
-    conversations: T[],
-    conversationId: string,
-    updater: (conversation: T) => T,
-) {
-    return conversations.map((conversation) => conversation.id === conversationId ? updater(conversation) : conversation);
+export function updateCreationConversationSnapshot<T extends { id: string }>(conversations: T[], conversationId: string, updater: (conversation: T) => T) {
+    return conversations.map((conversation) => (conversation.id === conversationId ? updater(conversation) : conversation));
 }
 
 export function pendingCreationMediaKey(conversations: StoredCreationConversation[]) {
-    return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => (
-        message.role === "assistant" && message.status === "pending" && message.mode !== "text"
-            ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`]
-            : []
-    ))).join("|");
+    return conversations
+        .flatMap((conversation) => conversation.messages.flatMap((message) => (message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))
+        .join("|");
 }
 
 export function pendingCreationTaskIds(conversations: StoredCreationConversation[]) {
-    const taskIds = conversations.flatMap((conversation) => conversation.messages.flatMap((message) => {
-        if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return [];
-        return message.taskIds || [];
-    }));
+    const taskIds = conversations.flatMap((conversation) =>
+        conversation.messages.flatMap((message) => {
+            if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return [];
+            return message.taskIds || [];
+        }),
+    );
     return Array.from(new Set(taskIds));
 }
 

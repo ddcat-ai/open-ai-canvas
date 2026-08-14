@@ -50,17 +50,18 @@ test("generation artifact sink recovers after ack crash without a second materia
     const effectKey = "materialize:task-ack-crash:0";
     const storageKey = generationArtifactStorageKey(effectKey, "image", "test-scope");
     let materializations = 0;
-    const run = () => loadOrStoreGenerationArtifact({
-        effectKey: storageKey,
-        read: async (key) => durable.get(key) ?? null,
-        materialize: async () => {
-            materializations += 1;
-            return { storageKey };
-        },
-        write: async (key, artifact) => {
-            durable.set(key, artifact);
-        },
-    });
+    const run = () =>
+        loadOrStoreGenerationArtifact({
+            effectKey: storageKey,
+            read: async (key) => durable.get(key) ?? null,
+            materialize: async () => {
+                materializations += 1;
+                return { storageKey };
+            },
+            write: async (key, artifact) => {
+                durable.set(key, artifact);
+            },
+        });
 
     await run();
     // Simulate a process crash after the durable sink succeeded but before the Agent effect ack.

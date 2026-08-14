@@ -35,7 +35,18 @@ export function canvasAssetHandoffPayloads(assets: Asset[], assetIds: Iterable<s
             return;
         }
         if (asset?.kind === "video") {
-            payloads.push({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height, durationMs: asset.data.durationMs, bytes: asset.data.bytes, mimeType: asset.data.mimeType, assetId: asset.id });
+            payloads.push({
+                kind: "video",
+                url: asset.data.url,
+                storageKey: asset.data.storageKey,
+                title: asset.title,
+                width: asset.data.width,
+                height: asset.data.height,
+                durationMs: asset.data.durationMs,
+                bytes: asset.data.bytes,
+                mimeType: asset.data.mimeType,
+                assetId: asset.id,
+            });
             return;
         }
         missingAssetIds.push(assetId);
@@ -47,11 +58,11 @@ export function canvasAssetHandoffPayloads(assets: Asset[], assetIds: Iterable<s
 export function canvasAssetHandoffAttempt(assets: Asset[], searchParams: URLSearchParams) {
     const assetIds = canvasAssetHandoffIds(searchParams);
     const { payloads, missingAssetIds } = canvasAssetHandoffPayloads(assets, assetIds);
-    return { kind: assetIds.length && !missingAssetIds.length ? "ready" as const : "retry" as const, assetIds, payloads: missingAssetIds.length ? [] : payloads, missingAssetIds };
+    return { kind: assetIds.length && !missingAssetIds.length ? ("ready" as const) : ("retry" as const), assetIds, payloads: missingAssetIds.length ? [] : payloads, missingAssetIds };
 }
 
 export function uninsertedCanvasAssetHandoffPayloads(nodes: Iterable<{ metadata?: { assetId?: unknown } }>, payloads: InsertAssetPayload[]) {
-    const insertedAssetIds = new Set(Array.from(nodes, (node) => typeof node.metadata?.assetId === "string" ? node.metadata.assetId : "").filter(Boolean));
+    const insertedAssetIds = new Set(Array.from(nodes, (node) => (typeof node.metadata?.assetId === "string" ? node.metadata.assetId : "")).filter(Boolean));
     return payloads.filter((payload) => !payload.assetId || !insertedAssetIds.has(payload.assetId));
 }
 
@@ -62,15 +73,11 @@ export function creationResultAssetIds(assets: Asset[], input: { messageId: stri
         .filter((asset) => asset.metadata?.source === "create-generation" || asset.metadata?.source === "generation-task")
         .filter((asset) => asset.metadata?.messageId === input.messageId || (typeof asset.metadata?.taskId === "string" && taskOrder.has(asset.metadata.taskId)))
         .sort((left, right) => {
-            const leftTask = typeof left.metadata?.taskId === "string" ? taskOrder.get(left.metadata.taskId) ?? Number.MAX_SAFE_INTEGER : 0;
-            const rightTask = typeof right.metadata?.taskId === "string" ? taskOrder.get(right.metadata.taskId) ?? Number.MAX_SAFE_INTEGER : 0;
+            const leftTask = typeof left.metadata?.taskId === "string" ? (taskOrder.get(left.metadata.taskId) ?? Number.MAX_SAFE_INTEGER) : 0;
+            const rightTask = typeof right.metadata?.taskId === "string" ? (taskOrder.get(right.metadata.taskId) ?? Number.MAX_SAFE_INTEGER) : 0;
             if (leftTask !== rightTask) return leftTask - rightTask;
-            const leftResult = typeof left.metadata?.outputIndex === "number"
-                ? left.metadata.outputIndex
-                : typeof left.metadata?.resultIndex === "number" ? left.metadata.resultIndex : 0;
-            const rightResult = typeof right.metadata?.outputIndex === "number"
-                ? right.metadata.outputIndex
-                : typeof right.metadata?.resultIndex === "number" ? right.metadata.resultIndex : 0;
+            const leftResult = typeof left.metadata?.outputIndex === "number" ? left.metadata.outputIndex : typeof left.metadata?.resultIndex === "number" ? left.metadata.resultIndex : 0;
+            const rightResult = typeof right.metadata?.outputIndex === "number" ? right.metadata.outputIndex : typeof right.metadata?.resultIndex === "number" ? right.metadata.resultIndex : 0;
             return leftResult - rightResult;
         });
     const unused = new Set(candidates.map((asset) => asset.id));

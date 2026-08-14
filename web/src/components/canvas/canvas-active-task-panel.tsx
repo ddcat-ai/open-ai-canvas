@@ -66,7 +66,9 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block text-sm font-semibold leading-5">生成任务</span>
-                                    <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} aria-live="polite">当前画布 · {tasks.length} 个进行中</span>
+                                    <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} aria-live="polite">
+                                        当前画布 · {tasks.length} 个进行中
+                                    </span>
                                 </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-2" style={{ color: theme.accent.primary }}>
@@ -93,7 +95,7 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                             now={now}
                                             theme={theme}
                                             expanded={expandedTaskId === task.id}
-                                            onToggle={() => setExpandedTaskId((current) => current === task.id ? null : task.id)}
+                                            onToggle={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
                                             reducedMotion={Boolean(reducedMotion)}
                                             creditsEnabled={creditsEnabled}
                                         />
@@ -108,7 +110,23 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
     );
 }
 
-function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, creditsEnabled }: { task: GenerationTask; now: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; expanded: boolean; onToggle: () => void; reducedMotion: boolean; creditsEnabled: boolean }) {
+function ActiveTaskCard({
+    task,
+    now,
+    theme,
+    expanded,
+    onToggle,
+    reducedMotion,
+    creditsEnabled,
+}: {
+    task: GenerationTask;
+    now: number;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    expanded: boolean;
+    onToggle: () => void;
+    reducedMotion: boolean;
+    creditsEnabled: boolean;
+}) {
     const showsProgress = generationTaskShowsProgress(task);
     const progress = showsProgress && typeof task.progress === "number" ? Math.max(0, Math.min(100, Math.round(task.progress))) : showsProgress && task.status === "queued" ? 0 : undefined;
     const startedAt = task.startedAt || task.createdAt;
@@ -119,12 +137,7 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
     const transition = reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel;
 
     return (
-        <motion.article
-            layout
-            layoutId={`canvas-active-task-${task.id}`}
-            className="overflow-hidden rounded-xl border"
-            style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}
-        >
+        <motion.article layout layoutId={`canvas-active-task-${task.id}`} className="overflow-hidden rounded-xl border" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
             <button type="button" className="block w-full p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]" onClick={onToggle} aria-expanded={expanded}>
                 <div className="flex min-w-0 items-start gap-2">
                     <motion.span layout="position" className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md" style={{ background: `${statusTone}18`, color: statusTone }}>
@@ -132,53 +145,62 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
                     </motion.span>
                     <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
-                            <span className="truncate text-xs font-semibold" title={formatTaskKind(task)}>{formatTaskKind(task)}</span>
-                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>{generationTaskStatusLabel(task)}</span>
+                            <span className="truncate text-xs font-semibold" title={formatTaskKind(task)}>
+                                {formatTaskKind(task)}
+                            </span>
+                            <span className="shrink-0 rounded-full border px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium" style={{ borderColor: `${statusTone}44`, color: statusTone }}>
+                                {generationTaskStatusLabel(task)}
+                            </span>
                         </span>
-                        <span className="mt-1 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} title={generationTaskStageLabel(task)}>{generationTaskStageLabel(task)}</span>
+                        <span className="mt-1 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} title={generationTaskStageLabel(task)}>
+                            {generationTaskStageLabel(task)}
+                        </span>
                     </span>
                     {expanded ? <ChevronUp className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} /> : <ChevronDown className="mt-0.5 size-3.5 shrink-0" style={{ color: theme.node.muted }} />}
                 </div>
 
-                {showsProgress ? <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
-                    {progress !== undefined ? (
-                        <motion.div
-                            className="relative h-full rounded-full overflow-hidden"
-                            animate={{ width: `${progress}%` }}
-                            transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: "easeOut" }}
-                            style={{ background: statusTone }}
-                        >
-                            {/* 进度条 shimmer 扫描动画（对应 #98 决策3）*/}
-                            {task.status === "running" && !reducedMotion ? (
-                                <span
-                                    className="absolute inset-0 canvas-task-progress-shimmer"
-                                    style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent)" }}
-                                    aria-hidden
-                                />
-                            ) : null}
-                        </motion.div>
-                    ) : (
-                        // indeterminate 模式（无具体百分比，从左到右循环扫描）
-                        <motion.div
-                            className="h-full rounded-full"
-                            initial={{ width: "20%", x: "-100%" }}
-                            animate={{ width: "20%", x: "400%" }}
-                            transition={reducedMotion ? { duration: 0 } : { duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                            style={{ background: statusTone }}
-                        />
-                    )}
-                </div> : null}
+                {showsProgress ? (
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
+                        {progress !== undefined ? (
+                            <motion.div className="relative h-full rounded-full overflow-hidden" animate={{ width: `${progress}%` }} transition={reducedMotion ? { duration: 0 } : { duration: 0.3, ease: "easeOut" }} style={{ background: statusTone }}>
+                                {/* 进度条 shimmer 扫描动画（对应 #98 决策3）*/}
+                                {task.status === "running" && !reducedMotion ? (
+                                    <span className="absolute inset-0 canvas-task-progress-shimmer" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent)" }} aria-hidden />
+                                ) : null}
+                            </motion.div>
+                        ) : (
+                            // indeterminate 模式（无具体百分比，从左到右循环扫描）
+                            <motion.div
+                                className="h-full rounded-full"
+                                initial={{ width: "20%", x: "-100%" }}
+                                animate={{ width: "20%", x: "400%" }}
+                                transition={reducedMotion ? { duration: 0 } : { duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                                style={{ background: statusTone }}
+                            />
+                        )}
+                    </div>
+                ) : null}
 
                 {/* 进度百分比显示（对应 #98 决策3：列表视图）*/}
                 {progress !== undefined && task.status === "running" ? (
                     <div className="mt-1 flex items-center justify-between text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
                         <span>{durationLabel}</span>
-                        <span className="font-medium tabular-nums" style={{ color: statusTone }}>{progress}%</span>
+                        <span className="font-medium tabular-nums" style={{ color: statusTone }}>
+                            {progress}%
+                        </span>
                     </div>
                 ) : (
                     <div className={`mt-3 grid gap-2 text-[var(--fs-tiny)] ${creditsEnabled ? "grid-cols-2" : "grid-cols-1"}`} style={{ color: theme.node.muted }}>
-                        <span className="inline-flex min-w-0 items-center gap-1 truncate" title={durationLabel}><Clock3 className="size-3 shrink-0" />{durationLabel}</span>
-                        {creditsEnabled ? <span className="inline-flex min-w-0 items-center justify-end gap-1 truncate" title={billingLabel}><Coins className="size-3 shrink-0" />{billingLabel}</span> : null}
+                        <span className="inline-flex min-w-0 items-center gap-1 truncate" title={durationLabel}>
+                            <Clock3 className="size-3 shrink-0" />
+                            {durationLabel}
+                        </span>
+                        {creditsEnabled ? (
+                            <span className="inline-flex min-w-0 items-center justify-end gap-1 truncate" title={billingLabel}>
+                                <Coins className="size-3 shrink-0" />
+                                {billingLabel}
+                            </span>
+                        ) : null}
                     </div>
                 )}
             </button>
@@ -195,7 +217,9 @@ function ActiveTaskCard({ task, now, theme, expanded, onToggle, reducedMotion, c
                     >
                         <div className="flex items-center justify-between gap-2">
                             <span>当前阶段</span>
-                            <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>{generationTaskStageLabel(task)}</span>
+                            <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>
+                                {generationTaskStageLabel(task)}
+                            </span>
                         </div>
                     </motion.div>
                 ) : null}

@@ -6,13 +6,16 @@ import path from "node:path";
 
 import { DreaminaCliRuntime } from "../../canvas-agent/src/dreamina-cli-runtime";
 import { createDreaminaHttpModule } from "../../canvas-agent/src/modules/dreamina-http";
-import { cancelLocalDreaminaGenerationTask, deleteLocalDreaminaGenerationTask, queryLocalDreaminaGenerationTask, refreshLocalDreaminaGenerationTask, runLocalDreaminaGenerationTask, waitForLocalDreaminaGenerationTask } from "../src/services/local-dreamina-generation";
-import { projectLocalDreaminaTask } from "../src/services/local-dreamina-task-projection";
 import {
-    LocalRuntimeSessionClient,
-    type RuntimeBrowserKeyRecord,
-    type RuntimeBrowserKeyStore,
-} from "../src/services/local-runtime-session";
+    cancelLocalDreaminaGenerationTask,
+    deleteLocalDreaminaGenerationTask,
+    queryLocalDreaminaGenerationTask,
+    refreshLocalDreaminaGenerationTask,
+    runLocalDreaminaGenerationTask,
+    waitForLocalDreaminaGenerationTask,
+} from "../src/services/local-dreamina-generation";
+import { projectLocalDreaminaTask } from "../src/services/local-dreamina-task-projection";
+import { LocalRuntimeSessionClient, type RuntimeBrowserKeyRecord, type RuntimeBrowserKeyStore } from "../src/services/local-runtime-session";
 
 const trustedOrigin = "http://127.0.0.1:18630";
 
@@ -21,27 +24,36 @@ test("Dreamina cross-Runtime completion survives HTTP wait and the Web parser wi
     const stateFile = path.join(configDir, "dreamina-runtime-state.json");
     const id = "dreamina-web-cross-runtime-0001";
     const videoBytes = Buffer.from("00000018667479706d703432", "hex");
-    await fs.writeFile(stateFile, JSON.stringify({
-        version: 1,
-        records: [{
-            ownerId: "owner-web-cross-runtime-0001",
-            idempotencyKey: id,
-            requestHash: "a".repeat(64),
-            state: "accepted",
-            submitId: "receipt-web-cross-runtime",
-            updatedAt: "2026-08-13T00:00:00.000Z",
-            taskVersion: 1,
-            operation: "text2video",
-            mode: "video",
-            model: "seedance2.0mini",
-            createdAt: "2026-08-13T00:00:00.000Z",
-            nextPollAt: "2000-01-01T00:00:00.000Z",
-        }],
-    }));
+    await fs.writeFile(
+        stateFile,
+        JSON.stringify({
+            version: 1,
+            records: [
+                {
+                    ownerId: "owner-web-cross-runtime-0001",
+                    idempotencyKey: id,
+                    requestHash: "a".repeat(64),
+                    state: "accepted",
+                    submitId: "receipt-web-cross-runtime",
+                    updatedAt: "2026-08-13T00:00:00.000Z",
+                    taskVersion: 1,
+                    operation: "text2video",
+                    mode: "video",
+                    model: "seedance2.0mini",
+                    createdAt: "2026-08-13T00:00:00.000Z",
+                    nextPollAt: "2000-01-01T00:00:00.000Z",
+                },
+            ],
+        }),
+    );
     let releaseWinner!: () => void;
     let markWinnerEntered!: () => void;
-    const winnerGate = new Promise<void>((resolve) => { releaseWinner = resolve; });
-    const winnerEntered = new Promise<void>((resolve) => { markWinnerEntered = resolve; });
+    const winnerGate = new Promise<void>((resolve) => {
+        releaseWinner = resolve;
+    });
+    const winnerEntered = new Promise<void>((resolve) => {
+        markWinnerEntered = resolve;
+    });
     let winnerQueries = 0;
     let waiterQueries = 0;
     const common = {
@@ -82,7 +94,9 @@ test("Dreamina cross-Runtime completion survives HTTP wait and the Web parser wi
         await winnerEntered;
         const parsed = waitForLocalDreaminaGenerationTask(id, "video", {
             client: {
-                async connect() { return connectedFixture(); },
+                async connect() {
+                    return connectedFixture();
+                },
                 async request(route, init) {
                     expect(route).toBe("/dreamina/generate/wait");
                     const response = await invokeDreaminaHttp(module, route, Buffer.from(String(init?.body)));
@@ -107,11 +121,13 @@ test("Dreamina cross-Runtime completion survives HTTP wait and the Web parser wi
             terminalOutcome: "SUCCEEDED",
             syncState: "SYNC_OK",
             resultState: "PENDING_MATERIALIZATION",
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "video",
-                providerArtifactRef: expect.stringMatching(/^dreamina-provider-artifact:[a-f0-9-]{36}:0$/),
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "video",
+                    providerArtifactRef: expect.stringMatching(/^dreamina-provider-artifact:[a-f0-9-]{36}:0$/),
+                },
+            ],
             context: { scope: "legacy_unscoped" },
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: expect.any(String),
@@ -126,10 +142,7 @@ test("Dreamina cross-Runtime completion survives HTTP wait and the Web parser wi
         });
         expect(waiterQueries).toBe(0);
         expect(winnerQueries).toBe(2);
-        const durableText = [
-            await fs.readFile(stateFile, "utf8"),
-            await fs.readFile(path.join(configDir, "dreamina-generation-task-store.json"), "utf8"),
-        ].join("\n");
+        const durableText = [await fs.readFile(stateFile, "utf8"), await fs.readFile(path.join(configDir, "dreamina-generation-task-store.json"), "utf8")].join("\n");
         expect(durableText).not.toContain("data:video/");
         expect(durableText).not.toContain(videoBytes.toString("base64"));
         expect(durableText).not.toContain(path.join(configDir, "winner-runs"));
@@ -145,7 +158,9 @@ test("deleting a Dreamina task removes only the local record through one signed 
     const requests: Array<{ path: string; method: string; body: string }> = [];
     await deleteLocalDreaminaGenerationTask("dreamina-delete-local-0001", {
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request(path, init) {
                 requests.push({ path, method: String(init?.method), body: String(init?.body) });
                 return jsonResponse(200, { ok: true, result: { deleted: true } });
@@ -153,50 +168,63 @@ test("deleting a Dreamina task removes only the local record through one signed 
         },
     });
 
-    expect(requests).toEqual([{
-        path: "/dreamina/generate/delete",
-        method: "POST",
-        body: JSON.stringify({ idempotencyKey: "dreamina-delete-local-0001" }),
-    }]);
+    expect(requests).toEqual([
+        {
+            path: "/dreamina/generate/delete",
+            method: "POST",
+            body: JSON.stringify({ idempotencyKey: "dreamina-delete-local-0001" }),
+        },
+    ]);
 });
 
 test("manual Dreamina status refresh sends exactly one signed status-only request", async () => {
     const requests: Array<{ path: string; method: string; body: string }> = [];
     const task = await refreshLocalDreaminaGenerationTask("dreamina-refresh-local-0001", {
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request(path, init) {
                 requests.push({ path, method: String(init?.method), body: String(init?.body) });
-                return jsonResponse(200, taskEnvelope("dreamina-refresh-local-0001", "failed", {
-                    officialStatus: "failed",
-                    errorCode: "dreamina_official_failed",
-                }));
+                return jsonResponse(
+                    200,
+                    taskEnvelope("dreamina-refresh-local-0001", "failed", {
+                        officialStatus: "failed",
+                        errorCode: "dreamina_official_failed",
+                    }),
+                );
             },
         },
     });
 
-    expect(requests).toEqual([{
-        path: "/dreamina/generate/refresh",
-        method: "POST",
-        body: JSON.stringify({ idempotencyKey: "dreamina-refresh-local-0001" }),
-    }]);
+    expect(requests).toEqual([
+        {
+            path: "/dreamina/generate/refresh",
+            method: "POST",
+            body: JSON.stringify({ idempotencyKey: "dreamina-refresh-local-0001" }),
+        },
+    ]);
     expect(task).toMatchObject({ status: "failed", officialStatus: "failed", errorCode: "dreamina_official_failed" });
 });
 
 test("Dreamina official failure uses stable neutral copy without exposing provider details", async () => {
-    await expect(runLocalDreaminaGenerationTask(videoInput(), {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request() {
-                const envelope = taskEnvelope("dreamina-official-fail-0001", "failed", {
-                    officialStatus: "failed",
-                    errorCode: "dreamina_official_failed",
-                });
-                return jsonResponse(200, { ...envelope, message: "private provider detail" });
+    await expect(
+        runLocalDreaminaGenerationTask(videoInput(), {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request() {
+                    const envelope = taskEnvelope("dreamina-official-fail-0001", "failed", {
+                        officialStatus: "failed",
+                        errorCode: "dreamina_official_failed",
+                    });
+                    return jsonResponse(200, { ...envelope, message: "private provider detail" });
+                },
             },
-        },
-        idempotencyKey: () => "dreamina-official-fail-0001",
-    })).rejects.toMatchObject({
+            idempotencyKey: () => "dreamina-official-fail-0001",
+        }),
+    ).rejects.toMatchObject({
         code: "dreamina_official_failed",
         message: "任务未成功。当前 Dreamina CLI 无法可靠判断是官网取消还是生成失败。",
         status: 502,
@@ -206,7 +234,9 @@ test("Dreamina official failure uses stable neutral copy without exposing provid
 test("Dreamina Web parsing preserves the shared orthogonal task contract while keeping the legacy DTO", async () => {
     const task = await queryLocalDreaminaGenerationTask("dreamina-contract-web-0001", "video", {
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request() {
                 return jsonResponse(200, {
                     ok: true,
@@ -277,24 +307,27 @@ test("Dreamina SUBMISSION_UNCERTAIN projects as failed attention without claimin
 
 test("Dreamina local generation posts only to its signed Runtime route and never to backend tasks", async () => {
     const requests: Array<{ path: string; method: string; body: string }> = [];
-    const result = await runLocalDreaminaGenerationTask({
-        model: "local:dreamina-cli:seedance2.0mini",
-        mode: "video",
-        prompt: "A short test clip",
-        settings: { aspect: "16:9", resolution: "720", duration: 4 },
-        references: [],
-    }, {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request(path, init) {
-                requests.push({ path, method: String(init?.method), body: String(init?.body) });
-                return jsonResponse(200, path.endsWith("/wait")
-                    ? taskEnvelope("seedance-web-route-0001", "succeeded")
-                    : taskEnvelope("seedance-web-route-0001", "running"));
-            },
+    const result = await runLocalDreaminaGenerationTask(
+        {
+            model: "local:dreamina-cli:seedance2.0mini",
+            mode: "video",
+            prompt: "A short test clip",
+            settings: { aspect: "16:9", resolution: "720", duration: 4 },
+            references: [],
         },
-        idempotencyKey: () => "seedance-web-route-0001",
-    });
+        {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request(path, init) {
+                    requests.push({ path, method: String(init?.method), body: String(init?.body) });
+                    return jsonResponse(200, path.endsWith("/wait") ? taskEnvelope("seedance-web-route-0001", "succeeded") : taskEnvelope("seedance-web-route-0001", "running"));
+                },
+            },
+            idempotencyKey: () => "seedance-web-route-0001",
+        },
+    );
 
     expect(result).toEqual({
         mode: "video",
@@ -324,36 +357,39 @@ test("Dreamina local generation posts only to its signed Runtime route and never
 
 test("Dreamina signed generation boundary serializes typed multimodal references and scoped task identity", async () => {
     const requests: Array<{ path: string; body: string }> = [];
-    await runLocalDreaminaGenerationTask({
-        model: "local:dreamina-cli:seedance2.5",
-        mode: "video",
-        prompt: "Multimodal signed fixture",
-        settings: { aspect: "16:9", resolution: "720", duration: 4 },
-        idempotencyKey: "retry-client-operation-0001",
-        clientOperationId: "retry-client-operation-0001",
-        context: {
-            scope: "scoped",
-            projectId: "project-signed-0001",
-            nodeId: "node-signed-0001",
-            retryOf: "dreamina:prior-signed-0001",
-            attemptGroupId: "dreamina:prior-signed-0001",
-        },
-        references: [
-            { kind: "image", mimeType: "image/png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), metadata: { name: "image.png", width: 16, height: 9 } },
-            { kind: "video", mimeType: "video/mp4", bytes: new Uint8Array([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70]), metadata: { name: "video.mp4", durationMs: 1000 } },
-            { kind: "audio", mimeType: "audio/mpeg", bytes: new Uint8Array([0x49, 0x44, 0x33, 4]), metadata: { name: "audio.mp3", durationMs: 1000 } },
-        ],
-    } as Parameters<typeof runLocalDreaminaGenerationTask>[0], {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request(path, init) {
-                requests.push({ path, body: String(init?.body) });
-                return jsonResponse(200, path.endsWith("/wait")
-                    ? taskEnvelope("retry-client-operation-0001", "succeeded")
-                    : taskEnvelope("retry-client-operation-0001", "running"));
+    await runLocalDreaminaGenerationTask(
+        {
+            model: "local:dreamina-cli:seedance2.5",
+            mode: "video",
+            prompt: "Multimodal signed fixture",
+            settings: { aspect: "16:9", resolution: "720", duration: 4 },
+            idempotencyKey: "retry-client-operation-0001",
+            clientOperationId: "retry-client-operation-0001",
+            context: {
+                scope: "scoped",
+                projectId: "project-signed-0001",
+                nodeId: "node-signed-0001",
+                retryOf: "dreamina:prior-signed-0001",
+                attemptGroupId: "dreamina:prior-signed-0001",
+            },
+            references: [
+                { kind: "image", mimeType: "image/png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), metadata: { name: "image.png", width: 16, height: 9 } },
+                { kind: "video", mimeType: "video/mp4", bytes: new Uint8Array([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70]), metadata: { name: "video.mp4", durationMs: 1000 } },
+                { kind: "audio", mimeType: "audio/mpeg", bytes: new Uint8Array([0x49, 0x44, 0x33, 4]), metadata: { name: "audio.mp3", durationMs: 1000 } },
+            ],
+        } as Parameters<typeof runLocalDreaminaGenerationTask>[0],
+        {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request(path, init) {
+                    requests.push({ path, body: String(init?.body) });
+                    return jsonResponse(200, path.endsWith("/wait") ? taskEnvelope("retry-client-operation-0001", "succeeded") : taskEnvelope("retry-client-operation-0001", "running"));
+                },
             },
         },
-    });
+    );
 
     expect(JSON.parse(requests[0]!.body)).toEqual({
         idempotencyKey: "retry-client-operation-0001",
@@ -384,31 +420,30 @@ test("Dreamina Seedance 2.5 accepts 30 image, 10 video, and 10 audio references 
         bytes: new Uint8Array([index + 1]),
         metadata: { name: `${kind}-${index + 1}` },
     });
-    const references = [
-        ...Array.from({ length: 30 }, (_, index) => makeReference("image", index)),
-        ...Array.from({ length: 10 }, (_, index) => makeReference("video", index)),
-        ...Array.from({ length: 10 }, (_, index) => makeReference("audio", index)),
-    ];
+    const references = [...Array.from({ length: 30 }, (_, index) => makeReference("image", index)), ...Array.from({ length: 10 }, (_, index) => makeReference("video", index)), ...Array.from({ length: 10 }, (_, index) => makeReference("audio", index))];
     let requests = 0;
 
-    await runLocalDreaminaGenerationTask({
-        model: "local:dreamina-cli:seedance2.5",
-        mode: "video",
-        prompt: "Full multimodal boundary",
-        settings: { aspect: "16:9", resolution: "720", duration: 4 },
-        references,
-    } as Parameters<typeof runLocalDreaminaGenerationTask>[0], {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request(path) {
-                requests += 1;
-                return jsonResponse(200, path.endsWith("/wait")
-                    ? taskEnvelope("seedance-boundary-0001", "succeeded")
-                    : taskEnvelope("seedance-boundary-0001", "running"));
+    await runLocalDreaminaGenerationTask(
+        {
+            model: "local:dreamina-cli:seedance2.5",
+            mode: "video",
+            prompt: "Full multimodal boundary",
+            settings: { aspect: "16:9", resolution: "720", duration: 4 },
+            references,
+        } as Parameters<typeof runLocalDreaminaGenerationTask>[0],
+        {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request(path) {
+                    requests += 1;
+                    return jsonResponse(200, path.endsWith("/wait") ? taskEnvelope("seedance-boundary-0001", "succeeded") : taskEnvelope("seedance-boundary-0001", "running"));
+                },
             },
+            idempotencyKey: () => "seedance-boundary-0001",
         },
-        idempotencyKey: () => "seedance-boundary-0001",
-    });
+    );
 
     expect(requests).toBe(2);
 
@@ -436,59 +471,86 @@ test("Dreamina Seedance 2.5 accepts 30 image, 10 video, and 10 audio references 
     ];
     for (const fixture of invalidCases) {
         let invalidRequests = 0;
-        await expect(runLocalDreaminaGenerationTask({
-            model: fixture.model,
-            mode: "video",
-            prompt: fixture.name,
-            settings: { aspect: "16:9", resolution: "720", duration: 4 },
-            references: fixture.references,
-        } as Parameters<typeof runLocalDreaminaGenerationTask>[0], {
-            client: {
-                async connect() { return connectedFixture(); },
-                async request() {
-                    invalidRequests += 1;
-                    throw new Error("must not request");
+        await expect(
+            runLocalDreaminaGenerationTask(
+                {
+                    model: fixture.model,
+                    mode: "video",
+                    prompt: fixture.name,
+                    settings: { aspect: "16:9", resolution: "720", duration: 4 },
+                    references: fixture.references,
+                } as Parameters<typeof runLocalDreaminaGenerationTask>[0],
+                {
+                    client: {
+                        async connect() {
+                            return connectedFixture();
+                        },
+                        async request() {
+                            invalidRequests += 1;
+                            throw new Error("must not request");
+                        },
+                    },
+                    idempotencyKey: () => "seedance-invalid-0001",
                 },
-            },
-            idempotencyKey: () => "seedance-invalid-0001",
-        })).rejects.toMatchObject({ status: 400 });
+            ),
+        ).rejects.toMatchObject({ status: 400 });
         expect(invalidRequests).toBe(0);
     }
 });
 
 test("Dreamina local generation blocks Seedance mini below four seconds before a Runtime request", async () => {
     let requests = 0;
-    await expect(runLocalDreaminaGenerationTask({
-        model: "local:dreamina-cli:seedance2.0mini",
-        mode: "video",
-        prompt: "A short test clip",
-        settings: { resolution: "720", duration: 3 },
-        references: [],
-    }, {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request() { requests += 1; throw new Error("must not request"); },
-        },
-        idempotencyKey: () => "seedance-web-route-0002",
-    })).rejects.toMatchObject({ code: "local_generation_model_unavailable" });
+    await expect(
+        runLocalDreaminaGenerationTask(
+            {
+                model: "local:dreamina-cli:seedance2.0mini",
+                mode: "video",
+                prompt: "A short test clip",
+                settings: { resolution: "720", duration: 3 },
+                references: [],
+            },
+            {
+                client: {
+                    async connect() {
+                        return connectedFixture();
+                    },
+                    async request() {
+                        requests += 1;
+                        throw new Error("must not request");
+                    },
+                },
+                idempotencyKey: () => "seedance-web-route-0002",
+            },
+        ),
+    ).rejects.toMatchObject({ code: "local_generation_model_unavailable" });
     expect(requests).toBe(0);
 });
 
 test("Dreamina generation asks to reconnect without exposing origin authorization terminology", async () => {
     let requests = 0;
-    await expect(runLocalDreaminaGenerationTask({
-        model: "local:dreamina-cli:seedance2.0mini",
-        mode: "video",
-        prompt: "A short test clip",
-        settings: { resolution: "720", duration: 4 },
-        references: [],
-    }, {
-        client: {
-            async connect() { return { state: "origin_not_trusted" as const, runtimeVersion: 2 }; },
-            async request() { requests += 1; throw new Error("must not submit"); },
-        },
-        idempotencyKey: () => "seedance-reconnect-copy-0001",
-    })).rejects.toMatchObject({
+    await expect(
+        runLocalDreaminaGenerationTask(
+            {
+                model: "local:dreamina-cli:seedance2.0mini",
+                mode: "video",
+                prompt: "A short test clip",
+                settings: { resolution: "720", duration: 4 },
+                references: [],
+            },
+            {
+                client: {
+                    async connect() {
+                        return { state: "origin_not_trusted" as const, runtimeVersion: 2 };
+                    },
+                    async request() {
+                        requests += 1;
+                        throw new Error("must not submit");
+                    },
+                },
+                idempotencyKey: () => "seedance-reconnect-copy-0001",
+            },
+        ),
+    ).rejects.toMatchObject({
         code: "origin_not_trusted",
         message: "本机连接需要重新建立",
         status: 403,
@@ -499,22 +561,29 @@ test("Dreamina generation asks to reconnect without exposing origin authorizatio
 test("Dreamina generation never replays a paid POST after a 401 or 403 session failure", async () => {
     for (const status of [401, 403]) {
         let requests = 0;
-        await expect(runLocalDreaminaGenerationTask({
-            model: "local:dreamina-cli:seedance2.0mini",
-            mode: "video",
-            prompt: "A short test clip",
-            settings: { resolution: "720", duration: 4 },
-            references: [],
-        }, {
-            client: {
-                async connect() { return connectedFixture(); },
-                async request() {
-                    requests += 1;
-                    return new Response(JSON.stringify({ ok: false, code: "scope_denied" }), { status });
+        await expect(
+            runLocalDreaminaGenerationTask(
+                {
+                    model: "local:dreamina-cli:seedance2.0mini",
+                    mode: "video",
+                    prompt: "A short test clip",
+                    settings: { resolution: "720", duration: 4 },
+                    references: [],
                 },
-            },
-            idempotencyKey: () => `seedance-no-replay-${status}`,
-        })).rejects.toMatchObject({ code: "local_generation_request_failed", status });
+                {
+                    client: {
+                        async connect() {
+                            return connectedFixture();
+                        },
+                        async request() {
+                            requests += 1;
+                            return new Response(JSON.stringify({ ok: false, code: "scope_denied" }), { status });
+                        },
+                    },
+                    idempotencyKey: () => `seedance-no-replay-${status}`,
+                },
+            ),
+        ).rejects.toMatchObject({ code: "local_generation_request_failed", status });
         expect(requests).toBe(1);
     }
 });
@@ -525,14 +594,17 @@ test("Dreamina query-only recovery reconnects once after an expired session with
     let revocations = 0;
     const task = await queryLocalDreaminaGenerationTask("dreamina-query-reconnect-0001", "video", {
         client: {
-            async connect() { connects += 1; return connectedFixture(); },
-            revokeLocalSession() { revocations += 1; },
+            async connect() {
+                connects += 1;
+                return connectedFixture();
+            },
+            revokeLocalSession() {
+                revocations += 1;
+            },
             async request(path) {
                 expect(path).toBe("/dreamina/generate/query");
                 queries += 1;
-                return queries === 1
-                    ? jsonResponse(403, { ok: false, code: "scope_denied" })
-                    : jsonResponse(200, taskEnvelope("dreamina-query-reconnect-0001", "succeeded"));
+                return queries === 1 ? jsonResponse(403, { ok: false, code: "scope_denied" }) : jsonResponse(200, taskEnvelope("dreamina-query-reconnect-0001", "succeeded"));
             },
         },
     });
@@ -544,7 +616,9 @@ test("Dreamina accepted background action preserves provider reconciliation and 
     const requests: Array<{ path: string; method: string }> = [];
     const task = await cancelLocalDreaminaGenerationTask("dreamina-local-stop-only-0001", {
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request(path, init) {
                 requests.push({ path, method: String(init?.method) });
                 return jsonResponse(200, taskEnvelope("dreamina-local-stop-only-0001", "running"));
@@ -575,13 +649,7 @@ test("Dreamina generation establishes a signed session before exactly one paid P
     });
 
     expect(result.mode).toBe("video");
-    expect(runtime.requests.map((request) => new URL(request.url).pathname)).toEqual([
-        "/runtime/info",
-        "/runtime/session/challenge",
-        "/runtime/session/exchange",
-        "/dreamina/generate",
-        "/dreamina/generate/wait",
-    ]);
+    expect(runtime.requests.map((request) => new URL(request.url).pathname)).toEqual(["/runtime/info", "/runtime/session/challenge", "/runtime/session/exchange", "/dreamina/generate", "/dreamina/generate/wait"]);
     expect(runtime.requests.filter((request) => request.path === "/dreamina/generate")).toHaveLength(1);
 });
 
@@ -595,10 +663,14 @@ test("Dreamina generation cancellation during signed session preflight prevents 
     });
     const controller = new AbortController();
 
-    const pending = runLocalDreaminaGenerationTask(videoInput(), {
-        client,
-        idempotencyKey: () => "seedance-session-preflight-0002",
-    }, controller.signal);
+    const pending = runLocalDreaminaGenerationTask(
+        videoInput(),
+        {
+            client,
+            idempotencyKey: () => "seedance-session-preflight-0002",
+        },
+        controller.signal,
+    );
     controller.abort();
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
@@ -617,10 +689,14 @@ test("Dreamina generation cancellation during the paid POST propagates without r
     runtime.requests.length = 0;
     const controller = new AbortController();
 
-    const pending = runLocalDreaminaGenerationTask(videoInput(), {
-        client,
-        idempotencyKey: () => "seedance-session-preflight-0003",
-    }, controller.signal);
+    const pending = runLocalDreaminaGenerationTask(
+        videoInput(),
+        {
+            client,
+            idempotencyKey: () => "seedance-session-preflight-0003",
+        },
+        controller.signal,
+    );
     await Promise.resolve();
     controller.abort();
 
@@ -632,24 +708,32 @@ test("detaching a Dreamina wait never sends a provider cancellation", async () =
     const controller = new AbortController();
     const requests: string[] = [];
     let waitStarted!: () => void;
-    const waiting = new Promise<void>((resolve) => { waitStarted = resolve; });
-    const pending = runLocalDreaminaGenerationTask(videoInput(), {
-        client: {
-            async connect() { return connectedFixture(); },
-            async request(path, init) {
-                requests.push(path);
-                if (path === "/dreamina/generate") return jsonResponse(200, taskEnvelope("dreamina-detached-wait-0001", "running"));
-                if (path === "/dreamina/generate/wait") {
-                    waitStarted();
-                    return await new Promise<Response>((_resolve, reject) => {
-                        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
-                    });
-                }
-                throw new Error(`unexpected mutation: ${path}`);
+    const waiting = new Promise<void>((resolve) => {
+        waitStarted = resolve;
+    });
+    const pending = runLocalDreaminaGenerationTask(
+        videoInput(),
+        {
+            client: {
+                async connect() {
+                    return connectedFixture();
+                },
+                async request(path, init) {
+                    requests.push(path);
+                    if (path === "/dreamina/generate") return jsonResponse(200, taskEnvelope("dreamina-detached-wait-0001", "running"));
+                    if (path === "/dreamina/generate/wait") {
+                        waitStarted();
+                        return await new Promise<Response>((_resolve, reject) => {
+                            init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+                        });
+                    }
+                    throw new Error(`unexpected mutation: ${path}`);
+                },
             },
+            idempotencyKey: () => "dreamina-detached-wait-0001",
         },
-        idempotencyKey: () => "dreamina-detached-wait-0001",
-    }, controller.signal);
+        controller.signal,
+    );
 
     await waiting;
     controller.abort();
@@ -663,7 +747,9 @@ test("Dreamina task listing uses one signed read and projects no request content
     const requests: Array<{ path: string; method: string }> = [];
     const tasks = await module.listLocalDreaminaGenerationTasks({
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request(path, init) {
                 requests.push({ path, method: String(init?.method) });
                 return jsonResponse(200, {
@@ -686,7 +772,9 @@ test("Dreamina task listing follows cursor pages", async () => {
     const fixture = taskEnvelope("dreamina-page-task-0001", "running").result as Record<string, unknown>;
     const tasks = await module.listLocalDreaminaGenerationTasks({
         client: {
-            async connect() { return connectedFixture(); },
+            async connect() {
+                return connectedFixture();
+            },
             async request(path) {
                 paths.push(path);
                 return paths.length === 1
@@ -696,10 +784,7 @@ test("Dreamina task listing follows cursor pages", async () => {
         },
     });
 
-    expect(paths).toEqual([
-        "/dreamina/generate/tasks?limit=100",
-        "/dreamina/generate/tasks?limit=100&cursor=cursor_page_2",
-    ]);
+    expect(paths).toEqual(["/dreamina/generate/tasks?limit=100", "/dreamina/generate/tasks?limit=100&cursor=cursor_page_2"]);
     expect(tasks.map((task) => task.id)).toEqual(["dreamina-page-task-0001", "dreamina-page-task-0002"]);
 });
 
@@ -709,13 +794,15 @@ test("Dreamina task listing reconnects once after an expired signed read", async
     let revocations = 0;
     const tasks = await module.listLocalDreaminaGenerationTasks({
         client: {
-            async connect() { return connectedFixture(); },
-            revokeLocalSession() { revocations += 1; },
+            async connect() {
+                return connectedFixture();
+            },
+            revokeLocalSession() {
+                revocations += 1;
+            },
             async request() {
                 reads += 1;
-                return reads === 1
-                    ? jsonResponse(403, { ok: false, code: "session_invalid" })
-                    : jsonResponse(200, { ok: true, result: [taskEnvelope("dreamina-list-task-0002", "running").result] });
+                return reads === 1 ? jsonResponse(403, { ok: false, code: "session_invalid" }) : jsonResponse(200, { ok: true, result: [taskEnvelope("dreamina-list-task-0002", "running").result] });
             },
         },
     });
@@ -725,11 +812,7 @@ test("Dreamina task listing reconnects once after an expired signed read", async
     expect(tasks.map((task) => task.id)).toEqual(["dreamina-list-task-0002"]);
 });
 
-async function invokeDreaminaHttp(
-    module: ReturnType<typeof createDreaminaHttpModule>,
-    routePath: string,
-    body: Buffer,
-): Promise<{ status: number; body: unknown }> {
+async function invokeDreaminaHttp(module: ReturnType<typeof createDreaminaHttpModule>, routePath: string, body: Buffer): Promise<{ status: number; body: unknown }> {
     const route = module.routes.find((candidate) => candidate.path === routePath);
     if (!route) throw new Error(`missing Dreamina route ${routePath}`);
     const req = new EventEmitter() as EventEmitter & { body?: Buffer };
@@ -745,7 +828,9 @@ async function invokeDreaminaHttp(
     res.writableEnded = false;
     res.statusCode = 200;
     let resolve!: (value: { status: number; body: unknown }) => void;
-    const response = new Promise<{ status: number; body: unknown }>((done) => { resolve = done; });
+    const response = new Promise<{ status: number; body: unknown }>((done) => {
+        resolve = done;
+    });
     res.json = (value) => {
         res.writableEnded = true;
         resolve({ status: res.statusCode, body: value });
@@ -773,9 +858,15 @@ function videoInput() {
 function memoryKeyStore(): RuntimeBrowserKeyStore & { record?: RuntimeBrowserKeyRecord } {
     return {
         record: undefined,
-        async load() { return this.record; },
-        async save(record) { this.record = record; },
-        async clear() { this.record = undefined; },
+        async load() {
+            return this.record;
+        },
+        async save(record) {
+            this.record = record;
+        },
+        async clear() {
+            this.record = undefined;
+        },
     };
 }
 
@@ -801,7 +892,7 @@ function signedRuntimeFixture(options: { blockInfoUntilAbort?: boolean; blockGen
             }
             if (path === "/runtime/session/challenge") {
                 const body = JSON.parse(String(init.body)) as { keyId?: string; publicKeyJwk?: JsonWebKey };
-                fixture.keyId = body.keyId ?? await keyIdForJwk(body.publicKeyJwk!);
+                fixture.keyId = body.keyId ?? (await keyIdForJwk(body.publicKeyJwk!));
                 return jsonResponse(200, {
                     state: "challenge",
                     challengeId: "challenge-generation-000001",
@@ -883,12 +974,14 @@ function taskEnvelope(id: string, status: "running" | "succeeded" | "failed", ov
             receiptRecorded: true,
             createdAt: "2026-08-12T00:00:00.000Z",
             updatedAt: "2026-08-12T00:00:00.000Z",
-            ...(status === "succeeded" ? {
-                result: {
-                    mode: "video",
-                    video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 },
-                },
-            } : {}),
+            ...(status === "succeeded"
+                ? {
+                      result: {
+                          mode: "video",
+                          video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 },
+                      },
+                  }
+                : {}),
             ...overrides,
         },
     };

@@ -17,10 +17,7 @@ type LocalRuntimeBootstrapEnvironment = {
     removeStorageItem(key: string): void;
 };
 
-export function runLocalRuntimeBootstrap(
-    environment: LocalRuntimeBootstrapEnvironment,
-    loadApplication: (state: LocalRuntimeBootstrapState) => void,
-) {
+export function runLocalRuntimeBootstrap(environment: LocalRuntimeBootstrapEnvironment, loadApplication: (state: LocalRuntimeBootstrapState) => void) {
     const url = new URL(environment.href);
     const legacyDeepLinkRejected = LEGACY_QUERY_KEYS.some((key) => url.searchParams.has(key));
     if (legacyDeepLinkRejected) {

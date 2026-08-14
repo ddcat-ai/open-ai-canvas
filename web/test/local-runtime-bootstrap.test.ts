@@ -4,12 +4,11 @@ const legacyToken = "legacy-master-token-canary";
 
 test("legacy query and storage secrets are removed before application modules load", async () => {
     const module = await import("../src/services/local-runtime-bootstrap").catch(() => ({}));
-    const runBootstrap = (module as {
-        runLocalRuntimeBootstrap?: (
-            environment: BootstrapEnvironment,
-            loadApplication: (state: { legacyDeepLinkRejected: boolean }) => void,
-        ) => { legacyDeepLinkRejected: boolean };
-    }).runLocalRuntimeBootstrap;
+    const runBootstrap = (
+        module as {
+            runLocalRuntimeBootstrap?: (environment: BootstrapEnvironment, loadApplication: (state: { legacyDeepLinkRejected: boolean }) => void) => { legacyDeepLinkRejected: boolean };
+        }
+    ).runLocalRuntimeBootstrap;
     expect(typeof runBootstrap).toBe("function");
     if (!runBootstrap) return;
 
@@ -22,9 +21,15 @@ test("legacy query and storage secrets are removed before application modules lo
     let rendered = false;
     const state = runBootstrap(
         {
-            get href() { return href; },
-            replaceUrl(url) { href = new URL(url, href).toString(); },
-            removeStorageItem(key) { storage.delete(key); },
+            get href() {
+                return href;
+            },
+            replaceUrl(url) {
+                href = new URL(url, href).toString();
+            },
+            removeStorageItem(key) {
+                storage.delete(key);
+            },
         },
         (bootstrapState) => {
             rendered = true;
@@ -39,9 +44,11 @@ test("legacy query and storage secrets are removed before application modules lo
     expect(rendered).toBe(true);
     expect(state).toEqual({ legacyDeepLinkRejected: true });
     expect(href).not.toContain(legacyToken);
-    const readState = (module as {
-        readLocalRuntimeBootstrapState?: () => { legacyDeepLinkRejected: boolean };
-    }).readLocalRuntimeBootstrapState;
+    const readState = (
+        module as {
+            readLocalRuntimeBootstrapState?: () => { legacyDeepLinkRejected: boolean };
+        }
+    ).readLocalRuntimeBootstrapState;
     expect(typeof readState).toBe("function");
     expect(readState?.()).toEqual({ legacyDeepLinkRejected: true });
 });

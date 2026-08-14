@@ -80,7 +80,9 @@ export function resetRemoteUserDataSync() {
 function waitForRemoteUserDataSyncResume() {
     if (!syncPauseCount) return Promise.resolve();
     if (!syncResumed) {
-        syncResumed = new Promise<void>((resolve) => { resumeSync = resolve; });
+        syncResumed = new Promise<void>((resolve) => {
+            resumeSync = resolve;
+        });
     }
     return syncResumed;
 }
@@ -88,7 +90,9 @@ function waitForRemoteUserDataSyncResume() {
 async function runRemoteUserDataSyncOperation<T>(operation: () => Promise<T>): Promise<T> {
     while (syncPauseCount) await waitForRemoteUserDataSyncResume();
     let finish!: () => void;
-    const active = new Promise<void>((resolve) => { finish = resolve; });
+    const active = new Promise<void>((resolve) => {
+        finish = resolve;
+    });
     activeRemoteSyncOperations.add(active);
     try {
         return await operation();
@@ -107,7 +111,9 @@ export async function withRemoteUserDataSyncPaused<T>(operation: () => Promise<T
     }
     let releaseTurn!: () => void;
     const previousTurn = syncPauseTail;
-    syncPauseTail = new Promise<void>((resolve) => { releaseTurn = resolve; });
+    syncPauseTail = new Promise<void>((resolve) => {
+        releaseTurn = resolve;
+    });
     await previousTurn;
     try {
         if (activeRemoteSyncOperations.size) {

@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-    LOCAL_RUNTIME_ENDPOINT,
-    LocalRuntimeClientError,
-    LocalRuntimeSessionClient,
-    resolveLocalRuntimeEndpoint,
-    type RuntimeBrowserKeyRecord,
-    type RuntimeBrowserKeyStore,
-} from "../src/services/local-runtime-session";
+import { LOCAL_RUNTIME_ENDPOINT, LocalRuntimeClientError, LocalRuntimeSessionClient, resolveLocalRuntimeEndpoint, type RuntimeBrowserKeyRecord, type RuntimeBrowserKeyStore } from "../src/services/local-runtime-session";
 
 const origin = "http://127.0.0.1:3001";
 const runtimeInstanceId = "web-runtime-fixture";
@@ -17,13 +10,7 @@ describe("Local Runtime signed browser session", () => {
     test("build-time endpoint accepts one exact isolated loopback origin without scanning", () => {
         expect(resolveLocalRuntimeEndpoint(undefined)).toBe("http://127.0.0.1:17371");
         expect(resolveLocalRuntimeEndpoint("http://127.0.0.1:31731")).toBe("http://127.0.0.1:31731");
-        for (const invalid of [
-            "http://localhost:31731",
-            "http://127.0.0.1:31731/path",
-            "http://127.0.0.1:31731?next=1",
-            "https://127.0.0.1:31731",
-            "http://127.0.0.1:17371,http://127.0.0.1:31731",
-        ]) {
+        for (const invalid of ["http://localhost:31731", "http://127.0.0.1:31731/path", "http://127.0.0.1:31731?next=1", "https://127.0.0.1:31731", "http://127.0.0.1:17371,http://127.0.0.1:31731"]) {
             expect(() => resolveLocalRuntimeEndpoint(invalid)).toThrow();
         }
     });
@@ -93,9 +80,7 @@ describe("Local Runtime signed browser session", () => {
 
         expect(result.state).toBe("connected");
         expect(second.currentSession()?.keyId).toBe(savedKeyId);
-        const challengeBody = runtime.requests
-            .filter((request) => request.url.endsWith("/runtime/session/challenge"))
-            .at(-1)?.body;
+        const challengeBody = runtime.requests.filter((request) => request.url.endsWith("/runtime/session/challenge")).at(-1)?.body;
         expect(challengeBody).toBe(JSON.stringify({ keyId: savedKeyId }));
         expect(challengeBody).not.toContain("publicKeyJwk");
     });
@@ -104,11 +89,15 @@ describe("Local Runtime signed browser session", () => {
         const client = new LocalRuntimeSessionClient({
             origin,
             keyStore: memoryKeyStore(),
-            fetch: async () => new Response(JSON.stringify({
-                code: "private_runtime_error",
-                message: canary,
-                detail: "C:\\Users\\owner\\Cookies",
-            }), { status: 500, headers: { "content-type": "application/json" } }),
+            fetch: async () =>
+                new Response(
+                    JSON.stringify({
+                        code: "private_runtime_error",
+                        message: canary,
+                        detail: "C:\\Users\\owner\\Cookies",
+                    }),
+                    { status: 500, headers: { "content-type": "application/json" } },
+                ),
         });
 
         let caught: unknown;
@@ -136,9 +125,15 @@ describe("Local Runtime signed browser session", () => {
 function memoryKeyStore(): RuntimeBrowserKeyStore & { record?: RuntimeBrowserKeyRecord } {
     return {
         record: undefined,
-        async load() { return this.record; },
-        async save(record) { this.record = record; },
-        async clear() { this.record = undefined; },
+        async load() {
+            return this.record;
+        },
+        async save(record) {
+            this.record = record;
+        },
+        async clear() {
+            this.record = undefined;
+        },
     };
 }
 
@@ -179,7 +174,7 @@ function runtimeFetchFixture() {
             }
             if (url.endsWith("/runtime/session/challenge")) {
                 const payload = JSON.parse(body ?? "{}") as { keyId?: string; publicKeyJwk?: JsonWebKey };
-                fixture.keyId = payload.keyId ?? await keyIdForJwk(payload.publicKeyJwk!);
+                fixture.keyId = payload.keyId ?? (await keyIdForJwk(payload.publicKeyJwk!));
                 const base = {
                     challengeId: "challenge-fixture-000001",
                     nonce: "bm9uY2UtZml4dHVyZS0wMDAwMDAwMDAwMDAwMDAwMDAwMDA",
@@ -187,10 +182,15 @@ function runtimeFetchFixture() {
                     expiresAt: new Date(fixture.now + 60_000).toISOString(),
                     keyId: fixture.keyId,
                 };
-                return jsonResponse(200, fixture.obsoleteChallenge ? {
-                    state: "obsolete_browser_confirmation",
-                    ...base,
-                } : { state: "challenge", ...base });
+                return jsonResponse(
+                    200,
+                    fixture.obsoleteChallenge
+                        ? {
+                              state: "obsolete_browser_confirmation",
+                              ...base,
+                          }
+                        : { state: "challenge", ...base },
+                );
             }
             if (url.endsWith("/runtime/session/exchange")) {
                 return jsonResponse(200, {

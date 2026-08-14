@@ -15,13 +15,7 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     nodesRef: { current: CanvasNodeData[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
 }) {
-    const applied = await applyMaterializedGenerationTaskResultToNodes(
-        input.nodesRef.current,
-        input.task,
-        input.output,
-        input.effectKey,
-        input.nodeId,
-    );
+    const applied = await applyMaterializedGenerationTaskResultToNodes(input.nodesRef.current, input.task, input.output, input.effectKey, input.nodeId);
     if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
     input.nodesRef.current = applied.nodes;
     input.setNodes(applied.nodes);
@@ -32,16 +26,8 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     });
 }
 
-export async function persistCanvasGenerationEffect(input: {
-    projectId: string;
-    effectKey: string;
-    nodes?: CanvasNodeData[];
-    connections?: CanvasConnection[];
-    chatSessions?: CanvasAssistantSession[];
-    activeChatId?: string | null;
-}) {
-    const stamped = input.nodes?.some((node) => generationEffectApplied(node.metadata || {}, input.effectKey))
-        || input.chatSessions?.some((session) => generationEffectApplied(session, input.effectKey));
+export async function persistCanvasGenerationEffect(input: { projectId: string; effectKey: string; nodes?: CanvasNodeData[]; connections?: CanvasConnection[]; chatSessions?: CanvasAssistantSession[]; activeChatId?: string | null }) {
+    const stamped = input.nodes?.some((node) => generationEffectApplied(node.metadata || {}, input.effectKey)) || input.chatSessions?.some((session) => generationEffectApplied(session, input.effectKey));
     if (!stamped) throw new Error("生成副作用缺少持久幂等标记");
     const project = useCanvasStore.getState().projects.find((candidate) => candidate.id === input.projectId);
     if (!project) throw new Error("画布项目不存在，无法持久化生成副作用");

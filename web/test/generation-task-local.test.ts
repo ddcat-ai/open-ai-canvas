@@ -12,6 +12,18 @@ import { onlineToolToOps } from "../src/components/canvas/canvas-assistant-panel
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel } from "../src/lib/generation-task-display";
 import { generationErrorMessage } from "../src/lib/generation-error";
 
+function compactSource(source: string) {
+    return source.replace(/\s+/g, " ").trim();
+}
+
+function sourceSection(source: string, startMarker: string, endMarker: string) {
+    const start = source.indexOf(startMarker);
+    const end = source.indexOf(endMarker, start + startMarker.length);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    return compactSource(source.slice(start, end));
+}
+
 test("Dreamina submit failure categories have bounded user-facing messages", () => {
     const cases = [
         ["dreamina_submit_spawn_failed", "无法启动官方即梦 CLI，任务尚未提交。"],
@@ -57,22 +69,26 @@ test("local Dreamina projection preserves stable outputs independently from prov
         lifecycle: "TERMINAL",
         terminalOutcome: "SUCCEEDED",
         resultState: "PENDING_MATERIALIZATION",
-        outputs: [{
-            outputIndex: 0,
-            mediaType: "image",
-            providerArtifactRef: "provider-artifact-opaque",
-        }],
+        outputs: [
+            {
+                outputIndex: 0,
+                mediaType: "image",
+                providerArtifactRef: "provider-artifact-opaque",
+            },
+        ],
         createdAt: "2026-08-13T00:00:00.000Z",
         updatedAt: "2026-08-13T00:01:00.000Z",
     });
 
     expect(task.status).toBe("succeeded");
     expect(task.resultState).toBe("PENDING_MATERIALIZATION");
-    expect(task.outputs).toEqual([{
-        outputIndex: 0,
-        mediaType: "image",
-        providerArtifactRef: "provider-artifact-opaque",
-    }]);
+    expect(task.outputs).toEqual([
+        {
+            outputIndex: 0,
+            mediaType: "image",
+            providerArtifactRef: "provider-artifact-opaque",
+        },
+    ]);
 });
 
 test("task display does not claim a submitted Dreamina receipt is actively generating", () => {
@@ -112,7 +128,20 @@ test("task display does not claim a submitted Dreamina receipt is actively gener
 
 test("Dreamina submission uncertainty is not an accepted background task", () => {
     const uncertain = { id: "dreamina:submit-uncertain-0001", provider: "dreamina-cli", status: "failed", stage: "submission_unknown", receiptRecorded: false, errorCode: "dreamina_submission_unknown" } as GenerationTask;
-    const projected = projectLocalDreaminaTask({ id: "submit-uncertain-0001", provider: "dreamina-cli", mode: "video", operation: "text2video", model: "seedance2.0", status: "failed", stage: "submission_unknown", receiptRecorded: false, lifecycle: "SUBMISSION_UNCERTAIN", errorCode: "dreamina_submission_unknown", createdAt: "2026-08-14T00:00:00.000Z", updatedAt: "2026-08-14T00:00:10.000Z" });
+    const projected = projectLocalDreaminaTask({
+        id: "submit-uncertain-0001",
+        provider: "dreamina-cli",
+        mode: "video",
+        operation: "text2video",
+        model: "seedance2.0",
+        status: "failed",
+        stage: "submission_unknown",
+        receiptRecorded: false,
+        lifecycle: "SUBMISSION_UNCERTAIN",
+        errorCode: "dreamina_submission_unknown",
+        createdAt: "2026-08-14T00:00:00.000Z",
+        updatedAt: "2026-08-14T00:00:10.000Z",
+    });
     expect(projected.status).toBe("failed");
     expect(projected.error).toBe("提交结果待确认，为避免重复扣费未自动重试。");
     expect(generationTaskStatusLabel(uncertain)).toBe("提交结果待确认");
@@ -132,14 +161,37 @@ test("Canvas task surfaces route Dreamina uncertainty through shared display sem
     ]);
     expect(nodeSource).toContain("generationTaskStageLabel(displayTask)");
     expect(nodeSource).toContain("generationTaskShowsProgress(displayTask)");
-    expect(nodeSource).toContain("!submissionUncertain ? <button");
-    expect(nodeSource).not.toContain("node.metadata?.taskStage || (taskId ? \"任务处理中\" : \"正在创建任务\")");
+    const loadingContentSource = sourceSection(nodeSource, "function LoadingContent(", "function useTaskElapsed(");
+    const cancelBranchStart = loadingContentSource.indexOf("{!submissionUncertain ? (");
+    const cancelBranchEndMarker = ") : null}";
+    const cancelBranchEnd = loadingContentSource.indexOf(cancelBranchEndMarker, cancelBranchStart);
+    expect(cancelBranchStart).toBeGreaterThanOrEqual(0);
+    expect(cancelBranchEnd).toBeGreaterThan(cancelBranchStart);
+
+    const cancelBranchSource = loadingContentSource.slice(cancelBranchStart, cancelBranchEnd + cancelBranchEndMarker.length);
+    const cancelButtonStart = cancelBranchSource.indexOf("<button");
+    const cancelButtonEndMarker = "</button>";
+    const cancelButtonEnd = cancelBranchSource.indexOf(cancelButtonEndMarker, cancelButtonStart);
+    expect(cancelButtonStart).toBeGreaterThan(0);
+    expect(cancelButtonEnd).toBeGreaterThan(cancelButtonStart);
+    expect(cancelBranchSource.slice(0, cancelButtonStart)).toBe("{!submissionUncertain ? ( ");
+
+    const cancelButtonSource = cancelBranchSource.slice(cancelButtonStart, cancelButtonEnd + cancelButtonEndMarker.length);
+    const onClickStart = cancelButtonSource.indexOf("onClick={(event) => {");
+    const onClickEnd = cancelButtonSource.indexOf("}}", onClickStart);
+    expect(cancelButtonSource).toContain("<button");
+    expect(onClickStart).toBeGreaterThanOrEqual(0);
+    expect(onClickEnd).toBeGreaterThan(onClickStart);
+    expect(cancelButtonSource.slice(onClickStart, onClickEnd)).toContain("onCancelTask?.(node);");
+    expect(cancelButtonSource).toContain("<Square");
+    expect(cancelButtonSource).toContain("取消");
+    expect(nodeSource).not.toContain('node.metadata?.taskStage || (taskId ? "任务处理中" : "正在创建任务")');
     expect(detailSource).toContain("generationTaskStageLabel(task)");
     expect(detailSource).toContain("generationTaskShowsProgress(task) ? <TaskDetailItem");
     expect(detailSource).not.toContain("task.stage || taskStatusText(task.status)");
     expect(scriptSource).toContain("generationTaskStageLabel(displayTask)");
     expect(scriptSource).toContain("generationTaskShowsProgress(displayTask)");
-    expect(scriptSource).not.toContain("node.metadata.taskStage || \"正在创建任务\"");
+    expect(scriptSource).not.toContain('node.metadata.taskStage || "正在创建任务"');
     expect(nodeSource).toContain("isGenerationTaskSubmissionUncertain(errorDisplayTask)");
     expect(taskCenterSource).toContain('if (action === "retry" && currentTask && isGenerationTaskSubmissionUncertain(currentTask))');
     expect(taskCenterSource).toContain("不能自动重试；请先核对官方状态，避免重复生成");
@@ -153,35 +205,52 @@ test("Canvas task surfaces route Dreamina uncertainty through shared display sem
 test("task center deletion accepts only local Dreamina records", async () => {
     await expect(deleteGenerationTask("backend-task-0001")).rejects.toThrow("当前任务不支持删除");
     const source = await Bun.file(new URL("../src/pages/tasks/index.tsx", import.meta.url)).text();
-    expect(source).toContain('detailTask.provider === "dreamina-cli" ? <Button danger aria-label="删除本机记录"');
-    expect(source).toContain("任务已由官方接受；删除后仍会在后台同步官方状态。");
-    expect(source).toContain("await deleteGenerationTask(task.id)");
+    const compactedSource = compactSource(source);
+    const deleteActionSource = sourceSection(source, "const deleteLocalTask =", "const refreshLocalTaskStatus =");
+
+    expect(compactedSource).toMatch(/\{detailTask\.provider === "dreamina-cli" \? \( <Button .*?aria-label="删除本机记录".*?onClick=\{\(\) => deleteLocalTask\(detailTask\)\}> 删除本机记录 <\/Button> \) : null\}/);
+    expect(compactedSource).toContain("任务已由官方接受；删除后仍会在后台同步官方状态。");
+    expect(deleteActionSource).toContain("await deleteGenerationTask(task.id);");
 });
 
 test("submitted Dreamina records expose a manual one-shot status refresh action", async () => {
     const source = await Bun.file(new URL("../src/pages/tasks/index.tsx", import.meta.url)).text();
-    expect(source).toContain('detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? <Button aria-label="更新官方状态"');
-    expect(source).toContain("await refreshGenerationTaskStatus(task.id)");
-    expect(source).not.toContain("setInterval(() => refreshGenerationTaskStatus");
+    const compactedSource = compactSource(source);
+    const refreshActionSource = sourceSection(source, "const refreshLocalTaskStatus =", "const queryProviderTask =");
+
+    expect(compactedSource).toMatch(
+        /\{detailTask\.provider === "dreamina-cli" && detailTask\.receiptRecorded && detailTask\.status === "running" \? \( <Button .*?aria-label="更新官方状态".*?onClick=\{\(\) => void refreshLocalTaskStatus\(detailTask\)\}> 更新官方状态 <\/Button> \) : null\}/,
+    );
+    expect(refreshActionSource).toContain("const next = await refreshGenerationTaskStatus(task.id);");
+    expect(refreshActionSource.match(/refreshGenerationTaskStatus\(task\.id\)/g)).toHaveLength(1);
+    expect(compactedSource).not.toMatch(/setInterval\(\(\) => (?:void |await )?refreshGenerationTaskStatus\(/);
 });
 
 test("a selected Dreamina local model never creates a Backend task", async () => {
     let backendCalls = 0;
     let localInput: LocalDreaminaGenerationInput | undefined;
-    const result = await runBackendGenerationTask({
-        mode: "video",
-        prompt: "A short test clip",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4" },
-    }, {
-        createTask: async () => { backendCalls += 1; throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input) => {
-            localInput = input;
-            return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+    const result = await runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "A short test clip",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4" },
         },
-        createId: () => "dreamina-task-route-0001",
-        now: () => "2026-08-11T00:00:00.000Z",
-    });
+        {
+            createTask: async () => {
+                backendCalls += 1;
+                throw new Error("must not post /tasks");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait Backend task");
+            },
+            runLocal: async (input) => {
+                localInput = input;
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-task-route-0001",
+            now: () => "2026-08-11T00:00:00.000Z",
+        },
+    );
 
     expect(result).toEqual({ mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } });
     expect(localInput?.settings).toEqual({ aspect: "1:1", resolution: "720", duration: 4 });
@@ -193,22 +262,31 @@ test("a selected Dreamina local model never creates a Backend task", async () =>
 test("the shared local generation entry projects pre-receipt work as submitting without fake progress", async () => {
     const updates: GenerationTask[] = [];
     let release!: () => void;
-    const waiting = new Promise<void>((resolve) => { release = resolve; });
-    const pending = runBackendGenerationTask({
-        mode: "video",
-        prompt: "fixture",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", size: "16:9", vquality: "720", videoSeconds: "4" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("backend task must not be created"); },
-        waitTask: async () => { throw new Error("backend task must not be awaited"); },
-        runLocal: async () => {
-            await waiting;
-            throw new LocalDreaminaGenerationClientError("dreamina_submit_timeout", "bounded", 504);
-        },
-        createId: () => "dreamina-pre-receipt-entry-0001",
-        now: () => "2026-08-12T10:00:00.000Z",
+    const waiting = new Promise<void>((resolve) => {
+        release = resolve;
     });
+    const pending = runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "fixture",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", size: "16:9", vquality: "720", videoSeconds: "4" },
+            onTaskUpdate: (task) => updates.push(task),
+        },
+        {
+            createTask: async () => {
+                throw new Error("backend task must not be created");
+            },
+            waitTask: async () => {
+                throw new Error("backend task must not be awaited");
+            },
+            runLocal: async () => {
+                await waiting;
+                throw new LocalDreaminaGenerationClientError("dreamina_submit_timeout", "bounded", 504);
+            },
+            createId: () => "dreamina-pre-receipt-entry-0001",
+            now: () => "2026-08-12T10:00:00.000Z",
+        },
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(updates[0]).toMatchObject({ status: "running", stage: "submitting" });
     expect(updates[0]?.progress).toBeUndefined();
@@ -219,25 +297,32 @@ test("the shared local generation entry projects pre-receipt work as submitting 
 test("shared Create and Canvas task projection exposes queued, submitted, generating, and terminal Runtime states", async () => {
     const updates: Array<{ id: string; status: string; stage?: string; resultJson?: string }> = [];
     const timestamp = "2026-08-12T00:00:00.000Z";
-    await runBackendGenerationTask({
-        mode: "video",
-        prompt: "A queued clip",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input, _signal, onTaskUpdate) => {
-            const base = { id: input.idempotencyKey!, provider: "dreamina-cli" as const, mode: "video" as const, operation: "text2video", model: "seedance2.0mini", receiptRecorded: false, createdAt: timestamp, updatedAt: timestamp };
-            onTaskUpdate?.({ ...base, status: "queued", stage: "queued", progress: 0 });
-            onTaskUpdate?.({ ...base, status: "running", stage: "submitted", progress: 10, receiptRecorded: true });
-            onTaskUpdate?.({ ...base, status: "running", stage: "generating", progress: 20, receiptRecorded: true });
-            onTaskUpdate?.({ ...base, status: "succeeded", stage: "succeeded", progress: 100, receiptRecorded: true, result: { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } } });
-            return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+    await runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "A queued clip",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+            onTaskUpdate: (task) => updates.push(task),
         },
-        createId: () => "dreamina-shared-async-0001",
-        now: () => timestamp,
-    });
+        {
+            createTask: async () => {
+                throw new Error("must not post /tasks");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait Backend task");
+            },
+            runLocal: async (input, _signal, onTaskUpdate) => {
+                const base = { id: input.idempotencyKey!, provider: "dreamina-cli" as const, mode: "video" as const, operation: "text2video", model: "seedance2.0mini", receiptRecorded: false, createdAt: timestamp, updatedAt: timestamp };
+                onTaskUpdate?.({ ...base, status: "queued", stage: "queued", progress: 0 });
+                onTaskUpdate?.({ ...base, status: "running", stage: "submitted", progress: 10, receiptRecorded: true });
+                onTaskUpdate?.({ ...base, status: "running", stage: "generating", progress: 20, receiptRecorded: true });
+                onTaskUpdate?.({ ...base, status: "succeeded", stage: "succeeded", progress: 100, receiptRecorded: true, result: { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } } });
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-shared-async-0001",
+            now: () => timestamp,
+        },
+    );
 
     const distinctUpdates = updates.filter((task, index) => index === 0 || task.status !== updates[index - 1]?.status || task.stage !== updates[index - 1]?.stage);
     expect(distinctUpdates.slice(0, 5).map((task) => [task.id, task.status, task.stage])).toEqual([
@@ -254,34 +339,43 @@ test("an explicitly cancelled Dreamina task stays cancelled instead of being pro
     const updates: Array<{ status: string; stage?: string }> = [];
     const timestamp = "2026-08-12T00:00:00.000Z";
 
-    await expect(runBackendGenerationTask({
-        mode: "video",
-        prompt: "A clip cancelled after submission",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input, _signal, onTaskUpdate) => {
-            const task = {
-                id: input.idempotencyKey!,
-                provider: "dreamina-cli" as const,
-                mode: "video" as const,
-                operation: "text2video",
-                model: "seedance2.0mini",
-                status: "cancelled" as const,
-                stage: "cancelled" as const,
-                progress: 0,
-                receiptRecorded: true,
-                createdAt: timestamp,
-                updatedAt: timestamp,
-            };
-            onTaskUpdate?.(task);
-            throw new DOMException("Aborted", "AbortError");
-        },
-        createId: () => "dreamina-explicit-cancel-0001",
-        now: () => timestamp,
-    })).rejects.toMatchObject({ name: "AbortError" });
+    await expect(
+        runBackendGenerationTask(
+            {
+                mode: "video",
+                prompt: "A clip cancelled after submission",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+                onTaskUpdate: (task) => updates.push(task),
+            },
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async (input, _signal, onTaskUpdate) => {
+                    const task = {
+                        id: input.idempotencyKey!,
+                        provider: "dreamina-cli" as const,
+                        mode: "video" as const,
+                        operation: "text2video",
+                        model: "seedance2.0mini",
+                        status: "cancelled" as const,
+                        stage: "cancelled" as const,
+                        progress: 0,
+                        receiptRecorded: true,
+                        createdAt: timestamp,
+                        updatedAt: timestamp,
+                    };
+                    onTaskUpdate?.(task);
+                    throw new DOMException("Aborted", "AbortError");
+                },
+                createId: () => "dreamina-explicit-cancel-0001",
+                now: () => timestamp,
+            },
+        ),
+    ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(updates.at(-1)).toMatchObject({ status: "cancelled", stage: "local_cli_cancelled" });
     expect(updates.some((task) => task.status === "failed")).toBe(false);
@@ -357,37 +451,46 @@ test("the shared generation entry keeps an accepted background update running", 
     const updates: Array<{ status: string; error?: string; errorCode?: string; receiptRecorded?: boolean }> = [];
     const timestamp = "2026-08-12T00:00:00.000Z";
 
-    await expect(runBackendGenerationTask({
-        mode: "video",
-        prompt: "A clip still running officially",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input, _signal, onTaskUpdate) => {
-            onTaskUpdate?.({
-                id: input.idempotencyKey!,
-                provider: "dreamina-cli",
+    await expect(
+        runBackendGenerationTask(
+            {
                 mode: "video",
-                operation: "text2video",
-                model: "seedance2.0",
-                status: "cancelled",
-                stage: "cancelled",
-                receiptRecorded: true,
-                lifecycle: "ACCEPTED",
-                errorCode: "dreamina_local_wait_stopped",
-                createdAt: timestamp,
-                updatedAt: timestamp,
-            });
-            return {
-                mode: "video" as const,
-                video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 },
-            };
-        },
-        createId: () => "dreamina-shared-local-stop-0001",
-        now: () => timestamp,
-    })).resolves.toMatchObject({ mode: "video" });
+                prompt: "A clip still running officially",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+                onTaskUpdate: (task) => updates.push(task),
+            },
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async (input, _signal, onTaskUpdate) => {
+                    onTaskUpdate?.({
+                        id: input.idempotencyKey!,
+                        provider: "dreamina-cli",
+                        mode: "video",
+                        operation: "text2video",
+                        model: "seedance2.0",
+                        status: "cancelled",
+                        stage: "cancelled",
+                        receiptRecorded: true,
+                        lifecycle: "ACCEPTED",
+                        errorCode: "dreamina_local_wait_stopped",
+                        createdAt: timestamp,
+                        updatedAt: timestamp,
+                    });
+                    return {
+                        mode: "video" as const,
+                        video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 },
+                    };
+                },
+                createId: () => "dreamina-shared-local-stop-0001",
+                now: () => timestamp,
+            },
+        ),
+    ).resolves.toMatchObject({ mode: "video" });
 
     const accepted = updates.find((task) => task.receiptRecorded);
     expect(accepted).toMatchObject({ status: "running", receiptRecorded: true });
@@ -399,22 +502,31 @@ test("the shared generation entry projects a paid POST abort as submission unkno
     const updates: Array<{ status: string; stage?: string; errorCode?: string }> = [];
     const controller = new AbortController();
 
-    await expect(runBackendGenerationTask({
-        mode: "video",
-        prompt: "A paid request with an unknown receipt",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
-        signal: controller.signal,
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async () => {
-            controller.abort();
-            throw new LocalDreaminaGenerationClientError("dreamina_submission_unknown", "提交结果未知", 502);
-        },
-        createId: () => "dreamina-shared-submit-unknown-0001",
-        now: () => "2026-08-12T00:00:00.000Z",
-    })).rejects.toMatchObject({ code: "dreamina_submission_unknown" });
+    await expect(
+        runBackendGenerationTask(
+            {
+                mode: "video",
+                prompt: "A paid request with an unknown receipt",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+                signal: controller.signal,
+                onTaskUpdate: (task) => updates.push(task),
+            },
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async () => {
+                    controller.abort();
+                    throw new LocalDreaminaGenerationClientError("dreamina_submission_unknown", "提交结果未知", 502);
+                },
+                createId: () => "dreamina-shared-submit-unknown-0001",
+                now: () => "2026-08-12T00:00:00.000Z",
+            },
+        ),
+    ).rejects.toMatchObject({ code: "dreamina_submission_unknown" });
 
     expect(updates.at(-1)).toMatchObject({
         status: "failed",
@@ -428,20 +540,32 @@ test("the shared local boundary emits correlation before reference preparation f
     const updates: GenerationTask[] = [];
     let localCalls = 0;
 
-    await expect(runBackendGenerationTask({
-        mode: "video",
-        prompt: "fixture",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
-        referenceImages: [{ id: "bad-reference", name: "bad.txt", url: "data:text/plain;base64,QQ==", mimeType: "text/plain", size: 1 }],
-        metadata: { videoEditOperation: "image_to_video" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async () => { localCalls += 1; throw new Error("must not reach Runtime"); },
-        createId: () => "dreamina-reference-boundary-0001",
-        now: () => "2026-08-12T00:00:00.000Z",
-    })).rejects.toMatchObject({ code: "dreamina_reference_invalid" });
+    await expect(
+        runBackendGenerationTask(
+            {
+                mode: "video",
+                prompt: "fixture",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+                referenceImages: [{ id: "bad-reference", name: "bad.txt", url: "data:text/plain;base64,QQ==", mimeType: "text/plain", size: 1 }],
+                metadata: { videoEditOperation: "image_to_video" },
+                onTaskUpdate: (task) => updates.push(task),
+            },
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async () => {
+                    localCalls += 1;
+                    throw new Error("must not reach Runtime");
+                },
+                createId: () => "dreamina-reference-boundary-0001",
+                now: () => "2026-08-12T00:00:00.000Z",
+            },
+        ),
+    ).rejects.toMatchObject({ code: "dreamina_reference_invalid" });
 
     expect(localCalls).toBe(0);
     expect(updates[0]).toMatchObject({
@@ -461,39 +585,46 @@ test("the shared local boundary emits correlation before reference preparation f
 test("the shared local boundary preserves correlation and stable session preflight errors", async () => {
     const updates: GenerationTask[] = [];
 
-    await expect(runBackendGenerationTask({
-        mode: "video",
-        prompt: "fixture",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
-        onTaskUpdate: (task) => updates.push(task),
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async () => { throw new LocalDreaminaGenerationClientError("origin_not_trusted", "本机连接需要重新建立", 403); },
-        createId: () => "dreamina-session-boundary-0001",
-        now: () => "2026-08-12T00:00:00.000Z",
-    })).rejects.toMatchObject({ code: "origin_not_trusted" });
+    await expect(
+        runBackendGenerationTask(
+            {
+                mode: "video",
+                prompt: "fixture",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+                onTaskUpdate: (task) => updates.push(task),
+            },
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async () => {
+                    throw new LocalDreaminaGenerationClientError("origin_not_trusted", "本机连接需要重新建立", 403);
+                },
+                createId: () => "dreamina-session-boundary-0001",
+                now: () => "2026-08-12T00:00:00.000Z",
+            },
+        ),
+    ).rejects.toMatchObject({ code: "origin_not_trusted" });
 
-    expect(updates.map((task) => task.id)).toEqual([
-        "dreamina:dreamina-session-boundary-0001",
-        "dreamina:dreamina-session-boundary-0001",
-    ]);
+    expect(updates.map((task) => task.id)).toEqual(["dreamina:dreamina-session-boundary-0001", "dreamina:dreamina-session-boundary-0001"]);
     expect(updates[0]).toMatchObject({ status: "running", stage: "submitting", operation: "text_to_video" });
     expect(updates.at(-1)).toMatchObject({ status: "failed", errorCode: "origin_not_trusted" });
 });
 
 test("four identical Dreamina user operations receive four independent task ids", async () => {
-    const ids = [
-        "dreamina-identical-click-0001",
-        "dreamina-identical-click-0002",
-        "dreamina-identical-click-0003",
-        "dreamina-identical-click-0004",
-    ];
+    const ids = ["dreamina-identical-click-0001", "dreamina-identical-click-0002", "dreamina-identical-click-0003", "dreamina-identical-click-0004"];
     const submitted: string[] = [];
     let index = 0;
     const dependencies = {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
+        createTask: async () => {
+            throw new Error("must not post /tasks");
+        },
+        waitTask: async () => {
+            throw new Error("must not wait Backend task");
+        },
         runLocal: async (input: LocalDreaminaGenerationInput) => {
             submitted.push(input.idempotencyKey!);
             return { mode: "video" as const, video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
@@ -502,21 +633,24 @@ test("four identical Dreamina user operations receive four independent task ids"
         now: () => "2026-08-12T00:00:00.000Z",
     };
 
-    await Promise.all(Array.from({ length: 4 }, () => runBackendGenerationTask({
-        mode: "video",
-        prompt: "same prompt",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
-    }, dependencies)));
+    await Promise.all(
+        Array.from({ length: 4 }, () =>
+            runBackendGenerationTask(
+                {
+                    mode: "video",
+                    prompt: "same prompt",
+                    config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+                },
+                dependencies,
+            ),
+        ),
+    );
 
     expect(submitted).toEqual(ids);
 });
 
 test("Create observes local Dreamina tasks by wait while remote providers keep polling", () => {
-    expect(splitGenerationTaskObservationIds([
-        "remote-task-0001",
-        "dreamina:dreamina-local-task-0001",
-        "remote-task-0002",
-    ])).toEqual({
+    expect(splitGenerationTaskObservationIds(["remote-task-0001", "dreamina:dreamina-local-task-0001", "remote-task-0002"])).toEqual({
         localWaitIds: ["dreamina:dreamina-local-task-0001"],
         remotePollIds: ["remote-task-0001", "remote-task-0002"],
     });
@@ -551,10 +685,16 @@ test("task center cursor-merges more than 100 Backend/local tasks and preserves 
         ["backend:2", { tasks: Array.from({ length: 60 }, (_, index) => makeBackendTask(`backend-page-2-${index.toString().padStart(3, "0")}`, "project-0001", `2026-08-13T09:${String(index % 60).padStart(2, "0")}:00.000Z`)) }],
     ]);
     const localPages = new Map<string | undefined, { tasks: ReturnType<typeof makeLocalTask>[]; nextCursor?: string }>([
-        [undefined, { tasks: [
-            ...Array.from({ length: 40 }, (_, index) => makeLocalTask(`local-page-1-${index.toString().padStart(3, "0")}`, "project-0001", `2026-08-13T11:${String(index % 60).padStart(2, "0")}:00.000Z`)),
-            makeLocalTask("local-other-project-0001", "project-0002", "2026-08-13T11:59:59.000Z"),
-        ], nextCursor: "local:2" }],
+        [
+            undefined,
+            {
+                tasks: [
+                    ...Array.from({ length: 40 }, (_, index) => makeLocalTask(`local-page-1-${index.toString().padStart(3, "0")}`, "project-0001", `2026-08-13T11:${String(index % 60).padStart(2, "0")}:00.000Z`)),
+                    makeLocalTask("local-other-project-0001", "project-0002", "2026-08-13T11:59:59.000Z"),
+                ],
+                nextCursor: "local:2",
+            },
+        ],
         ["local:2", { tasks: Array.from({ length: 35 }, (_, index) => makeLocalTask(`local-page-2-${index.toString().padStart(3, "0")}`, "project-0001", `2026-08-13T08:${String(index % 60).padStart(2, "0")}:00.000Z`)) }],
     ]);
     const backendRequests: unknown[] = [];
@@ -604,18 +744,20 @@ test("task center merges durable local Dreamina summaries without creating Backe
         },
         async listLocal() {
             calls.push("local:list");
-            return [{
-                id: "dreamina-task-center-0001",
-                provider: "dreamina-cli" as const,
-                mode: "video" as const,
-                operation: "text2video",
-                model: "seedance2.0",
-                status: "running" as const,
-                stage: "submitted" as const,
-                receiptRecorded: true,
-                createdAt: "2026-08-12T00:02:00.000Z",
-                updatedAt: "2026-08-12T00:03:00.000Z",
-            }];
+            return [
+                {
+                    id: "dreamina-task-center-0001",
+                    provider: "dreamina-cli" as const,
+                    mode: "video" as const,
+                    operation: "text2video",
+                    model: "seedance2.0",
+                    status: "running" as const,
+                    stage: "submitted" as const,
+                    receiptRecorded: true,
+                    createdAt: "2026-08-12T00:02:00.000Z",
+                    updatedAt: "2026-08-12T00:03:00.000Z",
+                },
+            ];
         },
     });
 
@@ -626,28 +768,34 @@ test("task center merges durable local Dreamina summaries without creating Backe
 
 test("project task lists include only durably scoped local Dreamina summaries", async () => {
     let localReads = 0;
-    const tasks = await listGenerationTasks(30, { projectId: "project-0001" }, {
-        async listBackend() { return []; },
-        async listLocal() {
-            localReads += 1;
-            const base = {
-                provider: "dreamina-cli" as const,
-                mode: "video" as const,
-                operation: "text2video",
-                model: "seedance2.0",
-                status: "running" as const,
-                stage: "submitted" as const,
-                receiptRecorded: true,
-                createdAt: "2026-08-12T00:00:00.000Z",
-                updatedAt: "2026-08-12T00:01:00.000Z",
-            };
-            return [
-                { ...base, id: "dreamina-project-scoped-0001", context: { scope: "scoped" as const, projectId: "project-0001", nodeId: "node-scoped-0001" } },
-                { ...base, id: "dreamina-project-other-0001", context: { scope: "scoped" as const, projectId: "project-0002", nodeId: "node-other-0001" } },
-                { ...base, id: "dreamina-project-legacy-0001", context: { scope: "legacy_unscoped" as const } },
-            ];
+    const tasks = await listGenerationTasks(
+        30,
+        { projectId: "project-0001" },
+        {
+            async listBackend() {
+                return [];
+            },
+            async listLocal() {
+                localReads += 1;
+                const base = {
+                    provider: "dreamina-cli" as const,
+                    mode: "video" as const,
+                    operation: "text2video",
+                    model: "seedance2.0",
+                    status: "running" as const,
+                    stage: "submitted" as const,
+                    receiptRecorded: true,
+                    createdAt: "2026-08-12T00:00:00.000Z",
+                    updatedAt: "2026-08-12T00:01:00.000Z",
+                };
+                return [
+                    { ...base, id: "dreamina-project-scoped-0001", context: { scope: "scoped" as const, projectId: "project-0001", nodeId: "node-scoped-0001" } },
+                    { ...base, id: "dreamina-project-other-0001", context: { scope: "scoped" as const, projectId: "project-0002", nodeId: "node-other-0001" } },
+                    { ...base, id: "dreamina-project-legacy-0001", context: { scope: "legacy_unscoped" as const } },
+                ];
+            },
         },
-    });
+    );
 
     expect(localReads).toBe(1);
     expect(tasks.map((task) => task.id)).toEqual(["dreamina:dreamina-project-scoped-0001"]);
@@ -658,12 +806,16 @@ test("project task lists include only durably scoped local Dreamina summaries", 
 });
 
 test("task log projection drops raw token, path, prompt, and stderr while keeping safe structured fields", () => {
-    const log = projectBackendSafeTaskLog("backend-task-safe-log-0001", {
-        level: "error",
-        message: "submitting token=secret prompt=private C:\\Users\\private\\clip.mp4 dreamina_query_failed",
-        payload: "stderr=private-cookie provider_access_denied",
-        createdAt: "2026-08-13T12:00:00.000Z",
-    }, 0);
+    const log = projectBackendSafeTaskLog(
+        "backend-task-safe-log-0001",
+        {
+            level: "error",
+            message: "submitting token=secret prompt=private C:\\Users\\private\\clip.mp4 dreamina_query_failed",
+            payload: "stderr=private-cookie provider_access_denied",
+            createdAt: "2026-08-13T12:00:00.000Z",
+        },
+        0,
+    );
     expect(log).toEqual({
         id: "safe:backend-task-safe-log-0001:0",
         taskId: "backend-task-safe-log-0001",
@@ -679,26 +831,30 @@ test("task log projection drops raw token, path, prompt, and stderr while keepin
 });
 
 test("task log projection allowlists stable public error codes and drops shaped secret-like codes", () => {
-    for (const [index, unsafeCode] of [
-        "provider_token_secretvalue",
-        "provider_cookie_private",
-        "dreamina_receipt_secret",
-    ].entries()) {
-        const log = projectBackendSafeTaskLog(`backend-task-unsafe-log-${index}`, {
-            level: "error",
-            message: unsafeCode,
-            createdAt: "2026-08-13T12:00:00.000Z",
-        }, index);
+    for (const [index, unsafeCode] of ["provider_token_secretvalue", "provider_cookie_private", "dreamina_receipt_secret"].entries()) {
+        const log = projectBackendSafeTaskLog(
+            `backend-task-unsafe-log-${index}`,
+            {
+                level: "error",
+                message: unsafeCode,
+                createdAt: "2026-08-13T12:00:00.000Z",
+            },
+            index,
+        );
         expect(log).not.toHaveProperty("errorCode");
         expect(JSON.stringify(log)).not.toContain(unsafeCode);
         expect(formatTaskLog(log)).toBe("stage=backend_event provenance=backend");
     }
 
-    const safeLog = projectBackendSafeTaskLog("backend-task-public-log-0001", {
-        level: "error",
-        message: "dreamina_query_failed",
-        createdAt: "2026-08-13T12:00:00.000Z",
-    }, 0);
+    const safeLog = projectBackendSafeTaskLog(
+        "backend-task-public-log-0001",
+        {
+            level: "error",
+            message: "dreamina_query_failed",
+            createdAt: "2026-08-13T12:00:00.000Z",
+        },
+        0,
+    );
     expect(safeLog.errorCode).toBe("dreamina_query_failed");
     expect(formatTaskLog(safeLog)).toBe("stage=backend_event error=dreamina_query_failed provenance=backend");
 });
@@ -708,20 +864,27 @@ test("Dreamina local video forwards product resolution values to the final CLI a
 
     for (const createValue of cases) {
         let localInput: LocalDreaminaGenerationInput | undefined;
-        await runBackendGenerationTask({
-            mode: "video",
-            prompt: "A short test clip",
-            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0_vip", videoSeconds: "4", vquality: createValue },
-        }, {
-            createTask: async () => { throw new Error("must not post /tasks"); },
-            waitTask: async () => { throw new Error("must not wait Backend task"); },
-            runLocal: async (input) => {
-                localInput = input;
-                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+        await runBackendGenerationTask(
+            {
+                mode: "video",
+                prompt: "A short test clip",
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0_vip", videoSeconds: "4", vquality: createValue },
             },
-            createId: () => `dreamina-video-resolution-${createValue}`,
-            now: () => "2026-08-11T00:00:00.000Z",
-        });
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async (input) => {
+                    localInput = input;
+                    return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+                },
+                createId: () => `dreamina-video-resolution-${createValue}`,
+                now: () => "2026-08-11T00:00:00.000Z",
+            },
+        );
         expect(localInput?.settings.resolution).toBe(createValue);
     }
 });
@@ -736,20 +899,27 @@ test("Dreamina local image forwards Create auto and explicit tiers to the final 
 
     for (const [createValue, runtimeValue] of cases) {
         let localInput: LocalDreaminaGenerationInput | undefined;
-        await runBackendGenerationTask({
-            mode: "image",
-            prompt: "A small test image",
-            config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: createValue },
-        }, {
-            createTask: async () => { throw new Error("must not post /tasks"); },
-            waitTask: async () => { throw new Error("must not wait Backend task"); },
-            runLocal: async (input) => {
-                localInput = input;
-                return { mode: "image", images: [{ dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png", bytes: 3 }] };
+        await runBackendGenerationTask(
+            {
+                mode: "image",
+                prompt: "A small test image",
+                config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: createValue },
             },
-            createId: () => `dreamina-image-resolution-${createValue}`,
-            now: () => "2026-08-11T00:00:00.000Z",
-        });
+            {
+                createTask: async () => {
+                    throw new Error("must not post /tasks");
+                },
+                waitTask: async () => {
+                    throw new Error("must not wait Backend task");
+                },
+                runLocal: async (input) => {
+                    localInput = input;
+                    return { mode: "image", images: [{ dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png", bytes: 3 }] };
+                },
+                createId: () => `dreamina-image-resolution-${createValue}`,
+                now: () => "2026-08-11T00:00:00.000Z",
+            },
+        );
         expect(localInput?.settings.resolution).toBe(runtimeValue);
     }
 });
@@ -757,8 +927,12 @@ test("Dreamina local image forwards Create auto and explicit tiers to the final 
 test("Canvas shared generation entry uses the same Dreamina resolution boundary for video and image", async () => {
     const localInputs: LocalDreaminaGenerationInput[] = [];
     const dependencies = {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
+        createTask: async () => {
+            throw new Error("must not post /tasks");
+        },
+        waitTask: async () => {
+            throw new Error("must not wait Backend task");
+        },
         runLocal: async (input: LocalDreaminaGenerationInput) => {
             localInputs.push(input);
             return input.mode === "video"
@@ -769,20 +943,26 @@ test("Canvas shared generation entry uses the same Dreamina resolution boundary 
         now: () => "2026-08-11T00:00:00.000Z",
     };
 
-    await runBackendCanvasGenerationTask({
-        projectId: "canvas-project",
-        nodeId: "video-node",
-        mode: "video",
-        prompt: "A short test clip",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
-    }, dependencies);
-    await runBackendCanvasGenerationTask({
-        projectId: "canvas-project",
-        nodeId: "image-node",
-        mode: "image",
-        prompt: "A small test image",
-        config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: "auto" },
-    }, dependencies);
+    await runBackendCanvasGenerationTask(
+        {
+            projectId: "canvas-project",
+            nodeId: "video-node",
+            mode: "video",
+            prompt: "A short test clip",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+        },
+        dependencies,
+    );
+    await runBackendCanvasGenerationTask(
+        {
+            projectId: "canvas-project",
+            nodeId: "image-node",
+            mode: "image",
+            prompt: "A small test image",
+            config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: "auto" },
+        },
+        dependencies,
+    );
 
     expect(localInputs[0]?.settings.resolution).toBe("720");
     expect(localInputs[1]?.settings.resolution).toBe("auto");
@@ -800,40 +980,53 @@ test("Canvas shared generation entry uses the same Dreamina resolution boundary 
 
 test("shared local Dreamina boundary preserves image video and audio references as typed bytes", async () => {
     let localInput: LocalDreaminaGenerationInput | undefined;
-    await runBackendGenerationTask({
-        projectId: "project-multimodal-0001",
-        mode: "video",
-        prompt: "Multimodal fixture",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.5", videoSeconds: "4", vquality: "720" },
-        referenceImages: [{
-            id: "image-reference-0001",
-            name: "image.png",
-            type: "image/png",
-            dataUrl: "data:image/png;base64,iVBORw0KGgo=",
-        }],
-        referenceVideos: [{
-            id: "video-reference-0001",
-            name: "video.mp4",
-            type: "video/mp4",
-            url: "data:video/mp4;base64,AAAA",
-        }],
-        referenceAudios: [{
-            id: "audio-reference-0001",
-            name: "audio.mp3",
-            type: "audio/mpeg",
-            url: "data:audio/mpeg;base64,SUQz",
-        }],
-        metadata: { nodeId: "node-multimodal-0001", conversationId: "conversation-multimodal-0001", messageId: "message-multimodal-0001" },
-    }, {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input) => {
-            localInput = input;
-            return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+    await runBackendGenerationTask(
+        {
+            projectId: "project-multimodal-0001",
+            mode: "video",
+            prompt: "Multimodal fixture",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.5", videoSeconds: "4", vquality: "720" },
+            referenceImages: [
+                {
+                    id: "image-reference-0001",
+                    name: "image.png",
+                    type: "image/png",
+                    dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+                },
+            ],
+            referenceVideos: [
+                {
+                    id: "video-reference-0001",
+                    name: "video.mp4",
+                    type: "video/mp4",
+                    url: "data:video/mp4;base64,AAAA",
+                },
+            ],
+            referenceAudios: [
+                {
+                    id: "audio-reference-0001",
+                    name: "audio.mp3",
+                    type: "audio/mpeg",
+                    url: "data:audio/mpeg;base64,SUQz",
+                },
+            ],
+            metadata: { nodeId: "node-multimodal-0001", conversationId: "conversation-multimodal-0001", messageId: "message-multimodal-0001" },
         },
-        createId: () => "dreamina-multimodal-shared-0001",
-        now: () => "2026-08-13T00:00:00.000Z",
-    });
+        {
+            createTask: async () => {
+                throw new Error("must not post /tasks");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait Backend task");
+            },
+            runLocal: async (input) => {
+                localInput = input;
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-multimodal-shared-0001",
+            now: () => "2026-08-13T00:00:00.000Z",
+        },
+    );
 
     expect((localInput as unknown as { references: Array<{ kind: string; mimeType: string; bytes: Uint8Array }>; context?: unknown }).references.map((reference) => [reference.kind, reference.mimeType, reference.bytes.byteLength])).toEqual([
         ["image", "image/png", 8],
@@ -861,17 +1054,26 @@ test("remote provider keeps Create resolution semantics and still creates one Ba
         createdAt: "2026-08-11T00:00:00.000Z",
         updatedAt: "2026-08-11T00:00:00.000Z",
     };
-    await runBackendGenerationTask({
-        mode: "video",
-        prompt: "A remote test clip",
-        config: { ...defaultConfig, model: "default::grok-imagine-video", vquality: "720", quality: "auto" },
-    }, {
-        createTask: async (input) => { backendInput = input; return task; },
-        waitTask: async () => ({ ...task, status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } }) }),
-        runLocal: async () => { localCalls += 1; throw new Error("must not use Local Runtime"); },
-        createId: () => "unused-local-id-0001",
-        now: () => "2026-08-11T00:00:00.000Z",
-    });
+    await runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "A remote test clip",
+            config: { ...defaultConfig, model: "default::grok-imagine-video", vquality: "720", quality: "auto" },
+        },
+        {
+            createTask: async (input) => {
+                backendInput = input;
+                return task;
+            },
+            waitTask: async () => ({ ...task, status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } }) }),
+            runLocal: async () => {
+                localCalls += 1;
+                throw new Error("must not use Local Runtime");
+            },
+            createId: () => "unused-local-id-0001",
+            now: () => "2026-08-11T00:00:00.000Z",
+        },
+    );
 
     expect(backendInput?.input.config).toMatchObject({ vquality: "720", quality: "auto" });
     expect(localCalls).toBe(0);
@@ -881,8 +1083,12 @@ test("remote image video and audio references keep Backend parity without Dreami
     const backendInputs: Array<Record<string, unknown>> = [];
     let localCalls = 0;
     const baseTask = {
-        type: "canvas_media", status: "running" as const, prompt: "fixture", attempts: 1,
-        createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+        type: "canvas_media",
+        status: "running" as const,
+        prompt: "fixture",
+        attempts: 1,
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
     };
     const cases = [
         {
@@ -907,18 +1113,27 @@ test("remote image video and audio references keep Backend parity without Dreami
 
     for (const [index, item] of cases.entries()) {
         const task = { ...baseTask, id: `remote-parity-${index}-0001`, operation: item.operation };
-        await runBackendGenerationTask({
-            mode: item.mode,
-            prompt: "Remote parity fixture",
-            config: { ...defaultConfig, model: "default::provider-neutral-model" },
-            ...item.references,
-        }, {
-            createTask: async (input) => { backendInputs.push(input as unknown as Record<string, unknown>); return task; },
-            waitTask: async () => ({ ...task, status: "succeeded", resultJson: JSON.stringify(item.result) }),
-            runLocal: async () => { localCalls += 1; throw new Error("must not use Local Runtime"); },
-            createId: () => "unused-remote-parity-id",
-            now: () => "2026-08-13T00:00:00.000Z",
-        });
+        await runBackendGenerationTask(
+            {
+                mode: item.mode,
+                prompt: "Remote parity fixture",
+                config: { ...defaultConfig, model: "default::provider-neutral-model" },
+                ...item.references,
+            },
+            {
+                createTask: async (input) => {
+                    backendInputs.push(input as unknown as Record<string, unknown>);
+                    return task;
+                },
+                waitTask: async () => ({ ...task, status: "succeeded", resultJson: JSON.stringify(item.result) }),
+                runLocal: async () => {
+                    localCalls += 1;
+                    throw new Error("must not use Local Runtime");
+                },
+                createId: () => "unused-remote-parity-id",
+                now: () => "2026-08-13T00:00:00.000Z",
+            },
+        );
     }
 
     expect(localCalls).toBe(0);
@@ -938,16 +1153,31 @@ test("shared task subscription reconnects Create and agents to one durable task 
     let queryCalls = 0;
     let waitCalls = 0;
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
     const context = { conversationId: "conversation-subscription-0001", messageId: "message-subscription-0001" };
     const running: GenerationTask = {
-        id: "dreamina:shared-subscription-0001", projectId: "project-subscription-0001", type: "canvas_video",
-        status: "running", prompt: "fixture", attempts: 1, clientContext: context,
-        createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+        id: "dreamina:shared-subscription-0001",
+        projectId: "project-subscription-0001",
+        type: "canvas_video",
+        status: "running",
+        prompt: "fixture",
+        attempts: 1,
+        clientContext: context,
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
     };
     const service = createService({
-        queryTask: async () => { queryCalls += 1; return running; },
-        waitTask: async () => { waitCalls += 1; await gate; return { ...running, status: "succeeded", updatedAt: "2026-08-13T00:01:00.000Z" }; },
+        queryTask: async () => {
+            queryCalls += 1;
+            return running;
+        },
+        waitTask: async () => {
+            waitCalls += 1;
+            await gate;
+            return { ...running, status: "succeeded", updatedAt: "2026-08-13T00:01:00.000Z" };
+        },
     }) as { subscribe(ids: string[], listener: (task: GenerationTask) => void): () => void };
     const first: GenerationTask[] = [];
     const second: GenerationTask[] = [];
@@ -978,8 +1208,12 @@ test("online and local agent run_generation persists conversation and message co
     const createdTasks: GenerationTask[] = [];
     const subscriptions = new Map<string, (task: GenerationTask) => void>();
     const dependencies = {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
+        createTask: async () => {
+            throw new Error("must not post /tasks");
+        },
+        waitTask: async () => {
+            throw new Error("must not wait Backend task");
+        },
         runLocal: async (input: LocalDreaminaGenerationInput) => {
             localInputs.push(input);
             return { mode: "video" as const, video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
@@ -987,20 +1221,28 @@ test("online and local agent run_generation persists conversation and message co
         createId: () => `agent-task-${localInputs.length + 1}`,
         now: () => "2026-08-13T00:00:00.000Z",
     };
-    const generate = async (nodeId: string, generationMode: Parameters<typeof runBackendCanvasGenerationTask>[0]["mode"], generationPrompt: string, options?: { context?: { conversationId?: string; messageId?: string }; onTaskUpdate?: (task: GenerationTask) => void }) => {
-        await runBackendCanvasGenerationTask({
-            projectId: "agent-project-0001",
-            nodeId,
-            mode: generationMode,
-            prompt: generationPrompt,
-            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
-            metadata: options?.context,
-            onTaskCreated: (task) => {
-                createdTasks.push(task);
-                options?.onTaskUpdate?.(task);
-                subscriptions.get(task.id)?.(task);
+    const generate = async (
+        nodeId: string,
+        generationMode: Parameters<typeof runBackendCanvasGenerationTask>[0]["mode"],
+        generationPrompt: string,
+        options?: { context?: { conversationId?: string; messageId?: string }; onTaskUpdate?: (task: GenerationTask) => void },
+    ) => {
+        await runBackendCanvasGenerationTask(
+            {
+                projectId: "agent-project-0001",
+                nodeId,
+                mode: generationMode,
+                prompt: generationPrompt,
+                config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+                metadata: options?.context,
+                onTaskCreated: (task) => {
+                    createdTasks.push(task);
+                    options?.onTaskUpdate?.(task);
+                    subscriptions.get(task.id)?.(task);
+                },
             },
-        }, dependencies);
+            dependencies,
+        );
     };
     const subscribeTasks = (ids: readonly string[], listener: (task: GenerationTask) => void) => {
         ids.forEach((id) => subscriptions.set(id, listener));
@@ -1025,10 +1267,14 @@ test("online and local agent run_generation persists conversation and message co
         { scope: "scoped", projectId: "agent-project-0001", nodeId: node.id, conversationId: "online-conversation-0001", messageId: "online-message-0001" },
         { scope: "scoped", projectId: "agent-project-0001", nodeId: node.id, conversationId: "local-conversation-0001", messageId: "local-message-0001" },
     ]);
-    expect(createdTasks.filter((task) => task.status === "running").map((task) => ({
-        projectId: task.projectId,
-        clientContext: task.clientContext,
-    }))).toEqual([
+    expect(
+        createdTasks
+            .filter((task) => task.status === "running")
+            .map((task) => ({
+                projectId: task.projectId,
+                clientContext: task.clientContext,
+            })),
+    ).toEqual([
         { projectId: "agent-project-0001", clientContext: { nodeId: node.id, conversationId: "online-conversation-0001", messageId: "online-message-0001" } },
         { projectId: "agent-project-0001", clientContext: { nodeId: node.id, conversationId: "local-conversation-0001", messageId: "local-message-0001" } },
     ]);
@@ -1042,10 +1288,10 @@ test("online agent generation tools preserve product values and emit the same ge
     expect(target?.metadata?.vquality).toBe("720");
     expect(run && { type: run.type, nodeId: run.nodeId, mode: run.mode }).toEqual({ type: "run_generation", nodeId: target?.id, mode: "video" });
 
-    expect(onlineToolToOps("canvas_run_generation", { nodeId: "video-node", mode: "video", prompt: "Retry video" }, snapshot, defaultConfig))
-        .toEqual([{ type: "run_generation", nodeId: "video-node", mode: "video", prompt: "Retry video" }]);
-    expect(onlineToolToOps("canvas_run_generation", { nodeId: "video-node", mode: "video", prompt: "Retry video", retry: true }, snapshot, defaultConfig))
-        .toEqual([{ type: "run_generation", nodeId: "video-node", mode: "video", prompt: "Retry video", retry: true }]);
+    expect(onlineToolToOps("canvas_run_generation", { nodeId: "video-node", mode: "video", prompt: "Retry video" }, snapshot, defaultConfig)).toEqual([{ type: "run_generation", nodeId: "video-node", mode: "video", prompt: "Retry video" }]);
+    expect(onlineToolToOps("canvas_run_generation", { nodeId: "video-node", mode: "video", prompt: "Retry video", retry: true }, snapshot, defaultConfig)).toEqual([
+        { type: "run_generation", nodeId: "video-node", mode: "video", prompt: "Retry video", retry: true },
+    ]);
 });
 
 test("Canvas image video audio executors hand one terminal task to the unified consumer", async () => {
@@ -1063,27 +1309,26 @@ test("Canvas image video audio executors hand one terminal task to the unified c
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:01:00.000Z",
         };
-        const result = await runCanvasGenerationTaskToConsumer({
-            projectId: "canvas-consumer-project",
-            nodeId: `node-${mode}-0001`,
-            mode,
-            prompt: "fixture",
-            config: defaultConfig,
-        }, {
-            runTask: async (options) => {
-                options.onTaskCreated?.({ ...task, status: "running" });
-                options.onTaskCreated?.(task);
-                return mode === "image"
-                    ? { mode, images: [{ dataUrl: "opaque://image" }] }
-                    : mode === "video"
-                        ? { mode, video: { dataUrl: "opaque://video" } }
-                        : { mode, audio: { dataUrl: "opaque://audio" } };
+        const result = await runCanvasGenerationTaskToConsumer(
+            {
+                projectId: "canvas-consumer-project",
+                nodeId: `node-${mode}-0001`,
+                mode,
+                prompt: "fixture",
+                config: defaultConfig,
             },
-            bindTask: () => undefined,
-            consumeTask: async (completed) => {
-                consumed.push({ mode, taskId: completed.id, outputType: completed.outputs?.[0]?.mediaType });
+            {
+                runTask: async (options) => {
+                    options.onTaskCreated?.({ ...task, status: "running" });
+                    options.onTaskCreated?.(task);
+                    return mode === "image" ? { mode, images: [{ dataUrl: "opaque://image" }] } : mode === "video" ? { mode, video: { dataUrl: "opaque://video" } } : { mode, audio: { dataUrl: "opaque://audio" } };
+                },
+                bindTask: () => undefined,
+                consumeTask: async (completed) => {
+                    consumed.push({ mode, taskId: completed.id, outputType: completed.outputs?.[0]?.mediaType });
+                },
             },
-        });
+        );
         expect(result.mode).toBe(mode);
     }
 
@@ -1095,10 +1340,13 @@ test("Canvas image video audio executors hand one terminal task to the unified c
 });
 
 test("Create audio upload converts, previews, removes, and submits through the shared generation task contract", async () => {
-    const creationAssets = await import("../src/pages/create/creation-assets") as unknown as {
+    const creationAssets = (await import("../src/pages/create/creation-assets")) as unknown as {
         creationUploadAccept?: (mode: "text" | "image" | "video") => string;
         creationFileAccepted?: (mode: "text" | "image" | "video", file: File) => boolean;
-        creationAttachmentFromAudio?: (file: File, uploaded: { url: string; storageKey: string; bytes: number; mimeType: string; durationMs?: number }) => {
+        creationAttachmentFromAudio?: (
+            file: File,
+            uploaded: { url: string; storageKey: string; bytes: number; mimeType: string; durationMs?: number },
+        ) => {
             id: string;
             name: string;
             type: string;
@@ -1106,13 +1354,13 @@ test("Create audio upload converts, previews, removes, and submits through the s
             storageKey: string;
             previewUrl: string;
         };
-        creationAttachmentFromAudioAsset?: (asset: {
+        creationAttachmentFromAudioAsset?: (asset: { id: string; kind: "audio"; title: string; coverUrl: string; data: { url: string; storageKey?: string; bytes: number; mimeType: string; durationMs?: number } }) => {
             id: string;
-            kind: "audio";
-            title: string;
-            coverUrl: string;
-            data: { url: string; storageKey?: string; bytes: number; mimeType: string; durationMs?: number };
-        }) => { id: string; type: string; url: string; storageKey?: string; previewUrl: string };
+            type: string;
+            url: string;
+            storageKey?: string;
+            previewUrl: string;
+        };
         splitCreationAttachments?: (attachments: unknown[]) => {
             referenceImages: unknown[];
             referenceVideos: unknown[];
@@ -1128,10 +1376,16 @@ test("Create audio upload converts, previews, removes, and submits through the s
     expect(typeof creationAssets.splitCreationAttachments).toBe("function");
     expect(typeof creationAssets.creationAttachmentPreview).toBe("function");
     expect(typeof creationAssets.removeCreationAttachment).toBe("function");
-    if (!creationAssets.creationUploadAccept || !creationAssets.creationFileAccepted
-        || !creationAssets.creationAttachmentFromAudio || !creationAssets.creationAttachmentFromAudioAsset
-        || !creationAssets.splitCreationAttachments || !creationAssets.creationAttachmentPreview
-        || !creationAssets.removeCreationAttachment) return;
+    if (
+        !creationAssets.creationUploadAccept ||
+        !creationAssets.creationFileAccepted ||
+        !creationAssets.creationAttachmentFromAudio ||
+        !creationAssets.creationAttachmentFromAudioAsset ||
+        !creationAssets.splitCreationAttachments ||
+        !creationAssets.creationAttachmentPreview ||
+        !creationAssets.removeCreationAttachment
+    )
+        return;
 
     const audioFile = new File([new Uint8Array([0x49, 0x44, 0x33, 4])], "reference.mp3", { type: "audio/mpeg" });
     expect(creationAssets.creationUploadAccept("video")).toBe("image/*,video/*,audio/*");
@@ -1177,54 +1431,66 @@ test("Create audio upload converts, previews, removes, and submits through the s
         createdAt: "2026-08-13T00:00:00.000Z",
         updatedAt: "2026-08-13T00:00:00.000Z",
     };
-    await runBackendGenerationTask({
-        projectId: running.projectId,
-        mode: "video",
-        prompt: running.prompt,
-        config: { ...defaultConfig, model: "remote-video-audio-fixture", videoModel: "remote-video-audio-fixture" },
-        ...references,
-    } as Parameters<typeof runBackendGenerationTask>[0], {
-        createTask: async (input) => {
-            createdInput = input;
-            return running;
+    await runBackendGenerationTask(
+        {
+            projectId: running.projectId,
+            mode: "video",
+            prompt: running.prompt,
+            config: { ...defaultConfig, model: "remote-video-audio-fixture", videoModel: "remote-video-audio-fixture" },
+            ...references,
+        } as Parameters<typeof runBackendGenerationTask>[0],
+        {
+            createTask: async (input) => {
+                createdInput = input;
+                return running;
+            },
+            waitTask: async () => ({
+                ...running,
+                status: "succeeded",
+                resultJson: JSON.stringify({ mode: "video", video: { dataUrl: "opaque://video" } }),
+                updatedAt: "2026-08-13T00:01:00.000Z",
+            }),
+            runLocal: async () => {
+                throw new Error("must not use local Runtime");
+            },
+            createId: () => "unused-create-audio-id",
+            now: () => "2026-08-13T00:00:00.000Z",
         },
-        waitTask: async () => ({
-            ...running,
-            status: "succeeded",
-            resultJson: JSON.stringify({ mode: "video", video: { dataUrl: "opaque://video" } }),
-            updatedAt: "2026-08-13T00:01:00.000Z",
-        }),
-        runLocal: async () => { throw new Error("must not use local Runtime"); },
-        createId: () => "unused-create-audio-id",
-        now: () => "2026-08-13T00:00:00.000Z",
-    });
+    );
 
     const submitted = createdInput as {
         operation?: string;
         input?: { referenceAudios?: Array<Record<string, unknown>> };
     };
     expect(submitted.operation).toBe("reference_to_video");
-    expect(submitted.input?.referenceAudios).toEqual([{
-        id: attachment.id,
-        name: "reference.mp3",
-        type: "audio/mpeg",
-        url: "",
-        storageKey: "resource:create-audio-0001",
-        bytes: 4,
-        durationMs: 1_000,
-    }]);
+    expect(submitted.input?.referenceAudios).toEqual([
+        {
+            id: attachment.id,
+            name: "reference.mp3",
+            type: "audio/mpeg",
+            url: "",
+            storageKey: "resource:create-audio-0001",
+            bytes: 4,
+            durationMs: 1_000,
+        },
+    ]);
     expect(submitted.input?.referenceAudios?.[0]).not.toHaveProperty("previewUrl");
 });
 
 test("node retry creates one new product operation identity and forwards durable retry context", async () => {
     const module = await import("../src/lib/canvas/canvas-project-generation");
-    const createRetryContext = (module as {
-        createGenerationRetryContext?: (retryOf: string, attemptGroupId?: string) => Promise<{
-            retryOf: string;
-            attemptGroupId: string;
-            clientOperationId: string;
-        }>;
-    }).createGenerationRetryContext;
+    const createRetryContext = (
+        module as {
+            createGenerationRetryContext?: (
+                retryOf: string,
+                attemptGroupId?: string,
+            ) => Promise<{
+                retryOf: string;
+                attemptGroupId: string;
+                clientOperationId: string;
+            }>;
+        }
+    ).createGenerationRetryContext;
     expect(typeof createRetryContext).toBe("function");
     if (!createRetryContext) return;
 
@@ -1238,23 +1504,30 @@ test("node retry creates one new product operation identity and forwards durable
     expect(first.clientOperationId).toMatch(/^retry:[a-f0-9]{64}$/);
 
     let localInput: LocalDreaminaGenerationInput | undefined;
-    await runBackendCanvasGenerationTask({
-        projectId: "project-retry-0001",
-        nodeId: "node-retry-0001",
-        mode: "video",
-        prompt: "Retry fixture",
-        config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
-        ...first,
-    } as Parameters<typeof runBackendCanvasGenerationTask>[0], {
-        createTask: async () => { throw new Error("must not post /tasks"); },
-        waitTask: async () => { throw new Error("must not wait Backend task"); },
-        runLocal: async (input) => {
-            localInput = input;
-            return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+    await runBackendCanvasGenerationTask(
+        {
+            projectId: "project-retry-0001",
+            nodeId: "node-retry-0001",
+            mode: "video",
+            prompt: "Retry fixture",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+            ...first,
+        } as Parameters<typeof runBackendCanvasGenerationTask>[0],
+        {
+            createTask: async () => {
+                throw new Error("must not post /tasks");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait Backend task");
+            },
+            runLocal: async (input) => {
+                localInput = input;
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "must-not-create-another-retry-id",
+            now: () => "2026-08-13T00:00:00.000Z",
         },
-        createId: () => "must-not-create-another-retry-id",
-        now: () => "2026-08-13T00:00:00.000Z",
-    });
+    );
 
     expect((localInput as unknown as { clientOperationId?: string }).clientOperationId).toBe(first.clientOperationId);
     expect(localInput?.idempotencyKey).toBe(first.clientOperationId);
@@ -1281,23 +1554,29 @@ test("node retry creates one new product operation identity and forwards durable
         createdAt: "2026-08-13T00:00:00.000Z",
         updatedAt: "2026-08-13T00:00:01.000Z",
     };
-    const compete = () => runCanvasGenerationTaskToConsumer({
-        projectId: "project-retry-0001",
-        nodeId: "node-retry-0001",
-        mode: "video",
-        prompt: "Retry fixture",
-        config: defaultConfig,
-        ...first,
-    }, {
-        runTask: async (options) => {
-            competingRuns += 1;
-            await Promise.resolve();
-            options.onTaskCreated?.(terminal);
-            return { mode: "video" as const, video: { dataUrl: "opaque://video" } };
-        },
-        bindTask: () => undefined,
-        consumeTask: async () => { competingConsumes += 1; },
-    });
+    const compete = () =>
+        runCanvasGenerationTaskToConsumer(
+            {
+                projectId: "project-retry-0001",
+                nodeId: "node-retry-0001",
+                mode: "video",
+                prompt: "Retry fixture",
+                config: defaultConfig,
+                ...first,
+            },
+            {
+                runTask: async (options) => {
+                    competingRuns += 1;
+                    await Promise.resolve();
+                    options.onTaskCreated?.(terminal);
+                    return { mode: "video" as const, video: { dataUrl: "opaque://video" } };
+                },
+                bindTask: () => undefined,
+                consumeTask: async () => {
+                    competingConsumes += 1;
+                },
+            },
+        );
     const [pageRetry, nodeOrAgentRetry] = await Promise.all([compete(), compete()]);
     expect(pageRetry).toEqual(nodeOrAgentRetry);
     expect(competingRuns).toBe(1);
@@ -1305,18 +1584,20 @@ test("node retry creates one new product operation identity and forwards durable
 });
 
 test("real node generation binding persists the first task before an Agent retry derives lineage", async () => {
-    let nodes: CanvasNodeData[] = [{
-        id: "agent-sequence-node-0001",
-        type: CanvasNodeType.Video,
-        title: "Sequence retry",
-        position: { x: 0, y: 0 },
-        width: 320,
-        height: 180,
-        metadata: {
-            generationMode: "video",
-            composerContent: "Sequence fixture",
+    let nodes: CanvasNodeData[] = [
+        {
+            id: "agent-sequence-node-0001",
+            type: CanvasNodeType.Video,
+            title: "Sequence retry",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 180,
+            metadata: {
+                generationMode: "video",
+                composerContent: "Sequence fixture",
+            },
         },
-    }];
+    ];
     const generatedOptions: Array<{ retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string } }> = [];
     let sequence = 0;
     let terminalTask: GenerationTask | undefined;
@@ -1324,12 +1605,14 @@ test("real node generation binding persists the first task before an Agent retry
     const run = async (retry: boolean) => {
         sequence += 1;
         await runCanvasAgentGenerationOps({
-            generationOps: [{
-                type: "run_generation",
-                nodeId: nodes[0]!.id,
-                mode: "video",
-                ...(retry ? { retry: true } : {}),
-            }],
+            generationOps: [
+                {
+                    type: "run_generation",
+                    nodeId: nodes[0]!.id,
+                    mode: "video",
+                    ...(retry ? { retry: true } : {}),
+                },
+            ],
             nodes,
             context: {
                 source: "online",
@@ -1357,28 +1640,35 @@ test("real node generation binding persists the first task before an Agent retry
                     updatedAt: "2026-08-13T00:00:00.000Z",
                 };
                 terminalTask = { ...running, status: "succeeded", updatedAt: "2026-08-13T00:01:00.000Z" };
-                await runCanvasGenerationTaskToConsumer({
-                    projectId: running.projectId,
-                    nodeId,
-                    mode,
-                    prompt,
-                    config: defaultConfig,
-                    ...(options.retryContext || {}),
-                }, {
-                    runTask: async (taskOptions) => {
-                        taskOptions.onTaskCreated?.(running);
-                        options.onTaskUpdate?.(running);
-                        taskOptions.onTaskCreated?.(terminalTask!);
-                        return { mode: "video", video: { dataUrl: "opaque://video" } };
+                await runCanvasGenerationTaskToConsumer(
+                    {
+                        projectId: running.projectId,
+                        nodeId,
+                        mode,
+                        prompt,
+                        config: defaultConfig,
+                        ...(options.retryContext || {}),
                     },
-                    bindTask: (task) => {
-                        nodes = nodes.map((node) => node.id === nodeId ? {
-                            ...node,
-                            metadata: { ...node.metadata, ...generationTaskMetadata(task) },
-                        } : node);
+                    {
+                        runTask: async (taskOptions) => {
+                            taskOptions.onTaskCreated?.(running);
+                            options.onTaskUpdate?.(running);
+                            taskOptions.onTaskCreated?.(terminalTask!);
+                            return { mode: "video", video: { dataUrl: "opaque://video" } };
+                        },
+                        bindTask: (task) => {
+                            nodes = nodes.map((node) =>
+                                node.id === nodeId
+                                    ? {
+                                          ...node,
+                                          metadata: { ...node.metadata, ...generationTaskMetadata(task) },
+                                      }
+                                    : node,
+                            );
+                        },
+                        consumeTask: async () => undefined,
                     },
-                    consumeTask: async () => undefined,
-                });
+                );
             },
             subscribeTasks: (_ids, listener) => {
                 queueMicrotask(() => {
@@ -1414,22 +1704,29 @@ test("real node generation binding persists the first task before an Agent retry
 
 test("real canvas agent generation entry persists continuation, observes terminal state, and resumes refresh idempotently", async () => {
     const module = await import("../src/pages/canvas/use-canvas-agent-operations");
-    const runAgentGenerationOps = (module as {
-        runCanvasAgentGenerationOps?: (input: {
-            generationOps: Array<{ type: "run_generation"; nodeId: string; mode?: "video"; prompt?: string; retry?: boolean }>;
-            nodes: CanvasNodeData[];
-            context?: { conversationId?: string; messageId?: string; source?: "online" | "local" };
-            generate: (nodeId: string, mode: "video", prompt: string, options: {
-                context?: { conversationId?: string; messageId?: string };
-                retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
-                onTaskUpdate(task: GenerationTask): void;
+    const runAgentGenerationOps = (
+        module as {
+            runCanvasAgentGenerationOps?: (input: {
+                generationOps: Array<{ type: "run_generation"; nodeId: string; mode?: "video"; prompt?: string; retry?: boolean }>;
+                nodes: CanvasNodeData[];
+                context?: { conversationId?: string; messageId?: string; source?: "online" | "local" };
+                generate: (
+                    nodeId: string,
+                    mode: "video",
+                    prompt: string,
+                    options: {
+                        context?: { conversationId?: string; messageId?: string };
+                        retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
+                        onTaskUpdate(task: GenerationTask): void;
+                    },
+                ) => Promise<void>;
+                subscribeTasks: (ids: readonly string[], listener: (task: GenerationTask) => void) => () => void;
+                consumeTask: (task: GenerationTask, continuationId: string, resume: () => Promise<void>) => Promise<unknown>;
+                resumeAgent: (task: GenerationTask) => Promise<void>;
+                onContinuation?: (nodeId: string, continuation: NonNullable<NonNullable<CanvasNodeData["metadata"]>["agentGenerationContinuation"]>) => void;
             }) => Promise<void>;
-            subscribeTasks: (ids: readonly string[], listener: (task: GenerationTask) => void) => () => void;
-            consumeTask: (task: GenerationTask, continuationId: string, resume: () => Promise<void>) => Promise<unknown>;
-            resumeAgent: (task: GenerationTask) => Promise<void>;
-            onContinuation?: (nodeId: string, continuation: NonNullable<NonNullable<CanvasNodeData["metadata"]>["agentGenerationContinuation"]>) => void;
-        }) => Promise<void>;
-    }).runCanvasAgentGenerationOps;
+        }
+    ).runCanvasAgentGenerationOps;
     expect(typeof runAgentGenerationOps).toBe("function");
     if (!runAgentGenerationOps) return;
 
@@ -1487,7 +1784,9 @@ test("real canvas agent generation entry persists continuation, observes termina
             consumed.push(`${task.id}:${continuationId}`);
             await resume();
         },
-        resumeAgent: async () => { continuations += 1; },
+        resumeAgent: async () => {
+            continuations += 1;
+        },
         onContinuation: (_nodeId, continuation) => {
             if (continuation.status === "pending") pendingContinuation = continuation;
         },
@@ -1510,27 +1809,29 @@ test("real canvas agent generation entry persists continuation, observes termina
         generationOps: [],
         nodes: [{ ...node, metadata: { ...node.metadata, taskId: running.id, agentGenerationContinuation: pendingContinuation } }],
         context: { source: "online", conversationId: "conversation-agent-entry-0001", messageId: "message-agent-entry-0001" },
-        generate: async () => { throw new Error("refresh must not submit again"); },
+        generate: async () => {
+            throw new Error("refresh must not submit again");
+        },
         subscribeTasks: (ids, listener) => {
             subscriptions.push([...ids]);
             queueMicrotask(() => listener(terminal));
             return () => undefined;
         },
         consumeTask: async (_task, _continuationId, resume) => resume(),
-        resumeAgent: async () => { continuations += 1; },
+        resumeAgent: async () => {
+            continuations += 1;
+        },
     });
     expect(subscriptions).toEqual([[running.id]]);
 });
 
 test("canvas refresh recovery consumes shared task subscriptions instead of querying and waiting per page", async () => {
     const module = await import("../src/pages/canvas/use-canvas-generation");
-    const subscribeRecovery = (module as {
-        subscribeCanvasGenerationRecoveryTasks?: (
-            ids: readonly string[],
-            listener: (task: GenerationTask) => void,
-            subscribe: (ids: readonly string[], listener: (task: GenerationTask) => void) => () => void,
-        ) => () => void;
-    }).subscribeCanvasGenerationRecoveryTasks;
+    const subscribeRecovery = (
+        module as {
+            subscribeCanvasGenerationRecoveryTasks?: (ids: readonly string[], listener: (task: GenerationTask) => void, subscribe: (ids: readonly string[], listener: (task: GenerationTask) => void) => () => void) => () => void;
+        }
+    ).subscribeCanvasGenerationRecoveryTasks;
     expect(typeof subscribeRecovery).toBe("function");
     if (!subscribeRecovery) return;
 
@@ -1546,11 +1847,15 @@ test("canvas refresh recovery consumes shared task subscriptions instead of quer
         createdAt: "2026-08-13T00:00:00.000Z",
         updatedAt: "2026-08-13T00:01:00.000Z",
     };
-    const unsubscribe = subscribeRecovery([task.id, task.id], (next) => observed.push(next), (ids, listener) => {
-        subscribedIds = ids;
-        listener(task);
-        return () => undefined;
-    });
+    const unsubscribe = subscribeRecovery(
+        [task.id, task.id],
+        (next) => observed.push(next),
+        (ids, listener) => {
+            subscribedIds = ids;
+            listener(task);
+            return () => undefined;
+        },
+    );
     unsubscribe();
 
     expect(subscribedIds).toEqual([task.id]);
@@ -1589,9 +1894,13 @@ test("agent run_generation waits for the shared task, persists one continuation,
         updatedAt: "2026-08-13T00:01:00.000Z",
     };
     let releaseGeneration!: () => void;
-    const generationGate = new Promise<void>((resolve) => { releaseGeneration = resolve; });
+    const generationGate = new Promise<void>((resolve) => {
+        releaseGeneration = resolve;
+    });
     let generationStarted!: () => void;
-    const started = new Promise<void>((resolve) => { generationStarted = resolve; });
+    const started = new Promise<void>((resolve) => {
+        generationStarted = resolve;
+    });
     const order: string[] = [];
     let generateOptions: Record<string, unknown> | undefined;
     const continuations: Array<{ nodeId: string; continuation: Record<string, unknown> }> = [];
@@ -1602,7 +1911,9 @@ test("agent run_generation waits for the shared task, persists one continuation,
         context: { source: "online", conversationId: "online-agent-conversation-0001", messageId: "online-agent-message-0001" },
         subscribeTasks: (_ids, listener) => {
             taskListener = listener;
-            return () => { taskListener = undefined; };
+            return () => {
+                taskListener = undefined;
+            };
         },
         generate: async (_nodeId, _mode, _prompt, options) => {
             generateOptions = options as unknown as Record<string, unknown>;
@@ -1617,7 +1928,9 @@ test("agent run_generation waits for the shared task, persists one continuation,
             await consumer({ task, effectKey: `agent-resume:${task.id}:${continuationId}` });
             return task;
         },
-    }).then(() => { order.push("dispatch-resolved"); });
+    }).then(() => {
+        order.push("dispatch-resolved");
+    });
 
     await started;
     order.push("before-release");
@@ -1635,40 +1948,39 @@ test("agent run_generation waits for the shared task, persists one continuation,
 });
 
 test("Create image batch retry keeps one attempt group while each new task points to its matching prior batch task", async () => {
-    const priorTaskIds = [
-        "dreamina:create-prior-batch-0001",
-        "dreamina:create-prior-batch-0002",
-        "dreamina:create-prior-batch-0003",
-    ];
+    const priorTaskIds = ["dreamina:create-prior-batch-0001", "dreamina:create-prior-batch-0002", "dreamina:create-prior-batch-0003"];
     const retryContexts = await createGenerationBatchRetryContexts(priorTaskIds, "dreamina:create-batch-attempt-group-0001");
     const inputs: LocalDreaminaGenerationInput[] = [];
-    const result = await runBackendGenerationTaskBatch({
-        mode: "image",
-        prompt: "Retry three images",
-        config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: "2k", count: "1" },
-        count: 3,
-        clientOperationId: "retry:create-batch-operation-0001",
-        retryOf: priorTaskIds[0],
-        attemptGroupId: "dreamina:create-batch-attempt-group-0001",
-        retryContextsByBatchIndex: retryContexts,
-    }, {
-        createTask: async () => { throw new Error("must not create backend task"); },
-        waitTask: async () => { throw new Error("must not wait backend task"); },
-        runLocal: async (input) => {
-            inputs.push(input);
-            return { mode: "image", images: [{ dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png", bytes: 3 }] };
+    const result = await runBackendGenerationTaskBatch(
+        {
+            mode: "image",
+            prompt: "Retry three images",
+            config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", quality: "2k", count: "1" },
+            count: 3,
+            clientOperationId: "retry:create-batch-operation-0001",
+            retryOf: priorTaskIds[0],
+            attemptGroupId: "dreamina:create-batch-attempt-group-0001",
+            retryContextsByBatchIndex: retryContexts,
         },
-        createId: () => "unused-create-batch-id",
-        now: () => "2026-08-13T00:00:00.000Z",
-    });
+        {
+            createTask: async () => {
+                throw new Error("must not create backend task");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait backend task");
+            },
+            runLocal: async (input) => {
+                inputs.push(input);
+                return { mode: "image", images: [{ dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png", bytes: 3 }] };
+            },
+            createId: () => "unused-create-batch-id",
+            now: () => "2026-08-13T00:00:00.000Z",
+        },
+    );
 
     expect(result.every((entry) => entry.status === "fulfilled")).toBe(true);
     expect(inputs.map((input) => input.context?.retryOf)).toEqual(priorTaskIds);
-    expect(inputs.map((input) => input.context?.attemptGroupId)).toEqual([
-        "dreamina:create-batch-attempt-group-0001",
-        "dreamina:create-batch-attempt-group-0001",
-        "dreamina:create-batch-attempt-group-0001",
-    ]);
+    expect(inputs.map((input) => input.context?.attemptGroupId)).toEqual(["dreamina:create-batch-attempt-group-0001", "dreamina:create-batch-attempt-group-0001", "dreamina:create-batch-attempt-group-0001"]);
     expect(inputs.map((input) => input.clientOperationId)).toEqual(retryContexts.map((context) => context.clientOperationId));
 });
 
@@ -1682,9 +1994,11 @@ test("Canvas refresh recovery delegates task observation to the shared subscript
 
 test("local Dreamina diagnostics project only safe structured stage/error/provenance fields", async () => {
     const module = await import("../src/services/local-dreamina-task-projection");
-    const projectLog = (module as {
-        projectLocalDreaminaDiagnosticLog?: (input: Record<string, unknown>) => Record<string, unknown>;
-    }).projectLocalDreaminaDiagnosticLog;
+    const projectLog = (
+        module as {
+            projectLocalDreaminaDiagnosticLog?: (input: Record<string, unknown>) => Record<string, unknown>;
+        }
+    ).projectLocalDreaminaDiagnosticLog;
     expect(typeof projectLog).toBe("function");
     if (!projectLog) return;
 
@@ -1743,8 +2057,14 @@ test("Task 7 fake browser presentation stays isolated from real CLI, OAuth, paid
     Object.defineProperty(globalThis, "window", {
         configurable: true,
         value: {
-            open: () => { browserCalls.push("open"); return null; },
-            dispatchEvent: () => { browserCalls.push("dispatch"); return true; },
+            open: () => {
+                browserCalls.push("open");
+                return null;
+            },
+            dispatchEvent: () => {
+                browserCalls.push("dispatch");
+                return true;
+            },
         },
     });
 

@@ -11,8 +11,7 @@ export const statusLabel: Record<TaskStatus, string> = {
 type GenerationTaskDisplayTarget = Pick<GenerationTask, "provider" | "status" | "stage" | "officialStatus"> & Partial<Pick<GenerationTask, "errorCode">>;
 
 export function isGenerationTaskSubmissionUncertain(task: GenerationTaskDisplayTarget) {
-    return task.provider === "dreamina-cli"
-        && (task.stage === "submission_unknown" || task.errorCode === "dreamina_submission_unknown");
+    return task.provider === "dreamina-cli" && (task.stage === "submission_unknown" || task.errorCode === "dreamina_submission_unknown");
 }
 
 export function generationTaskStatusLabel(task: GenerationTaskDisplayTarget) {
@@ -77,4 +76,3 @@ export function formatTaskKind(task: GenerationTask) {
     if (task.type.startsWith("video_")) return "视频任务";
     return "生成任务";
 }
-

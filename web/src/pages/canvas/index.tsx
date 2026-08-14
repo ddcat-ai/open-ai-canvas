@@ -57,7 +57,7 @@ export default function CanvasPage() {
         const query = keyword.trim().toLowerCase();
         const scoped = projects.filter((project) => projectFilter === "all" || (projectFilter === "independent" ? !project.projectId : project.projectId === projectFilter));
         const values = query ? scoped.filter((project) => project.title.toLowerCase().includes(query)) : [...scoped];
-        values.sort((a, b) => sort === "name" ? a.title.localeCompare(b.title, "zh-CN") : sort === "nodes" ? b.nodes.length - a.nodes.length : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        values.sort((a, b) => (sort === "name" ? a.title.localeCompare(b.title, "zh-CN") : sort === "nodes" ? b.nodes.length - a.nodes.length : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
         return values;
     }, [keyword, projectFilter, projects, sort]);
     const projectNames = useMemo(() => new Map((projectQuery.data?.projects || []).map(({ project }) => [project.id, project.name])), [projectQuery.data]);
@@ -66,11 +66,7 @@ export default function CanvasPage() {
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const projectFilterLabel = projectFilter === "all" ? "全部画布" : projectFilter === "independent" ? "自由画布" : projectNames.get(projectFilter) || "项目画布";
     const sortLabel = sort === "name" ? "按名称" : sort === "nodes" ? "按节点" : "最近更新";
-    const projectFilterItems = useMemo(() => [
-        { key: "all", label: "全部画布" },
-        { key: "independent", label: "自由画布" },
-        ...(projectQuery.data?.projects || []).map(({ project }) => ({ key: project.id, label: project.name })),
-    ], [projectQuery.data]);
+    const projectFilterItems = useMemo(() => [{ key: "all", label: "全部画布" }, { key: "independent", label: "自由画布" }, ...(projectQuery.data?.projects || []).map(({ project }) => ({ key: project.id, label: project.name }))], [projectQuery.data]);
     const sortItems = [
         { key: "updated", label: "最近更新", icon: <Clock3 className="size-3.5" /> },
         { key: "name", label: "按名称", icon: <ArrowDownAZ className="size-3.5" /> },
@@ -104,41 +100,54 @@ export default function CanvasPage() {
                     }),
                 ),
             );
-            await Promise.all(data.projects.map(async (item) => {
-                const drawingEngineById = new Map((item.drawingDocuments || []).map((document) => [document.drawingId, document.engine || "tldraw"]));
-                const importedProjectId = importProject({
-                    ...item.project,
-                    nodes: item.project.nodes.map((node) => node.type === "drawing" && node.metadata?.drawingId
-                        ? { ...node, metadata: { ...node.metadata, drawingEngine: drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" } }
-                        : node),
-                });
-                await Promise.all((item.drawingDocuments || []).map((document) => {
-                    const previewFile = document.previewPath ? zip.get(document.previewPath) : undefined;
-                    const preview = previewFile && !previewFile.type ? previewFile.slice(0, previewFile.size, "image/png") : previewFile;
-                    const renderFile = document.generationRender?.path ? zip.get(document.generationRender.path) : undefined;
-                    const renderBlob = renderFile && !renderFile.type ? renderFile.slice(0, renderFile.size, document.generationRender?.mimeType || "image/png") : renderFile;
-                    const render = renderBlob && document.generationRender
-                        ? {
-                              blob: renderBlob,
-                              pageId: document.generationRender.pageId,
-                              width: document.generationRender.width,
-                              height: document.generationRender.height,
-                              mimeType: document.generationRender.mimeType,
-                              background: document.generationRender.background,
-                          } satisfies CanvasDrawingRenderDraft
-                        : undefined;
-                    const engine = document.engine || "tldraw";
-                    return saveCanvasDrawing(importedProjectId, document.drawingId, engine, document.snapshot, {
-                        version: 2,
-                        engine,
-                        snapshot: document.snapshot,
-                        revision: Math.max(0, document.revision - 1),
-                        updatedAt: document.updatedAt,
-                        shapeCount: document.shapeCount,
-                        pageCount: document.pageCount,
-                    }, preview, render);
-                }));
-            }));
+            await Promise.all(
+                data.projects.map(async (item) => {
+                    const drawingEngineById = new Map((item.drawingDocuments || []).map((document) => [document.drawingId, document.engine || "tldraw"]));
+                    const importedProjectId = importProject({
+                        ...item.project,
+                        nodes: item.project.nodes.map((node) =>
+                            node.type === "drawing" && node.metadata?.drawingId ? { ...node, metadata: { ...node.metadata, drawingEngine: drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" } } : node,
+                        ),
+                    });
+                    await Promise.all(
+                        (item.drawingDocuments || []).map((document) => {
+                            const previewFile = document.previewPath ? zip.get(document.previewPath) : undefined;
+                            const preview = previewFile && !previewFile.type ? previewFile.slice(0, previewFile.size, "image/png") : previewFile;
+                            const renderFile = document.generationRender?.path ? zip.get(document.generationRender.path) : undefined;
+                            const renderBlob = renderFile && !renderFile.type ? renderFile.slice(0, renderFile.size, document.generationRender?.mimeType || "image/png") : renderFile;
+                            const render =
+                                renderBlob && document.generationRender
+                                    ? ({
+                                          blob: renderBlob,
+                                          pageId: document.generationRender.pageId,
+                                          width: document.generationRender.width,
+                                          height: document.generationRender.height,
+                                          mimeType: document.generationRender.mimeType,
+                                          background: document.generationRender.background,
+                                      } satisfies CanvasDrawingRenderDraft)
+                                    : undefined;
+                            const engine = document.engine || "tldraw";
+                            return saveCanvasDrawing(
+                                importedProjectId,
+                                document.drawingId,
+                                engine,
+                                document.snapshot,
+                                {
+                                    version: 2,
+                                    engine,
+                                    snapshot: document.snapshot,
+                                    revision: Math.max(0, document.revision - 1),
+                                    updatedAt: document.updatedAt,
+                                    shapeCount: document.shapeCount,
+                                    pageCount: document.pageCount,
+                                },
+                                preview,
+                                render,
+                            );
+                        }),
+                    );
+                }),
+            );
             message.success(`已导入 ${data.projects.length} 个画布`);
         } catch {
             message.error("导入失败，请选择有效的画布压缩包");
@@ -169,35 +178,102 @@ export default function CanvasPage() {
                     title="画布"
                     description="把镜头、素材和想法留在同一张画布里。"
                     meta={<span className="app-projects-header-meta">{projects.length} 个</span>}
-                    actions={(
+                    actions={
                         <>
-                        <Button className="library-primary-action !h-9 !px-3.5" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button>
-                        {projects.length ? (
-                                    <Dropdown menu={{ items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }] }} trigger={["click"]}>
-                                <Button className="!h-9 !w-9 !p-0" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
-                        </Dropdown>
-                        ) : null}
-                        <Button className="!h-9 !px-3.5" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>导入</Button>
+                            <Button className="library-primary-action !h-9 !px-3.5" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>
+                                新建画布
+                            </Button>
+                            {projects.length ? (
+                                <Dropdown menu={{ items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }] }} trigger={["click"]}>
+                                    <Button className="!h-9 !w-9 !p-0" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
+                                </Dropdown>
+                            ) : null}
+                            <Button className="!h-9 !px-3.5" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>
+                                导入
+                            </Button>
                         </>
-                    )}
+                    }
                 />
 
                 <section className="canvas-library-discovery" aria-label="画布浏览工具">
                     <div className="canvas-library-search">
                         <Search aria-hidden="true" />
-                        <input value={keyword} placeholder="搜索画布" aria-label="搜索画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                        {keyword ? <button type="button" aria-label="清除搜索" onClick={() => { setKeyword(""); setPage(1); }}><X /></button> : null}
+                        <input
+                            value={keyword}
+                            placeholder="搜索画布"
+                            aria-label="搜索画布"
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                        />
+                        {keyword ? (
+                            <button
+                                type="button"
+                                aria-label="清除搜索"
+                                onClick={() => {
+                                    setKeyword("");
+                                    setPage(1);
+                                }}
+                            >
+                                <X />
+                            </button>
+                        ) : null}
                     </div>
                     <div className="canvas-library-filters">
-                        <Dropdown trigger={["click"]} placement="bottomLeft" menu={{ items: projectFilterItems, selectedKeys: [projectFilter], onClick: ({ key }) => { setProjectFilter(String(key)); setPage(1); } }}>
-                            <button type="button" className={`canvas-library-filter${projectFilter !== "all" ? " is-active" : ""}`} aria-label="按所属项目筛选"><SlidersHorizontal /><span>{projectFilterLabel}</span></button>
+                        <Dropdown
+                            trigger={["click"]}
+                            placement="bottomLeft"
+                            menu={{
+                                items: projectFilterItems,
+                                selectedKeys: [projectFilter],
+                                onClick: ({ key }) => {
+                                    setProjectFilter(String(key));
+                                    setPage(1);
+                                },
+                            }}
+                        >
+                            <button type="button" className={`canvas-library-filter${projectFilter !== "all" ? " is-active" : ""}`} aria-label="按所属项目筛选">
+                                <SlidersHorizontal />
+                                <span>{projectFilterLabel}</span>
+                            </button>
                         </Dropdown>
-                        <Dropdown trigger={["click"]} placement="bottomLeft" menu={{ items: sortItems, selectedKeys: [sort], onClick: ({ key }) => { setSort(key as typeof sort); setPage(1); } }}>
-                            <button type="button" className={`canvas-library-filter${sort !== "updated" ? " is-active" : ""}`} aria-label="画布排序">{sort === "updated" ? <Clock3 /> : sort === "name" ? <ArrowDownAZ /> : <ListFilter />}<span>{sortLabel}</span></button>
+                        <Dropdown
+                            trigger={["click"]}
+                            placement="bottomLeft"
+                            menu={{
+                                items: sortItems,
+                                selectedKeys: [sort],
+                                onClick: ({ key }) => {
+                                    setSort(key as typeof sort);
+                                    setPage(1);
+                                },
+                            }}
+                        >
+                            <button type="button" className={`canvas-library-filter${sort !== "updated" ? " is-active" : ""}`} aria-label="画布排序">
+                                {sort === "updated" ? <Clock3 /> : sort === "name" ? <ArrowDownAZ /> : <ListFilter />}
+                                <span>{sortLabel}</span>
+                            </button>
                         </Dropdown>
-                        {keyword || projectFilter !== "all" || sort !== "updated" ? <button type="button" className="canvas-library-reset" onClick={() => { setKeyword(""); setProjectFilter("all"); setSort("updated"); setPage(1); }}>重置</button> : null}
+                        {keyword || projectFilter !== "all" || sort !== "updated" ? (
+                            <button
+                                type="button"
+                                className="canvas-library-reset"
+                                onClick={() => {
+                                    setKeyword("");
+                                    setProjectFilter("all");
+                                    setSort("updated");
+                                    setPage(1);
+                                }}
+                            >
+                                重置
+                            </button>
+                        ) : null}
                     </div>
-                    <span className="canvas-library-count"><strong>{String(filteredProjects.length).padStart(2, "0")}</strong><span>/ {String(projects.length).padStart(2, "0")} 画布</span></span>
+                    <span className="canvas-library-count">
+                        <strong>{String(filteredProjects.length).padStart(2, "0")}</strong>
+                        <span>/ {String(projects.length).padStart(2, "0")} 画布</span>
+                    </span>
                 </section>
             </div>
 
@@ -205,10 +281,34 @@ export default function CanvasPage() {
                 {selectedIds.length ? (
                     <div className="app-canvas-selection-toolbar mt-2 flex min-h-10 flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
                         <strong className="mr-auto font-medium">已选 {selectedIds.length} 个画布</strong>
-                        <Button size="small" disabled={!hydrated || projectQuery.isLoading} onClick={() => { setAssociationProjectId(selectedProjects[0]?.projectId || ""); setAssociationOpen(true); }}>加入项目</Button>
-                        {selectedProjects.some((project) => project.projectId) ? <Button size="small" disabled={!hydrated} onClick={() => { setAssociationProjectId(""); void associateSelected(""); }}>移出项目</Button> : null}
-                        <Button size="small" disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(selectedProjects, `影策画布-${selectedIds.length}个画布`)}>导出</Button>
-                        <Button size="small" danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>删除</Button>
+                        <Button
+                            size="small"
+                            disabled={!hydrated || projectQuery.isLoading}
+                            onClick={() => {
+                                setAssociationProjectId(selectedProjects[0]?.projectId || "");
+                                setAssociationOpen(true);
+                            }}
+                        >
+                            加入项目
+                        </Button>
+                        {selectedProjects.some((project) => project.projectId) ? (
+                            <Button
+                                size="small"
+                                disabled={!hydrated}
+                                onClick={() => {
+                                    setAssociationProjectId("");
+                                    void associateSelected("");
+                                }}
+                            >
+                                移出项目
+                            </Button>
+                        ) : null}
+                        <Button size="small" disabled={!hydrated} icon={<Download className="size-3.5" />} onClick={() => void exportCanvasProjects(selectedProjects, `影策画布-${selectedIds.length}个画布`)}>
+                            导出
+                        </Button>
+                        <Button size="small" danger disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>
+                            删除
+                        </Button>
                     </div>
                 ) : null}
 
@@ -225,14 +325,37 @@ export default function CanvasPage() {
                     <WorkspaceState icon="canvas" title="没有匹配的画布" description="换一个画布名称或重置筛选条件。" />
                 )}
 
-                <PaginationBar current={page} pageSize={pageSize} total={filteredProjects.length} pageSizeOptions={[12, 24, 48]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+                <PaginationBar
+                    current={page}
+                    pageSize={pageSize}
+                    total={filteredProjects.length}
+                    pageSizeOptions={[12, 24, 48]}
+                    onChange={(nextPage, nextPageSize) => {
+                        setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                        setPageSize(nextPageSize);
+                    }}
+                />
             </div>
 
-                <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
-                <Modal title="加入项目" open={associationOpen} okText="保存关联" cancelText="取消" okButtonProps={{ disabled: !associationProjectId, loading: projectQuery.isFetching }} onCancel={() => setAssociationOpen(false)} onOk={() => void associateSelected()}>
-                    <p className="mb-3 text-sm text-foreground/60">选中的画布会保留原有节点和本地媒体，只增加项目关联。</p>
-                    <Select className="w-full" value={associationProjectId || undefined} placeholder="选择项目" options={(projectQuery.data?.projects || []).map((item) => ({ label: item.project.name, value: item.project.id }))} onChange={setAssociationProjectId} />
-                </Modal>
+            <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
+            <Modal
+                title="加入项目"
+                open={associationOpen}
+                okText="保存关联"
+                cancelText="取消"
+                okButtonProps={{ disabled: !associationProjectId, loading: projectQuery.isFetching }}
+                onCancel={() => setAssociationOpen(false)}
+                onOk={() => void associateSelected()}
+            >
+                <p className="mb-3 text-sm text-foreground/60">选中的画布会保留原有节点和本地媒体，只增加项目关联。</p>
+                <Select
+                    className="w-full"
+                    value={associationProjectId || undefined}
+                    placeholder="选择项目"
+                    options={(projectQuery.data?.projects || []).map((item) => ({ label: item.project.name, value: item.project.id }))}
+                    onChange={setAssociationProjectId}
+                />
+            </Modal>
         </WorkspacePage>
     );
 }

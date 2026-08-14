@@ -12,10 +12,7 @@ import { withGenerationConsumersPaused } from "@/services/generation-consumer-li
 export async function switchUserStorageScope(userId?: string | null) {
     await withGenerationConsumersPaused(async () => {
         await withRemoteUserDataSyncPaused(async () => {
-            await Promise.all([
-                flushCanvasStorePersistence(),
-                flushAssetStorePersistence(),
-            ]);
+            await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
             resetRemoteUserDataSync();
             setActiveUserScope(userId);
         });
@@ -30,10 +27,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
         if (previousUserId !== nextUserId) appQueryClient.clear();
         await switchUserStorageScope(payload.user?.id);
-        const [persistedCanvas, persistedAssets] = await Promise.all([
-            localForageStorage.getItem(CANVAS_STORE_KEY),
-            localForageStorage.getItem(ASSET_STORE_KEY),
-        ]);
+        const [persistedCanvas, persistedAssets] = await Promise.all([localForageStorage.getItem(CANVAS_STORE_KEY), localForageStorage.getItem(ASSET_STORE_KEY)]);
         const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);

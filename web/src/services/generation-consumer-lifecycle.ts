@@ -20,10 +20,7 @@ export function activeGenerationConsumerController(controller: AbortController):
     return controller.signal.aborted ? new AbortController() : controller;
 }
 
-export function runGenerationConsumer<T>(
-    signal: AbortSignal | undefined,
-    operation: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
+export function runGenerationConsumer<T>(signal: AbortSignal | undefined, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
     if (pausedTransitions > 0) return Promise.reject(abortError());
 
     const controller = new AbortController();
@@ -55,7 +52,9 @@ export function beginGenerationConsumer(signal?: AbortSignal): GenerationConsume
     if (signal?.aborted) abort();
     else signal?.addEventListener("abort", abort, { once: true });
     let release!: () => void;
-    const settled = new Promise<void>((resolve) => { release = resolve; });
+    const settled = new Promise<void>((resolve) => {
+        release = resolve;
+    });
     const active: ActiveGenerationConsumer = { controller, settled };
     activeGenerationConsumers.add(active);
     let released = false;
@@ -84,7 +83,10 @@ export function withGenerationConsumersPaused<T>(operation: () => Promise<T>): P
         await cancelAndDrainActiveGenerationConsumers();
         return operation();
     });
-    transitionTail = result.then(() => undefined, () => undefined);
+    transitionTail = result.then(
+        () => undefined,
+        () => undefined,
+    );
     return result.finally(() => {
         pausedTransitions -= 1;
     });

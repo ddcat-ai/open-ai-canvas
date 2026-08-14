@@ -19,8 +19,7 @@ export function creationUploadAccept(mode: CreationMode) {
 }
 
 export function creationFileAccepted(mode: CreationMode, file: Pick<File, "type">) {
-    return file.type.startsWith("image/")
-        || (mode === "video" && (file.type.startsWith("video/") || file.type.startsWith("audio/")));
+    return file.type.startsWith("image/") || (mode === "video" && (file.type.startsWith("video/") || file.type.startsWith("audio/")));
 }
 
 export function creationAttachmentKind(attachment: Pick<CreationAttachment, "type">): CreationAttachmentKind {
@@ -39,9 +38,7 @@ export function splitCreationAttachments(attachments: CreationAttachment[]) {
 
 export function creationAttachmentPreview(attachment: CreationAttachment): { kind: CreationAttachmentKind; url: string } {
     const kind = creationAttachmentKind(attachment);
-    const url = kind === "image"
-        ? attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || ""
-        : attachment.url || attachment.previewUrl;
+    const url = kind === "image" ? attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "" : attachment.url || attachment.previewUrl;
     return { kind, url };
 }
 

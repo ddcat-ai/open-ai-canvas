@@ -3,11 +3,7 @@ import { test } from "node:test";
 
 import type { GenerationTask } from "../src/services/api/task-center";
 import { applyGenerationConsumerEffect } from "../src/services/generation-consumer-dedupe";
-import {
-    createGenerationTaskMaterializer,
-    type GenerationTaskEffectResult,
-    type GenerationTaskEffectStore,
-} from "../src/services/generation-task-materializer";
+import { createGenerationTaskMaterializer, type GenerationTaskEffectResult, type GenerationTaskEffectStore } from "../src/services/generation-task-materializer";
 
 test("node message and agent consumers receive stable effect keys across three replays", async () => {
     const completed = new Map<string, GenerationTaskEffectResult>();
@@ -62,11 +58,7 @@ test("node message and agent consumers receive stable effect keys across three r
         });
     }
 
-    assert.deepEqual(seen, [
-        "attach-node:task-consumer-effect-keys:node-safe-id:0",
-        "attach-message:task-consumer-effect-keys:message-safe-id:0",
-        "agent-resume:task-consumer-effect-keys:continuation-safe-id",
-    ]);
+    assert.deepEqual(seen, ["attach-node:task-consumer-effect-keys:node-safe-id:0", "attach-message:task-consumer-effect-keys:message-safe-id:0", "agent-resume:task-consumer-effect-keys:continuation-safe-id"]);
 });
 
 test("production-shaped node message and agent records replay three times with one side effect", () => {
@@ -98,9 +90,18 @@ test("production-shaped node message and agent records replay three times with o
     node = structuredClone(node);
     message = structuredClone(message);
     agent = structuredClone(agent);
-    node = applyGenerationConsumerEffect(node, effectKeys.node, () => { calls.node += 1; return node; }).value;
-    message = applyGenerationConsumerEffect(message, effectKeys.message, () => { calls.message += 1; return message; }).value;
-    agent = applyGenerationConsumerEffect(agent, effectKeys.agent, () => { calls.agent += 1; return agent; }).value;
+    node = applyGenerationConsumerEffect(node, effectKeys.node, () => {
+        calls.node += 1;
+        return node;
+    }).value;
+    message = applyGenerationConsumerEffect(message, effectKeys.message, () => {
+        calls.message += 1;
+        return message;
+    }).value;
+    agent = applyGenerationConsumerEffect(agent, effectKeys.agent, () => {
+        calls.agent += 1;
+        return agent;
+    }).value;
 
     assert.deepEqual(calls, { node: 1, message: 1, agent: 1 });
     assert.equal(node.generationEffectKeys.length, 1);

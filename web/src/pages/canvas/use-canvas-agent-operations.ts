@@ -87,10 +87,7 @@ export async function runCanvasAgentGenerationOps({
                             conversationId: task.clientContext?.conversationId || context?.conversationId,
                             messageId: task.clientContext?.messageId || context?.messageId,
                         };
-                        const continuationId = await (continuationIdPromise ?? canvasAgentGenerationContinuationId(
-                            task.clientContext?.nodeId || nodeId,
-                            taskContext,
-                        ));
+                        const continuationId = await (continuationIdPromise ?? canvasAgentGenerationContinuationId(task.clientContext?.nodeId || nodeId, taskContext));
                         const continuation: CanvasAgentGenerationContinuation = {
                             id: continuationId,
                             taskId: task.id,
@@ -112,7 +109,9 @@ export async function runCanvasAgentGenerationOps({
                             });
                             await resumeAgent(task);
                         });
-                    })().then(resolve, reject).finally(() => unsubscribe?.());
+                    })()
+                        .then(resolve, reject)
+                        .finally(() => unsubscribe?.());
                 });
             });
         });
@@ -121,48 +120,49 @@ export async function runCanvasAgentGenerationOps({
     };
 
     if (!generationOps.length) {
-        const taskNodes = nodes.filter((node) => node.metadata?.agentGenerationContinuation?.status === "pending"
-            && (node.metadata?.taskId || node.metadata.agentGenerationContinuation.taskId));
-        await Promise.all(taskNodes.map((node) => {
-            const continuation = node.metadata!.agentGenerationContinuation!;
-            return observe(node.metadata?.taskId || continuation.taskId, node.id, Promise.resolve(continuation.id));
-        }));
+        const taskNodes = nodes.filter((node) => node.metadata?.agentGenerationContinuation?.status === "pending" && (node.metadata?.taskId || node.metadata.agentGenerationContinuation.taskId));
+        await Promise.all(
+            taskNodes.map((node) => {
+                const continuation = node.metadata!.agentGenerationContinuation!;
+                return observe(node.metadata?.taskId || continuation.taskId, node.id, Promise.resolve(continuation.id));
+            }),
+        );
         return;
     }
 
-    await Promise.all(generationOps.map(async (op) => {
-        const target = nodes.find((node) => node.id === op.nodeId);
-        const prompt = op.prompt?.trim() ? op.prompt : target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "";
-        const retryOf = op.retry ? target?.metadata?.taskId : undefined;
-        if (op.retry && !retryOf) throw new Error("当前节点没有可重试的生成任务");
-        const retryContext = retryOf
-            ? await createGenerationRetryContext(retryOf, target?.metadata?.attemptGroupId)
-            : undefined;
-        const continuationIdPromise = canvasAgentGenerationContinuationId(op.nodeId, context);
-        let observation: Promise<void> | undefined;
-        let continuationTaskId = "";
-        const generationPromise = generate(op.nodeId, op.mode || target?.metadata?.generationMode || "image", prompt, {
-            context: context ? { conversationId: context.conversationId, messageId: context.messageId } : undefined,
-            ...(retryContext ? { retryContext } : {}),
-            onTaskUpdate: (task) => {
-                if (continuationTaskId) return;
-                continuationTaskId = task.id;
-                observation = observe(task.id, op.nodeId, continuationIdPromise);
-                void continuationIdPromise.then((continuationId) => {
-                    onContinuation?.(op.nodeId, {
-                        id: continuationId,
-                        taskId: task.id,
-                        ...(context?.conversationId ? { conversationId: context.conversationId } : {}),
-                        ...(context?.messageId ? { messageId: context.messageId } : {}),
-                        ...(context?.source ? { source: context.source } : {}),
-                        status: "pending",
+    await Promise.all(
+        generationOps.map(async (op) => {
+            const target = nodes.find((node) => node.id === op.nodeId);
+            const prompt = op.prompt?.trim() ? op.prompt : (target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
+            const retryOf = op.retry ? target?.metadata?.taskId : undefined;
+            if (op.retry && !retryOf) throw new Error("当前节点没有可重试的生成任务");
+            const retryContext = retryOf ? await createGenerationRetryContext(retryOf, target?.metadata?.attemptGroupId) : undefined;
+            const continuationIdPromise = canvasAgentGenerationContinuationId(op.nodeId, context);
+            let observation: Promise<void> | undefined;
+            let continuationTaskId = "";
+            const generationPromise = generate(op.nodeId, op.mode || target?.metadata?.generationMode || "image", prompt, {
+                context: context ? { conversationId: context.conversationId, messageId: context.messageId } : undefined,
+                ...(retryContext ? { retryContext } : {}),
+                onTaskUpdate: (task) => {
+                    if (continuationTaskId) return;
+                    continuationTaskId = task.id;
+                    observation = observe(task.id, op.nodeId, continuationIdPromise);
+                    void continuationIdPromise.then((continuationId) => {
+                        onContinuation?.(op.nodeId, {
+                            id: continuationId,
+                            taskId: task.id,
+                            ...(context?.conversationId ? { conversationId: context.conversationId } : {}),
+                            ...(context?.messageId ? { messageId: context.messageId } : {}),
+                            ...(context?.source ? { source: context.source } : {}),
+                            status: "pending",
+                        });
                     });
-                });
-            },
-        });
-        await generationPromise;
-        if (observation) await observation;
-    }));
+                },
+            });
+            await generationPromise;
+            if (observation) await observation;
+        }),
+    );
 }
 
 export async function consumeCanvasAgentGenerationContinuation(
@@ -174,9 +174,14 @@ export async function consumeCanvasAgentGenerationContinuation(
 ) {
     if (continuation.status !== "pending" || continuation.taskId !== task.id || task.status !== "succeeded") return task;
     const consumeAgent = dependencies.consumeAgent ?? consumeGenerationTaskAgent;
-    return consumeAgent(task, continuation.id, async ({ effectKey }) => {
-        onCompleted({ ...continuation, status: "completed", effectKey });
-    }, { signal });
+    return consumeAgent(
+        task,
+        continuation.id,
+        async ({ effectKey }) => {
+            onCompleted({ ...continuation, status: "completed", effectKey });
+        },
+        { signal },
+    );
 }
 
 async function canvasAgentGenerationContinuationId(nodeId: string, context?: CanvasAgentGenerationContext) {
@@ -229,62 +234,75 @@ export function useCanvasAgentOperations({
         setLastAgentChange(null);
     }, [connections, nodes]);
 
-    const applyOps = useCallback(async (ops?: CanvasAgentOp[], generationContext?: CanvasAgentGenerationContext) => {
-        const safeOps = Array.isArray(ops) ? ops.filter((op) => op?.type) : [];
-        const before = { projectId, domainProjectId, title: projectTitle, nodes: nodesRef.current, connections: connectionsRef.current, selectedNodeIds: Array.from(selectedNodeIdsRef.current), viewport: viewportRef.current };
-        const generationOps = safeOps.filter((op): op is Extract<CanvasAgentOp, { type: "run_generation" }> => op.type === "run_generation" && Boolean(op.nodeId));
-        const next = applyCanvasAgentOps(before, safeOps.filter((op) => op.type !== "run_generation"));
-        const beforeNodeIds = new Set(before.nodes.map((node) => node.id));
-        const addedNodeIds = next.nodes.filter((node) => !beforeNodeIds.has(node.id)).map((node) => node.id);
-        const addedNodeIdSet = new Set(addedNodeIds);
-        const focusNodeIds = next.nodes.filter((node) => addedNodeIdSet.has(node.id) && (!node.parentId || !addedNodeIdSet.has(node.parentId))).map((node) => node.id);
-        const affectedNodeIds = focusNodeIds.length ? focusNodeIds : agentAffectedNodeIds(safeOps, next.nodes);
-        const nextSelectedNodeIds = focusNodeIds.length ? focusNodeIds : next.selectedNodeIds;
-        nodesRef.current = next.nodes;
-        connectionsRef.current = next.connections;
-        selectedNodeIdsRef.current = new Set(nextSelectedNodeIds);
-        viewportRef.current = next.viewport;
-        setNodes(next.nodes);
-        setConnections(next.connections);
-        setSelectedNodeIds(new Set(nextSelectedNodeIds));
-        setSelectedConnectionId(null);
-        setViewport(next.viewport);
-        setContextMenu(null);
-        if (safeOps.length) {
-            const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasAgentOps(safeOps) || "画布操作已完成", nodeIds: affectedNodeIds };
-            undoStackRef.current = [...undoStackRef.current, { snapshot: before, afterNodes: next.nodes, afterConnections: next.connections, change }].slice(-10);
-            const nextUndoCount = undoStackRef.current.length;
-            setUndoOpsCount(nextUndoCount);
-            setLastAgentChange({ ...change, undoCount: nextUndoCount });
-        }
-        if (focusNodeIds.length) queueMicrotask(() => focusSelection());
-        if (generationOps.length) {
-            const generate = generateNodeRef.current;
-            if (generate) await runCanvasAgentGenerationOps({
-                generationOps,
-                nodes: nodesRef.current,
-                generate,
-                context: generationContext,
-                onContinuation: (nodeId, continuation) => {
-                    setNodes((current) => {
-                        const updated = current.map((node) => node.id === nodeId ? {
-                            ...node,
-                            metadata: {
-                                ...node.metadata,
-                                agentGenerationContinuation: continuation,
-                                ...(continuation.effectKey ? {
-                                    generationEffectKeys: Array.from(new Set([...(node.metadata?.generationEffectKeys || []), continuation.effectKey])),
-                                } : {}),
-                            },
-                        } : node);
-                        nodesRef.current = updated;
-                        return updated;
+    const applyOps = useCallback(
+        async (ops?: CanvasAgentOp[], generationContext?: CanvasAgentGenerationContext) => {
+            const safeOps = Array.isArray(ops) ? ops.filter((op) => op?.type) : [];
+            const before = { projectId, domainProjectId, title: projectTitle, nodes: nodesRef.current, connections: connectionsRef.current, selectedNodeIds: Array.from(selectedNodeIdsRef.current), viewport: viewportRef.current };
+            const generationOps = safeOps.filter((op): op is Extract<CanvasAgentOp, { type: "run_generation" }> => op.type === "run_generation" && Boolean(op.nodeId));
+            const next = applyCanvasAgentOps(
+                before,
+                safeOps.filter((op) => op.type !== "run_generation"),
+            );
+            const beforeNodeIds = new Set(before.nodes.map((node) => node.id));
+            const addedNodeIds = next.nodes.filter((node) => !beforeNodeIds.has(node.id)).map((node) => node.id);
+            const addedNodeIdSet = new Set(addedNodeIds);
+            const focusNodeIds = next.nodes.filter((node) => addedNodeIdSet.has(node.id) && (!node.parentId || !addedNodeIdSet.has(node.parentId))).map((node) => node.id);
+            const affectedNodeIds = focusNodeIds.length ? focusNodeIds : agentAffectedNodeIds(safeOps, next.nodes);
+            const nextSelectedNodeIds = focusNodeIds.length ? focusNodeIds : next.selectedNodeIds;
+            nodesRef.current = next.nodes;
+            connectionsRef.current = next.connections;
+            selectedNodeIdsRef.current = new Set(nextSelectedNodeIds);
+            viewportRef.current = next.viewport;
+            setNodes(next.nodes);
+            setConnections(next.connections);
+            setSelectedNodeIds(new Set(nextSelectedNodeIds));
+            setSelectedConnectionId(null);
+            setViewport(next.viewport);
+            setContextMenu(null);
+            if (safeOps.length) {
+                const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasAgentOps(safeOps) || "画布操作已完成", nodeIds: affectedNodeIds };
+                undoStackRef.current = [...undoStackRef.current, { snapshot: before, afterNodes: next.nodes, afterConnections: next.connections, change }].slice(-10);
+                const nextUndoCount = undoStackRef.current.length;
+                setUndoOpsCount(nextUndoCount);
+                setLastAgentChange({ ...change, undoCount: nextUndoCount });
+            }
+            if (focusNodeIds.length) queueMicrotask(() => focusSelection());
+            if (generationOps.length) {
+                const generate = generateNodeRef.current;
+                if (generate)
+                    await runCanvasAgentGenerationOps({
+                        generationOps,
+                        nodes: nodesRef.current,
+                        generate,
+                        context: generationContext,
+                        onContinuation: (nodeId, continuation) => {
+                            setNodes((current) => {
+                                const updated = current.map((node) =>
+                                    node.id === nodeId
+                                        ? {
+                                              ...node,
+                                              metadata: {
+                                                  ...node.metadata,
+                                                  agentGenerationContinuation: continuation,
+                                                  ...(continuation.effectKey
+                                                      ? {
+                                                            generationEffectKeys: Array.from(new Set([...(node.metadata?.generationEffectKeys || []), continuation.effectKey])),
+                                                        }
+                                                      : {}),
+                                              },
+                                          }
+                                        : node,
+                                );
+                                nodesRef.current = updated;
+                                return updated;
+                            });
+                        },
                     });
-                },
-            });
-        }
-        return { ...next, nodes: nodesRef.current, connections: connectionsRef.current, projectId, title: projectTitle, selectedNodeIds: nextSelectedNodeIds };
-    }, [connectionsRef, domainProjectId, focusSelection, generateNodeRef, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, viewportRef]);
+            }
+            return { ...next, nodes: nodesRef.current, connections: connectionsRef.current, projectId, title: projectTitle, selectedNodeIds: nextSelectedNodeIds };
+        },
+        [connectionsRef, domainProjectId, focusSelection, generateNodeRef, nodesRef, projectId, projectTitle, selectedNodeIdsRef, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setViewport, viewportRef],
+    );
 
     const undoOps = useCallback(() => {
         const batch = undoStackRef.current.at(-1);

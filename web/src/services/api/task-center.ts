@@ -1,6 +1,14 @@
 import { DREAMINA_SUBMIT_ERROR_MESSAGES, generationErrorMessage } from "@/lib/generation-error";
 import { apiClient, request, type BackendEnvelope } from "@/services/api/request";
-import { cancelLocalDreaminaGenerationTask, deleteLocalDreaminaGenerationTask, listLocalDreaminaGenerationTaskPage, queryLocalDreaminaGenerationTask, refreshLocalDreaminaGenerationTask, waitForLocalDreaminaGenerationTask, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
+import {
+    cancelLocalDreaminaGenerationTask,
+    deleteLocalDreaminaGenerationTask,
+    listLocalDreaminaGenerationTaskPage,
+    queryLocalDreaminaGenerationTask,
+    refreshLocalDreaminaGenerationTask,
+    waitForLocalDreaminaGenerationTask,
+    type LocalDreaminaGenerationTask,
+} from "@/services/local-dreamina-generation";
 import { isLocalDreaminaTaskId, projectLocalDreaminaDiagnosticLog, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 
 export type { BackendEnvelope } from "@/services/api/request";
@@ -235,20 +243,17 @@ type GenerationTaskListDependencies = {
 
 const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
     listBackendPage: async (page, signal) => ({
-        tasks: await request<GenerationTask[]>(api.get("/tasks", {
-            params: { limit: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
-            signal,
-        })),
+        tasks: await request<GenerationTask[]>(
+            api.get("/tasks", {
+                params: { limit: Math.min(page.limit, 100), projectId: page.projectId, activeOnly: page.activeOnly || undefined },
+                signal,
+            }),
+        ),
     }),
     listLocalPage: (page, signal) => listLocalDreaminaGenerationTaskPage(page, {}, signal),
 };
 
-export async function listGenerationTasks(
-    limit = 30,
-    options?: { projectId?: string; activeOnly?: boolean },
-    dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies,
-    signal?: AbortSignal,
-) {
+export async function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }, dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies, signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(10_000, Math.trunc(limit))) : 30;
     const baseRequest = {
@@ -256,22 +261,32 @@ export async function listGenerationTasks(
         ...(options?.projectId ? { projectId: options.projectId } : {}),
         activeOnly: options?.activeOnly === true,
     } satisfies GenerationTaskPageRequest;
-    const backendPageReader = dependencies.listBackendPage ?? (async (page: GenerationTaskPageRequest, pageSignal?: AbortSignal) => ({
-        tasks: await dependencies.listBackend?.(page.limit, {
-            ...(page.projectId ? { projectId: page.projectId } : {}),
-            activeOnly: page.activeOnly,
-        }, pageSignal) ?? [],
-    }));
-    const localPageReader = dependencies.listLocalPage ?? (async (page: GenerationTaskPageRequest, pageSignal?: AbortSignal) => ({
-        tasks: await dependencies.listLocal?.({
-            ...(page.projectId ? { projectId: page.projectId } : {}),
-            activeOnly: page.activeOnly,
-        }, pageSignal) ?? [],
-    }));
-    const [backendTasks, localTasks] = await Promise.all([
-        collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal),
-        collectGenerationTaskPages(localPageReader, baseRequest, boundedLimit, signal).catch(() => []),
-    ]);
+    const backendPageReader =
+        dependencies.listBackendPage ??
+        (async (page: GenerationTaskPageRequest, pageSignal?: AbortSignal) => ({
+            tasks:
+                (await dependencies.listBackend?.(
+                    page.limit,
+                    {
+                        ...(page.projectId ? { projectId: page.projectId } : {}),
+                        activeOnly: page.activeOnly,
+                    },
+                    pageSignal,
+                )) ?? [],
+        }));
+    const localPageReader =
+        dependencies.listLocalPage ??
+        (async (page: GenerationTaskPageRequest, pageSignal?: AbortSignal) => ({
+            tasks:
+                (await dependencies.listLocal?.(
+                    {
+                        ...(page.projectId ? { projectId: page.projectId } : {}),
+                        activeOnly: page.activeOnly,
+                    },
+                    pageSignal,
+                )) ?? [],
+        }));
+    const [backendTasks, localTasks] = await Promise.all([collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal), collectGenerationTaskPages(localPageReader, baseRequest, boundedLimit, signal).catch(() => [])]);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     return [...backendTasks, ...localTasks.map((task) => projectLocalDreaminaTask(task))]
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
@@ -280,12 +295,7 @@ export async function listGenerationTasks(
         .slice(0, boundedLimit);
 }
 
-async function collectGenerationTaskPages<T>(
-    readPage: (request: GenerationTaskPageRequest, signal?: AbortSignal) => Promise<GenerationTaskPage<T>>,
-    baseRequest: GenerationTaskPageRequest,
-    limit: number,
-    signal?: AbortSignal,
-) {
+async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskPageRequest, signal?: AbortSignal) => Promise<GenerationTaskPage<T>>, baseRequest: GenerationTaskPageRequest, limit: number, signal?: AbortSignal) {
     const items: T[] = [];
     const seenCursors = new Set<string>();
     let cursor: string | undefined;
@@ -303,16 +313,14 @@ async function collectGenerationTaskPages<T>(
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
     if (isLocalDreaminaTaskId(id)) {
-        return queryLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal)
-            .then((task) => projectLocalDreaminaTask(task));
+        return queryLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
     }
     return request<GenerationTask>(api.get(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal }));
 }
 
 export function waitForLocalGenerationTask(id: string, options?: { signal?: AbortSignal }) {
     if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不是本机即梦任务"));
-    return waitForLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal)
-        .then((task) => projectLocalDreaminaTask(task));
+    return waitForLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
 }
 
 export function splitGenerationTaskObservationIds(ids: readonly string[]) {
@@ -395,16 +403,14 @@ export function queryFailedVideoProviderTask(id: string) {
 
 export function cancelGenerationTask(id: string) {
     if (isLocalDreaminaTaskId(id)) {
-        return cancelLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id))
-            .then((task) => projectLocalDreaminaTask(task));
+        return cancelLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id)).then((task) => projectLocalDreaminaTask(task));
     }
     return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/cancel`));
 }
 
 export function refreshGenerationTaskStatus(id: string, options?: { signal?: AbortSignal }) {
     if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不支持手动更新官方状态"));
-    return refreshLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), {}, options?.signal)
-        .then((task) => projectLocalDreaminaTask(task));
+    return refreshLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
 }
 
 export function deleteGenerationTask(id: string) {
@@ -422,12 +428,7 @@ export async function listTaskLogs(id: string) {
 }
 
 export function formatTaskLog(log: TaskLog) {
-    return [
-        `stage=${log.stage}`,
-        ...(log.errorCode ? [`error=${log.errorCode}`] : []),
-        `provenance=${log.provenance}`,
-        ...(log.observedAt ? [`observedAt=${log.observedAt}`] : []),
-    ].join(" ");
+    return [`stage=${log.stage}`, ...(log.errorCode ? [`error=${log.errorCode}`] : []), `provenance=${log.provenance}`, ...(log.observedAt ? [`observedAt=${log.observedAt}`] : [])].join(" ");
 }
 
 function projectGenerationTaskSafeLog(task: GenerationTask): TaskLog {
@@ -446,11 +447,7 @@ function projectGenerationTaskSafeLog(task: GenerationTask): TaskLog {
     };
 }
 
-export function projectBackendSafeTaskLog(
-    taskId: string,
-    raw: { level?: unknown; message?: unknown; payload?: unknown; createdAt?: unknown },
-    index: number,
-): TaskLog {
+export function projectBackendSafeTaskLog(taskId: string, raw: { level?: unknown; message?: unknown; payload?: unknown; createdAt?: unknown }, index: number): TaskLog {
     const text = [raw.message, raw.payload].filter((value): value is string => typeof value === "string").join(" ");
     const stage = safeTaskLogStage(text) || "backend_event";
     const errorCode = safeTaskLogErrorCode(text);
@@ -472,16 +469,11 @@ function safeTaskLogStage(value: unknown) {
     return match?.[1]?.toLowerCase();
 }
 
-const SAFE_TASK_LOG_ERROR_CODES = new Set([
-    ...Object.keys(DREAMINA_SUBMIT_ERROR_MESSAGES),
-    "dreamina_query_failed",
-    "dreamina_submission_unknown",
-    "dreamina_reference_invalid",
-]);
+const SAFE_TASK_LOG_ERROR_CODES = new Set([...Object.keys(DREAMINA_SUBMIT_ERROR_MESSAGES), "dreamina_query_failed", "dreamina_submission_unknown", "dreamina_reference_invalid"]);
 
 function safeTaskLogErrorCode(value: unknown) {
     if (typeof value !== "string") return undefined;
-    for (const match of value.matchAll(/(?:dreamina|local_generation|model|provider)_[a-z0-9_]{2,80}/ig)) {
+    for (const match of value.matchAll(/(?:dreamina|local_generation|model|provider)_[a-z0-9_]{2,80}/gi)) {
         const errorCode = match[0].toLowerCase();
         if (SAFE_TASK_LOG_ERROR_CODES.has(errorCode)) return errorCode;
     }

@@ -2,12 +2,16 @@ import { expect, test } from "bun:test";
 
 test("Local CLI settings automatically connects without any browser-confirmation flow or connection secrets", async () => {
     const module = await import("../src/pages/settings/local-cli-settings").catch(() => ({}));
-    const present = (module as {
-        localCliSettingsPresentation?: typeof presentationContract;
-    }).localCliSettingsPresentation;
-    const copy = (module as {
-        LOCAL_CLI_SETTINGS_COPY?: typeof compactCopyContract;
-    }).LOCAL_CLI_SETTINGS_COPY;
+    const present = (
+        module as {
+            localCliSettingsPresentation?: typeof presentationContract;
+        }
+    ).localCliSettingsPresentation;
+    const copy = (
+        module as {
+            LOCAL_CLI_SETTINGS_COPY?: typeof compactCopyContract;
+        }
+    ).LOCAL_CLI_SETTINGS_COPY;
     expect(typeof present).toBe("function");
     expect(copy).toEqual(compactCopyContract);
     expect("openLocalRuntimePairing" in module).toBe(false);
@@ -77,9 +81,11 @@ test("Local CLI settings automatically connects without any browser-confirmation
 
 test("Dreamina model and credit cache scope follows accountBinding plus sessionEpoch and credits expose observedAt", async () => {
     const modelStore = await import("../src/stores/use-local-dreamina-model-store").catch(() => ({}));
-    const scopeKey = (modelStore as {
-        dreaminaModelCacheScopeKey?: (scope: { accountBinding: string; sessionEpoch: number }) => string;
-    }).dreaminaModelCacheScopeKey;
+    const scopeKey = (
+        modelStore as {
+            dreaminaModelCacheScopeKey?: (scope: { accountBinding: string; sessionEpoch: number }) => string;
+        }
+    ).dreaminaModelCacheScopeKey;
     expect(typeof scopeKey).toBe("function");
     if (scopeKey) {
         expect(scopeKey({ accountBinding: "account-binding-a", sessionEpoch: 7 })).toBe("account-binding-a:7");
@@ -88,24 +94,26 @@ test("Dreamina model and credit cache scope follows accountBinding plus sessionE
     }
 
     const settings = await import("../src/pages/settings/local-cli-settings").catch(() => ({}));
-    const present = (settings as {
-        localCliSettingsPresentation?: (input: {
-            connection: string;
-            moduleAvailable: boolean;
-            timeZone?: string;
-            dreamina?: {
-                provider: "dreamina-cli";
-                state: "authenticated";
-                installed: true;
-                authenticated: true;
-                message: string;
-                totalCredit: number;
-                creditObservedAt: string;
-                accountBinding: string;
-                sessionEpoch: number;
-            };
-        }) => { dreamina: { creditLabel?: string; creditObservedAtLabel?: string } };
-    }).localCliSettingsPresentation;
+    const present = (
+        settings as {
+            localCliSettingsPresentation?: (input: {
+                connection: string;
+                moduleAvailable: boolean;
+                timeZone?: string;
+                dreamina?: {
+                    provider: "dreamina-cli";
+                    state: "authenticated";
+                    installed: true;
+                    authenticated: true;
+                    message: string;
+                    totalCredit: number;
+                    creditObservedAt: string;
+                    accountBinding: string;
+                    sessionEpoch: number;
+                };
+            }) => { dreamina: { creditLabel?: string; creditObservedAtLabel?: string } };
+        }
+    ).localCliSettingsPresentation;
     expect(typeof present).toBe("function");
     if (!present) return;
     const authenticated = present({
@@ -149,9 +157,11 @@ test("Dreamina model and credit cache scope follows accountBinding plus sessionE
 
 test("Local CLI settings keeps the Runtime compact and uses the official Dreamina CLI copy", async () => {
     const module = await import("../src/pages/settings/local-cli-settings").catch(() => ({}));
-    const copy = (module as {
-        LOCAL_CLI_SETTINGS_COPY?: typeof compactCopyContract;
-    }).LOCAL_CLI_SETTINGS_COPY;
+    const copy = (
+        module as {
+            LOCAL_CLI_SETTINGS_COPY?: typeof compactCopyContract;
+        }
+    ).LOCAL_CLI_SETTINGS_COPY;
     expect(copy).toEqual(compactCopyContract);
 
     const source = await Bun.file(new URL("../src/pages/settings/local-cli-settings.tsx", import.meta.url)).text();

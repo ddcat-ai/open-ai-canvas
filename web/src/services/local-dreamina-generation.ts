@@ -1,11 +1,7 @@
 import type { LocalRuntimeTransport } from "@/services/local-runtime";
 import { LocalRuntimeClientError, type LocalRuntimeConnection } from "@/services/local-runtime-session";
 import { getLocalRuntimeSessionClient } from "@/stores/use-local-runtime-store";
-import type {
-    GenerationTaskEffectClaim,
-    GenerationTaskEffectResult,
-    GenerationTaskEffectStore,
-} from "@/services/generation-task-materializer";
+import type { GenerationTaskEffectClaim, GenerationTaskEffectResult, GenerationTaskEffectStore } from "@/services/generation-task-materializer";
 
 const MAX_RESPONSE_BYTES = 256 * 1024 * 1024;
 const MAX_REFERENCE_BYTES = 20 * 1024 * 1024;
@@ -25,17 +21,19 @@ export type LocalDreaminaTaskLifecycle = "QUEUED_LOCAL" | "SUBMITTING" | "SUBMIS
 export type LocalDreaminaTerminalOutcome = "SUCCEEDED" | "REJECTED" | "FAILED" | "CANCELLED" | "FAILED_OR_CANCELLED";
 export type LocalDreaminaTaskSyncState = "SYNC_OK" | "SYNC_RETRY_WAIT" | "SYNC_BLOCKED_ACCOUNT" | "SYNC_UNCERTAIN" | "SYNC_CONFLICT";
 export type LocalDreaminaTaskResultState = "NOT_AVAILABLE" | "PENDING_MATERIALIZATION" | "MATERIALIZING" | "READY" | "FAILED_RETRYABLE" | "FAILED_PERMANENT";
-export type LocalDreaminaTaskContext = {
-    scope: "scoped";
-    projectId?: string;
-    nodeId?: string;
-    conversationId?: string;
-    messageId?: string;
-    batchIndex?: number;
-    batchCount?: number;
-    retryOf?: string;
-    attemptGroupId?: string;
-} | { scope: "legacy_unscoped" };
+export type LocalDreaminaTaskContext =
+    | {
+          scope: "scoped";
+          projectId?: string;
+          nodeId?: string;
+          conversationId?: string;
+          messageId?: string;
+          batchIndex?: number;
+          batchCount?: number;
+          retryOf?: string;
+          attemptGroupId?: string;
+      }
+    | { scope: "legacy_unscoped" };
 export type LocalDreaminaTaskOutput = {
     outputIndex: number;
     mediaType: "image" | "video" | "audio";
@@ -110,7 +108,11 @@ export type LocalDreaminaGenerationTask = {
 };
 
 export class LocalDreaminaGenerationClientError extends Error {
-    constructor(readonly code: string, message: string, readonly status = 500) {
+    constructor(
+        readonly code: string,
+        message: string,
+        readonly status = 500,
+    ) {
         super(message);
         this.name = "LocalDreaminaGenerationClientError";
     }
@@ -127,9 +129,7 @@ type Dependencies = {
 };
 type ParsedInput = Omit<LocalDreaminaGenerationInput, "model"> & { model: string };
 
-export function createLocalDreaminaTaskEffectStore(
-    dependencies: Pick<Dependencies, "client"> = {},
-): GenerationTaskEffectStore {
+export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependencies, "client"> = {}): GenerationTaskEffectStore {
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     type EffectLease = {
         taskId: string;
@@ -182,9 +182,7 @@ export function createLocalDreaminaTaskEffectStore(
                 const result = parseEffectResult(value.result);
                 return { status: "completed", result };
             }
-            if (value.status !== "claimed" || typeof value.leaseToken !== "string"
-                || typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt))
-                || !Number.isSafeInteger(value.fence) || (value.fence as number) < 1) {
+            if (value.status !== "claimed" || typeof value.leaseToken !== "string" || typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt)) || !Number.isSafeInteger(value.fence) || (value.fence as number) < 1) {
                 throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
             }
             const lease = {
@@ -208,8 +206,7 @@ export function createLocalDreaminaTaskEffectStore(
                 leaseToken: lease.leaseToken,
                 fence: lease.fence,
             });
-            if (typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt))
-                || value.fence !== lease.fence) {
+            if (typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt)) || value.fence !== lease.fence) {
                 throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", "本机任务副作用租约已失效", 409);
             }
             lease.expiresAt = value.leaseExpiresAt;
@@ -251,28 +248,19 @@ export function createLocalDreaminaTaskEffectStore(
 
 function parseEffectResult(value: unknown): GenerationTaskEffectResult {
     const result = record(value);
-    if (!result || Object.keys(result).some((key) => key !== "materializedAssetId")
-        || (result.materializedAssetId !== undefined && typeof result.materializedAssetId !== "string")) {
+    if (!result || Object.keys(result).some((key) => key !== "materializedAssetId") || (result.materializedAssetId !== undefined && typeof result.materializedAssetId !== "string")) {
         throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
     }
-    return typeof result.materializedAssetId === "string"
-        ? { materializedAssetId: result.materializedAssetId }
-        : {};
+    return typeof result.materializedAssetId === "string" ? { materializedAssetId: result.materializedAssetId } : {};
 }
 
 // Local CLI work goes straight to the signed Runtime; it must never create a backend task.
-export async function runLocalDreaminaGenerationTask(
-    input: LocalDreaminaGenerationInput,
-    dependencies: Dependencies = {},
-    signal?: AbortSignal,
-): Promise<LocalDreaminaGenerationResult> {
+export async function runLocalDreaminaGenerationTask(input: LocalDreaminaGenerationInput, dependencies: Dependencies = {}, signal?: AbortSignal): Promise<LocalDreaminaGenerationResult> {
     const parsed = parseInput(input);
     const idempotencyKey = parsed.idempotencyKey ?? dependencies.idempotencyKey?.() ?? crypto.randomUUID();
     validateTaskIdentity(idempotencyKey, parsed.mode);
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
-    let task = parsed.resumeOnly
-        ? await queryLocalDreaminaGenerationTask(idempotencyKey, parsed.mode, { client }, signal)
-        : await submitParsedTask(parsed, idempotencyKey, client, signal);
+    let task = parsed.resumeOnly ? await queryLocalDreaminaGenerationTask(idempotencyKey, parsed.mode, { client }, signal) : await submitParsedTask(parsed, idempotencyKey, client, signal);
     dependencies.onTaskUpdate?.(task);
     if (task.status === "queued" || task.status === "running") {
         task = await waitForLocalDreaminaGenerationTask(idempotencyKey, parsed.mode, { client }, signal);
@@ -294,22 +282,12 @@ export async function runLocalDreaminaGenerationTask(
     throw new LocalDreaminaGenerationClientError(task.errorCode ?? "local_generation_unknown", "本机即梦生成未完成", 502);
 }
 
-export async function queryLocalDreaminaGenerationTask(
-    idempotencyKey: string,
-    mode: "image" | "video" | undefined,
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function queryLocalDreaminaGenerationTask(idempotencyKey: string, mode: "image" | "video" | undefined, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     validateTaskIdentity(idempotencyKey, mode);
     return queryWithOneReconnect(dependencies.client ?? getLocalRuntimeSessionClient(), idempotencyKey, mode, signal);
 }
 
-export async function waitForLocalDreaminaGenerationTask(
-    idempotencyKey: string,
-    mode: "image" | "video" | undefined,
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function waitForLocalDreaminaGenerationTask(idempotencyKey: string, mode: "image" | "video" | undefined, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     validateTaskIdentity(idempotencyKey, mode);
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     const request = async () => {
@@ -331,11 +309,7 @@ export async function waitForLocalDreaminaGenerationTask(
     return parseTask(result.value, mode);
 }
 
-export async function listLocalDreaminaGenerationTaskPage(
-    page: { limit: number; cursor?: string; projectId?: string; activeOnly?: boolean },
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function listLocalDreaminaGenerationTaskPage(page: { limit: number; cursor?: string; projectId?: string; activeOnly?: boolean }, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     const params = new URLSearchParams({ limit: String(Math.max(1, Math.min(100, Math.trunc(page.limit)))) });
     if (page.cursor) params.set("cursor", page.cursor);
@@ -355,10 +329,7 @@ export async function listLocalDreaminaGenerationTaskPage(
     return parseTaskPage(result.value);
 }
 
-export async function listLocalDreaminaGenerationTasks(
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function listLocalDreaminaGenerationTasks(dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     const tasks: LocalDreaminaGenerationTask[] = [];
     const seenCursors = new Set<string>();
     let cursor: string | undefined;
@@ -372,11 +343,7 @@ export async function listLocalDreaminaGenerationTasks(
     return tasks;
 }
 
-export async function cancelLocalDreaminaGenerationTask(
-    idempotencyKey: string,
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function cancelLocalDreaminaGenerationTask(idempotencyKey: string, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     validateTaskIdentity(idempotencyKey, "image");
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     await requireConnection(client, signal);
@@ -391,11 +358,7 @@ export async function cancelLocalDreaminaGenerationTask(
     return parseTask(value);
 }
 
-export async function deleteLocalDreaminaGenerationTask(
-    idempotencyKey: string,
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function deleteLocalDreaminaGenerationTask(idempotencyKey: string, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     validateTaskIdentity(idempotencyKey, "image");
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     await requireConnection(client, signal);
@@ -415,11 +378,7 @@ export async function deleteLocalDreaminaGenerationTask(
     return { deleted: true as const };
 }
 
-export async function refreshLocalDreaminaGenerationTask(
-    idempotencyKey: string,
-    dependencies: Pick<Dependencies, "client"> = {},
-    signal?: AbortSignal,
-) {
+export async function refreshLocalDreaminaGenerationTask(idempotencyKey: string, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
     validateTaskIdentity(idempotencyKey, "image");
     const client = dependencies.client ?? getLocalRuntimeSessionClient();
     await requireConnection(client, signal);
@@ -495,16 +454,23 @@ async function requireConnection(client: RuntimeClient, signal?: AbortSignal) {
 }
 
 function parseInput(value: LocalDreaminaGenerationInput): ParsedInput {
-    if (!value || typeof value !== "object" || !/^local:dreamina-cli:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value.model)
-        || (value.mode !== "image" && value.mode !== "video")
-        || typeof value.prompt !== "string" || !value.prompt.trim() || value.prompt.length > 20_000
-        || !Array.isArray(value.references) || !validReferenceCounts(value.model, value.references)
-        || (value.idempotencyKey !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.idempotencyKey))
-        || (value.clientOperationId !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.clientOperationId))) throw invalidRequest();
+    if (
+        !value ||
+        typeof value !== "object" ||
+        !/^local:dreamina-cli:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value.model) ||
+        (value.mode !== "image" && value.mode !== "video") ||
+        typeof value.prompt !== "string" ||
+        !value.prompt.trim() ||
+        value.prompt.length > 20_000 ||
+        !Array.isArray(value.references) ||
+        !validReferenceCounts(value.model, value.references) ||
+        (value.idempotencyKey !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.idempotencyKey)) ||
+        (value.clientOperationId !== undefined && !/^[A-Za-z0-9._:-]{16,120}$/.test(value.clientOperationId))
+    )
+        throw invalidRequest();
     const model = value.model.slice("local:dreamina-cli:".length);
     const settings = value.settings ?? {};
-    if (!settings || typeof settings !== "object" || Array.isArray(settings)
-        || Object.keys(settings).some((key) => !["aspect", "resolution", "duration", "count"].includes(key))) throw invalidRequest();
+    if (!settings || typeof settings !== "object" || Array.isArray(settings) || Object.keys(settings).some((key) => !["aspect", "resolution", "duration", "count"].includes(key))) throw invalidRequest();
     if (settings.duration !== undefined && (!Number.isInteger(settings.duration) || settings.duration < 1 || settings.duration > 60)) throw invalidRequest();
     if (settings.count !== undefined && (!Number.isInteger(settings.count) || settings.count < 1 || settings.count > 4)) throw invalidRequest();
     if (value.mode === "video" && settings.count !== undefined && settings.count !== 1) throw invalidRequest();
@@ -514,13 +480,13 @@ function parseInput(value: LocalDreaminaGenerationInput): ParsedInput {
     let bytes = 0;
     for (const reference of value.references) {
         const kind = reference?.kind ?? "image";
-        const validMime = kind === "image"
-            ? ["image/png", "image/jpeg", "image/webp"].includes(reference?.mimeType)
-            : kind === "video"
-                ? ["video/mp4", "video/quicktime", "video/webm"].includes(reference?.mimeType)
-                : kind === "audio" && ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/flac"].includes(reference?.mimeType);
-        if (!reference || !validMime || !(reference.bytes instanceof Uint8Array) || !reference.bytes.byteLength
-            || !safeReferenceMetadata(reference.metadata, kind)) throw invalidRequest();
+        const validMime =
+            kind === "image"
+                ? ["image/png", "image/jpeg", "image/webp"].includes(reference?.mimeType)
+                : kind === "video"
+                  ? ["video/mp4", "video/quicktime", "video/webm"].includes(reference?.mimeType)
+                  : kind === "audio" && ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/flac"].includes(reference?.mimeType);
+        if (!reference || !validMime || !(reference.bytes instanceof Uint8Array) || !reference.bytes.byteLength || !safeReferenceMetadata(reference.metadata, kind)) throw invalidRequest();
         bytes += reference.bytes.byteLength;
         if (bytes > MAX_REFERENCE_BYTES) throw invalidRequest();
     }
@@ -566,9 +532,7 @@ function safeReferenceMetadata(value: unknown, kind: "image" | "video" | "audio"
     if (value === undefined) return true;
     const metadata = record(value);
     if (!metadata) return false;
-    const allowed = kind === "image" ? ["name", "width", "height"]
-        : kind === "video" ? ["name", "width", "height", "durationMs"]
-            : ["name", "durationMs"];
+    const allowed = kind === "image" ? ["name", "width", "height"] : kind === "video" ? ["name", "width", "height", "durationMs"] : ["name", "durationMs"];
     if (Object.keys(metadata).some((key) => !allowed.includes(key))) return false;
     if (metadata.name !== undefined && (typeof metadata.name !== "string" || metadata.name.length > 200 || /[\u0000-\u001f\u007f]/.test(metadata.name))) return false;
     for (const key of ["width", "height", "durationMs"]) {
@@ -589,14 +553,26 @@ async function readBoundedJson(response: Response, maxBytes = MAX_RESPONSE_BYTES
             const item = await reader.read();
             if (item.done) break;
             total += item.value.byteLength;
-            if (total > maxBytes) { await reader.cancel(); throw invalidResponse(); }
+            if (total > maxBytes) {
+                await reader.cancel();
+                throw invalidResponse();
+            }
             chunks.push(item.value);
         }
-    } finally { reader.releaseLock(); }
+    } finally {
+        reader.releaseLock();
+    }
     const bytes = new Uint8Array(total);
     let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    try { return JSON.parse(new TextDecoder().decode(bytes)) as unknown; } catch { throw invalidResponse(); }
+    for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    try {
+        return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+    } catch {
+        throw invalidResponse();
+    }
 }
 
 function parseTask(value: unknown, expectedMode?: "image" | "video", allowMissingResult = false): LocalDreaminaGenerationTask {
@@ -604,21 +580,29 @@ function parseTask(value: unknown, expectedMode?: "image" | "video", allowMissin
     const source = envelope?.ok === true ? record(envelope.result) : undefined;
     const status = source?.status;
     const stage = source?.stage;
-    if (!source || typeof source.id !== "string" || !/^[A-Za-z0-9._:-]{8,160}$/.test(source.id)
-        || source.provider !== "dreamina-cli" || (source.mode !== "image" && source.mode !== "video")
-        || (expectedMode && source.mode !== expectedMode) || typeof source.operation !== "string" || typeof source.model !== "string"
-        || !["queued", "running", "succeeded", "failed", "cancelled"].includes(String(status))
-        || !["queued", "submitting", "submitted", "generating", "succeeded", "failed", "cancelled", "submission_unknown"].includes(String(stage))
-        || typeof source.receiptRecorded !== "boolean"
-        || typeof source.createdAt !== "string" || !Number.isFinite(Date.parse(source.createdAt))
-        || typeof source.updatedAt !== "string" || !Number.isFinite(Date.parse(source.updatedAt))) throw invalidResponse();
+    if (
+        !source ||
+        typeof source.id !== "string" ||
+        !/^[A-Za-z0-9._:-]{8,160}$/.test(source.id) ||
+        source.provider !== "dreamina-cli" ||
+        (source.mode !== "image" && source.mode !== "video") ||
+        (expectedMode && source.mode !== expectedMode) ||
+        typeof source.operation !== "string" ||
+        typeof source.model !== "string" ||
+        !["queued", "running", "succeeded", "failed", "cancelled"].includes(String(status)) ||
+        !["queued", "submitting", "submitted", "generating", "succeeded", "failed", "cancelled", "submission_unknown"].includes(String(stage)) ||
+        typeof source.receiptRecorded !== "boolean" ||
+        typeof source.createdAt !== "string" ||
+        !Number.isFinite(Date.parse(source.createdAt)) ||
+        typeof source.updatedAt !== "string" ||
+        !Number.isFinite(Date.parse(source.updatedAt))
+    )
+        throw invalidResponse();
     const result = source.result === undefined ? undefined : parseResult(source.result, source.mode);
     if (status === "succeeded" && !result && !allowMissingResult) throw invalidResponse();
     return {
         id: source.id,
-        ...(typeof source.clientOperationId === "string" && /^[A-Za-z0-9._:-]{16,120}$/.test(source.clientOperationId)
-            ? { clientOperationId: source.clientOperationId }
-            : {}),
+        ...(typeof source.clientOperationId === "string" && /^[A-Za-z0-9._:-]{16,120}$/.test(source.clientOperationId) ? { clientOperationId: source.clientOperationId } : {}),
         provider: "dreamina-cli",
         mode: source.mode,
         operation: source.operation,
@@ -628,9 +612,7 @@ function parseTask(value: unknown, expectedMode?: "image" | "video", allowMissin
         ...(typeof source.progress === "number" && source.progress >= 0 && source.progress <= 100 ? { progress: source.progress } : {}),
         receiptRecorded: source.receiptRecorded,
         ...(typeof source.errorCode === "string" ? { errorCode: source.errorCode } : {}),
-        ...(typeof source.officialStatus === "string" && ["pending", "processing", "completed", "failed", "cancelled"].includes(source.officialStatus)
-            ? { officialStatus: source.officialStatus as LocalDreaminaGenerationTask["officialStatus"] }
-            : {}),
+        ...(typeof source.officialStatus === "string" && ["pending", "processing", "completed", "failed", "cancelled"].includes(source.officialStatus) ? { officialStatus: source.officialStatus as LocalDreaminaGenerationTask["officialStatus"] } : {}),
         ...parseTaskContract(source),
         createdAt: source.createdAt,
         updatedAt: source.updatedAt,
@@ -646,11 +628,13 @@ function parseTaskContract(source: Record<string, unknown>): Partial<LocalDreami
     const terminalOutcome = source.terminalOutcome;
     const syncState = source.syncState;
     const resultState = source.resultState;
-    if (!["QUEUED_LOCAL", "SUBMITTING", "SUBMISSION_UNCERTAIN", "ACCEPTED", "RUNNING", "TERMINAL"].includes(String(lifecycle))
-        || !["SYNC_OK", "SYNC_RETRY_WAIT", "SYNC_BLOCKED_ACCOUNT", "SYNC_UNCERTAIN", "SYNC_CONFLICT"].includes(String(syncState))
-        || !["NOT_AVAILABLE", "PENDING_MATERIALIZATION", "MATERIALIZING", "READY", "FAILED_RETRYABLE", "FAILED_PERMANENT"].includes(String(resultState))
-        || (lifecycle === "TERMINAL") !== (typeof terminalOutcome === "string")
-        || (terminalOutcome !== undefined && !["SUCCEEDED", "REJECTED", "FAILED", "CANCELLED", "FAILED_OR_CANCELLED"].includes(String(terminalOutcome)))) {
+    if (
+        !["QUEUED_LOCAL", "SUBMITTING", "SUBMISSION_UNCERTAIN", "ACCEPTED", "RUNNING", "TERMINAL"].includes(String(lifecycle)) ||
+        !["SYNC_OK", "SYNC_RETRY_WAIT", "SYNC_BLOCKED_ACCOUNT", "SYNC_UNCERTAIN", "SYNC_CONFLICT"].includes(String(syncState)) ||
+        !["NOT_AVAILABLE", "PENDING_MATERIALIZATION", "MATERIALIZING", "READY", "FAILED_RETRYABLE", "FAILED_PERMANENT"].includes(String(resultState)) ||
+        (lifecycle === "TERMINAL") !== (typeof terminalOutcome === "string") ||
+        (terminalOutcome !== undefined && !["SUCCEEDED", "REJECTED", "FAILED", "CANCELLED", "FAILED_OR_CANCELLED"].includes(String(terminalOutcome)))
+    ) {
         throw invalidResponse();
     }
 
@@ -701,11 +685,18 @@ function parseTaskOutputs(value: unknown): LocalDreaminaTaskOutput[] {
     const indexes = new Set<number>();
     return value.map((candidate) => {
         const output = record(candidate);
-        if (!output || !Number.isSafeInteger(output.outputIndex) || (output.outputIndex as number) < 0 || (output.outputIndex as number) > 999
-            || indexes.has(output.outputIndex as number) || !["image", "video", "audio"].includes(String(output.mediaType))
-            || (output.providerArtifactRef !== undefined && !safeOpaqueRef(output.providerArtifactRef))
-            || (output.materializedAssetId !== undefined && !safeOpaqueRef(output.materializedAssetId))
-            || (output.materializationErrorCode !== undefined && !safeErrorCode(output.materializationErrorCode))) throw invalidResponse();
+        if (
+            !output ||
+            !Number.isSafeInteger(output.outputIndex) ||
+            (output.outputIndex as number) < 0 ||
+            (output.outputIndex as number) > 999 ||
+            indexes.has(output.outputIndex as number) ||
+            !["image", "video", "audio"].includes(String(output.mediaType)) ||
+            (output.providerArtifactRef !== undefined && !safeOpaqueRef(output.providerArtifactRef)) ||
+            (output.materializedAssetId !== undefined && !safeOpaqueRef(output.materializedAssetId)) ||
+            (output.materializationErrorCode !== undefined && !safeErrorCode(output.materializationErrorCode))
+        )
+            throw invalidResponse();
         indexes.add(output.outputIndex as number);
         return {
             outputIndex: output.outputIndex as number,
@@ -719,11 +710,15 @@ function parseTaskOutputs(value: unknown): LocalDreaminaTaskOutput[] {
 
 function parseProviderObservation(value: unknown): LocalDreaminaProviderObservation {
     const observation = record(value);
-    if (!observation || !["submit_receipt", "query_result", "list_task"].includes(String(observation.source))
-        || typeof observation.observedAt !== "string" || !Number.isFinite(Date.parse(observation.observedAt))
-        || !["pending", "processing", "completed", "failed", "cancelled"].includes(String(observation.status))
-        || (observation.accountBinding !== undefined && !safeAccountBinding(observation.accountBinding))
-        || (observation.fenceEpoch !== undefined && (!Number.isSafeInteger(observation.fenceEpoch) || (observation.fenceEpoch as number) < 0))) {
+    if (
+        !observation ||
+        !["submit_receipt", "query_result", "list_task"].includes(String(observation.source)) ||
+        typeof observation.observedAt !== "string" ||
+        !Number.isFinite(Date.parse(observation.observedAt)) ||
+        !["pending", "processing", "completed", "failed", "cancelled"].includes(String(observation.status)) ||
+        (observation.accountBinding !== undefined && !safeAccountBinding(observation.accountBinding)) ||
+        (observation.fenceEpoch !== undefined && (!Number.isSafeInteger(observation.fenceEpoch) || (observation.fenceEpoch as number) < 0))
+    ) {
         throw invalidResponse();
     }
     return {
@@ -762,8 +757,7 @@ function parseTaskPage(value: unknown) {
     const result = record(rawResult);
     const items = Array.isArray(rawResult) ? rawResult : result?.tasks;
     const nextCursor = result?.nextCursor;
-    if (!Array.isArray(items) || items.length > MAX_TASK_LIST_ITEMS
-        || (nextCursor !== undefined && (typeof nextCursor !== "string" || !/^[A-Za-z0-9_-]{1,512}$/.test(nextCursor)))) throw invalidResponse();
+    if (!Array.isArray(items) || items.length > MAX_TASK_LIST_ITEMS || (nextCursor !== undefined && (typeof nextCursor !== "string" || !/^[A-Za-z0-9_-]{1,512}$/.test(nextCursor)))) throw invalidResponse();
     return {
         tasks: items.map((item) => parseTask({ ok: true, result: item }, undefined, true)),
         ...(typeof nextCursor === "string" ? { nextCursor } : {}),
@@ -781,9 +775,8 @@ function parseResult(value: unknown, mode: "image" | "video"): LocalDreaminaGene
 function parseMedia(value: unknown, prefix: "image/" | "video/") {
     const media = record(value);
     const bytes = media?.bytes;
-    if (!media || typeof media.dataUrl !== "string" || typeof media.mimeType !== "string"
-        || !media.mimeType.startsWith(prefix) || !Number.isInteger(bytes) || (bytes as number) <= 0
-        || !media.dataUrl.startsWith(`data:${media.mimeType};base64,`)) throw invalidResponse();
+    if (!media || typeof media.dataUrl !== "string" || typeof media.mimeType !== "string" || !media.mimeType.startsWith(prefix) || !Number.isInteger(bytes) || (bytes as number) <= 0 || !media.dataUrl.startsWith(`data:${media.mimeType};base64,`))
+        throw invalidResponse();
     return { dataUrl: media.dataUrl, mimeType: media.mimeType, bytes: bytes as number };
 }
 
@@ -801,7 +794,7 @@ function bytesToBase64(bytes: Uint8Array) {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
 function submissionUnknown() {
@@ -812,6 +805,12 @@ function validateTaskIdentity(idempotencyKey: string, mode: "image" | "video" | 
     if (!/^[A-Za-z0-9._:-]{16,120}$/.test(idempotencyKey) || (mode !== undefined && mode !== "image" && mode !== "video")) throw invalidRequest();
 }
 
-function invalidRequest() { return new LocalDreaminaGenerationClientError("local_generation_request_invalid", "本机即梦生成参数无效", 400); }
-function unavailable() { return new LocalDreaminaGenerationClientError("local_generation_model_unavailable", "所选本机即梦模型或操作不可用", 409); }
-function invalidResponse() { return new LocalDreaminaGenerationClientError("local_generation_response_invalid", "本机即梦生成响应无效", 502); }
+function invalidRequest() {
+    return new LocalDreaminaGenerationClientError("local_generation_request_invalid", "本机即梦生成参数无效", 400);
+}
+function unavailable() {
+    return new LocalDreaminaGenerationClientError("local_generation_model_unavailable", "所选本机即梦模型或操作不可用", 409);
+}
+function invalidResponse() {
+    return new LocalDreaminaGenerationClientError("local_generation_response_invalid", "本机即梦生成响应无效", 502);
+}

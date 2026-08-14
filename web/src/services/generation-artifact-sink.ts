@@ -11,10 +11,6 @@ export async function loadOrStoreGenerationArtifact<TArtifact>(dependencies: {
     return (await dependencies.read(dependencies.effectKey)) ?? materialized;
 }
 
-export function generationArtifactStorageKey(
-    effectKey: string,
-    mediaType: "image" | "video" | "audio",
-    scope = "local",
-): string {
+export function generationArtifactStorageKey(effectKey: string, mediaType: "image" | "video" | "audio", scope = "local"): string {
     return `generation-${mediaType}:${scope}:${encodeURIComponent(effectKey)}`;
 }

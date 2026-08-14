@@ -2,13 +2,7 @@ import { describe, expect, test } from "bun:test";
 import localforage from "localforage";
 
 import { createGenerationTaskSubscriptionService, type GenerationTask } from "../src/services/api/task-center";
-import {
-    createGenerationTaskMaterializer,
-    createIdempotentMaterializeOutput,
-    materializeEffectKey,
-    type GenerationTaskEffectClaim,
-    type GenerationTaskEffectStore,
-} from "../src/services/generation-task-materializer";
+import { createGenerationTaskMaterializer, createIdempotentMaterializeOutput, materializeEffectKey, type GenerationTaskEffectClaim, type GenerationTaskEffectStore } from "../src/services/generation-task-materializer";
 import { createLocalDreaminaTaskEffectStore } from "../src/services/local-dreamina-generation";
 import { applyCanvasGenerationTaskNodeEffect, persistCanvasGenerationEffect } from "../src/services/canvas-generation-consumer";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "../src/services/generation-consumer-dedupe";
@@ -47,23 +41,25 @@ function createEffectStore(): GenerationTaskEffectStore {
 describe("generation task materializer", () => {
     test("remote Backend Create uses the default production materializer without Dreamina authority", async () => {
         const previousAssets = useAssetStore.getState().assets;
-        useAssetStore.getState().replaceAssets([{
-            id: "asset-remote-default-wiring",
-            kind: "image",
-            title: "remote generated image",
-            coverUrl: "opaque://remote-generated-image",
-            tags: ["generated"],
-            metadata: {},
-            data: {
-                dataUrl: "opaque://remote-generated-image",
-                width: 1,
-                height: 1,
-                bytes: 1,
-                mimeType: "image/png",
+        useAssetStore.getState().replaceAssets([
+            {
+                id: "asset-remote-default-wiring",
+                kind: "image",
+                title: "remote generated image",
+                coverUrl: "opaque://remote-generated-image",
+                tags: ["generated"],
+                metadata: {},
+                data: {
+                    dataUrl: "opaque://remote-generated-image",
+                    width: 1,
+                    height: 1,
+                    bytes: 1,
+                    mimeType: "image/png",
+                },
+                createdAt: "2026-08-13T00:00:00.000Z",
+                updatedAt: "2026-08-13T00:00:00.000Z",
             },
-            createdAt: "2026-08-13T00:00:00.000Z",
-            updatedAt: "2026-08-13T00:00:00.000Z",
-        }]);
+        ]);
         const task: GenerationTask = {
             id: "backend-create-remote-default-wiring",
             provider: "remote-image-provider",
@@ -72,24 +68,22 @@ describe("generation task materializer", () => {
             prompt: "redacted",
             attempts: 1,
             resultState: "READY",
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "image",
-                materializedAssetId: "asset-remote-default-wiring",
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "image",
+                    materializedAssetId: "asset-remote-default-wiring",
+                },
+            ],
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
         let attachments = 0;
         try {
-            const materialized = await consumeGenerationTaskMessage(
-                task,
-                "message-remote-default-wiring",
-                async ({ resultUrls }) => {
-                    attachments += 1;
-                    expect(resultUrls).toEqual(["opaque://remote-generated-image"]);
-                },
-            );
+            const materialized = await consumeGenerationTaskMessage(task, "message-remote-default-wiring", async ({ resultUrls }) => {
+                attachments += 1;
+                expect(resultUrls).toEqual(["opaque://remote-generated-image"]);
+            });
             expect(materialized.id).toBe(task.id);
             expect(attachments).toBe(1);
         } finally {
@@ -121,7 +115,9 @@ describe("generation task materializer", () => {
                 async request<T>(name: string, callback: () => Promise<T>) {
                     const prior = lockTails.get(name) ?? Promise.resolve();
                     let release!: () => void;
-                    const tail = new Promise<void>((resolve) => { release = resolve; });
+                    const tail = new Promise<void>((resolve) => {
+                        release = resolve;
+                    });
                     const queued = prior.then(() => tail);
                     lockTails.set(name, queued);
                     await prior;
@@ -197,7 +193,9 @@ describe("generation task materializer", () => {
                 async request<T>(name: string, callback: () => Promise<T>) {
                     const prior = lockTails.get(name) ?? Promise.resolve();
                     let release!: () => void;
-                    const tail = new Promise<void>((resolve) => { release = resolve; });
+                    const tail = new Promise<void>((resolve) => {
+                        release = resolve;
+                    });
                     const queued = prior.then(() => tail);
                     lockTails.set(name, queued);
                     await prior;
@@ -254,7 +252,9 @@ describe("generation task materializer", () => {
         let scheduledHandle: ReturnType<typeof setTimeout> | undefined;
         let clearedScheduledTimer = 0;
         let resolveScheduled!: () => void;
-        const scheduled = new Promise<void>((resolve) => { resolveScheduled = resolve; });
+        const scheduled = new Promise<void>((resolve) => {
+            resolveScheduled = resolve;
+        });
         globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
             const handle = originalSetTimeout(handler, timeout, ...args);
             if (scheduledHandle === undefined && typeof timeout === "number" && timeout <= 250) {
@@ -286,9 +286,7 @@ describe("generation task materializer", () => {
         const effects: GenerationTaskEffectStore = {
             async claim() {
                 claims += 1;
-                return claims === 1
-                    ? { status: "busy", retryAt: new Date(Date.now() + 25).toISOString() }
-                    : { status: "completed", result: {} };
+                return claims === 1 ? { status: "busy", retryAt: new Date(Date.now() + 25).toISOString() } : { status: "completed", result: {} };
             },
             async renew() {
                 return { fence: 1 };
@@ -307,9 +305,15 @@ describe("generation task materializer", () => {
         const controller = new AbortController();
 
         try {
-            const run = materializer.attachNode(task, "node-abort-busy", 0, async () => {
-                sinks += 1;
-            }, controller.signal);
+            const run = materializer.attachNode(
+                task,
+                "node-abort-busy",
+                0,
+                async () => {
+                    sinks += 1;
+                },
+                controller.signal,
+            );
             await scheduled;
             controller.abort();
             await expect(run).rejects.toMatchObject({ name: "AbortError" });
@@ -356,13 +360,18 @@ describe("generation task materializer", () => {
         const materializer = createGenerationTaskMaterializer(dependencies);
         let messageEffects = 0;
 
-        await consumeGenerationTaskMessage(task, "message-stale-create", async () => {
-            messageEffects += 1;
-        }, {
-            materialize: async (input) => input,
-            materializedUrls: () => ["opaque://materialized"],
-            attachMessage: (input, messageId, outputIndex, consumer) => materializer.attachMessage(input, messageId, outputIndex, consumer),
-        });
+        await consumeGenerationTaskMessage(
+            task,
+            "message-stale-create",
+            async () => {
+                messageEffects += 1;
+            },
+            {
+                materialize: async (input) => input,
+                materializedUrls: () => ["opaque://materialized"],
+                attachMessage: (input, messageId, outputIndex, consumer) => materializer.attachMessage(input, messageId, outputIndex, consumer),
+            },
+        );
 
         expect(messageEffects).toBe(1);
     });
@@ -399,12 +408,18 @@ describe("generation task materializer", () => {
         const materializer = createGenerationTaskMaterializer(dependencies);
         let canvasStatus: "loading" | "success" = "loading";
 
-        await consumeGenerationTaskNode(task, "node-stale-canvas", 0, async () => {
-            canvasStatus = "success";
-        }, {
-            materialize: async (input) => input,
-            attachNode: (input, nodeId, outputIndex, consumer) => materializer.attachNode(input, nodeId, outputIndex, consumer),
-        });
+        await consumeGenerationTaskNode(
+            task,
+            "node-stale-canvas",
+            0,
+            async () => {
+                canvasStatus = "success";
+            },
+            {
+                materialize: async (input) => input,
+                attachNode: (input, nodeId, outputIndex, consumer) => materializer.attachNode(input, nodeId, outputIndex, consumer),
+            },
+        );
 
         expect(canvasStatus).toBe("success");
     });
@@ -423,11 +438,13 @@ describe("generation task materializer", () => {
             prompt: "redacted",
             attempts: 1,
             resultState: "READY" as const,
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "image" as const,
-                materializedAssetId: "asset-stable-id",
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "image" as const,
+                    materializedAssetId: "asset-stable-id",
+                },
+            ],
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
@@ -440,18 +457,21 @@ describe("generation task materializer", () => {
 
         for (let replay = 0; replay < 3; replay += 1) {
             for (const task of tasks) {
-                await consumeGenerationTaskMessage(task, "message-create-safe-id", async () => {
-                    messageEffects += 1;
-                }, {
-                    async materialize(input) {
-                        materializeCalls += 1;
-                        return input;
+                await consumeGenerationTaskMessage(
+                    task,
+                    "message-create-safe-id",
+                    async () => {
+                        messageEffects += 1;
                     },
-                    materializedUrls: () => ["asset-url-redacted"],
-                    attachMessage: (input, messageId, outputIndex, consumer) => (
-                        materializer.attachMessage(input, messageId, outputIndex, consumer)
-                    ),
-                });
+                    {
+                        async materialize(input) {
+                            materializeCalls += 1;
+                            return input;
+                        },
+                        materializedUrls: () => ["asset-url-redacted"],
+                        attachMessage: (input, messageId, outputIndex, consumer) => materializer.attachMessage(input, messageId, outputIndex, consumer),
+                    },
+                );
             }
         }
 
@@ -467,11 +487,13 @@ describe("generation task materializer", () => {
             prompt: "redacted",
             attempts: 1,
             resultState: "READY",
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "image",
-                materializedAssetId: "asset-node-id",
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "image",
+                    materializedAssetId: "asset-node-id",
+                },
+            ],
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
@@ -484,14 +506,18 @@ describe("generation task materializer", () => {
         let attachments = 0;
 
         for (let replay = 0; replay < 3; replay += 1) {
-            await consumeGenerationTaskNode(task, "node-safe-id", 0, async () => {
-                attachments += 1;
-            }, {
-                materialize: async (input) => input,
-                attachNode: (input, nodeId, outputIndex, consumer) => (
-                    materializer.attachNode(input, nodeId, outputIndex, consumer)
-                ),
-            });
+            await consumeGenerationTaskNode(
+                task,
+                "node-safe-id",
+                0,
+                async () => {
+                    attachments += 1;
+                },
+                {
+                    materialize: async (input) => input,
+                    attachNode: (input, nodeId, outputIndex, consumer) => materializer.attachNode(input, nodeId, outputIndex, consumer),
+                },
+            );
         }
 
         expect(attachments).toBe(1);
@@ -516,13 +542,16 @@ describe("generation task materializer", () => {
         let continuations = 0;
 
         for (let replay = 0; replay < 3; replay += 1) {
-            await consumeGenerationTaskAgent(task, "cinematic-continuation-id", async () => {
-                continuations += 1;
-            }, {
-                resumeAgent: (input, continuationId, consumer) => (
-                    materializer.resumeAgent(input, continuationId, consumer)
-                ),
-            });
+            await consumeGenerationTaskAgent(
+                task,
+                "cinematic-continuation-id",
+                async () => {
+                    continuations += 1;
+                },
+                {
+                    resumeAgent: (input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer),
+                },
+            );
         }
 
         expect(continuations).toBe(1);
@@ -533,13 +562,17 @@ describe("generation task materializer", () => {
             const effects = createEffectStore();
             const materializer = createGenerationTaskMaterializer({
                 effects,
-                async materializeOutput() { throw new Error("agent task has no media output"); },
+                async materializeOutput() {
+                    throw new Error("agent task has no media output");
+                },
             });
             let queryCalls = 0;
             let waitCalls = 0;
             let continuations = 0;
             let release!: () => void;
-            const gate = new Promise<void>((resolveGate) => { release = resolveGate; });
+            const gate = new Promise<void>((resolveGate) => {
+                release = resolveGate;
+            });
             const running: GenerationTask = {
                 id: provider === "dreamina-cli" ? "dreamina:agent-refresh-task-0001" : "backend-agent-refresh-task-0001",
                 provider,
@@ -558,20 +591,31 @@ describe("generation task materializer", () => {
             };
             const terminal = { ...running, status: "succeeded" as const, updatedAt: "2026-08-13T00:01:00.000Z" };
             const service = createGenerationTaskSubscriptionService({
-                async queryTask() { queryCalls += 1; return running; },
-                async waitTask() { waitCalls += 1; await gate; return terminal; },
+                async queryTask() {
+                    queryCalls += 1;
+                    return running;
+                },
+                async waitTask() {
+                    waitCalls += 1;
+                    await gate;
+                    return terminal;
+                },
             });
             let continuationChain = Promise.resolve();
             const observe = (task: GenerationTask) => {
                 if (task.status !== "succeeded") return;
-                continuationChain = continuationChain.then(() => consumeGenerationTaskAgent(
-                    task,
-                    `${task.clientContext?.conversationId}:${task.clientContext?.messageId}:${task.clientContext?.nodeId}`,
-                    async () => { continuations += 1; },
-                    {
-                        resumeAgent: (input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer),
-                    },
-                ));
+                continuationChain = continuationChain.then(() =>
+                    consumeGenerationTaskAgent(
+                        task,
+                        `${task.clientContext?.conversationId}:${task.clientContext?.messageId}:${task.clientContext?.nodeId}`,
+                        async () => {
+                            continuations += 1;
+                        },
+                        {
+                            resumeAgent: (input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer),
+                        },
+                    ),
+                );
             };
 
             const disconnect = service.subscribe([running.id], observe);
@@ -582,11 +626,16 @@ describe("generation task materializer", () => {
             await new Promise((resolveTick) => setTimeout(resolveTick, 0));
             await continuationChain;
             reconnect();
-            await consumeGenerationTaskAgent(terminal, "conversation-agent-0001:message-agent-0001:node-agent-0001", async () => {
-                continuations += 1;
-            }, {
-                resumeAgent: (input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer),
-            });
+            await consumeGenerationTaskAgent(
+                terminal,
+                "conversation-agent-0001:message-agent-0001:node-agent-0001",
+                async () => {
+                    continuations += 1;
+                },
+                {
+                    resumeAgent: (input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer),
+                },
+            );
 
             expect({ provider, queryCalls, waitCalls, continuations }).toEqual({
                 provider,
@@ -614,16 +663,18 @@ describe("generation task materializer", () => {
             requests.push({ path, body });
             let result: Record<string, unknown>;
             if (path.endsWith("/claim")) {
-                result = state === "completed"
-                    ? { status: "completed", result: { materializedAssetId: "asset-agent-durable" } }
-                    : state === "claimed"
-                        ? { status: "busy", retryAt: "2026-08-13T00:00:30.000Z" }
-                        : (state = "claimed", {
-                            status: "claimed",
-                            leaseToken,
-                            leaseExpiresAt: "2026-08-13T00:00:30.000Z",
-                            fence: 1,
-                        });
+                result =
+                    state === "completed"
+                        ? { status: "completed", result: { materializedAssetId: "asset-agent-durable" } }
+                        : state === "claimed"
+                          ? { status: "busy", retryAt: "2026-08-13T00:00:30.000Z" }
+                          : ((state = "claimed"),
+                            {
+                                status: "claimed",
+                                leaseToken,
+                                leaseExpiresAt: "2026-08-13T00:00:30.000Z",
+                                fence: 1,
+                            });
             } else if (path.endsWith("/renew")) {
                 result = {
                     leaseExpiresAt: "2026-08-13T00:00:40.000Z",
@@ -651,10 +702,7 @@ describe("generation task materializer", () => {
         const effectKey = "materialize:dreamina:task-cross-tab:0";
         const taskId = "dreamina:task-cross-tab";
 
-        const claims = await Promise.all([
-            first.claim(effectKey, taskId),
-            second.claim(effectKey, taskId),
-        ]);
+        const claims = await Promise.all([first.claim(effectKey, taskId), second.claim(effectKey, taskId)]);
 
         expect(claims.map((claim) => claim.status).sort()).toEqual(["busy", "claimed"]);
         await first.complete(effectKey, taskId, { materializedAssetId: "asset-agent-durable" });
@@ -682,9 +730,7 @@ describe("generation task materializer", () => {
             request: async (path: string, init?: RequestInit) => {
                 const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
                 requests.push({ path, body });
-                const result = path.endsWith("/claim")
-                    ? { status: "claimed", leaseToken, leaseExpiresAt: "2026-08-13T00:00:30.000Z", fence: 7 }
-                    : { leaseExpiresAt: "2026-08-13T00:00:40.000Z", fence: 7 };
+                const result = path.endsWith("/claim") ? { status: "claimed", leaseToken, leaseExpiresAt: "2026-08-13T00:00:30.000Z", fence: 7 } : { leaseExpiresAt: "2026-08-13T00:00:40.000Z", fence: 7 };
                 return new Response(JSON.stringify({ ok: true, result }), {
                     status: 200,
                     headers: { "content-type": "application/json" },
@@ -719,9 +765,7 @@ describe("generation task materializer", () => {
                 if (path.endsWith("/release")) {
                     releaseBodies.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
                 }
-                const result = path.endsWith("/claim")
-                    ? { status: "claimed", leaseToken, leaseExpiresAt: "2026-08-13T00:00:30.000Z", fence: 3 }
-                    : (releaseCalls += 1, { released: false });
+                const result = path.endsWith("/claim") ? { status: "claimed", leaseToken, leaseExpiresAt: "2026-08-13T00:00:30.000Z", fence: 3 } : ((releaseCalls += 1), { released: false });
                 return new Response(JSON.stringify({ ok: true, result }), {
                     status: 200,
                     headers: { "content-type": "application/json" },
@@ -734,13 +778,15 @@ describe("generation task materializer", () => {
         await expect(store.release(effectKey, taskId)).rejects.toMatchObject({ code: "local_runtime_effect_lease_lost" });
         await expect(store.release(effectKey, taskId)).rejects.toMatchObject({ code: "local_runtime_effect_lease_lost" });
         expect(releaseCalls).toBe(2);
-        expect(releaseBodies).toEqual([0, 1].map(() => ({
-            consumerId: "web-generation-materializer",
-            taskId,
-            effectKey,
-            leaseToken,
-            fence: 3,
-        })));
+        expect(releaseBodies).toEqual(
+            [0, 1].map(() => ({
+                consumerId: "web-generation-materializer",
+                taskId,
+                effectKey,
+                leaseToken,
+                fence: 3,
+            })),
+        );
     });
 
     test("a slow consumer renews its lease across the original TTL and blocks a second instance", async () => {
@@ -760,11 +806,17 @@ describe("generation task materializer", () => {
         let active: { token: number; fence: number; expiresAt: number } | undefined;
         let completed = false;
         let resolveRenewed!: () => void;
-        const renewed = new Promise<void>((resolve) => { resolveRenewed = resolve; });
+        const renewed = new Promise<void>((resolve) => {
+            resolveRenewed = resolve;
+        });
         let resolveStarted!: () => void;
-        const started = new Promise<void>((resolve) => { resolveStarted = resolve; });
+        const started = new Promise<void>((resolve) => {
+            resolveStarted = resolve;
+        });
         let resolveFinish!: () => void;
-        const finish = new Promise<void>((resolve) => { resolveFinish = resolve; });
+        const finish = new Promise<void>((resolve) => {
+            resolveFinish = resolve;
+        });
 
         const effectClient = (): GenerationTaskEffectStore => {
             let owned: { token: number; fence: number } | undefined;
@@ -828,10 +880,7 @@ describe("generation task materializer", () => {
         firstRun = first.attachNode(task, "node-slow-effect", 0, sink);
         await started;
         now = 80;
-        await Promise.race([
-            renewed,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("lease was not renewed")), 100)),
-        ]);
+        await Promise.race([renewed, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("lease was not renewed")), 100))]);
         now = 120;
         const secondRun = second.attachNode(task, "node-slow-effect", 0, sink);
         resolveFinish();
@@ -847,11 +896,13 @@ describe("generation task materializer", () => {
             prompt: "redacted",
             attempts: 1,
             resultState: "PENDING_MATERIALIZATION",
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "image",
-                providerArtifactRef: "provider-artifact-opaque",
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "image",
+                    providerArtifactRef: "provider-artifact-opaque",
+                },
+            ],
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
@@ -946,9 +997,7 @@ describe("generation task materializer", () => {
 
             const results = await Promise.all([first.materialize(task), second.materialize(task)]);
             const effectKey = materializeEffectKey(task.id, 0);
-            const stored = useAssetStore.getState().assets.filter(
-                (candidate) => candidate.metadata?.generationEffectKey === effectKey,
-            );
+            const stored = useAssetStore.getState().assets.filter((candidate) => candidate.metadata?.generationEffectKey === effectKey);
             const assetIds = results.map((result) => result.outputs?.[0]?.materializedAssetId);
 
             expect(stored).toHaveLength(1);
@@ -1031,12 +1080,14 @@ describe("generation task materializer", () => {
             prompt: "redacted",
             attempts: 1,
             resultState: "READY",
-            outputs: [{
-                outputIndex: 0,
-                mediaType: "image",
-                providerArtifactRef: "provider-artifact-opaque",
-                materializedAssetId: "asset-stable-id",
-            }],
+            outputs: [
+                {
+                    outputIndex: 0,
+                    mediaType: "image",
+                    providerArtifactRef: "provider-artifact-opaque",
+                    materializedAssetId: "asset-stable-id",
+                },
+            ],
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
@@ -1174,9 +1225,13 @@ describe("generation task materializer", () => {
         const originalSetItem = localforage.setItem.bind(localforage);
         const persistedPayloads: string[] = [];
         let releasePersistence!: () => void;
-        const persistenceGate = new Promise<void>((resolve) => { releasePersistence = resolve; });
+        const persistenceGate = new Promise<void>((resolve) => {
+            releasePersistence = resolve;
+        });
         let persistenceStartedResolve!: () => void;
-        const persistenceStarted = new Promise<void>((resolve) => { persistenceStartedResolve = resolve; });
+        const persistenceStarted = new Promise<void>((resolve) => {
+            persistenceStartedResolve = resolve;
+        });
         const localStorageValues = new Map<string, string>();
         Object.defineProperty(globalThis, "window", {
             configurable: true,
@@ -1221,37 +1276,43 @@ describe("generation task materializer", () => {
             createdAt: "2026-08-13T00:00:00.000Z",
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
-        useAssetStore.getState().replaceAssets([{
-            id: "asset-durable-node",
-            kind: "image",
-            title: "result",
-            coverUrl: "opaque://durable-node",
-            tags: [],
-            metadata: {},
-            data: { dataUrl: "opaque://durable-node", storageKey: "resource:durable-node", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
-            createdAt: "2026-08-13T00:00:00.000Z",
-            updatedAt: "2026-08-13T00:00:00.000Z",
-        }]);
-        useCanvasStore.setState({
-            projects: [{
-                id: "canvas-durable-barrier",
-                title: "canvas",
+        useAssetStore.getState().replaceAssets([
+            {
+                id: "asset-durable-node",
+                kind: "image",
+                title: "result",
+                coverUrl: "opaque://durable-node",
+                tags: [],
+                metadata: {},
+                data: { dataUrl: "opaque://durable-node", storageKey: "resource:durable-node", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
                 createdAt: "2026-08-13T00:00:00.000Z",
                 updatedAt: "2026-08-13T00:00:00.000Z",
-                nodes: [node],
-                connections: [],
-                chatSessions: [],
-                activeChatId: null,
-                backgroundMode: "dots",
-                showImageInfo: false,
-                viewport: { x: 0, y: 0, k: 1 },
-                directorScenes: [],
-            }],
+            },
+        ]);
+        useCanvasStore.setState({
+            projects: [
+                {
+                    id: "canvas-durable-barrier",
+                    title: "canvas",
+                    createdAt: "2026-08-13T00:00:00.000Z",
+                    updatedAt: "2026-08-13T00:00:00.000Z",
+                    nodes: [node],
+                    connections: [],
+                    chatSessions: [],
+                    activeChatId: null,
+                    backgroundMode: "dots",
+                    showImageInfo: false,
+                    viewport: { x: 0, y: 0, k: 1 },
+                    directorScenes: [],
+                },
+            ],
         });
         let visibleNodes = [node];
         let completeCalls = 0;
         let completeResolve!: () => void;
-        const completed = new Promise<void>((resolve) => { completeResolve = resolve; });
+        const completed = new Promise<void>((resolve) => {
+            completeResolve = resolve;
+        });
         const baseEffects = createEffectStore();
         const effects: GenerationTaskEffectStore = {
             ...baseEffects,
@@ -1277,16 +1338,20 @@ describe("generation task materializer", () => {
                     task,
                     output: output!,
                     effectKey,
-                    nodesRef: { get current() { return visibleNodes; }, set current(value) { visibleNodes = value; } },
+                    nodesRef: {
+                        get current() {
+                            return visibleNodes;
+                        },
+                        set current(value) {
+                            visibleNodes = value;
+                        },
+                    },
                     setNodes: (value) => {
                         visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
                     },
                 });
             });
-            expect(await Promise.race([
-                persistenceStarted.then(() => "persistence"),
-                completed.then(() => "complete"),
-            ])).toBe("persistence");
+            expect(await Promise.race([persistenceStarted.then(() => "persistence"), completed.then(() => "complete")])).toBe("persistence");
             expect(completeCalls).toBe(0);
             releasePersistence();
             await run;
@@ -1309,9 +1374,13 @@ describe("generation task materializer", () => {
         const originalSetItem = localforage.setItem.bind(localforage);
         const persistedPayloads: string[] = [];
         let releasePersistence!: () => void;
-        const persistenceGate = new Promise<void>((resolve) => { releasePersistence = resolve; });
+        const persistenceGate = new Promise<void>((resolve) => {
+            releasePersistence = resolve;
+        });
         let persistenceStartedResolve!: () => void;
-        const persistenceStarted = new Promise<void>((resolve) => { persistenceStartedResolve = resolve; });
+        const persistenceStarted = new Promise<void>((resolve) => {
+            persistenceStartedResolve = resolve;
+        });
         const localStorageValues = new Map<string, string>();
         Object.defineProperty(globalThis, "window", {
             configurable: true,
@@ -1341,20 +1410,22 @@ describe("generation task materializer", () => {
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
         useCanvasStore.setState({
-            projects: [{
-                id: "canvas-agent-durable",
-                title: "canvas",
-                createdAt: "2026-08-13T00:00:00.000Z",
-                updatedAt: "2026-08-13T00:00:00.000Z",
-                nodes: [],
-                connections: [],
-                chatSessions: [session],
-                activeChatId: session.id,
-                backgroundMode: "dots",
-                showImageInfo: false,
-                viewport: { x: 0, y: 0, k: 1 },
-                directorScenes: [],
-            }],
+            projects: [
+                {
+                    id: "canvas-agent-durable",
+                    title: "canvas",
+                    createdAt: "2026-08-13T00:00:00.000Z",
+                    updatedAt: "2026-08-13T00:00:00.000Z",
+                    nodes: [],
+                    connections: [],
+                    chatSessions: [session],
+                    activeChatId: session.id,
+                    backgroundMode: "dots",
+                    showImageInfo: false,
+                    viewport: { x: 0, y: 0, k: 1 },
+                    directorScenes: [],
+                },
+            ],
         });
         const task: GenerationTask = {
             id: "backend-agent-durable",
@@ -1368,7 +1439,9 @@ describe("generation task materializer", () => {
         };
         let completeCalls = 0;
         let completeResolve!: () => void;
-        const completed = new Promise<void>((resolve) => { completeResolve = resolve; });
+        const completed = new Promise<void>((resolve) => {
+            completeResolve = resolve;
+        });
         const baseEffects = createEffectStore();
         const effects: GenerationTaskEffectStore = {
             ...baseEffects,
@@ -1387,37 +1460,35 @@ describe("generation task materializer", () => {
         const effectKey = `agent-resume:${task.id}:continuation-agent-durable`;
         let sideEffects = 0;
 
-        const consume = () => materializer.resumeAgent(task, "continuation-agent-durable", async () => {
-            const current = useCanvasStore.getState().projects.find((project) => project.id === "canvas-agent-durable")!;
-            const currentSession = current.chatSessions[0]!;
-            if (generationEffectApplied(currentSession, effectKey)) return;
-            sideEffects += 1;
-            const durableSession = applyGenerationConsumerEffect(currentSession, effectKey, (value) => value).value;
-            const node: CanvasNodeData = {
-                id: "agent-created-node",
-                type: CanvasNodeType.Text,
-                title: "agent result",
-                position: { x: 0, y: 0 },
-                width: 320,
-                height: 180,
-                metadata: { content: "durable" },
-            };
-            await persistCanvasGenerationEffect({
-                projectId: current.id,
-                effectKey,
-                nodes: [...current.nodes, node],
-                connections: current.connections,
-                chatSessions: [durableSession],
-                activeChatId: currentSession.id,
+        const consume = () =>
+            materializer.resumeAgent(task, "continuation-agent-durable", async () => {
+                const current = useCanvasStore.getState().projects.find((project) => project.id === "canvas-agent-durable")!;
+                const currentSession = current.chatSessions[0]!;
+                if (generationEffectApplied(currentSession, effectKey)) return;
+                sideEffects += 1;
+                const durableSession = applyGenerationConsumerEffect(currentSession, effectKey, (value) => value).value;
+                const node: CanvasNodeData = {
+                    id: "agent-created-node",
+                    type: CanvasNodeType.Text,
+                    title: "agent result",
+                    position: { x: 0, y: 0 },
+                    width: 320,
+                    height: 180,
+                    metadata: { content: "durable" },
+                };
+                await persistCanvasGenerationEffect({
+                    projectId: current.id,
+                    effectKey,
+                    nodes: [...current.nodes, node],
+                    connections: current.connections,
+                    chatSessions: [durableSession],
+                    activeChatId: currentSession.id,
+                });
             });
-        });
 
         try {
             const run = consume();
-            expect(await Promise.race([
-                persistenceStarted.then(() => "persistence"),
-                completed.then(() => "complete"),
-            ])).toBe("persistence");
+            expect(await Promise.race([persistenceStarted.then(() => "persistence"), completed.then(() => "complete")])).toBe("persistence");
             expect(completeCalls).toBe(0);
             releasePersistence();
             await run;
@@ -1454,39 +1525,51 @@ describe("generation task materializer", () => {
         };
         const seen: string[] = [];
 
-        await consumeGenerationTaskNode(task, "node-safe-id", 0, async ({ effectKey }) => {
-            seen.push(effectKey);
-        }, {
-            materialize: async (input) => input,
-            attachNode: async (input, _nodeId, _outputIndex, consumer) => {
-                await consumer({ task: input, output: input.outputs?.[0], effectKey: "attach-node:task-production-effect-key:node-safe-id:0" });
-                return "applied";
+        await consumeGenerationTaskNode(
+            task,
+            "node-safe-id",
+            0,
+            async ({ effectKey }) => {
+                seen.push(effectKey);
             },
-        });
-        await consumeGenerationTaskMessage(task, "message-safe-id", async ({ effectKey }) => {
-            seen.push(effectKey);
-        }, {
-            materialize: async (input) => input,
-            materializedUrls: () => ["opaque://materialized"],
-            attachMessage: async (input, _messageId, _outputIndex, consumer) => {
-                await consumer({ task: input, output: input.outputs?.[0], effectKey: "attach-message:task-production-effect-key:message-safe-id:0" });
-                return "applied";
+            {
+                materialize: async (input) => input,
+                attachNode: async (input, _nodeId, _outputIndex, consumer) => {
+                    await consumer({ task: input, output: input.outputs?.[0], effectKey: "attach-node:task-production-effect-key:node-safe-id:0" });
+                    return "applied";
+                },
             },
-        });
-        await consumeGenerationTaskAgent(task, "continuation-safe-id", async ({ effectKey }) => {
-            seen.push(effectKey);
-        }, {
-            resumeAgent: async (input, _continuationId, consumer) => {
-                await consumer({ task: input, effectKey: "agent-resume:task-production-effect-key:continuation-safe-id" });
-                return "applied";
+        );
+        await consumeGenerationTaskMessage(
+            task,
+            "message-safe-id",
+            async ({ effectKey }) => {
+                seen.push(effectKey);
             },
-        });
+            {
+                materialize: async (input) => input,
+                materializedUrls: () => ["opaque://materialized"],
+                attachMessage: async (input, _messageId, _outputIndex, consumer) => {
+                    await consumer({ task: input, output: input.outputs?.[0], effectKey: "attach-message:task-production-effect-key:message-safe-id:0" });
+                    return "applied";
+                },
+            },
+        );
+        await consumeGenerationTaskAgent(
+            task,
+            "continuation-safe-id",
+            async ({ effectKey }) => {
+                seen.push(effectKey);
+            },
+            {
+                resumeAgent: async (input, _continuationId, consumer) => {
+                    await consumer({ task: input, effectKey: "agent-resume:task-production-effect-key:continuation-safe-id" });
+                    return "applied";
+                },
+            },
+        );
 
-        expect(seen).toEqual([
-            "attach-node:task-production-effect-key:node-safe-id:0",
-            "attach-message:task-production-effect-key:message-safe-id:0",
-            "agent-resume:task-production-effect-key:continuation-safe-id",
-        ]);
+        expect(seen).toEqual(["attach-node:task-production-effect-key:node-safe-id:0", "attach-message:task-production-effect-key:message-safe-id:0", "agent-resume:task-production-effect-key:continuation-safe-id"]);
     });
 
     test("production consumer adapters forward one abort signal through materialization and attachment", async () => {

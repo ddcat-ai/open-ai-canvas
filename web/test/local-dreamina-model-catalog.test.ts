@@ -8,24 +8,29 @@ test("Dreamina model discovery reads only the signed Runtime catalog", async () 
     const catalog = await getDreaminaModelCatalog({
         async request(path) {
             requests.push(path);
-            return new Response(JSON.stringify({
-                ok: true,
-                provider: "dreamina-cli",
-                accountBinding: "a".repeat(64),
-                sessionEpoch: 3,
-                models: [{
+            return new Response(
+                JSON.stringify({
+                    ok: true,
                     provider: "dreamina-cli",
-                    id: "seedance2.0mini",
-                    displayName: "seedance2.0mini",
-                    modality: "video",
-                    operations: ["text-to-video", "image-to-video", "reference-to-video"],
-                    adapterSupported: true,
-                    accountEntitlement: "unknown",
-                    currentlyObservedAvailable: "unknown",
-                    settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
-                    source: "runtime-execution-contract",
-                }],
-            }), { status: 200, headers: { "content-type": "application/json" } });
+                    accountBinding: "a".repeat(64),
+                    sessionEpoch: 3,
+                    models: [
+                        {
+                            provider: "dreamina-cli",
+                            id: "seedance2.0mini",
+                            displayName: "seedance2.0mini",
+                            modality: "video",
+                            operations: ["text-to-video", "image-to-video", "reference-to-video"],
+                            adapterSupported: true,
+                            accountEntitlement: "unknown",
+                            currentlyObservedAvailable: "unknown",
+                            settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
+                            source: "runtime-execution-contract",
+                        },
+                    ],
+                }),
+                { status: 200, headers: { "content-type": "application/json" } },
+            );
         },
     });
     expect(catalog).toHaveLength(1);
@@ -54,26 +59,29 @@ test("Dreamina model discovery returns its authenticated cache scope with one si
 });
 
 test("Dreamina model discovery treats a signed scope denial as an error, never a successful empty catalog", async () => {
-    await expect(getDreaminaModelCatalog({
-        async request() {
-            return new Response(JSON.stringify({
-                ok: false,
-                code: "scope_denied",
-                message: "public failure",
-            }), { status: 403, headers: { "content-type": "application/json" } });
-        },
-    })).rejects.toThrow("Dreamina model catalog is unavailable");
+    await expect(
+        getDreaminaModelCatalog({
+            async request() {
+                return new Response(
+                    JSON.stringify({
+                        ok: false,
+                        code: "scope_denied",
+                        message: "public failure",
+                    }),
+                    { status: 403, headers: { "content-type": "application/json" } },
+                );
+            },
+        }),
+    ).rejects.toThrow("Dreamina model catalog is unavailable");
 });
 
 test("Dreamina catalog recovery replaces an obsolete 401/403 session and retries only the safe GET once", async () => {
     const module = await import("../src/services/local-dreamina-model-catalog").catch(() => ({}));
-    const recover = (module as {
-        getDreaminaModelCatalogWithSessionRecovery?: (client: {
-            request(path: string, init?: RequestInit): Promise<Response>;
-            connect(signal?: AbortSignal): Promise<{ state: string }>;
-            revokeLocalSession(): void;
-        }) => Promise<unknown[]>;
-    }).getDreaminaModelCatalogWithSessionRecovery;
+    const recover = (
+        module as {
+            getDreaminaModelCatalogWithSessionRecovery?: (client: { request(path: string, init?: RequestInit): Promise<Response>; connect(signal?: AbortSignal): Promise<{ state: string }>; revokeLocalSession(): void }) => Promise<unknown[]>;
+        }
+    ).getDreaminaModelCatalogWithSessionRecovery;
     expect(typeof recover).toBe("function");
     if (!recover) return;
 
@@ -89,8 +97,13 @@ test("Dreamina catalog recovery replaces an obsolete 401/403 session and retries
                 }
                 return catalogResponse();
             },
-            async connect() { connected += 1; return { state: "connected" }; },
-            revokeLocalSession() { revoked += 1; },
+            async connect() {
+                connected += 1;
+                return { state: "connected" };
+            },
+            revokeLocalSession() {
+                revoked += 1;
+            },
         });
 
         expect(models).toHaveLength(1);
@@ -104,13 +117,15 @@ test("Dreamina catalog recovery replaces an obsolete 401/403 session and retries
 
 test("Dreamina catalog snapshot recovery preserves the authenticated cache scope after one safe reconnect", async () => {
     const module = await import("../src/services/local-dreamina-model-catalog").catch(() => ({}));
-    const recover = (module as {
-        getDreaminaModelCatalogSnapshotWithSessionRecovery?: (client: {
-            request(path: string, init?: RequestInit): Promise<Response>;
-            connect(signal?: AbortSignal): Promise<{ state: string }>;
-            revokeLocalSession(): void;
-        }) => Promise<{ accountBinding: string; sessionEpoch: number; models: unknown[] }>;
-    }).getDreaminaModelCatalogSnapshotWithSessionRecovery;
+    const recover = (
+        module as {
+            getDreaminaModelCatalogSnapshotWithSessionRecovery?: (client: {
+                request(path: string, init?: RequestInit): Promise<Response>;
+                connect(signal?: AbortSignal): Promise<{ state: string }>;
+                revokeLocalSession(): void;
+            }) => Promise<{ accountBinding: string; sessionEpoch: number; models: unknown[] }>;
+        }
+    ).getDreaminaModelCatalogSnapshotWithSessionRecovery;
     expect(typeof recover).toBe("function");
     if (!recover) return;
 
@@ -123,8 +138,13 @@ test("Dreamina catalog snapshot recovery preserves the authenticated cache scope
             if (requests === 1) return new Response(JSON.stringify({ ok: false }), { status: 401 });
             return catalogResponse();
         },
-        async connect() { connected += 1; return { state: "connected" }; },
-        revokeLocalSession() { revoked += 1; },
+        async connect() {
+            connected += 1;
+            return { state: "connected" };
+        },
+        revokeLocalSession() {
+            revoked += 1;
+        },
     });
 
     expect(snapshot).toMatchObject({ accountBinding: "a".repeat(64), sessionEpoch: 3 });
@@ -144,8 +164,13 @@ test("Dreamina catalog recovery reconnects once when the browser rejects an expi
             if (requests === 1) throw new LocalRuntimeClientError("session_required", "public failure", 401);
             return catalogResponse();
         },
-        async connect() { connected += 1; return { state: "connected" as const }; },
-        revokeLocalSession() { revoked += 1; },
+        async connect() {
+            connected += 1;
+            return { state: "connected" as const };
+        },
+        revokeLocalSession() {
+            revoked += 1;
+        },
     });
 
     expect(models).toHaveLength(1);
@@ -154,43 +179,22 @@ test("Dreamina catalog recovery reconnects once when the browser rejects an expi
 
 test("effective config projects an asynchronously arriving Dreamina catalog without persisting the local channel", async () => {
     const module = await import("../src/stores/use-config-store").catch(() => ({}));
-    const project = (module as {
-        effectiveConfigWithDreamina?: (
-            config: typeof import("../src/stores/use-config-store").defaultConfig,
-            state: "idle" | "loading" | "ready" | "error",
-            models: Array<Record<string, unknown>>,
-        ) => typeof import("../src/stores/use-config-store").defaultConfig;
-    }).effectiveConfigWithDreamina;
+    const project = (
+        module as {
+            effectiveConfigWithDreamina?: (
+                config: typeof import("../src/stores/use-config-store").defaultConfig,
+                state: "idle" | "loading" | "ready" | "error",
+                models: Array<Record<string, unknown>>,
+            ) => typeof import("../src/stores/use-config-store").defaultConfig;
+        }
+    ).effectiveConfigWithDreamina;
     expect(typeof project).toBe("function");
     if (!project) return;
 
     const { defaultConfig } = await import("../src/stores/use-config-store");
     const pending = project(defaultConfig, "loading", []);
-    const ready = project(defaultConfig, "ready", [{
-        provider: "dreamina-cli",
-        id: "seedance2.0mini",
-        displayName: "seedance2.0mini",
-        modality: "video",
-        operations: ["text-to-video", "image-to-video", "reference-to-video"],
-        adapterSupported: true,
-        accountEntitlement: "unknown",
-        currentlyObservedAvailable: "unknown",
-        settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
-        source: "runtime-execution-contract",
-    }]);
-
-    expect(pending.videoModels).not.toContain("local:dreamina-cli:seedance2.0mini");
-    expect(ready.videoModels).toContain("local:dreamina-cli:seedance2.0mini");
-    expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
-});
-
-function catalogResponse() {
-    return new Response(JSON.stringify({
-        ok: true,
-        provider: "dreamina-cli",
-        accountBinding: "a".repeat(64),
-        sessionEpoch: 3,
-        models: [{
+    const ready = project(defaultConfig, "ready", [
+        {
             provider: "dreamina-cli",
             id: "seedance2.0mini",
             displayName: "seedance2.0mini",
@@ -201,6 +205,36 @@ function catalogResponse() {
             currentlyObservedAvailable: "unknown",
             settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
             source: "runtime-execution-contract",
-        }],
-    }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+    ]);
+
+    expect(pending.videoModels).not.toContain("local:dreamina-cli:seedance2.0mini");
+    expect(ready.videoModels).toContain("local:dreamina-cli:seedance2.0mini");
+    expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
+});
+
+function catalogResponse() {
+    return new Response(
+        JSON.stringify({
+            ok: true,
+            provider: "dreamina-cli",
+            accountBinding: "a".repeat(64),
+            sessionEpoch: 3,
+            models: [
+                {
+                    provider: "dreamina-cli",
+                    id: "seedance2.0mini",
+                    displayName: "seedance2.0mini",
+                    modality: "video",
+                    operations: ["text-to-video", "image-to-video", "reference-to-video"],
+                    adapterSupported: true,
+                    accountEntitlement: "unknown",
+                    currentlyObservedAvailable: "unknown",
+                    settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
+                    source: "runtime-execution-contract",
+                },
+            ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+    );
 }

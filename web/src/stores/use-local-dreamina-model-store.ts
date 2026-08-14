@@ -9,11 +9,16 @@ type State = { state: "idle" | "loading" | "ready" | "error"; models: DreaminaLo
 export const dreaminaModelCacheScopeKey = ({ accountBinding, sessionEpoch }: { accountBinding: string; sessionEpoch: string | number }) => `${accountBinding}:${sessionEpoch}`;
 
 export const useLocalDreaminaModelStore = create<State>((set, get) => ({
-    state: "idle", models: [], cacheScope: undefined,
+    state: "idle",
+    models: [],
+    cacheScope: undefined,
     async sync(signal) {
         const runtime = useLocalRuntimeStore.getState();
         const available = runtime.connection === "connected" && runtime.modules.some((module) => module.id === "dreamina" && module.scopes.includes("dreamina:models"));
-        if (!available) { set({ state: "idle", models: [], cacheScope: undefined }); return; }
+        if (!available) {
+            set({ state: "idle", models: [], cacheScope: undefined });
+            return;
+        }
         const client = getLocalRuntimeSessionClient();
         try {
             const snapshot = await getDreaminaModelCatalogSnapshotWithSessionRecovery(client, signal);
@@ -29,5 +34,9 @@ export function useLocalDreaminaModelBootstrap() {
     const connection = useLocalRuntimeStore((state) => state.connection);
     const modules = useLocalRuntimeStore((state) => state.modules);
     const sync = useLocalDreaminaModelStore((state) => state.sync);
-    useEffect(() => { const controller = new AbortController(); void sync(controller.signal); return () => controller.abort(); }, [connection, modules, sync]);
+    useEffect(() => {
+        const controller = new AbortController();
+        void sync(controller.signal);
+        return () => controller.abort();
+    }, [connection, modules, sync]);
 }

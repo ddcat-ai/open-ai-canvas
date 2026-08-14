@@ -2,30 +2,29 @@ import { expect, test } from "bun:test";
 
 test("Canvas consumes signed fetch SSE without bearer data in the URL or headers", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection").catch(() => ({}));
-    const consume = (module as {
-        consumeLocalRuntimeEventStream?: (
-            client: RuntimeTransport,
-            path: string,
-            options: { lastEventId?: string; onEvent(event: RuntimeEvent): void },
-        ) => Promise<void>;
-    }).consumeLocalRuntimeEventStream;
+    const consume = (
+        module as {
+            consumeLocalRuntimeEventStream?: (client: RuntimeTransport, path: string, options: { lastEventId?: string; onEvent(event: RuntimeEvent): void }) => Promise<void>;
+        }
+    ).consumeLocalRuntimeEventStream;
     expect(typeof consume).toBe("function");
     if (!consume) return;
 
     const calls: Array<{ path: string; headers: Headers; method: string }> = [];
     const events: RuntimeEvent[] = [];
-    await consume({
-        async request(path, init = {}) {
-            calls.push({ path, headers: new Headers(init.headers), method: String(init.method || "GET") });
-            return sseResponse([
-                "id: 7\nevent: hello\ndata: {\"ok\":true}\n\n",
-                "id: 8\nevent: agent_log\ndata: first\ndata: second\n\n",
-            ]);
+    await consume(
+        {
+            async request(path, init = {}) {
+                calls.push({ path, headers: new Headers(init.headers), method: String(init.method || "GET") });
+                return sseResponse(['id: 7\nevent: hello\ndata: {"ok":true}\n\n', "id: 8\nevent: agent_log\ndata: first\ndata: second\n\n"]);
+            },
         },
-    }, "/events?clientId=client-1", {
-        lastEventId: "6",
-        onEvent: (event) => events.push(event),
-    });
+        "/events?clientId=client-1",
+        {
+            lastEventId: "6",
+            onEvent: (event) => events.push(event),
+        },
+    );
 
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ path: "/events?clientId=client-1", method: "GET" });
@@ -34,7 +33,7 @@ test("Canvas consumes signed fetch SSE without bearer data in the URL or headers
     expect(calls[0].headers.has("x-canvas-agent-token")).toBe(false);
     expect(calls[0].path).not.toContain("token");
     expect(events).toEqual([
-        { type: "hello", data: "{\"ok\":true}", id: "7" },
+        { type: "hello", data: '{"ok":true}', id: "7" },
         { type: "agent_log", data: "first\nsecond", id: "8" },
     ]);
 });
@@ -44,19 +43,29 @@ test("Canvas SSE rejects oversized events and pre-cancelled requests", async () 
     let calls = 0;
     const cancelled = new AbortController();
     cancelled.abort();
-    await expect(module.consumeLocalRuntimeEventStream({
-        request: async () => {
-            calls++;
-            return sseResponse([]);
-        },
-    }, "/events?clientId=client-1", { signal: cancelled.signal, onEvent: () => undefined }))
-        .rejects.toMatchObject({ name: "AbortError" });
+    await expect(
+        module.consumeLocalRuntimeEventStream(
+            {
+                request: async () => {
+                    calls++;
+                    return sseResponse([]);
+                },
+            },
+            "/events?clientId=client-1",
+            { signal: cancelled.signal, onEvent: () => undefined },
+        ),
+    ).rejects.toMatchObject({ name: "AbortError" });
     expect(calls).toBe(0);
 
-    await expect(module.consumeLocalRuntimeEventStream({
-        request: async () => sseResponse([`event: agent_log\ndata: ${"x".repeat(300 * 1024)}\n\n`]),
-    }, "/events?clientId=client-1", { onEvent: () => undefined }))
-        .rejects.toMatchObject({ code: "canvas_event_too_large" });
+    await expect(
+        module.consumeLocalRuntimeEventStream(
+            {
+                request: async () => sseResponse([`event: agent_log\ndata: ${"x".repeat(300 * 1024)}\n\n`]),
+            },
+            "/events?clientId=client-1",
+            { onEvent: () => undefined },
+        ),
+    ).rejects.toMatchObject({ code: "canvas_event_too_large" });
 });
 
 test("Canvas SSE accepts one large transport chunk containing many bounded events", async () => {
@@ -64,9 +73,17 @@ test("Canvas SSE accepts one large transport chunk containing many bounded event
     const chunk = Array.from({ length: 3_000 }, (_, index) => `id: ${index}\nevent: agent_log\ndata: ${"x".repeat(80)}\n\n`).join("");
     let events = 0;
 
-    await module.consumeLocalRuntimeEventStream({
-        request: async () => sseResponse([chunk]),
-    }, "/events?clientId=client-1", { onEvent: () => { events++; } });
+    await module.consumeLocalRuntimeEventStream(
+        {
+            request: async () => sseResponse([chunk]),
+        },
+        "/events?clientId=client-1",
+        {
+            onEvent: () => {
+                events++;
+            },
+        },
+    );
 
     expect(events).toBe(3_000);
 });
@@ -83,9 +100,11 @@ test("Canvas Agent UI store contains no Runtime endpoint, bearer, or session fie
 
 test("Canvas connection reuses the shared Runtime store and requires the canvas module", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
-    const prepare = (module as {
-        prepareCanvasRuntimeConnection?: (store: RuntimeStore, signal?: AbortSignal) => Promise<void>;
-    }).prepareCanvasRuntimeConnection;
+    const prepare = (
+        module as {
+            prepareCanvasRuntimeConnection?: (store: RuntimeStore, signal?: AbortSignal) => Promise<void>;
+        }
+    ).prepareCanvasRuntimeConnection;
     expect(typeof prepare).toBe("function");
     if (!prepare) return;
 
@@ -111,7 +130,9 @@ test("Canvas connection reuses the shared Runtime store and requires the canvas 
         connection: "connected",
         modules: [{ id: "dreamina" }],
         error: "",
-        async connect() { return; },
+        async connect() {
+            return;
+        },
     };
     await expect(prepare({ getState: () => missingState })).rejects.toMatchObject({ code: "canvas_module_unavailable" });
 
@@ -119,16 +140,20 @@ test("Canvas connection reuses the shared Runtime store and requires the canvas 
         connection: "connected",
         modules: [{ id: "canvas-agent" }],
         error: "",
-        async connect() { failedRefreshState.error = "本机运行时连接超时"; },
+        async connect() {
+            failedRefreshState.error = "本机运行时连接超时";
+        },
     };
     await expect(prepare({ getState: () => failedRefreshState })).rejects.toMatchObject({ code: "canvas_runtime_unavailable" });
 });
 
 test("Canvas launch mode auto-connects after rejected legacy deep-link secrets are removed", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
-    const shouldAutoConnect = (module as {
-        shouldAutoConnectCanvasRuntime?: (params: URLSearchParams) => boolean;
-    }).shouldAutoConnectCanvasRuntime;
+    const shouldAutoConnect = (
+        module as {
+            shouldAutoConnectCanvasRuntime?: (params: URLSearchParams) => boolean;
+        }
+    ).shouldAutoConnectCanvasRuntime;
     expect(typeof shouldAutoConnect).toBe("function");
     if (!shouldAutoConnect) return;
 
@@ -140,9 +165,11 @@ test("Canvas launch mode auto-connects after rejected legacy deep-link secrets a
 
 test("Canvas reconnect wait resolves quietly when component cleanup aborts", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
-    const waitForReconnect = (module as {
-        waitForCanvasRuntimeReconnect?: (signal: AbortSignal, delayMs?: number) => Promise<void>;
-    }).waitForCanvasRuntimeReconnect;
+    const waitForReconnect = (
+        module as {
+            waitForCanvasRuntimeReconnect?: (signal: AbortSignal, delayMs?: number) => Promise<void>;
+        }
+    ).waitForCanvasRuntimeReconnect;
     expect(typeof waitForReconnect).toBe("function");
     if (!waitForReconnect) return;
 
@@ -155,13 +182,11 @@ test("Canvas reconnect wait resolves quietly when component cleanup aborts", asy
 
 test("Canvas state sync reports a stable error without exposing Runtime response text", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
-    const postState = (module as {
-        postCanvasRuntimeState?: (
-            client: RuntimeTransport,
-            clientId: string,
-            snapshot: unknown,
-        ) => Promise<void>;
-    }).postCanvasRuntimeState;
+    const postState = (
+        module as {
+            postCanvasRuntimeState?: (client: RuntimeTransport, clientId: string, snapshot: unknown) => Promise<void>;
+        }
+    ).postCanvasRuntimeState;
     expect(typeof postState).toBe("function");
     if (!postState) return;
 
@@ -169,16 +194,20 @@ test("Canvas state sync reports a stable error without exposing Runtime response
     const calls: Array<{ path: string; headers: Headers; body: string }> = [];
     let thrown: unknown;
     try {
-        await postState({
-            async request(path, init = {}) {
-                calls.push({
-                    path,
-                    headers: new Headers(init.headers),
-                    body: String(init.body || ""),
-                });
-                return new Response(secretResponse, { status: 500 });
+        await postState(
+            {
+                async request(path, init = {}) {
+                    calls.push({
+                        path,
+                        headers: new Headers(init.headers),
+                        body: String(init.body || ""),
+                    });
+                    return new Response(secretResponse, { status: 500 });
+                },
             },
-        }, "client/1", { nodes: [], connections: [] });
+            "client/1",
+            { nodes: [], connections: [] },
+        );
     } catch (error) {
         thrown = error;
     }
@@ -208,12 +237,15 @@ type RuntimeEvent = {
 
 function sseResponse(chunks: string[]) {
     const encoder = new TextEncoder();
-    return new Response(new ReadableStream<Uint8Array>({
-        start(controller) {
-            for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
-            controller.close();
-        },
-    }), { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    return new Response(
+        new ReadableStream<Uint8Array>({
+            start(controller) {
+                for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+                controller.close();
+            },
+        }),
+        { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } },
+    );
 }
 
 type RuntimeStore = {

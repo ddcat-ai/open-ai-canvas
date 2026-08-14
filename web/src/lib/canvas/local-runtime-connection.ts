@@ -13,7 +13,10 @@ export type LocalRuntimeEventStreamOptions = {
 };
 
 export class CanvasRuntimeStreamError extends Error {
-    constructor(readonly code: string, message: string) {
+    constructor(
+        readonly code: string,
+        message: string,
+    ) {
         super(message);
         this.name = "CanvasRuntimeStreamError";
     }
@@ -35,10 +38,7 @@ type CanvasRuntimeStore = {
     };
 };
 
-export async function prepareCanvasRuntimeConnection(
-    store: CanvasRuntimeStore,
-    signal?: AbortSignal,
-) {
+export async function prepareCanvasRuntimeConnection(store: CanvasRuntimeStore, signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     await store.getState().connect(signal);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -67,11 +67,7 @@ export function waitForCanvasRuntimeReconnect(signal: AbortSignal, delayMs = 1_0
     });
 }
 
-export async function postCanvasRuntimeState(
-    client: LocalRuntimeTransport,
-    clientId: string,
-    snapshot: unknown,
-) {
+export async function postCanvasRuntimeState(client: LocalRuntimeTransport, clientId: string, snapshot: unknown) {
     try {
         const response = await client.request(`/canvas/state?clientId=${encodeURIComponent(clientId)}`, {
             method: "POST",
@@ -84,11 +80,7 @@ export async function postCanvasRuntimeState(
     }
 }
 
-export async function consumeLocalRuntimeEventStream(
-    client: LocalRuntimeTransport,
-    path: string,
-    options: LocalRuntimeEventStreamOptions,
-) {
+export async function consumeLocalRuntimeEventStream(client: LocalRuntimeTransport, path: string, options: LocalRuntimeEventStreamOptions) {
     if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const headers = new Headers();
     if (options.lastEventId) headers.set("Last-Event-ID", options.lastEventId);

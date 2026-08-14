@@ -2,16 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+function compactSource(source: string) {
+    return source.replace(/\s+/g, " ").trim();
+}
+
 describe("creation library button", () => {
     test("places a library control beside the generation mode picker", () => {
         const source = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
-        const modePickerIndex = source.indexOf("<ModePicker mode={props.mode} onModeChange={props.onModeChange} />");
-        const libraryButtonIndex = source.indexOf('className="creation-chat-control" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"');
+        const dockStart = source.indexOf('<footer className="creation-chat-dock">');
+        const dockEnd = source.indexOf("</footer>", dockStart);
 
-        expect(modePickerIndex).toBeGreaterThanOrEqual(0);
-        expect(libraryButtonIndex).toBeGreaterThan(modePickerIndex);
-        expect(source.slice(libraryButtonIndex, libraryButtonIndex + 180)).toContain("<FolderOpen />");
-        expect(source.slice(libraryButtonIndex, libraryButtonIndex + 180)).toContain("<span>素材库</span>");
+        expect(dockStart).toBeGreaterThanOrEqual(0);
+        expect(dockEnd).toBeGreaterThan(dockStart);
+        expect(compactSource(source.slice(dockStart, dockEnd))).toMatch(
+            /<ModePicker mode=\{props\.mode\} onModeChange=\{props\.onModeChange\} \/> <Tooltip\b[^>]*> <button(?=[^>]*className="creation-chat-control")(?=[^>]*onClick=\{props\.onOpenLibrary\})(?=[^>]*disabled=\{props\.busy \|\| !referencesSupported\})(?=[^>]*aria-label="打开素材库选择参考内容")[^>]*> <FolderOpen \/> <span>素材库<\/span> <\/button> <\/Tooltip>/,
+        );
     });
 
     test("uploads from the library without adding a reference before confirmation", () => {

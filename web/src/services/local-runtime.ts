@@ -1,16 +1,7 @@
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
 export type LocalRuntimeModuleId = "canvas-agent" | "dreamina";
-export type LocalRuntimeScope =
-    | "runtime:status"
-    | "runtime:revoke"
-    | "canvas:connect"
-    | "dreamina:status"
-    | "dreamina:login"
-    | "dreamina:logout"
-    | "dreamina:run"
-    | "dreamina:models"
-    | "dreamina:generate";
+export type LocalRuntimeScope = "runtime:status" | "runtime:revoke" | "canvas:connect" | "dreamina:status" | "dreamina:login" | "dreamina:logout" | "dreamina:run" | "dreamina:models" | "dreamina:generate";
 
 export type LocalRuntimeModuleDescriptor = {
     id: LocalRuntimeModuleId;
@@ -38,21 +29,14 @@ const MODULE_SCOPES: Record<LocalRuntimeModuleId, ReadonlySet<LocalRuntimeScope>
     dreamina: new Set(["dreamina:status", "dreamina:login", "dreamina:logout", "dreamina:run", "dreamina:models", "dreamina:generate"]),
 };
 
-export async function readLocalRuntimeStatus(
-    client: LocalRuntimeTransport,
-    signal?: AbortSignal,
-): Promise<LocalRuntimeStatus> {
+export async function readLocalRuntimeStatus(client: LocalRuntimeTransport, signal?: AbortSignal): Promise<LocalRuntimeStatus> {
     const response = await client.request("/runtime/status", { method: "GET", signal });
     if (response.redirected || response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
         throw invalidResponse(response.status);
     }
     const body = await readBoundedJson(response);
     if (!response.ok) {
-        const code = response.status === 401
-            ? "session_required"
-            : response.status === 403
-                ? "scope_denied"
-                : "runtime_request_failed";
+        const code = response.status === 401 ? "session_required" : response.status === 403 ? "scope_denied" : "runtime_request_failed";
         throw new LocalRuntimeClientError(code, publicRequestError(code), response.status);
     }
     return parseRuntimeStatus(body, response.status);
@@ -97,35 +81,33 @@ async function readBoundedJson(response: Response): Promise<unknown> {
 }
 
 function parseRuntimeStatus(value: unknown, status: number): LocalRuntimeStatus {
-    if (!isRecord(value) || !hasExactKeys(value, ["modules", "ok", "runtime"])
-        || value.ok !== true || !isRecord(value.runtime) || !Array.isArray(value.modules)) {
+    if (!isRecord(value) || !hasExactKeys(value, ["modules", "ok", "runtime"]) || value.ok !== true || !isRecord(value.runtime) || !Array.isArray(value.modules)) {
         throw invalidResponse(status);
     }
     const runtime = value.runtime;
-    if (!hasExactKeys(runtime, ["apiVersion", "id", "version"])
-        || runtime.id !== "framefield-local-runtime"
-        || runtime.apiVersion !== 2
-        || typeof runtime.version !== "string"
-        || !/^[A-Za-z0-9._+:-]{1,80}$/.test(runtime.version)) {
+    if (!hasExactKeys(runtime, ["apiVersion", "id", "version"]) || runtime.id !== "framefield-local-runtime" || runtime.apiVersion !== 2 || typeof runtime.version !== "string" || !/^[A-Za-z0-9._+:-]{1,80}$/.test(runtime.version)) {
         throw invalidResponse(status);
     }
 
     const ids = new Set<LocalRuntimeModuleId>();
     const modules = value.modules.map((item) => {
-        if (!isRecord(item) || !hasExactKeys(item, ["apiVersion", "displayName", "id", "scopes"])
-            || !isModuleId(item.id) || ids.has(item.id)
-            || item.apiVersion !== 1
-            || typeof item.displayName !== "string"
-            || item.displayName.trim() !== item.displayName
-            || item.displayName.length < 1
-            || item.displayName.length > 80
-            || !Array.isArray(item.scopes)) {
+        if (
+            !isRecord(item) ||
+            !hasExactKeys(item, ["apiVersion", "displayName", "id", "scopes"]) ||
+            !isModuleId(item.id) ||
+            ids.has(item.id) ||
+            item.apiVersion !== 1 ||
+            typeof item.displayName !== "string" ||
+            item.displayName.trim() !== item.displayName ||
+            item.displayName.length < 1 ||
+            item.displayName.length > 80 ||
+            !Array.isArray(item.scopes)
+        ) {
             throw invalidResponse(status);
         }
         const scopes = item.scopes as unknown[];
         const allowedScopes = MODULE_SCOPES[item.id];
-        if (scopes.some((scope) => typeof scope !== "string" || !allowedScopes.has(scope as LocalRuntimeScope))
-            || new Set(scopes).size !== scopes.length) {
+        if (scopes.some((scope) => typeof scope !== "string" || !allowedScopes.has(scope as LocalRuntimeScope)) || new Set(scopes).size !== scopes.length) {
             throw invalidResponse(status);
         }
         ids.add(item.id);

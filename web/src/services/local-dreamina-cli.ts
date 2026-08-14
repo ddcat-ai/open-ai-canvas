@@ -2,11 +2,7 @@ import type { LocalRuntimeTransport } from "@/services/local-runtime";
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
 export type DreaminaCliState = "missing" | "installed" | "login_pending" | "authenticated" | "error";
-export type DreaminaLifecycleStatusCode =
-    | "dreamina_missing"
-    | "dreamina_version_failed"
-    | "dreamina_login_required"
-    | "dreamina_login_pending";
+export type DreaminaLifecycleStatusCode = "dreamina_missing" | "dreamina_version_failed" | "dreamina_login_required" | "dreamina_login_pending";
 
 export type DreaminaCliStatus = {
     provider: "dreamina-cli";
@@ -32,7 +28,11 @@ export type DreaminaRequestOptions = {
 };
 
 export class DreaminaAgentError extends Error {
-    constructor(readonly code: string, readonly status: number, message: string) {
+    constructor(
+        readonly code: string,
+        readonly status: number,
+        message: string,
+    ) {
         super(message);
         this.name = "DreaminaAgentError";
     }
@@ -45,12 +45,7 @@ export type DreaminaLifecycleAction = keyof typeof DREAMINA_REQUEST_TIMEOUTS;
 export function dreaminaRequestTimeout(action: DreaminaLifecycleAction, override?: number) {
     return override ?? DREAMINA_REQUEST_TIMEOUTS[action];
 }
-const LIFECYCLE_CODES = new Set<DreaminaLifecycleStatusCode>([
-    "dreamina_missing",
-    "dreamina_version_failed",
-    "dreamina_login_required",
-    "dreamina_login_pending",
-]);
+const LIFECYCLE_CODES = new Set<DreaminaLifecycleStatusCode>(["dreamina_missing", "dreamina_version_failed", "dreamina_login_required", "dreamina_login_pending"]);
 const STABLE_ERROR_MESSAGES: Record<string, string> = {
     dreamina_cancelled: "Dreamina 操作已取消",
     dreamina_cleanup_failed: "Dreamina 进程清理失败，请检查本机进程状态",
@@ -101,29 +96,29 @@ export function logoutDreamina(client: LocalRuntimeTransport, options: DreaminaR
     });
 }
 
-async function requestDreamina(
-    client: LocalRuntimeTransport,
-    method: "GET" | "POST",
-    route: "/dreamina/status" | "/dreamina/login" | "/dreamina/logout",
-    options: DreaminaRequestOptions,
-) {
+async function requestDreamina(client: LocalRuntimeTransport, method: "GET" | "POST", route: "/dreamina/status" | "/dreamina/login" | "/dreamina/logout", options: DreaminaRequestOptions) {
     if (options.signal?.aborted) throw publicError("dreamina_cancelled", 499);
     const controller = new AbortController();
     let timedOut = false;
     const abort = () => controller.abort();
     options.signal?.addEventListener("abort", abort, { once: true });
-    const timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-    }, Math.max(1, options.timeoutMs ?? DREAMINA_REQUEST_TIMEOUTS.status));
+    const timer = setTimeout(
+        () => {
+            timedOut = true;
+            controller.abort();
+        },
+        Math.max(1, options.timeoutMs ?? DREAMINA_REQUEST_TIMEOUTS.status),
+    );
 
     try {
         const response = await client.request(route, {
             method,
-            ...(method === "POST" ? {
-                headers: { "content-type": "application/json" },
-                body: "{}",
-            } : {}),
+            ...(method === "POST"
+                ? {
+                      headers: { "content-type": "application/json" },
+                      body: "{}",
+                  }
+                : {}),
             signal: controller.signal,
         });
         if (response.redirected || response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
@@ -131,9 +126,7 @@ async function requestDreamina(
         }
         const body = await readBoundedJson(response);
         if (!response.ok || !isRecord(body) || body.ok !== true) {
-            const code = isRecord(body) && typeof body.code === "string" && body.code in STABLE_ERROR_MESSAGES
-                ? body.code
-                : "dreamina_internal_error";
+            const code = isRecord(body) && typeof body.code === "string" && body.code in STABLE_ERROR_MESSAGES ? body.code : "dreamina_internal_error";
             throw publicError(code, response.status || 500);
         }
         return parseStatus(body.status, options.now?.() ?? Date.now());
@@ -202,26 +195,23 @@ function parseStatus(value: unknown, now: number): DreaminaCliStatus {
         allowed.add("userCode");
         allowed.add("expiresAt");
     }
-    if (Object.keys(value).some((key) => !allowed.has(key))
-        || value.provider !== "dreamina-cli"
-        || !isDreaminaState(value.state)
-        || typeof value.installed !== "boolean"
-        || typeof value.authenticated !== "boolean"
-        || typeof value.message !== "string"
-        || value.message.length < 1
-        || value.message.length > 500
-        || (value.version !== undefined && (typeof value.version !== "string" || !/^[A-Za-z0-9._+:-]{1,120}$/.test(value.version)))
-        || (value.totalCredit !== undefined && (
-            value.state !== "authenticated"
-            || !Number.isInteger(value.totalCredit)
-            || (value.totalCredit as number) < 0
-            || (value.totalCredit as number) > 1_000_000_000
-        ))
-        || ((value.accountBinding === undefined) !== (value.sessionEpoch === undefined))
-        || (value.accountBinding !== undefined && (value.state !== "authenticated" || typeof value.accountBinding !== "string" || !/^[A-Za-z0-9._:-]{8,160}$/.test(value.accountBinding)))
-        || (value.sessionEpoch !== undefined && (value.state !== "authenticated" || !Number.isSafeInteger(value.sessionEpoch) || (value.sessionEpoch as number) < 0))
-        || (value.creditObservedAt !== undefined && (value.totalCredit === undefined || typeof value.creditObservedAt !== "string" || !Number.isFinite(Date.parse(value.creditObservedAt))))
-        || (value.code !== undefined && (typeof value.code !== "string" || !LIFECYCLE_CODES.has(value.code as DreaminaLifecycleStatusCode)))) {
+    if (
+        Object.keys(value).some((key) => !allowed.has(key)) ||
+        value.provider !== "dreamina-cli" ||
+        !isDreaminaState(value.state) ||
+        typeof value.installed !== "boolean" ||
+        typeof value.authenticated !== "boolean" ||
+        typeof value.message !== "string" ||
+        value.message.length < 1 ||
+        value.message.length > 500 ||
+        (value.version !== undefined && (typeof value.version !== "string" || !/^[A-Za-z0-9._+:-]{1,120}$/.test(value.version))) ||
+        (value.totalCredit !== undefined && (value.state !== "authenticated" || !Number.isInteger(value.totalCredit) || (value.totalCredit as number) < 0 || (value.totalCredit as number) > 1_000_000_000)) ||
+        (value.accountBinding === undefined) !== (value.sessionEpoch === undefined) ||
+        (value.accountBinding !== undefined && (value.state !== "authenticated" || typeof value.accountBinding !== "string" || !/^[A-Za-z0-9._:-]{8,160}$/.test(value.accountBinding))) ||
+        (value.sessionEpoch !== undefined && (value.state !== "authenticated" || !Number.isSafeInteger(value.sessionEpoch) || (value.sessionEpoch as number) < 0)) ||
+        (value.creditObservedAt !== undefined && (value.totalCredit === undefined || typeof value.creditObservedAt !== "string" || !Number.isFinite(Date.parse(value.creditObservedAt)))) ||
+        (value.code !== undefined && (typeof value.code !== "string" || !LIFECYCLE_CODES.has(value.code as DreaminaLifecycleStatusCode)))
+    ) {
         throw publicError("dreamina_response_invalid", 502);
     }
     const code = value.code as DreaminaLifecycleStatusCode | undefined;
@@ -231,10 +221,7 @@ function parseStatus(value: unknown, now: number): DreaminaCliStatus {
 
     let verification: Pick<DreaminaCliStatus, "verificationUri" | "userCode" | "expiresAt"> = {};
     if (value.state === "login_pending") {
-        if (!isOfficialVerificationUri(value.verificationUri)
-            || typeof value.userCode !== "string"
-            || !/^[A-Za-z0-9-]{4,32}$/.test(value.userCode)
-            || typeof value.expiresAt !== "string") {
+        if (!isOfficialVerificationUri(value.verificationUri) || typeof value.userCode !== "string" || !/^[A-Za-z0-9-]{4,32}$/.test(value.userCode) || typeof value.expiresAt !== "string") {
             throw publicError("dreamina_response_invalid", 502);
         }
         const expiresAt = Date.parse(value.expiresAt);
@@ -264,12 +251,7 @@ function parseStatus(value: unknown, now: number): DreaminaCliStatus {
     };
 }
 
-function consistentStatus(
-    state: DreaminaCliState,
-    installed: boolean,
-    authenticated: boolean,
-    code: DreaminaLifecycleStatusCode | undefined,
-) {
+function consistentStatus(state: DreaminaCliState, installed: boolean, authenticated: boolean, code: DreaminaLifecycleStatusCode | undefined) {
     if (state === "missing") return !installed && !authenticated && code === "dreamina_missing";
     if (state === "installed") return installed && !authenticated && code === "dreamina_login_required";
     if (state === "login_pending") return installed && !authenticated && code === "dreamina_login_pending";
@@ -285,12 +267,7 @@ function isOfficialVerificationUri(value: unknown): value is string {
     if (typeof value !== "string" || value.length > 2_048) return false;
     try {
         const url = new URL(value);
-        return url.protocol === "https:"
-            && url.hostname === "jimeng.jianying.com"
-            && url.pathname === "/ai-tool/cli-auth"
-            && !url.username
-            && !url.password
-            && !url.hash;
+        return url.protocol === "https:" && url.hostname === "jimeng.jianying.com" && url.pathname === "/ai-tool/cli-auth" && !url.username && !url.password && !url.hash;
     } catch {
         return false;
     }

@@ -50,7 +50,7 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
 
 export function creationReferenceMetadata(references: CreationReference[]) {
     return {
-        skillIds: references.flatMap((reference) => reference.skill?.skill_id ? [reference.skill.skill_id] : []),
+        skillIds: references.flatMap((reference) => (reference.skill?.skill_id ? [reference.skill.skill_id] : [])),
     };
 }
 

@@ -36,15 +36,48 @@ export function generationTaskMode(task: GenerationTask, fallback?: CanvasGenera
 }
 
 export function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
-    return { content: image.url, storageKey: image.storageKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined };
+    return {
+        content: image.url,
+        storageKey: image.storageKey,
+        status: "success",
+        naturalWidth: image.width,
+        naturalHeight: image.height,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
+        errorDetails: undefined,
+        generationErrorCode: undefined,
+        failedPromptFingerprint: undefined,
+    };
 }
 
 export function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
-    return { content: video.url, storageKey: video.storageKey, status: "success", naturalWidth: video.width, naturalHeight: video.height, bytes: video.bytes, mimeType: video.mimeType || "video/mp4", durationMs: video.durationMs, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined };
+    return {
+        content: video.url,
+        storageKey: video.storageKey,
+        status: "success",
+        naturalWidth: video.width,
+        naturalHeight: video.height,
+        bytes: video.bytes,
+        mimeType: video.mimeType || "video/mp4",
+        durationMs: video.durationMs,
+        errorDetails: undefined,
+        generationErrorCode: undefined,
+        failedPromptFingerprint: undefined,
+    };
 }
 
 export function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
-    return { content: audio.url, storageKey: audio.storageKey, status: "success", bytes: audio.bytes, mimeType: audio.mimeType || "audio/mpeg", durationMs: audio.durationMs, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined };
+    return {
+        content: audio.url,
+        storageKey: audio.storageKey,
+        status: "success",
+        bytes: audio.bytes,
+        mimeType: audio.mimeType || "audio/mpeg",
+        durationMs: audio.durationMs,
+        errorDetails: undefined,
+        generationErrorCode: undefined,
+        failedPromptFingerprint: undefined,
+    };
 }
 
 export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]): Promise<CanvasNodeData> {
@@ -65,9 +98,10 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             if (!sourceDataUrl) throw new Error("无法读取情绪编辑源图片，未使用整图重绘结果");
             resultDataUrl = await compositeEmotionImage(sourceDataUrl, image.dataUrl, emotionEdit.editRegion, emotionEdit.faceBox);
         }
-        const uploaded = image.storageKey && !emotionEdit
-            ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
-            : await uploadImage(resultDataUrl);
+        const uploaded =
+            image.storageKey && !emotionEdit
+                ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
+                : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
         const requestedImageSize = nodeSizeFromRatio(node.metadata?.size || "auto", imageConfig.width, imageConfig.height);
         const imageSizeBounds = requestedImageSize || { width: node.width || imageConfig.width, height: node.height || imageConfig.height };
@@ -75,9 +109,8 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         const resultWidth = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.width : uploaded.width;
         const resultHeight = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.height : uploaded.height;
         const normalizedImage = resultWidth === uploaded.width && resultHeight === uploaded.height ? uploaded : { ...uploaded, width: resultWidth, height: resultHeight };
-        const imageSize = node.metadata?.generationType === "edit" && !requestedImageSize
-            ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height }
-            : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
+        const imageSize =
+            node.metadata?.generationType === "edit" && !requestedImageSize ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height } : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
         return {
             ...node,
             type: CanvasNodeType.Image,
@@ -91,7 +124,15 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     if (mode === "video") {
         if (!result.video?.dataUrl) throw new Error("后端任务没有返回视频");
         const video = result.video.storageKey
-            ? { url: await resolveMediaUrl(result.video.storageKey, result.video.dataUrl), storageKey: result.video.storageKey, width: result.video.width, height: result.video.height, durationMs: result.video.durationMs, bytes: result.video.bytes || 0, mimeType: result.video.mimeType || "video/mp4" }
+            ? {
+                  url: await resolveMediaUrl(result.video.storageKey, result.video.dataUrl),
+                  storageKey: result.video.storageKey,
+                  width: result.video.width,
+                  height: result.video.height,
+                  durationMs: result.video.durationMs,
+                  bytes: result.video.bytes || 0,
+                  mimeType: result.video.mimeType || "video/mp4",
+              }
             : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || node.width || VIDEO_NODE_MAX_SIZE.width, video.height || node.height || VIDEO_NODE_MAX_SIZE.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
         return {
@@ -113,7 +154,11 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     }
 
     if (!result.text) throw new Error("后端任务没有返回文本");
-    return { ...node, type: CanvasNodeType.Text, metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } };
+    return {
+        ...node,
+        type: CanvasNodeType.Text,
+        metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined },
+    };
 }
 
 export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, targetNodeId?: string) {
@@ -128,13 +173,7 @@ export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], 
     };
 }
 
-export async function applyMaterializedGenerationTaskResultToNodes(
-    nodes: CanvasNodeData[],
-    task: GenerationTask,
-    output: GenerationTaskOutput,
-    effectKey: string,
-    targetNodeId?: string,
-) {
+export async function applyMaterializedGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, output: GenerationTaskOutput, effectKey: string, targetNodeId?: string) {
     const node = findGenerationTaskNode(nodes, task, targetNodeId);
     if (!node) return { nodes, updated: false, nodeId: "", node: null };
     if (generationEffectApplied(node.metadata || {}, effectKey)) {
@@ -164,11 +203,7 @@ export async function applyMaterializedGenerationTaskResultToNodes(
     const updatedNode = await buildGenerationTaskNodeResult(node, { ...task, resultJson: JSON.stringify(result) }, nodes);
     const durableNode = {
         ...updatedNode,
-        metadata: applyGenerationConsumerEffect(
-            { ...updatedNode.metadata, assetId: asset.id },
-            effectKey,
-            (metadata) => metadata,
-        ).value,
+        metadata: applyGenerationConsumerEffect({ ...updatedNode.metadata, assetId: asset.id }, effectKey, (metadata) => metadata).value,
     };
     return {
         nodes: nodes.map((item) => (item.id === node.id ? durableNode : item)),

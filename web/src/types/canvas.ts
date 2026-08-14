@@ -41,7 +41,25 @@ export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character"
 export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat";
 export type CanvasSkillCategory = "writing" | "storyboard" | "image" | "video" | "utility";
 export type CanvasSkillOutputMode = "text" | "json" | "image_prompt" | "workflow";
-export type StoryboardColumn = "shotNumber" | "durationSeconds" | "plotDescription" | "dialogue" | "narrativeIntent" | "viewerPOV" | "performanceBlocking" | "shotSize" | "emotion" | "lightingAndAtmosphere" | "audioEffects" | "camera" | "motion" | "timeBeats" | "imageGenerationPrompt" | "videoMotionPrompt" | "continuityOut" | "negativePrompt";
+export type StoryboardColumn =
+    | "shotNumber"
+    | "durationSeconds"
+    | "plotDescription"
+    | "dialogue"
+    | "narrativeIntent"
+    | "viewerPOV"
+    | "performanceBlocking"
+    | "shotSize"
+    | "emotion"
+    | "lightingAndAtmosphere"
+    | "audioEffects"
+    | "camera"
+    | "motion"
+    | "timeBeats"
+    | "imageGenerationPrompt"
+    | "videoMotionPrompt"
+    | "continuityOut"
+    | "negativePrompt";
 
 export type StoryboardCharacterReference = {
     characterName: string;

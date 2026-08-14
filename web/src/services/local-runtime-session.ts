@@ -1,9 +1,7 @@
 import { openDB } from "idb";
 import { canonicalize } from "json-canonicalize";
 
-const configuredRuntimeEndpoint = typeof import.meta.env === "object"
-    ? import.meta.env.VITE_FRAMEFIELD_LOCAL_RUNTIME_ENDPOINT
-    : undefined;
+const configuredRuntimeEndpoint = typeof import.meta.env === "object" ? import.meta.env.VITE_FRAMEFIELD_LOCAL_RUNTIME_ENDPOINT : undefined;
 export const LOCAL_RUNTIME_ENDPOINT = resolveLocalRuntimeEndpoint(configuredRuntimeEndpoint);
 const KEY_DATABASE = "framefield-local-runtime";
 const KEY_STORE = "browser-keys";
@@ -15,15 +13,7 @@ export function resolveLocalRuntimeEndpoint(value: string | undefined) {
         throw new Error("Local Runtime endpoint must be one exact loopback origin");
     }
     const url = new URL(value);
-    if (url.protocol !== "http:"
-        || url.hostname !== "127.0.0.1"
-        || !url.port
-        || url.pathname !== "/"
-        || url.username
-        || url.password
-        || url.search
-        || url.hash
-        || url.origin !== value) {
+    if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || !url.port || url.pathname !== "/" || url.username || url.password || url.search || url.hash || url.origin !== value) {
         throw new Error("Local Runtime endpoint must be one exact loopback origin");
     }
     return url.origin;
@@ -50,9 +40,7 @@ export type RuntimePublicSession = {
     expiresAt: string;
 };
 
-export type LocalRuntimeConnection =
-    | { state: "connected"; session: RuntimePublicSession; runtimeVersion: number }
-    | { state: "origin_not_trusted"; runtimeVersion: number };
+export type LocalRuntimeConnection = { state: "connected"; session: RuntimePublicSession; runtimeVersion: number } | { state: "origin_not_trusted"; runtimeVersion: number };
 
 type RuntimeInfo = {
     runtime: "framefield-local-runtime";
@@ -80,7 +68,11 @@ type LocalRuntimeSessionClientOptions = {
 };
 
 export class LocalRuntimeClientError extends Error {
-    constructor(readonly code: string, message: string, readonly status = 0) {
+    constructor(
+        readonly code: string,
+        message: string,
+        readonly status = 0,
+    ) {
         super(message);
         this.name = "LocalRuntimeClientError";
     }
@@ -215,12 +207,7 @@ export class LocalRuntimeSessionClient {
                 expiresAt: challenge.expiresAt,
             }),
         );
-        const exchange = await this.jsonFetch(
-            "/runtime/session/exchange",
-            { challengeId: challenge.challengeId, signature },
-            signal,
-            true,
-        );
+        const exchange = await this.jsonFetch("/runtime/session/exchange", { challengeId: challenge.challengeId, signature }, signal, true);
         if (!exchange.response.ok) throw responseError(exchange.response, exchange.body);
         const session = parseSession(exchange.body, key.keyId);
         this.pending = undefined;
@@ -246,19 +233,12 @@ export class LocalRuntimeSessionClient {
     }
 
     private async createChallenge(key: RuntimeBrowserKeyRecord, signal?: AbortSignal) {
-        const payload = key.registered
-            ? { keyId: key.keyId }
-            : { publicKeyJwk: key.publicKeyJwk };
+        const payload = key.registered ? { keyId: key.keyId } : { publicKeyJwk: key.publicKeyJwk };
         const result = await this.jsonFetch("/runtime/session/challenge", payload, signal, true);
         if (result.response.status === 404 && key.registered) {
             key.registered = false;
             await this.keyStore.save(key);
-            const retry = await this.jsonFetch(
-                "/runtime/session/challenge",
-                { publicKeyJwk: key.publicKeyJwk },
-                signal,
-                true,
-            );
+            const retry = await this.jsonFetch("/runtime/session/challenge", { publicKeyJwk: key.publicKeyJwk }, signal, true);
             if (!retry.response.ok) throw responseError(retry.response, retry.body);
             return parseChallenge(retry.body, key.keyId);
         }
@@ -266,12 +246,7 @@ export class LocalRuntimeSessionClient {
         return parseChallenge(result.body, key.keyId);
     }
 
-    private async jsonFetch(
-        path: string,
-        body: unknown,
-        signal?: AbortSignal,
-        allowError = false,
-    ) {
+    private async jsonFetch(path: string, body: unknown, signal?: AbortSignal, allowError = false) {
         const response = await this.fetchImpl(`${LOCAL_RUNTIME_ENDPOINT}${path}`, {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -292,11 +267,7 @@ export class LocalRuntimeSessionClient {
             validateKeyRecord(existing);
             return existing;
         }
-        const pair = await this.cryptoImpl.subtle.generateKey(
-            { name: "ECDSA", namedCurve: "P-256" },
-            false,
-            ["sign", "verify"],
-        );
+        const pair = await this.cryptoImpl.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
         const publicKeyJwk = await this.cryptoImpl.subtle.exportKey("jwk", pair.publicKey);
         validatePublicJwk(publicKeyJwk);
         const keyId = await browserKeyId(this.cryptoImpl, publicKeyJwk);
@@ -320,7 +291,7 @@ export function createIndexedDbRuntimeKeyStore(): RuntimeBrowserKeyStore {
     });
     return {
         async load() {
-            return await (await database).get(KEY_STORE, KEY_RECORD_ID) as RuntimeBrowserKeyRecord | undefined;
+            return (await (await database).get(KEY_STORE, KEY_RECORD_ID)) as RuntimeBrowserKeyRecord | undefined;
         },
         async save(record) {
             await (await database).put(KEY_STORE, record, KEY_RECORD_ID);
@@ -332,20 +303,21 @@ export function createIndexedDbRuntimeKeyStore(): RuntimeBrowserKeyStore {
 }
 
 async function browserKeyId(cryptoImpl: Crypto, jwk: JsonWebKey) {
-    return await sha256Base64Url(cryptoImpl, new TextEncoder().encode(canonicalize({
-        crv: jwk.crv,
-        kty: jwk.kty,
-        x: jwk.x,
-        y: jwk.y,
-    })));
+    return await sha256Base64Url(
+        cryptoImpl,
+        new TextEncoder().encode(
+            canonicalize({
+                crv: jwk.crv,
+                kty: jwk.kty,
+                x: jwk.x,
+                y: jwk.y,
+            }),
+        ),
+    );
 }
 
 async function signP1363(cryptoImpl: Crypto, privateKey: CryptoKey, payload: string) {
-    const signature = new Uint8Array(await cryptoImpl.subtle.sign(
-        { name: "ECDSA", hash: "SHA-256" },
-        privateKey,
-        new TextEncoder().encode(payload),
-    ));
+    const signature = new Uint8Array(await cryptoImpl.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, new TextEncoder().encode(payload)));
     if (signature.byteLength !== 64) {
         throw new LocalRuntimeClientError("signature_invalid", "浏览器签名格式不受支持");
     }
@@ -389,11 +361,7 @@ function exactRuntimeUrl(pathAndQuery: string) {
 function exactOrigin(value: string) {
     try {
         const url = new URL(value);
-        if (!['http:', 'https:'].includes(url.protocol)
-            || url.pathname !== "/"
-            || url.search
-            || url.hash
-            || url.origin !== value) throw new Error();
+        if (!["http:", "https:"].includes(url.protocol) || url.pathname !== "/" || url.search || url.hash || url.origin !== value) throw new Error();
         return url.origin;
     } catch {
         throw new LocalRuntimeClientError("origin_invalid", "当前页面来源无效");
@@ -401,40 +369,46 @@ function exactOrigin(value: string) {
 }
 
 function validatePublicJwk(jwk: JsonWebKey) {
-    if (jwk.kty !== "EC"
-        || jwk.crv !== "P-256"
-        || !/^[A-Za-z0-9_-]{43}$/.test(jwk.x ?? "")
-        || !/^[A-Za-z0-9_-]{43}$/.test(jwk.y ?? "")
-        || jwk.d !== undefined
-        || jwk.ext !== true
-        || !Array.isArray(jwk.key_ops)
-        || jwk.key_ops.length !== 1
-        || jwk.key_ops[0] !== "verify") {
+    if (
+        jwk.kty !== "EC" ||
+        jwk.crv !== "P-256" ||
+        !/^[A-Za-z0-9_-]{43}$/.test(jwk.x ?? "") ||
+        !/^[A-Za-z0-9_-]{43}$/.test(jwk.y ?? "") ||
+        jwk.d !== undefined ||
+        jwk.ext !== true ||
+        !Array.isArray(jwk.key_ops) ||
+        jwk.key_ops.length !== 1 ||
+        jwk.key_ops[0] !== "verify"
+    ) {
         throw new LocalRuntimeClientError("browser_key_invalid", "浏览器公钥无效");
     }
 }
 
 function validateKeyRecord(record: RuntimeBrowserKeyRecord) {
     validatePublicJwk(record.publicKeyJwk);
-    if (record.id !== KEY_RECORD_ID
-        || record.privateKey.type !== "private"
-        || record.privateKey.extractable
-        || record.privateKey.algorithm.name !== "ECDSA"
-        || record.privateKey.usages.length !== 1
-        || record.privateKey.usages[0] !== "sign"
-        || !/^[A-Za-z0-9_-]{43}$/.test(record.keyId)) {
+    if (
+        record.id !== KEY_RECORD_ID ||
+        record.privateKey.type !== "private" ||
+        record.privateKey.extractable ||
+        record.privateKey.algorithm.name !== "ECDSA" ||
+        record.privateKey.usages.length !== 1 ||
+        record.privateKey.usages[0] !== "sign" ||
+        !/^[A-Za-z0-9_-]{43}$/.test(record.keyId)
+    ) {
         throw new LocalRuntimeClientError("browser_key_invalid", "浏览器密钥无效");
     }
 }
 
 function parseInfo(value: Record<string, unknown>): RuntimeInfo {
     assertExactKeys(value, ["runtime", "apiVersion", "protocolVersion", "runtimeInstanceId", "originTrusted"]);
-    if (value.runtime !== "framefield-local-runtime"
-        || value.apiVersion !== 2
-        || value.protocolVersion !== "framefield-runtime-session-v1"
-        || typeof value.runtimeInstanceId !== "string"
-        || !/^[A-Za-z0-9_-]{8,160}$/.test(value.runtimeInstanceId)
-        || typeof value.originTrusted !== "boolean") {
+    if (
+        value.runtime !== "framefield-local-runtime" ||
+        value.apiVersion !== 2 ||
+        value.protocolVersion !== "framefield-runtime-session-v1" ||
+        typeof value.runtimeInstanceId !== "string" ||
+        !/^[A-Za-z0-9_-]{8,160}$/.test(value.runtimeInstanceId) ||
+        typeof value.originTrusted !== "boolean"
+    ) {
         throw new LocalRuntimeClientError("runtime_incompatible", "本机运行时版本不兼容");
     }
     return value as RuntimeInfo;
@@ -442,12 +416,7 @@ function parseInfo(value: Record<string, unknown>): RuntimeInfo {
 
 function parseChallenge(value: Record<string, unknown>, keyId: string): RuntimeChallenge {
     assertExactKeys(value, ["state", "challengeId", "nonce", "runtimeInstanceId", "expiresAt", "keyId"]);
-    if (value.state !== "challenge"
-        || typeof value.challengeId !== "string"
-        || typeof value.nonce !== "string"
-        || typeof value.runtimeInstanceId !== "string"
-        || typeof value.expiresAt !== "string"
-        || value.keyId !== keyId) {
+    if (value.state !== "challenge" || typeof value.challengeId !== "string" || typeof value.nonce !== "string" || typeof value.runtimeInstanceId !== "string" || typeof value.expiresAt !== "string" || value.keyId !== keyId) {
         throw new LocalRuntimeClientError("challenge_invalid", "本机会话挑战无效");
     }
     return value as RuntimeChallenge;
@@ -455,12 +424,7 @@ function parseChallenge(value: Record<string, unknown>, keyId: string): RuntimeC
 
 function parseSession(value: Record<string, unknown>, keyId: string): RuntimePublicSession {
     assertExactKeys(value, ["sessionId", "keyId", "scopes", "expiresAt"]);
-    if (typeof value.sessionId !== "string"
-        || value.sessionId.length < 16
-        || value.keyId !== keyId
-        || !Array.isArray(value.scopes)
-        || value.scopes.some((scope) => typeof scope !== "string")
-        || typeof value.expiresAt !== "string") {
+    if (typeof value.sessionId !== "string" || value.sessionId.length < 16 || value.keyId !== keyId || !Array.isArray(value.scopes) || value.scopes.some((scope) => typeof scope !== "string") || typeof value.expiresAt !== "string") {
         throw new LocalRuntimeClientError("session_invalid", "本机会话响应无效");
     }
     return value as RuntimePublicSession;
@@ -475,7 +439,7 @@ function assertExactKeys(value: Record<string, unknown>, keys: readonly string[]
 
 async function safeJson(response: Response) {
     try {
-        const value = await response.json() as unknown;
+        const value = (await response.json()) as unknown;
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
         return value as Record<string, unknown>;
     } catch {
@@ -484,9 +448,7 @@ async function safeJson(response: Response) {
 }
 
 function responseError(response: Response, body: Record<string, unknown>) {
-    const code = typeof body.code === "string" && body.code in PUBLIC_RUNTIME_ERROR_MESSAGES
-        ? body.code
-        : "runtime_request_failed";
+    const code = typeof body.code === "string" && body.code in PUBLIC_RUNTIME_ERROR_MESSAGES ? body.code : "runtime_request_failed";
     return new LocalRuntimeClientError(code, PUBLIC_RUNTIME_ERROR_MESSAGES[code], response.status);
 }
 

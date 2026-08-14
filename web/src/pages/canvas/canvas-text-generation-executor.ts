@@ -58,30 +58,32 @@ export async function executeTextGeneration({
     const textTargetIds = generateInPlace ? [nodeId, ...childIds] : childIds;
     textTargetIds.forEach((targetNodeId) => startGenerationRequest(targetNodeId, nodeId, nodeId, controller));
     const answers = await Promise.all(
-        textTargetIds.map((targetNodeId) => (
-            runCanvasGenerationTaskToConsumer({
-                projectId,
-                nodeId: targetNodeId,
-                ...retryContext,
-                mode: "text",
-                prompt: effectivePrompt,
-                config: generationConfig,
-                referenceImages: generationContext.referenceImages,
-                referenceVideos: generationContext.referenceVideos,
-                signal: controller.signal,
-                metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions },
-            }, {
-                bindTask: (task) => bindGenerationTask(targetNodeId, task),
-                consumeTask: (task) => applyGenerationTaskResult(targetNodeId, task),
-            }).then(() => ({ nodeId: targetNodeId }))
-                .finally(() => finishGenerationRequest(targetNodeId, controller))
-        )),
+        textTargetIds.map((targetNodeId) =>
+            runCanvasGenerationTaskToConsumer(
+                {
+                    projectId,
+                    nodeId: targetNodeId,
+                    ...retryContext,
+                    mode: "text",
+                    prompt: effectivePrompt,
+                    config: generationConfig,
+                    referenceImages: generationContext.referenceImages,
+                    referenceVideos: generationContext.referenceVideos,
+                    signal: controller.signal,
+                    metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions },
+                },
+                {
+                    bindTask: (task) => bindGenerationTask(targetNodeId, task),
+                    consumeTask: (task) => applyGenerationTaskResult(targetNodeId, task),
+                },
+            )
+                .then(() => ({ nodeId: targetNodeId }))
+                .finally(() => finishGenerationRequest(targetNodeId, controller)),
+        ),
     );
     if (controller.signal.aborted) return;
     void answers;
     if (isConfigNode) {
-        setNodes((current) => current.map((node) => node.id === nodeId
-            ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } }
-            : node));
+        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } } : node)));
     }
 }

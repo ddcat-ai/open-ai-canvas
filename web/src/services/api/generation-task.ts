@@ -63,27 +63,33 @@ type PreparedGenerationReferences = {
 };
 
 // 生成、计费、取消和任务记录必须共用后端任务生命周期，页面层不能再直连供应商。
-export async function runBackendGenerationTask({
-    projectId,
-    mode,
-    prompt,
-    config,
-    referenceImages = [],
-    referenceVideos = [],
-    referenceAudios = [],
-    mask,
-    signal,
-    metadata,
-    onTaskUpdate,
-    localIdempotencyKey,
-    localResumeOnly,
-    clientOperationId,
-    retryOf,
-    attemptGroupId,
-}: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies = defaultDependencies) {
+export async function runBackendGenerationTask(
+    {
+        projectId,
+        mode,
+        prompt,
+        config,
+        referenceImages = [],
+        referenceVideos = [],
+        referenceAudios = [],
+        mask,
+        signal,
+        metadata,
+        onTaskUpdate,
+        localIdempotencyKey,
+        localResumeOnly,
+        clientOperationId,
+        retryOf,
+        attemptGroupId,
+    }: BackendGenerationTaskOptions,
+    dependencies: GenerationTaskDependencies = defaultDependencies,
+) {
     throwIfAborted(signal);
     if (isLocalDreaminaModel(config.model)) {
-        return await runLocalDreaminaGeneration({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId }, dependencies);
+        return await runLocalDreaminaGeneration(
+            { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId },
+            dependencies,
+        );
     }
     const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
@@ -95,25 +101,38 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     throwIfAborted(options.signal);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
     if (isLocalDreaminaModel(options.config.model)) {
-        return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => {
-            const retryContext = options.retryContextsByBatchIndex?.[batchIndex];
-            return runLocalDreaminaGeneration({
-                ...options,
-                config: { ...options.config, count: "1" },
-                metadata: { ...options.metadata, batchIndex, batchCount: count },
-                localIdempotencyKey: options.localIdempotencyKey ? `${options.localIdempotencyKey}:${batchIndex + 1}` : undefined,
-                clientOperationId: retryContext?.clientOperationId ?? (options.clientOperationId ? `${options.clientOperationId}:${batchIndex + 1}` : undefined),
-                retryOf: retryContext?.retryOf ?? options.retryOf,
-                attemptGroupId: retryContext?.attemptGroupId ?? options.attemptGroupId,
-            }, dependencies);
-        }));
+        return Promise.allSettled(
+            Array.from({ length: count }, (_, batchIndex) => {
+                const retryContext = options.retryContextsByBatchIndex?.[batchIndex];
+                return runLocalDreaminaGeneration(
+                    {
+                        ...options,
+                        config: { ...options.config, count: "1" },
+                        metadata: { ...options.metadata, batchIndex, batchCount: count },
+                        localIdempotencyKey: options.localIdempotencyKey ? `${options.localIdempotencyKey}:${batchIndex + 1}` : undefined,
+                        clientOperationId: retryContext?.clientOperationId ?? (options.clientOperationId ? `${options.clientOperationId}:${batchIndex + 1}` : undefined),
+                        retryOf: retryContext?.retryOf ?? options.retryOf,
+                        attemptGroupId: retryContext?.attemptGroupId ?? options.attemptGroupId,
+                    },
+                    dependencies,
+                );
+            }),
+        );
     }
     const prepared = await prepareGenerationReferences(options);
     throwIfAborted(options.signal);
-    return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => createAndWaitGenerationTask({
-        ...options,
-        metadata: { ...options.metadata, batchIndex, batchCount: count },
-    }, prepared, dependencies)));
+    return Promise.allSettled(
+        Array.from({ length: count }, (_, batchIndex) =>
+            createAndWaitGenerationTask(
+                {
+                    ...options,
+                    metadata: { ...options.metadata, batchIndex, batchCount: count },
+                },
+                prepared,
+                dependencies,
+            ),
+        ),
+    );
 }
 
 async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies): Promise<BackendGenerationResult> {
@@ -143,27 +162,27 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
     };
     options.onTaskUpdate?.(task);
     try {
-        const references = await localGenerationReferences(
-            [...(options.referenceImages ?? []), ...(options.mask ? [options.mask] : [])],
-            options.referenceVideos ?? [],
-            options.referenceAudios ?? [],
-        );
+        const references = await localGenerationReferences([...(options.referenceImages ?? []), ...(options.mask ? [options.mask] : [])], options.referenceVideos ?? [], options.referenceAudios ?? []);
         const resolution = options.mode === "video" ? options.config.vquality : options.config.quality;
-        const result = await dependencies.runLocal({
-            model: options.config.model as `local:dreamina-cli:${string}`,
-            mode: options.mode,
-            prompt: options.prompt,
-            settings: {
-                aspect: options.config.size,
-                resolution,
-                ...(options.mode === "video" ? { duration: Number(options.config.videoSeconds) } : { count: Number(options.config.count) }),
+        const result = await dependencies.runLocal(
+            {
+                model: options.config.model as `local:dreamina-cli:${string}`,
+                mode: options.mode,
+                prompt: options.prompt,
+                settings: {
+                    aspect: options.config.size,
+                    resolution,
+                    ...(options.mode === "video" ? { duration: Number(options.config.videoSeconds) } : { count: Number(options.config.count) }),
+                },
+                references,
+                resumeOnly: options.localResumeOnly,
+                idempotencyKey: runtimeId,
+                clientOperationId,
+                context,
             },
-            references,
-            resumeOnly: options.localResumeOnly,
-            idempotencyKey: runtimeId,
-            clientOperationId,
-            context,
-        }, options.signal, (runtimeTask) => options.onTaskUpdate?.(projectLocalDreaminaTask(runtimeTask, task)));
+            options.signal,
+            (runtimeTask) => options.onTaskUpdate?.(projectLocalDreaminaTask(runtimeTask, task)),
+        );
         const completedAt = dependencies.now();
         options.onTaskUpdate?.({ ...task, status: "succeeded", progress: 100, stage: "local_cli_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt });
         return result;
@@ -178,10 +197,14 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
             stage: cancelled ? "local_cli_cancelled" : "local_cli_failed",
             completedAt,
             updatedAt: completedAt,
-            ...(localWaitStopped ? { errorCode: error.code, error: error.message } : !cancelled ? {
-                ...(localErrorCode ? { errorCode: localErrorCode } : {}),
-                error: error instanceof Error ? error.message : "即梦本机生成失败",
-            } : {}),
+            ...(localWaitStopped
+                ? { errorCode: error.code, error: error.message }
+                : !cancelled
+                  ? {
+                        ...(localErrorCode ? { errorCode: localErrorCode } : {}),
+                        error: error instanceof Error ? error.message : "即梦本机生成失败",
+                    }
+                  : {}),
         });
         throw error;
     }
@@ -197,44 +220,44 @@ function generationOperation(options: BackendGenerationTaskOptions) {
 
 export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {
     if (error instanceof LocalDreaminaGenerationClientError && error.code === "dreamina_submission_unknown") return false;
-    return signal?.aborted === true || (error instanceof Error && error.name === "AbortError")
-        || (error instanceof LocalDreaminaGenerationClientError && error.code === LOCAL_DREAMINA_WAIT_STOPPED_CODE);
+    return signal?.aborted === true || (error instanceof Error && error.name === "AbortError") || (error instanceof LocalDreaminaGenerationClientError && error.code === LOCAL_DREAMINA_WAIT_STOPPED_CODE);
 }
 
-
 async function localGenerationReferences(images: ReferenceImage[], videos: ReferenceVideo[], audios: ReferenceAudio[]): Promise<LocalDreaminaGenerationInput["references"]> {
-    const imageReferences = await Promise.all(images.map(async (image) => {
-        const source = image.dataUrl || image.url;
-        if (!source && !image.storageKey) throw new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦图片参考素材不可用", 400);
-        const blob = image.storageKey ? await getImageBlob(image.storageKey) : await (await fetch(source!)).blob();
-        if (!blob || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw invalidLocalReference();
-        return {
-            kind: "image" as const,
-            mimeType: blob.type as "image/png" | "image/jpeg" | "image/webp",
-            bytes: new Uint8Array(await blob.arrayBuffer()),
-            metadata: compactReferenceMetadata({ name: image.name, width: image.width, height: image.height }),
-        };
-    }));
-    const mediaReferences = async (items: Array<ReferenceVideo | ReferenceAudio>, kind: "video" | "audio") => Promise.all(items.map(async (media) => {
-        const source = media.url || "";
-        const blob = media.storageKey ? await getMediaBlob(media.storageKey)
-            : source ? await (await fetch(source)).blob() : null;
-        const allowed = kind === "video"
-            ? ["video/mp4", "video/quicktime", "video/webm"]
-            : ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/flac"];
-        if (!blob || !allowed.includes(blob.type)) throw invalidLocalReference();
-        return {
-            kind,
-            mimeType: blob.type,
-            bytes: new Uint8Array(await blob.arrayBuffer()),
-            metadata: compactReferenceMetadata({
-                name: media.name,
-                ...("width" in media ? { width: media.width, height: media.height } : {}),
-                durationMs: media.durationMs,
+    const imageReferences = await Promise.all(
+        images.map(async (image) => {
+            const source = image.dataUrl || image.url;
+            if (!source && !image.storageKey) throw new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦图片参考素材不可用", 400);
+            const blob = image.storageKey ? await getImageBlob(image.storageKey) : await (await fetch(source!)).blob();
+            if (!blob || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw invalidLocalReference();
+            return {
+                kind: "image" as const,
+                mimeType: blob.type as "image/png" | "image/jpeg" | "image/webp",
+                bytes: new Uint8Array(await blob.arrayBuffer()),
+                metadata: compactReferenceMetadata({ name: image.name, width: image.width, height: image.height }),
+            };
+        }),
+    );
+    const mediaReferences = async (items: Array<ReferenceVideo | ReferenceAudio>, kind: "video" | "audio") =>
+        Promise.all(
+            items.map(async (media) => {
+                const source = media.url || "";
+                const blob = media.storageKey ? await getMediaBlob(media.storageKey) : source ? await (await fetch(source)).blob() : null;
+                const allowed = kind === "video" ? ["video/mp4", "video/quicktime", "video/webm"] : ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/flac"];
+                if (!blob || !allowed.includes(blob.type)) throw invalidLocalReference();
+                return {
+                    kind,
+                    mimeType: blob.type,
+                    bytes: new Uint8Array(await blob.arrayBuffer()),
+                    metadata: compactReferenceMetadata({
+                        name: media.name,
+                        ...("width" in media ? { width: media.width, height: media.height } : {}),
+                        durationMs: media.durationMs,
+                    }),
+                };
             }),
-        };
-    }));
-    const references = [...imageReferences, ...await mediaReferences(videos, "video"), ...await mediaReferences(audios, "audio")] as LocalDreaminaGenerationInput["references"];
+        );
+    const references = [...imageReferences, ...(await mediaReferences(videos, "video")), ...(await mediaReferences(audios, "audio"))] as LocalDreaminaGenerationInput["references"];
     if (references.reduce((total, reference) => total + reference.bytes.byteLength, 0) > 20 * 1024 * 1024) throw invalidLocalReference();
     return references;
 }
@@ -276,7 +299,12 @@ function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 }
 
-async function prepareGenerationReferences({ referenceImages = [], referenceVideos = [], referenceAudios = [], mask }: Pick<BackendGenerationTaskOptions, "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
+async function prepareGenerationReferences({
+    referenceImages = [],
+    referenceVideos = [],
+    referenceAudios = [],
+    mask,
+}: Pick<BackendGenerationTaskOptions, "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
     const preparedImages = await Promise.all(referenceImages.map(prepareBackendImageReference));
     const preparedVideos = await Promise.all(referenceVideos.map(prepareBackendMediaReference));
     const preparedAudios = await Promise.all(referenceAudios.map(prepareBackendMediaReference));

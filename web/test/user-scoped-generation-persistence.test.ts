@@ -4,12 +4,7 @@ import localforage from "localforage";
 import { getActiveUserScope, setActiveUserScope } from "../src/lib/user-scope";
 import { switchUserStorageScope } from "../src/lib/user-session";
 import { activeGenerationConsumerController, beginGenerationConsumer, runGenerationConsumer } from "../src/services/generation-consumer-lifecycle";
-import {
-    CREATION_CONVERSATIONS_KEY,
-    loadCreationConversations,
-    pendingCreationTaskIds,
-    saveCreationConversations,
-} from "../src/services/creation-conversation-store";
+import { CREATION_CONVERSATIONS_KEY, loadCreationConversations, pendingCreationTaskIds, saveCreationConversations } from "../src/services/creation-conversation-store";
 import { useAssetStore, type NewAsset } from "../src/stores/use-asset-store";
 import { flushAssetStorePersistence } from "../src/stores/use-asset-store";
 import { deleteAssetWithRemoteSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "../src/services/user-data-sync";
@@ -56,26 +51,34 @@ test("Create pending conversations stay in their account and cannot be consumed 
 
     try {
         setActiveUserScope("account-A");
-        await saveCreationConversations([{
-            id: "conversation-account-A",
-            messages: [{
-                id: "message-account-A",
-                role: "assistant",
-                mode: "image",
-                status: "pending",
-                taskIds: ["backend-task-account-A"],
-            }],
-        }]);
-        values.set(CREATION_CONVERSATIONS_KEY, [{
-            id: "legacy-unscoped",
-            messages: [{
-                id: "legacy-message",
-                role: "assistant",
-                mode: "image",
-                status: "pending",
-                taskIds: ["legacy-unscoped-task"],
-            }],
-        }]);
+        await saveCreationConversations([
+            {
+                id: "conversation-account-A",
+                messages: [
+                    {
+                        id: "message-account-A",
+                        role: "assistant",
+                        mode: "image",
+                        status: "pending",
+                        taskIds: ["backend-task-account-A"],
+                    },
+                ],
+            },
+        ]);
+        values.set(CREATION_CONVERSATIONS_KEY, [
+            {
+                id: "legacy-unscoped",
+                messages: [
+                    {
+                        id: "legacy-message",
+                        role: "assistant",
+                        mode: "image",
+                        status: "pending",
+                        taskIds: ["legacy-unscoped-task"],
+                    },
+                ],
+            },
+        ]);
         setActiveUserScope("account-B");
         const recovered = await loadCreationConversations();
         let queries = 0;
@@ -88,16 +91,20 @@ test("Create pending conversations stay in their account and cannot be consumed 
         expect(recovered ?? []).toEqual([]);
         expect(queries).toBe(0);
         expect(materializations).toBe(0);
-        expect(values.get(CREATION_CONVERSATIONS_KEY)).toEqual([{
-            id: "legacy-unscoped",
-            messages: [{
-                id: "legacy-message",
-                role: "assistant",
-                mode: "image",
-                status: "pending",
-                taskIds: ["legacy-unscoped-task"],
-            }],
-        }]);
+        expect(values.get(CREATION_CONVERSATIONS_KEY)).toEqual([
+            {
+                id: "legacy-unscoped",
+                messages: [
+                    {
+                        id: "legacy-message",
+                        role: "assistant",
+                        mode: "image",
+                        status: "pending",
+                        taskIds: ["legacy-unscoped-task"],
+                    },
+                ],
+            },
+        ]);
     } finally {
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
@@ -124,9 +131,13 @@ test("asset writes freeze account scope and user switching drains the previous a
 
     const assetKeys: string[] = [];
     let releaseFirstWrite!: () => void;
-    const firstWriteGate = new Promise<void>((resolve) => { releaseFirstWrite = resolve; });
+    const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+    });
     let firstWriteStartedResolve!: () => void;
-    const firstWriteStarted = new Promise<void>((resolve) => { firstWriteStartedResolve = resolve; });
+    const firstWriteStarted = new Promise<void>((resolve) => {
+        firstWriteStartedResolve = resolve;
+    });
     let blocked = false;
     localforage.setItem = (async (key: string, value: string) => {
         if (key.includes("infinite-canvas:asset_store")) {
@@ -142,15 +153,9 @@ test("asset writes freeze account scope and user switching drains the previous a
 
     const previousAssets = useAssetStore.getState().assets;
     try {
-        const firstWrite = useAssetStore.getState().addGenerationAsset(
-            "materialize:scope-freeze-first:0",
-            generatedAsset("first"),
-        );
+        const firstWrite = useAssetStore.getState().addGenerationAsset("materialize:scope-freeze-first:0", generatedAsset("first"));
         await firstWriteStarted;
-        const secondWrite = useAssetStore.getState().addGenerationAsset(
-            "materialize:scope-freeze-second:0",
-            generatedAsset("second"),
-        );
+        const secondWrite = useAssetStore.getState().addGenerationAsset("materialize:scope-freeze-second:0", generatedAsset("second"));
         const switchScope = switchUserStorageScope("account-B");
 
         await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -187,19 +192,27 @@ test("account switching aborts and drains generation consumers before activating
     });
     setActiveUserScope("account-A");
     let consumerStartedResolve!: () => void;
-    const consumerStarted = new Promise<void>((resolve) => { consumerStartedResolve = resolve; });
+    const consumerStarted = new Promise<void>((resolve) => {
+        consumerStartedResolve = resolve;
+    });
     let releaseConsumerResolve!: () => void;
-    const releaseConsumer = new Promise<void>((resolve) => { releaseConsumerResolve = resolve; });
+    const releaseConsumer = new Promise<void>((resolve) => {
+        releaseConsumerResolve = resolve;
+    });
     let abortObserved = false;
     let sinkWrites = 0;
 
     const consumerResult = runGenerationConsumer(undefined, async (signal) => {
         consumerStartedResolve();
         await new Promise<void>((resolve) => {
-            signal.addEventListener("abort", () => {
-                abortObserved = true;
-                resolve();
-            }, { once: true });
+            signal.addEventListener(
+                "abort",
+                () => {
+                    abortObserved = true;
+                    resolve();
+                },
+                { once: true },
+            );
         });
         await releaseConsumer;
         if (!signal.aborted) sinkWrites += 1;
@@ -250,9 +263,13 @@ test("account switching keeps new generation consumers closed while old persiste
     setActiveUserScope("account-A");
 
     let writeStartedResolve!: () => void;
-    const writeStarted = new Promise<void>((resolve) => { writeStartedResolve = resolve; });
+    const writeStarted = new Promise<void>((resolve) => {
+        writeStartedResolve = resolve;
+    });
     let releaseWriteResolve!: () => void;
-    const releaseWrite = new Promise<void>((resolve) => { releaseWriteResolve = resolve; });
+    const releaseWrite = new Promise<void>((resolve) => {
+        releaseWriteResolve = resolve;
+    });
     localforage.setItem = (async (key: string, value: string) => {
         if (key.includes("infinite-canvas:asset_store")) {
             writeStartedResolve();
@@ -263,10 +280,7 @@ test("account switching keeps new generation consumers closed while old persiste
 
     const previousAssets = useAssetStore.getState().assets;
     try {
-        const pendingWrite = useAssetStore.getState().addGenerationAsset(
-            "materialize:switch-flush-gate:0",
-            generatedAsset("flush gate"),
-        );
+        const pendingWrite = useAssetStore.getState().addGenerationAsset("materialize:switch-flush-gate:0", generatedAsset("flush gate"));
         await writeStarted;
         const switchScope = switchUserStorageScope("account-B");
         await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -307,7 +321,13 @@ test("an in-flight provider request is aborted and drained before the account ch
     setActiveUserScope("account-A");
     const request = beginGenerationConsumer();
     let abortObserved = false;
-    request.signal.addEventListener("abort", () => { abortObserved = true; }, { once: true });
+    request.signal.addEventListener(
+        "abort",
+        () => {
+            abortObserved = true;
+        },
+        { once: true },
+    );
     try {
         const switchScope = switchUserStorageScope("account-B");
         await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -334,7 +354,9 @@ test("StrictMode cleanup replaces only an already-aborted generation consumer co
 
 test("account scope transition can hold remote user-data sync paused for its full critical section", async () => {
     let releaseResolve!: () => void;
-    const release = new Promise<void>((resolve) => { releaseResolve = resolve; });
+    const release = new Promise<void>((resolve) => {
+        releaseResolve = resolve;
+    });
     let entered = false;
     const transition = withRemoteUserDataSyncPaused(async () => {
         entered = true;
@@ -343,7 +365,9 @@ test("account scope transition can hold remote user-data sync paused for its ful
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(entered).toBe(true);
     let completed = false;
-    transition.then(() => { completed = true; });
+    transition.then(() => {
+        completed = true;
+    });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(completed).toBe(false);
     releaseResolve();
@@ -357,7 +381,9 @@ test("account scope transition drains an active remote deletion before entering 
     const previousAdapter = apiClient.defaults.adapter;
     const previousAssets = useAssetStore.getState().assets;
     let releaseDelete!: () => void;
-    const deleteReleased = new Promise<void>((resolve) => { releaseDelete = resolve; });
+    const deleteReleased = new Promise<void>((resolve) => {
+        releaseDelete = resolve;
+    });
     let deleteStarted = false;
     apiClient.defaults.adapter = async (config) => {
         const url = String(config.url || "");
@@ -384,22 +410,26 @@ test("account scope transition drains an active remote deletion before entering 
     try {
         useAssetStore.getState().replaceAssets([]);
         await syncRemoteUserData("account-A");
-        useAssetStore.getState().replaceAssets([{
-            id: "shared-asset",
-            kind: "image",
-            title: "account A asset",
-            coverUrl: "opaque://account-a",
-            tags: [],
-            metadata: {},
-            data: { dataUrl: "opaque://account-a", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
-            createdAt: "2026-08-13T00:00:00.000Z",
-            updatedAt: "2026-08-13T00:00:00.000Z",
-        }]);
+        useAssetStore.getState().replaceAssets([
+            {
+                id: "shared-asset",
+                kind: "image",
+                title: "account A asset",
+                coverUrl: "opaque://account-a",
+                tags: [],
+                metadata: {},
+                data: { dataUrl: "opaque://account-a", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
+                createdAt: "2026-08-13T00:00:00.000Z",
+                updatedAt: "2026-08-13T00:00:00.000Z",
+            },
+        ]);
         const deletion = deleteAssetWithRemoteSync("shared-asset");
         await new Promise<void>((resolve) => queueMicrotask(resolve));
         expect(deleteStarted).toBe(true);
         let transitionEntered = false;
-        const transition = withRemoteUserDataSyncPaused(async () => { transitionEntered = true; });
+        const transition = withRemoteUserDataSyncPaused(async () => {
+            transitionEntered = true;
+        });
         await new Promise<void>((resolve) => queueMicrotask(resolve));
         expect(transitionEntered).toBe(false);
         expect(useAssetStore.getState().assets.some((asset) => asset.id === "shared-asset")).toBe(true);

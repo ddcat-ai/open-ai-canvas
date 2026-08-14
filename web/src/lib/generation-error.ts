@@ -103,9 +103,7 @@ function extractWrappedProviderMessage(raw: string) {
     const requestFailure = raw.match(/^Request failed with status code \d{3}\s*[:：-]?\s*(.+)$/is);
     const wrapped = interfaceFailure?.[1] ?? requestFailure?.[1];
     if (!wrapped) return "";
-    const message = wrapped
-        .replace(/^\d{3}(?:\s+(?:Bad Gateway|Service Unavailable|Gateway Timeout|Internal Server Error|Not Found|Unauthorized|Forbidden|Too Many Requests))?\s*[:：-]?\s*/i, "")
-        .trim();
+    const message = wrapped.replace(/^\d{3}(?:\s+(?:Bad Gateway|Service Unavailable|Gateway Timeout|Internal Server Error|Not Found|Unauthorized|Forbidden|Too Many Requests))?\s*[:：-]?\s*/i, "").trim();
     return message && !containsInfrastructureDetails(message) ? message : "";
 }
 

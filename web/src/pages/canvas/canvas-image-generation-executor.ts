@@ -55,7 +55,7 @@ export async function executeImageGeneration({
     const imageConfig = requestedImageSize || imageDefaults;
     // auto 图生图沿用来源节点尺寸；用户明确选择比例时必须以目标比例创建节点。
     const referenceNode = referenceImages.length === 1 ? canvasNodes.find((node) => node.id === referenceImages[0].id && node.type === CanvasNodeType.Image) : undefined;
-    const imageSizeSource = requestedImageSize ? undefined : (isImageNode && sourceNode?.metadata?.content ? sourceNode : referenceNode);
+    const imageSizeSource = requestedImageSize ? undefined : isImageNode && sourceNode?.metadata?.content ? sourceNode : referenceNode;
     const outputNodeSize = imageSizeSource ? { width: imageSizeSource.width, height: imageSizeSource.height } : imageConfig;
     const parentPosition = sourceNode?.position || { x: 0, y: 0 };
     const parentWidth = sourceNode?.width || parentConfig.width;
@@ -101,7 +101,16 @@ export async function executeImageGeneration({
         position: imageGenerationChildPosition(rootNode.position, rootNode.width, outputNodeSize, index),
         width: outputNodeSize.width,
         height: outputNodeSize.height,
-        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, size: generationConfig.size, batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined, ...generationMetadata, ...styleMetadata, generationErrorCode: undefined, failedPromptFingerprint: undefined },
+        metadata: {
+            prompt: effectivePrompt,
+            status: NODE_STATUS_LOADING,
+            size: generationConfig.size,
+            batchRootId: count > 1 && !directCopiedBatch ? rootId : undefined,
+            ...generationMetadata,
+            ...styleMetadata,
+            generationErrorCode: undefined,
+            failedPromptFingerprint: undefined,
+        },
     }));
     const batchConnections = directCopiedBatch
         ? childIds.map((childId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: childId }))
@@ -140,47 +149,63 @@ export async function executeImageGeneration({
     await Promise.all(
         targetIds.map(async (targetId) => {
             try {
-                await runCanvasGenerationTaskToConsumer({
-                    projectId,
-                    nodeId: targetId,
-                    ...retryContext,
-                    mode: "image",
-                    prompt: effectivePrompt,
-                    config: { ...generationConfig, count: "1" },
-                    referenceImages,
-                    signal: controller.signal,
-                    metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...styleMetadata },
-                }, {
-                    bindTask: (task) => bindGenerationTask(targetId, task),
-                    consumeTask: (task) => applyGenerationTaskResult(targetId, task),
-                });
+                await runCanvasGenerationTaskToConsumer(
+                    {
+                        projectId,
+                        nodeId: targetId,
+                        ...retryContext,
+                        mode: "image",
+                        prompt: effectivePrompt,
+                        config: { ...generationConfig, count: "1" },
+                        referenceImages,
+                        signal: controller.signal,
+                        metadata: {
+                            sourceNodeId: nodeId,
+                            ...taskContext,
+                            resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
+                            promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation,
+                            promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables,
+                            ...styleMetadata,
+                        },
+                    },
+                    {
+                        bindTask: (task) => bindGenerationTask(targetId, task),
+                        consumeTask: (task) => applyGenerationTaskResult(targetId, task),
+                    },
+                );
                 if (targetId !== rootId && !directCopiedBatch) {
                     setNodes((current) => {
                         const child = current.find((node) => node.id === targetId);
                         const root = current.find((node) => node.id === rootId);
                         if (!child?.metadata?.content || !root || root.metadata?.primaryImageId) return current;
                         const center = { x: root.position.x + root.width / 2, y: root.position.y + root.height / 2 };
-                        const geometry = root.metadata?.locked ? {} : {
-                            width: child.width,
-                            height: child.height,
-                            position: { x: center.x - child.width / 2, y: center.y - child.height / 2 },
-                        };
-                        return current.map((node) => node.id === rootId ? {
-                            ...node,
-                            ...geometry,
-                            metadata: {
-                                ...node.metadata,
-                                content: child.metadata?.content,
-                                storageKey: child.metadata?.storageKey,
-                                mimeType: child.metadata?.mimeType,
-                                bytes: child.metadata?.bytes,
-                                naturalWidth: child.metadata?.naturalWidth,
-                                naturalHeight: child.metadata?.naturalHeight,
-                                assetId: child.metadata?.assetId,
-                                primaryImageId: targetId,
-                                status: NODE_STATUS_SUCCESS,
-                            },
-                        } : node);
+                        const geometry = root.metadata?.locked
+                            ? {}
+                            : {
+                                  width: child.width,
+                                  height: child.height,
+                                  position: { x: center.x - child.width / 2, y: center.y - child.height / 2 },
+                              };
+                        return current.map((node) =>
+                            node.id === rootId
+                                ? {
+                                      ...node,
+                                      ...geometry,
+                                      metadata: {
+                                          ...node.metadata,
+                                          content: child.metadata?.content,
+                                          storageKey: child.metadata?.storageKey,
+                                          mimeType: child.metadata?.mimeType,
+                                          bytes: child.metadata?.bytes,
+                                          naturalWidth: child.metadata?.naturalWidth,
+                                          naturalHeight: child.metadata?.naturalHeight,
+                                          assetId: child.metadata?.assetId,
+                                          primaryImageId: targetId,
+                                          status: NODE_STATUS_SUCCESS,
+                                      },
+                                  }
+                                : node,
+                        );
                     });
                 }
                 hasSuccess = true;

@@ -9,7 +9,22 @@ import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerat
 import { formatTaskKind, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain, operationOptions } from "@/lib/generation-task-display";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 
-import { cancelGenerationTask, createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import {
+    cancelGenerationTask,
+    createAgentSession,
+    createGenerationTask,
+    deleteGenerationTask,
+    formatTaskLog,
+    listGenerationTasks,
+    listTaskLogs,
+    queryFailedVideoProviderTask,
+    queryGenerationTask,
+    refreshGenerationTaskStatus,
+    retryGenerationTask,
+    type CreateTaskInput,
+    type GenerationTask,
+    type TaskLog,
+} from "@/services/api/task-center";
 import { localDreaminaCancellationCopy, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -91,25 +106,35 @@ export default function TasksPage() {
     const tasksRef = useRef<GenerationTask[]>([]);
     const canvasById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const domainProjectNameById = useMemo(() => new Map(domainProjects.map((item) => [item.project.id, item.project.name])), [domainProjects]);
-    const projectOptions = useMemo(() => projects.map((project) => {
-        const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
-        return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
-    }), [domainProjectNameById, projects]);
+    const projectOptions = useMemo(
+        () =>
+            projects.map((project) => {
+                const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
+                return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
+            }),
+        [domainProjectNameById, projects],
+    );
     const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")), [effectiveConfig, tasks]);
-    const filteredTasks = useMemo(() => tasks.filter((task) => {
-        if (statusFilter === "all") return true;
-        if (statusFilter === "active") return task.status === "queued" || task.status === "running";
-        if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
-        if (statusFilter === "succeeded") return task.status === "succeeded";
-        return false;
-    }).filter((task) => {
-        if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
-        if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
-        if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
-        const query = keyword.trim().toLowerCase();
-        const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
-        return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
-    }), [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks]);
+    const filteredTasks = useMemo(
+        () =>
+            tasks
+                .filter((task) => {
+                    if (statusFilter === "all") return true;
+                    if (statusFilter === "active") return task.status === "queued" || task.status === "running";
+                    if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
+                    if (statusFilter === "succeeded") return task.status === "succeeded";
+                    return false;
+                })
+                .filter((task) => {
+                    if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
+                    if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
+                    if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
+                    const query = keyword.trim().toLowerCase();
+                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
+                    return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
+                }),
+        [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks],
+    );
     const visibleTasks = useMemo(() => filteredTasks.slice((page - 1) * pageSize, page * pageSize), [filteredTasks, page, pageSize]);
     const taskStats = useMemo(() => {
         let today = 0;
@@ -129,10 +154,7 @@ export default function TasksPage() {
         return { today, active, succeeded, failed };
     }, [tasks]);
     const groupingActive = viewMode === "list" && groupEnabled;
-    const visibleTaskGroups = useMemo(
-        () => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []),
-        [canvasById, domainProjectNameById, filteredTasks, groupingActive],
-    );
+    const visibleTaskGroups = useMemo(() => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []), [canvasById, domainProjectNameById, filteredTasks, groupingActive]);
 
     const changeViewMode = (mode: TaskViewMode) => {
         setViewMode(mode);
@@ -174,14 +196,7 @@ export default function TasksPage() {
     );
 
     const renderTaskGridCard = (task: GenerationTask) => (
-        <TaskGridCard
-            key={task.id}
-            task={task}
-            actingId={actingId}
-            onOpen={() => void openTaskDetail(task)}
-            onRetry={() => void runAction(task.id, "retry")}
-            onCancel={() => void runAction(task.id, "cancel")}
-        />
+        <TaskGridCard key={task.id} task={task} actingId={actingId} onOpen={() => void openTaskDetail(task)} onRetry={() => void runAction(task.id, "retry")} onCancel={() => void runAction(task.id, "cancel")} />
     );
 
     useEffect(() => {
@@ -190,9 +205,11 @@ export default function TasksPage() {
             return;
         }
         let cancelled = false;
-        void listProjects().then((result) => {
-            if (!cancelled) setDomainProjects(result.projects);
-        }).catch(() => undefined);
+        void listProjects()
+            .then((result) => {
+                if (!cancelled) setDomainProjects(result.projects);
+            })
+            .catch(() => undefined);
         return () => {
             cancelled = true;
         };
@@ -225,20 +242,23 @@ export default function TasksPage() {
         );
     }, []);
 
-    const loadTasks = useCallback(async (showLoading = false) => {
-        if (showLoading) setLoading(true);
-        try {
-            const next = await listGenerationTasks(1000);
-            setTasks((current) => reconcileTaskSummaries(current, next));
-            void syncCompletedCanvasTasks(next);
-            return next;
-        } catch (error) {
-            if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
-            return undefined;
-        } finally {
-            if (showLoading) setLoading(false);
-        }
-    }, [message, syncCompletedCanvasTasks]);
+    const loadTasks = useCallback(
+        async (showLoading = false) => {
+            if (showLoading) setLoading(true);
+            try {
+                const next = await listGenerationTasks(1000);
+                setTasks((current) => reconcileTaskSummaries(current, next));
+                void syncCompletedCanvasTasks(next);
+                return next;
+            } catch (error) {
+                if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
+                return undefined;
+            } finally {
+                if (showLoading) setLoading(false);
+            }
+        },
+        [message, syncCompletedCanvasTasks],
+    );
 
     const openTaskDetail = useCallback(
         async (task: GenerationTask) => {
@@ -299,7 +319,7 @@ export default function TasksPage() {
         try {
             const next = action === "retry" ? await retryGenerationTask(id) : await cancelGenerationTask(id);
             setTasks((items) => items.map((item) => (item.id === id ? next : item)));
-            setDetailTask((current) => current?.id === id ? { ...current, ...next } : current);
+            setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
             if (action === "retry") {
                 setStatusFilter("active");
                 setPage(1);
@@ -321,11 +341,12 @@ export default function TasksPage() {
     const deleteLocalTask = (task: GenerationTask) => {
         Modal.confirm({
             title: "删除本机任务记录？",
-            content: localDreaminaCancellationCopy(task)?.kind === "background"
-                ? "任务已由官方接受；删除后仍会在后台同步官方状态。"
-                : task.status === "queued"
-                    ? "任务尚未提交官方；删除会取消本机排队且不会触发官方请求。"
-                    : "这只会删除本机任务记录，不会删除已生成的素材。",
+            content:
+                localDreaminaCancellationCopy(task)?.kind === "background"
+                    ? "任务已由官方接受；删除后仍会在后台同步官方状态。"
+                    : task.status === "queued"
+                      ? "任务尚未提交官方；删除会取消本机排队且不会触发官方请求。"
+                      : "这只会删除本机任务记录，不会删除已生成的素材。",
             okText: "删除本机记录",
             okButtonProps: { danger: true },
             cancelText: "保留",
@@ -439,20 +460,35 @@ export default function TasksPage() {
                     <PageHeader
                         title="任务中心"
                         description="跟踪生成任务的排队、进度与失败原因。"
-                        meta={<span className="app-projects-header-meta">{filteredTasks.length} 个任务{loading ? " · 同步中" : ""}</span>}
-                            actions={(
-                                <>
-                                <Button icon={<RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />} onClick={() => void loadTasks(true)}>刷新</Button>
-                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>
-                                </>
-                            )}
+                        meta={
+                            <span className="app-projects-header-meta">
+                                {filteredTasks.length} 个任务{loading ? " · 同步中" : ""}
+                            </span>
+                        }
+                        actions={
+                            <>
+                                <Button icon={<RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />} onClick={() => void loadTasks(true)}>
+                                    刷新
+                                </Button>
+                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                    新建任务
+                                </Button>
+                            </>
+                        }
                     />
                     <TaskStatPills stats={taskStats} statusFilter={statusFilter} onFilterChange={setStatusFilter} />
                     <ListToolbar
                         className="library-toolbar task-library-toolbar"
                         active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}
-                        onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}
-                        trailing={(
+                        onReset={() => {
+                            setKeyword("");
+                            setProjectFilter("all");
+                            setKindFilter("all");
+                            setModelFilter("all");
+                            setStatusFilter("all");
+                            setPage(1);
+                        }}
+                        trailing={
                             <div className="flex flex-wrap items-center gap-2.5">
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
@@ -469,16 +505,60 @@ export default function TasksPage() {
                                     </Tooltip>
                                 </div>
                             </div>
-                        )}
+                        }
                     >
-                        <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型或画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                        <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
-                        <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: "全部类型", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }]} />
-                        <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
+                        <Input
+                            id="task-search"
+                            name="taskSearch"
+                            allowClear
+                            className="app-list-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索任务、模型或画布"
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                        />
+                        <Select
+                            className="w-full sm:w-48"
+                            value={projectFilter}
+                            onChange={(value) => {
+                                setProjectFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: "全部画布", value: "all" }, ...projectOptions]}
+                        />
+                        <Select
+                            className="w-full sm:w-32"
+                            value={kindFilter}
+                            onChange={(value) => {
+                                setKindFilter(value as TaskKindFilter);
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: "全部类型", value: "all" },
+                                { label: "文本", value: "text" },
+                                { label: "图片", value: "image" },
+                                { label: "视频", value: "video" },
+                            ]}
+                        />
+                        <Select
+                            className="w-full sm:w-44"
+                            value={modelFilter}
+                            onChange={(value) => {
+                                setModelFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]}
+                        />
                         <Segmented
                             size="small"
                             value={statusFilter}
-                            onChange={(value) => { setStatusFilter(value as typeof statusFilter); setPage(1); }}
+                            onChange={(value) => {
+                                setStatusFilter(value as typeof statusFilter);
+                                setPage(1);
+                            }}
                             options={[
                                 { label: "全部", value: "all" },
                                 { label: "失败/取消", value: "failed" },
@@ -490,21 +570,23 @@ export default function TasksPage() {
                 </div>
 
                 <div className="canvas-library-frame task-library-frame">
-                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
+                    {loading && !tasks.length ? (
+                        <div className="library-loading-grid" aria-label="正在加载任务">
+                            {Array.from({ length: 8 }, (_, index) => (
+                                <div key={index} className="library-skeleton" />
+                            ))}
+                        </div>
+                    ) : null}
                     {!loading || tasks.length ? (
                         visibleTasks.length ? (
                             viewMode === "grid" ? (
-                                <div className="task-grid-view">
-                                    {visibleTasks.map(renderTaskGridCard)}
-                                </div>
+                                <div className="task-grid-view">{visibleTasks.map(renderTaskGridCard)}</div>
                             ) : groupingActive ? (
                                 <div className="task-group-list">
                                     {visibleTaskGroups.map((group) => (
                                         <section key={group.key} className="task-group">
                                             <TaskGroupHeader group={group} retrying={retryingGroup === group.key} onRetryFailed={() => void retryGroupTasks(group.key, group.tasks)} />
-                                            <div className="task-record-list">
-                                                {group.tasks.map(renderTaskRow)}
-                                            </div>
+                                            <div className="task-record-list">{group.tasks.map(renderTaskRow)}</div>
                                         </section>
                                     ))}
                                 </div>
@@ -516,11 +598,26 @@ export default function TasksPage() {
                                 compact
                                 title={taskEmptyState(statusFilter).title}
                                 description={taskEmptyState(statusFilter).description}
-                                action={<Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>}
+                                action={
+                                    <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                        新建任务
+                                    </Button>
+                                }
                             />
                         )
                     ) : null}
-                    {!groupingActive ? <PaginationBar current={page} pageSize={pageSize} total={filteredTasks.length} pageSizeOptions={[20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} /> : null}
+                    {!groupingActive ? (
+                        <PaginationBar
+                            current={page}
+                            pageSize={pageSize}
+                            total={filteredTasks.length}
+                            pageSizeOptions={[20, 50, 100]}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                                setPageSize(nextPageSize);
+                            }}
+                        />
+                    ) : null}
                 </div>
             </WorkspacePage>
             <Modal className="library-modal" title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
@@ -554,12 +651,30 @@ export default function TasksPage() {
                         </div>
                         {detailTask.provider === "dreamina-cli" ? <p className="text-xs leading-5 text-foreground/60">官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。</p> : null}
                         <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>更新官方状态</Button> : null}
-                            {detailTask.provider === "dreamina-cli" && (detailTask.status === "queued" || detailTask.status === "running") ? <Button danger loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id, "cancel")}>{localDreaminaCancellationCopy(detailTask)?.action || "取消任务"}</Button> : null}
-                            {detailTask.provider === "dreamina-cli" ? <Button danger aria-label="删除本机记录" icon={<Trash2 className="size-4" />} loading={actingId === detailTask.id} onClick={() => deleteLocalTask(detailTask)}>删除本机记录</Button> : null}
-                            {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
+                            {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? (
+                                <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>
+                                    更新官方状态
+                                </Button>
+                            ) : null}
+                            {detailTask.provider === "dreamina-cli" && (detailTask.status === "queued" || detailTask.status === "running") ? (
+                                <Button danger loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id, "cancel")}>
+                                    {localDreaminaCancellationCopy(detailTask)?.action || "取消任务"}
+                                </Button>
+                            ) : null}
+                            {detailTask.provider === "dreamina-cli" ? (
+                                <Button danger aria-label="删除本机记录" icon={<Trash2 className="size-4" />} loading={actingId === detailTask.id} onClick={() => deleteLocalTask(detailTask)}>
+                                    删除本机记录
+                                </Button>
+                            ) : null}
+                            {canQueryProviderTask(detailTask) ? (
+                                <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>
+                                    手动查询任务
+                                </Button>
+                            ) : null}
                         </div>
-                        {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre> : null}
+                        {detailTask.error ? (
+                            <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre>
+                        ) : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
                         <DetailBlock title="输入" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.inputJson)} />
                         <DetailBlock title="结果" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.resultJson)} />
@@ -582,9 +697,11 @@ export default function TasksPage() {
                 destroyOnHidden
                 className="library-modal task-media-preview-modal"
             >
-                {mediaPreview?.kind === "video"
-                    ? <video src={mediaPreview.url} className="max-h-[76vh] w-full bg-black object-contain" controls playsInline preload="metadata" />
-                    : mediaPreview ? <img src={mediaPreview.url} alt={mediaPreview.title} className="max-h-[76vh] w-full bg-black object-contain" /> : null}
+                {mediaPreview?.kind === "video" ? (
+                    <video src={mediaPreview.url} className="max-h-[76vh] w-full bg-black object-contain" controls playsInline preload="metadata" />
+                ) : mediaPreview ? (
+                    <img src={mediaPreview.url} alt={mediaPreview.title} className="max-h-[76vh] w-full bg-black object-contain" />
+                ) : null}
             </Modal>
         </>
     );
@@ -614,9 +731,13 @@ function TaskResultMedia({ value, taskType }: { value?: string; taskType: string
         <div>
             <Typography.Text strong>生成结果</Typography.Text>
             <div className="mt-2 grid max-h-[360px] grid-cols-2 gap-2 overflow-auto rounded-lg bg-stone-950 p-2 md:grid-cols-3">
-                {urls.map((url, index) => isVideoResult(url, taskType)
-                    ? <video key={`${url}-${index}`} src={url} className="aspect-video w-full rounded-md bg-black object-contain" controls preload="metadata" />
-                    : <img key={`${url}-${index}`} src={url} alt={`生成结果 ${index + 1}`} className="aspect-square w-full rounded-md bg-black object-contain" />)}
+                {urls.map((url, index) =>
+                    isVideoResult(url, taskType) ? (
+                        <video key={`${url}-${index}`} src={url} className="aspect-video w-full rounded-md bg-black object-contain" controls preload="metadata" />
+                    ) : (
+                        <img key={`${url}-${index}`} src={url} alt={`生成结果 ${index + 1}`} className="aspect-square w-full rounded-md bg-black object-contain" />
+                    ),
+                )}
             </div>
         </div>
     );

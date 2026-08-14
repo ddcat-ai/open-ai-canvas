@@ -86,10 +86,34 @@ export async function executeVideoGeneration({
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
     try {
-        await runCanvasGenerationTaskToConsumer({ projectId, nodeId: videoId, ...retryContext, mode: "video", prompt: effectivePrompt, config: generationConfig, referenceImages: generationContext.referenceImages, referenceVideos: generationContext.referenceVideos, referenceAudios: generationContext.referenceAudios, signal: controller.signal, metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoices: generationContext.resolvedCharacterVoices, promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation, promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables, ...videoGenerationMetadata, ...styleMetadata }, }, {
-            bindTask: (task) => bindGenerationTask(videoId, task),
-            consumeTask: (task) => applyGenerationTaskResult(videoId, task),
-        });
+        await runCanvasGenerationTaskToConsumer(
+            {
+                projectId,
+                nodeId: videoId,
+                ...retryContext,
+                mode: "video",
+                prompt: effectivePrompt,
+                config: generationConfig,
+                referenceImages: generationContext.referenceImages,
+                referenceVideos: generationContext.referenceVideos,
+                referenceAudios: generationContext.referenceAudios,
+                signal: controller.signal,
+                metadata: {
+                    sourceNodeId: nodeId,
+                    ...taskContext,
+                    resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
+                    resolvedCharacterVoices: generationContext.resolvedCharacterVoices,
+                    promptTemplateOperation: sourceNode?.metadata?.promptTemplateOperation,
+                    promptTemplateVariables: sourceNode?.metadata?.promptTemplateVariables,
+                    ...videoGenerationMetadata,
+                    ...styleMetadata,
+                },
+            },
+            {
+                bindTask: (task) => bindGenerationTask(videoId, task),
+                consumeTask: (task) => applyGenerationTaskResult(videoId, task),
+            },
+        );
     } finally {
         finishGenerationRequest(videoId, controller);
     }
@@ -127,15 +151,29 @@ export async function executeAudioGeneration({
         metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig) },
     };
     registerPendingNodeIds([audioId]);
-    setNodes((current) => (isEmptyAudioNode ? current.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node)) : [...current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode]));
+    setNodes((current) =>
+        isEmptyAudioNode ? current.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node)) : [...current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode],
+    );
     if (!isEmptyAudioNode) setConnections((current) => [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: audioId }]);
 
     startGenerationRequest(audioId, nodeId, nodeId, controller);
     try {
-        await runCanvasGenerationTaskToConsumer({ projectId, nodeId: audioId, ...retryContext, mode: "audio", prompt: effectivePrompt, config: generationConfig, signal: controller.signal, metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoiceKey: generationContext.resolvedCharacterVoices[0]?.voiceKey }, }, {
-            bindTask: (task) => bindGenerationTask(audioId, task),
-            consumeTask: (task) => applyGenerationTaskResult(audioId, task),
-        });
+        await runCanvasGenerationTaskToConsumer(
+            {
+                projectId,
+                nodeId: audioId,
+                ...retryContext,
+                mode: "audio",
+                prompt: effectivePrompt,
+                config: generationConfig,
+                signal: controller.signal,
+                metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoiceKey: generationContext.resolvedCharacterVoices[0]?.voiceKey },
+            },
+            {
+                bindTask: (task) => bindGenerationTask(audioId, task),
+                consumeTask: (task) => applyGenerationTaskResult(audioId, task),
+            },
+        );
     } finally {
         finishGenerationRequest(audioId, controller);
     }

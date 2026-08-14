@@ -1,16 +1,10 @@
-import type {
-    GenerationTask,
-    GenerationTaskOutput,
-} from "@/services/api/task-center";
+import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
 
 export type GenerationTaskEffectResult = {
     materializedAssetId?: string;
 };
 
-export type GenerationTaskEffectClaim =
-    | { status: "claimed"; fence: number; binding?: string }
-    | { status: "busy"; retryAt?: string }
-    | { status: "completed"; result: GenerationTaskEffectResult };
+export type GenerationTaskEffectClaim = { status: "claimed"; fence: number; binding?: string } | { status: "busy"; retryAt?: string } | { status: "completed"; result: GenerationTaskEffectResult };
 
 export type GenerationTaskEffectStore = {
     claim(effectKey: string, taskId: string): Promise<GenerationTaskEffectClaim>;
@@ -19,19 +13,9 @@ export type GenerationTaskEffectStore = {
     release(effectKey: string, taskId: string, binding?: string): Promise<void>;
 };
 
-export type MaterializeGenerationTaskOutput = (input: {
-    task: GenerationTask;
-    output: GenerationTaskOutput;
-    effectKey: string;
-    signal?: AbortSignal;
-}) => Promise<GenerationTaskEffectResult>;
+export type MaterializeGenerationTaskOutput = (input: { task: GenerationTask; output: GenerationTaskOutput; effectKey: string; signal?: AbortSignal }) => Promise<GenerationTaskEffectResult>;
 
-export type GenerationTaskEffectConsumer = (input: {
-    task: GenerationTask;
-    output?: GenerationTaskOutput;
-    effectKey: string;
-    signal?: AbortSignal;
-}) => Promise<void>;
+export type GenerationTaskEffectConsumer = (input: { task: GenerationTask; output?: GenerationTaskOutput; effectKey: string; signal?: AbortSignal }) => Promise<void>;
 
 function abortError(): DOMException {
     return new DOMException("The operation was aborted", "AbortError");
@@ -58,14 +42,7 @@ async function waitForAbortableDelay(delayMs: number, signal?: AbortSignal) {
     });
 }
 
-export function createIdempotentMaterializeOutput(dependencies: {
-    insertOrReturnAsset(input: {
-        task: GenerationTask;
-        output: GenerationTaskOutput;
-        effectKey: string;
-        signal?: AbortSignal;
-    }): Promise<string>;
-}): MaterializeGenerationTaskOutput {
+export function createIdempotentMaterializeOutput(dependencies: { insertOrReturnAsset(input: { task: GenerationTask; output: GenerationTaskOutput; effectKey: string; signal?: AbortSignal }): Promise<string> }): MaterializeGenerationTaskOutput {
     return async (input) => ({
         materializedAssetId: await dependencies.insertOrReturnAsset(input),
     });
@@ -87,18 +64,15 @@ export function agentResumeEffectKey(taskId: string, continuationId: string): st
     return `agent-resume:${taskId}:${continuationId}`;
 }
 
-export function createGenerationTaskMaterializer(dependencies: {
-    effects: GenerationTaskEffectStore;
-    materializeOutput: MaterializeGenerationTaskOutput;
-    leaseHeartbeatMs?: number;
-    waitUntil?: (retryAt: string, signal?: AbortSignal) => Promise<void>;
-}) {
+export function createGenerationTaskMaterializer(dependencies: { effects: GenerationTaskEffectStore; materializeOutput: MaterializeGenerationTaskOutput; leaseHeartbeatMs?: number; waitUntil?: (retryAt: string, signal?: AbortSignal) => Promise<void> }) {
     const leaseHeartbeatMs = dependencies.leaseHeartbeatMs ?? 10_000;
     if (!Number.isSafeInteger(leaseHeartbeatMs) || leaseHeartbeatMs < 1) throw new Error("Invalid generation effect heartbeat interval");
-    const waitUntil = dependencies.waitUntil ?? (async (retryAt: string, signal?: AbortSignal) => {
-        const delayMs = Math.max(0, Date.parse(retryAt) - Date.now());
-        await waitForAbortableDelay(delayMs, signal);
-    });
+    const waitUntil =
+        dependencies.waitUntil ??
+        (async (retryAt: string, signal?: AbortSignal) => {
+            const delayMs = Math.max(0, Date.parse(retryAt) - Date.now());
+            await waitForAbortableDelay(delayMs, signal);
+        });
 
     async function claimWhenAvailable(effectKey: string, taskId: string, signal?: AbortSignal): Promise<Exclude<GenerationTaskEffectClaim, { status: "busy" }>> {
         while (true) {
@@ -106,9 +80,7 @@ export function createGenerationTaskMaterializer(dependencies: {
             const claim = await dependencies.effects.claim(effectKey, taskId);
             throwIfAborted(signal);
             if (claim.status !== "busy") return claim;
-            const leaseRetryAt = claim.retryAt && Number.isFinite(Date.parse(claim.retryAt))
-                ? Date.parse(claim.retryAt)
-                : Date.now() + leaseHeartbeatMs;
+            const leaseRetryAt = claim.retryAt && Number.isFinite(Date.parse(claim.retryAt)) ? Date.parse(claim.retryAt) : Date.now() + leaseHeartbeatMs;
             // 同一 effect 可能已由当前 owner 提前完成；短周期复核 completed，同时仍以租约到期为接管边界。
             const nextCheckAt = Math.min(leaseRetryAt, Date.now() + 250);
             await waitUntil(new Date(nextCheckAt).toISOString(), signal);
@@ -131,7 +103,9 @@ export function createGenerationTaskMaterializer(dependencies: {
                 if (stopped) break;
                 await dependencies.effects.renew(effectKey, taskId, binding);
             }
-        })().catch((error) => { failure = error; });
+        })().catch((error) => {
+            failure = error;
+        });
         return async () => {
             if (!stopped) {
                 stopped = true;
@@ -157,13 +131,7 @@ export function createGenerationTaskMaterializer(dependencies: {
         }
         throw failure;
     }
-    async function consumeEffect(
-        effectKey: string,
-        task: GenerationTask,
-        consumer: GenerationTaskEffectConsumer,
-        output?: GenerationTaskOutput,
-        signal?: AbortSignal,
-    ): Promise<"applied" | "completed" | "busy"> {
+    async function consumeEffect(effectKey: string, task: GenerationTask, consumer: GenerationTaskEffectConsumer, output?: GenerationTaskOutput, signal?: AbortSignal): Promise<"applied" | "completed" | "busy"> {
         const claim = await claimWhenAvailable(effectKey, task.id, signal);
         if (claim.status === "completed") return "completed";
         const stopHeartbeat = startLeaseHeartbeat(effectKey, task.id, claim.binding);
@@ -225,40 +193,21 @@ export function createGenerationTaskMaterializer(dependencies: {
             return {
                 ...task,
                 outputs,
-                resultState: outputs.every((output) => Boolean(output.materializedAssetId))
-                    ? "READY"
-                    : "MATERIALIZING",
+                resultState: outputs.every((output) => Boolean(output.materializedAssetId)) ? "READY" : "MATERIALIZING",
             };
         },
 
-        attachNode(
-            task: GenerationTask,
-            nodeId: string,
-            outputIndex: number,
-            consumer: GenerationTaskEffectConsumer,
-            signal?: AbortSignal,
-        ) {
+        attachNode(task: GenerationTask, nodeId: string, outputIndex: number, consumer: GenerationTaskEffectConsumer, signal?: AbortSignal) {
             const output = requireMaterializedOutput(task, outputIndex);
             return consumeEffect(attachNodeEffectKey(task.id, nodeId, outputIndex), task, consumer, output, signal);
         },
 
-        attachMessage(
-            task: GenerationTask,
-            messageId: string,
-            outputIndex: number,
-            consumer: GenerationTaskEffectConsumer,
-            signal?: AbortSignal,
-        ) {
+        attachMessage(task: GenerationTask, messageId: string, outputIndex: number, consumer: GenerationTaskEffectConsumer, signal?: AbortSignal) {
             const output = requireMaterializedOutput(task, outputIndex);
             return consumeEffect(attachMessageEffectKey(task.id, messageId, outputIndex), task, consumer, output, signal);
         },
 
-        resumeAgent(
-            task: GenerationTask,
-            continuationId: string,
-            consumer: GenerationTaskEffectConsumer,
-            signal?: AbortSignal,
-        ) {
+        resumeAgent(task: GenerationTask, continuationId: string, consumer: GenerationTaskEffectConsumer, signal?: AbortSignal) {
             return consumeEffect(agentResumeEffectKey(task.id, continuationId), task, consumer, undefined, signal);
         },
     };

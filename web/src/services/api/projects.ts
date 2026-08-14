@@ -166,7 +166,6 @@ export type ProjectDetail = {
     assetCandidates: ProjectAssetCandidate[];
 };
 
-
 export function listProjects() {
     return request<{ projects: ProjectSummary[] }>(api.get("/projects"));
 }

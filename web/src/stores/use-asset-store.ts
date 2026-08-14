@@ -131,37 +131,44 @@ export const useAssetStore = create<AssetStore>()(
             },
             addGenerationAsset: (effectKey, asset) => {
                 const scope = getActiveUserScope();
-                return trackAssetOperation((async () => {
-                    const id = await generationAssetId(effectKey);
-                    return insertOrReturnGenerationAsset<Asset>({
-                        effectKey,
-                        assetId: id,
-                        createAsset: () => {
-                            const now = new Date().toISOString();
-                            return {
-                                ...asset,
-                                id,
-                                createdAt: now,
-                                updatedAt: now,
-                                metadata: { ...asset.metadata, generationEffectKey: effectKey },
-                            } as Asset;
-                        },
-                        updateAssets: (updater) => {
-                            const previousScope = assetWriteScopeOverride;
-                            assetWriteScopeOverride = scope;
-                            try {
-                                set((state) => ({ assets: updater(state.assets) }));
-                            } finally {
-                                assetWriteScopeOverride = previousScope;
-                            }
-                        },
-                        readAssets: () => get().assets,
-                        persistAssets: (assets) => persistAssetStateForScope(ASSET_STORE_KEY, {
-                            state: { assets } as StorageValue<AssetStore>["state"],
-                            version: 0,
-                        }, scope),
-                    });
-                })());
+                return trackAssetOperation(
+                    (async () => {
+                        const id = await generationAssetId(effectKey);
+                        return insertOrReturnGenerationAsset<Asset>({
+                            effectKey,
+                            assetId: id,
+                            createAsset: () => {
+                                const now = new Date().toISOString();
+                                return {
+                                    ...asset,
+                                    id,
+                                    createdAt: now,
+                                    updatedAt: now,
+                                    metadata: { ...asset.metadata, generationEffectKey: effectKey },
+                                } as Asset;
+                            },
+                            updateAssets: (updater) => {
+                                const previousScope = assetWriteScopeOverride;
+                                assetWriteScopeOverride = scope;
+                                try {
+                                    set((state) => ({ assets: updater(state.assets) }));
+                                } finally {
+                                    assetWriteScopeOverride = previousScope;
+                                }
+                            },
+                            readAssets: () => get().assets,
+                            persistAssets: (assets) =>
+                                persistAssetStateForScope(
+                                    ASSET_STORE_KEY,
+                                    {
+                                        state: { assets } as StorageValue<AssetStore>["state"],
+                                        version: 0,
+                                    },
+                                    scope,
+                                ),
+                        });
+                    })(),
+                );
             },
             updateAsset: (id, patch) =>
                 set((state) => ({

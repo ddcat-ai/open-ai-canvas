@@ -324,8 +324,21 @@ function InfiniteCanvasPage() {
     }, [linkedProjectQuery.data, projectLoaded, setNodes]);
     const canvasContext = useMemo(() => summarizeCanvasContext(nodes, selectedNodeIds, linkedProjectQuery.data?.units), [linkedProjectQuery.data?.units, nodes, selectedNodeIds]);
 
-    const { applyGenerationTaskResult, bindGenerationTask, cancelNodeTask, confirmStopGeneration, finishGenerationRequest, openNodeTaskDetails, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } =
-        useCanvasGeneration({ projectId, domainProjectId: linkedProjectId, projectLoaded, nodes, nodesRef, setNodes });
+    const {
+        applyGenerationTaskResult,
+        bindGenerationTask,
+        cancelNodeTask,
+        confirmStopGeneration,
+        finishGenerationRequest,
+        openNodeTaskDetails,
+        runningNodeId,
+        setRunningNodeId,
+        setTaskDetail,
+        startGenerationRequest,
+        taskDetail,
+        taskDetailLoading,
+        taskDetailLogs,
+    } = useCanvasGeneration({ projectId, domainProjectId: linkedProjectId, projectLoaded, nodes, nodesRef, setNodes });
 
     useEffect(() => {
         if (!projectLoaded || !codexAutoConnect) return;
@@ -488,10 +501,12 @@ function InfiniteCanvasPage() {
         const attempt = canvasAssetHandoffAttempt(assets, searchParams);
         const { assetIds, payloads } = attempt;
         if (!assetIds.length) return;
-        const assetReadiness = assetIds.map((assetId) => {
-            const asset = assets.find((candidate) => candidate.id === assetId);
-            return `${assetId}:${asset?.kind || "missing"}`;
-        }).join("|");
+        const assetReadiness = assetIds
+            .map((assetId) => {
+                const asset = assets.find((candidate) => candidate.id === assetId);
+                return `${assetId}:${asset?.kind || "missing"}`;
+            })
+            .join("|");
         const handoffKey = `${projectId}:${assetReadiness}`;
         if (assetHandoffRef.current === handoffKey) return;
         assetHandoffRef.current = handoffKey;

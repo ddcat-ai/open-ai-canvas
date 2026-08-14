@@ -138,29 +138,31 @@ export type ConfigStoreSnapshot = {
 
 function isVideoModelName(model: string) {
     const value = modelOptionName(model).toLowerCase();
-    return value.includes("seedance")
-        || value.includes("video")
-        || value.includes("sora")
-        || value.includes("veo")
-        || value.includes("kling")
-        || value.includes("wan")
-        || value.includes("hailuo")
-        || value.includes("pika")
-        || value.includes("runway")
-        || value.includes("gen-3")
-        || value.includes("gen3")
-        || value.includes("hunyuan-video")
-        || value.includes("hunyuanvideo")
-        || value.includes("cogvideo")
-        || value.includes("mochi")
-        || value.includes("latte")
-        || value.includes("stable-video")
-        || value.includes("svd")
-        || value.includes("animatediff")
-        || value.includes("ltx-video")
-        || value.includes("ltxvideo")
-        || value.includes("minimax-video")
-        || value.includes("abab-video");
+    return (
+        value.includes("seedance") ||
+        value.includes("video") ||
+        value.includes("sora") ||
+        value.includes("veo") ||
+        value.includes("kling") ||
+        value.includes("wan") ||
+        value.includes("hailuo") ||
+        value.includes("pika") ||
+        value.includes("runway") ||
+        value.includes("gen-3") ||
+        value.includes("gen3") ||
+        value.includes("hunyuan-video") ||
+        value.includes("hunyuanvideo") ||
+        value.includes("cogvideo") ||
+        value.includes("mochi") ||
+        value.includes("latte") ||
+        value.includes("stable-video") ||
+        value.includes("svd") ||
+        value.includes("animatediff") ||
+        value.includes("ltx-video") ||
+        value.includes("ltxvideo") ||
+        value.includes("minimax-video") ||
+        value.includes("abab-video")
+    );
 }
 
 function isImageModelName(model: string) {
@@ -316,7 +318,7 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
             audioFormat: config.audioFormat || defaultConfig.audioFormat,
             audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-			audioInstructions: config.audioInstructions || "",
+            audioInstructions: config.audioInstructions || "",
             // 旧版全局 systemPrompt 会跨任务污染请求；提示词定制现已按 operation 由服务端编译。
             systemPrompt: "",
             videoSeconds: normalizeVideoDuration(config.videoSeconds),
@@ -342,22 +344,35 @@ export function useEffectiveConfig() {
     const config = useConfigStore((state) => state.config);
     const catalogState = useLocalDreaminaModelStore((state) => state.state);
     const dreaminaModels = useLocalDreaminaModelStore((state) => state.models);
-    return useMemo(
-        () => effectiveConfigWithDreamina(config, catalogState, dreaminaModels),
-        [catalogState, config, dreaminaModels],
-    );
+    return useMemo(() => effectiveConfigWithDreamina(config, catalogState, dreaminaModels), [catalogState, config, dreaminaModels]);
 }
 
-export function effectiveConfigWithDreamina(
-    config: AiConfig,
-    catalogState: "idle" | "loading" | "ready" | "error",
-    dreaminaModels: DreaminaLocalModel[],
-): AiConfig {
+export function effectiveConfigWithDreamina(config: AiConfig, catalogState: "idle" | "loading" | "ready" | "error", dreaminaModels: DreaminaLocalModel[]): AiConfig {
     if (catalogState !== "ready" || !dreaminaModels.length) return { ...config, channelMode: "local" };
-    const channel: ModelChannel = { id: "local:dreamina-cli", name: "官方即梦 CLI", baseUrl: "", apiKey: "", apiFormat: "openai", models: dreaminaModels.map((item) => item.id), scope: "user", enabled: true, transport: "local-runtime", localModels: dreaminaModels };
+    const channel: ModelChannel = {
+        id: "local:dreamina-cli",
+        name: "官方即梦 CLI",
+        baseUrl: "",
+        apiKey: "",
+        apiFormat: "openai",
+        models: dreaminaModels.map((item) => item.id),
+        scope: "user",
+        enabled: true,
+        transport: "local-runtime",
+        localModels: dreaminaModels,
+    };
     const channels = [...config.channels.filter((item) => item.id !== channel.id), channel];
     const models = modelOptionsFromChannels(channels);
-    return { ...config, channelMode: "local", channels, models, imageModels: filterModelsByCapability(models, "image", channels), videoModels: filterModelsByCapability(models, "video", channels), textModels: filterModelsByCapability(models, "text", channels), audioModels: filterModelsByCapability(models, "audio", channels) };
+    return {
+        ...config,
+        channelMode: "local",
+        channels,
+        models,
+        imageModels: filterModelsByCapability(models, "image", channels),
+        videoModels: filterModelsByCapability(models, "video", channels),
+        textModels: filterModelsByCapability(models, "text", channels),
+        audioModels: filterModelsByCapability(models, "audio", channels),
+    };
 }
 
 export function createModelChannel(channel?: Partial<ModelChannel>): ModelChannel {
@@ -425,7 +440,7 @@ export function modelOptionsFromChannels(channels: ModelChannel[]) {
                 .map(normalizeRawModelName)
                 .filter(Boolean)
                 .filter((model) => channel.scope !== "system" || hasSystemModelPrice(channel, model))
-                .map((model) => channel.transport === "local-runtime" ? `local:dreamina-cli:${model}` : encodeChannelModel(channel.id, model)),
+                .map((model) => (channel.transport === "local-runtime" ? `local:dreamina-cli:${model}` : encodeChannelModel(channel.id, model))),
         ),
     );
 }
@@ -466,7 +481,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
         headers: channel.headers,
-        apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? "gemini" as const : "openai" as const) : channel.apiFormat,
+        apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? ("gemini" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",
     };
@@ -539,7 +554,14 @@ function uniqueRawModels(models: string[]) {
 }
 
 function uniqueModelOptions(models: string[]) {
-    return Array.from(new Set((models || []).filter((model): model is string => typeof model === "string").map((model) => model.trim()).filter(Boolean)));
+    return Array.from(
+        new Set(
+            (models || [])
+                .filter((model): model is string => typeof model === "string")
+                .map((model) => model.trim())
+                .filter(Boolean),
+        ),
+    );
 }
 
 function normalizeRawModelName(value: unknown) {
@@ -559,7 +581,9 @@ export function buildApiUrl(baseUrl: string, path: string) {
 export function resolveBackendApiUrl(value: string) {
     const url = value.trim();
     if (!url.startsWith("/api/")) return url;
-    const backendBaseUrl = String(import.meta.env.VITE_CANVAS_BACKEND_URL || "/api").trim().replace(/\/+$/, "");
+    const backendBaseUrl = String(import.meta.env.VITE_CANVAS_BACKEND_URL || "/api")
+        .trim()
+        .replace(/\/+$/, "");
     return backendBaseUrl === "/api" ? url : `${backendBaseUrl}${url.slice("/api".length)}`;
 }
 
