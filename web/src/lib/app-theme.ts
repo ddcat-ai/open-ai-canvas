@@ -1,11 +1,25 @@
 import type { ThemeConfig } from "antd";
 import { theme as antdTheme } from "antd";
 
-const neutral = {
+// 主操作、普通选择和开关是不同交互语义，必须各自维护成对的背景/前景色。
+const controlTheme = {
     light: {
-        primary: "#171717",
-        primaryHover: "#000000",
-        primaryText: "#ffffff",
+        solidBg: "#171717",
+        solidHoverBg: "#303030",
+        solidActiveBg: "#404040",
+        solidFg: "#ffffff",
+        selectedBg: "rgba(17, 17, 17, 0.09)",
+        selectedHoverBg: "rgba(17, 17, 17, 0.13)",
+        selectedActiveBg: "rgba(17, 17, 17, 0.16)",
+        selectedFg: "#171717",
+        controlSurface: "#ffffff",
+        controlBorder: "rgba(17, 17, 17, 0.18)",
+        controlDisabledBg: "rgba(17, 17, 17, 0.05)",
+        controlDisabledFg: "rgba(17, 17, 17, 0.36)",
+        controlFocus: "rgba(17, 17, 17, 0.24)",
+        switchOffBg: "rgba(17, 17, 17, 0.22)",
+        switchOffHoverBg: "rgba(17, 17, 17, 0.3)",
+        switchOffHandle: "#ffffff",
         menuBg: "#f5f5f5",
         menuText: "#171717",
         selectActiveBg: "rgba(17, 17, 17, 0.035)",
@@ -15,9 +29,22 @@ const neutral = {
         tableSelectedHoverBg: "rgba(17, 17, 17, 0.08)",
     },
     dark: {
-        primary: "#fafafa",
-        primaryHover: "#ffffff",
-        primaryText: "#171717",
+        solidBg: "#f5f5f5",
+        solidHoverBg: "#ffffff",
+        solidActiveBg: "#e5e5e5",
+        solidFg: "#171717",
+        selectedBg: "rgba(255, 255, 255, 0.12)",
+        selectedHoverBg: "rgba(255, 255, 255, 0.16)",
+        selectedActiveBg: "rgba(255, 255, 255, 0.2)",
+        selectedFg: "#f5f5f5",
+        controlSurface: "rgba(255, 255, 255, 0.035)",
+        controlBorder: "rgba(255, 255, 255, 0.24)",
+        controlDisabledBg: "rgba(255, 255, 255, 0.06)",
+        controlDisabledFg: "rgba(255, 255, 255, 0.38)",
+        controlFocus: "rgba(255, 255, 255, 0.24)",
+        switchOffBg: "rgba(255, 255, 255, 0.22)",
+        switchOffHoverBg: "rgba(255, 255, 255, 0.3)",
+        switchOffHandle: "#f5f5f5",
         menuBg: "#262626",
         menuText: "#fafafa",
         selectActiveBg: "rgba(255, 255, 255, 0.055)",
@@ -29,35 +56,27 @@ const neutral = {
 };
 
 export function getAntThemeConfig(dark: boolean): ThemeConfig {
-    const color = dark ? neutral.dark : neutral.light;
+    const color = dark ? controlTheme.dark : controlTheme.light;
     const elevatedBackground = dark ? "rgba(31, 31, 32, 0.96)" : "rgba(255, 255, 255, 0.96)";
     const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
     const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
     // 黑白主题使用边框表达焦点，避免输入控件周围出现蓝紫色光圈。
     const focusShadow = "none";
-    // 暗色界面的黑白主按钮与选择控件分色，避免开关轨道、勾选符号和滑块融成一片。
-    const selectionControl = dark
-        ? {
-              active: "#ffffff",
-              border: "rgba(255, 255, 255, 0.3)",
-              disabledBackground: "rgba(255, 255, 255, 0.06)",
-              focus: "rgba(255, 255, 255, 0.22)",
-              hover: "#e5e5e5",
-              primary: "#f5f5f5",
-              surface: "rgba(255, 255, 255, 0.035)",
-          }
-        : null;
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         cssVar: { key: dark ? "infinite-canvas-dark" : "infinite-canvas-light" },
         token: {
-            colorPrimary: color.primary,
-            colorInfo: color.primary,
-            colorLink: color.primary,
-            colorLinkHover: color.primaryHover,
-            colorLinkActive: color.primary,
-            colorTextLightSolid: color.primaryText,
+            colorPrimary: color.solidBg,
+            colorPrimaryHover: color.solidHoverBg,
+            colorPrimaryActive: color.solidActiveBg,
+            colorPrimaryBg: color.selectedBg,
+            colorPrimaryBgHover: color.selectedHoverBg,
+            colorInfo: color.solidBg,
+            colorLink: color.solidBg,
+            colorLinkHover: color.solidHoverBg,
+            colorLinkActive: color.solidActiveBg,
+            colorTextLightSolid: color.solidFg,
             colorBgElevated: elevatedBackground,
             colorBorderSecondary: dark ? "rgba(255, 255, 255, 0.1)" : "rgba(17, 17, 17, 0.09)",
             boxShadowSecondary: dark ? "0 24px 72px rgba(0, 0, 0, 0.48)" : "0 22px 64px rgba(15, 23, 42, 0.14)",
@@ -80,28 +99,19 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 paddingInline: 14,
                 paddingInlineLG: 16,
                 paddingInlineSM: 10,
-                ...(dark
-                    ? {
-                          colorPrimary: "#f5f5f4",
-                          colorPrimaryHover: "#ffffff",
-                          colorPrimaryActive: "#e7e5e4",
-                          primaryColor: "#171717",
-                          defaultBg: "#262626",
-                          defaultColor: "#f5f5f4",
-                          defaultBorderColor: "#404040",
-                          defaultHoverBg: "#303030",
-                          defaultHoverColor: "#ffffff",
-                          defaultHoverBorderColor: "#525252",
-                          defaultActiveBg: "#1f1f1f",
-                          defaultActiveColor: "#ffffff",
-                          defaultActiveBorderColor: "#525252",
-                      }
-                    : {
-                          /* 浅色模式：primary 近黑(#171717)，antd 默认 hover 加暗到 #000000 几乎不可见。
-                             改为提亮 hover/active，让交互反馈可感知（审计 #121）*/
-                          colorPrimaryHover: "#404040",
-                          colorPrimaryActive: "#525252",
-                      }),
+                colorPrimary: color.solidBg,
+                colorPrimaryHover: color.solidHoverBg,
+                colorPrimaryActive: color.solidActiveBg,
+                primaryColor: color.solidFg,
+                defaultBg: color.controlSurface,
+                defaultColor: color.selectedFg,
+                defaultBorderColor: color.controlBorder,
+                defaultHoverBg: color.selectedBg,
+                defaultHoverColor: color.selectedFg,
+                defaultHoverBorderColor: color.controlBorder,
+                defaultActiveBg: color.selectedHoverBg,
+                defaultActiveColor: color.selectedFg,
+                defaultActiveBorderColor: color.controlBorder,
             },
             Input: {
                 paddingInline: 11,
@@ -119,60 +129,51 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 activeShadow: focusShadow,
             },
             Switch: {
-                handleBg: dark ? "#fafafa" : "#ffffff",
+                handleBg: color.switchOffHandle,
                 handleShadow: dark ? "0 1px 4px rgba(0, 0, 0, 0.42)" : "0 1px 2px rgba(0, 0, 0, 0.2)",
-                ...(selectionControl
-                    ? {
-                          colorPrimary: selectionControl.primary,
-                          colorPrimaryActive: selectionControl.active,
-                          colorPrimaryHover: selectionControl.hover,
-                          colorTextQuaternary: "rgba(255, 255, 255, 0.16)",
-                          colorTextTertiary: "rgba(255, 255, 255, 0.24)",
-                          controlOutline: selectionControl.focus,
-                      }
-                    : {}),
+                colorPrimary: color.solidBg,
+                colorPrimaryActive: color.solidActiveBg,
+                colorPrimaryHover: color.solidHoverBg,
+                colorTextQuaternary: color.switchOffBg,
+                colorTextTertiary: color.switchOffHoverBg,
+                controlOutline: color.controlFocus,
             },
             Checkbox: {
-                ...(selectionControl
-                    ? {
-                          colorBgContainer: selectionControl.surface,
-                          colorBgContainerDisabled: selectionControl.disabledBackground,
-                          colorBorder: selectionControl.border,
-                          colorPrimary: selectionControl.primary,
-                          colorPrimaryActive: selectionControl.active,
-                          colorPrimaryHover: selectionControl.hover,
-                          controlOutline: selectionControl.focus,
-                      }
-                    : {}),
+                colorBgContainer: color.controlSurface,
+                colorBgContainerDisabled: color.controlDisabledBg,
+                colorBorder: color.controlBorder,
+                colorPrimary: color.solidBg,
+                colorPrimaryActive: color.solidActiveBg,
+                colorPrimaryHover: color.solidHoverBg,
+                controlOutline: color.controlFocus,
             },
             Radio: {
                 radioSize: 16,
                 dotSize: 6,
-                ...(selectionControl
-                    ? {
-                          buttonBg: selectionControl.surface,
-                          buttonCheckedBg: color.selectSelectedBg,
-                          buttonSolidCheckedActiveBg: selectionControl.active,
-                          buttonSolidCheckedBg: selectionControl.primary,
-                          buttonSolidCheckedHoverBg: selectionControl.hover,
-                          colorBgContainer: selectionControl.surface,
-                          colorBgContainerDisabled: selectionControl.disabledBackground,
-                          colorBorder: selectionControl.border,
-                          colorPrimary: selectionControl.primary,
-                          colorPrimaryActive: selectionControl.active,
-                          colorPrimaryHover: selectionControl.hover,
-                          controlOutline: selectionControl.focus,
-                      }
-                    : {}),
+                buttonBg: color.controlSurface,
+                buttonCheckedBg: color.selectedBg,
+                buttonCheckedBgDisabled: color.controlDisabledBg,
+                buttonCheckedColorDisabled: color.controlDisabledFg,
+                buttonSolidCheckedColor: color.solidFg,
+                buttonSolidCheckedActiveBg: color.solidActiveBg,
+                buttonSolidCheckedBg: color.solidBg,
+                buttonSolidCheckedHoverBg: color.solidHoverBg,
+                colorBgContainer: color.controlSurface,
+                colorBgContainerDisabled: color.controlDisabledBg,
+                colorBorder: color.controlBorder,
+                colorPrimary: color.solidBg,
+                colorPrimaryActive: color.solidActiveBg,
+                colorPrimaryHover: color.solidHoverBg,
+                controlOutline: color.controlFocus,
             },
             Menu: {
                 itemActiveBg: color.menuBg,
                 itemHoverBg: color.menuBg,
                 itemSelectedBg: color.menuBg,
                 itemSelectedColor: color.menuText,
-                darkItemHoverBg: neutral.dark.menuBg,
-                darkItemSelectedBg: neutral.dark.menuBg,
-                darkItemSelectedColor: neutral.dark.menuText,
+                darkItemHoverBg: controlTheme.dark.menuBg,
+                darkItemSelectedBg: controlTheme.dark.menuBg,
+                darkItemSelectedColor: controlTheme.dark.menuText,
             },
             Select: {
                 selectorBg: elevatedBackground,
@@ -200,16 +201,19 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             Pagination: {
                 itemBg: "transparent",
                 itemLinkBg: "transparent",
-                itemActiveBg: dark ? "#fafafa" : "#171717",
-                itemActiveColor: dark ? "#171717" : "#ffffff",
-                itemActiveColorHover: dark ? "#171717" : "#ffffff",
+                itemActiveBg: color.solidBg,
+                itemActiveColor: color.solidFg,
+                itemActiveColorHover: color.solidFg,
             },
             Segmented: {
                 trackBg: subtleBackground,
                 trackPadding: 3,
-                itemSelectedBg: elevatedBackground,
-                itemSelectedColor: dark ? "#fafafa" : "#171717",
-                itemHoverBg: dark ? "rgba(255, 255, 255, 0.07)" : "rgba(17, 17, 17, 0.055)",
+                itemColor: color.controlDisabledFg,
+                itemHoverColor: color.selectedFg,
+                itemHoverBg: color.selectedBg,
+                itemActiveBg: color.selectedActiveBg,
+                itemSelectedBg: color.selectedBg,
+                itemSelectedColor: color.selectedFg,
             },
             Modal: {
                 headerBg: "transparent",

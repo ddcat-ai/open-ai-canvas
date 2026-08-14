@@ -1,4 +1,4 @@
-import { Modal } from "antd";
+import { Button, Modal } from "antd";
 import { Check, FileText, FolderOpen, Image as ImageIcon, LoaderCircle, Music2, Search, Upload, UserRound, Video } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -155,8 +155,7 @@ export function AssetLibraryPickerModal({
             onCancel={() => {
                 if (!working) onClose();
             }}
-            width="min(1040px, calc(100vw - 24px))"
-            className="asset-library-picker-modal"
+            className="workspace-modal workspace-modal-wide asset-library-picker-modal"
             styles={{ container: { padding: 0 }, body: { padding: 0 } }}
         >
             <div className="asset-picker-shell">
@@ -168,7 +167,7 @@ export function AssetLibraryPickerModal({
                 <div className="asset-picker-body">
                     <nav className="asset-picker-categories" aria-label="素材分类">
                         {categories.map((value) => (
-                            <button key={value} type="button" className={category === value ? "is-active" : ""} onClick={() => setCategory(value)}>
+                            <button key={value} type="button" className={category === value ? "is-active" : ""} aria-pressed={category === value} onClick={() => setCategory(value)}>
                                 <span>{categoryLabels[value] || "其他"}</span><em>{countFor(value)}</em>
                             </button>
                         ))}
@@ -195,10 +194,10 @@ export function AssetLibraryPickerModal({
                     ) : footerNote ? <span className="asset-picker-footer-note">{footerNote}</span> : <span />}
                     {error ? <span className="asset-picker-footer-error" role="alert">{error}</span> : null}
                     <div className="asset-picker-actions">
-                        <button type="button" onClick={onClose} disabled={working}>取消</button>
-                        <button type="button" className="is-primary" disabled={working || !selectedIds.length} onClick={() => void confirm()}>
-                            {working && !uploading ? <LoaderCircle className="animate-spin" /> : <Check />}{confirmLabel(selectedIds.length)}
-                        </button>
+                        <Button type="text" onClick={onClose} disabled={working}>取消</Button>
+                        <Button type="primary" icon={<Check />} disabled={working || !selectedIds.length} loading={working && !uploading} onClick={() => void confirm()}>
+                            {confirmLabel(selectedIds.length)}
+                        </Button>
                     </div>
                 </footer>
             </div>

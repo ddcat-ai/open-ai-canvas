@@ -293,7 +293,7 @@ export default function AssetsPage() {
 
             <div className="canvas-library-frame assets-library-frame">
                 <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
-                    <aside className="thin-scrollbar flex gap-2 overflow-x-auto border-b border-border/70 py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:pr-3">
+                    <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:pr-3">
                         <AssetFilterGroup title="素材类型" options={kindOptions} value={kindFilter} counts={kindCounts} onChange={(value) => { setKindFilter(value as AssetKind | "all"); setPage(1); }} />
                         <AssetFilterGroup title="业务分类" options={categoryOptions} value={categoryFilter} counts={categoryCounts} onChange={(value) => { setCategoryFilter(value as AssetCategory | "all"); setPage(1); }} className="lg:mt-5" />
                     </aside>
@@ -327,7 +327,7 @@ export default function AssetsPage() {
             </div>
             </WorkspacePage>
 
-            <Modal className="library-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal className="workspace-modal workspace-modal-wide library-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
                         <Form.Item name="kind" label="类型">
@@ -387,7 +387,7 @@ export default function AssetsPage() {
                             </Form.Item>
                         )}
                     </Form>
-                    <div className="lg:border-l lg:border-border lg:pl-4">
+                    <div className="lg:pl-4">
                         <Typography.Text strong className="text-xs">预览</Typography.Text>
                         <div className="mt-2 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">
                             {coverUrl || imageDraft?.dataUrl ? (
@@ -395,7 +395,7 @@ export default function AssetsPage() {
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
                             )}
-                            <div className="border-x border-b border-border bg-background p-3">
+                            <div className="bg-background p-3">
                                 <Typography.Text strong ellipsis className="block">
                                     {title || "未命名素材"}
                                 </Typography.Text>

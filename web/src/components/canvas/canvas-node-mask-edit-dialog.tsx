@@ -99,9 +99,9 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
     };
 
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={980} centered destroyOnHidden>
+        <Modal className="workspace-modal workspace-modal-wide" title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} centered destroyOnHidden>
             <div className="grid gap-5 lg:grid-cols-[minmax(360px,1fr)_320px]">
-                <div className="flex min-h-[360px] items-center justify-center rounded-xl border border-black/10 bg-transparent p-0 dark:border-white/10">
+                <div className="flex min-h-[360px] items-center justify-center rounded-lg bg-surface-active p-0">
                     <div className="relative inline-block max-w-full overflow-hidden rounded-lg bg-transparent select-none">
                         <img src={dataUrl} alt="" className="block max-h-[68vh] max-w-full bg-transparent" draggable={false} />
                         {image ? (
@@ -129,10 +129,10 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                        <Button type={mode === "paint" ? "primary" : "default"} icon={<Brush className="size-4" />} onClick={() => setMode("paint")}>
+                        <Button type={mode === "paint" ? "primary" : "default"} aria-pressed={mode === "paint"} icon={<Brush className="size-4" />} onClick={() => setMode("paint")}>
                             画笔
                         </Button>
-                        <Button type={mode === "erase" ? "primary" : "default"} icon={<Eraser className="size-4" />} onClick={() => setMode("erase")}>
+                        <Button type={mode === "erase" ? "primary" : "default"} aria-pressed={mode === "erase"} icon={<Eraser className="size-4" />} onClick={() => setMode("erase")}>
                             擦除
                         </Button>
                     </div>
@@ -157,7 +157,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                                 setError("");
                             }}
                         />
-                        {error ? <div className="text-xs font-medium text-[#ef4444]">{error}</div> : null}
+                        {error ? <div className="text-xs font-medium text-destructive">{error}</div> : null}
                     </div>
 
                     <div className="mt-auto flex items-center justify-between gap-2">

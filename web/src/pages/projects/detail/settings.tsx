@@ -43,9 +43,9 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
 
     return (
         <div>
-            <header className="flex items-end justify-between gap-3 border-b border-border/70 pb-3"><div><h2 className="text-lg font-semibold">项目设置</h2><p className="mt-1 text-xs text-foreground/48">基础信息、项目画风与归档管理</p></div><Button type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!dirty || !name.trim()} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存设置" : "已保存"}</Button></header>
+            <header className="flex items-end justify-between gap-3 pb-3"><div><h2 className="text-lg font-semibold">项目设置</h2><p className="mt-1 text-xs text-foreground/48">基础信息、项目画风与归档管理</p></div><Button type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!dirty || !name.trim()} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存设置" : "已保存"}</Button></header>
 
-            <section className="border-b border-border/70 py-4">
+            <section className="py-5">
                 <h3 className="mb-3 text-sm font-semibold">基础设置</h3>
                 <div className="grid gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
                     <Field label="项目名称" className="xl:col-span-2"><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
@@ -55,29 +55,29 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
                 </div>
             </section>
 
-            <section className="border-b border-border/70 py-4">
-                <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">项目画风</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/45">项目保存当前版本快照；修改“我的风格”不会自动改写历史项目</p></div>{styleProfile ? <span className="text-[var(--fs-label)] text-[var(--workspace-accent)]">{styleProfile.source === "user" ? "来自我的风格" : styleProfile.source === "external" ? "外部导入" : "系统预设"}</span> : <span className="text-[var(--fs-label)] text-foreground/40">未设置</span>}</div>
-                <div className="flex flex-col gap-3 border-y border-border/70 py-3 lg:flex-row lg:items-center">
+            <section className="py-5">
+                <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">项目画风</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/45">项目保存当前版本快照；修改“我的风格”不会自动改写历史项目</p></div>{styleProfile ? <span className="text-[var(--fs-label)] text-foreground/52">{styleProfile.source === "user" ? "来自我的风格" : styleProfile.source === "external" ? "外部导入" : "系统预设"}</span> : <span className="text-[var(--fs-label)] text-foreground/40">未设置</span>}</div>
+                <div className="flex flex-col gap-3 rounded-lg bg-surface-active p-3 lg:flex-row lg:items-center">
                     {selectedStyle ? <img src={selectedStyle.imageUrl} width="160" height="90" alt={`${selectedStyle.title}画风示意`} className="aspect-video w-40 shrink-0 rounded-md object-cover" /> : <span className="grid aspect-video w-40 shrink-0 place-items-center rounded-md bg-foreground/5 text-foreground/35"><Palette className="size-5" /></span>}
                     <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold">{styleProfile?.title || selectedStyle?.title || "尚未设置项目画风"}</div>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-foreground/48">{styleProfile?.description || selectedStyle?.description || "从系统风格开始，或创建可自由编辑的项目视觉规范。"}</p>
                         {styleProfile ? <div className="mt-2 flex flex-wrap gap-1">{styleProfile.tags.map((tag) => <span key={tag} className="rounded bg-foreground/10 px-1.5 py-0.5 text-[var(--fs-tiny)] text-foreground/55">{tag}</span>)}</div> : null}
                     </div>
-                    <div className="flex shrink-0 flex-wrap gap-2"><Button icon={<Eye className="size-3.5" />} disabled={!selectedStyle} onClick={() => setStyleDetail(selectedStyle || null)}>查看规范</Button><Button type={styleProfile ? "primary" : "default"} icon={<Pencil className="size-3.5" />} disabled={!styleProfile} onClick={() => { setStyleEditorRequested(true); setStylePickerOpen(true); }}>编辑画风</Button><Button icon={<Palette className="size-3.5" />} onClick={() => { setStyleEditorRequested(false); setStylePickerOpen(true); }}>{selectedStyle ? "更换画风" : "选择画风"}</Button></div>
+                    <div className="flex shrink-0 flex-wrap gap-2"><Button icon={<Eye className="size-3.5" />} disabled={!selectedStyle} onClick={() => setStyleDetail(selectedStyle || null)}>查看规范</Button><Button icon={<Pencil className="size-3.5" />} disabled={!styleProfile} onClick={() => { setStyleEditorRequested(true); setStylePickerOpen(true); }}>编辑画风</Button><Button icon={<Palette className="size-3.5" />} onClick={() => { setStyleEditorRequested(false); setStylePickerOpen(true); }}>{selectedStyle ? "更换画风" : "选择画风"}</Button></div>
                 </div>
-                {styleProfile ? <div className="grid grid-cols-2 border-b border-border text-xs sm:grid-cols-5"><StyleMetric label="执行策略" value={styleProfile.executionPolicy === "strict-assets" ? "严格校验" : "兼容降级"} /><StyleMetric label="绑定资产" value={`${styleProfile.assets.length} 个`} /><StyleMetric label="已启用" value={`${enabledStyleAssets.length} 个`} /><StyleMetric label="图片执行" value={styleExecutionStatusLabel(styleExecutionPlans?.image.status)} /><StyleMetric label="视频执行" value={styleExecutionStatusLabel(styleExecutionPlans?.video.status)} /></div> : null}
-                {styleExecutionPlans && (styleExecutionPlans.image.warnings.length || styleExecutionPlans.video.warnings.length) ? <div className="grid gap-1 border-b border-border px-3 py-2 text-[var(--fs-label)] leading-5 text-amber-600 dark:text-amber-400">{styleExecutionPlans.image.warnings.length ? <p>图片：{styleExecutionPlans.image.warnings.join("；")}</p> : null}{styleExecutionPlans.video.warnings.length ? <p>视频：{styleExecutionPlans.video.warnings.join("；")}</p> : null}</div> : null}
+                {styleProfile ? <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><StyleMetric label="执行策略" value={styleProfile.executionPolicy === "strict-assets" ? "严格校验" : "兼容降级"} /><StyleMetric label="绑定资产" value={`${styleProfile.assets.length} 个`} /><StyleMetric label="已启用" value={`${enabledStyleAssets.length} 个`} /><StyleMetric label="图片执行" value={styleExecutionStatusLabel(styleExecutionPlans?.image.status)} /><StyleMetric label="视频执行" value={styleExecutionStatusLabel(styleExecutionPlans?.video.status)} /></div> : null}
+                {styleExecutionPlans && (styleExecutionPlans.image.warnings.length || styleExecutionPlans.video.warnings.length) ? <div className="mt-2 grid gap-1 rounded-md bg-amber-500/5 px-3 py-2 text-[var(--fs-label)] leading-5 text-amber-600 dark:text-amber-400">{styleExecutionPlans.image.warnings.length ? <p>图片：{styleExecutionPlans.image.warnings.join("；")}</p> : null}{styleExecutionPlans.video.warnings.length ? <p>视频：{styleExecutionPlans.video.warnings.join("；")}</p> : null}</div> : null}
             </section>
 
             <section className="py-4">
-                <div className="flex flex-col gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-lg bg-red-500/5 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded bg-red-500/10 text-red-500"><Archive className="size-3.5" /></span><div className="min-w-0"><h3 className="text-sm font-medium">{project.status === "archived" ? "恢复项目" : "归档项目"}</h3><p className="mt-0.5 text-[var(--fs-label)] text-foreground/48">{project.status === "archived" ? "恢复后可继续创建章节、画布和生成任务" : "保留全部章节、画布和资产，停止项目内新建与生成"}</p></div></div>
                     <Button size="small" danger={project.status !== "archived"} icon={project.status === "archived" ? <Check className="size-3.5" /> : <ShieldAlert className="size-3.5" />} onClick={() => setArchiveOpen(true)}>{project.status === "archived" ? "恢复项目" : "归档项目"}</Button>
                 </div>
             </section>
 
-            <Modal title={project.status === "archived" ? "恢复项目" : "归档项目"} open={archiveOpen} okText={project.status === "archived" ? "确认恢复" : "确认归档"} cancelText="取消" okButtonProps={{ danger: project.status !== "archived", loading: archiveMutation.isPending }} onCancel={() => setArchiveOpen(false)} onOk={() => archiveMutation.mutate()} width={440} styles={{ body: { paddingTop: 12 } }}><p className="m-0 text-sm leading-6 text-foreground/65">{project.status === "archived" ? "恢复后项目会重新进入可编辑状态。" : "归档不会删除章节、画布或资产，画布文档仍可在创作画布中打开。"}</p></Modal>
+            <Modal className="workspace-modal workspace-modal-compact" title={project.status === "archived" ? "恢复项目" : "归档项目"} open={archiveOpen} okText={project.status === "archived" ? "确认恢复" : "确认归档"} cancelText="取消" okButtonProps={{ danger: project.status !== "archived", loading: archiveMutation.isPending }} onCancel={() => setArchiveOpen(false)} onOk={() => archiveMutation.mutate()} styles={{ body: { paddingTop: 12 } }}><p className="m-0 text-sm leading-6 text-foreground/65">{project.status === "archived" ? "恢复后项目会重新进入可编辑状态。" : "归档不会删除章节、画布或资产，画布文档仍可在创作画布中打开。"}</p></Modal>
             <CanvasStylePickerModal open={stylePickerOpen} value={stylePresetId} currentProfile={styleProfile} startInEditor={styleEditorRequested} onClose={() => { setStylePickerOpen(false); setStyleEditorRequested(false); }} onSelect={(preset) => { applyStyle(preset); setStylePickerOpen(false); setStyleEditorRequested(false); }} />
             <CanvasStyleDetailModal open={Boolean(styleDetail)} preset={styleDetail} selected={styleDetail?.id === stylePresetId} onClose={() => setStyleDetail(null)} onSelect={(preset) => { applyStyle(preset); setStyleDetail(null); }} />
         </div>
@@ -90,7 +90,7 @@ export default function ProjectSettingsView({ detail, refreshProject }: ProjectD
 }
 
 function StyleMetric({ label, value }: { label: string; value: string }) {
-    return <div className="min-w-0 border-r border-t border-border px-3 py-2 first:border-l sm:border-t-0"><span className="block text-[var(--fs-tiny)] text-foreground/40">{label}</span><span className="mt-0.5 block truncate font-medium text-foreground/65">{value}</span></div>;
+    return <div className="min-w-0 rounded-md bg-surface-active px-3 py-2"><span className="block text-[var(--fs-tiny)] text-foreground/40">{label}</span><span className="mt-0.5 block truncate font-medium text-foreground/65">{value}</span></div>;
 }
 
 function styleExecutionStatusLabel(status?: "ready" | "degraded" | "blocked") {

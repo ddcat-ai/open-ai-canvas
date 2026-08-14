@@ -149,7 +149,7 @@ export function PromptPreferencesPane() {
 
     return (
         <div className="flex min-h-full flex-col">
-            <header className="shrink-0 border-b border-border pb-4">
+            <header className="shrink-0 pb-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="min-w-0 flex-1">
                         <label className="mb-2 block text-xs font-medium text-foreground/55" htmlFor="prompt-template-select">提示词模板</label>
@@ -205,7 +205,7 @@ export function PromptPreferencesPane() {
                             onChange={(event) => setAppendContent(event.target.value)}
                         />
                     ) : (
-                        <div className="min-h-96 flex-1 overflow-hidden rounded-md border border-border">
+                        <div className="min-h-96 flex-1 overflow-hidden rounded-md bg-surface-active">
                             <PromptCodeEditor
                                 value={mode === "inherit" ? templateContent : rewriteContent}
                                 readOnly={mode === "inherit"}
@@ -216,7 +216,7 @@ export function PromptPreferencesPane() {
                     )}
                 </section>
 
-                <aside className="min-h-0 border-t border-border pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+                <aside className="min-h-0 pt-4 lg:pl-6 lg:pt-0">
                     <Tabs
                         size="small"
                         items={[
@@ -233,7 +233,7 @@ export function PromptPreferencesPane() {
                             {
                                 key: "preview",
                                 label: "最终结构",
-                                children: <div className="space-y-4 text-xs leading-6"><section><div className="mb-2 font-medium text-foreground/80">创作策略</div><pre className="thin-scrollbar max-h-64 overflow-auto whitespace-pre-wrap text-foreground/65">{previewCreative || "尚未填写"}</pre></section><section className="border-t border-border pt-4"><div className="mb-2 font-medium text-foreground/80">运行时强制追加</div><p className="text-foreground/55">当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。</p></section></div>,
+                                children: <div className="space-y-5 text-xs leading-6"><section><div className="mb-2 font-medium text-foreground/80">创作策略</div><pre className="thin-scrollbar max-h-64 overflow-auto whitespace-pre-wrap text-foreground/65">{previewCreative || "尚未填写"}</pre></section><section><div className="mb-2 font-medium text-foreground/80">运行时强制追加</div><p className="text-foreground/55">当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。</p></section></div>,
                             },
                         ]}
                     />

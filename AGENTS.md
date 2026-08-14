@@ -123,7 +123,16 @@
 - 页面级分类导航至少 44px 高，并提供”图标 + 明确文字”入口和一致选中态；重要设置不能只藏在无文字图标中。
 - 可编辑的工作区、画布和对象名称常显铅笔图标并支持单击编辑；双击和右键只能作为快捷方式，不能作为唯一发现路径。
 - 不把页面大段说明文字当作”如何使用”的常驻教程；通过明确控件、空态、反馈和可发现的图标+文字表达功能。
-- **卡片、列表、交互动效遵循 [UI 设计系统规范](docs/ui-design-system.md)**：统一卡片表面色、边框、投影、hover状态(240ms/translateY -4px)、双主题均衡策略。改造卡片前必须先读该规范，确保新增样式符合设计token体系。
+- **卡片、列表、交互动效遵循 [UI 设计系统规范](docs/ui-design-system.md)**：统一卡片表面、状态描边和 hover（180ms/translateY -2px）；普通卡片默认无边框、无 hairline、无投影。改造前先读规范并核对现有 token。
+
+#### UI 修复防回归
+
+- 主操作、普通选中、Checkbox/Radio 勾选和 Switch 是四种颜色角色；每种状态都必须为明暗主题成对定义背景与前景，禁止把 `primary` 实心色直接复用为普通选中态。
+- 持久切换按钮使用 `aria-pressed` 表达状态；`type="primary"` 只用于当前流程的主要命令，不用于表示“已选中”。
+- AntD Button、Switch、Checkbox、Radio、Segmented 的共性状态只在 `web/src/lib/app-theme.ts` 和全局兼容区维护；不得新增页面级 `.dark .ant-switch-*`、`.ant-checkbox-*` 或 Segmented 选中色补丁。组件级 CSS 只允许处理尺寸和布局。
+- 新增 CSS 前先搜索同名选择器和 token；回到唯一源规则修改，并删除被替代的末尾 override。新增 token 后必须确认定义真实存在且明暗主题均可解析，不能只在文档中声明。
+- 卡片层级通过 `--library-surface`、明度、间距和信息密度表达；禁止装饰性左侧竖条、默认 border、hairline、inset stroke、渐变光和卡片阴影。业务 selected、warning、error 等真实状态才可保留克制的语义描边或颜色。
+- 工作区 Modal 统一使用 `workspace-modal`，并按语义选择 `workspace-modal-compact`、默认 standard 或 `workspace-modal-wide`；素材选择统一复用 `AssetLibraryPickerModal`，页面不得复制按钮、弹窗宽度和素材网格样式。
 
 ### 6.2 空间、响应式和动效
 

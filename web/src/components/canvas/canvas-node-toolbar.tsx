@@ -492,12 +492,11 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
 
     return (
         <Modal
-            className="canvas-node-info-modal"
+            className="workspace-modal canvas-node-info-modal"
             title={title}
             open={open && Boolean(node)}
             centered
             footer={null}
-            width={760}
             onCancel={onClose}
             styles={{ body: { paddingTop: 4 } }}
         >
@@ -522,7 +521,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                     <div className="canvas-node-inspector-options">
                                         {assetCategoryOptions.map((option) => {
                                             const active = assetCategory === option.value;
-                                            return <button key={option.value} type="button" disabled={readOnly} onClick={() => saveAssetCategory(option.value)} className={active ? "is-active" : ""} style={{ "--inspector-accent": theme.accent.primary, "--inspector-accent-soft": theme.accent.primarySoft } as CSSProperties}>{option.label}</button>;
+                                            return <button key={option.value} type="button" disabled={readOnly} aria-pressed={active} onClick={() => saveAssetCategory(option.value)} className={active ? "is-active" : ""}>{option.label}</button>;
                                         })}
                                     </div>
                                     <p className="canvas-node-inspector-help">生成后会按此分类进入项目资产；角色、场景和画风工作流会自动预填。</p>
