@@ -97,27 +97,16 @@ export function buildTimelineRenderPlan(timeline: TimelineProject, sources: Time
     const concatEntries: string[] = [];
     const videoClips = getOrderedVideoClips(timeline);
 
-    // 1) 逐片段裁切：按源素材内部时间定位，输出统一编码便于 concat。
+    // 1)+2) 逐片段裁切，并按时间线顺序在片段前补黑场（含静音音轨），输出统一编码便于 concat。
+    // 黑场必须插入对应片段之前的 concat 位置：concat 按列表顺序拼接，若先收完所有 trim 再把 gap 追加到
+    // 结尾，任何存在空隙的时间线（如 A(0-15s) 与 B(25-40s) 之间的 10s）都会把黑场拼到片尾、字幕整体错位。
+    // 无源片段（如节点已被删除）既不产 trim 也不补自己的黑场，直接跳过：cursor 不推进，其跨度由下一个
+    // 有源片段前的单个 gap 统一覆盖。若先为无源片段补 gap 再等 cursor，同一段空隙会被重复计长、成片超长
+    // （线上实锤：缺源片段前有空隙时黑场翻倍、字幕继续漂移）。
+    let cursorMs = 0;
     videoClips.forEach((clip, index) => {
         const source = sourceByNode.get(clip.nodeId);
         if (!source) return;
-        const output = `trim-${index}.mp4`;
-        // 裁切时长取时间线片段时长（clip.durationMs），而不是源素材剩余时长：
-        // 左缘裁剪后 sourceStartMs 前移但 sourceDurationMs 仍为源全长，若按源时长 -t 会把旧片段尾部多裁出来，
-        // 表现为「裁剪后播放仍从最原始视频开始/出现旧片段」；-ss 已定位源内起点，-t 必须等于片段展示时长。
-        const durationSec = Math.max(0.1, clip.durationMs / 1000);
-        steps.push({
-            kind: "trim",
-            output,
-            args: ["-ss", String((clip.sourceStartMs || 0) / 1000), "-i", source.fileName, "-t", String(durationSec), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "128k", output],
-            description: `裁切片段 ${index + 1}（${clip.title || clip.nodeId}）`,
-        });
-        concatEntries.push(output);
-    });
-
-    // 2) 空隙补黑场（时间线与成片对齐），含静音音轨。
-    let cursorMs = 0;
-    videoClips.forEach((clip, index) => {
         const gapMs = clip.startMs - cursorMs;
         if (gapMs > 100) {
             const output = `gap-${index}.mp4`;
@@ -151,6 +140,21 @@ export function buildTimelineRenderPlan(timeline: TimelineProject, sources: Time
             });
             concatEntries.push(output);
         }
+        const output = `trim-${index}.mp4`;
+        // 裁切时长取时间线片段时长（clip.durationMs），而不是源素材剩余时长：
+        // 左缘裁剪后 sourceStartMs 前移但 sourceDurationMs 仍为源全长，若按源时长 -t 会把旧片段尾部多裁出来，
+        // 表现为「裁剪后播放仍从最原始视频开始/出现旧片段」；-ss 已定位源内起点，-t 必须等于片段展示时长。
+        // -ss 必须放在 -i 之后（输出 seek）：放在 -i 之前是输入 seek，MP4/H.264 只会定位到目标时间戳
+        // 之前最近的关键帧，切点会偏移最多一个 GOP（常见 0.5-2s）、片尾被 -t 截掉、音视频在切点处错位。
+        // 本步骤已 -c:v libx264 重编码，输出 seek 帧精确，代价只是多解码。
+        const durationSec = Math.max(0.1, clip.durationMs / 1000);
+        steps.push({
+            kind: "trim",
+            output,
+            args: ["-i", source.fileName, "-ss", String((clip.sourceStartMs || 0) / 1000), "-t", String(durationSec), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "128k", output],
+            description: `裁切片段 ${index + 1}（${clip.title || clip.nodeId}）`,
+        });
+        concatEntries.push(output);
         cursorMs = clip.startMs + clip.durationMs;
     });
 
