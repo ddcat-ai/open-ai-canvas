@@ -34,7 +34,7 @@ const configSections: Array<{ key: ConfigSectionKey; label: string; description:
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
     { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
-    { key: "storage", label: "我的 OSS", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
+    { key: "storage", label: "我的对象存储", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
 ];
 
 type UserChannelConnection = "openai" | "gemini";
@@ -527,7 +527,7 @@ export default function SettingsPage() {
                         label: (
                             <span className="inline-flex items-center gap-2">
                                 <Cloud className="size-4" />
-                                我的 OSS
+                                我的对象存储
                             </span>
                         ),
                         children: (

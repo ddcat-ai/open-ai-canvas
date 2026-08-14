@@ -25,7 +25,7 @@ export type RemoteResource = {
 
 export type UserOSSSetting = {
     enabled: boolean;
-    provider: "aliyun";
+    provider: "aliyun" | "tencent";
     region: string;
     endpoint: string;
     bucket: string;
@@ -112,10 +112,10 @@ export async function getResourceOSSUrl(storageKey?: string) {
     if (!id) throw new Error("当前媒体尚未上传到后端资源存储");
     try {
         const data = await request<{ url: string }>(api.get(`/resources/${encodeURIComponent(id)}/oss-url`));
-        if (!data.url) throw new Error("后端未返回 OSS 地址");
+        if (!data.url) throw new Error("后端未返回对象存储地址");
         return data.url;
     } catch (error) {
-        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data.msg || error.message || "获取 OSS 地址失败");
+        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data.msg || error.message || "获取对象存储地址失败");
         throw error;
     }
 }
