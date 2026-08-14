@@ -1490,16 +1490,63 @@ func storyboardCameraMovementCount(value string) int {
 }
 
 func extractJSONText(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	trimmed = strings.TrimPrefix(trimmed, "```json")
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSuffix(trimmed, "```")
-	start := strings.Index(trimmed, "{")
-	end := strings.LastIndex(trimmed, "}")
-	if start < 0 || end < start {
-		return "", errors.New("模型返回的不是 JSON")
+	// Text models may prepend an explanation or append a Markdown fence despite
+	// the JSON-only contract. Scan complete JSON values instead of pairing the
+	// first opening brace with the final closing brace, which can merge prose and
+	// make an otherwise valid character breakdown fail validation.
+	for start := 0; start < len(raw); start++ {
+		if raw[start] != '{' && raw[start] != '[' {
+			continue
+		}
+		end := jsonValueEnd(raw, start)
+		if end < start {
+			continue
+		}
+		candidate := raw[start : end+1]
+		var decoded interface{}
+		if json.Unmarshal([]byte(candidate), &decoded) == nil {
+			return candidate, nil
+		}
 	}
-	return trimmed[start : end+1], nil
+	return "", errors.New("模型返回的不是 JSON")
+}
+
+func jsonValueEnd(source string, start int) int {
+	stack := make([]byte, 0, 8)
+	inString := false
+	escaped := false
+	for index := start; index < len(source); index++ {
+		value := source[index]
+		if inString {
+			if escaped {
+				escaped = false
+			} else if value == '\\' {
+				escaped = true
+			} else if value == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch value {
+		case '"':
+			inString = true
+		case '{', '[':
+			stack = append(stack, value)
+		case '}', ']':
+			if len(stack) == 0 {
+				return -1
+			}
+			opener := stack[len(stack)-1]
+			if (value == '}' && opener != '{') || (value == ']' && opener != '[') {
+				return -1
+			}
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				return index
+			}
+		}
+	}
+	return -1
 }
 
 func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboardPlan, assets []storyboardAsset, projectStyle storyboardProjectStyle) (map[string]interface{}, []map[string]interface{}, error) {
