@@ -80,7 +80,7 @@ export default function TestVoiceRecording() {
                                 disabled={!prompt.trim()}
                                 loading={sending}
                                 onClick={handleSubmit}
-                                style={{ background: theme.accent.primary, borderColor: theme.accent.primary }}
+                                style={{ background: theme.accent.primary, borderColor: theme.accent.primary, color: theme.accent.onPrimary }}
                             >
                                 发送
                             </Button>

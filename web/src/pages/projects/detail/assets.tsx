@@ -6,6 +6,7 @@ import { Box, Check, ChevronDown, Download, FileText, Image as ImageIcon, Link2,
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
+import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import {
@@ -34,6 +35,7 @@ import { generateCharacterTurnaround } from "./project-character-media";
 import { categoryLabels, categoryLabel, mediaLabel, StatusPill, formatTime, textValue, type ProjectDetailViewProps } from "./shared";
 
 const categories = ["all", "character", "environment", "wardrobe", "prop", "weapon", "style", "other"];
+const pickerCategoryLabels = { all: "全部素材", ...categoryLabels };
 const characterFields = [
     ["role", "剧情定位与人物关系"], ["aliases", "别名"], ["appearance", "稳定外貌"], ["physique", "身高、体型与体态"],
     ["clothing", "默认服装造型"], ["personality", "性格与表演基线"], ["props", "固定道具"],
@@ -52,21 +54,34 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [category, setCategory] = useState("all");
     const [addOpen, setAddOpen] = useState(false);
-    const [assetId, setAssetId] = useState("");
-    const [assetCategory, setAssetCategory] = useState("other");
     const [editorAsset, setEditorAsset] = useState<ProjectAsset | "new" | null>(null);
     const [imageAsset, setImageAsset] = useState<ProjectAsset | null>(null);
     const [voiceAsset, setVoiceAsset] = useState<ProjectAsset | null>(null);
     const [previewAsset, setPreviewAsset] = useState<ProjectAsset | null>(null);
-    const [imageSelection, setImageSelection] = useState("");
     const [voiceProfileId, setVoiceProfileId] = useState("");
     const [voiceInstructions, setVoiceInstructions] = useState("");
     const [form] = Form.useForm<CharacterForm>();
 
     const projectAssetIds = new Set(detail.assets.map((asset) => asset.id));
     const availableAssets = personalAssets.filter((asset) => !projectAssetIds.has(asset.id));
-    const selectedPersonalAsset = personalAssets.find((asset) => asset.id === assetId);
     const imageAssets = personalAssets.filter((asset): asset is ImageAsset => asset.kind === "image");
+    const availablePickerItems = useMemo<AssetLibraryPickerItem[]>(() => availableAssets.map((asset) => ({
+        id: asset.id,
+        title: asset.title,
+        category: asset.kind === "entity" ? "character" : asset.category || "other",
+        kindLabel: mediaLabel(asset.kind),
+        asset,
+        description: asset.note,
+        searchText: asset.tags.join(" "),
+    })), [availableAssets]);
+    const imagePickerItems = useMemo<AssetLibraryPickerItem[]>(() => imageAssets.map((asset) => ({
+        id: asset.id,
+        title: asset.title,
+        category: asset.category || "other",
+        kindLabel: "图片",
+        asset,
+        searchText: asset.tags.join(" "),
+    })), [imageAssets]);
     const pendingCandidates = detail.assetCandidates.filter((candidate) => candidate.category === "character" && candidate.status === "pending_confirmation");
     const characterAssets = detail.assets.filter((asset) => asset.category === "character" && asset.character);
     const mediaAssetCount = detail.assets.filter((asset) => asset.category !== "character").length;
@@ -86,7 +101,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
 
     const done = (content: string) => { refreshProject(); message.success(content); };
     const failed = (fallback: string) => (error: unknown) => message.error(error instanceof Error ? error.message : fallback);
-    const addMutation = useMutation({ mutationFn: () => linkProjectAsset(detail.project.id, { assetId, category: assetCategory }), onSuccess: ({ asset }) => { updatePersonalAsset(asset.id, { category: asset.category as AssetCategory, status: asset.status as AssetStatus, primaryVersionId: asset.primaryVersionId }); setAddOpen(false); setAssetId(""); done("资产已加入项目"); }, onError: failed("资产加入失败") });
+    const addMutation = useMutation({ mutationFn: ({ assetId, category: nextCategory }: { assetId: string; category: string }) => linkProjectAsset(detail.project.id, { assetId, category: nextCategory }), onSuccess: ({ asset }) => { updatePersonalAsset(asset.id, { category: asset.category as AssetCategory, status: asset.status as AssetStatus, primaryVersionId: asset.primaryVersionId }); setAddOpen(false); done("资产已加入项目"); }, onError: failed("资产加入失败") });
     const versionMutation = useMutation({ mutationFn: (id: string) => createProjectAssetVersion(detail.project.id, id, {}), onSuccess: () => done("已创建新版本"), onError: failed("版本创建失败") });
     const unlinkMutation = useMutation({ mutationFn: (id: string) => unlinkProjectAsset(detail.project.id, id), onSuccess: () => done("资产已移出项目"), onError: failed("资产移除失败") });
     const categoryMutation = useMutation({ mutationFn: ({ id, next }: { id: string; next: string }) => updateProjectAssetCategory(detail.project.id, id, next), onSuccess: ({ asset }) => { updatePersonalAsset(asset.id, { category: asset.category as AssetCategory }); done("资产分类已更新"); }, onError: failed("资产分类更新失败") });
@@ -128,11 +143,11 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
         onError: failed("三视图生成失败"),
     });
     const bindImagesMutation = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (selectedAssetId: string) => {
             if (!imageAsset) throw new Error("未选择角色");
             await saveRemoteUserDataNow();
             const latest = useAssetStore.getState().assets;
-            const selected = latest.find((asset) => asset.id === imageSelection);
+            const selected = latest.find((asset) => asset.id === selectedAssetId);
             if (selected?.kind !== "image") throw new Error("请选择一张包含正面、侧面和背面的三视图设定图");
             const resourceId = resourceIdFromStorageKey((selected as ImageAsset).data.storageKey);
             if (!resourceId) throw new Error("所选图片尚未同步到后端资源库");
@@ -149,7 +164,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
         const definition = asset === "new" ? {} : asset.character?.definition || {};
         form.setFieldsValue({ name: asset === "new" ? "" : asset.title, ...Object.fromEntries(characterFields.map(([key]) => [key, fieldValue(definition[key])])) } as CharacterForm);
     };
-    const openImages = (asset: ProjectAsset) => { setImageAsset(asset); setImageSelection(""); };
+    const openImages = (asset: ProjectAsset) => setImageAsset(asset);
     const openVoice = (asset: ProjectAsset) => { setVoiceAsset(asset); setVoiceProfileId(asset.character?.voice?.profile.id || ""); setVoiceInstructions(asset.character?.voice?.instructions || ""); };
     const downloadPreviewAsset = (asset: ProjectAsset) => {
         const personal = personalAssets.find((item) => item.id === asset.id);
@@ -218,10 +233,40 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
                 </div>
             </div>
 
-            <Modal title="引用个人素材" open={addOpen} okText="加入项目" cancelText="取消" okButtonProps={{ disabled: !assetId, loading: addMutation.isPending }} onCancel={() => setAddOpen(false)} onOk={() => addMutation.mutate()} width={480}><div className="grid gap-3"><Select showSearch optionFilterProp="label" value={assetId || undefined} placeholder="选择未加入项目的素材" options={availableAssets.map((asset) => ({ label: `${asset.title} · ${mediaLabel(asset.kind)}`, value: asset.id }))} onChange={(value) => { setAssetId(value); const next = personalAssets.find((asset) => asset.id === value); setAssetCategory(next?.kind === "entity" ? "character" : next?.category || "other"); }} /><Select value={assetCategory} disabled={selectedPersonalAsset?.kind === "entity"} options={selectedPersonalAsset?.kind === "entity" ? [{ value: "character", label: "角色" }] : Object.entries(categoryLabels).filter(([value]) => value !== "character").map(([value, label]) => ({ value, label }))} onChange={setAssetCategory} /></div></Modal>
+            <AssetLibraryPickerModal
+                open={addOpen}
+                items={availablePickerItems}
+                categoryLabels={pickerCategoryLabels}
+                multiple={false}
+                title="个人素材"
+                confirmLabel={() => "加入项目"}
+                emptyTitle="没有可引用的个人素材"
+                emptyDescription="个人素材已全部加入项目，或素材库仍为空。"
+                onClose={() => setAddOpen(false)}
+                onConfirm={async (ids) => {
+                    const selected = personalAssets.find((asset) => asset.id === ids[0]);
+                    if (!selected) throw new Error("所选素材已不存在，请重新选择");
+                    await addMutation.mutateAsync({ assetId: selected.id, category: selected.kind === "entity" ? "character" : selected.category || "other" });
+                }}
+            />
             <ProjectAssetPreviewModal asset={previewAsset} personalAsset={previewAsset ? personalAssets.find((item) => item.id === previewAsset.id) : undefined} onClose={() => setPreviewAsset(null)} onDownload={() => previewAsset && downloadPreviewAsset(previewAsset)} onReplaceImage={() => { if (!previewAsset || previewAsset.category !== "character") return; setPreviewAsset(null); openImages(previewAsset); }} />
             <CharacterEditorModal open={Boolean(editorAsset)} editing={editorAsset !== "new"} form={form} loading={saveCharacter.isPending} onClose={() => setEditorAsset(null)} onSave={() => form.validateFields().then((values) => saveCharacter.mutate(values))} />
-            <Modal title={`绑定单张三视图 · ${imageAsset?.title || ""}`} open={Boolean(imageAsset)} okText="绑定并生成新版本" cancelText="取消" width={720} okButtonProps={{ loading: bindImagesMutation.isPending, disabled: !imageSelection }} onCancel={() => setImageAsset(null)} onOk={() => bindImagesMutation.mutate()}>{imageAssets.length ? <div className="grid max-h-[420px] gap-3 overflow-y-auto sm:grid-cols-3">{imageAssets.map((asset) => <button type="button" key={asset.id} onClick={() => setImageSelection(asset.id)} className={`overflow-hidden rounded-lg border text-left transition ${imageSelection === asset.id ? "border-[var(--workspace-accent)] ring-2 ring-[var(--workspace-accent)]/20" : "border-border/70 hover:border-foreground/35"}`}><div className="relative aspect-[4/3] bg-foreground/[.045]"><img src={asset.data.dataUrl} alt={asset.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />{imageSelection === asset.id ? <span className="absolute right-2 top-2 grid size-6 place-items-center rounded-full bg-[var(--workspace-accent)] text-white"><Check className="size-4" /></span> : null}</div><div className="truncate px-2 py-2 text-[var(--fs-label)] font-medium">{asset.title}</div></button>)}</div> : <WorkspaceState icon="assets" compact title="个人图片素材为空" description="需要一张包含正面、侧面、背面的角色设定图。" />}</Modal>
+            <AssetLibraryPickerModal
+                open={Boolean(imageAsset)}
+                items={imagePickerItems}
+                categoryLabels={pickerCategoryLabels}
+                multiple={false}
+                eyebrow="绑定图片"
+                title={imageAsset?.title || "角色三视图"}
+                confirmLabel={() => "绑定并生成新版本"}
+                emptyTitle="个人图片素材为空"
+                emptyDescription="需要一张包含正面、侧面、背面的角色设定图。"
+                onClose={() => setImageAsset(null)}
+                onConfirm={async (ids) => {
+                    if (!ids[0]) throw new Error("请选择一张三视图设定图");
+                    await bindImagesMutation.mutateAsync(ids[0]);
+                }}
+            />
             <Modal title={`选择声音素材 · ${voiceAsset?.title || ""}`} open={Boolean(voiceAsset)} okText="绑定并生成新版本" cancelText="取消" okButtonProps={{ loading: bindVoiceMutation.isPending, disabled: !voiceProfileId }} onCancel={() => setVoiceAsset(null)} onOk={() => bindVoiceMutation.mutate()}><div className="grid gap-3"><Select loading={voices.isLoading} showSearch optionFilterProp="label" value={voiceProfileId || undefined} placeholder="选择声音" options={(voices.data?.profiles || []).map((voice) => ({ label: `${voice.name} · ${voice.language}`, value: voice.id }))} onChange={setVoiceProfileId} /><Input.TextArea rows={3} value={voiceInstructions} placeholder="表演指令，例如：克制、温暖、语速稍慢" onChange={(event) => setVoiceInstructions(event.target.value)} />{voiceAsset?.character && voiceAsset.character.voiceStatus !== "missing" ? <div className="flex items-center justify-between border-t border-border/70 pt-2"><span className="text-[var(--fs-label)] text-foreground/45">当前绑定：{voiceAsset.character.voice?.profile.name || "声音素材不可用"}</span><Popconfirm title="解除当前声音绑定？" description="该操作会保留历史版本，并创建一个未绑定声音的新版本。" okText="解除" cancelText="取消" onConfirm={() => unbindVoiceMutation.mutate()}><Button type="text" danger size="small" loading={unbindVoiceMutation.isPending} icon={<VolumeX className="size-3.5" />}>解除声音</Button></Popconfirm></div> : null}</div></Modal>
         </div>
     );

@@ -155,7 +155,7 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
                                         height: step.status === "current" ? "var(--flow-step-node-current)" : "var(--flow-step-node)",
                                         background: step.status === "pending" ? "transparent" : theme.accent.primary,
                                         border: step.status === "pending" ? "var(--stroke-2) solid var(--cn-stroke)" : "none",
-                                        color: step.status === "pending" ? theme.node.muted : "#fff",
+                                        color: step.status === "pending" ? theme.node.muted : theme.accent.onPrimary,
                                         boxShadow: step.status === "current" ? "var(--flow-step-current-glow)" : undefined,
                                         fontSize: step.status === "current" ? "var(--fs-body)" : "var(--fs-caption)",
                                     }}

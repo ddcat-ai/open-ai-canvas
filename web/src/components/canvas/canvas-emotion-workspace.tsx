@@ -305,8 +305,8 @@ function FaceSelectionOverlay({
                     >
                         {selected ? (
                             <span
-                                className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold text-white"
-                                style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)" }}
+                                className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold"
+                                style={{ background: active ? theme.accent.primary : "rgba(20,20,22,.82)", color: active ? theme.accent.onPrimary : "#ffffff" }}
                             >
                                 {selected.name}
                             </span>

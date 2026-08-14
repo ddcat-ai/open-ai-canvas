@@ -41,7 +41,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
               active: "#ffffff",
               border: "rgba(255, 255, 255, 0.3)",
               disabledBackground: "rgba(255, 255, 255, 0.06)",
-              focus: "transparent",
+              focus: "rgba(255, 255, 255, 0.22)",
               hover: "#e5e5e5",
               primary: "#f5f5f5",
               surface: "rgba(255, 255, 255, 0.035)",
@@ -151,7 +151,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 ...(selectionControl
                     ? {
                           buttonBg: selectionControl.surface,
-                          buttonCheckedBg: "rgba(91, 110, 225, 0.12)",
+                          buttonCheckedBg: color.selectSelectedBg,
                           buttonSolidCheckedActiveBg: selectionControl.active,
                           buttonSolidCheckedBg: selectionControl.primary,
                           buttonSolidCheckedHoverBg: selectionControl.hover,

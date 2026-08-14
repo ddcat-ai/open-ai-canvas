@@ -74,7 +74,7 @@ export function ImageToolSettingsModal({ open, tools, selectedIds, showLabels, o
                     {tools.map((tool) => (
                         <label key={tool.id} className="flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-[var(--r-md)] border px-1.5 transition-colors" style={{ background: selected.has(tool.id) ? theme.accent.primarySoft : "transparent", borderColor: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.border, color: selected.has(tool.id) ? theme.accent.primary : theme.node.text }}>
                             <Checkbox className="canvas-image-tool-checkbox shrink-0" style={{ "--tool-accent": theme.accent.primary } as CSSProperties} value={tool.id} disabled={!selected.has(tool.id) && selectedTools.length >= maxSelected} />
-                            <span className="grid size-5 shrink-0 place-items-center rounded-[var(--r-sm)] [&_svg]:size-3" style={{ background: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.itemHover, color: selected.has(tool.id) ? "#ffffff" : theme.node.muted }}>{tool.icon}</span>
+                            <span className="grid size-5 shrink-0 place-items-center rounded-[var(--r-sm)] [&_svg]:size-3" style={{ background: selected.has(tool.id) ? theme.accent.primary : theme.toolbar.itemHover, color: selected.has(tool.id) ? theme.accent.onPrimary : theme.node.muted }}>{tool.icon}</span>
                             <span className="min-w-0 truncate text-[var(--fs-tiny)] font-medium leading-none">{tool.label}</span>
                         </label>
                     ))}

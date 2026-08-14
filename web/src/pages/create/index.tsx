@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from "react";
 import localforage from "localforage";
 import { App, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Link } from "react-router";
 
-import { AssetMediaPreview } from "@/components/asset-media-preview";
+import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelPicker } from "@/components/model-picker";
@@ -292,6 +292,17 @@ export default function CreatePage() {
     };
 
     const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
+    const libraryItems = useMemo<AssetLibraryPickerItem[]>(() => assets
+        .filter((asset): asset is Extract<Asset, { kind: "image" | "video" }> => asset.kind === "image" || asset.kind === "video")
+        .map((asset) => ({
+            id: asset.id,
+            title: asset.title,
+            category: asset.category || "other",
+            kindLabel: asset.kind === "video" ? "视频" : "图片",
+            asset,
+            searchText: asset.tags.join(" "),
+            disabledReason: mode !== "video" && asset.kind === "video" ? "视频仅支持视频创作" : undefined,
+        })), [assets, mode]);
     const uploadCreationAsset = async (file: File) => {
         if (file.type.startsWith("video/")) {
             const uploaded = await uploadMediaFile(file, "create-upload");
@@ -656,78 +667,19 @@ export default function CreatePage() {
             </div>}
         </div>
         <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} />
-        <CreationAssetLibraryModal open={libraryOpen} assets={assets} mode={mode} selectedIds={new Set(attachments.filter((item) => item.id.startsWith("asset:")).map((item) => item.id.slice(6)))} onClose={() => setLibraryOpen(false)} onConfirm={handleLibrarySelect} onUpload={uploadLibraryAssets} />
+        <AssetLibraryPickerModal
+            open={libraryOpen}
+            items={libraryItems}
+            categoryLabels={creationAssetCategoryLabels}
+            initialSelectedIds={attachments.filter((item) => item.id.startsWith("asset:")).map((item) => item.id.slice(6))}
+            upload={{ accept: mode === "video" ? "image/*,video/*" : "image/*", description: `支持图片${mode === "video" ? "和视频" : ""}，上传后保存到素材库`, onUpload: uploadLibraryAssets }}
+            onClose={() => setLibraryOpen(false)}
+            onConfirm={(ids) => handleLibrarySelect(assets.filter((asset) => ids.includes(asset.id)))}
+        />
     </>;
 }
 
 const creationAssetCategoryLabels: Record<string, string> = { all: "全部素材", character: "角色", environment: "场景", wardrobe: "服饰", prop: "道具", weapon: "武器", style: "画风", other: "其他" };
-
-function CreationAssetLibraryModal({ open, assets, mode, selectedIds, onClose, onConfirm, onUpload }: { open: boolean; assets: Asset[]; mode: CreationMode; selectedIds: Set<string>; onClose: () => void; onConfirm: (assets: Asset[]) => void; onUpload: (files: FileList | File[]) => Promise<string[]> }) {
-    const [category, setCategory] = useState("all");
-    const [keyword, setKeyword] = useState("");
-    const [selected, setSelected] = useState<Set<string>>(new Set());
-    const [uploading, setUploading] = useState(false);
-    const [uploadingCount, setUploadingCount] = useState(0);
-    const uploadInputRef = useRef<HTMLInputElement>(null);
-    const mediaAssets = useMemo(() => assets.filter((asset): asset is Extract<Asset, { kind: "image" | "video" }> => asset.kind === "image" || asset.kind === "video"), [assets]);
-    const categories = useMemo(() => ["all", ...Array.from(new Set(mediaAssets.map((asset) => asset.category || "other")))], [mediaAssets]);
-    const visibleAssets = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
-        return mediaAssets.filter((asset) => (category === "all" || (asset.category || "other") === category) && (!query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)));
-    }, [category, keyword, mediaAssets]);
-
-    useEffect(() => {
-        if (!open) return;
-        setCategory("all");
-        setKeyword("");
-        setSelected(new Set(selectedIds));
-    }, [open]);
-
-    const toggle = (asset: Asset) => {
-        if (mode !== "video" && asset.kind === "video") return;
-        setSelected((current) => {
-            const next = new Set(current);
-            if (next.has(asset.id)) next.delete(asset.id); else next.add(asset.id);
-            return next;
-        });
-    };
-    const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-        if (!event.target.files || uploading) return;
-        const fileCount = event.target.files.length;
-        if (!fileCount) return;
-        setUploadingCount(fileCount);
-        setUploading(true);
-        try {
-            const assetIds = await onUpload(event.target.files);
-            if (assetIds.length) setSelected((current) => new Set([...current, ...assetIds]));
-        } finally {
-            event.target.value = "";
-            setUploading(false);
-            setUploadingCount(0);
-        }
-    };
-    const selectedAssets = mediaAssets.filter((asset) => selected.has(asset.id) && (mode === "video" || asset.kind === "image"));
-    const count = category === "all" ? mediaAssets.length : mediaAssets.filter((asset) => (asset.category || "other") === category).length;
-
-    return <Modal open={open} footer={null} title={null} destroyOnHidden closable={!uploading} maskClosable={!uploading} keyboard={!uploading} onCancel={() => { if (!uploading) onClose(); }} width="min(980px, calc(100vw - 24px))" className="creation-asset-library-modal" styles={{ container: { padding: 0 }, body: { padding: 0 } }}>
-        <div className="creation-library-shell">
-            <div className="creation-library-toolbar"><div className="creation-library-toolbar-title"><span>参考内容</span><strong>素材库</strong></div><div className="creation-library-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索素材名称或标签" aria-label="搜索素材" /></div><span className="creation-library-toolbar-count">已选 {selectedAssets.length} · {count} 个素材</span></div>
-            <div className="creation-library-body">
-                <nav className="creation-library-categories" aria-label="素材分类">{categories.map((item) => <button key={item} type="button" className={category === item ? "is-active" : ""} onClick={() => setCategory(item)}><span>{creationAssetCategoryLabels[item] || "其他"}</span><em>{item === "all" ? mediaAssets.length : mediaAssets.filter((asset) => (asset.category || "other") === item).length}</em></button>)}</nav>
-                <div className="creation-library-grid-wrap"><div className="creation-library-grid">{visibleAssets.length ? visibleAssets.map((asset) => <CreationLibraryCard key={asset.id} asset={asset} selected={selected.has(asset.id)} disabled={mode !== "video" && asset.kind === "video"} onToggle={() => toggle(asset)} />) : <div className="creation-library-empty"><FolderOpen /><strong>这个分类还没有素材</strong><span>换个分类，或从底部上传一份新素材。</span></div>}</div></div>
-            </div>
-            <footer className="creation-library-footer"><input ref={uploadInputRef} type="file" hidden accept={mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={handleUpload} /><button type="button" className="creation-library-upload" onClick={() => uploadInputRef.current?.click()} disabled={uploading} aria-busy={uploading} aria-live="polite">{uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}<span><strong>{uploading ? `正在上传 ${uploadingCount} 个素材` : "上传新素材"}</strong><small>{uploading ? "正在保存到素材库，完成后会自动选中" : `支持图片${mode === "video" ? "和视频" : ""}，上传后保存到素材库`}</small></span></button><div className="creation-library-actions"><button type="button" onClick={onClose} disabled={uploading}>取消</button><button type="button" className="is-primary" disabled={uploading || !selectedAssets.length} onClick={() => onConfirm(selectedAssets)}><Check />使用已选素材{selectedAssets.length ? `（${selectedAssets.length}）` : ""}</button></div></footer>
-        </div>
-    </Modal>;
-}
-
-function CreationLibraryCard({ asset, selected, disabled, onToggle }: { asset: Extract<Asset, { kind: "image" | "video" }>; selected: boolean; disabled: boolean; onToggle: () => void }) {
-    const isVideo = asset.kind === "video";
-    return <button type="button" className={`creation-library-card${selected ? " is-selected" : ""}${disabled ? " is-disabled" : ""}`} onClick={onToggle} disabled={disabled} aria-pressed={selected}>
-        <div className="creation-library-card-media"><AssetMediaPreview asset={asset} alt={asset.title} fallback={<div className="creation-library-card-fallback">{isVideo ? <Film /> : <ImageIcon />}</div>} /><span className="creation-library-card-check"><Check /></span><span className="creation-library-card-kind">{isVideo ? "视频" : "图片"}</span>{disabled ? <span className="creation-library-card-lock">视频仅支持视频创作</span> : null}</div>
-        <div className="creation-library-card-title">{asset.title || "未命名素材"}</div>
-    </button>;
-}
 
 function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelect }: { open: boolean; conversations: CreationConversation[]; activeId: string; onClose: () => void; onSelect: (conversation: CreationConversation) => void }) {
     const [keyword, setKeyword] = useState("");
