@@ -178,6 +178,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                             </nav>
                             <div className="shrink-0 p-2">
                                 <WorkspaceSidebarFooter
+                                    showAnnouncement={false}
                                     expandedClassName="flex"
                                     collapsedClassName="hidden"
                                     accountClassName="flex-row gap-2 px-2"

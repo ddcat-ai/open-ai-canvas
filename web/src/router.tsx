@@ -1,47 +1,59 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireFeature } from "@/components/auth/require-feature";
+import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import UserLayout from "@/layouts/user-layout";
-import AdminPage from "@/pages/admin";
-import { AccessSettingsPage, AnalyticsPage, AnnouncementsPage, CreditOperationsPage, EmailSettingsPage, FeatureAvailabilityPage } from "@/pages/admin/admin-route-pages";
-import ChannelsPage from "@/pages/admin/channels/channels-page";
-import LogsPage from "@/pages/admin/logs/logs-page";
-import RedemptionCodesPage from "@/pages/admin/redemption-codes/redemption-codes-page";
-import RuntimePolicySettingsPage from "@/pages/admin/settings/runtime-policy-settings-page";
-import DrawingEngineSettingsPage from "@/pages/admin/settings/drawing-engine-settings-page";
-import StorageSettingsPage from "@/pages/admin/settings/storage-settings-page";
-import StoryboardPromptsPage from "@/pages/admin/storyboard-prompts/storyboard-prompts-page";
-import UsersPage from "@/pages/admin/users/users-page";
-import AssetsPage from "@/pages/assets";
 import { AuthScene } from "@/pages/auth/auth-scene";
-import LoginPage from "@/pages/auth/login";
-import RegisterPage from "@/pages/auth/register";
-import CanvasPage from "@/pages/canvas";
-import CanvasProjectPage from "@/pages/canvas/project";
-import SharedCanvasPage from "@/pages/canvas/shared";
-import CreatePage from "@/pages/create";
-import HomePage from "@/pages/home";
-import NotFound from "@/pages/not-found";
 import RouteErrorPage from "@/pages/route-error";
-import SkillsPage from "@/pages/skills";
-import TasksPage from "@/pages/tasks";
-import WalletPage from "@/pages/wallet";
-import ProjectsPage from "@/pages/projects";
-import ProjectDetailPage from "@/pages/projects/detail";
-import SettingsPage from "@/pages/settings";
-import TestVoiceRecording from "@/pages/test-voice-recording";
+
+const AdminPage = lazy(() => import("@/pages/admin"));
+const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
+const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
+const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
+const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
+const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
+const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
+const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
+const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
+const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
+const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
+const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
+const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
+const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
+const AssetsPage = lazy(() => import("@/pages/assets"));
+const LoginPage = lazy(() => import("@/pages/auth/login"));
+const RegisterPage = lazy(() => import("@/pages/auth/register"));
+const CanvasPage = lazy(() => import("@/pages/canvas"));
+const CanvasProjectPage = lazy(() => import("@/pages/canvas/project"));
+const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
+const CreatePage = lazy(() => import("@/pages/create"));
+const HomePage = lazy(() => import("@/pages/home"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const SkillsPage = lazy(() => import("@/pages/skills"));
+const TasksPage = lazy(() => import("@/pages/tasks"));
+const WalletPage = lazy(() => import("@/pages/wallet"));
+const ProjectsPage = lazy(() => import("@/pages/projects"));
+const ProjectDetailPage = lazy(() => import("@/pages/projects/detail"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
+
+function deferred(element: ReactNode) {
+    return <Suspense fallback={<FullScreenLoader label="正在打开页面" detail="仅加载当前工作区所需内容" />}>{element}</Suspense>;
+}
 
 export const router = createBrowserRouter([
     {
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/login", element: <LoginPage /> },
-            { path: "/register", element: <RegisterPage /> },
+            { path: "/login", element: deferred(<LoginPage />) },
+            { path: "/register", element: deferred(<RegisterPage />) },
         ],
     },
-    { path: "/share/canvas/:token", element: <SharedCanvasPage />, errorElement: <RouteErrorPage /> },
+    { path: "/share/canvas/:token", element: deferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     {
         element: (
             <UserLayout>
@@ -51,44 +63,44 @@ export const router = createBrowserRouter([
         errorElement: <RouteErrorPage />,
         children: [
             { path: "/", element: <Navigate to="/create" replace /> },
-            { path: "/create", element: <RequireAuth><CreatePage /></RequireAuth> },
-            { path: "/home", element: <HomePage /> },
-            { path: "/tasks", element: <RequireAuth><RequireFeature feature="taskCenterEnabled"><TasksPage /></RequireFeature></RequireAuth> },
-            { path: "/assets", element: <RequireAuth><AssetsPage /></RequireAuth> },
-            { path: "/skills", element: <RequireAuth><SkillsPage /></RequireAuth> },
-            { path: "/wallet", element: <RequireAuth><RequireFeature feature="creditsEnabled"><WalletPage /></RequireFeature></RequireAuth> },
-            { path: "/settings", element: <RequireAuth><SettingsPage /></RequireAuth> },
-            { path: "/test-voice-recording", element: <RequireAuth><TestVoiceRecording /></RequireAuth> },
-            { path: "/projects", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectsPage /></RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId/:view", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled"><ProjectDetailPage /></RequireFeature></RequireAuth> },
-            { path: "/canvas", element: <RequireAuth><CanvasPage /></RequireAuth> },
-            { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
+            { path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
+            { path: "/home", element: deferred(<HomePage />) },
+            { path: "/tasks", element: <RequireAuth><RequireFeature feature="taskCenterEnabled">{deferred(<TasksPage />)}</RequireFeature></RequireAuth> },
+            { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
+            { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
+            { path: "/wallet", element: <RequireAuth><RequireFeature feature="creditsEnabled">{deferred(<WalletPage />)}</RequireFeature></RequireAuth> },
+            { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
+            { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
+            { path: "/projects", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId/:view", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
+            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
+            { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
+            { path: "/canvas/:id", element: <RequireAuth>{deferred(<CanvasProjectPage />)}</RequireAuth> },
             {
                 path: "/admin",
-                element: <RequireAuth><AdminPage /></RequireAuth>,
+                element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
-                    { index: true, element: <AnalyticsPage /> },
-                    { path: "users", element: <UsersPage /> },
-                    { path: "channels", element: <ChannelsPage /> },
-                    { path: "prompt-templates", element: <StoryboardPromptsPage /> },
+                    { index: true, element: deferred(<AnalyticsPage />) },
+                    { path: "users", element: deferred(<UsersPage />) },
+                    { path: "channels", element: deferred(<ChannelsPage />) },
+                    { path: "prompt-templates", element: deferred(<StoryboardPromptsPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
-                    { path: "announcements", element: <AnnouncementsPage /> },
-                    { path: "credit-operations", element: <CreditOperationsPage /> },
-                    { path: "redemption-codes", element: <RedemptionCodesPage /> },
-                    { path: "logs", element: <LogsPage /> },
+                    { path: "announcements", element: deferred(<AnnouncementsPage />) },
+                    { path: "credit-operations", element: deferred(<CreditOperationsPage />) },
+                    { path: "redemption-codes", element: deferred(<RedemptionCodesPage />) },
+                    { path: "logs", element: deferred(<LogsPage />) },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
-                    { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },
+                    { path: "settings/drawing-engine", element: deferred(<DrawingEngineSettingsPage />) },
                     { path: "settings/concurrency", element: <Navigate to="/admin/settings/runtime-policy" replace /> },
-                    { path: "settings/runtime-policy", element: <RuntimePolicySettingsPage /> },
-                    { path: "settings/features", element: <FeatureAvailabilityPage /> },
-                    { path: "settings/access", element: <AccessSettingsPage /> },
-                    { path: "settings/email", element: <EmailSettingsPage /> },
-                    { path: "settings/storage", element: <StorageSettingsPage /> },
+                    { path: "settings/runtime-policy", element: deferred(<RuntimePolicySettingsPage />) },
+                    { path: "settings/features", element: deferred(<FeatureAvailabilityPage />) },
+                    { path: "settings/access", element: deferred(<AccessSettingsPage />) },
+                    { path: "settings/email", element: deferred(<EmailSettingsPage />) },
+                    { path: "settings/storage", element: deferred(<StorageSettingsPage />) },
                 ],
             },
         ],
     },
-    { path: "*", element: <NotFound /> },
+    { path: "*", element: deferred(<NotFound />) },
 ]);

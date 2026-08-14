@@ -1,6 +1,6 @@
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob, resolveImageUrl } from "@/services/image-storage";
-import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteAsset, getRemoteCanvasProject, listRemoteAssets, listRemoteCanvasProjects, upsertRemoteAsset, upsertRemoteCanvasProject, type RemoteUserDataSummary } from "@/services/api/user-data";
+import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteUserDataSnapshot, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import type { Asset } from "@/stores/use-asset-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -23,17 +23,13 @@ export async function syncRemoteUserData(userId?: string | null) {
     if (!activeRemoteUserId) return;
     applyingRemoteState = true;
     try {
-        const [remoteCanvas, remoteAssets] = await Promise.all([listRemoteCanvasProjects(), listRemoteAssets()]);
-        remoteProjectVersions = versionMap(remoteCanvas.projects);
-        remoteAssetVersions = versionMap(remoteAssets.assets);
+        const remoteSnapshot = await getRemoteUserDataSnapshot();
+        remoteProjectVersions = versionMap(remoteSnapshot.projects);
+        remoteAssetVersions = versionMap(remoteSnapshot.assets);
         const localProjects = useCanvasStore.getState().projects;
         const localAssets = useAssetStore.getState().assets;
-        const [changedProjects, changedAssets] = await Promise.all([
-            fetchNewerRemoteItems(localProjects, remoteCanvas.projects, async (id) => (await getRemoteCanvasProject(id)).project),
-            fetchNewerRemoteItems(localAssets, remoteAssets.assets, async (id) => (await getRemoteAsset(id)).asset),
-        ]);
-        const mergedProjects = mergeById(localProjects, changedProjects);
-        const mergedAssets = mergeById(localAssets, await hydrateAssets(changedAssets));
+        const mergedProjects = mergeById(localProjects, remoteSnapshot.projects);
+        const mergedAssets = mergeById(localAssets, await hydrateAssets(remoteSnapshot.assets));
         useCanvasStore.getState().replaceProjects(mergedProjects);
         useAssetStore.getState().replaceAssets(mergedAssets);
     } finally {
@@ -128,8 +124,8 @@ async function saveRemoteUserDataBatch() {
     try {
         const currentProjects = useCanvasStore.getState().projects;
         const currentAssets = useAssetStore.getState().assets;
-        const dirtyProjects = currentProjects.filter((item) => remoteProjectVersions.get(item.id) !== item.updatedAt);
-        const dirtyAssets = currentAssets.filter((item) => remoteAssetVersions.get(item.id) !== item.updatedAt);
+        const dirtyProjects = currentProjects.filter((item) => !sameVersion(remoteProjectVersions.get(item.id), item.updatedAt));
+        const dirtyAssets = currentAssets.filter((item) => !sameVersion(remoteAssetVersions.get(item.id), item.updatedAt));
         const deletedProjectIds = missingIds(remoteProjectVersions, currentProjects);
         const deletedAssetIds = missingIds(remoteAssetVersions, currentAssets);
         if (!dirtyProjects.length && !dirtyAssets.length && !deletedProjectIds.length && !deletedAssetIds.length) return;
@@ -278,17 +274,8 @@ function mergeById<T extends { id?: string; updatedAt?: string }>(local: T[], re
     return Array.from(items.values()).sort((a, b) => timeValue(b.updatedAt) - timeValue(a.updatedAt));
 }
 
-async function fetchNewerRemoteItems<T extends { id: string; updatedAt?: string }>(local: T[], remote: RemoteUserDataSummary[], fetchItem: (id: string) => Promise<T>) {
-    const localById = new Map(local.map((item) => [item.id, item]));
-    const pending = remote.filter((item) => {
-        const current = localById.get(item.id);
-        return !current || timeValue(item.updatedAt) > timeValue(current.updatedAt);
-    });
-    return Promise.all(pending.map((item) => fetchItem(item.id)));
-}
-
-function versionMap(items: RemoteUserDataSummary[]) {
-    return new Map(items.map((item) => [item.id, item.updatedAt]));
+function versionMap(items: Array<{ id: string; updatedAt?: string }>) {
+    return new Map<string, string>(items.map((item) => [item.id, item.updatedAt || ""]));
 }
 
 function missingIds<T extends { id: string }>(remote: Map<string, string>, local: T[]) {
@@ -304,6 +291,10 @@ function replaceById<T extends { id: string }>(current: T[], changed: T[]) {
 function timeValue(value?: string) {
     const time = value ? Date.parse(value) : 0;
     return Number.isFinite(time) ? time : 0;
+}
+
+function sameVersion(remote?: string, local?: string) {
+    return Boolean(remote && local) && timeValue(remote) === timeValue(local);
 }
 
 function isLocalStorageKey(value: string) {

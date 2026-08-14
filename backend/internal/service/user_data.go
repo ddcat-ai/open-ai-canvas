@@ -29,6 +29,23 @@ type UserDataSummary struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type UserDataSnapshot struct {
+	Assets   []json.RawMessage `json:"assets"`
+	Projects []json.RawMessage `json:"projects"`
+}
+
+func (s *Service) UserDataSnapshot(userID string) (UserDataSnapshot, error) {
+	assets, err := s.UserAssets(userID)
+	if err != nil {
+		return UserDataSnapshot{}, err
+	}
+	projects, err := s.UserCanvasProjects(userID)
+	if err != nil {
+		return UserDataSnapshot{}, err
+	}
+	return UserDataSnapshot{Assets: assets, Projects: projects}, nil
+}
+
 func (s *Service) UserAssetSummaries(userID string) ([]UserDataSummary, error) {
 	assets, err := s.repo.AssetSummaries(userID)
 	if err != nil {
