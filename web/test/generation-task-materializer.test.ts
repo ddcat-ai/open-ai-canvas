@@ -7,7 +7,7 @@ import { createLocalDreaminaTaskEffectStore } from "../src/services/local-dreami
 import { applyCanvasGenerationTaskNodeEffect, persistCanvasGenerationEffect } from "../src/services/canvas-generation-consumer";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "../src/services/generation-consumer-dedupe";
 import { createProviderNeutralGenerationTaskEffectStore } from "../src/services/provider-neutral-generation-effects";
-import { consumeGenerationTaskAgent, consumeGenerationTaskMessage, consumeGenerationTaskNode } from "../src/services/project-asset-sync";
+import { consumeGenerationTaskAgent, consumeGenerationTaskMessage, consumeGenerationTaskNode, materializeGenerationTaskAssets } from "../src/services/project-asset-sync";
 import { useCanvasStore } from "../src/stores/canvas/use-canvas-store";
 import { useAssetStore, type NewAsset } from "../src/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
@@ -87,6 +87,115 @@ describe("generation task materializer", () => {
             expect(materialized.id).toBe(task.id);
             expect(attachments).toBe(1);
         } finally {
+            useAssetStore.getState().replaceAssets(previousAssets);
+        }
+    });
+
+    test("image materialization decodes intrinsic Blob dimensions when provider metadata omits width and height", async () => {
+        const previousAssets = useAssetStore.getState().assets;
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalImage = (globalThis as { Image?: unknown }).Image;
+        const originalLocks = Object.getOwnPropertyDescriptor(navigator, "locks");
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const localStorageValues = new Map<string, string>();
+        const durableValues = new Map<string, unknown>();
+        const lockTails = new Map<string, Promise<void>>();
+        const imageBlob = new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1440" viewBox="0 0 2560 1440"></svg>'], { type: "image/svg+xml" });
+        const imageUrl = URL.createObjectURL(imageBlob);
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+        Object.defineProperty(navigator, "locks", {
+            configurable: true,
+            value: {
+                async request<T>(name: string, callback: () => Promise<T>) {
+                    const prior = lockTails.get(name) ?? Promise.resolve();
+                    let release!: () => void;
+                    const tail = new Promise<void>((resolve) => {
+                        release = resolve;
+                    });
+                    const queued = prior.then(() => tail);
+                    lockTails.set(name, queued);
+                    await prior;
+                    try {
+                        return await callback();
+                    } finally {
+                        release();
+                        if (lockTails.get(name) === queued) lockTails.delete(name);
+                    }
+                },
+            },
+        });
+        localforage.getItem = (async (key: string) => durableValues.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: unknown) => {
+            durableValues.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+        Object.defineProperty(globalThis, "Image", {
+            configurable: true,
+            value: class FakeImage {
+                naturalWidth = 2560;
+                naturalHeight = 1440;
+                onload: (() => void) | null = null;
+                onerror: (() => void) | null = null;
+                set src(_value: string) {
+                    queueMicrotask(() => this.onload?.());
+                }
+            },
+        });
+        const task: GenerationTask = {
+            id: "backend-image-intrinsic-dimensions",
+            provider: "remote-image-provider",
+            type: "image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "PENDING_MATERIALIZATION",
+            resultJson: JSON.stringify({
+                images: [
+                    {
+                        dataUrl: imageUrl,
+                        storageKey: "resource:intrinsic-dimensions-existing",
+                        bytes: imageBlob.size,
+                        mimeType: imageBlob.type,
+                    },
+                ],
+            }),
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        useAssetStore.getState().replaceAssets([]);
+
+        try {
+            const materialized = await materializeGenerationTaskAssets(task);
+            const assetId = materialized.outputs?.[0]?.materializedAssetId;
+            const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === assetId);
+
+            expect(asset).toMatchObject({
+                kind: "image",
+                data: {
+                    width: 2560,
+                    height: 1440,
+                },
+            });
+        } finally {
+            URL.revokeObjectURL(imageUrl);
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalLocks) Object.defineProperty(navigator, "locks", originalLocks);
+            else delete (navigator as { locks?: unknown }).locks;
+            if (originalImage === undefined) delete (globalThis as { Image?: unknown }).Image;
+            else Object.defineProperty(globalThis, "Image", { configurable: true, value: originalImage });
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
             useAssetStore.getState().replaceAssets(previousAssets);
         }
     });

@@ -1,4 +1,5 @@
 import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset, type CanvasAssetSource } from "@/lib/canvas/canvas-node-asset";
+import { readImageMeta } from "@/lib/image-utils";
 import { parseBackendGenerationResult, type BackendGenerationResult } from "@/services/api/generation-task";
 import { linkProjectAsset, updateProjectAssetCategory } from "@/services/api/projects";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
@@ -146,11 +147,13 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     if (result.storageKey) {
         const url = await resolveImageUrl(result.storageKey, result.dataUrl);
         if (!url) throw new Error("图片结果资源不可用");
+        const meta = result.width && result.height ? undefined : await readImageMeta(url);
+        throwIfAborted(signal);
         return {
             url,
             storageKey: result.storageKey,
-            width: result.width || 1024,
-            height: result.height || 1024,
+            width: result.width || meta?.width || 1024,
+            height: result.height || meta?.height || 1024,
             bytes: result.bytes || 0,
             mimeType: result.mimeType || "image/png",
         };
@@ -168,11 +171,13 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     const url = await resolveImageUrl(storageKey);
     throwIfAborted(signal);
     if (!url) throw new Error("图片结果资源不可用");
+    const meta = result.width && result.height ? undefined : await readImageMeta(url);
+    throwIfAborted(signal);
     return {
         url,
         storageKey,
-        width: result.width || 1024,
-        height: result.height || 1024,
+        width: result.width || meta?.width || 1024,
+        height: result.height || meta?.height || 1024,
         bytes: result.bytes || blob.size,
         mimeType: result.mimeType || blob.type || "image/png",
     };
