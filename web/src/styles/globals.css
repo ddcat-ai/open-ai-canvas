@@ -123,26 +123,19 @@
     --project-library-surface: #f5f5f5;
     --project-library-cover-surface: #ececec;
     --project-library-icon-surface: #ffffff;
-    --project-library-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    --project-library-shadow: none;
 
     /* === 新卡片系统 Token（对应 docs/ui-design-system.md）=== */
-    /* 卡片表面 - 纯白卡片浮在浅灰页面上 */
-    --card-surface: #ffffff;
-    --card-surface-hover: #ffffff;
-    --card-surface-raised: #f8f8f8;
+    /* 卡片表面通过明度分层，普通卡片不依赖描边和投影。 */
+    --card-surface: #f7f7f7;
+    --card-surface-hover: #f0f0f0;
+    --card-surface-raised: #ececec;
 
-    /* 卡片边框 - 极淡，靠投影建立层次 */
-    --card-border: rgba(17, 17, 17, 0.06);
-    --card-border-hover: rgba(17, 17, 17, 0.08);
+    --card-border: transparent;
+    --card-border-hover: transparent;
 
-    /* 卡片投影 - 微妙轻盈，像Apple/Figma */
-    --card-elevation:
-        0 1px 2px rgba(0, 0, 0, 0.04),
-        0 2px 4px rgba(0, 0, 0, 0.02);
-    --card-elevation-hover:
-        0 4px 12px rgba(0, 0, 0, 0.06),
-        0 8px 24px rgba(0, 0, 0, 0.04),
-        0 12px 36px rgba(0, 0, 0, 0.02);
+    --card-elevation: none;
+    --card-elevation-hover: none;
 
     /* 画布卡片封面区 - 浅灰衬托内容 */
     --canvas-cover-surface: #f5f5f5;
@@ -391,7 +384,7 @@
     --workspace-border-strong: rgba(17, 17, 17, 0.22);
     --workspace-grid-line: rgba(17, 17, 17, 0.045);
     --workspace-nav: var(--workspace-navigation);
-    --workspace-sidebar: var(--bg-secondary);
+    --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
 
@@ -521,7 +514,7 @@
     --workspace-border-strong: rgba(255, 255, 255, 0.16);
     --workspace-grid-line: rgba(255, 255, 255, 0.038);
     --workspace-nav: var(--workspace-navigation);
-    --workspace-sidebar: var(--bg-secondary);
+    --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #f5f5f5;
     --workspace-accent-soft: rgba(255, 255, 255, 0.09);
     --chart-1: oklch(0.87 0 0);
@@ -600,24 +593,18 @@
     --project-library-surface: #151515;
     --project-library-cover-surface: #1c1c1c;
     --project-library-icon-surface: #0d0d0d;
-    --project-library-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    --project-library-shadow: none;
 
     /* === 新卡片系统 Token - Dark（对应 docs/ui-design-system.md）=== */
-    --card-surface: #1f1f1f;
-    --card-surface-hover: #242424;
-    --card-surface-raised: #2a2a2a;
+    --card-surface: #171717;
+    --card-surface-hover: #1e1e1e;
+    --card-surface-raised: #252525;
 
-    --card-border: rgba(255, 255, 255, 0.08);
-    --card-border-hover: rgba(255, 255, 255, 0.14);
+    --card-border: transparent;
+    --card-border-hover: transparent;
 
-    --card-elevation:
-        0 2px 6px rgba(0, 0, 0, 0.32),
-        0 4px 12px rgba(0, 0, 0, 0.24),
-        0 6px 20px rgba(0, 0, 0, 0.16);
-    --card-elevation-hover:
-        0 8px 20px rgba(0, 0, 0, 0.40),
-        0 12px 32px rgba(0, 0, 0, 0.32),
-        0 16px 48px rgba(0, 0, 0, 0.24);
+    --card-elevation: none;
+    --card-elevation-hover: none;
 
     --canvas-cover-surface: #171717;
     --canvas-icon-surface: #0d0d0d;
@@ -665,7 +652,7 @@
     --page-topbar-border: var(--workspace-border);
     --canvas-topbar-surface: var(--workspace-glass-surface);
     --canvas-topbar-border: var(--workspace-glass-border);
-    --rail-icon-size: 20px;
+    --rail-icon-size: 18px;
 
     /* Canvas 创建菜单：固定行高保证图标、徽标和单行标签互不挤占 */
     --canvas-create-node-height: var(--space-12);
@@ -864,7 +851,7 @@
         --workspace-border-strong: rgba(17, 17, 17, 0.2);
         --workspace-grid-line: rgba(17, 17, 17, 0.035);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--bg-secondary);
+        --workspace-sidebar: var(--workspace-navigation);
         --workspace-accent: #171717;
         --workspace-accent-soft: rgba(17, 17, 17, 0.065);
         background-color: var(--workspace-canvas);
@@ -885,7 +872,7 @@
         --workspace-border-strong: rgba(255, 255, 255, 0.18);
         --workspace-grid-line: rgba(255, 255, 255, 0.026);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--bg-secondary);
+        --workspace-sidebar: var(--workspace-navigation);
         --workspace-accent: #f5f5f5;
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
@@ -907,7 +894,6 @@
 
     .app-workspace-shell.is-spatial .app-workspace-sidebar {
         border: 0;
-        border-right: 1px solid var(--workspace-border);
         border-radius: 0;
         background: var(--workspace-sidebar);
         box-shadow: none;
@@ -1058,14 +1044,11 @@
     .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active {
         background: var(--workspace-accent-soft);
         color: var(--foreground);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+        box-shadow: none;
     }
 
     .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before {
-        left: -9px;
-        width: 3px;
-        height: 20px;
-        box-shadow: 0 0 18px color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+        display: none;
     }
 
     .app-workspace-shell.is-spatial .app-workspace-stage {
@@ -1207,7 +1190,7 @@
     }
 
     .app-workspace-sidebar {
-        border-right: 1px solid var(--workspace-border);
+        border: 0;
         background: var(--workspace-sidebar);
         transition: width var(--motion-state) var(--ease-aceternity);
     }
@@ -1233,8 +1216,8 @@
         min-height: var(--page-topbar-h);
         padding-top: 10px;
         padding-bottom: 10px;
-        background: var(--page-topbar-surface);
-        border-bottom: 1px solid var(--page-topbar-border);
+        background: var(--workspace-content);
+        border-bottom: 0;
         backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     }
 
@@ -1261,9 +1244,9 @@
         position: relative;
         z-index: var(--z-toolbar);
         height: var(--page-topbar-h);
-        background: var(--page-topbar-surface);
-        border-color: var(--page-topbar-border);
-        box-shadow: 0 10px 24px -20px color-mix(in srgb, var(--workspace-border) 85%, transparent);
+        background: var(--workspace-navigation);
+        border: 0;
+        box-shadow: none;
         backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     }
 
@@ -1277,6 +1260,14 @@
         border-radius: var(--r-md);
         color: color-mix(in srgb, var(--foreground) 58%, transparent);
         transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-topbar-icon-button > svg,
+    .app-workspace-topbar-icon-button > span > svg,
+    .app-workspace-nav-icon {
+        width: 18px;
+        height: 18px;
+        stroke-width: 1.8;
     }
 
     .app-workspace-topbar-icon-button:hover {
@@ -1376,11 +1367,7 @@
     }
 
     .app-workspace-rail .app-workspace-nav-link.is-active::before {
-        display: block !important;
-        left: -8px;
-        width: 2px;
-        height: 18px;
-        background: var(--workspace-accent);
+        display: none !important;
     }
 
     /* 底部账号区：40px 触点 + 头像 hover 反馈增强 */
@@ -1398,13 +1385,7 @@
     }
 
     .app-workspace-nav-link.is-active::before {
-        position: absolute;
-        left: -8px;
-        width: 2px;
-        height: 18px;
-        border-radius: 0 2px 2px 0;
-        background: var(--workspace-accent);
-        content: "";
+        display: none;
     }
 
     .app-workspace-icon-button {
@@ -3352,20 +3333,19 @@
     .app-collection-card {
         position: relative;
         overflow: hidden;
-        border: 1px solid var(--border);
+        border: 0;
         border-radius: 10px;
-        background: var(--workspace-surface-strong);
+        background: var(--card-surface);
         transition:
             background-color var(--motion-instant) ease-out,
-            border-color var(--motion-instant) ease-out,
-            box-shadow var(--motion-instant) ease-out;
+            transform var(--motion-state) var(--motion-ease-out);
     }
 
     .app-collection-card:hover,
     .app-collection-card:focus-within {
-        border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
-        background: color-mix(in srgb, var(--workspace-surface-strong) 96%, var(--foreground) 4%);
+        background: var(--card-surface-hover);
         box-shadow: none;
+        transform: translateY(-2px);
     }
 
     /* 画布库采用电影档案的浏览节奏：搜索轻、画面重、信息退后。 */
@@ -3420,32 +3400,32 @@
     .canvas-library-count { display: flex; align-items: baseline; gap: 6px; justify-self: end; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-micro); white-space: nowrap; }
     .canvas-library-count strong { color: var(--foreground); font-size: var(--fs-heading-lg); font-variant-numeric: tabular-nums; font-weight: 500; letter-spacing: .02em; }
 
-    /* 画布库网格 - 优化间距（对应 Bento Grid 原则）*/
-    .canvas-library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 28px 22px; }
-    .canvas-library-page .app-pagination-bar { position: static; margin-top: var(--space-4); border-color: var(--workspace-border); background: transparent; padding: var(--space-1-half) var(--space-2); backdrop-filter: none; }
+    /* 画布库保持固定列节奏，行列间距一致。 */
+    .canvas-library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: stretch; gap: var(--space-5) var(--space-4); }
+    .canvas-library-page .app-pagination-bar { position: static; margin-top: var(--space-4); border: 0; background: transparent; padding: var(--space-1-half) var(--space-2); backdrop-filter: none; }
 
     /* === 画布卡片重构（对应 docs/ui-design-system.md）=== */
-    .app-canvas-project-card { min-width: 0; cursor: pointer; color: var(--foreground); transition: transform 240ms var(--motion-ease-out), box-shadow 280ms var(--motion-ease-out), background-color 200ms ease-out, border-color 200ms ease-out; }
+    .app-canvas-project-card { min-width: 0; cursor: pointer; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
 
-    /* 创建卡片 - 更吸引人的设计 */
-    .app-canvas-create-card { display: flex; min-width: 0; cursor: pointer; flex-direction: column; align-items: stretch; border: 0; background: transparent; padding: 0; color: var(--foreground); text-align: left; transition: transform 240ms var(--motion-ease-out); }
-    .app-canvas-create-card:hover:not(:disabled), .app-canvas-create-card:focus-visible { transform: translateY(-6px); }
-    .app-canvas-create-card:active:not(:disabled) { transform: translateY(-3px) scale(0.995); transition-duration: 120ms; }
+    /* 创建卡与内容卡使用相同表面和克制位移。 */
+    .app-canvas-create-card { display: flex; min-width: 0; cursor: pointer; flex-direction: column; align-items: stretch; border: 0; border-radius: var(--r-lg); background: var(--card-surface); padding: 0; color: var(--foreground); text-align: left; transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    .app-canvas-create-card:hover:not(:disabled), .app-canvas-create-card:focus-visible { background: var(--card-surface-hover); transform: translateY(-2px); }
+    .app-canvas-create-card:active:not(:disabled) { transform: translateY(-1px) scale(0.995); transition-duration: var(--motion-instant); }
     .app-canvas-create-card:focus-visible { outline: 0; }
-    .app-canvas-create-preview { display: grid; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border-radius: var(--r-xl); background: var(--card-surface); box-shadow: var(--card-elevation); border: 2px dashed rgba(17, 17, 17, 0.12); transition: background-color 240ms ease-out, box-shadow 280ms var(--motion-ease-out), border-color 200ms ease-out, border-style 200ms ease-out; }
-    .app-canvas-create-card:hover:not(:disabled) .app-canvas-create-preview, .app-canvas-create-card:focus-visible .app-canvas-create-preview { background: var(--card-surface); border-color: var(--workspace-accent); border-style: solid; box-shadow: var(--card-elevation-hover), 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 12%, transparent); }
-    .app-canvas-create-icon { width: 38px; height: 38px; color: color-mix(in srgb, var(--foreground) 32%, transparent); stroke-width: 1.2; transition: color 240ms ease-out, transform 280ms var(--motion-ease-out); }
-    .app-canvas-create-card:hover:not(:disabled) .app-canvas-create-icon { color: var(--workspace-accent); transform: scale(1.12) rotate(90deg); }
-    .app-canvas-create-title { margin-top: 14px; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.25; }
-    .app-canvas-create-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
+    .app-canvas-create-preview { display: grid; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; background: var(--canvas-cover-surface); box-shadow: none; }
+    .app-canvas-create-card:hover:not(:disabled) .app-canvas-create-preview, .app-canvas-create-card:focus-visible .app-canvas-create-preview { background: var(--canvas-cover-surface); box-shadow: none; }
+    .app-canvas-create-icon { width: 42px; height: 42px; border-radius: var(--r-md); background: var(--canvas-icon-surface); padding: 11px; color: color-mix(in srgb, var(--foreground) 42%, transparent); stroke-width: 1.8; transition: color var(--motion-state) ease-out; }
+    .app-canvas-create-card:hover:not(:disabled) .app-canvas-create-icon { color: var(--foreground); }
+    .app-canvas-create-title { margin: 14px 14px 0; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.25; }
+    .app-canvas-create-meta { margin: 6px 14px 16px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
     .app-canvas-create-card:disabled { cursor: not-allowed; opacity: .5; }
 
-    /* 画布卡片 - 库视图 - 更明显的hover效果 */
-    .app-canvas-project-card.is-library { overflow: hidden; border-radius: var(--r-xl); background: var(--card-surface); box-shadow: var(--card-elevation); border: 1px solid var(--card-border); content-visibility: auto; contain-intrinsic-size: 0 320px; }
-    .app-canvas-project-card.is-library .app-canvas-project-preview { overflow: hidden; border-radius: var(--r-xl) var(--r-xl) 0 0; background: var(--canvas-cover-surface); }
-    .app-canvas-project-card.is-library:hover, .app-canvas-project-card.is-library:focus-within { background: var(--card-surface); box-shadow: var(--card-elevation-hover); border-color: var(--card-border-hover); transform: translateY(-6px); }
-    .app-canvas-project-card.is-library:active { transform: translateY(-3px) scale(0.995); transition-duration: 120ms; }
-    .app-canvas-project-card.is-library.is-selected { box-shadow: var(--card-elevation), 0 0 0 2px color-mix(in srgb, var(--workspace-accent) 32%, transparent); border-color: var(--workspace-accent); border-radius: var(--r-xl); }
+    /* 画布卡片依靠表面明度表达 hover，选中态才显示描边。 */
+    .app-canvas-project-card.is-library { overflow: hidden; border: 0; border-radius: var(--r-lg); background: var(--card-surface); box-shadow: none; content-visibility: auto; contain-intrinsic-size: 0 320px; }
+    .app-canvas-project-card.is-library .app-canvas-project-preview { overflow: hidden; border-radius: var(--r-lg) var(--r-lg) 0 0; background: var(--canvas-cover-surface); }
+    .app-canvas-project-card.is-library:hover, .app-canvas-project-card.is-library:focus-within { background: var(--card-surface-hover); box-shadow: none; transform: translateY(-2px); }
+    .app-canvas-project-card.is-library:active { transform: translateY(-1px) scale(0.995); transition-duration: var(--motion-instant); }
+    .app-canvas-project-card.is-library.is-selected { box-shadow: 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 52%, transparent); border-radius: var(--r-lg); }
     .app-canvas-project-card.is-recent .app-canvas-project-preview { overflow: hidden; border-radius: var(--r-2xl) var(--r-2xl) 0 0; background: var(--workspace-surface-strong); transition: box-shadow 420ms var(--motion-ease-out), transform 420ms var(--motion-ease-out); }
     .app-canvas-project-card.is-recent:hover .app-canvas-project-preview, .app-canvas-project-card.is-recent:focus-within .app-canvas-project-preview { box-shadow: 0 18px 36px color-mix(in srgb, var(--foreground) 13%, transparent); transform: translateY(-4px); }
 
@@ -3473,8 +3453,8 @@
     .app-canvas-project-card:hover .app-canvas-project-body { background: transparent; }
 
     /* Focus状态 - 键盘导航可见 */
-    .app-canvas-project-card:focus:not(:focus-visible) { outline: none; box-shadow: var(--card-elevation); }
-    .app-canvas-project-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; box-shadow: var(--card-elevation), 0 0 0 4px color-mix(in srgb, var(--ring) 16%, transparent); }
+    .app-canvas-project-card:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+    .app-canvas-project-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; box-shadow: none; }
     .canvas-project-card-footer { margin-top: 12px; }
     .canvas-project-heading-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; }
     .canvas-project-title-button { min-width: 0; flex: 1; cursor: pointer; border: 0; background: transparent; padding: 0; text-align: left; }
@@ -3511,7 +3491,7 @@
     .app-projects-header-meta {
         display: inline-flex;
         align-items: center;
-        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border: 0;
         border-radius: var(--r-full);
         background: color-mix(in srgb, var(--foreground) 4%, transparent);
         padding: 3px 10px;
@@ -3520,42 +3500,36 @@
         font-weight: 560;
         font-variant-numeric: tabular-nums;
     }
-    /* 全站统一页头毛玻璃 band：素材库、画布库、任务中心、短剧创作、技能库、积分中心、首页 */
+    /* 页头与页面共用同一画布，仅通过间距和排版建立层级。 */
     .studio-band {
         position: relative;
-        overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-        border-radius: var(--r-lg);
-        background:
-            radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--workspace-accent) 7%, transparent), transparent 38%),
-            color-mix(in srgb, var(--foreground) 1.5%, transparent);
-        box-shadow: var(--elevation-card), var(--elevation-hairline);
-        padding: 2px 2px 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
     }
 
     .studio-band .app-page-header {
         background: transparent;
         border-bottom: 0;
-        padding-inline: 14px;
+        padding-inline: 0;
     }
 
     .canvas-library-page .studio-band .canvas-library-discovery {
         border: 0;
-        border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
         border-radius: 0;
         background: transparent;
         box-shadow: none;
-        margin-top: 0;
+        margin-top: var(--space-2);
     }
 
     .canvas-library-page .canvas-library-frame {
         display: flex;
         min-height: 0;
         flex-direction: column;
-        border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-        border-radius: var(--r-lg);
-        background: color-mix(in srgb, var(--foreground) 1%, transparent);
-        padding: 14px;
+        border: 0;
+        background: transparent;
+        padding: 0;
     }
 
     .assets-library-page .assets-library-frame,
@@ -3721,10 +3695,10 @@
     }
 
     .canvas-library-page .canvas-library-discovery {
-        border-radius: var(--r-lg);
-        background: color-mix(in srgb, var(--foreground) 2%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
-        padding: 10px 12px;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        padding: 8px 0 12px;
     }
 
     .canvas-library-page .canvas-library-grid {
@@ -3734,11 +3708,11 @@
     .canvas-library-page .canvas-library-search {
         border-radius: var(--r-md);
         background: color-mix(in srgb, var(--foreground) 4%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 8%, transparent);
+        box-shadow: none;
     }
 
     .canvas-library-page .canvas-library-search:focus-within {
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 46%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 10%, transparent);
     }
 
     .canvas-library-page .app-canvas-project-card.is-library {
@@ -3785,34 +3759,34 @@
     .library-toolbar-controls .ant-input-affix-wrapper { border-radius: var(--r-lg); }
     .library-toolbar-controls .ant-select-selector { border-radius: var(--r-md) !important; }
     .library-grid { display: grid; align-items: start; gap: 26px 18px; }
-    .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform 420ms var(--motion-ease-out), background-color 260ms ease-out, box-shadow 420ms var(--motion-ease-out); }
-    .library-card-surface { background: var(--surface-card); box-shadow: var(--elevation-card), var(--elevation-hairline); }
-    .library-card-surface:hover, .library-card-surface:focus-within { background: var(--surface-card-hover); box-shadow: var(--elevation-card-hover), var(--elevation-hairline); }
-    .library-card:hover, .library-card:focus-within { transform: translateY(-7px); }
-    .library-create-card { display: flex; min-width: 0; cursor: pointer; flex-direction: column; align-items: stretch; border: 0; background: transparent; padding: 0; color: var(--foreground); text-align: left; transition: transform 420ms var(--motion-ease-out); }
-    .library-create-card:hover, .library-create-card:focus-visible { transform: translateY(-7px); outline: 0; }
-    .library-create-cover { display: grid; aspect-ratio: 16 / 10; place-items: center; overflow: hidden; border-radius: var(--r-2xl); background: var(--surface-card); color: color-mix(in srgb, var(--foreground) 35%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 11%, transparent); transition: background-color 320ms ease-out, color 260ms ease-out, box-shadow 420ms var(--motion-ease-out); }
+    .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    .library-card-surface { background: var(--card-surface); box-shadow: none; }
+    .library-card-surface:hover, .library-card-surface:focus-within { background: var(--card-surface-hover); box-shadow: none; }
+    .library-card:hover, .library-card:focus-within { transform: translateY(-2px); }
+    .library-create-card { display: flex; min-width: 0; cursor: pointer; flex-direction: column; align-items: stretch; border: 0; background: transparent; padding: 0; color: var(--foreground); text-align: left; transition: transform var(--motion-state) var(--motion-ease-out); }
+    .library-create-card:hover, .library-create-card:focus-visible { transform: translateY(-2px); outline: 0; }
+    .library-create-cover { display: grid; aspect-ratio: 16 / 10; place-items: center; overflow: hidden; border-radius: var(--r-2xl); background: var(--card-surface); color: color-mix(in srgb, var(--foreground) 35%, transparent); box-shadow: none; transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out; }
     /* 创建卡与同网格里的内容卡共用封面比例，否则首格会矮一截、网格底线对不齐。 */
     .project-library-grid .library-create-cover { aspect-ratio: 16 / 9; }
-    .library-create-card:hover .library-create-cover, .library-create-card:focus-visible .library-create-cover { background: var(--surface-card-hover); color: var(--foreground); box-shadow: var(--elevation-card-hover), var(--elevation-hairline); }
-    .library-create-cover svg { transition: transform 420ms var(--motion-ease-out); stroke-width: 1.2; }
-    .library-create-card:hover .library-create-cover svg, .library-create-card:focus-visible .library-create-cover svg { transform: scale(1.12) rotate(90deg); }
+    .library-create-card:hover .library-create-cover, .library-create-card:focus-visible .library-create-cover { background: var(--card-surface-hover); color: var(--foreground); box-shadow: none; }
+    .library-create-cover svg { stroke-width: 1.8; }
+    .library-create-card:hover .library-create-cover svg, .library-create-card:focus-visible .library-create-cover svg { transform: none; }
     .library-create-title { margin-top: 15px; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.3; }
     .library-create-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
     /* 技能网格里的创建卡要和技能卡等高，不然首格会短一截。 */
-    .skill-library-grid .library-create-card { justify-content: center; min-height: 218px; border-radius: var(--r-xl); background: var(--surface-card); padding: 16px; box-shadow: var(--elevation-card), var(--elevation-hairline); }
+    .skill-library-grid .library-create-card { justify-content: center; min-height: 218px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
     .skill-library-grid .library-create-cover { aspect-ratio: auto; min-height: 96px; flex: 1 1 auto; border-radius: var(--r-lg); }
     .skill-library-grid .library-create-title { margin-top: 13px; font-size: var(--fs-body-lg); }
 
     /* 列数按内容体量分开定：项目卡是这些页面的主角，6 列会把它挤成缩略图；
        资产卡只承载一张图 + 标题，密一点反而好扫。 */
     .assets-library-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-    .project-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 22px; align-items: stretch; }
+    .project-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); align-items: stretch; }
     .skill-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
     /* 项目卡是一个完整实体表面；封面只是顶部内容区，避免透明主体和内嵌细线造成「镂空」感。 */
-    .project-library-card { display: block; border-radius: var(--r-lg); background: var(--project-library-surface) !important; box-shadow: var(--project-library-shadow); transition: none; }
-    .project-library-card:hover, .project-library-card:focus-within { background: var(--project-library-surface) !important; box-shadow: var(--project-library-shadow); }
-    .project-library-card:hover, .project-library-card:focus-within, .project-library-grid .library-create-card:hover, .project-library-grid .library-create-card:focus-visible { transform: none; }
+    .project-library-card { display: block; border-radius: var(--r-lg); background: var(--card-surface) !important; box-shadow: none; }
+    .project-library-card:hover, .project-library-card:focus-within { background: var(--card-surface-hover) !important; box-shadow: none; }
+    .project-library-card:hover, .project-library-card:focus-within, .project-library-grid .library-create-card:hover, .project-library-grid .library-create-card:focus-visible { transform: translateY(-2px); }
     .project-library-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
     .project-library-grid .library-create-cover, .project-library-grid .library-create-card:hover .library-create-cover, .project-library-grid .library-create-card:focus-visible .library-create-cover { border-radius: var(--r-lg); background: var(--project-library-cover-surface); box-shadow: none; }
     .project-library-grid .library-create-card:hover .library-create-cover svg, .project-library-grid .library-create-card:focus-visible .library-create-cover svg { transform: none; }
@@ -4294,19 +4268,19 @@
     }
 
     @media (max-width: 1600px) and (min-width: 1101px) {
-        .canvas-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 30px 20px; }
+        .canvas-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
     }
 
     @media (max-width: 1100px) and (min-width: 900px) {
-        .canvas-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 18px; }
+        .canvas-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
     }
 
     @media (max-width: 899px) and (min-width: 640px) {
-        .canvas-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 16px; }
+        .canvas-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
     }
 
     @media (max-width: 639px) {
-        .canvas-library-grid { grid-template-columns: 1fr; gap: 18px; }
+        .canvas-library-grid { grid-template-columns: 1fr; gap: var(--space-4); }
         .canvas-library-discovery { padding-inline: 0; }
         .canvas-library-filters { min-width: 0; }
         .canvas-library-filter { max-width: 150px; padding-inline: 6px; }
@@ -7101,7 +7075,7 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 .creation-image-result:hover img { transform: scale(1.025); }
 .creation-image-result:hover span, .creation-video-result:hover > span { opacity: 1; }
 
-.creation-video-result { position: relative; display: block; width: min(760px, 100%); aspect-ratio: 16 / 9; overflow: hidden; border: 0; border-radius: 10px; background: #121316; }
+.creation-video-result { position: relative; display: block; width: min(920px, 100%); aspect-ratio: 16 / 9; overflow: hidden; border: 0; border-radius: 10px; background: #121316; }
 .creation-video-result > span { display: inline-flex; width: auto; height: 30px; align-items: center; gap: 5px; padding: 0 9px; font-size: 11px; }
 .creation-media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; color: var(--creation-faint); font-size: 11px; }
 .creation-media-actions > span { margin-right: 2px; }
@@ -7879,24 +7853,10 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
 .app-story-create-panel {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--r-lg);
-    background:
-        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--workspace-accent) 7%, transparent), transparent 36%),
-        radial-gradient(circle at 96% 100%, color-mix(in srgb, var(--workspace-accent) 5%, transparent), transparent 32%),
-        var(--surface-card);
-    box-shadow: var(--elevation-card), var(--elevation-hairline);
-}
-
-.app-story-create-panel::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: linear-gradient(180deg, var(--workspace-accent) 0%, color-mix(in srgb, var(--workspace-accent) 42%, transparent) 100%);
-    opacity: 0.72;
+    background: var(--card-surface);
+    box-shadow: none;
 }
 
 .app-story-create-head {
@@ -7906,8 +7866,7 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 14px 16px 14px 19px;
-    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    padding: 16px;
 }
 
 .app-story-create-title {
@@ -7952,20 +7911,25 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     height: 34px;
     align-items: center;
     gap: 7px;
-    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border: 0;
     border-radius: var(--r-md);
     background: color-mix(in srgb, var(--foreground) 3%, transparent);
     padding: 0 12px;
     color: color-mix(in srgb, var(--foreground) 62%, transparent);
     font-size: var(--fs-caption);
     font-weight: 520;
-    transition: border-color 180ms ease-out, background-color 180ms ease-out, color 180ms ease-out;
+    transition: background-color 180ms ease-out, color 180ms ease-out;
 }
 
 .app-story-create-shortcut:hover {
-    border-color: color-mix(in srgb, var(--foreground) 24%, transparent);
     background: color-mix(in srgb, var(--foreground) 6%, transparent);
     color: var(--foreground);
+}
+
+.app-story-create-actions .ant-btn-default {
+    border: 0;
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    box-shadow: none;
 }
 
 .app-story-create-main {
@@ -7973,7 +7937,7 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     min-width: 0;
     align-items: flex-start;
     gap: 10px;
-    padding: 12px 16px 14px 19px;
+    padding: 12px 16px 14px;
 }
 
 .app-story-create-input {
@@ -7981,6 +7945,7 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     flex: 1;
 }
 
+.app-story-create-input,
 .app-story-create-input textarea {
     resize: none !important;
     border-color: transparent !important;
@@ -7991,11 +7956,13 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     color: var(--foreground) !important;
 }
 
+.app-story-create-input:focus,
 .app-story-create-input textarea:focus {
     border-color: transparent !important;
     box-shadow: none !important;
 }
 
+.app-story-create-input::placeholder,
 .app-story-create-input textarea::placeholder {
     color: color-mix(in srgb, var(--foreground) 38%, transparent) !important;
 }
@@ -8007,17 +7974,17 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     align-items: center;
     gap: 8px;
     max-width: 220px;
-    border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+    border: 0;
     border-radius: var(--r-full);
     background: color-mix(in srgb, var(--foreground) 4%, transparent);
     padding: 0 11px 0 4px;
     color: color-mix(in srgb, var(--foreground) 72%, transparent);
     font-size: var(--fs-caption);
-    transition: border-color 180ms ease-out, color 180ms ease-out;
+    transition: background-color 180ms ease-out, color 180ms ease-out;
 }
 
 .app-story-create-style-chip:hover {
-    border-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
     color: var(--foreground);
 }
 
@@ -8041,7 +8008,7 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     flex-wrap: wrap;
     align-items: center;
     gap: 10px 14px;
-    padding: 0 16px 14px 19px;
+    padding: 0 16px 16px;
 }
 
 .app-story-create-controls label {
@@ -8057,7 +8024,7 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
 }
 
 .app-story-create-controls .ant-select-selector {
-    border-color: color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+    border: 0 !important;
     border-radius: var(--r-md) !important;
     background: color-mix(in srgb, var(--foreground) 3%, transparent) !important;
     box-shadow: none !important;
@@ -8734,20 +8701,20 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .storyboard-workbench-stage-inner {
-    width: min(920px, 100%);
+    width: min(1120px, 100%);
     margin: 0 auto;
     animation: creation-composer-arrive var(--motion-dur-slow-calc) var(--motion-ease-out) both;
 }
 
 .creation-home .storyboard-workbench-card {
     overflow: hidden;
-    border: 1px solid var(--creation-border);
-    border-radius: 18px;
+    border: 0;
+    border-radius: var(--r-lg);
     background: var(--creation-surface);
-    box-shadow: var(--elevation-card), var(--elevation-hairline);
+    box-shadow: none;
 }
 
-.creation-home .storyboard-workbench-card.is-error { border-color: color-mix(in srgb, #ef5350 42%, transparent); }
+.creation-home .storyboard-workbench-card.is-error { background: color-mix(in srgb, #ef5350 6%, var(--creation-surface)); }
 
 .creation-home .storyboard-workbench-card-head {
     display: flex;
@@ -8756,7 +8723,6 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     align-items: center;
     justify-content: space-between;
     gap: 10px 14px;
-    border-bottom: 1px solid var(--creation-border);
     padding: 14px 18px;
 }
 
@@ -8793,7 +8759,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    border: 1px solid var(--creation-border);
+    border: 0;
     border-radius: 999px;
     background: var(--creation-surface-muted);
     color: var(--creation-muted);
@@ -8833,7 +8799,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    border: 1px solid var(--creation-border);
+    border: 0;
     border-radius: 8px;
     background: var(--creation-surface-muted);
     color: var(--creation-muted);
@@ -8845,7 +8811,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .storyboard-workbench-card-actions button:hover,
-.creation-home .storyboard-workbench-card-actions a:hover { border-color: var(--creation-border-strong); background: var(--creation-surface-hover); color: var(--creation-text); }
+.creation-home .storyboard-workbench-card-actions a:hover { background: var(--creation-surface-hover); color: var(--creation-text); }
 .creation-home .storyboard-workbench-card-actions button:disabled { cursor: not-allowed; opacity: .5; }
 .creation-home .storyboard-workbench-card-actions button:focus-visible,
 .creation-home .storyboard-workbench-card-actions a:focus-visible { outline: 2px solid var(--creation-accent); outline-offset: 2px; }
@@ -8856,7 +8822,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 /* 镜头脚本区 */
 .creation-home .storyboard-workbench-brief {
     margin-bottom: 18px;
-    border: 1px solid var(--creation-border);
+    border: 0;
     border-radius: 12px;
     background: var(--creation-surface-muted);
     padding: 13px 15px;
@@ -8886,7 +8852,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border: 1px dashed var(--creation-border);
+    border: 0;
     border-radius: 12px;
     background: var(--creation-surface-muted);
     color: var(--creation-muted);
@@ -8909,7 +8875,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    border: 1px solid color-mix(in srgb, #ef5350 38%, transparent);
+    border: 0;
     border-radius: 12px;
     background: color-mix(in srgb, #ef5350 7%, transparent);
     padding: 13px 15px;
@@ -8971,7 +8937,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .storyboard-workbench-composer .creation-chat-composer {
-    width: min(920px, 100%);
+    width: min(1120px, 100%);
     margin: 0 auto;
 }
 
@@ -9136,7 +9102,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     flex-direction: column;
 }
 
-.creation-home .storyboard-workbench-turn.is-user .storyboard-workbench-turn-copy { max-width: min(78%, 560px); align-items: flex-end; }
+.creation-home .storyboard-workbench-turn.is-user .storyboard-workbench-turn-copy { max-width: min(82%, 680px); align-items: flex-end; }
 .creation-home .storyboard-workbench-turn.is-ai .storyboard-workbench-turn-copy { flex: 1 1 auto; }
 
 .creation-home .storyboard-workbench-turn-meta {
@@ -9169,9 +9135,8 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 /* 用户气泡 */
 .creation-home .storyboard-workbench-turn.is-user .storyboard-workbench-turn-bubble {
     min-width: 0;
-    border: 1px solid var(--creation-border);
-    border-top-right-radius: 4px;
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--r-lg) var(--r-sm) var(--r-lg) var(--r-lg);
     background: var(--creation-surface-muted);
     padding: 11px 14px;
 }
@@ -9183,10 +9148,11 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: flex;
     align-items: center;
     gap: 12px;
-    margin: 4px 0;
+    justify-content: center;
+    margin: 8px 0;
 }
 
-.creation-home .storyboard-workbench-handoff-rail { height: 1px; flex: 1 1 auto; background: var(--creation-border); }
+.creation-home .storyboard-workbench-handoff-rail { display: none; }
 
 .creation-home .storyboard-workbench-handoff-badge {
     display: inline-flex;
@@ -9223,7 +9189,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     min-height: 0;
     align-items: stretch;
     justify-content: flex-start;
-    border: 1px solid var(--creation-border);
+    border: 0;
     border-radius: 12px;
     background: var(--creation-surface-muted);
 }
@@ -9239,7 +9205,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    border: 1px solid var(--creation-border);
+    border: 0;
     border-radius: 999px;
     background: var(--creation-surface);
     color: var(--creation-faint);
@@ -9252,7 +9218,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .storyboard-workbench-pipeline em i { color: var(--creation-text); font-size: var(--fs-micro); font-style: normal; font-variant-numeric: tabular-nums; font-weight: 600; }
-.creation-home .storyboard-workbench-pipeline em:last-child { border-color: color-mix(in srgb, var(--creation-accent) 40%, var(--creation-border)); color: var(--creation-text); }
+.creation-home .storyboard-workbench-pipeline em:last-child { background: color-mix(in srgb, var(--creation-accent) 10%, var(--creation-surface)); color: var(--creation-text); }
 
 @keyframes creation-pipeline-step {
     0% { opacity: 0; transform: translateY(4px); }
@@ -9265,8 +9231,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     align-items: flex-start;
     gap: 9px;
     margin-top: 12px;
-    border: 1px solid var(--creation-border);
-    border-left: 3px solid var(--creation-text);
+    border: 0;
     border-radius: 10px;
     background: color-mix(in srgb, var(--creation-text) 4%, transparent);
     padding: 10px 13px;
@@ -9358,9 +9323,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 
 /* 舞台：下一镜草稿引导卡 */
 .creation-home .storyboard-workbench-card.is-next {
-    border-style: dashed;
-    border-color: var(--creation-border-strong);
-    background: transparent;
+    background: var(--creation-surface);
     box-shadow: none;
 }
 
@@ -9368,7 +9331,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: flex;
     align-items: flex-start;
     gap: 14px;
-    border: 1px dashed var(--creation-border);
+    border: 0;
     border-radius: 12px;
     background: var(--creation-surface-muted);
     padding: 16px 18px;

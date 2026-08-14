@@ -65,7 +65,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                     active ? "is-active font-medium" : "",
                 )}
             >
-                <Icon className="size-5 shrink-0" />
+                <Icon className="app-workspace-nav-icon shrink-0" strokeWidth={1.8} />
             </Link>
         );
     };
@@ -118,7 +118,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                         <div className="app-workspace-rail hidden min-h-0 flex-col overflow-y-auto lg:flex">
                             <div className="app-workspace-rail-header flex h-16 shrink-0 items-center justify-center">
                                 <Link to="/home" className="grid size-10 shrink-0 place-items-center rounded-md text-foreground/55 transition-colors hover:bg-surface-hover hover:text-foreground" title="工作台首页">
-                                    <Home className="size-4" />
+                                    <Home className="app-workspace-nav-icon" strokeWidth={1.8} />
                                 </Link>
                             </div>
                             <div className="app-workspace-rail-middle flex min-h-0 w-full flex-1 flex-col items-center justify-start overflow-y-auto px-3 pt-3">
@@ -141,7 +141,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
 
                         {/* 移动端：抽屉完整导航 */}
                         <div className="app-workspace-mobile-nav flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
-                            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/55 px-3">
+                            <div className="flex h-14 shrink-0 items-center gap-2 px-3">
                                 <Link to="/" className="flex min-w-0 items-center gap-2" title="影策">
                                     <span className="app-workspace-brand-mark grid size-7 shrink-0 place-items-center rounded-md bg-foreground text-background"><InfinityIcon className="size-4" /></span>
                                     <span className="truncate text-[var(--fs-body)] font-semibold">影策</span>
@@ -169,14 +169,14 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                                 onClick={handleNavClick}
                                                 className={cn("app-workspace-nav-link relative mb-1 flex h-11 shrink-0 items-center gap-3 rounded-md px-2.5 text-[var(--fs-body)] transition-colors", active ? "is-active font-medium" : "text-foreground/55 hover:bg-surface-hover hover:text-foreground/85")}
                                             >
-                                                <Icon className="size-4 shrink-0" />
+                                                <Icon className="app-workspace-nav-icon shrink-0" strokeWidth={1.8} />
                                                 <span className="truncate">{tool.label}</span>
                                             </Link>
                                         </Fragment>
                                     );
                                 })}
                             </nav>
-                            <div className="shrink-0 border-t border-border/55 p-2">
+                            <div className="shrink-0 p-2">
                                 <WorkspaceSidebarFooter
                                     expandedClassName="flex"
                                     collapsedClassName="hidden"
