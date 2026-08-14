@@ -241,7 +241,7 @@ export default function SkillsPage() {
 
 function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; loading: boolean; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
     return (
-        <article className={`library-card skill-library-card group${skill.is_added ? " is-added" : ""}`}>
+        <article className={`library-card library-card-surface skill-library-card group${skill.is_added ? " is-selected is-added" : ""}`}>
             <div className="skill-card-top">
                 <button type="button" className="skill-card-title-button" onClick={onOpen}>
                     <h3>{skill.skill_name}</h3>
@@ -279,7 +279,7 @@ function SkillCard({ skill, loading, onOpen, onAdd, onLike, onEdit, onDelete }: 
                 ? <div className="skill-card-action"><span className="skill-card-owner-flag">我创建的</span><span className="skill-card-added-count">{formatSkillCount(skill.added_count)} 人已加入</span></div>
                 : (
                     <div className="skill-card-action">
-                        <button type="button" disabled={loading} className={`skill-card-join${skill.is_added ? " is-added" : ""}`} onClick={onAdd}>
+                        <button type="button" disabled={loading} aria-pressed={skill.is_added} className={`skill-card-join${skill.is_added ? " is-added" : ""}`} onClick={onAdd}>
                             {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : skill.is_added ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
                             <span>{skill.is_added ? "已加入" : "加入我的技能库"}</span>
                         </button>

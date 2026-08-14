@@ -71,7 +71,7 @@ export default function ProjectDetailPage() {
     return (
         <WorkspacePage className="project-workbench-page !overflow-hidden" fluid>
             <div className="flex h-full min-h-0 flex-col">
-                <header className="project-workbench-header shrink-0 border-b border-border/65 bg-workspace-glass px-3 py-2 backdrop-blur-md sm:px-4 lg:px-5 lg:py-0">
+                <header className="project-workbench-header shrink-0 bg-workspace-glass px-3 py-2 backdrop-blur-md sm:px-4 lg:px-5 lg:py-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-x-3 lg:min-h-16 lg:flex-nowrap">
                         <div className="flex min-w-0 flex-1 items-center gap-2.5 lg:w-[250px] lg:flex-none xl:w-[290px]">
                             <button type="button" onClick={() => navigate("/projects")} className="grid size-9 shrink-0 place-items-center rounded-md text-foreground/42 transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="返回项目" title="返回项目"><ArrowLeft className="size-4" /></button>
@@ -81,7 +81,7 @@ export default function ProjectDetailPage() {
                                 <span className="hidden shrink-0 text-[var(--fs-tiny)] text-foreground/42 sm:inline">{detail.data.project.status === "archived" ? "已归档" : "进行中"}</span>
                             </div>
                         </div>
-                        <nav className="thin-scrollbar order-last mt-1 flex h-11 w-full min-w-0 items-center gap-0.5 overflow-x-auto lg:order-none lg:mt-0 lg:h-16 lg:flex-1 lg:border-l lg:border-border/55 lg:pl-3" aria-label="项目导航">
+                        <nav className="thin-scrollbar order-last mt-1 flex h-11 w-full min-w-0 items-center gap-0.5 overflow-x-auto lg:order-none lg:mt-0 lg:h-16 lg:flex-1 lg:pl-3" aria-label="项目导航">
                             {views.map((item) => { const Icon = item.icon; const active = item.key === activeView; const href = item.key === "chapters" ? chapterHref : `/projects/${projectId}/${item.key}`; return <Link key={item.key} to={href} className={`relative flex h-11 shrink-0 items-center gap-2 rounded-md px-2.5 text-[var(--fs-body)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3 ${active ? "bg-[var(--workspace-accent-soft)] font-medium text-foreground lg:after:absolute lg:after:inset-x-3 lg:after:bottom-0 lg:after:h-0.5 lg:after:rounded-full lg:after:bg-[var(--workspace-accent)]" : "text-foreground/52 hover:bg-surface-hover hover:text-foreground"}`} aria-current={active ? "page" : undefined}><Icon className={`size-4 shrink-0 ${active ? "text-[var(--workspace-accent)]" : "text-foreground/45"}`} /><span className="sm:hidden">{item.shortLabel}</span><span className="hidden sm:inline">{item.label}</span></Link>; })}
                         </nav>
                         <Tooltip title={activeView === "chapters" && detail.data.units.length ? "新建当前章节画布" : "新建项目画布"}><Button size="small" className="!h-9 !shrink-0 !px-2 sm:!px-3" icon={<Plus className="size-4" />} onClick={createCanvas} aria-label={activeView === "chapters" && detail.data.units.length ? "新建当前章节画布" : "新建项目画布"}><span className="hidden sm:inline">新建画布</span></Button></Tooltip>
