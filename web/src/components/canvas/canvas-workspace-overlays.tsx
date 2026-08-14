@@ -79,23 +79,26 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
             onPointerDown={(event) => event.stopPropagation()}
         >
             <motion.div initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: anchor.placement === "above" ? 8 : -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={aceternityMotion.spring.panel} className="flex items-center gap-2">
-                <span className="aceternity-floating-panel shrink-0 rounded-full border px-2.5 py-1.5 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.spatial.glowStrong, color: theme.accent.primary, boxShadow: `0 14px 36px ${theme.spatial.shadow}` }}>已选 {count}</span>
+                <span className="aceternity-floating-panel shrink-0 rounded-full border px-2.5 py-1.5 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.accent.primary }}>已选 {count}</span>
                 <div className="max-w-[min(560px,calc(100vw-90px))]">{children}</div>
             </motion.div>
         </div>
     );
 }
 
-export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth = 520, panelHeight = 420, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; children: ReactNode }) {
+export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth, panelHeight = 190, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; children: ReactNode }) {
     const panelRef = useRef<HTMLDivElement>(null);
-    const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, panelWidth, panelHeight);
+    const initialWidth = resolveNodePanelWidth(node, viewport, panelWidth);
+    const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, initialWidth, panelHeight);
 
     useLayoutEffect(() => {
         const container = containerRef.current;
         const panel = panelRef.current;
         if (!container || !panel) return;
         const update = (nextViewport: ViewportTransform) => {
-            const position = getNodePanelPosition(node, nextViewport, { width: container.clientWidth, height: container.clientHeight }, panel.offsetWidth || panelWidth, panel.offsetHeight || panelHeight);
+            const nextWidth = resolveNodePanelWidth(node, nextViewport, panelWidth);
+            panel.style.width = `${nextWidth}px`;
+            const position = getNodePanelPosition(node, nextViewport, { width: container.clientWidth, height: container.clientHeight }, nextWidth, panel.offsetHeight || panelHeight);
             panel.style.left = `${position.left}px`;
             panel.style.top = `${position.top}px`;
         };
@@ -115,13 +118,18 @@ export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidt
             ref={panelRef}
             data-canvas-no-zoom
             className="thin-scrollbar absolute z-[var(--z-modal-overlay)] max-w-[calc(100%_-_24px)] overflow-y-auto"
-            style={{ left: initialPosition.left, top: initialPosition.top, width: panelWidth, maxHeight: "calc(100% - 84px)" }}
+            style={{ left: initialPosition.left, top: initialPosition.top, width: initialWidth, maxHeight: "calc(100% - 84px)" }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
             {children}
         </div>
     );
+}
+
+function resolveNodePanelWidth(node: CanvasNodeData, viewport: ViewportTransform, requestedWidth?: number) {
+    if (requestedWidth) return requestedWidth;
+    return clamp(Math.round(node.width * viewport.k * 1.5), 680, 920);
 }
 
 export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => void; onClose: () => void }) {
@@ -157,7 +165,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             className="aceternity-floating-panel absolute z-[var(--z-modal-overlay)] w-[248px] origin-top-left overflow-hidden rounded-[var(--r-2xl)] border p-2 backdrop-blur-2xl"
             data-canvas-no-zoom
             data-connection-create-menu
-            style={{ left: initialPosition.left, top: initialPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 30px 90px ${theme.spatial.shadow}` }}
+            style={{ left: initialPosition.left, top: initialPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >

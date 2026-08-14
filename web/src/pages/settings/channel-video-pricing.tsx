@@ -48,7 +48,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     const activeBillingMode = activeModelCost?.billingMode || "fixed_request";
 
     return (
-        <div className="mt-3 border-t border-border/70 pt-3">
+        <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                     <div className="text-xs font-medium">模型能力与请求协议</div>
@@ -64,8 +64,8 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                     const capability = cost?.capability || modelProtocolCapability(protocol) || "text";
                     const billingMode = cost?.billingMode || "fixed_request";
                     return (
-                        <div key={model} className="flex min-w-0 items-center gap-3 rounded-md border border-border/70 bg-background/45 px-3 py-2.5">
-                            <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-muted/35 text-foreground/65">
+                        <div key={model} className="flex min-w-0 items-center gap-3 rounded-md bg-surface-active px-3 py-2.5 transition-colors hover:bg-surface-hover">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.045] text-foreground/65">
                                 <Settings2 className="size-4" />
                             </span>
                             <div className="min-w-0 flex-1">
@@ -110,7 +110,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
             >
                 {activeModel && activeCapability && activeProtocol ? (
                     <div className="space-y-4">
-                        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5">
+                        <div className="rounded-md bg-surface-active px-3 py-2.5">
                             <div className="text-xs font-medium">模型能力与请求协议</div>
                             <div className="mt-1 text-[var(--fs-tiny)] text-foreground/45">这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。</div>
                         </div>

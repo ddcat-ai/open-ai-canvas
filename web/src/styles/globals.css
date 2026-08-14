@@ -189,6 +189,7 @@
     --z-popover: 200;           /* L10 弹出层 */
     --z-toast: 500;             /* L11 通知 */
     --z-tooltip: 1000;          /* L12 提示 */
+    --z-dialog-popover: 1100;   /* AntD Modal 之上的设置浮层 */
     --z-loader: 1200;           /* 全屏加载遮罩 */
     --z-max: 2000;              /* L13 最高（紧急通知）*/
 
@@ -259,7 +260,6 @@
 @media (prefers-reduced-motion: reduce) {
     .canvas-connection-flow,
     .canvas-connection-draft,
-    .canvas-generation-border-flow,
     .canvas-task-progress-shimmer,
     .ai-title-aurora,
     .creation-intro-mark,
@@ -271,7 +271,6 @@
 }
 .no-motion .canvas-connection-flow,
 .no-motion .canvas-connection-draft,
-.no-motion .canvas-generation-border-flow,
 .no-motion .canvas-task-progress-shimmer,
 .no-motion .ai-title-aurora,
 .no-motion .creation-intro-mark,
@@ -675,7 +674,6 @@
     --dock-blur: 24px;
     --dock-surface: var(--cn-spatial-surface);
     --dock-border: var(--cn-spatial-toolbar-border);
-    --dock-shadow: var(--shadow-lg);
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
     --dock-radius-tight: var(--r-tight);
@@ -696,20 +694,8 @@
     --canvas-create-node-height: var(--space-12);
     --canvas-create-resource-height: var(--space-8);
 
-    /* Node 组件（画布节点，对应 #97 节点视觉规范）*/
-    --node-radius: var(--r-2xl);          /* 16px */
-    --node-border-width: var(--stroke-1); /* 1px */
-    --node-border: var(--cn-stroke);
-    --node-active-border-width: var(--stroke-2); /* 2px */
-    --node-active-border: var(--cn-active-stroke);
-    --node-active-glow: 0 0 0 4px var(--cn-active-stroke-soft);
-    --node-active-glow-strong: 0 0 0 6px var(--cn-active-stroke-soft);
-    --node-shadow: var(--shadow-sm);
-    --node-shadow-hover: var(--shadow-md);
-    --node-hover-lift: var(--space-1);   /* 4px 节点 hover 静态抬升 */
-    --node-shadow-selected: var(--shadow-lg);
-    --node-shadow-selected-primary: var(--shadow-xl);
-    --node-shadow-active: var(--shadow-2xl);
+    /* Node 组件：节点首先是内容容器，常态不使用卡片投影或发光。 */
+    --node-radius: var(--r-lg);           /* 12px */
     --node-header-height: 24px;
     --node-title-fs: var(--fs-label);     /* 11px */
     --node-badge-fs: var(--fs-tiny);      /* 10px */
@@ -718,6 +704,14 @@
     --node-z-content: 30;                 /* 节点遮罩层（stacking context 内，见 ADR-001）*/
     --node-z-overlay: 40;                 /* 节点角标/按钮层 */
     --node-z-handle: 50;                  /* 节点 resize handle 层 */
+
+    /* 节点上下文生成器：一层浮动表面，内部仅靠明度和间距组织信息。 */
+    --canvas-composer-radius: var(--r-lg);
+    --canvas-composer-surface: var(--workspace-surface-strong);
+    --canvas-composer-control-surface: color-mix(in srgb, var(--foreground) 5%, transparent);
+    --canvas-composer-control-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --canvas-composer-shadow: var(--elevation-card);
+    --canvas-composer-settings-width: 138px;
 
     /* Modal 组件（对话框，对应 #98 面板层级）*/
     --modal-radius: var(--r-lg);
@@ -761,11 +755,10 @@
 
     /* Prompt 面板（对应 #98 决策2 渐进式三区）*/
     --prompt-panel-max-height: min(70vh, 640px);
-    --prompt-panel-input-min-height: 72px;
-    --prompt-panel-input-max-height: 224px;
     --prompt-panel-section-fs: var(--fs-body);     /* 14px A区 */
     --prompt-panel-caption-fs: var(--fs-caption);  /* 12px B区 */
     --prompt-panel-label-fs: var(--fs-label);      /* 11px 标签 */
+    --settings-model-option-min-height: 76px;
     --prompt-panel-heading-fs: var(--fs-heading);  /* 16px 区标题 */
 
     /* 进度条（对应 #98 决策3 任务进度）*/
@@ -3629,7 +3622,7 @@
         padding: 0;
     }
 
-    /* 设置页方案 A：桌面偏好面板 */
+    /* 设置页：导航是稳定区域，内容使用连续 section，不再用卡片套卡片表达层级。 */
     .settings-page .settings-topbar {
         display: flex;
         min-height: 40px;
@@ -3637,7 +3630,7 @@
         justify-content: space-between;
         gap: 12px;
         padding: 0 14px;
-        background: color-mix(in srgb, var(--foreground) 2%, transparent);
+        background: transparent;
     }
 
     .settings-nav-panel {
@@ -3653,39 +3646,16 @@
         color: var(--foreground);
     }
 
-    .settings-surface-card {
-        overflow: hidden;
-        border-radius: var(--r-lg);
-        background: var(--library-surface);
-        padding: 16px;
-        box-shadow: none;
-    }
-
-    .settings-section-card {
-        overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-        border-radius: var(--r-lg);
-        background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
-        padding: 16px;
-        box-shadow: var(--elevation-card), var(--elevation-hairline);
-    }
-
-    .settings-section-card + .settings-section-card {
-        margin-top: 12px;
-    }
-
-    .settings-page section[aria-labelledby^="channel-"] {
-        border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
-        border-radius: var(--r-lg);
-        background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
-        box-shadow: var(--elevation-card), var(--elevation-hairline);
-        transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
-    }
-
-    .settings-page section[aria-labelledby^="channel-"]:hover {
-        border-color: color-mix(in srgb, var(--foreground) 16%, transparent) !important;
-        box-shadow: var(--elevation-card-hover), var(--elevation-hairline);
-    }
+    .settings-pane-root { min-height: 100%; }
+    .settings-pane { min-width: 0; }
+    .settings-section { min-width: 0; }
+    .settings-channel { border: 0; border-radius: var(--r-lg); background: var(--library-surface); transition: background-color var(--motion-state) ease-out; }
+    .settings-channel:hover, .settings-channel:focus-within { background: var(--library-surface-hover); }
+    .settings-channel-status { display: inline-flex; min-width: 0; align-items: center; gap: var(--space-1-half); color: color-mix(in srgb, var(--foreground) 52%, transparent); }
+    .settings-channel-status i { width: var(--space-1-half); height: var(--space-1-half); flex: 0 0 auto; border-radius: var(--r-full); background: currentColor; }
+    .settings-channel-status.is-ready { color: color-mix(in srgb, var(--palette-status-success) 74%, var(--foreground)); }
+    .settings-channel-status.is-warning { color: color-mix(in srgb, var(--palette-status-warning) 78%, var(--foreground)); }
+    .settings-preference-block + .settings-preference-block { margin-top: var(--space-2); }
 
     .settings-pane-header {
         display: flex;
@@ -3722,16 +3692,18 @@
         letter-spacing: 0.02em;
     }
 
-    .settings-field-group-label::after {
-        content: "";
-        height: 1px;
-        flex: 1;
-        background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    }
-
     .settings-channel-list {
         padding-top: 2px;
     }
+
+    .model-default-option { min-height: var(--settings-model-option-min-height); background: color-mix(in srgb, var(--foreground) 2.5%, transparent); color: var(--foreground); }
+    .model-default-option:hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); }
+    .model-default-option.is-selected { background: var(--workspace-accent-soft); }
+    .model-default-option-icon { background: color-mix(in srgb, var(--foreground) 5%, transparent); }
+    .model-default-option.is-selected .model-default-option-icon { background: color-mix(in srgb, var(--workspace-surface-strong) 72%, transparent); }
+    .model-default-option-scope, .model-default-price { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+    .model-default-option-check { background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+    .model-default-option-check.is-selected { background: var(--control-check-bg); color: var(--control-check-fg); }
 
     .settings-page :where(.ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-input-number, .ant-picker) {
         min-height: 34px;
@@ -3904,27 +3876,28 @@
     /* 任务列表：整屏几十条长 prompt 极易糊成一片，靠三件事拉开密度——
        行距（min-height + gap）、标题只给一行且宽度封顶、次要信息降到 42% 前景色。 */
     .task-record-list { display: grid; gap: 2px; margin-top: 10px; }
-    .task-record-row { position: relative; display: grid; min-width: 0; grid-template-columns: 84px minmax(0, 1fr) 120px 104px 104px; align-items: center; gap: 18px; min-height: 92px; margin-bottom: 6px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--foreground) 1.5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 5%, transparent); padding: 12px 14px; transition: background-color 180ms ease-out, box-shadow 180ms ease-out; }
-    .task-record-row:hover, .task-record-row:focus-within { background: color-mix(in srgb, var(--foreground) 4%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent); }
+    .task-record-row { position: relative; display: grid; min-width: 0; grid-template-columns: 84px minmax(0, 1fr) 120px 104px 104px; align-items: center; gap: 18px; min-height: 92px; border-radius: var(--r-md); background: transparent; padding: 12px 14px; transition: background-color var(--motion-state) ease-out; }
+    .task-record-row:hover, .task-record-row:focus-within { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+    .task-record-row.is-attention { background: color-mix(in srgb, var(--palette-status-error) 4%, transparent); }
     .task-record-main { min-width: 0; }
     .task-record-heading { display: flex; min-width: 0; align-items: baseline; gap: 10px; overflow: hidden; }
     /* 标题封顶 68ch：超宽屏下一行能塞 200+ 汉字，读者反而找不到落点。 */
     .task-record-title { display: block; min-width: 0; max-width: 68ch; flex: 0 1 auto; overflow: hidden; border: 0; background: transparent; padding: 0; color: color-mix(in srgb, var(--foreground) 92%, transparent); text-align: left; font-size: var(--fs-body); font-weight: 560; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
     .task-record-title:hover { color: var(--foreground); }
-    .task-record-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; border-radius: var(--r-full); background: color-mix(in srgb, var(--foreground) 5%, transparent); padding: 3px 9px 3px 7px; color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: var(--fs-tiny); line-height: 1.4; white-space: nowrap; }
+    .task-record-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: var(--fs-tiny); line-height: 1.4; white-space: nowrap; }
     .task-record-dot { position: relative; display: block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: var(--r-full); }
     .task-record-dot.is-pulsing::after { position: absolute; inset: -4px; border-radius: var(--r-full); background: inherit; opacity: 0.45; content: ""; animation: task-record-dot-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite; }
     @keyframes task-record-dot-ping { 75%, 100% { transform: scale(2.1); opacity: 0; } }
     @media (prefers-reduced-motion: reduce) { .task-record-dot.is-pulsing::after { animation: none; } }
-    .task-record-status.is-failed { background: color-mix(in srgb, var(--palette-status-error) 12%, transparent); color: color-mix(in srgb, var(--palette-status-error) 74%, var(--foreground)); }
-    .task-record-status.is-active { background: color-mix(in srgb, var(--palette-status-warning) 12%, transparent); color: color-mix(in srgb, var(--palette-status-warning) 74%, var(--foreground)); }
-    .task-record-status.is-success { background: color-mix(in srgb, var(--palette-status-success) 10%, transparent); color: color-mix(in srgb, var(--palette-status-success) 74%, var(--foreground)); }
+    .task-record-status.is-failed { color: color-mix(in srgb, var(--palette-status-error) 74%, var(--foreground)); }
+    .task-record-status.is-active { color: color-mix(in srgb, var(--palette-status-warning) 74%, var(--foreground)); }
+    .task-record-status.is-success { color: color-mix(in srgb, var(--palette-status-success) 74%, var(--foreground)); }
     .task-record-dot.is-success { background: var(--palette-status-success); }
     .task-record-dot.is-active { background: var(--palette-status-warning); }
     .task-record-dot.is-queued { background: var(--palette-status-loading); }
     .task-record-dot.is-failed { background: var(--palette-status-error); }
     .task-record-dot.is-idle { background: color-mix(in srgb, var(--foreground) 30%, transparent); }
-    .task-record-thumb { position: relative; display: grid; width: 84px; height: 60px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 28%, transparent); }
+    .task-record-thumb { position: relative; display: grid; width: 84px; height: 60px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 28%, transparent); }
     .task-record-thumb img, .task-record-thumb video { width: 100%; height: 100%; object-fit: cover; }
     .task-record-meta { display: flex; min-width: 0; align-items: center; gap: 8px; margin-top: 7px; overflow: hidden; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); white-space: nowrap; }
     .task-record-meta-canvas { display: inline-flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; }
@@ -3950,28 +3923,11 @@
     .task-record-actions .ant-btn { width: 32px; height: 32px; padding: 0; border-radius: var(--r-md); }
     .task-record-row:hover .task-record-actions, .task-record-row:focus-within .task-record-actions { opacity: 1; transform: translateX(0); }
 
-    /* open-vetta 语言补充：渐变标题、统计胶囊、视图切换、分组视图、网格卡片。
-       全部走既有 token（--foreground / --workspace-accent / --palette-status-* / --r-*），不引入孤立字面值。 */
-    @supports ((-webkit-background-clip: text) or (background-clip: text)) {
-        .task-library-page .app-page-header-title {
-            background: linear-gradient(120deg, var(--foreground) 18%, color-mix(in srgb, var(--workspace-accent) 72%, var(--foreground)) 55%, var(--workspace-accent));
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-    }
-    .task-stat-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
-    .task-stat-pill { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); border-radius: var(--r-full); background: color-mix(in srgb, var(--foreground) 3%, transparent); color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: var(--fs-label); line-height: 1; transition: border-color 160ms ease-out, color 160ms ease-out, background-color 160ms ease-out; }
-    .task-stat-pill b { color: var(--foreground); font-weight: 620; font-variant-numeric: tabular-nums; }
-    .task-stat-pill.is-clickable { cursor: pointer; }
-    .task-stat-pill.is-clickable:hover { border-color: color-mix(in srgb, var(--foreground) 18%, transparent); background: color-mix(in srgb, var(--foreground) 5%, transparent); color: var(--foreground); }
-    .task-stat-pill.is-fail { color: color-mix(in srgb, var(--palette-status-error) 80%, var(--foreground)); }
-    .task-stat-pill.is-fail b { color: color-mix(in srgb, var(--palette-status-error) 88%, var(--foreground)); }
-    .task-stat-pill.is-active-filter { border-color: color-mix(in srgb, var(--workspace-accent) 34%, transparent); background: color-mix(in srgb, var(--workspace-accent) 8%, transparent); color: var(--foreground); }
-    .task-stat-dot { display: block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: var(--r-full); background: currentColor; }
-    .task-stat-dot.is-run { color: var(--palette-status-warning); }
-    .task-stat-dot.is-ok { color: var(--palette-status-success); }
-    .task-stat-dot.is-bad { color: var(--palette-status-error); }
+    .task-status-filter { display: inline-flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .task-status-today { color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); white-space: nowrap; }
+    .task-status-today strong { margin-left: 4px; color: var(--foreground); font-weight: 620; font-variant-numeric: tabular-nums; }
+    .task-status-filter .ant-segmented-item-label > span { display: inline-flex; align-items: center; gap: 6px; }
+    .task-status-filter .ant-segmented-item-label b { color: inherit; font-size: var(--fs-tiny); font-weight: 620; font-variant-numeric: tabular-nums; opacity: .62; }
     .task-view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 5%, transparent); }
     /* AntD 6 按钮样式经 CSS-in-JS 运行时注入（晚于本文件），hover 组合特异性达 .ant-btn:not(:disabled):not(.ant-btn-disabled):hover (0,4,0)，必须用 !important 才能稳定覆盖；限定在本组件作用域内，不污染全局。 */
     .task-view-switch .ant-btn { border: 0 !important; box-shadow: none !important; }
@@ -3980,26 +3936,26 @@
     .task-group { margin-bottom: 22px; }
     .task-group:last-child { margin-bottom: 0; }
     .task-group-head { display: flex; align-items: center; gap: 12px; padding: 0 2px 10px; }
-    .task-group-ic { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: color-mix(in srgb, var(--workspace-accent) 12%, transparent); color: var(--workspace-accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 22%, transparent); }
+    .task-group-ic { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 5%, transparent); color: var(--workspace-accent); }
     .task-group-ic svg { width: 17px; height: 17px; }
     .task-group-name { display: flex; min-width: 0; align-items: center; gap: 9px; font-size: var(--fs-heading-lg); font-weight: 620; letter-spacing: -.01em; }
     .task-group-name > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .task-group-count { flex: 0 0 auto; border-radius: var(--r-full); background: color-mix(in srgb, var(--foreground) 7%, transparent); padding: 3px 9px; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-tiny); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .task-group-count { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-tiny); font-weight: 500; font-variant-numeric: tabular-nums; }
     .task-group-sub { display: block; margin-top: 4px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); }
     .task-group-sub b.is-bad { color: color-mix(in srgb, var(--palette-status-error) 80%, var(--foreground)); font-weight: 560; }
-    .task-group-reset { display: inline-flex; align-items: center; gap: 5px; height: 28px; margin-left: auto; flex: 0 0 auto; border: 0; border-radius: var(--r-full); background: color-mix(in srgb, var(--palette-status-error) 10%, transparent); padding: 0 11px; color: color-mix(in srgb, var(--palette-status-error) 82%, var(--foreground)); font-size: var(--fs-label); font-weight: 550; cursor: pointer; transition: background-color 160ms ease-out, color 160ms ease-out; }
-    .task-group-reset:hover { background: color-mix(in srgb, var(--palette-status-error) 18%, transparent); color: color-mix(in srgb, var(--palette-status-error) 92%, var(--foreground)); }
+    .task-group-reset { display: inline-flex; align-items: center; gap: 5px; height: 28px; margin-left: auto; flex: 0 0 auto; border: 0; border-radius: var(--r-md); background: transparent; padding: 0 8px; color: color-mix(in srgb, var(--palette-status-error) 78%, var(--foreground)); font-size: var(--fs-label); font-weight: 550; cursor: pointer; transition: background-color 160ms ease-out, color 160ms ease-out; }
+    .task-group-reset:hover { background: color-mix(in srgb, var(--palette-status-error) 8%, transparent); color: color-mix(in srgb, var(--palette-status-error) 92%, var(--foreground)); }
     .task-group-reset svg { width: 13px; height: 13px; }
-    .task-grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 12px; margin-top: 10px; }
-    .task-grid-card { min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--foreground) 1.5%, transparent); box-shadow: var(--elevation-hairline); transition: border-color 200ms ease-out, background-color 200ms ease-out; }
-    .task-grid-card:hover, .task-grid-card:focus-within { border-color: color-mix(in srgb, var(--foreground) 13%, transparent); background: color-mix(in srgb, var(--foreground) 3.5%, transparent); }
-    .task-grid-card.is-attention { border-color: color-mix(in srgb, var(--palette-status-error) 22%, transparent); }
+    .task-grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 16px; margin-top: 10px; }
+    .task-grid-card { min-width: 0; overflow: hidden; border: 0; border-radius: var(--r-lg); background: var(--library-surface); box-shadow: none; transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    .task-grid-card:hover, .task-grid-card:focus-within { background: var(--library-surface-hover); transform: translateY(var(--library-hover-offset)); }
+    .task-grid-card.is-attention .task-grid-body { background: color-mix(in srgb, var(--palette-status-error) 5%, transparent); }
     .task-grid-thumb { position: relative; display: grid; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 30%, transparent); }
     .task-grid-thumb > svg { width: 26px; height: 26px; }
     .task-grid-thumb img, .task-grid-thumb video { width: 100%; height: 100%; object-fit: cover; }
     .task-grid-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; background: color-mix(in srgb, var(--background) 58%, transparent); opacity: 0; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); transition: opacity 200ms ease-out; }
     .task-grid-card:hover .task-grid-overlay, .task-grid-card:focus-within .task-grid-overlay { opacity: 1; }
-    .task-grid-overlay .ant-btn { width: 32px; height: 32px; border-radius: var(--r-md); background: color-mix(in srgb, var(--background) 78%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent); color: var(--foreground); }
+    .task-grid-overlay .ant-btn { width: 32px; height: 32px; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--background) 86%, transparent); box-shadow: none; color: var(--foreground); }
     .task-grid-overlay .ant-btn:hover { color: var(--foreground); background: var(--background); }
     .task-grid-body { padding: 10px 12px 11px; }
     .task-grid-title { display: block; width: 100%; min-width: 0; overflow: hidden; border: 0; background: transparent; padding: 0; color: color-mix(in srgb, var(--foreground) 90%, transparent); text-align: left; font-size: var(--fs-body); font-weight: 560; line-height: 1.45; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; }
@@ -4013,9 +3969,13 @@
     @media (max-width: 640px) {
         .task-group-name { flex-wrap: wrap; }
         .task-group-reset { margin-left: 0; }
-        .task-stat-pills { gap: 6px; }
-        .task-stat-pill { height: 28px; padding: 0 10px; }
+        .task-status-filter { width: 100%; }
+        .task-status-filter .ant-segmented { width: 100%; }
     }
+
+    .task-detail-facts { gap: 2px; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 2.5%, transparent); padding: 4px; }
+    .task-detail-fact { border-radius: var(--r-sm); }
+    .task-detail-error { border-radius: var(--r-md); background: color-mix(in srgb, var(--palette-status-error) 8%, transparent); color: color-mix(in srgb, var(--palette-status-error) 78%, var(--foreground)); }
 
     /* 项目概览：原本是「有边框的浅色盒子 + 一堆等重小字」，层级读不出来。
        改成：主区留白撑开、标题字阶拉高、右栏用背景色而非边框分隔、流水线行给足行高。 */
@@ -4750,13 +4710,9 @@
     }
 
     :where(.ant-select-dropdown, .ant-dropdown-menu, .ant-popover-inner) {
-        border: 1px solid var(--border);
-        box-shadow: 0 20px 56px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid var(--workspace-border);
+        box-shadow: var(--elevation-overlay) !important;
         backdrop-filter: blur(22px);
-    }
-
-    .dark :where(.ant-select-dropdown, .ant-dropdown-menu, .ant-popover-inner) {
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
     }
 
     :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select-content) {
@@ -4976,38 +4932,6 @@
         box-shadow: none;
     }
 
-    .canvas-image-tool-heading-icon,
-    .canvas-image-tool-option-icon {
-        background: color-mix(in srgb, var(--foreground) 6%, transparent);
-        color: color-mix(in srgb, var(--foreground) 52%, transparent);
-    }
-
-    .canvas-image-tool-count {
-        border-radius: var(--r-xs);
-        background: var(--control-selected-bg);
-        padding: 2px 7px;
-        color: var(--control-selected-fg);
-        font-size: var(--fs-tiny);
-        line-height: 1.5;
-    }
-
-    .canvas-image-tool-option {
-        border: 0;
-        background: transparent;
-        color: var(--foreground);
-    }
-
-    .canvas-image-tool-option:hover,
-    .canvas-image-tool-option.is-selected {
-        background: var(--control-selected-bg);
-        color: var(--control-selected-fg);
-    }
-
-    .canvas-image-tool-option.is-selected .canvas-image-tool-option-icon {
-        background: var(--control-selected-hover-bg);
-        color: var(--control-selected-fg);
-    }
-
     .aceternity-dock-separator {
         background: color-mix(in srgb, currentColor 13%, transparent);
     }
@@ -5020,7 +4944,7 @@
 
     .aceternity-floating-panel {
         transform-origin: bottom center;
-        box-shadow: 0 30px 90px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        box-shadow: var(--elevation-overlay);
     }
 
     .app-workspace-canvas {
@@ -5496,7 +5420,7 @@
         display: flex;
         gap: 8px;
         max-width: 100%;
-        min-height: 44px;
+        min-height: 40px;
         min-width: 0;
         outline: none;
         overflow: hidden;
@@ -5508,6 +5432,10 @@
 
     .canvas-model-picker-option:hover {
         background: color-mix(in srgb, var(--workspace-accent) 9%, transparent) !important;
+    }
+
+    .canvas-model-picker-option[aria-selected="true"] {
+        background: color-mix(in srgb, var(--workspace-accent) 6%, transparent) !important;
     }
 
     .canvas-model-picker-option:focus-visible {
@@ -5580,11 +5508,6 @@
     html:not(.dark) .canvas-generation-settings-trigger.ant-btn:focus-visible,
     html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"] {
         background: rgba(15, 23, 42, 0.075) !important;
-    }
-
-    html:not(.dark) .canvas-generation-cost-badge {
-        background: rgba(79, 110, 232, 0.09) !important;
-        color: #4f6ee8 !important;
     }
 
     .canvas-preset-picker-menu {
@@ -5743,13 +5666,12 @@
         animation: canvas-panel-in var(--motion-dur-fast-calc) var(--motion-ease-out) both;
     }
 
-    /* 覆盖工具栏与节点之间的视觉留白，避免鼠标途中被相邻节点抢走悬浮状态。 */
     .canvas-node-toolbar::after {
         position: absolute;
         top: 100%;
-        right: -8px;
-        left: -8px;
-        height: 14px;
+        right: 0;
+        left: 0;
+        height: 30px;
         content: "";
     }
 
@@ -5834,43 +5756,239 @@
     .canvas-node-shell,
     .canvas-frame-shell {
         transition:
-            border-color var(--motion-state) var(--ease-aceternity),
             box-shadow var(--motion-state) var(--ease-aceternity),
-            background-color var(--motion-state) var(--ease-aceternity),
-            transform var(--motion-panel) var(--ease-aceternity);
+            background-color var(--motion-state) var(--ease-aceternity);
     }
 
-    .canvas-node-shell.aceternity-comet-card {
-        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
+    .canvas-node-shell {
+        box-shadow: none;
     }
 
-    .canvas-node-shell.aceternity-comet-card:hover,
-    .canvas-frame-shell:hover {
-        transform: translateY(var(--node-hover-lift));
+    .canvas-node-inline-action {
+        border: 0;
+        border-radius: var(--r-md);
+        background: var(--canvas-composer-surface);
+        color: var(--cn-text);
+        box-shadow: var(--elevation-card);
     }
 
-    .canvas-node-shell[data-canvas-node-hover-locked="true"],
-    .canvas-frame-shell[data-canvas-frame-hover-locked="true"] {
-        transform: none !important;
+    .canvas-node-inline-action:hover {
+        background: var(--canvas-composer-control-hover);
     }
 
-    .canvas-node-shell.aceternity-comet-card:hover {
-        box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18), 0 6px 20px rgba(15, 23, 42, 0.1);
+    .canvas-node-composer {
+        position: relative;
+        overflow: hidden;
+        border: 0;
+        border-radius: var(--canvas-composer-radius);
+        background: var(--canvas-composer-surface);
+        color: var(--cn-text);
+        box-shadow: var(--canvas-composer-shadow);
+        padding: var(--space-3);
     }
 
-    .dark .canvas-node-shell.aceternity-comet-card {
-        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.3);
+    .canvas-node-composer-header {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: var(--space-1);
+        min-height: 28px;
     }
 
-    .dark .canvas-node-shell.aceternity-comet-card:hover {
-        box-shadow: 0 34px 90px rgba(0, 0, 0, 0.52), 0 8px 26px rgba(0, 0, 0, 0.36);
+    .canvas-node-composer-mode {
+        display: flex;
+        min-width: 0;
+        height: 28px;
+        align-items: center;
+        gap: var(--space-1);
+        border-radius: var(--r-md);
+        background: var(--canvas-composer-control-surface);
+        padding-inline: var(--space-2);
+    }
+
+    .canvas-node-composer-editor {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: var(--r-md);
+        background: transparent;
+        margin-top: var(--space-1);
+    }
+
+    .canvas-node-composer-editor:focus-within {
+        background: transparent;
+    }
+
+    .canvas-node-composer-references {
+        display: flex;
+        min-width: 0;
+        height: 36px;
+        flex-shrink: 0;
+        align-items: center;
+        gap: var(--space-1);
+        overflow-x: auto;
+        padding-inline: var(--space-2);
+    }
+
+    .canvas-node-reference-chip {
+        display: inline-flex;
+        min-width: 0;
+        height: 30px;
+        flex: 0 0 auto;
+        align-items: center;
+        overflow: hidden;
+        border-radius: var(--r-md);
+        background: var(--canvas-composer-control-surface);
+    }
+
+    .canvas-node-reference-preview {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        overflow: hidden;
+        border: 0;
+        background: transparent;
+        padding: 0;
+    }
+
+    .canvas-node-reference-label {
+        display: inline-flex;
+        max-width: 112px;
+        height: 30px;
+        align-items: center;
+        gap: var(--space-1);
+        overflow: hidden;
+        border: 0;
+        background: transparent;
+        padding: 0 var(--space-2);
+        color: color-mix(in srgb, var(--foreground) 64%, transparent);
+        font-size: var(--fs-tiny);
+    }
+
+    .canvas-node-reference-label span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-node-composer-parameters {
+        margin-top: var(--space-1);
+        padding-top: var(--space-2);
+    }
+
+    .canvas-node-composer-footer {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-1);
+        margin-top: var(--space-1);
+        padding-top: var(--space-2);
+    }
+
+    .canvas-node-composer-model {
+        min-width: 148px;
+        max-width: 220px;
+        flex: 1 1 220px;
+    }
+
+    .canvas-node-composer-settings-trigger {
+        height: 28px !important;
+        width: var(--canvas-composer-settings-width) !important;
+        justify-content: flex-start !important;
+        border: 0 !important;
+        border-radius: var(--r-md) !important;
+        padding-inline: var(--space-2) !important;
+        box-shadow: none !important;
+        font-size: var(--fs-tiny) !important;
+        font-weight: 400 !important;
+    }
+
+    .canvas-node-composer-submit {
+        display: inline-flex !important;
+        min-width: var(--space-8) !important;
+        height: var(--space-8) !important;
+        flex: 0 0 auto;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: var(--space-1) !important;
+        border: 0 !important;
+        border-radius: var(--r-full) !important;
+        background: var(--canvas-composer-control-surface) !important;
+        padding: calc(var(--space-1) / 2) !important;
+        box-shadow: none !important;
+        font-size: var(--fs-tiny) !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+    }
+
+    .canvas-node-composer-submit.has-cost {
+        padding-left: var(--space-2) !important;
+    }
+
+    .canvas-node-composer-submit:not(:disabled):hover {
+        background: var(--canvas-composer-control-hover) !important;
+    }
+
+    .canvas-node-composer-submit-cost {
+        display: inline-flex;
+        min-width: 0;
+        align-items: center;
+        gap: var(--space-1);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .canvas-node-composer-submit-cost > :first-child {
+        font-size: var(--fs-label);
+    }
+
+    .canvas-node-composer-submit-action {
+        display: grid;
+        width: calc(var(--space-8) - var(--space-1));
+        height: calc(var(--space-8) - var(--space-1));
+        flex: 0 0 calc(var(--space-8) - var(--space-1));
+        place-items: center;
+        border-radius: var(--r-full);
+        background: var(--canvas-composer-submit-action);
+        color: var(--canvas-composer-submit-action-fg);
+    }
+
+    .canvas-node-composer-resize-handle {
+        display: grid;
+        width: 100%;
+        height: var(--space-4);
+        place-items: center;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        cursor: row-resize;
+        touch-action: none;
+    }
+
+    .canvas-node-composer-resize-handle > span {
+        width: var(--space-12);
+        height: var(--space-1);
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--foreground) 22%, transparent);
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .canvas-node-composer-resize-handle:hover > span,
+    .canvas-node-composer-resize-handle:active > span,
+    .canvas-node-composer-resize-handle:focus-visible > span {
+        background: color-mix(in srgb, var(--foreground) 42%, transparent);
+    }
+
+    .canvas-node-composer-resize-handle:focus-visible {
+        outline: none;
     }
 
     [data-canvas-viewport-interacting="true"] .canvas-node-shell,
     [data-canvas-viewport-interacting="true"] .canvas-frame-shell,
     [data-canvas-viewport-interacting="true"] .aceternity-comet-card {
         transition: none !important;
-        transform: none !important;
     }
 
     /* 静止期用最终倍率重新排版 DOM，避免 Windows Chromium 复用交互期的低分辨率合成纹理。 */
@@ -5888,12 +6006,7 @@
         will-change: transform;
     }
 
-    [data-canvas-viewport-interacting="true"] .canvas-node-shell.aceternity-comet-card,
-    [data-canvas-viewport-interacting="true"] .canvas-node-shell.aceternity-comet-card:hover {
-        box-shadow: none !important;
-    }
-
-    [data-canvas-viewport-interacting="true"] :where(.canvas-node-shell-generating::before, .canvas-connection-flow, .canvas-connection-draft) {
+    [data-canvas-viewport-interacting="true"] :where(.canvas-connection-flow, .canvas-connection-draft) {
         animation: none !important;
     }
 
@@ -5911,29 +6024,6 @@
     }
     .canvas-task-progress-shimmer {
         animation: canvas-task-progress-shimmer 1.4s linear infinite;
-    }
-
-    .canvas-node-shell-generating::before {
-        position: absolute;
-        z-index: 45;
-        inset: -1.5px;
-        padding: 1px;
-        border-radius: 19px;
-        background: linear-gradient(110deg, rgba(91, 110, 225, 0.66), rgba(96, 165, 250, 0.62), rgba(167, 139, 250, 0.58), rgba(244, 114, 182, 0.54), rgba(250, 204, 21, 0.5), rgba(52, 211, 153, 0.58), rgba(91, 110, 225, 0.66));
-        background-size: 300% 100%;
-        content: "";
-        filter: drop-shadow(0 0 3px rgba(96, 165, 250, 0.2));
-        pointer-events: none;
-        animation: canvas-generation-border-flow 2.4s var(--motion-ease-linear) infinite;
-        -webkit-mask:
-            linear-gradient(#000 0 0) content-box,
-            linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-        mask-composite: exclude;
-    }
-
-    .dark .canvas-node-shell-generating::before {
-        filter: drop-shadow(0 0 4px rgba(91, 110, 225, 0.22));
     }
 
     .canvas-connection-flow {
@@ -5962,11 +6052,6 @@
         }
     }
 
-    @keyframes canvas-generation-border-flow {
-        to {
-            background-position: 300% 0;
-        }
-    }
 
     .canvas-node-info-modal .ant-modal-header {
         padding-right: 0;
@@ -6069,14 +6154,9 @@
         transition-duration: 0.01ms !important;
     }
 
-    .canvas-node-shell-generating::before,
     .canvas-connection-flow,
     .canvas-connection-draft {
         animation: none;
-    }
-
-    .canvas-node-shell-generating::before {
-        background-position: 50% 0;
     }
 }
 

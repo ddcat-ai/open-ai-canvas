@@ -42,7 +42,7 @@ export function ListToolbar({ children, trailing, active, onReset, className }: 
 }
 
 export function TableSurface({ children, className }: { children: ReactNode; className?: string }) {
-    return <div className={cn("app-table-surface mt-4 min-w-0 overflow-hidden rounded-lg border border-border bg-surface", className)}>{children}</div>;
+    return <div className={cn("app-table-surface mt-4 min-w-0 overflow-hidden rounded-lg bg-surface", className)}>{children}</div>;
 }
 
 export function CollectionGrid({ children, className }: { children: ReactNode; className?: string }) {
