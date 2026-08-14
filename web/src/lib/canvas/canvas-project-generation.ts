@@ -1,6 +1,6 @@
 import { type GenerationTask } from "@/services/api/task-center";
 import { backendProviderConfig, runBackendGenerationTask } from "@/services/api/generation-task";
-import { defaultConfig, modelMatchesCapability, modelOptionName, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
@@ -316,7 +316,7 @@ export function resolveCanvasGenerationModel(config: AiConfig, model: string | u
     if (!model) return "";
     const normalized = normalizeModelOptionValue(model, config.channels);
     if (!normalized) return "";
-    return modelMatchesCapability(modelOptionName(normalized), mode) ? normalized : "";
+    return configuredModelMatchesCapability(config, normalized, mode) ? normalized : "";
 }
 
 export function supportsVideoReferenceAudio(config: AiConfig) {

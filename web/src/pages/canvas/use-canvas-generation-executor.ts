@@ -204,7 +204,8 @@ export function useCanvasGenerationExecutor({
                 return;
             }
 
-            const markSourceStatus = sourceNode?.type !== CanvasNodeType.Image && !editingTextNode;
+            // 已有内容节点只是本次生成的来源；任务状态归新目标所有，不能覆盖已成功结果。
+            const markSourceStatus = !sourceNode?.metadata?.content && !editingTextNode;
             const statusPrompt = sourceNode?.type === CanvasNodeType.Config ? effectivePrompt : prompt;
             if (!effectivePrompt && (mode === "text" || mode === "audio")) {
                 finishGenerationRequest(nodeId, controller);
