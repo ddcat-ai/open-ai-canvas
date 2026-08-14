@@ -1,7 +1,8 @@
 .next/
 out/
 node_modules/
-docs/
+docs/*
+!docs/prototypes/
 .env*
 !.env.example
 data/
