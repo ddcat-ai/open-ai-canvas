@@ -141,23 +141,26 @@ test("Canvas task surfaces route Dreamina uncertainty through shared display sem
     expect(scriptSource).toContain("generationTaskShowsProgress(displayTask)");
     expect(scriptSource).not.toContain("node.metadata.taskStage || \"正在创建任务\"");
     expect(nodeSource).toContain("isGenerationTaskSubmissionUncertain(errorDisplayTask)");
-    expect(taskCenterSource).toContain("!isGenerationTaskSubmissionUncertain(task)");
-    expect(taskCenterSource).toContain("if (isGenerationTaskSubmissionUncertain(task)) return generationTaskStageLabel(task);");
+    expect(taskCenterSource).toContain('if (action === "retry" && currentTask && isGenerationTaskSubmissionUncertain(currentTask))');
+    expect(taskCenterSource).toContain("不能自动重试；请先核对官方状态，避免重复生成");
+    expect(taskCenterSource).toContain('onRetry={() => void runAction(task.id, "retry")}');
+    expect(taskCenterSource).toContain("<TaskListRow");
+    expect(taskCenterSource).toContain("<TaskGridCard");
     expect(createSource).not.toContain('item.generationStage === "submission_unknown"');
-    expect(createSource).toContain("const showCancellationAction = !hasLocalDreaminaTask || Boolean(cancellationCopy);");
+    expect(createSource).not.toContain('generationStage === "submission_unknown" ? "cancelled"');
 });
 
 test("task center deletion accepts only local Dreamina records", async () => {
     await expect(deleteGenerationTask("backend-task-0001")).rejects.toThrow("当前任务不支持删除");
     const source = await Bun.file(new URL("../src/pages/tasks/index.tsx", import.meta.url)).text();
-    expect(source).toContain('aria-label="删除本机记录"');
+    expect(source).toContain('detailTask.provider === "dreamina-cli" ? <Button danger aria-label="删除本机记录"');
     expect(source).toContain("任务已由官方接受；删除后仍会在后台同步官方状态。");
     expect(source).toContain("await deleteGenerationTask(task.id)");
 });
 
 test("submitted Dreamina records expose a manual one-shot status refresh action", async () => {
     const source = await Bun.file(new URL("../src/pages/tasks/index.tsx", import.meta.url)).text();
-    expect(source).toContain('aria-label="更新状态"');
+    expect(source).toContain('detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? <Button aria-label="更新官方状态"');
     expect(source).toContain("await refreshGenerationTaskStatus(task.id)");
     expect(source).not.toContain("setInterval(() => refreshGenerationTaskStatus");
 });

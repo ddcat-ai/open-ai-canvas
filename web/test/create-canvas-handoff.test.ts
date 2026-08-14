@@ -212,9 +212,10 @@ test("Create forwards owned result assets through one new canvas and the project
     const canvasProject = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
 
     expect(create).toContain('import { creationCanvasHandoffPath, creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff"');
-    expect(create).toContain("const resultAssetIds = resultUrls?.length ? creationResultAssetIds(assets");
-    expect(create).toContain("const canvasHandoffPath = creationCanvasHandoffPath(resultAssetIds, resultUrls?.length)");
-    expect(create).toContain("<Link to={canvasPath}>");
+    expect(create).toContain("const resultAssetIds = result && resultUrls.length ? creationResultAssetIds(assets, { messageId: result.id, taskIds: result.taskIds || [], resultUrls }) : [];");
+    expect(create).toContain('const canvasHandoffPath = result ? creationCanvasHandoffPath(resultAssetIds, resultUrls.length) : "";');
+    expect(create).toContain('const canvasPath = canvasHandoffPath || "/canvas";');
+    expect(create).toContain('<Link to={canvasPath}>{canvasHandoffPath ? "添加到画布" : "打开画布"}</Link>');
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');
     expect(canvasIndex).toContain('mode !== "new" && mode !== "recent" && mode !== "handoff"');
     expect(canvasProject).toContain('import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff"');

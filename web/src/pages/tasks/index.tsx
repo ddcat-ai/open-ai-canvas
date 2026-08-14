@@ -554,9 +554,9 @@ export default function TasksPage() {
                         </div>
                         {detailTask.provider === "dreamina-cli" ? <p className="text-xs leading-5 text-foreground/60">官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。</p> : null}
                         <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>更新官方状态</Button> : null}
+                            {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>更新官方状态</Button> : null}
                             {detailTask.provider === "dreamina-cli" && (detailTask.status === "queued" || detailTask.status === "running") ? <Button danger loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id, "cancel")}>{localDreaminaCancellationCopy(detailTask)?.action || "取消任务"}</Button> : null}
-                            {detailTask.provider === "dreamina-cli" ? <Button danger icon={<Trash2 className="size-4" />} loading={actingId === detailTask.id} onClick={() => deleteLocalTask(detailTask)}>删除本机记录</Button> : null}
+                            {detailTask.provider === "dreamina-cli" ? <Button danger aria-label="删除本机记录" icon={<Trash2 className="size-4" />} loading={actingId === detailTask.id} onClick={() => deleteLocalTask(detailTask)}>删除本机记录</Button> : null}
                             {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
                         </div>
                         {detailTask.error ? <pre className="max-h-28 overflow-auto whitespace-pre-wrap border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{generationErrorMessage(detailTask.error)}</pre> : null}

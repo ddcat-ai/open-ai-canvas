@@ -94,6 +94,7 @@ test("Dreamina accepted local background action never writes an official cancell
     const runtime = new DreaminaCliRuntime({
         ownerId,
         stateFile: box.stateFile,
+        now: () => new Date("2026-08-13T23:00:00.000Z"),
         ensureReady: async () => undefined,
         discover: async () => installation,
         runProcess: async () => {
