@@ -572,7 +572,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		}
 		return config, nil
 	}
-	channel, err := s.repo.SystemChannel(channelID)
+	channel, err := s.SystemChannel(channelID)
 	if err != nil {
 		return providerConfig{}, errors.New("系统渠道不存在或已停用")
 	}
