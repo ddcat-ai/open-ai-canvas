@@ -108,7 +108,7 @@ export function CanvasTopBar({
     return (
         <>
             <div className="canvas-topbar pointer-events-none absolute left-0 right-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between px-4 sm:px-5">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+                <div className="canvas-topbar-cluster canvas-topbar-project-cluster pointer-events-auto flex min-w-0 items-center gap-2">
                     <Dropdown
                         trigger={["click"]}
                         menu={{
@@ -142,7 +142,7 @@ export function CanvasTopBar({
                         </button>
                     </Dropdown>
 
-                    <div ref={titleRef} className="flex min-w-0 flex-col items-start">
+                    <div ref={titleRef} className="canvas-topbar-title-block flex min-w-0 flex-auto flex-col items-start overflow-hidden">
                         {isTitleEditing ? (
                             <input
                                 autoFocus
@@ -159,8 +159,8 @@ export function CanvasTopBar({
                                 aria-label="画布名称"
                             />
                         ) : (
-                            <div className="flex min-w-0 items-center gap-0.5">
-                                <button type="button" className="max-w-[280px] truncate text-left text-base font-semibold tracking-normal transition-opacity hover:opacity-75" onClick={onStartTitleEditing} title="点击修改画布名称">
+                            <div className="canvas-topbar-title-row flex min-w-0 items-center gap-0.5">
+                                <button type="button" className="min-w-0 flex-1 truncate text-left text-base font-semibold tracking-normal transition-opacity hover:opacity-75" onClick={onStartTitleEditing} title="点击修改画布名称">
                                     {title}
                                 </button>
                                 <Tooltip title="重命名画布">
@@ -171,7 +171,7 @@ export function CanvasTopBar({
                             </div>
                         )}
                         {projectContext && !isTitleEditing ? (
-                            <div className="mt-0.5 flex max-w-[360px] items-center gap-1.5 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                            <div className="canvas-topbar-project-context mt-0.5 flex w-full min-w-0 items-center gap-1.5 overflow-hidden text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                                 <Link to={`/projects/${projectContext.projectId}/overview`} className="inline-flex min-w-0 items-center gap-1 hover:underline" title={`返回项目：${projectContext.projectName}`}>
                                     <FolderKanban className="size-3 shrink-0" />
                                     <span className="max-w-[120px] truncate">{projectContext.projectName}</span>
@@ -189,7 +189,7 @@ export function CanvasTopBar({
 
                 <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={onWorkspaceModeChange} open={workspaceModeOpen} onOpenChange={handleWorkspaceModeOpenChange} />
 
-                <div className="pointer-events-auto flex items-center gap-1.5">
+                <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5">
                     <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
                     <Dropdown
                         trigger={["click"]}
@@ -247,7 +247,7 @@ export function CanvasTopBar({
                     <Button
                         type="text"
                         className="!h-10 !rounded-xl !px-3 !font-medium"
-                        style={{ background: agentOpen ? theme.toolbar.activeBg : theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
+                        style={{ background: agentOpen ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
                         icon={<Bot className="size-4" />}
                         onClick={onToggleAgent}
                     >

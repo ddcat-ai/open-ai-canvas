@@ -118,7 +118,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
         {
             id: "asset-tray-toggle",
             label: open ? "收起素材空间" : `打开素材空间，共 ${(showLibrary ? assetImages.length : 0) + canvasImages.length} 项`,
-            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[var(--fs-nano)] font-bold leading-3" style={{ background: theme.accent.primary, color: "#ffffff" }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
+            icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[var(--fs-nano)] font-bold leading-3" style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
             active: open,
             onClick: () => setOpen((value) => !value),
         },

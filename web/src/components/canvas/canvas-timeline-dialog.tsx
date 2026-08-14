@@ -591,7 +591,7 @@ export function CanvasTimelineDialog({
                                 width,
                                 background: isSelected ? theme.accent.primary : clipFill,
                                 borderColor: isSelected ? theme.timeline.clipSelectedBorder : theme.timeline.trackBorder,
-                                color: isSelected ? "#fff" : theme.node.text,
+                                color: isSelected ? theme.accent.onPrimary : theme.node.text,
                             }}
                             onPointerDown={(event) => handleClipPointerDown(event, clip.id, "move")}
                             onPointerMove={handleClipPointerMove}

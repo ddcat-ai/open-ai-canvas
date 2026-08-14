@@ -94,7 +94,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                         </div>
                     )}
                 >
-                    <button type="button" className={cn("flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-surface-hover", accountClassName)} title={creditsEnabled ? `${user.displayName || user.username} · ${balance} 积分` : user.displayName || user.username}>
+                    <button type="button" className={cn("app-workspace-account-button flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-surface-hover", accountClassName)} title={creditsEnabled ? `${user.displayName || user.username} · ${balance} 积分` : user.displayName || user.username}>
                         <UserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
                             <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
