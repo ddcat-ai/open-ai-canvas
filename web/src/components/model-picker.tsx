@@ -157,7 +157,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                         disabled={Boolean(disabledReason)}
                                         title={disabledReason || modelOptionLabel(config, displayModel)}
                                         className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
-                                        style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
+                                        style={{ background: "transparent", color: theme.node.text }}
                                         onClick={() => {
                                             if (!model) return;
                                             onChange(model);

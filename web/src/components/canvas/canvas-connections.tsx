@@ -66,9 +66,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showVisual ? <path
                 d={pathD}
                 stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 1.6 : 1}
+                strokeWidth={emphasized ? 1.4 : 1}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.52 : 0.24}
+                strokeOpacity={emphasized ? 0.42 : 0.16}
                 fill="none"
                 strokeLinecap="round"
                 style={{ pointerEvents: "none" }}
@@ -79,11 +79,11 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 stroke={`url(#${gradientId})`}
                 strokeWidth="1.8"
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="1"
+                strokeOpacity="0.72"
                 strokeDasharray="18 26"
                 fill="none"
                 strokeLinecap="round"
-                style={{ filter: `drop-shadow(0 0 3px ${theme.accent.primary}35)`, pointerEvents: "none" }}
+                style={{ pointerEvents: "none" }}
             /> : null}
         </g>
     );
