@@ -87,11 +87,15 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
         }
     }
 
-    function startLeaseHeartbeat(effectKey: string, taskId: string, binding?: string) {
+    function startLeaseHeartbeat(effectKey: string, taskId: string, binding?: string, parentSignal?: AbortSignal) {
         let stopped = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let wake: (() => void) | undefined;
         let failure: unknown;
+        const controller = new AbortController();
+        const abortFromParent = () => controller.abort();
+        if (parentSignal?.aborted) abortFromParent();
+        else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
         const done = (async () => {
             while (!stopped) {
                 await new Promise<void>((resolve) => {
@@ -105,16 +109,19 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
             }
         })().catch((error) => {
             failure = error;
+            controller.abort();
         });
-        return async () => {
+        const stop = async () => {
             if (!stopped) {
                 stopped = true;
                 if (timer) clearTimeout(timer);
                 wake?.();
             }
+            parentSignal?.removeEventListener("abort", abortFromParent);
             await done;
             if (failure) throw failure;
         };
+        return { signal: controller.signal, stop };
     }
 
     async function releaseClaim(effectKey: string, taskId: string, binding: string | undefined, stopHeartbeat: () => Promise<void>, original: unknown): Promise<never> {
@@ -131,19 +138,26 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
         }
         throw failure;
     }
-    async function consumeEffect(effectKey: string, task: GenerationTask, consumer: GenerationTaskEffectConsumer, output?: GenerationTaskOutput, signal?: AbortSignal): Promise<"applied" | "completed" | "busy"> {
+    async function consumeEffect(
+        effectKey: string,
+        task: GenerationTask,
+        consumer: GenerationTaskEffectConsumer,
+        output?: GenerationTaskOutput,
+        signal?: AbortSignal,
+        options: { consumerResolveCommits?: boolean } = {},
+    ): Promise<"applied" | "completed" | "busy"> {
         const claim = await claimWhenAvailable(effectKey, task.id, signal);
         if (claim.status === "completed") return "completed";
-        const stopHeartbeat = startLeaseHeartbeat(effectKey, task.id, claim.binding);
+        const heartbeat = startLeaseHeartbeat(effectKey, task.id, claim.binding, signal);
         try {
-            throwIfAborted(signal);
-            await consumer({ task, output, effectKey, signal });
-            throwIfAborted(signal);
-            await stopHeartbeat();
+            throwIfAborted(heartbeat.signal);
+            await consumer({ task, output, effectKey, signal: heartbeat.signal });
+            if (!options.consumerResolveCommits) throwIfAborted(heartbeat.signal);
+            await heartbeat.stop();
             await dependencies.effects.complete(effectKey, task.id, {}, claim.binding);
             return "applied";
         } catch (error) {
-            return releaseClaim(effectKey, task.id, claim.binding, stopHeartbeat, error);
+            return releaseClaim(effectKey, task.id, claim.binding, heartbeat.stop, error);
         }
     }
 
@@ -169,21 +183,21 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
                     if (claim.status === "completed") {
                         output.materializedAssetId = claim.result.materializedAssetId;
                     } else if (claim.status === "claimed") {
-                        const stopHeartbeat = startLeaseHeartbeat(effectKey, task.id, claim.binding);
+                        const heartbeat = startLeaseHeartbeat(effectKey, task.id, claim.binding, signal);
                         try {
-                            throwIfAborted(signal);
+                            throwIfAborted(heartbeat.signal);
                             const result = await dependencies.materializeOutput({
                                 task,
                                 output,
                                 effectKey,
-                                signal,
+                                signal: heartbeat.signal,
                             });
-                            throwIfAborted(signal);
-                            await stopHeartbeat();
+                            throwIfAborted(heartbeat.signal);
+                            await heartbeat.stop();
                             await dependencies.effects.complete(effectKey, task.id, result, claim.binding);
                             output.materializedAssetId = result.materializedAssetId;
                         } catch (error) {
-                            return releaseClaim(effectKey, task.id, claim.binding, stopHeartbeat, error);
+                            return releaseClaim(effectKey, task.id, claim.binding, heartbeat.stop, error);
                         }
                     }
                 }
@@ -208,7 +222,7 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
         },
 
         resumeAgent(task: GenerationTask, continuationId: string, consumer: GenerationTaskEffectConsumer, signal?: AbortSignal) {
-            return consumeEffect(agentResumeEffectKey(task.id, continuationId), task, consumer, undefined, signal);
+            return consumeEffect(agentResumeEffectKey(task.id, continuationId), task, consumer, undefined, signal, { consumerResolveCommits: true });
         },
     };
 }

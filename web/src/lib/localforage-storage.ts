@@ -13,30 +13,15 @@ export function localForageStorageForScope(scope?: string): StateStorage {
     return {
         getItem: async (name) => {
             if (typeof window === "undefined") return null;
-            const key = keyFor(name);
-            try {
-                return (await localforage.getItem<string>(key)) || null;
-            } catch {
-                return window.localStorage.getItem(key);
-            }
+            return (await localforage.getItem<string>(keyFor(name))) || null;
         },
         setItem: async (name, value) => {
             if (typeof window === "undefined") return;
-            const key = keyFor(name);
-            try {
-                await localforage.setItem(key, value);
-            } catch {
-                window.localStorage.setItem(key, value);
-            }
+            await localforage.setItem(keyFor(name), value);
         },
         removeItem: async (name) => {
             if (typeof window === "undefined") return;
-            const key = keyFor(name);
-            try {
-                await localforage.removeItem(key);
-            } catch {
-                window.localStorage.removeItem(key);
-            }
+            await localforage.removeItem(keyFor(name));
         },
     };
 }

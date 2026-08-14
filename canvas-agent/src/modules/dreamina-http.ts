@@ -12,6 +12,7 @@ import {
 } from "../dreamina-generation.js";
 import { projectDreaminaModelCatalog } from "../dreamina-model-catalog.js";
 import { DreaminaProviderArtifactStore } from "../dreamina-provider-artifacts.js";
+import { projectDreaminaPublicRunError, projectDreaminaPublicRuntimeResult } from "../dreamina-public-result.js";
 import { DreaminaCliError, isStableDreaminaErrorCode } from "../dreamina-cli-process.js";
 import { DreaminaTaskProjector, readSafeJournal } from "../dreamina-task-projection.js";
 import { DreaminaTaskStore, type DreaminaStoredTask } from "../dreamina-task-store.js";
@@ -506,9 +507,9 @@ async function runDreamina(
     try {
         const result = await action(parseRunBody(req.body), controller.signal);
         if (cannotRespond(controller, res)) return;
-        res.json({ ok: true, result });
+        res.json({ ok: true, result: projectDreaminaPublicRuntimeResult(result) });
     } catch (error) {
-        if (!cannotRespond(controller, res)) sendDreaminaError(res, error);
+        if (!cannotRespond(controller, res)) sendDreaminaPublicRunError(res, error);
     } finally {
         removeRequestController(req, res, controller);
     }
@@ -650,7 +651,7 @@ function parseRunBody(value: unknown) {
     let parsed: unknown;
     try { parsed = JSON.parse(value.toString("utf8")); } catch { throw requestInvalid(); }
     const result = dreaminaCliInputSchema.safeParse(parsed);
-    if (!result.success) throw requestInvalid();
+    if (!result.success || result.data.operation === "query_result") throw requestInvalid();
     return result.data;
 }
 
@@ -673,6 +674,15 @@ function parseGenerationRecovery(value: unknown): { idempotencyKey: string; mode
 function record(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw requestInvalid();
     return value as Record<string, unknown>;
+}
+
+function sendDreaminaPublicRunError(res: Response, error: unknown) {
+    const projected = projectDreaminaPublicRunError(error);
+    res.status(projected.statusCode).json({
+        ok: false,
+        code: projected.code,
+        message: projected.message,
+    });
 }
 
 function sendDreaminaError(res: Response, error: unknown) {

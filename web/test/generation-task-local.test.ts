@@ -4,7 +4,7 @@ import { defaultConfig } from "../src/stores/use-config-store";
 import { runBackendGenerationTask, runBackendGenerationTaskBatch } from "../src/services/api/generation-task";
 import { deleteGenerationTask, formatTaskLog, listGenerationTasks, projectBackendSafeTaskLog, splitGenerationTaskObservationIds, type GenerationTask } from "../src/services/api/task-center";
 import { isLocalDreaminaBackgroundTask, localDreaminaCancellationCopy, localDreaminaDetachOutcome, projectLocalDreaminaTask } from "../src/services/local-dreamina-task-projection";
-import { LocalDreaminaGenerationClientError, type LocalDreaminaGenerationInput } from "../src/services/local-dreamina-generation";
+import { LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput } from "../src/services/local-dreamina-generation";
 import { createGenerationBatchRetryContexts, createGenerationRetryContext, generationTaskMetadata, runBackendCanvasGenerationTask, runCanvasGenerationTaskToConsumer } from "../src/lib/canvas/canvas-project-generation";
 import { runCanvasAgentGenerationOps } from "../src/pages/canvas/use-canvas-agent-operations";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
@@ -379,6 +379,104 @@ test("an explicitly cancelled Dreamina task stays cancelled instead of being pro
 
     expect(updates.at(-1)).toMatchObject({ status: "cancelled", stage: "local_cli_cancelled" });
     expect(updates.some((task) => task.status === "failed")).toBe(false);
+});
+
+test("an accepted Dreamina wait abort preserves the last public task instead of projecting cancellation", async () => {
+    const controller = new AbortController();
+    const updates: GenerationTask[] = [];
+    const requests: string[] = [];
+    let waitStartedResolve!: () => void;
+    const waitStarted = new Promise<void>((resolve) => {
+        waitStartedResolve = resolve;
+    });
+    const runtimeTaskId = "dreamina-accepted-wait-abort-0001";
+    const client = {
+        async connect() {
+            return {
+                state: "connected" as const,
+                runtimeVersion: 2,
+                session: {
+                    sessionId: "session-accepted-wait-abort-0001",
+                    keyId: "browser-key-accepted-wait-abort",
+                    scopes: ["dreamina:generate"],
+                    expiresAt: "2099-01-01T00:00:00.000Z",
+                },
+            };
+        },
+        async request(path: string, init?: RequestInit) {
+            requests.push(path);
+            if (path === "/dreamina/generate") {
+                return new Response(
+                    JSON.stringify({
+                        ok: true,
+                        result: {
+                            id: runtimeTaskId,
+                            provider: "dreamina-cli",
+                            mode: "video",
+                            operation: "text2video",
+                            model: "seedance2.0",
+                            status: "running",
+                            stage: "submitted",
+                            receiptRecorded: true,
+                            lifecycle: "ACCEPTED",
+                            syncState: "SYNC_OK",
+                            resultState: "NOT_AVAILABLE",
+                            outputs: [],
+                            context: { scope: "scoped" },
+                            createdAt: "2026-08-14T00:00:00.000Z",
+                            updatedAt: "2026-08-14T00:00:01.000Z",
+                        },
+                    }),
+                    { status: 200, headers: { "content-type": "application/json" } },
+                );
+            }
+            if (path === "/dreamina/generate/wait") {
+                waitStartedResolve();
+                return await new Promise<Response>((_resolve, reject) => {
+                    const signal = init?.signal;
+                    if (!signal) return reject(new Error("wait request must carry the generation AbortSignal"));
+                    const onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+                    signal.addEventListener("abort", onAbort, { once: true });
+                    if (signal.aborted) onAbort();
+                });
+            }
+            throw new Error(`unexpected Dreamina route: ${path}`);
+        },
+    };
+
+    const pending = runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "accepted wait abort fixture",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0", videoSeconds: "4", vquality: "720" },
+            signal: controller.signal,
+            onTaskUpdate: (task) => updates.push(task),
+        },
+        {
+            createTask: async () => {
+                throw new Error("must not post Backend /tasks");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait a Backend task");
+            },
+            runLocal: (input, signal, onTaskUpdate) => runLocalDreaminaGenerationTask(input, { client: client as never, onTaskUpdate }, signal),
+            createId: () => runtimeTaskId,
+            now: () => "2026-08-14T00:00:02.000Z",
+        },
+    );
+
+    await waitStarted;
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(requests).toEqual(["/dreamina/generate", "/dreamina/generate/wait"]);
+    expect(updates.at(-1)).toMatchObject({
+        id: `dreamina:${runtimeTaskId}`,
+        status: "running",
+        stage: "submitted",
+        receiptRecorded: true,
+    });
+    expect(updates.some((task) => task.status === "cancelled")).toBe(false);
 });
 
 test("an accepted Dreamina detach stays running across Tasks, Create, Canvas, and batches", () => {
@@ -1862,6 +1960,204 @@ test("canvas refresh recovery consumes shared task subscriptions instead of quer
     expect(observed).toEqual([task]);
 });
 
+test("canvas project switch aborts and drains stale recovery before applying the next project's same node id", async () => {
+    const module = await import("../src/pages/canvas/use-canvas-generation");
+    type RecoveryContext = {
+        projectId: string;
+        signal: AbortSignal;
+        isCurrentProject: () => boolean;
+    };
+    type RecoveryCoordinator = {
+        switchProject: (projectId: string, operation: (context: RecoveryContext) => Promise<void>) => Promise<void>;
+        abortAndDrain: () => Promise<void>;
+    };
+    const createCoordinator = (
+        module as {
+            createCanvasGenerationRecoveryCoordinator?: () => RecoveryCoordinator;
+        }
+    ).createCanvasGenerationRecoveryCoordinator;
+    const recoverNode = module.recoverCanvasGenerationTaskNode;
+    expect(typeof createCoordinator).toBe("function");
+    expect(typeof recoverNode).toBe("function");
+    if (!createCoordinator) return;
+
+    const coordinator = createCoordinator();
+    const sharedNodeId = "shared-recovery-node";
+    const node = (projectId: string): CanvasNodeData => ({
+        id: sharedNodeId,
+        type: CanvasNodeType.Image,
+        title: `${projectId} durable`,
+        position: { x: 0, y: 0 },
+        width: 320,
+        height: 180,
+        metadata: { taskId: `task-${projectId}`, status: "loading" },
+    });
+    const completed = (projectId: string): GenerationTask => ({
+        id: `task-${projectId}`,
+        projectId,
+        type: "canvas_image",
+        status: "succeeded",
+        prompt: "fixture",
+        attempts: 1,
+        createdAt: "2026-08-15T00:00:00.000Z",
+        updatedAt: "2026-08-15T00:01:00.000Z",
+    });
+
+    let visibleProjectId = "canvas-A";
+    let visibleNodes = [node(visibleProjectId)];
+    let staleApplyCalls = 0;
+    let nextApplyCalls = 0;
+    let subscriptionAborts = 0;
+    let subscriptionUnsubscribes = 0;
+    let nextRecoveryStarted = false;
+    let nextRecoveryBookkeeping: string[] = [];
+    const recoveringTaskIds = new Set(["task-canvas-A"]);
+    let releaseDelayedTerminal!: () => void;
+    const delayedTerminal = new Promise<void>((resolve) => {
+        releaseDelayedTerminal = resolve;
+    });
+    let markOldRecoveryStarted!: () => void;
+    const oldRecoveryStarted = new Promise<void>((resolve) => {
+        markOldRecoveryStarted = resolve;
+    });
+
+    const setVisibleNodes = (value: CanvasNodeData[] | ((current: CanvasNodeData[]) => CanvasNodeData[])) => {
+        visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
+    };
+
+    const oldRecovery = coordinator.switchProject("canvas-A", async (context) => {
+        const unsubscribe = () => {
+            subscriptionUnsubscribes += 1;
+        };
+        const onAbort = () => {
+            subscriptionAborts += 1;
+            unsubscribe();
+        };
+        context.signal.addEventListener("abort", onAbort, { once: true });
+        markOldRecoveryStarted();
+        await delayedTerminal;
+        context.signal.removeEventListener("abort", onAbort);
+        await recoverNode({
+            projectId: context.projectId,
+            node: node("canvas-A"),
+            completed: completed("canvas-A"),
+            continuationOnly: false,
+            nodesRef: {
+                get current() {
+                    return visibleNodes;
+                },
+                set current(value) {
+                    visibleNodes = value;
+                },
+            },
+            setNodes: setVisibleNodes,
+            applyGenerationTaskResult: async () => {
+                staleApplyCalls += 1;
+                visibleNodes = [{ ...node("canvas-A"), title: "canvas-A late terminal" }];
+            },
+            signal: context.signal,
+            isCurrentProject: context.isCurrentProject,
+        });
+    });
+
+    await oldRecoveryStarted;
+    visibleProjectId = "canvas-B";
+    visibleNodes = [node(visibleProjectId)];
+    const nextRecovery = coordinator.switchProject("canvas-B", async (context) => {
+        nextRecoveryStarted = true;
+        recoveringTaskIds.clear();
+        nextRecoveryBookkeeping = [...recoveringTaskIds];
+        await recoverNode({
+            projectId: context.projectId,
+            node: node("canvas-B"),
+            completed: completed("canvas-B"),
+            continuationOnly: false,
+            nodesRef: {
+                get current() {
+                    return visibleNodes;
+                },
+                set current(value) {
+                    visibleNodes = value;
+                },
+            },
+            setNodes: setVisibleNodes,
+            applyGenerationTaskResult: async () => {
+                nextApplyCalls += 1;
+                visibleNodes = [{ ...node("canvas-B"), title: "canvas-B recovered" }];
+            },
+            signal: context.signal,
+            isCurrentProject: context.isCurrentProject,
+        });
+    });
+
+    try {
+        await Promise.resolve();
+        expect(subscriptionAborts).toBe(1);
+        expect(subscriptionUnsubscribes).toBe(1);
+        expect(nextRecoveryStarted).toBe(false);
+        expect(visibleNodes[0]?.title).toBe("canvas-B durable");
+
+        releaseDelayedTerminal();
+        await Promise.all([oldRecovery, nextRecovery]);
+
+        expect(staleApplyCalls).toBe(0);
+        expect(nextApplyCalls).toBe(1);
+        expect(nextRecoveryStarted).toBe(true);
+        expect(nextRecoveryBookkeeping).toEqual([]);
+        expect(visibleProjectId).toBe("canvas-B");
+        expect(visibleNodes[0]?.id).toBe(sharedNodeId);
+        expect(visibleNodes[0]?.title).toBe("canvas-B recovered");
+    } finally {
+        releaseDelayedTerminal();
+        await coordinator.abortAndDrain();
+    }
+});
+
+test("cinematic continuation failure boundary keeps retryable errors pending and marks provider failures", async () => {
+    const panelModule = await import("../src/components/canvas/canvas-assistant-panel");
+    const consumerModule = await import("../src/services/canvas-generation-consumer");
+    const handleFailure = (
+        panelModule as {
+            handleCinematicContinuationFailure?: (error: unknown, failProvider: (error: unknown) => void) => "abort" | "durable-ack" | "provider-failed";
+        }
+    ).handleCinematicContinuationFailure;
+    expect(typeof handleFailure).toBe("function");
+    if (!handleFailure) return;
+
+    const cases = [
+        { name: "online-tool abort", error: new DOMException("The operation was aborted", "AbortError"), expected: "pending", disposition: "abort" },
+        { name: "durable ack", error: new consumerModule.CanvasGenerationDurableAckError(new Error("local durable write failed")), expected: "pending", disposition: "durable-ack" },
+        { name: "provider failure", error: new Error("provider failed"), expected: "failed", disposition: "provider-failed" },
+    ] as const;
+    for (const scenario of cases) {
+        let status: "pending" | "failed" = "pending";
+        const disposition = handleFailure(scenario.error, () => {
+            status = "failed";
+        });
+        expect(disposition, scenario.name).toBe(scenario.disposition);
+        expect(status, scenario.name).toBe(scenario.expected);
+    }
+});
+
+test("all cinematic production entry adapters are the shared continuation boundary", async () => {
+    const panelModule = await import("../src/components/canvas/canvas-assistant-panel");
+    const sharedBoundary = (
+        panelModule as {
+            runCanvasCinematicContinuationBoundary?: (...args: never[]) => Promise<unknown>;
+        }
+    ).runCanvasCinematicContinuationBoundary;
+    const entryAdapters = (
+        panelModule as {
+            canvasCinematicContinuationEntryAdapters?: Record<"online-tool" | "submit-cinematic" | "resume-cinematic", (...args: never[]) => Promise<unknown>>;
+        }
+    ).canvasCinematicContinuationEntryAdapters;
+
+    expect(typeof sharedBoundary).toBe("function");
+    expect(entryAdapters).toBeDefined();
+    if (!sharedBoundary || !entryAdapters) return;
+    for (const entry of ["online-tool", "submit-cinematic", "resume-cinematic"] as const) expect(entryAdapters[entry], entry).toBe(sharedBoundary);
+});
+
 test("agent run_generation waits for the shared task, persists one continuation, and shares retry identity with node retry", async () => {
     const priorTaskId = "dreamina:agent-prior-task-0001";
     const attemptGroupId = "dreamina:agent-attempt-group-0001";
@@ -1904,6 +2200,14 @@ test("agent run_generation waits for the shared task, persists one continuation,
     const order: string[] = [];
     let generateOptions: Record<string, unknown> | undefined;
     const continuations: Array<{ nodeId: string; continuation: Record<string, unknown> }> = [];
+    let continuationCompletionStartedResolve!: () => void;
+    const continuationCompletionStarted = new Promise<void>((resolve) => {
+        continuationCompletionStartedResolve = resolve;
+    });
+    let releaseContinuationCompletion!: () => void;
+    const continuationCompletionGate = new Promise<void>((resolve) => {
+        releaseContinuationCompletion = resolve;
+    });
     let taskListener: ((task: GenerationTask) => void) | undefined;
     const pending = runCanvasAgentGenerationOps({
         generationOps: [{ type: "run_generation", nodeId: node.id, mode: "video", retry: true }],
@@ -1922,7 +2226,13 @@ test("agent run_generation waits for the shared task, persists one continuation,
             options.onTaskUpdate?.({ ...terminal, status: "running" });
             taskListener?.(terminal);
         },
-        onContinuation: (nodeId, continuation) => continuations.push({ nodeId, continuation: continuation as unknown as Record<string, unknown> }),
+        onContinuation: async (nodeId, continuation) => {
+            continuations.push({ nodeId, continuation: continuation as unknown as Record<string, unknown> });
+            if (continuation.status === "completed") {
+                continuationCompletionStartedResolve();
+                await continuationCompletionGate;
+            }
+        },
         consumeTask: async (task, continuationId, consumer) => {
             expect(task.id).toBe(terminal.id);
             await consumer({ task, effectKey: `agent-resume:${task.id}:${continuationId}` });
@@ -1935,6 +2245,13 @@ test("agent run_generation waits for the shared task, persists one continuation,
     await started;
     order.push("before-release");
     releaseGeneration();
+    await continuationCompletionStarted;
+    try {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(order).toEqual(["before-release"]);
+    } finally {
+        releaseContinuationCompletion();
+    }
     await pending;
 
     expect(order).toEqual(["before-release", "dispatch-resolved"]);

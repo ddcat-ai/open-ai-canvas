@@ -5,6 +5,8 @@ import { useParams, useSearchParams } from "react-router";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
 import { readLocalRuntimeBootstrapState } from "@/services/local-runtime-bootstrap";
+import { createCanvasGenerationLiveProjectAdapter, registerCanvasGenerationLiveProject } from "@/services/canvas-generation-consumer";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
@@ -149,6 +151,7 @@ function InfiniteCanvasPage() {
     const params = useParams<{ id: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = params.id || "";
+    const canvasStorageScope = getActiveUserScope();
     const localAgentConnected = useCanvasAgentStore((state) => state.connected);
     const localAgentActivity = useCanvasAgentStore((state) => state.activity);
     const localAgentEnabled = useCanvasAgentStore((state) => state.enabled);
@@ -259,9 +262,20 @@ function InfiniteCanvasPage() {
 
     const nodesRef = useRef(nodes);
     const connectionsRef = useRef(connections);
+    const chatSessionsRef = useRef(chatSessions);
+    const activeChatIdRef = useRef(activeChatId);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
     const viewportRef = useRef(viewport);
     const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => Promise<void>) | null>(null);
+
+    useEffect(() => {
+        if (!projectId) return;
+        return registerCanvasGenerationLiveProject({
+            scope: canvasStorageScope,
+            projectId,
+            adapter: createCanvasGenerationLiveProjectAdapter({ nodesRef, connectionsRef, chatSessionsRef, activeChatIdRef, setNodes, setConnections, setChatSessions, setActiveChatId }),
+        });
+    }, [canvasStorageScope, projectId]);
 
     const { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas } = useCanvasHistory({
         projectLoaded,
@@ -367,9 +381,11 @@ function InfiniteCanvasPage() {
     useLayoutEffect(() => {
         nodesRef.current = nodes;
         connectionsRef.current = connections;
+        chatSessionsRef.current = chatSessions;
+        activeChatIdRef.current = activeChatId;
         selectedNodeIdsRef.current = selectedNodeIds;
         viewportRef.current = viewport;
-    }, [nodes, connections, selectedNodeIds, viewport]);
+    }, [activeChatId, chatSessions, nodes, connections, selectedNodeIds, viewport]);
 
     useEffect(() => {
         if (!projectLoaded) return;
@@ -1118,6 +1134,8 @@ function InfiniteCanvasPage() {
     });
 
     const handleAssistantSessionsChange = useCallback((sessions: CanvasAssistantSession[], activeId: string | null) => {
+        chatSessionsRef.current = sessions;
+        activeChatIdRef.current = activeId;
         setChatSessions(sessions);
         setActiveChatId(activeId);
     }, []);

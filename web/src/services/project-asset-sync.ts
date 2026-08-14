@@ -5,6 +5,7 @@ import { linkProjectAsset, updateProjectAssetCategory } from "@/services/api/pro
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
 import { getMediaBlob, resolveMediaUrl, setMediaBlob } from "@/services/file-storage";
 import { createGenerationTaskMaterializer, createIdempotentMaterializeOutput, type MaterializeGenerationTaskOutput } from "@/services/generation-task-materializer";
+import { withGenerationArtifactCommitLock } from "@/services/generation-asset-repository";
 import { getImageBlob, resolveImageUrl, setImageBlob } from "@/services/image-storage";
 import { generationArtifactStorageKey, loadOrStoreGenerationArtifact } from "@/services/generation-artifact-sink";
 import { createLocalDreaminaTaskEffectStore } from "@/services/local-dreamina-generation";
@@ -147,7 +148,7 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     if (result.storageKey) {
         const url = await resolveImageUrl(result.storageKey, result.dataUrl);
         if (!url) throw new Error("图片结果资源不可用");
-        const meta = result.width && result.height ? undefined : await readImageMeta(url);
+        const meta = result.width && result.height ? undefined : await readImageMeta(url, signal);
         throwIfAborted(signal);
         return {
             url,
@@ -171,7 +172,7 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     const url = await resolveImageUrl(storageKey);
     throwIfAborted(signal);
     if (!url) throw new Error("图片结果资源不可用");
-    const meta = result.width && result.height ? undefined : await readImageMeta(url);
+    const meta = result.width && result.height ? undefined : await readImageMeta(url, signal);
     throwIfAborted(signal);
     return {
         url,
@@ -209,9 +210,8 @@ async function storedGenerationMedia(dataUrl: string, effectKey: string, mediaTy
     };
 }
 
-async function generationOutputAsset(input: Parameters<MaterializeGenerationTaskOutput>[0]): Promise<NewAsset> {
+async function generationOutputAsset(input: Parameters<MaterializeGenerationTaskOutput>[0], scope: string): Promise<NewAsset> {
     throwIfAborted(input.signal);
-    const scope = getActiveUserScope();
     const result = generationTaskResult(input.task);
     const metadata = {
         source: "generation-task",
@@ -344,12 +344,19 @@ function generationTaskEffectStore() {
 
 const materializeGenerationOutput: MaterializeGenerationTaskOutput = createIdempotentMaterializeOutput({
     async insertOrReturnAsset(input) {
-        throwIfAborted(input.signal);
-        const asset = await generationOutputAsset(input);
-        throwIfAborted(input.signal);
-        const assetId = await useAssetStore.getState().addGenerationAsset(input.effectKey, asset);
-        throwIfAborted(input.signal);
-        return assetId;
+        const scope = getActiveUserScope();
+        return withGenerationArtifactCommitLock(
+            scope,
+            async () => {
+                throwIfAborted(input.signal);
+                const asset = await generationOutputAsset(input, scope);
+                throwIfAborted(input.signal);
+                const assetId = await useAssetStore.getState().addGenerationAsset(input.effectKey, asset, input.signal);
+                throwIfAborted(input.signal);
+                return assetId;
+            },
+            { requireCrossRealmLock: true },
+        );
     },
 });
 
@@ -395,7 +402,7 @@ export async function consumeGenerationTaskNode(
     task: GenerationTask,
     nodeId: string,
     outputIndex: number,
-    consumer: (input: { task: GenerationTask; output: GenerationTaskOutput; effectKey: string }) => Promise<void> | void,
+    consumer: (input: { task: GenerationTask; output: GenerationTaskOutput; effectKey: string; signal?: AbortSignal }) => Promise<void> | void,
     dependencies: {
         signal?: AbortSignal;
         managed?: true;
@@ -413,8 +420,8 @@ export async function consumeGenerationTaskNode(
         materialized,
         nodeId,
         outputIndex,
-        async ({ effectKey }) => {
-            await consumer({ task: materialized, output, effectKey });
+        async ({ effectKey, signal }) => {
+            await consumer({ task: materialized, output, effectKey, signal });
         },
         dependencies.signal,
     );
@@ -424,7 +431,7 @@ export async function consumeGenerationTaskNode(
 export async function consumeGenerationTaskAgent(
     task: GenerationTask,
     continuationId: string,
-    consumer: (input: { task: GenerationTask; effectKey: string }) => Promise<void> | void,
+    consumer: (input: { task: GenerationTask; effectKey: string; signal?: AbortSignal }) => Promise<void> | void,
     dependencies: {
         signal?: AbortSignal;
         managed?: true;
@@ -439,8 +446,8 @@ export async function consumeGenerationTaskAgent(
     await (dependencies.resumeAgent ?? resumeGenerationTaskAgent)(
         materialized,
         continuationId,
-        async ({ effectKey }) => {
-            await consumer({ task: materialized, effectKey });
+        async ({ effectKey, signal }) => {
+            await consumer({ task: materialized, effectKey, signal });
         },
         dependencies.signal,
     );
@@ -450,7 +457,7 @@ export async function consumeGenerationTaskAgent(
 export async function consumeGenerationTaskMessage(
     task: GenerationTask,
     messageId: string,
-    consumer: (input: { task: GenerationTask; resultUrls: string[]; effectKey: string }) => Promise<void> | void,
+    consumer: (input: { task: GenerationTask; resultUrls: string[]; effectKey: string; signal?: AbortSignal }) => Promise<void> | void,
     dependencies: {
         signal?: AbortSignal;
         managed?: true;
@@ -471,8 +478,8 @@ export async function consumeGenerationTaskMessage(
             materialized,
             messageId,
             output.outputIndex,
-            async ({ effectKey }) => {
-                await consumer({ task: materialized, resultUrls, effectKey });
+            async ({ effectKey, signal }) => {
+                await consumer({ task: materialized, resultUrls, effectKey, signal });
             },
             dependencies.signal,
         );

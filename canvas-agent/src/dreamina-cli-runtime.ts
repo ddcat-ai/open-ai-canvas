@@ -51,9 +51,8 @@ export { acquireStateLock } from "./dreamina-cli-state.js";
 type Installation = { installed: true; executable: string } | { installed: false };
 const DEFAULT_SUBMISSION_RESERVATION_LEASE_MS = 30_000;
 const DEFAULT_SUBMISSION_RESERVATION_HEARTBEAT_MS = 5_000;
-export type DreaminaRuntimeResult =
-    | { state: "accepted"; submitId: string }
-    | { state: "query"; result: unknown };
+export type DreaminaRuntimeResult = { state: "accepted"; submitId: string };
+type DreaminaRuntimeQueryResult = { state: "query"; result: unknown };
 export type DreaminaRuntimeRunOptions = {
     signal?: AbortSignal;
     requestFingerprint?: string;
@@ -174,6 +173,7 @@ export class DreaminaCliRuntime {
     private readonly activeTasks = new Set<string>();
     private readonly queueHeartbeats = new Map<string, () => Promise<void>>();
     private readonly deferredCleanups = new Map<string, () => Promise<void>>();
+    private nextQueueTicket = 1;
     private readonly arbiter: DreaminaCliArbiter;
     private readonly reconciler: DreaminaTaskReconciler;
     private readonly taskStore: DreaminaTaskStore;
@@ -556,6 +556,9 @@ export class DreaminaCliRuntime {
                     if (concurrent.requestHash !== requestHash) throw idempotencyConflict();
                     throw submissionUnknown();
                 }
+                const queueTicket = this.nextQueueTicket;
+                if (!Number.isSafeInteger(queueTicket) || queueTicket < 1 || queueTicket >= Number.MAX_SAFE_INTEGER) throw stateInvalid();
+                this.nextQueueTicket = queueTicket + 1;
                 this.records.set(key, {
                     ownerId: this.ownerId,
                     idempotencyKey: input.idempotencyKey,
@@ -565,6 +568,7 @@ export class DreaminaCliRuntime {
                     state: "queued",
                     queueOwnerId: this.reservationOwnerId,
                     queueExpiresAt: this.queueExpiry(),
+                    queueTicket,
                     updatedAt: createdAt,
                     taskVersion: 1,
                     operation: input.operation,
@@ -644,7 +648,7 @@ export class DreaminaCliRuntime {
             const record = this.records.get(task.key);
             if (!record || record.requestHash !== task.requestHash) throw stateInvalid();
             if (record.state !== "queued") throw submissionUnknown();
-            if (!this.hasGenerationCapacity()) return undefined;
+            if (!this.hasQueuedGenerationPriority(record)) return undefined;
             const reservation: SubmissionReservation = {
                 reservationId: crypto.randomUUID(),
                 reservationOwnerId: this.reservationOwnerId,
@@ -680,6 +684,7 @@ export class DreaminaCliRuntime {
             this.onQueueHeartbeatWait?.("started", task.key);
             try {
                 await this.renewQueueLease(task.key, task.requestHash, shutdown.signal);
+                this.promoteQueueHead(task.key);
             } catch {
                 stopped = true;
                 clearInterval(timer);
@@ -1041,17 +1046,28 @@ export class DreaminaCliRuntime {
         });
     }
 
-    private releaseSlot(key: string) {
-        if (!this.activeTasks.delete(key)) return;
+    private promoteQueueHead(expectedKey?: string) {
         while (this.queue.length) {
-            const nextKey = this.queue.shift()!;
+            const nextKey = this.queue[0]!;
+            if (expectedKey && nextKey !== expectedKey) return;
             const next = this.asyncTasks.get(nextKey);
-            if (!next || this.records.get(nextKey)?.state !== "queued") continue;
+            if (!next || this.records.get(nextKey)?.state !== "queued") {
+                this.queue.shift();
+                continue;
+            }
+            if (next.starting) return;
             void this.startTask(next).then((result) => {
-                if (result.status === "queued" && !this.queue.includes(nextKey)) this.queue.unshift(nextKey);
-            }).catch(() => undefined);
+                if (result.status !== "queued" && this.queue[0] === nextKey) this.queue.shift();
+            }).catch(() => {
+                if (this.records.get(nextKey)?.state !== "queued" && this.queue[0] === nextKey) this.queue.shift();
+            });
             return;
         }
+    }
+
+    private releaseSlot(key: string) {
+        if (!this.activeTasks.delete(key)) return;
+        this.promoteQueueHead();
     }
 
     private publicTask(record: RuntimeRecord, task?: PreparedAsyncTask): DreaminaPublicGenerationTask {
@@ -1296,7 +1312,7 @@ export class DreaminaCliRuntime {
         signal?: AbortSignal,
         downloadDirectory?: string,
         accountBinding?: string,
-    ): Promise<DreaminaRuntimeResult> {
+    ): Promise<DreaminaRuntimeQueryResult> {
         const combined = combineAbortSignals(signal, this.queryShutdown.signal);
         let invocation: Awaited<ReturnType<DreaminaCliArbiter["acquire"]>> | undefined;
         try {
@@ -1503,6 +1519,10 @@ export class DreaminaCliRuntime {
         }
         this.records.clear();
         for (const [key, record] of next) this.records.set(key, record);
+        this.nextQueueTicket = Math.max(
+            disk.nextQueueTicket ?? 1,
+            ...disk.records.map((record) => (record.queueTicket ?? 0) + 1),
+        );
         if (recovered) await this.persistUnlocked(lease);
     }
 
@@ -1510,10 +1530,21 @@ export class DreaminaCliRuntime {
         return [...this.records.values()].filter(reservesOfficialSlot).length < this.maxActiveTasks;
     }
 
+    private hasQueuedGenerationPriority(record: RuntimeRecord) {
+        const available = this.maxActiveTasks - [...this.records.values()].filter(reservesOfficialSlot).length;
+        if (available <= 0) return false;
+        return [...this.records.values()]
+            .filter((candidate) => liveQueueLease(candidate, this.now()))
+            .sort(compareDurableQueueOrder)
+            .slice(0, available)
+            .some((candidate) => candidate === record);
+    }
+
     private async persistUnlocked(lease: StateLockLease) {
         const payload: RuntimeDiskState = {
             version: 1,
             records: [...this.records.values()].sort((left, right) => left.idempotencyKey.localeCompare(right.idempotencyKey)),
+            nextQueueTicket: this.nextQueueTicket,
         };
         await persistRuntimeDiskState(this.stateFile, this.ownerId, payload, lease);
     }
@@ -1650,6 +1681,15 @@ function liveQueueLease(record: RuntimeRecord, now: Date) {
 function clearQueueLease(record: RuntimeRecord) {
     delete record.queueOwnerId;
     delete record.queueExpiresAt;
+    delete record.queueTicket;
+}
+
+function compareDurableQueueOrder(left: RuntimeRecord, right: RuntimeRecord) {
+    if (left.queueTicket !== undefined && right.queueTicket !== undefined) return left.queueTicket - right.queueTicket;
+    if (left.queueTicket === undefined && right.queueTicket !== undefined) return -1;
+    if (left.queueTicket !== undefined && right.queueTicket === undefined) return 1;
+    const created = Date.parse(left.createdAt ?? left.updatedAt) - Date.parse(right.createdAt ?? right.updatedAt);
+    return created || left.idempotencyKey.localeCompare(right.idempotencyKey);
 }
 
 function liveReservation(record: RuntimeRecord, now: Date) {
@@ -1710,7 +1750,7 @@ function isDurableJournalCommitError(error: unknown) {
     ].includes(error.code);
 }
 
-function queryState(value: DreaminaRuntimeResult): "pending" | "completed" | "incomplete" {
+function queryState(value: DreaminaRuntimeQueryResult): "pending" | "completed" | "incomplete" {
     if (value.state !== "query" || !value.result || typeof value.result !== "object" || Array.isArray(value.result)) return "pending";
     const result = value.result as Record<string, unknown>;
     const state = String(result.status ?? result.state ?? result.genStatus ?? result.code ?? "").toLowerCase();
@@ -1719,7 +1759,7 @@ function queryState(value: DreaminaRuntimeResult): "pending" | "completed" | "in
     return "pending";
 }
 
-function queryOfficialStatus(value: DreaminaRuntimeResult): NonNullable<RuntimeRecord["officialStatus"]> {
+function queryOfficialStatus(value: DreaminaRuntimeQueryResult): NonNullable<RuntimeRecord["officialStatus"]> {
     if (value.state !== "query" || !value.result || typeof value.result !== "object" || Array.isArray(value.result)) throw queryResponseInvalid();
     const result = value.result as Record<string, unknown>;
     const status = result.genStatus ?? result.status ?? result.state ?? result.code;

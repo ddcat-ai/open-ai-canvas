@@ -22,19 +22,20 @@ import (
 )
 
 type Service struct {
-	repo            *repository.Repository
-	dataDir         string
-	cancelMu        sync.Mutex
-	registrationMu  sync.Mutex
-	emailCodeMu     sync.Mutex
-	redeemBatchMu   sync.Mutex
-	storageMu       sync.Mutex
-	characterTaskMu sync.Mutex
-	activeCancels   map[string]context.CancelFunc
-	pendingStorage  map[string]int64
-	coordinator     *runtimeCoordinator
-	runtimeErr      error
-	workerID        string
+	repo                *repository.Repository
+	dataDir             string
+	runtimeCapabilities RuntimeCapabilities
+	cancelMu            sync.Mutex
+	registrationMu      sync.Mutex
+	emailCodeMu         sync.Mutex
+	redeemBatchMu       sync.Mutex
+	storageMu           sync.Mutex
+	characterTaskMu     sync.Mutex
+	activeCancels       map[string]context.CancelFunc
+	pendingStorage      map[string]int64
+	coordinator         *runtimeCoordinator
+	runtimeErr          error
+	workerID            string
 }
 
 const taskWorkerConcurrency = 3
@@ -190,8 +191,12 @@ type agentStoryboardShot struct {
 }
 
 func New(repo *repository.Repository, dataDir string) *Service {
+	return NewWithRuntimeCapabilities(repo, dataDir, RuntimeCapabilities{})
+}
+
+func NewWithRuntimeCapabilities(repo *repository.Repository, dataDir string, capabilities RuntimeCapabilities) *Service {
 	coordinator, err := newRuntimeCoordinator(repo.Dialect())
-	return &Service{repo: repo, dataDir: dataDir, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, workerID: newID()}
+	return &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, workerID: newID()}
 }
 
 func (s *Service) StartWorker() {
@@ -1131,6 +1136,7 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 	if err != nil {
 		return nil, nil, err
 	}
+	ctx = withProviderOutboundPolicy(ctx, config)
 	plannerPrompt, err := s.buildAgentStoryboardPlannerPrompt(task.UserID, task.Prompt, input.Requirements, assets, input.ProjectStyle, input.Characters, 0, 0)
 	if err != nil {
 		return nil, nil, err
@@ -1174,6 +1180,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 	if err != nil {
 		return nil, nil, err
 	}
+	ctx = withProviderOutboundPolicy(ctx, config)
 	plannerPrompt, err := s.buildAgentStoryboardPlannerPrompt(task.UserID, task.Prompt, input.Requirements, assets, input.ProjectStyle, input.Characters, input.ShotDuration, input.ShotCount)
 	if err != nil {
 		return nil, nil, err

@@ -34,6 +34,7 @@ export type RuntimeRecord = {
     submissionPhase?: "reserved" | "spawn_permitted";
     queueOwnerId?: string;
     queueExpiresAt?: string;
+    queueTicket?: number;
     updatedAt: string;
     submitId?: string;
     taskVersion?: 1;
@@ -50,7 +51,7 @@ export type RuntimeRecord = {
     providerOutputs?: RuntimeProviderOutput[];
     hidden?: true;
 };
-export type RuntimeDiskState = { version: 1; records: RuntimeRecord[] };
+export type RuntimeDiskState = { version: 1; records: RuntimeRecord[]; nextQueueTicket?: number };
 export type StateLockLease = (() => Promise<void>) & { assertOwned: () => Promise<void> };
 
 const BACKUP_SUFFIX = ".replace-backup";
@@ -204,6 +205,7 @@ export async function readRuntimeDiskState(stateFile: string, ownerId: string): 
 }
 
 function assertProgression(previous: RuntimeDiskState, current: RuntimeDiskState) {
+    if ((current.nextQueueTicket ?? 1) < (previous.nextQueueTicket ?? 1)) throw stateInvalid();
     const next = new Map(current.records.map((record) => [recordKey(record.ownerId, record.idempotencyKey), record]));
     for (const record of previous.records) {
         const incoming = next.get(recordKey(record.ownerId, record.idempotencyKey));
@@ -268,7 +270,8 @@ export function stateRank(state: RuntimeRecord["state"]) {
 function validRuntimeDiskState(value: unknown, ownerId: string): value is RuntimeDiskState {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const disk = value as Partial<RuntimeDiskState>;
-    if (disk.version !== 1 || !Array.isArray(disk.records) || disk.records.length > 10_000) return false;
+    if (disk.version !== 1 || !Array.isArray(disk.records) || disk.records.length > 10_000
+        || (disk.nextQueueTicket !== undefined && (!Number.isSafeInteger(disk.nextQueueTicket) || disk.nextQueueTicket < 1))) return false;
     const keys = new Set<string>();
     for (const record of disk.records) {
         if (!validRecord(record) || record.ownerId !== ownerId) return false;
@@ -282,7 +285,7 @@ function validRuntimeDiskState(value: unknown, ownerId: string): value is Runtim
 function validRecord(value: unknown): value is RuntimeRecord {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const record = value as Partial<RuntimeRecord>;
-    const allowed = ["idempotencyKey", "clientOperationId", "context", "ownerId", "requestHash", "state", "journalVersion", "fenceEpoch", "accountBinding", "sessionEpoch", "reservationId", "reservationOwnerId", "reservationExpiresAt", "submissionPhase", "queueOwnerId", "queueExpiresAt", "submitId", "updatedAt", "taskVersion", "operation", "mode", "model", "createdAt", "errorCode", "officialStatus", "nextPollAt", "pollLease", "retryCount", "lastObservedAt", "providerOutputs", "hidden"];
+    const allowed = ["idempotencyKey", "clientOperationId", "context", "ownerId", "requestHash", "state", "journalVersion", "fenceEpoch", "accountBinding", "sessionEpoch", "reservationId", "reservationOwnerId", "reservationExpiresAt", "submissionPhase", "queueOwnerId", "queueExpiresAt", "queueTicket", "submitId", "updatedAt", "taskVersion", "operation", "mode", "model", "createdAt", "errorCode", "officialStatus", "nextPollAt", "pollLease", "retryCount", "lastObservedAt", "providerOutputs", "hidden"];
     if (Object.keys(value).some((key) => !allowed.includes(key))) return false;
     const hasSubmitId = typeof record.submitId === "string" && /^[A-Za-z0-9._:-]{8,160}$/.test(record.submitId);
     const hasReservation = typeof record.reservationId === "string"
@@ -328,6 +331,7 @@ function validRecord(value: unknown): value is RuntimeRecord {
         && ((record.accountBinding === undefined) === (record.sessionEpoch === undefined))
         && reservationShapeValid
         && (noQueueLease || hasQueueLease)
+        && (record.queueTicket === undefined || (Number.isSafeInteger(record.queueTicket) && record.queueTicket >= 1))
         && (record.nextPollAt === undefined || (typeof record.nextPollAt === "string" && Number.isFinite(Date.parse(record.nextPollAt))))
         && (record.pollLease === undefined || validPollLease(record.pollLease))
         && (record.retryCount === undefined || (Number.isSafeInteger(record.retryCount) && record.retryCount >= 0 && record.retryCount <= 1_000_000))
@@ -472,6 +476,7 @@ function assertRecordProgression(previous: RuntimeRecord, incoming: RuntimeRecor
     if (previous.sessionEpoch !== undefined && (incoming.sessionEpoch ?? -1) < previous.sessionEpoch) throw stateInvalid();
     if (previous.state === "queued" && incoming.state === "queued" && previous.queueOwnerId !== undefined) {
         if (incoming.queueOwnerId !== previous.queueOwnerId
+            || incoming.queueTicket !== previous.queueTicket
             || Date.parse(incoming.queueExpiresAt ?? "") < Date.parse(previous.queueExpiresAt ?? "")) throw stateInvalid();
     }
     if (previous.state === "pending" && incoming.state === "pending" && previous.reservationId !== undefined) {
@@ -494,7 +499,7 @@ function reliableUncertainReconciliation(record: RuntimeRecord) {
 
 function sameJournalRecord(left: RuntimeRecord, right: RuntimeRecord) {
     const keys: Array<keyof RuntimeRecord> = [
-        "ownerId", "idempotencyKey", "clientOperationId", "requestHash", "state", "updatedAt", "fenceEpoch", "accountBinding", "sessionEpoch", "reservationId", "reservationOwnerId", "reservationExpiresAt", "submissionPhase", "queueOwnerId", "queueExpiresAt", "submitId", "taskVersion",
+        "ownerId", "idempotencyKey", "clientOperationId", "requestHash", "state", "updatedAt", "fenceEpoch", "accountBinding", "sessionEpoch", "reservationId", "reservationOwnerId", "reservationExpiresAt", "submissionPhase", "queueOwnerId", "queueExpiresAt", "queueTicket", "submitId", "taskVersion",
         "operation", "mode", "model", "createdAt", "errorCode", "officialStatus", "nextPollAt", "retryCount", "lastObservedAt", "hidden",
     ];
     return keys.every((key) => left[key] === right[key])

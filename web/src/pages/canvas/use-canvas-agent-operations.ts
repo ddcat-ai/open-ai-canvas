@@ -4,6 +4,7 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 import { applyCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { createGenerationRetryContext, type GenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
 import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { persistCanvasAgentGenerationContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
 import type { CanvasConnection, CanvasNodeData, ContextMenuState, ViewportTransform } from "@/types/canvas";
 
@@ -17,6 +18,12 @@ type CanvasAgentGenerationOptions = {
 };
 type CanvasAgentGenerationContinuationDependencies = {
     consumeAgent?: typeof consumeGenerationTaskAgent;
+    persistContinuation?: typeof persistCanvasAgentGenerationContinuationEffect;
+    projectId?: string;
+    nodeId?: string;
+    previousNodes?: CanvasNodeData[];
+    nodesRef?: { current: CanvasNodeData[] };
+    setNodes?: Dispatch<SetStateAction<CanvasNodeData[]>>;
 };
 
 type UseCanvasAgentOperationsOptions = {
@@ -58,7 +65,7 @@ type RunCanvasAgentGenerationOpsInput = {
     subscribeTasks?: (ids: readonly string[], listener: (task: GenerationTask) => void) => () => void;
     consumeTask?: typeof consumeGenerationTaskAgent;
     resumeAgent?: (task: GenerationTask) => Promise<void>;
-    onContinuation?: (nodeId: string, continuation: CanvasAgentGenerationContinuation) => void;
+    onContinuation?: (nodeId: string, continuation: CanvasAgentGenerationContinuation) => Promise<void> | void;
 };
 
 export async function runCanvasAgentGenerationOps({
@@ -97,12 +104,12 @@ export async function runCanvasAgentGenerationOps({
                             status: task.status === "succeeded" ? "pending" : "failed",
                         };
                         if (task.status !== "succeeded") {
-                            onContinuation?.(nodeId, continuation);
+                            await onContinuation?.(nodeId, continuation);
                             await resumeAgent(task);
                             return;
                         }
                         await consumeTask(task, continuationId, async (effect?: { effectKey?: string }) => {
-                            onContinuation?.(nodeId, {
+                            await onContinuation?.(nodeId, {
                                 ...continuation,
                                 status: "completed",
                                 ...(effect?.effectKey ? { effectKey: effect.effectKey } : {}),
@@ -168,7 +175,7 @@ export async function runCanvasAgentGenerationOps({
 export async function consumeCanvasAgentGenerationContinuation(
     task: GenerationTask,
     continuation: CanvasAgentGenerationContinuation,
-    onCompleted: (continuation: CanvasAgentGenerationContinuation) => void,
+    onCompleted: (continuation: CanvasAgentGenerationContinuation, signal?: AbortSignal) => Promise<void> | void,
     dependencies: CanvasAgentGenerationContinuationDependencies = {},
     signal?: AbortSignal,
 ) {
@@ -177,8 +184,21 @@ export async function consumeCanvasAgentGenerationContinuation(
     return consumeAgent(
         task,
         continuation.id,
-        async ({ effectKey }) => {
-            onCompleted({ ...continuation, status: "completed", effectKey });
+        async ({ effectKey, signal: leaseSignal }) => {
+            const completed = { ...continuation, status: "completed" as const, effectKey };
+            if (dependencies.projectId && dependencies.nodeId && dependencies.nodesRef && dependencies.setNodes) {
+                await (dependencies.persistContinuation ?? persistCanvasAgentGenerationContinuationEffect)({
+                    projectId: dependencies.projectId,
+                    nodeId: dependencies.nodeId,
+                    continuation: completed,
+                    effectKey,
+                    signal: leaseSignal,
+                    previousNodes: dependencies.previousNodes,
+                    nodesRef: dependencies.nodesRef,
+                    setNodes: dependencies.setNodes,
+                });
+            }
+            await onCompleted(completed, leaseSignal);
         },
         { signal },
     );
@@ -275,7 +295,18 @@ export function useCanvasAgentOperations({
                         nodes: nodesRef.current,
                         generate,
                         context: generationContext,
-                        onContinuation: (nodeId, continuation) => {
+                        onContinuation: async (nodeId, continuation) => {
+                            if (continuation.status === "completed" && continuation.effectKey) {
+                                await persistCanvasAgentGenerationContinuationEffect({
+                                    projectId,
+                                    nodeId,
+                                    continuation,
+                                    effectKey: continuation.effectKey,
+                                    nodesRef,
+                                    setNodes,
+                                });
+                                return;
+                            }
                             setNodes((current) => {
                                 const updated = current.map((node) =>
                                     node.id === nodeId
@@ -284,11 +315,6 @@ export function useCanvasAgentOperations({
                                               metadata: {
                                                   ...node.metadata,
                                                   agentGenerationContinuation: continuation,
-                                                  ...(continuation.effectKey
-                                                      ? {
-                                                            generationEffectKeys: Array.from(new Set([...(node.metadata?.generationEffectKeys || []), continuation.effectKey])),
-                                                        }
-                                                      : {}),
                                               },
                                           }
                                         : node,

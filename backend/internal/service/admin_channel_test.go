@@ -15,13 +15,9 @@ import (
 )
 
 func TestChannelFromRequestStoresConnectionWithoutDefaultProtocol(t *testing.T) {
-	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	defer server.Close()
-
 	channel, err := channelFromRequest(ChannelRequest{
 		Name:             "混合模型渠道",
-		BaseURL:          server.URL + "/v1",
+		BaseURL:          "https://8.8.8.8/v1",
 		APIKey:           "access-key",
 		SecretKey:        "secret-key",
 		ConcurrencyLimit: intPtr(6),
@@ -112,7 +108,6 @@ func TestRuntimeConcurrencyUsesEnvironmentFallback(t *testing.T) {
 }
 
 func TestFetchAdminChannelModelsReaddsDeletedModel(t *testing.T) {
-	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"id":"model-a"}]}`))
@@ -120,8 +115,9 @@ func TestFetchAdminChannelModelsReaddsDeletedModel(t *testing.T) {
 	defer upstream.Close()
 
 	svc, db := newChannelModelTestService(t)
+	svc.runtimeCapabilities = RuntimeCapabilities{desktopLocalChannels: true}
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
-	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: upstream.URL + "/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `[]`}
+	channel := model.ModelChannel{ID: "channel-1", UserID: admin.ID, Scope: model.ChannelScopeSystem, Enabled: true, Name: "Test", BaseURL: upstream.URL + "/v1", APIKey: "key", APIFormat: "openai", ModelsJSON: `[]`, AllowLocalChannel: true}
 	deleted := model.ChannelModel{ID: "deleted-model", ChannelID: channel.ID, ModelKey: "model-a", DisplayName: "model-a", BillingMode: "fixed_request", PriceVersion: 1}
 	if err := db.Create(&channel).Error; err != nil {
 		t.Fatal(err)

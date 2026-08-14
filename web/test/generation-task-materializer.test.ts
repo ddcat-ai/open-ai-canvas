@@ -4,14 +4,18 @@ import localforage from "localforage";
 import { createGenerationTaskSubscriptionService, type GenerationTask } from "../src/services/api/task-center";
 import { createGenerationTaskMaterializer, createIdempotentMaterializeOutput, materializeEffectKey, type GenerationTaskEffectClaim, type GenerationTaskEffectStore } from "../src/services/generation-task-materializer";
 import { createLocalDreaminaTaskEffectStore } from "../src/services/local-dreamina-generation";
-import { applyCanvasGenerationTaskNodeEffect, persistCanvasGenerationEffect } from "../src/services/canvas-generation-consumer";
+import { applyCanvasGenerationTaskNodeEffect, persistCanvasAgentGenerationContinuationEffect, persistCanvasGenerationEffect } from "../src/services/canvas-generation-consumer";
+import { canvasCinematicContinuationEntryAdapters } from "../src/components/canvas/canvas-assistant-panel";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "../src/services/generation-consumer-dedupe";
 import { createProviderNeutralGenerationTaskEffectStore } from "../src/services/provider-neutral-generation-effects";
 import { consumeGenerationTaskAgent, consumeGenerationTaskMessage, consumeGenerationTaskNode, materializeGenerationTaskAssets } from "../src/services/project-asset-sync";
-import { useCanvasStore } from "../src/stores/canvas/use-canvas-store";
-import { useAssetStore, type NewAsset } from "../src/stores/use-asset-store";
-import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
-import { setActiveUserScope } from "../src/lib/user-scope";
+import { flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
+import { flushAssetStorePersistence, useAssetStore, type NewAsset } from "../src/stores/use-asset-store";
+import { CanvasNodeType, type CanvasAssistantSession, type CanvasNodeData } from "../src/types/canvas";
+import { recoverCanvasGenerationTaskNode } from "../src/pages/canvas/use-canvas-generation";
+import { getActiveUserScope, setActiveUserScope } from "../src/lib/user-scope";
+import { readImageMeta } from "../src/lib/image-utils";
+import { consumeCanvasAgentGenerationContinuation } from "../src/pages/canvas/use-canvas-agent-operations";
 
 function createEffectStore(): GenerationTaskEffectStore {
     const completed = new Map<string, { materializedAssetId?: string }>();
@@ -37,6 +41,181 @@ function createEffectStore(): GenerationTaskEffectStore {
         },
     };
 }
+
+type MetaImageHarnessImage = {
+    naturalWidth: number;
+    naturalHeight: number;
+    onload: (() => void) | null;
+    onerror: (() => void) | null;
+};
+
+function installImageMetaHarness(naturalWidth = 0, naturalHeight = 0) {
+    const originalImage = Object.getOwnPropertyDescriptor(globalThis, "Image");
+    const originalSetTimeout = Object.getOwnPropertyDescriptor(globalThis, "setTimeout");
+    const originalClearTimeout = Object.getOwnPropertyDescriptor(globalThis, "clearTimeout");
+    const images: MetaImageHarnessImage[] = [];
+    const srcAssignments: string[] = [];
+    const timers = new Map<number, () => void>();
+    let nextTimer = 0;
+
+    Object.defineProperty(globalThis, "Image", {
+        configurable: true,
+        value: class FakeImage implements MetaImageHarnessImage {
+            naturalWidth = naturalWidth;
+            naturalHeight = naturalHeight;
+            onload: (() => void) | null = null;
+            onerror: (() => void) | null = null;
+
+            constructor() {
+                images.push(this);
+            }
+
+            set src(value: string) {
+                srcAssignments.push(value);
+            }
+        },
+    });
+    Object.defineProperty(globalThis, "setTimeout", {
+        configurable: true,
+        value: (handler: () => void) => {
+            nextTimer += 1;
+            timers.set(nextTimer, handler);
+            return nextTimer;
+        },
+    });
+    Object.defineProperty(globalThis, "clearTimeout", {
+        configurable: true,
+        value: (timer: number) => {
+            timers.delete(timer);
+        },
+    });
+
+    return {
+        images,
+        srcAssignments,
+        timers,
+        fireNextTimer() {
+            const handler = timers.values().next().value as (() => void) | undefined;
+            handler?.();
+        },
+        restore() {
+            if (originalImage) Object.defineProperty(globalThis, "Image", originalImage);
+            else delete (globalThis as { Image?: unknown }).Image;
+            if (originalSetTimeout) Object.defineProperty(globalThis, "setTimeout", originalSetTimeout);
+            if (originalClearTimeout) Object.defineProperty(globalThis, "clearTimeout", originalClearTimeout);
+        },
+    };
+}
+
+function trackedAbortSignal() {
+    let aborted = false;
+    const listeners = new Set<EventListenerOrEventListenerObject>();
+    const signal = {
+        get aborted() {
+            return aborted;
+        },
+        addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+            if (type === "abort") listeners.add(listener);
+        },
+        removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+            if (type === "abort") listeners.delete(listener);
+        },
+    } as unknown as AbortSignal;
+
+    return {
+        signal,
+        abort() {
+            aborted = true;
+            const event = new Event("abort");
+            for (const listener of [...listeners]) {
+                if (typeof listener === "function") listener(event);
+                else listener.handleEvent(event);
+            }
+        },
+        listenerCount: () => listeners.size,
+    };
+}
+
+describe("readImageMeta", () => {
+    test("success returns intrinsic metadata and releases every callback", async () => {
+        const harness = installImageMetaHarness(2560, 1440);
+        const abort = trackedAbortSignal();
+        try {
+            const result = readImageMeta("data:image/webp;base64,AA==", abort.signal);
+            harness.images[0]?.onload?.();
+
+            expect(await result).toEqual({ width: 2560, height: 1440, mimeType: "image/webp" });
+            expect(harness.images[0]?.onload).toBeNull();
+            expect(harness.images[0]?.onerror).toBeNull();
+            expect(harness.timers.size).toBe(0);
+            expect(abort.listenerCount()).toBe(0);
+            expect(harness.srcAssignments).toEqual(["data:image/webp;base64,AA=="]);
+        } finally {
+            harness.restore();
+        }
+    });
+
+    test("image error falls back once and releases every callback", async () => {
+        const harness = installImageMetaHarness();
+        const abort = trackedAbortSignal();
+        try {
+            const result = readImageMeta("data:image/png;base64,AA==", abort.signal);
+            harness.images[0]?.onerror?.();
+
+            expect(await result).toEqual({ width: 1024, height: 1024, mimeType: "image/png" });
+            expect(harness.images[0]?.onload).toBeNull();
+            expect(harness.images[0]?.onerror).toBeNull();
+            expect(harness.timers.size).toBe(0);
+            expect(abort.listenerCount()).toBe(0);
+            expect(harness.srcAssignments).toEqual(["data:image/png;base64,AA=="]);
+        } finally {
+            harness.restore();
+        }
+    });
+
+    test("timeout falls back once and releases every callback", async () => {
+        const harness = installImageMetaHarness();
+        const abort = trackedAbortSignal();
+        try {
+            const result = readImageMeta("opaque://image", abort.signal);
+            harness.fireNextTimer();
+
+            expect(await result).toEqual({ width: 1024, height: 1024, mimeType: "image/png" });
+            expect(harness.images[0]?.onload).toBeNull();
+            expect(harness.images[0]?.onerror).toBeNull();
+            expect(harness.timers.size).toBe(0);
+            expect(abort.listenerCount()).toBe(0);
+            expect(harness.srcAssignments).toEqual(["opaque://image", ""]);
+        } finally {
+            harness.restore();
+        }
+    });
+
+    test("abort rejects promptly and releases every callback", async () => {
+        const harness = installImageMetaHarness();
+        const abort = trackedAbortSignal();
+        try {
+            const result = readImageMeta("opaque://image", abort.signal);
+            const outcome = result.then(
+                () => "resolved",
+                (error: DOMException) => error.name,
+            );
+            abort.abort();
+            const promptOutcome = await Promise.race([outcome, new Promise<string>((resolve) => queueMicrotask(() => resolve("pending")))]);
+            if (promptOutcome === "pending") harness.fireNextTimer();
+            await outcome;
+
+            expect(promptOutcome).toBe("AbortError");
+            expect(harness.images[0]?.onload).toBeNull();
+            expect(harness.images[0]?.onerror).toBeNull();
+            expect(harness.timers.size).toBe(0);
+            expect(abort.listenerCount()).toBe(0);
+            expect(harness.srcAssignments).toEqual(["opaque://image", ""]);
+        } finally {
+            harness.restore();
+        }
+    });
+});
 
 describe("generation task materializer", () => {
     test("remote Backend Create uses the default production materializer without Dreamina authority", async () => {
@@ -113,6 +292,7 @@ describe("generation task materializer", () => {
                 },
             },
         });
+        setActiveUserScope("materializer-indexeddb");
         Object.defineProperty(navigator, "locks", {
             configurable: true,
             value: {
@@ -164,6 +344,7 @@ describe("generation task materializer", () => {
                     {
                         dataUrl: imageUrl,
                         storageKey: "resource:intrinsic-dimensions-existing",
+                        width: 1280,
                         bytes: imageBlob.size,
                         mimeType: imageBlob.type,
                     },
@@ -182,10 +363,13 @@ describe("generation task materializer", () => {
             expect(asset).toMatchObject({
                 kind: "image",
                 data: {
-                    width: 2560,
+                    width: 1280,
                     height: 1440,
                 },
             });
+            const assetStoreKey = "infinite-canvas:asset_store:user:materializer-indexeddb";
+            expect(durableValues.has(assetStoreKey)).toBe(true);
+            expect(localStorageValues.has(assetStoreKey)).toBe(false);
         } finally {
             URL.revokeObjectURL(imageUrl);
             localforage.getItem = originalGetItem;
@@ -197,6 +381,103 @@ describe("generation task materializer", () => {
             if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
             else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
             useAssetStore.getState().replaceAssets(previousAssets);
+        }
+    });
+
+    test("image materialization keeps its effect retryable when the IndexedDB catalog write fails", async () => {
+        const previousAssets = useAssetStore.getState().assets;
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalLocks = Object.getOwnPropertyDescriptor(navigator, "locks");
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const durableValues = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        const localStorageCalls: string[] = [];
+        let failWrites = true;
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => {
+                        if (key.includes("infinite-canvas:asset_store")) localStorageCalls.push(`get:${key}`);
+                        return localStorageValues.get(key) ?? null;
+                    },
+                    setItem: (key: string, value: string) => {
+                        if (key.includes("infinite-canvas:asset_store")) localStorageCalls.push(`set:${key}`);
+                        localStorageValues.set(key, value);
+                    },
+                    removeItem: (key: string) => {
+                        if (key.includes("infinite-canvas:asset_store")) localStorageCalls.push(`remove:${key}`);
+                        localStorageValues.delete(key);
+                    },
+                },
+            },
+        });
+        setActiveUserScope("materializer-catalog-failure");
+        Object.defineProperty(navigator, "locks", {
+            configurable: true,
+            value: {
+                request<T>(_name: string, callback: () => Promise<T>) {
+                    return callback();
+                },
+            },
+        });
+        localforage.getItem = (async (key: string) => durableValues.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (failWrites && key.includes("infinite-canvas:asset_store")) throw new Error("indexeddb catalog write failed");
+            durableValues.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+        const task: GenerationTask = {
+            id: "backend-image-catalog-failure",
+            provider: "remote-image-provider",
+            type: "image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "PENDING_MATERIALIZATION",
+            resultJson: JSON.stringify({
+                images: [
+                    {
+                        dataUrl: "opaque://catalog-failure",
+                        storageKey: "resource:catalog-failure-existing",
+                        width: 640,
+                        height: 360,
+                        bytes: 12,
+                        mimeType: "image/png",
+                    },
+                ],
+            }),
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        useAssetStore.getState().replaceAssets([]);
+
+        try {
+            await expect(materializeGenerationTaskAssets(task)).rejects.toThrow("indexeddb catalog write failed");
+            const assetStoreKey = "infinite-canvas:asset_store:user:materializer-catalog-failure";
+            expect(durableValues.has(assetStoreKey)).toBe(false);
+            expect(localStorageCalls).toEqual([]);
+            const releasedEffect = [...durableValues.entries()].find(([key]) => key.includes("generation-effect") && key.includes(task.id));
+            expect(releasedEffect).toBeDefined();
+            expect(JSON.parse(releasedEffect![1])).toMatchObject({ state: "released" });
+
+            failWrites = false;
+            const recovered = await materializeGenerationTaskAssets(task);
+            const recoveredId = recovered.outputs?.[0]?.materializedAssetId;
+            const persisted = JSON.parse(durableValues.get(assetStoreKey)!) as { state: { assets: Array<{ id: string }> } };
+            expect(recovered.resultState).toBe("READY");
+            expect(persisted.state.assets.filter((candidate) => candidate.id === recoveredId)).toHaveLength(1);
+            expect(JSON.parse(durableValues.get(releasedEffect![0])!)).toMatchObject({ state: "completed", result: { materializedAssetId: recoveredId } });
+        } finally {
+            failWrites = false;
+            useAssetStore.getState().replaceAssets(previousAssets);
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalLocks) Object.defineProperty(navigator, "locks", originalLocks);
+            else delete (navigator as { locks?: unknown }).locks;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
         }
     });
 
@@ -666,6 +947,151 @@ describe("generation task materializer", () => {
         expect(continuations).toBe(1);
     });
 
+    test("post-write aborted cinematic commit completes the agent effect claim before replay", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousScope = getActiveUserScope();
+        const previousProjects = useCanvasStore.getState().projects;
+        const values = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+
+        let currentEffectKey = "";
+        let abortOnCommit = true;
+        let parentController: AbortController | undefined;
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            values.set(key, value);
+            if (abortOnCommit && currentEffectKey && value.includes(currentEffectKey)) {
+                abortOnCommit = false;
+                parentController?.abort();
+            }
+            return value;
+        }) as typeof localforage.setItem;
+
+        const scope = "cinematic-materializer-post-write-abort";
+        const projectId = "canvas-cinematic-materializer-post-write-abort";
+        const sessionId = "session-cinematic-materializer-post-write-abort";
+        const messageId = "message-cinematic-materializer-post-write-abort";
+        const continuationId = "cinematic-materializer-continuation";
+        const pendingSession: CanvasAssistantSession = {
+            id: sessionId,
+            title: "pending",
+            pendingBackendSession: { id: "backend-cinematic-materializer", kind: "cinematic", messageId, status: "pending", startedAt: "2026-08-14T00:00:00.000Z" },
+            messages: [{ id: messageId, role: "assistant", text: "pending", detail: { kind: "cinematic", backendSessionId: "backend-cinematic-materializer", status: "pending" } }],
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        const project: CanvasProject = {
+            id: projectId,
+            title: "cinematic materializer",
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+            nodes: [],
+            connections: [],
+            chatSessions: [pendingSession],
+            activeChatId: sessionId,
+            backgroundMode: "dots",
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        const task: GenerationTask = {
+            id: "backend-cinematic-post-write-abort-task",
+            type: "agent_storyboard_rows",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        const materializer = createGenerationTaskMaterializer({
+            effects: createEffectStore(),
+            async materializeOutput() {
+                throw new Error("agent task has no media outputs");
+            },
+        });
+        let mountedSessions = [pendingSession];
+        let consumerCalls = 0;
+        let executeCalls = 0;
+
+        try {
+            setActiveUserScope(scope);
+            useCanvasStore.setState({ projects: [project] });
+            await flushCanvasStorePersistence();
+
+            for (let replay = 0; replay < 3; replay += 1) {
+                const controller = new AbortController();
+                parentController = controller;
+                await consumeGenerationTaskAgent(
+                    task,
+                    continuationId,
+                    async ({ effectKey, signal }) => {
+                        consumerCalls += 1;
+                        if (mountedSessions[0]?.generationEffectKeys?.includes(effectKey)) return;
+                        currentEffectKey = effectKey;
+                        await canvasCinematicContinuationEntryAdapters["online-tool"]({
+                            projectId,
+                            effectKey,
+                            signal,
+                            readSnapshot: () => ({ projectId, title: "cinematic materializer", nodes: [], connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } }),
+                            executeOps: async () => {
+                                executeCalls += 1;
+                            },
+                            completeSession: (key) => {
+                                mountedSessions = [
+                                    {
+                                        ...pendingSession,
+                                        pendingBackendSession: undefined,
+                                        generationEffectKeys: key ? [key] : undefined,
+                                        messages: [{ id: messageId, role: "assistant", text: "completed", detail: { kind: "cinematic", backendSessionId: "backend-cinematic-materializer", status: "completed" } }],
+                                        updatedAt: "2026-08-14T00:01:00.000Z",
+                                    },
+                                ];
+                                useCanvasStore.getState().updateProject(projectId, { chatSessions: mountedSessions });
+                                return mountedSessions;
+                            },
+                            readLiveSessionState: () => ({ sessions: mountedSessions, activeChatId: sessionId }),
+                            restoreLiveSessions: (sessions) => {
+                                mountedSessions = sessions;
+                            },
+                            restoreLiveSnapshot: () => undefined,
+                            failProvider: () => {
+                                throw new Error("post-write abort must not become a provider failure");
+                            },
+                        });
+                    },
+                    {
+                        signal: controller.signal,
+                        resumeAgent: (input, id, consumer) => materializer.resumeAgent(input, id, consumer, controller.signal),
+                    },
+                );
+            }
+
+            expect(consumerCalls).toBe(1);
+            expect(executeCalls).toBe(1);
+            expect(mountedSessions[0]?.generationEffectKeys?.length).toBe(1);
+            expect(mountedSessions[0]?.pendingBackendSession).toBeUndefined();
+        } finally {
+            setActiveUserScope(previousScope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+        }
+    });
+
     test("online and local agents refresh-reconnect the original scoped task and resume once", async () => {
         for (const provider of ["backend-online", "dreamina-cli"] as const) {
             const effects = createEffectStore();
@@ -995,6 +1421,84 @@ describe("generation task materializer", () => {
         resolveFinish();
         expect(await Promise.all([firstRun, secondRun])).toEqual(["applied", "completed"]);
         expect(sideEffects).toBe(1);
+    });
+
+    test("lease renewal failure aborts an in-flight consumer before its later durable write and never completes the claim", async () => {
+        const task: GenerationTask = {
+            id: "task-renew-fencing",
+            type: "image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "READY",
+            outputs: [{ outputIndex: 0, mediaType: "image", materializedAssetId: "asset-renew-fencing" }],
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        let renewCalls = 0;
+        let completeCalls = 0;
+        let releaseCalls = 0;
+        let durableWrites = 0;
+        const parentController = new AbortController();
+        let consumerSignal: AbortSignal | undefined;
+        let resolveRenewAttempted!: () => void;
+        const renewAttempted = new Promise<void>((resolve) => {
+            resolveRenewAttempted = resolve;
+        });
+        let releaseDurableWrite!: () => void;
+        const durableWriteAllowed = new Promise<void>((resolve) => {
+            releaseDurableWrite = resolve;
+        });
+        const effects: GenerationTaskEffectStore = {
+            async claim() {
+                return { status: "claimed", fence: 1 };
+            },
+            async renew() {
+                renewCalls += 1;
+                resolveRenewAttempted();
+                throw new Error("lease lost during consumer");
+            },
+            async complete() {
+                completeCalls += 1;
+            },
+            async release() {
+                releaseCalls += 1;
+            },
+        };
+        const materializer = createGenerationTaskMaterializer({
+            effects,
+            leaseHeartbeatMs: 1,
+            async materializeOutput() {
+                throw new Error("already materialized");
+            },
+        });
+
+        const run = materializer.attachNode(
+            task,
+            "node-renew-fencing",
+            0,
+            async ({ signal }) => {
+                consumerSignal = signal;
+                await durableWriteAllowed;
+                if (!signal?.aborted) durableWrites += 1;
+            },
+            parentController.signal,
+        );
+
+        await renewAttempted;
+        await new Promise<void>((resolve) => {
+            if (consumerSignal?.aborted) resolve();
+            else consumerSignal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        releaseDurableWrite();
+        await expect(run).rejects.toThrow("lease lost during consumer");
+        expect(renewCalls).toBeGreaterThan(0);
+        expect(consumerSignal).toBeDefined();
+        expect(consumerSignal?.aborted).toBe(true);
+        expect(parentController.signal.aborted).toBe(false);
+        expect(durableWrites).toBe(0);
+        expect(completeCalls).toBe(0);
+        expect(releaseCalls).toBe(1);
     });
 
     test("replaying one materialize effect three times inserts the asset once", async () => {
@@ -1331,7 +1835,9 @@ describe("generation task materializer", () => {
 
     test("Canvas node effect completes only after its stamped project snapshot is durable", async () => {
         const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
         const originalSetItem = localforage.setItem.bind(localforage);
+        const indexedValues = new Map<string, string>();
         const persistedPayloads: string[] = [];
         let releasePersistence!: () => void;
         const persistenceGate = new Promise<void>((resolve) => {
@@ -1352,12 +1858,14 @@ describe("generation task materializer", () => {
                 },
             },
         });
+        localforage.getItem = (async (key: string) => indexedValues.get(key) ?? null) as typeof localforage.getItem;
         localforage.setItem = (async (key: string, value: string) => {
             if (key.includes("infinite-canvas:canvas_store")) {
                 persistedPayloads.push(value);
                 persistenceStartedResolve();
                 await persistenceGate;
             }
+            indexedValues.set(key, value);
             return value;
         }) as typeof localforage.setItem;
 
@@ -1470,17 +1978,786 @@ describe("generation task materializer", () => {
             expect(restarted.state.projects[0]?.nodes[0]?.metadata?.generationEffectKeys).toEqual([effectKey]);
         } finally {
             releasePersistence();
+            withCanvasStorePersistenceSuppressed(() => {
+                useCanvasStore.setState({ projects: previousProjects });
+            });
+            useAssetStore.getState().replaceAssets(previousAssets);
+            await flushAssetStorePersistence();
+            localforage.getItem = originalGetItem;
             localforage.setItem = originalSetItem;
             if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
             else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
-            useCanvasStore.setState({ projects: previousProjects });
+        }
+    });
+
+    test("Canvas first durable write failure releases the claim and retry persists the effect before completion", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousProjects = useCanvasStore.getState().projects;
+        const previousAssets = useAssetStore.getState().assets;
+        const scope = "canvas-first-write-retry";
+        const storageKey = `infinite-canvas:canvas_store:user:${scope}`;
+        const values = new Map<string, string>();
+        let failCanvasWrite = true;
+        const localStorageValues = new Map<string, string>();
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (key === storageKey && failCanvasWrite) throw new Error("canvas first durable write failed");
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+
+        const node: CanvasNodeData = {
+            id: "node-first-write-retry",
+            type: CanvasNodeType.Image,
+            title: "result",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 180,
+            metadata: { taskId: "backend-first-write-retry", status: "loading" },
+        };
+        const project = {
+            id: "canvas-first-write-retry",
+            title: "canvas",
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+            nodes: [node],
+            connections: [],
+            chatSessions: [],
+            activeChatId: null,
+            backgroundMode: "dots" as const,
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        const task: GenerationTask = {
+            id: "backend-first-write-retry",
+            provider: "remote-image-provider",
+            type: "canvas_image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "READY",
+            resultJson: JSON.stringify({ images: [{ dataUrl: "https://example.invalid/retry-node.png", storageKey: "resource:retry-node", width: 1, height: 1, mimeType: "image/png" }] }),
+            outputs: [{ outputIndex: 0, mediaType: "image", materializedAssetId: "asset-first-write-retry" }],
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        const effectKey = `attach-node:${task.id}:${node.id}:0`;
+        values.set(storageKey, JSON.stringify({ state: { projects: [project] }, version: 0, storageRevision: 1 }));
+        setActiveUserScope(scope);
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [project] }));
+        useAssetStore.getState().replaceAssets([
+            {
+                id: "asset-first-write-retry",
+                kind: "image",
+                title: "result",
+                coverUrl: "https://example.invalid/retry-node.png",
+                tags: [],
+                metadata: {},
+                data: { dataUrl: "https://example.invalid/retry-node.png", storageKey: "resource:retry-node", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
+                createdAt: "2026-08-14T00:00:00.000Z",
+                updatedAt: "2026-08-14T00:00:00.000Z",
+            },
+        ]);
+        let visibleNodes = [node];
+        let releases = 0;
+        let completes = 0;
+        const baseEffects = createEffectStore();
+        const effects: GenerationTaskEffectStore = {
+            ...baseEffects,
+            async complete(effect, taskId, result, binding) {
+                completes += 1;
+                await baseEffects.complete(effect, taskId, result, binding);
+            },
+            async release(effect, taskId, binding) {
+                releases += 1;
+                await baseEffects.release(effect, taskId, binding);
+            },
+        };
+        const materializer = createGenerationTaskMaterializer({ effects, materializeOutput: async () => ({}) });
+        const apply = () =>
+            materializer.attachNode(task, node.id, 0, async ({ output }) => {
+                await applyCanvasGenerationTaskNodeEffect({
+                    projectId: project.id,
+                    nodeId: node.id,
+                    task,
+                    output: output!,
+                    effectKey,
+                    nodesRef: {
+                        get current() {
+                            return visibleNodes;
+                        },
+                        set current(value) {
+                            visibleNodes = value;
+                        },
+                    },
+                    setNodes: (value) => {
+                        visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
+                    },
+                });
+            });
+
+        try {
+            await expect(apply()).rejects.toThrow("canvas first durable write failed");
+            expect(releases).toBe(1);
+            expect(completes).toBe(0);
+            expect(generationEffectApplied(visibleNodes[0]?.metadata || {}, effectKey)).toBe(false);
+            expect(values.get(storageKey)).not.toContain(effectKey);
+
+            failCanvasWrite = false;
+            await apply();
+            expect(completes).toBe(1);
+            const durable = JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+            expect(generationEffectApplied(durable.state.projects[0]?.nodes[0]?.metadata || {}, effectKey)).toBe(true);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: durable.state.projects as never }));
+            expect(generationEffectApplied(useCanvasStore.getState().projects[0]?.nodes[0]?.metadata || {}, effectKey)).toBe(true);
+        } finally {
+            failCanvasWrite = false;
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
             useAssetStore.getState().replaceAssets(previousAssets);
+            await flushAssetStorePersistence();
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+        }
+    });
+
+    test("Canvas node effect keeps a newer mounted ordinary edit when the post-commit ordinary flush fails", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousScope = getActiveUserScope();
+        const previousProjects = useCanvasStore.getState().projects;
+        const previousAssets = useAssetStore.getState().assets;
+        const scope = "canvas-node-post-commit-mounted-edit";
+        const storageKey = `infinite-canvas:canvas_store:user:${scope}`;
+        const values = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+
+        const node: CanvasNodeData = {
+            id: "node-post-commit-mounted-edit",
+            type: CanvasNodeType.Image,
+            title: "base node",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 180,
+            metadata: { taskId: "backend-post-commit-mounted-edit", status: "loading" },
+        };
+        const project = {
+            id: "canvas-node-post-commit-mounted-edit",
+            title: "canvas",
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+            nodes: [node],
+            connections: [],
+            chatSessions: [],
+            activeChatId: null,
+            backgroundMode: "dots" as const,
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        const task: GenerationTask = {
+            id: "backend-post-commit-mounted-edit",
+            provider: "remote-image-provider",
+            type: "canvas_image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "READY",
+            resultJson: JSON.stringify({ images: [{ dataUrl: "https://example.invalid/post-commit.png", storageKey: "resource:post-commit", width: 1, height: 1, mimeType: "image/png" }] }),
+            outputs: [{ outputIndex: 0, mediaType: "image", materializedAssetId: "asset-post-commit-mounted-edit" }],
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        const effectKey = `attach-node:${task.id}:${node.id}:0`;
+        let visibleNodes = [node];
+        let generationCommitted = false;
+        let failOrdinaryWrite = true;
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (key === storageKey && !generationCommitted && value.includes(effectKey)) {
+                values.set(key, value);
+                generationCommitted = true;
+                const committed = JSON.parse(value) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+                const committedNode = committed.state.projects[0]!.nodes[0]!;
+                visibleNodes = [{ ...committedNode, title: "newer ordinary node edit", position: { x: 88, y: 44 }, metadata: { ...committedNode.metadata, ordinaryNote: "newer" } }];
+                useCanvasStore.getState().updateProject(project.id, { nodes: visibleNodes });
+                return value;
+            }
+            if (key === storageKey && generationCommitted && failOrdinaryWrite) {
+                failOrdinaryWrite = false;
+                throw new Error("post-commit ordinary flush failed");
+            }
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+
+        try {
+            setActiveUserScope(scope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [project] }));
+            values.set(storageKey, JSON.stringify({ state: { projects: [project] }, version: 0, storageRevision: 1, tombstones: { projects: {}, nodes: {}, connections: {}, sessions: {}, messages: {} } }));
+            useAssetStore.getState().replaceAssets([
+                {
+                    id: "asset-post-commit-mounted-edit",
+                    kind: "image",
+                    title: "result",
+                    coverUrl: "https://example.invalid/post-commit.png",
+                    tags: [],
+                    metadata: {},
+                    data: { dataUrl: "https://example.invalid/post-commit.png", storageKey: "resource:post-commit", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
+                    createdAt: "2026-08-14T00:00:00.000Z",
+                    updatedAt: "2026-08-14T00:00:00.000Z",
+                },
+            ]);
+
+            await applyCanvasGenerationTaskNodeEffect({
+                projectId: project.id,
+                nodeId: node.id,
+                task,
+                output: task.outputs![0]!,
+                effectKey,
+                nodesRef: {
+                    get current() {
+                        return visibleNodes;
+                    },
+                    set current(value) {
+                        visibleNodes = value;
+                    },
+                },
+                setNodes: (value) => {
+                    visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
+                },
+            });
+
+            expect(generationCommitted).toBe(true);
+            expect(visibleNodes[0]?.title).toBe("newer ordinary node edit");
+            expect(visibleNodes[0]?.position).toEqual({ x: 88, y: 44 });
+            expect(visibleNodes[0]?.metadata?.ordinaryNote).toBe("newer");
+            expect(generationEffectApplied(visibleNodes[0]?.metadata || {}, effectKey)).toBe(true);
+            expect((JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } }).state.projects[0]?.nodes[0]?.metadata?.generationEffectKeys).toContain(effectKey);
+
+            await flushCanvasStorePersistence();
+            const retried = JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+            expect(retried.state.projects[0]?.nodes[0]?.title).toBe("newer ordinary node edit");
+            expect(retried.state.projects[0]?.nodes[0]?.metadata?.generationEffectKeys).toContain(effectKey);
+        } finally {
+            failOrdinaryWrite = false;
+            setActiveUserScope(previousScope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+            useAssetStore.getState().replaceAssets(previousAssets);
+            await flushAssetStorePersistence();
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+        }
+    });
+
+    test("Canvas Agent continuation keeps a newer mounted ordinary edit when the post-commit ordinary flush fails", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousScope = getActiveUserScope();
+        const previousProjects = useCanvasStore.getState().projects;
+        const scope = "canvas-agent-post-commit-mounted-edit";
+        const storageKey = `infinite-canvas:canvas_store:user:${scope}`;
+        const values = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+
+        const effectKey = "agent-resume:backend-agent-post-commit:continuation-post-commit";
+        const continuation = { id: "continuation-post-commit", taskId: "backend-agent-post-commit", status: "completed" as const, effectKey };
+        const node: CanvasNodeData = {
+            id: "node-agent-post-commit",
+            type: CanvasNodeType.Text,
+            title: "agent base",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 180,
+            metadata: { content: "base", agentGenerationContinuation: { id: continuation.id, taskId: continuation.taskId, status: "pending" } },
+        };
+        const project = {
+            id: "canvas-agent-post-commit-mounted-edit",
+            title: "canvas",
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+            nodes: [node],
+            connections: [],
+            chatSessions: [],
+            activeChatId: null,
+            backgroundMode: "dots" as const,
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        let visibleNodes = [node];
+        let generationCommitted = false;
+        let failOrdinaryWrite = true;
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (key === storageKey && !generationCommitted && value.includes(effectKey)) {
+                values.set(key, value);
+                generationCommitted = true;
+                const committed = JSON.parse(value) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+                const committedNode = committed.state.projects[0]!.nodes[0]!;
+                visibleNodes = [{ ...committedNode, title: "newer ordinary agent edit", position: { x: 55, y: 66 }, metadata: { ...committedNode.metadata, ordinaryNote: "newer-agent" } }];
+                useCanvasStore.getState().updateProject(project.id, { nodes: visibleNodes });
+                return value;
+            }
+            if (key === storageKey && generationCommitted && failOrdinaryWrite) {
+                failOrdinaryWrite = false;
+                throw new Error("post-commit ordinary agent flush failed");
+            }
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+
+        try {
+            setActiveUserScope(scope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [project] }));
+            values.set(storageKey, JSON.stringify({ state: { projects: [project] }, version: 0, storageRevision: 1, tombstones: { projects: {}, nodes: {}, connections: {}, sessions: {}, messages: {} } }));
+
+            await persistCanvasAgentGenerationContinuationEffect({
+                projectId: project.id,
+                nodeId: node.id,
+                continuation,
+                effectKey,
+                previousNodes: [node],
+                nodesRef: {
+                    get current() {
+                        return visibleNodes;
+                    },
+                    set current(value) {
+                        visibleNodes = value;
+                    },
+                },
+                setNodes: (value) => {
+                    visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
+                },
+            });
+
+            expect(generationCommitted).toBe(true);
+            expect(visibleNodes[0]?.title).toBe("newer ordinary agent edit");
+            expect(visibleNodes[0]?.position).toEqual({ x: 55, y: 66 });
+            expect(visibleNodes[0]?.metadata?.ordinaryNote).toBe("newer-agent");
+            expect(visibleNodes[0]?.metadata?.agentGenerationContinuation).toMatchObject({ status: "completed", effectKey });
+            expect(generationEffectApplied(visibleNodes[0]?.metadata || {}, effectKey)).toBe(true);
+
+            await flushCanvasStorePersistence();
+            const retried = JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+            expect(retried.state.projects[0]?.nodes[0]?.title).toBe("newer ordinary agent edit");
+            expect(retried.state.projects[0]?.nodes[0]?.metadata?.generationEffectKeys).toContain(effectKey);
+        } finally {
+            failOrdinaryWrite = false;
+            setActiveUserScope(previousScope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+        }
+    });
+
+    test("Canvas agent continuation waits for its async completion callback before completing the effect", async () => {
+        const task: GenerationTask = {
+            id: "backend-agent-callback-ack",
+            provider: "remote-cinematic-provider",
+            type: "agent_storyboard_rows",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            createdAt: "2026-08-13T00:00:00.000Z",
+            updatedAt: "2026-08-13T00:00:00.000Z",
+        };
+        const continuation = {
+            id: "continuation-callback-ack",
+            taskId: task.id,
+            status: "pending" as const,
+        };
+        let completeCalls = 0;
+        const baseEffects = createEffectStore();
+        const effects: GenerationTaskEffectStore = {
+            ...baseEffects,
+            async complete(effectKey, taskId, result) {
+                completeCalls += 1;
+                await baseEffects.complete(effectKey, taskId, result);
+            },
+        };
+        const materializer = createGenerationTaskMaterializer({
+            effects,
+            async materializeOutput() {
+                throw new Error("no outputs");
+            },
+        });
+        let callbackStartedResolve!: () => void;
+        const callbackStarted = new Promise<void>((resolve) => {
+            callbackStartedResolve = resolve;
+        });
+        let releaseCallback!: () => void;
+        const callbackGate = new Promise<void>((resolve) => {
+            releaseCallback = resolve;
+        });
+
+        const run = consumeCanvasAgentGenerationContinuation(
+            task,
+            continuation,
+            async () => {
+                callbackStartedResolve();
+                await callbackGate;
+            },
+            {
+                consumeAgent: ((input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer)) as typeof consumeGenerationTaskAgent,
+            },
+        );
+
+        await callbackStarted;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(completeCalls).toBe(0);
+        releaseCallback();
+        await run;
+        expect(completeCalls).toBe(1);
+    });
+
+    test("production Canvas agent continuation is durably completed before the materializer acknowledges the effect", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousScope = getActiveUserScope();
+        const previousProjects = useCanvasStore.getState().projects;
+        const values = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        let failDedicatedWrite = false;
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (failDedicatedWrite && key.includes("infinite-canvas:canvas_store") && value.includes("agent-resume:backend-agent-production-durable:continuation-agent-production-durable")) {
+                throw new Error("continuation durable write failed");
+            }
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+
+        const scope = "canvas-agent-production-durable";
+        const storageKey = `infinite-canvas:canvas_store:user:${scope}`;
+        const projectId = "canvas-agent-production-durable";
+        const nodeId = "node-agent-production-durable";
+        const task: GenerationTask = {
+            id: "backend-agent-production-durable",
+            provider: "remote-cinematic-provider",
+            type: "agent_storyboard_rows",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            createdAt: "2026-08-13T00:00:00.000Z",
+            updatedAt: "2026-08-13T00:00:00.000Z",
+        };
+        const continuation = {
+            id: "continuation-agent-production-durable",
+            taskId: task.id,
+            status: "pending" as const,
+        };
+        const pendingNode: CanvasNodeData = {
+            id: nodeId,
+            type: CanvasNodeType.Text,
+            title: "agent node",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 180,
+            metadata: { content: "base", agentGenerationContinuation: continuation },
+        };
+        const project = {
+            id: projectId,
+            title: "canvas",
+            createdAt: "2026-08-13T00:00:00.000Z",
+            updatedAt: "2026-08-13T00:00:00.000Z",
+            nodes: [pendingNode],
+            connections: [],
+            chatSessions: [],
+            activeChatId: null,
+            backgroundMode: "dots" as const,
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        let completeCalls = 0;
+        const baseEffects = createEffectStore();
+        const effects: GenerationTaskEffectStore = {
+            ...baseEffects,
+            async complete(effectKey, taskId, result) {
+                completeCalls += 1;
+                await baseEffects.complete(effectKey, taskId, result);
+            },
+        };
+        const materializer = createGenerationTaskMaterializer({
+            effects,
+            async materializeOutput() {
+                throw new Error("no outputs");
+            },
+        });
+        const nodesRef = { current: [pendingNode] };
+        let completionCallbacks = 0;
+        const consume = () =>
+            consumeCanvasAgentGenerationContinuation(
+                task,
+                continuation,
+                (nextContinuation) => {
+                    completionCallbacks += 1;
+                    const nextNodes = nodesRef.current.map((node) =>
+                        node.id === nodeId
+                            ? {
+                                  ...node,
+                                  metadata: {
+                                      ...node.metadata,
+                                      agentGenerationContinuation: nextContinuation,
+                                      ...(nextContinuation.effectKey ? { generationEffectKeys: [nextContinuation.effectKey] } : {}),
+                                  },
+                              }
+                            : node,
+                    );
+                    nodesRef.current = nextNodes;
+                    useCanvasStore.getState().updateProject(projectId, { nodes: nextNodes });
+                },
+                {
+                    consumeAgent: ((input, continuationId, consumer) => materializer.resumeAgent(input, continuationId, consumer)) as typeof consumeGenerationTaskAgent,
+                    projectId,
+                    nodeId,
+                    nodesRef,
+                    setNodes: (value: CanvasNodeData[] | ((current: CanvasNodeData[]) => CanvasNodeData[])) => {
+                        nodesRef.current = typeof value === "function" ? value(nodesRef.current) : value;
+                    },
+                } as never,
+            );
+
+        try {
+            setActiveUserScope(scope);
+            useCanvasStore.setState({ projects: [project] });
+            await flushCanvasStorePersistence();
+
+            failDedicatedWrite = true;
+            await expect(consume()).rejects.toThrow("continuation durable write failed");
+            expect(completeCalls).toBe(0);
+            expect(completionCallbacks).toBe(0);
+            expect((JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } }).state.projects[0]?.nodes[0]?.metadata?.agentGenerationContinuation?.status).toBe("pending");
+
+            failDedicatedWrite = false;
+            await consume();
+            await flushCanvasStorePersistence();
+            await consume();
+            await consume();
+
+            const effectKey = `agent-resume:${task.id}:${continuation.id}`;
+            const durable = JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+            const durableNode = durable.state.projects[0]?.nodes[0];
+            const liveNode = useCanvasStore.getState().projects[0]?.nodes[0];
+            expect(completeCalls).toBe(1);
+            expect(completionCallbacks).toBe(1);
+            expect(durableNode?.metadata?.agentGenerationContinuation).toMatchObject({ status: "completed", effectKey });
+            expect(durableNode?.metadata?.generationEffectKeys).toEqual([effectKey]);
+            expect(liveNode?.metadata?.agentGenerationContinuation).toMatchObject({ status: "completed", effectKey });
+        } finally {
+            setActiveUserScope(previousScope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+        }
+    });
+
+    test("refresh recovery keeps a failed local Canvas ack retryable and durably preserves storyboard plus continuation on replay", async () => {
+        const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
+        const originalSetItem = localforage.setItem.bind(localforage);
+        const previousProjects = useCanvasStore.getState().projects;
+        const previousScope = getActiveUserScope();
+        const scope = "canvas-refresh-storyboard-ack-retry";
+        const storageKey = `infinite-canvas:canvas_store:user:${scope}`;
+        const values = new Map<string, string>();
+        const localStorageValues = new Map<string, string>();
+        let failCanvasWrite = false;
+        Object.defineProperty(globalThis, "window", {
+            configurable: true,
+            value: {
+                localStorage: {
+                    getItem: (key: string) => localStorageValues.get(key) ?? null,
+                    setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                    removeItem: (key: string) => localStorageValues.delete(key),
+                },
+            },
+        });
+        localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+        localforage.setItem = (async (key: string, value: string) => {
+            if (key === storageKey && failCanvasWrite) throw new Error("canvas continuation durable ack failed");
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+
+        const task: GenerationTask = {
+            id: "backend-refresh-storyboard-ack-retry",
+            projectId: "canvas-refresh-storyboard-ack-retry",
+            provider: "remote-cinematic-provider",
+            type: "agent_storyboard_rows",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultJson: JSON.stringify({ title: "Recovered storyboard", rows: [{ plotDescription: "Recovered shot", dialogue: "Hello" }] }),
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:01:00.000Z",
+        };
+        const continuation = { id: "continuation-refresh-storyboard-ack-retry", taskId: task.id, status: "pending" as const };
+        const pendingNode: CanvasNodeData = {
+            id: "node-refresh-storyboard-ack-retry",
+            type: CanvasNodeType.Script,
+            title: "Script",
+            position: { x: 0, y: 0 },
+            width: 640,
+            height: 480,
+            metadata: { status: "loading", taskId: task.id, agentGenerationContinuation: continuation },
+        };
+        const project = {
+            id: task.projectId!,
+            title: "canvas",
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+            nodes: [pendingNode],
+            connections: [],
+            chatSessions: [],
+            activeChatId: null,
+            backgroundMode: "dots" as const,
+            showImageInfo: false,
+            viewport: { x: 0, y: 0, k: 1 },
+            directorScenes: [],
+        };
+        const baseEffects = createEffectStore();
+        let completeCalls = 0;
+        const effects: GenerationTaskEffectStore = {
+            ...baseEffects,
+            async complete(effectKey, taskId, result, binding) {
+                completeCalls += 1;
+                await baseEffects.complete(effectKey, taskId, result, binding);
+            },
+        };
+        const materializer = createGenerationTaskMaterializer({ effects, materializeOutput: async () => ({}) });
+        let visibleNodes = [pendingNode];
+        const nodesRef = { current: [pendingNode] };
+        const setNodes = (value: CanvasNodeData[] | ((current: CanvasNodeData[]) => CanvasNodeData[])) => {
+            visibleNodes = typeof value === "function" ? value(visibleNodes) : value;
+        };
+        const consumeContinuation = (
+            inputTask: GenerationTask,
+            inputContinuation: typeof continuation,
+            onCompleted: (next: typeof continuation & { effectKey?: string }, signal?: AbortSignal) => Promise<void> | void,
+            dependencies: Parameters<typeof consumeCanvasAgentGenerationContinuation>[3],
+            signal?: AbortSignal,
+        ) =>
+            consumeCanvasAgentGenerationContinuation(
+                inputTask,
+                inputContinuation,
+                onCompleted as Parameters<typeof consumeCanvasAgentGenerationContinuation>[2],
+                {
+                    ...dependencies,
+                    consumeAgent: ((materialized, continuationId, consumer) => materializer.resumeAgent(materialized, continuationId, consumer)) as NonNullable<Parameters<typeof consumeCanvasAgentGenerationContinuation>[3]>["consumeAgent"],
+                },
+                signal,
+            );
+        const recover = () =>
+            recoverCanvasGenerationTaskNode({
+                projectId: project.id,
+                node: pendingNode,
+                completed: task,
+                continuationOnly: false,
+                nodesRef,
+                setNodes: setNodes as never,
+                applyGenerationTaskResult: async () => undefined,
+                signal: new AbortController().signal,
+                consumeContinuation: consumeContinuation as never,
+            });
+
+        try {
+            setActiveUserScope(scope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [project] }));
+            values.set(storageKey, JSON.stringify({ state: { projects: [project] }, version: 0, storageRevision: 1, tombstones: { projects: {}, nodes: {}, connections: {}, sessions: {}, messages: {} } }));
+
+            failCanvasWrite = true;
+            await recover();
+            expect(completeCalls).toBe(0);
+            expect(visibleNodes[0]?.metadata?.storyboard?.rows).toHaveLength(1);
+            expect(visibleNodes[0]?.metadata?.agentGenerationContinuation?.status).toBe("pending");
+            expect(nodesRef.current[0]?.metadata?.storyboard?.rows).toHaveLength(1);
+            expect(nodesRef.current[0]?.metadata?.agentGenerationContinuation?.status).toBe("pending");
+
+            failCanvasWrite = false;
+            await recover();
+            await recover();
+            await recover();
+            const effectKey = `agent-resume:${task.id}:${continuation.id}`;
+            const durable = JSON.parse(values.get(storageKey)!) as { state: { projects: Array<{ nodes: CanvasNodeData[] }> } };
+            const durableNode = durable.state.projects[0]?.nodes[0];
+            expect(completeCalls).toBe(1);
+            expect(durableNode?.metadata?.storyboard?.rows).toHaveLength(1);
+            expect(durableNode?.metadata?.storyboard?.rows[0]?.plotDescription).toBe("Recovered shot");
+            expect(durableNode?.metadata?.agentGenerationContinuation).toMatchObject({ status: "completed", effectKey });
+            expect(durableNode?.metadata?.generationEffectKeys).toEqual([effectKey]);
+            expect(visibleNodes[0]?.metadata?.storyboard?.rows[0]?.plotDescription).toBe("Recovered shot");
+            expect(visibleNodes[0]?.metadata?.agentGenerationContinuation).toMatchObject({ status: "completed", effectKey });
+        } finally {
+            failCanvasWrite = false;
+            setActiveUserScope(previousScope);
+            withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+            localforage.getItem = originalGetItem;
+            localforage.setItem = originalSetItem;
+            if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+            else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
         }
     });
 
     test("agent continuation acknowledgement waits for the durable stamped Canvas snapshot", async () => {
         const originalWindow = (globalThis as { window?: unknown }).window;
+        const originalGetItem = localforage.getItem.bind(localforage);
         const originalSetItem = localforage.setItem.bind(localforage);
+        const indexedValues = new Map<string, string>();
         const persistedPayloads: string[] = [];
         let releasePersistence!: () => void;
         const persistenceGate = new Promise<void>((resolve) => {
@@ -1501,12 +2778,14 @@ describe("generation task materializer", () => {
                 },
             },
         });
+        localforage.getItem = (async (key: string) => indexedValues.get(key) ?? null) as typeof localforage.getItem;
         localforage.setItem = (async (key: string, value: string) => {
             if (key.includes("infinite-canvas:canvas_store")) {
                 persistedPayloads.push(value);
                 persistenceStartedResolve();
                 await persistenceGate;
             }
+            indexedValues.set(key, value);
             return value;
         }) as typeof localforage.setItem;
 
@@ -1588,9 +2867,13 @@ describe("generation task materializer", () => {
                 await persistCanvasGenerationEffect({
                     projectId: current.id,
                     effectKey,
+                    previousNodes: current.nodes,
                     nodes: [...current.nodes, node],
+                    previousConnections: current.connections,
                     connections: current.connections,
+                    previousChatSessions: current.chatSessions,
                     chatSessions: [durableSession],
+                    previousActiveChatId: current.activeChatId,
                     activeChatId: currentSession.id,
                 });
             });
@@ -1613,10 +2896,13 @@ describe("generation task materializer", () => {
             expect(restarted.chatSessions[0]?.generationEffectKeys).toEqual([effectKey]);
         } finally {
             releasePersistence();
+            withCanvasStorePersistenceSuppressed(() => {
+                useCanvasStore.setState({ projects: previousProjects });
+            });
+            localforage.getItem = originalGetItem;
             localforage.setItem = originalSetItem;
             if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
             else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
-            useCanvasStore.setState({ projects: previousProjects });
         }
     });
 
@@ -1741,11 +3027,49 @@ describe("generation task materializer", () => {
         expect(seen[4]).toBe(seen[5]);
     });
 
+    test("production node consumer receives the attachment lease signal", async () => {
+        const task: GenerationTask = {
+            id: "task-production-lease-signal",
+            type: "image",
+            status: "succeeded",
+            prompt: "redacted",
+            attempts: 1,
+            resultState: "READY",
+            outputs: [{ outputIndex: 0, mediaType: "image", materializedAssetId: "asset-production-lease-signal" }],
+            createdAt: "2026-08-14T00:00:00.000Z",
+            updatedAt: "2026-08-14T00:00:00.000Z",
+        };
+        const parentController = new AbortController();
+        const leaseController = new AbortController();
+        let consumerSignal: AbortSignal | undefined;
+
+        await consumeGenerationTaskNode(
+            task,
+            "node-production-lease-signal",
+            0,
+            async ({ signal }) => {
+                consumerSignal = signal;
+            },
+            {
+                signal: parentController.signal,
+                materialize: async (input) => input,
+                attachNode: async (input, _nodeId, _outputIndex, consumer) => {
+                    await consumer({ task: input, output: input.outputs?.[0], effectKey: "attach-node:production-lease-signal", signal: leaseController.signal });
+                    return "applied";
+                },
+            },
+        );
+
+        expect(consumerSignal).toBe(leaseController.signal);
+        expect(consumerSignal).not.toBe(parentController.signal);
+    });
+
     test("Canvas asset sync freezes its account key and is aborted by account lifecycle cleanup", async () => {
         const source = await Bun.file(new URL("../src/services/project-asset-sync.ts", import.meta.url)).text();
         expect(source).toContain("const scope = getActiveUserScope();");
         expect(source).toContain("const key = [scope,");
         expect(source).toContain("runGenerationConsumer(options.signal");
+        expect(source.match(/readImageMeta\(url, signal\)/g)).toHaveLength(2);
     });
 
     test("generic task materialization never treats a local Canvas id as a backend project id", async () => {
@@ -1755,14 +3079,20 @@ describe("generation task materializer", () => {
         expect(source).toContain("await syncAssetToProject(asset.id, options.domainProjectId");
     });
 
-    test("production materialization forwards its abort signal into the output sink", async () => {
+    test("production materialization forwards parent abort into its lease-owned output sink", async () => {
         const controller = new AbortController();
         let sinkSignal: AbortSignal | undefined;
+        let sinkStartedResolve!: () => void;
+        const sinkStarted = new Promise<void>((resolve) => {
+            sinkStartedResolve = resolve;
+        });
         const materializer = createGenerationTaskMaterializer({
             effects: createEffectStore(),
             async materializeOutput(input) {
                 sinkSignal = input.signal;
-                return { materializedAssetId: "asset-signal" };
+                sinkStartedResolve();
+                await new Promise<void>((resolve) => input.signal?.addEventListener("abort", () => resolve(), { once: true }));
+                throw new DOMException("The operation was aborted", "AbortError");
             },
         });
         const task: GenerationTask = {
@@ -1776,7 +3106,12 @@ describe("generation task materializer", () => {
             updatedAt: "2026-08-13T00:00:00.000Z",
         };
 
-        await materializer.materialize(task, controller.signal);
-        expect(sinkSignal).toBe(controller.signal);
+        const materializing = materializer.materialize(task, controller.signal);
+        await sinkStarted;
+        expect(sinkSignal).toBeDefined();
+        expect(sinkSignal).not.toBe(controller.signal);
+        controller.abort();
+        await expect(materializing).rejects.toMatchObject({ name: "AbortError" });
+        expect(sinkSignal?.aborted).toBe(true);
     });
 });

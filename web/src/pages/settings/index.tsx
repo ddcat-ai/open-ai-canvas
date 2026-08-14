@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Select, Tag, Tooltip } from "antd";
+import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Select, Switch, Tag, Tooltip } from "antd";
 import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, SquareTerminal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -11,9 +11,10 @@ import { fetchChannelModels, type ChannelModelCatalogItem } from "@/services/api
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, protocolForModelCatalog } from "@/lib/model-protocols";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
-import { createModelChannel, defaultBaseUrlForApiFormat, defaultConfig, filterModelsByCapability, modelOptionsFromChannels, useConfigStore, useEffectiveConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { channelConnectionSignature, createModelChannel, defaultBaseUrlForApiFormat, defaultConfig, filterModelsByCapability, modelOptionsFromChannels, useConfigStore, useEffectiveConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
+import { desktopLocalChannelFormState, desktopLocalChannelPayloadValue, DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL } from "@/lib/desktop-local-channel";
 import { LocalCliSettings } from "./local-cli-settings";
 import { ModelDefaultGrid } from "./model-default-grid";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
@@ -44,6 +45,42 @@ function channelModelFetchErrorMessage(error: unknown) {
     return `${detail}；也可以直接在模型列表中手动输入模型名`;
 }
 
+export function userLocalChannelFormOwner(desktopLocalChannelsEnabled: boolean, hostname: string, requestedAllowLocalChannel?: boolean) {
+    const state = desktopLocalChannelFormState(desktopLocalChannelsEnabled, hostname, requestedAllowLocalChannel);
+    return { ...state, payloadValue: desktopLocalChannelPayloadValue(desktopLocalChannelsEnabled, hostname, requestedAllowLocalChannel) };
+}
+
+export function UserLocalChannelSwitch({ visible, checked, onChange }: { visible: boolean; checked: boolean; onChange: (checked: boolean) => void }) {
+    if (!visible) return null;
+    return (
+        <Form.Item label="允许本机渠道" className="mb-0 lg:col-span-12" extra={`仅放行精确 localhost 或 127.0.0.1；示例：${DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}`}>
+            <Switch checked={checked} onChange={onChange} />
+        </Form.Item>
+    );
+}
+
+export function UserLocalChannelFields({ channel, visible, checked, desktopLocalChannelsEnabled, hostname, updateChannel }: { channel: ModelChannel; visible: boolean; checked: boolean; desktopLocalChannelsEnabled: boolean; hostname: string; updateChannel: (id: string, patch: Partial<ModelChannel>) => void }) {
+    return (
+        <>
+            <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 lg:col-span-6">
+                <Input
+                    id={`channel-${channel.id}-base-url`}
+                    inputMode="url"
+                    value={channel.baseUrl}
+                    placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : "填写渠道 Base URL"}
+                    onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })}
+                    onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/, "") })}
+                />
+            </Form.Item>
+            <UserLocalChannelSwitch visible={visible} checked={checked} onChange={(value) => updateChannel(channel.id, userLocalChannelChangePatch(desktopLocalChannelsEnabled, hostname, value))} />
+        </>
+    );
+}
+
+export function userLocalChannelChangePatch(desktopLocalChannelsEnabled: boolean, hostname: string, checked: boolean) {
+    return { allowLocalChannel: userLocalChannelFormOwner(desktopLocalChannelsEnabled, hostname, checked).payloadValue };
+}
+
 export default function SettingsPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
@@ -58,7 +95,11 @@ export default function SettingsPage() {
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
+    const desktopLocalChannelsEnabled = useUserStore((state) => state.features.desktopLocalChannelsEnabled);
+    const desktopLocalChannelHostname = typeof window === "undefined" ? "" : window.location.hostname;
+    const showDesktopLocalChannelControl = userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, false).visible;
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
+    const channelForModelFetch = (channel: ModelChannel) => ({ ...channel, allowLocalChannel: userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).payloadValue });
 
     useEffect(() => {
         if (isConfigSection(requestedSection)) setActiveTab(requestedSection);
@@ -163,7 +204,7 @@ export default function SettingsPage() {
         }
         setChannelLoading(channel.id, true);
         try {
-            const result = await fetchChannelModels(channel, true);
+            const result = await fetchChannelModels(channelForModelFetch(channel), true);
             if (!result.models.length) {
                 message.warning(`${channel.name || "当前渠道"}未返回模型，已保留现有手工模型`);
                 return;
@@ -200,7 +241,7 @@ export default function SettingsPage() {
             const results = await Promise.all(
                 runnable.map(async (channel) => {
                     try {
-                        const result = await fetchChannelModels(channel, true);
+                        const result = await fetchChannelModels(channelForModelFetch(channel), true);
                         return { channel, result, error: "" };
                     } catch (error) {
                         return { channel, result: { models: [], catalog: [] }, error: error instanceof Error ? error.message : "读取失败" };
@@ -410,16 +451,14 @@ export default function SettingsPage() {
                                                                                         onChange={(value) => updateChannelConnection(channel, value)}
                                                                                     />
                                                                                 </Form.Item>
-                                                                                <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 lg:col-span-6">
-                                                                                    <Input
-                                                                                        id={`channel-${channel.id}-base-url`}
-                                                                                        inputMode="url"
-                                                                                        value={channel.baseUrl}
-                                                                                        placeholder="填写渠道 Base URL"
-                                                                                        onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })}
-                                                                                        onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/, "") })}
-                                                                                    />
-                                                                                </Form.Item>
+                                                                                <UserLocalChannelFields
+                                                                                    channel={channel}
+                                                                                    visible={showDesktopLocalChannelControl}
+                                                                                    checked={userLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked}
+                                                                                    desktopLocalChannelsEnabled={desktopLocalChannelsEnabled}
+                                                                                    hostname={desktopLocalChannelHostname}
+                                                                                    updateChannel={updateChannel}
+                                                                                />
                                                                                 <Form.Item label="API Key" htmlFor={`channel-${channel.id}-api-key`} className="mb-0 lg:col-span-5">
                                                                                     <Input.Password
                                                                                         id={`channel-${channel.id}-api-key`}
@@ -714,10 +753,6 @@ function channelConnectionError(channel: ModelChannel) {
     if (!channel.apiKey.trim()) return "请填写 API Key / Access Key";
     if (requiresSecretKey(channel) && !channel.secretKey?.trim()) return "当前协议需要填写 Secret Key";
     return "";
-}
-
-function channelConnectionSignature(channel: ModelChannel) {
-    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", JSON.stringify(channel.headers || [])].join("\n");
 }
 
 function channelValidationError(channel: ModelChannel) {

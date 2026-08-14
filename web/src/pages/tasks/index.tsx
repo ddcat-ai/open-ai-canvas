@@ -838,6 +838,7 @@ function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConf
         apiFormat: config.apiFormat,
         interfaceType: config.interfaceType,
         baseUrl: config.baseUrl,
+        allowLocalChannel: config.allowLocalChannel === true,
         apiKey: config.apiKey,
         secretKey: config.secretKey,
         model: config.model,

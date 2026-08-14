@@ -169,6 +169,7 @@ test("Local CLI settings keeps the Runtime compact and uses the official Dreamin
     expect(source).not.toContain("runtimeController");
     expect(source).toContain('void runDreamina("refresh")');
     expect(source.match(/官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。/g)).toHaveLength(1);
+    expect(source.match(/LOCAL_CLI_SETTINGS_COPY\.dreaminaAccountSwitch/g)).toHaveLength(1);
     expect(source).not.toContain("dreaminaSafety");
     expect(source).not.toContain("Framefield 不读取或上传 Cookie、浏览器 Profile 或登录令牌。");
     expect(source).not.toContain("无需重复授权");
@@ -177,6 +178,11 @@ test("Local CLI settings keeps the Runtime compact and uses the official Dreamin
     expect(source).not.toContain("Canvas 与 OAuth CLI 共用同一个进程");
     expect(source).not.toContain("当前浏览器密钥自动重连");
     expect(source).not.toContain("页面未授权，以页面发起/完成授权为准");
+
+    const architecture = await Bun.file(new URL("../../canvas-agent/README.md", import.meta.url)).text();
+    expect(architecture).toContain("外部程序直接切换 Dreamina CLI 账号无法被本应用实时观测");
+    expect(architecture).toContain("官方 CLI 的 argv 可能被同一 OS 用户通过进程列表看到");
+    expect(architecture).toContain("prompt、receipt 或本地路径");
 });
 
 test("settings route recognizes local-cli as a first-class section", async () => {
@@ -236,5 +242,6 @@ const compactCopyContract = {
     dreaminaMembership: "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
     dreaminaConsistency: "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
     dreaminaCancel: "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
+    dreaminaAccountSwitch: "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
     dreaminaRefresh: "刷新状态",
 } as const;

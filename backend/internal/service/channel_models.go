@@ -97,7 +97,7 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 		return nil, err
 	}
 	// 使用服务端保存的渠道密钥和请求头访问上游，避免敏感配置再次经过浏览器。
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
+	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, AllowLocalChannel: channel.AllowLocalChannel, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +242,9 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
+	if _, err := s.validateChannelOutboundURL(channel.BaseURL, channel.AllowLocalChannel, false); err != nil {
+		return nil, err
+	}
 	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
 	if err != nil {
 		return nil, err
@@ -277,6 +280,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			APIFormat:          channel.APIFormat,
 			InterfaceType:      string(protocol),
 			BaseURL:            channel.BaseURL,
+			AllowLocalChannel:  s.effectiveAllowLocalChannel(channel.AllowLocalChannel),
 			APIKey:             channel.APIKey,
 			SecretKey:          channel.SecretKey,
 			Headers:            headers,
@@ -305,6 +309,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		Service: s, UserID: actor.ID, ChannelID: channel.ID, Capability: capability,
 		Operation: "admin_model_test", Model: modelKey, VideoSeconds: videoSecondsValue,
 	})
+	testCtx = withProviderOutboundPolicy(testCtx, input.Config)
 	startedAt := time.Now()
 	switch capability {
 	case "text":

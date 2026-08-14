@@ -12,6 +12,7 @@ export const dreaminaGenerationOperations = [
 ] as const;
 
 const safeId = z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/);
+export const dreaminaSubmitIdSchema = safeId;
 const prompt = z.string().min(1).max(20_000);
 const referencePath = z.string().min(1).max(2_048);
 const imageReferences = z.array(referencePath);
@@ -85,6 +86,7 @@ export const dreaminaGenerationSchemas = [
     z.object({ operation: z.literal("multimodal2video"), idempotencyKey: safeId, prompt: prompt.optional(), modelVersion: seedanceModel.optional(), ratio: videoRatio.optional(), videoResolution, duration: videoDuration.optional(), referenceImages: imageReferences.max(30).optional(), referenceVideos: z.array(referencePath).max(10).optional(), referenceAudios: z.array(referencePath).max(10).optional() }).strict(),
 ] as const;
 
+const generationDiscriminatedSchema = z.discriminatedUnion("operation", dreaminaGenerationSchemas);
 const schemas = [
     ...dreaminaGenerationSchemas,
     z.object({ operation: z.literal("query_result"), submitId: safeId }).strict(),
@@ -92,14 +94,14 @@ const schemas = [
 
 const discriminatedSchema = z.discriminatedUnion("operation", schemas);
 export type DreaminaCliInput = z.infer<typeof discriminatedSchema>;
-export type DreaminaGenerationInput = Exclude<DreaminaCliInput, { operation: "query_result" }>;
+export type DreaminaGenerationInput = z.infer<typeof generationDiscriminatedSchema>;
+export const dreaminaGenerationInputSchema = generationDiscriminatedSchema.superRefine(validateOperationCombination);
 export const dreaminaCliInputSchema = discriminatedSchema.superRefine(validateOperationCombination);
 
-// MCP accepts one raw object shape; the discriminated runtime schema remains authoritative.
-export const dreaminaCliToolShape = z.object({
-    operation: z.enum([...dreaminaGenerationOperations, "query_result"]),
-    idempotencyKey: safeId.optional(),
-    submitId: safeId.optional(),
+// Public MCP exposes generation only; the internal Runtime schema retains query_result for scheduler use.
+export const dreaminaMcpToolShape = z.object({
+    operation: z.enum(dreaminaGenerationOperations),
+    idempotencyKey: safeId,
     prompt: prompt.optional(),
     modelVersion: z.union([dreaminaImageModelSchema, imageVideoModel]).optional(),
     ratio: imageRatio.optional(),

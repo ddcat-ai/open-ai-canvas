@@ -29,6 +29,7 @@ export const LOCAL_CLI_SETTINGS_COPY = {
     dreaminaMembership: "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
     dreaminaConsistency: "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
     dreaminaCancel: "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
+    dreaminaAccountSwitch: "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
     dreaminaRefresh: "刷新状态",
 } as const;
 
@@ -219,6 +220,7 @@ export function LocalCliSettings() {
                         <p className="text-xs leading-6 text-foreground/60">{LOCAL_CLI_SETTINGS_COPY.dreaminaMembership}</p>
                         <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaConsistency}</p>
                         <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaCancel}</p>
+                        <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaAccountSwitch}</p>
                         {status?.state === "missing" ? (
                             <p className="rounded-md bg-foreground/[0.035] p-3 text-xs leading-6 text-foreground/65">未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。</p>
                         ) : null}

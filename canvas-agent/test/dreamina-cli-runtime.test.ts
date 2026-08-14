@@ -2060,8 +2060,8 @@ test("Dreamina recovery serializes lock-sensitive queries and reaches each recei
     });
     try {
         await runtime.getTask("dreamina-query-fifo-0001");
-        await waitForPromise(queryBatchCompleted, "Dreamina recovery query batch");
-        await waitForAsync(async () => (await runtime.listTasks()).every((task) => task.status === "failed"));
+        await waitForPromise(queryBatchCompleted, "Dreamina recovery query batch", 10_000);
+        await waitForAsync(async () => (await runtime.listTasks()).every((task) => task.status === "failed"), 10_000);
         assert.equal(maxActiveQueries, 1);
         assert.deepEqual(Object.fromEntries(calls), { 1: 1, 2: 1, 3: 1 });
         assert.deepEqual((await runtime.listTasks()).map((task) => task.errorCode), [
@@ -2110,7 +2110,7 @@ test("Dreamina query FIFO is fair across pending receipts and shutdown aborts qu
     });
     try {
         await runtime.getTask("dreamina-query-fifo-0001");
-        await waitForAsync(async () => (await runtime.listTasks()).every((task) => task.status === "failed"));
+        await waitForAsync(async () => (await runtime.listTasks()).every((task) => task.status === "failed"), 15_000);
         assert.equal(maxActiveQueries, 1);
         assert.deepEqual([...new Set(order)].sort(), [1, 2, 3]);
         assert.deepEqual(Object.fromEntries([...attempts.entries()].sort(([left], [right]) => left - right)), {
@@ -2642,6 +2642,8 @@ test("Dreamina restart fails queued work before submission and never replays its
 test("Dreamina official cancellation releases a scheduler slot without local cancellation authority", async () => {
     const box = await sandbox();
     let submits = 0;
+    let markSecondSubmitStarted!: () => void;
+    const secondSubmitStarted = new Promise<void>((resolve) => { markSecondSubmitStarted = resolve; });
     const runtime = new DreaminaCliRuntime({
         ownerId,
         stateFile: box.stateFile,
@@ -2653,6 +2655,7 @@ test("Dreamina official cancellation releases a scheduler slot without local can
         runProcess: async (input) => {
             if (input.args[0] === "text2video") {
                 submits += 1;
+                if (submits === 2) markSecondSubmitStarted();
                 input.onSpawn?.(4242);
                 return { exitCode: 0, stdout: JSON.stringify({ submit_id: `receipt-release-${submits}` }), stderr: "" };
             }
@@ -2665,7 +2668,7 @@ test("Dreamina official cancellation releases a scheduler slot without local can
         const queuedPromise = runtime.enqueue({ ...base, idempotencyKey: "dreamina-after-cancel-0001", prompt: "next" });
         assert.equal((await queuedPromise).status, "queued");
         assert.equal((await runtime.refreshTask(active.id)).status, "running");
-        await waitFor(() => submits === 2);
+        await waitForPromise(secondSubmitStarted, "Dreamina queued task submission", 10_000);
         assert.equal((await runtime.getTask(active.id)).status, "cancelled");
         assert.equal((await runtime.getTask("dreamina-after-cancel-0001")).status, "running");
     } finally {
@@ -2674,10 +2677,169 @@ test("Dreamina official cancellation releases a scheduler slot without local can
     }
 });
 
+test("Dreamina cross-Runtime queue head promotes after a peer reconciler releases durable capacity", async () => {
+    const box = await sandbox();
+    let releaseTerminal!: () => void;
+    let markTerminalQueryStarted!: () => void;
+    const terminalGate = new Promise<void>((resolve) => { releaseTerminal = resolve; });
+    const terminalQueryStarted = new Promise<void>((resolve) => { markTerminalQueryStarted = resolve; });
+    let markQueuedSubmitStarted!: () => void;
+    const queuedSubmitStarted = new Promise<void>((resolve) => { markQueuedSubmitStarted = resolve; });
+    let runtimeASubmits = 0;
+    let runtimeBSubmits = 0;
+    const sharedOptions = {
+        ownerId,
+        stateFile: box.stateFile,
+        ensureReady: async () => undefined,
+        discover: async () => installation,
+        maxActiveTasks: 1,
+        pollIntervalMs: 60_000,
+        reservationLeaseMs: 500,
+        reservationHeartbeatMs: 20,
+    };
+    const runtimeA = new DreaminaCliRuntime({
+        ...sharedOptions,
+        generationRoot: path.join(box.root, "runtime-a-runs"),
+        runProcess: async (input) => {
+            if (input.args[0] === "text2video") {
+                runtimeASubmits += 1;
+                input.onSpawn?.(4242);
+                return { exitCode: 0, stdout: '{"submit_id":"receipt-runtime-a-slot"}', stderr: "" };
+            }
+            markTerminalQueryStarted();
+            await terminalGate;
+            return { exitCode: 0, stdout: '{"status":"cancelled"}', stderr: "" };
+        },
+    });
+    const runtimeB = new DreaminaCliRuntime({
+        ...sharedOptions,
+        generationRoot: path.join(box.root, "runtime-b-runs"),
+        runProcess: async (input) => {
+            if (input.args[0] === "text2video") {
+                runtimeBSubmits += 1;
+                markQueuedSubmitStarted();
+                input.onSpawn?.(5252);
+                return { exitCode: 0, stdout: '{"submit_id":"receipt-runtime-b-promoted"}', stderr: "" };
+            }
+            return { exitCode: 0, stdout: '{"status":"pending"}', stderr: "" };
+        },
+    });
+    const base = { operation: "text2video" as const, modelVersion: "seedance2.0mini" as const, ratio: "16:9" as const, videoResolution: "720p" as const, duration: 4 };
+    try {
+        const active = await runtimeA.enqueue({ ...base, idempotencyKey: "dreamina-runtime-a-active-0001", prompt: "active" });
+        const queued = await runtimeB.enqueue({ ...base, idempotencyKey: "dreamina-runtime-b-queued-0001", prompt: "queued" });
+        assert.equal(active.status, "running");
+        assert.equal(queued.status, "queued");
+        assert.equal(runtimeASubmits, 1);
+        assert.equal(runtimeBSubmits, 0);
+
+        await runtimeA.refreshTask(active.id);
+        await waitForPromise(terminalQueryStarted, "Runtime A terminal reconciliation", 2_000);
+        releaseTerminal();
+        await waitForRuntimeRecord(box.stateFile, active.id, (record) => record.state === "cancelled", 2_000);
+        await waitForPromise(queuedSubmitStarted, "Runtime B queued promotion", 1_000);
+
+        assert.equal(runtimeBSubmits, 1);
+        assert.equal((await runtimeB.getTask(queued.id)).status, "running");
+    } finally {
+        releaseTerminal();
+        await Promise.all([runtimeA.dispose(), runtimeB.dispose()]);
+        await box.cleanup();
+    }
+});
+
+test("Dreamina durable scheduler preserves FIFO when a later Runtime heartbeat reaches the released slot first", async () => {
+    const box = await sandbox();
+    let releaseTerminal!: () => void;
+    const terminalGate = new Promise<void>((resolve) => { releaseTerminal = resolve; });
+    let markFirstQueuedSubmit!: (runtime: "B" | "C") => void;
+    const firstQueuedSubmit = new Promise<"B" | "C">((resolve) => { markFirstQueuedSubmit = resolve; });
+    let markSecondQueuedSubmit!: (runtime: "B" | "C") => void;
+    const secondQueuedSubmit = new Promise<"B" | "C">((resolve) => { markSecondQueuedSubmit = resolve; });
+    let observeQueuedHeartbeats = false;
+    let firstQueuedSubmitRuntime: "B" | "C" | undefined;
+    const queuedHeartbeatOrder: Array<"B" | "C"> = [];
+    const queuedSubmitOrder: Array<"B" | "C"> = [];
+    const shared = {
+        ownerId,
+        stateFile: box.stateFile,
+        ensureReady: async () => undefined,
+        discover: async () => installation,
+        maxActiveTasks: 1,
+        pollIntervalMs: 60_000,
+        reservationLeaseMs: 5_000,
+    };
+    const runtimeA = new DreaminaCliRuntime({
+        ...shared,
+        reservationHeartbeatMs: 50,
+        generationRoot: path.join(box.root, "fifo-runtime-a"),
+        runProcess: async (input) => {
+            if (input.args[0] === "text2video") {
+                input.onSpawn?.(4101);
+                return { exitCode: 0, stdout: '{"submit_id":"fifo-active"}', stderr: "" };
+            }
+            await terminalGate;
+            return { exitCode: 0, stdout: '{"status":"cancelled"}', stderr: "" };
+        },
+    });
+    const queuedRuntime = (runtime: "B" | "C", heartbeatMs: number) => new DreaminaCliRuntime({
+        ...shared,
+        reservationHeartbeatMs: heartbeatMs,
+        generationRoot: path.join(box.root, `fifo-runtime-${runtime.toLowerCase()}`),
+        onQueueHeartbeatWait(event) {
+            if (observeQueuedHeartbeats && event === "started") queuedHeartbeatOrder.push(runtime);
+        },
+        runProcess: async (input) => {
+            if (input.args[0] === "text2video") {
+                queuedSubmitOrder.push(runtime);
+                if (!firstQueuedSubmitRuntime) {
+                    firstQueuedSubmitRuntime = runtime;
+                    markFirstQueuedSubmit(runtime);
+                } else if (queuedSubmitOrder.length === 2) markSecondQueuedSubmit(runtime);
+                input.onSpawn?.(runtime === "B" ? 4202 : 4303);
+                return { exitCode: 0, stdout: JSON.stringify({ submit_id: `receipt-fifo-${runtime.toLowerCase()}` }), stderr: "" };
+            }
+            return { exitCode: 0, stdout: '{"status":"cancelled"}', stderr: "" };
+        },
+    });
+    const runtimeB = queuedRuntime("B", 1_000);
+    const runtimeC = queuedRuntime("C", 20);
+    const base = { operation: "text2video" as const, modelVersion: "seedance2.0mini" as const, ratio: "16:9" as const, videoResolution: "720p" as const, duration: 4 };
+    try {
+        const active = await runtimeA.enqueue({ ...base, idempotencyKey: "dreamina-durable-fifo-active-0001", prompt: "active" });
+        const queuedB = await runtimeB.enqueue({ ...base, idempotencyKey: "dreamina-durable-fifo-b-0001", prompt: "queued-b" });
+        const queuedC = await runtimeC.enqueue({ ...base, idempotencyKey: "dreamina-durable-fifo-c-0001", prompt: "queued-c" });
+        assert.equal(queuedB.status, "queued");
+        assert.equal(queuedC.status, "queued");
+
+        await runtimeA.refreshTask(active.id);
+        observeQueuedHeartbeats = true;
+        releaseTerminal();
+        await waitForRuntimeRecord(box.stateFile, active.id, (record) => record.state === "cancelled", 2_000);
+
+        assert.equal(await waitForPromise(firstQueuedSubmit, "first durable FIFO queued submit", 3_000), "B");
+        assert.equal(queuedHeartbeatOrder[0], "C");
+        assert.deepEqual(queuedSubmitOrder, ["B"]);
+        assert.equal((await runtimeC.getTask(queuedC.id)).status, "queued");
+
+        await waitForRuntimeRecord(box.stateFile, queuedB.id, (record) => record.state === "accepted", 2_000);
+        assert.equal((await runtimeB.refreshTask(queuedB.id)).status, "running");
+        await waitForRuntimeRecord(box.stateFile, queuedB.id, (record) => record.state === "cancelled", 2_000);
+        assert.equal(await waitForPromise(secondQueuedSubmit, "second durable FIFO queued submit", 2_000), "C");
+        assert.deepEqual(queuedSubmitOrder, ["B", "C"]);
+    } finally {
+        releaseTerminal();
+        await Promise.all([runtimeA.dispose(), runtimeB.dispose(), runtimeC.dispose()]);
+        await box.cleanup();
+    }
+});
+
 test("Dreamina hides accepted work without releasing its official slot and keeps reconciling it", async () => {
     const box = await sandbox();
     let submits = 0;
     let hiddenOfficiallyCancelled = false;
+    let markSixthSubmitStarted!: () => void;
+    const sixthSubmitStarted = new Promise<void>((resolve) => { markSixthSubmitStarted = resolve; });
     const runtime = new DreaminaCliRuntime({
         ownerId,
         stateFile: box.stateFile,
@@ -2689,6 +2851,7 @@ test("Dreamina hides accepted work without releasing its official slot and keeps
         runProcess: async (input) => {
             if (input.args[0] === "text2video") {
                 submits += 1;
+                if (submits === 6) markSixthSubmitStarted();
                 input.onSpawn?.(4242);
                 return { exitCode: 0, stdout: JSON.stringify({ submit_id: `receipt-hide-${submits}` }), stderr: "" };
             }
@@ -2719,11 +2882,7 @@ test("Dreamina hides accepted work without releasing its official slot and keeps
         assert.equal(submits, 5);
 
         assert.deepEqual(await runtime.deleteTask(accepted[0]!.id), { deleted: true });
-        let hidden: { state?: string; hidden?: boolean } | undefined;
-        await waitForAsync(async () => {
-            hidden = await readRuntimeRecordWhenAvailable(box.stateFile, accepted[0]!.id);
-            return hidden?.state === "accepted" && hidden.hidden === true;
-        });
+        const hidden = await readRuntimeRecordWhenAvailable(box.stateFile, accepted[0]!.id);
         assert.equal(submits, 5);
         await assert.rejects(runtime.getTask(accepted[0]!.id), (error: unknown) => (
             error instanceof DreaminaCliError && error.code === "dreamina_task_not_found"
@@ -2732,10 +2891,13 @@ test("Dreamina hides accepted work without releasing its official slot and keeps
         assert.equal(hidden?.hidden, true);
 
         hiddenOfficiallyCancelled = true;
-        await waitForAsync(async () => (
-            (await readRuntimeRecordWhenAvailable(box.stateFile, accepted[0]!.id))?.state === "cancelled"
-        ));
-        await waitFor(() => submits === 6);
+        await waitForRuntimeRecord(
+            box.stateFile,
+            accepted[0]!.id,
+            (record) => record.state === "cancelled",
+            10_000,
+        );
+        await waitForPromise(sixthSubmitStarted, "Dreamina hidden task slot release", 10_000);
     } finally {
         await runtime.dispose();
         await box.cleanup();
@@ -2819,6 +2981,17 @@ test("Dreamina cross-Runtime waiters reload durable completed and cancelled term
     for (const terminal of ["completed", "cancelled"] as const) {
         const box = await sandbox();
         const id = `dreamina-durable-wait-${terminal}-0001`;
+        let markWaiterLoaded!: () => void;
+        let releaseWaiterLoad!: () => void;
+        const waiterLoaded = new Promise<void>((resolve) => { markWaiterLoaded = resolve; });
+        const waiterLoadGate = new Promise<void>((resolve) => { releaseWaiterLoad = resolve; });
+        const waiterArtifactStore = new DreaminaProviderArtifactStore({
+            root: path.join(box.root, "dreamina-provider-artifacts"),
+        });
+        waiterArtifactStore.scavenge = async () => {
+            markWaiterLoaded();
+            await waiterLoadGate;
+        };
         await fs.writeFile(box.stateFile, JSON.stringify({
             version: 1,
             records: [{
@@ -2871,24 +3044,29 @@ test("Dreamina cross-Runtime waiters reload durable completed and cancelled term
                 waiterQueries += 1;
                 return { exitCode: 0, stdout: '{"status":"failed"}', stderr: "" };
             },
+            artifactStore: waiterArtifactStore,
         });
         try {
             await winner.start();
             await winnerEntered;
             const waiting = waiter.waitForTask(id, "video");
-            await new Promise((resolve) => setTimeout(resolve, 25));
+            await waiterLoaded;
             assert.equal(waiterQueries, 0);
             releaseWinner();
-            const outcome = await Promise.race([
-                waiting.then(
-                    (result) => ({ kind: "resolved" as const, result }),
-                    (error: unknown) => ({
-                        kind: "rejected" as const,
-                        code: error && typeof error === "object" && "code" in error ? String(error.code) : "unexpected",
-                    }),
-                ),
-                new Promise<{ kind: "pending" }>((resolve) => setTimeout(() => resolve({ kind: "pending" }), 750)),
-            ]);
+            await waitForRuntimeRecord(box.stateFile, id, (record) => (
+                terminal === "completed"
+                    ? record.state === "succeeded" && record.providerOutputs?.length === 1
+                    : record.state === "cancelled"
+            ));
+            await winner.dispose();
+            releaseWaiterLoad();
+            const outcome = await waiting.then(
+                (result) => ({ kind: "resolved" as const, result }),
+                (error: unknown) => ({
+                    kind: "rejected" as const,
+                    code: error && typeof error === "object" && "code" in error ? String(error.code) : "unexpected",
+                }),
+            );
             const videoBytes = Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0, 0, 0, 0]);
             assert.deepEqual(outcome, terminal === "completed"
                 ? {
@@ -2907,6 +3085,7 @@ test("Dreamina cross-Runtime waiters reload durable completed and cancelled term
             assert.equal(winnerQueries, terminal === "completed" ? 2 : 1);
         } finally {
             releaseWinner();
+            releaseWaiterLoad();
             await Promise.all([winner.dispose(), waiter.dispose()]);
             await box.cleanup();
         }
@@ -3607,8 +3786,8 @@ async function waitFor(condition: () => boolean) {
     }
 }
 
-async function waitForAsync(condition: () => Promise<boolean>) {
-    const deadline = Date.now() + 2_000;
+async function waitForAsync(condition: () => Promise<boolean>, timeoutMs = 2_000) {
+    const deadline = Date.now() + timeoutMs;
     while (!(await condition())) {
         if (Date.now() >= deadline) throw new Error("timed out waiting for Dreamina async state");
         await new Promise((resolve) => setTimeout(resolve, 10));

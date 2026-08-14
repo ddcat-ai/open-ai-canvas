@@ -9,7 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
 import { imageToDataUrl } from "@/services/image-storage";
-import { persistCanvasGenerationEffect } from "@/services/canvas-generation-consumer";
+import { isCanvasGenerationDurableAckError, persistCanvasCinematicSessionContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "@/services/generation-consumer-dedupe";
 import { activeGenerationConsumerController } from "@/services/generation-consumer-lifecycle";
@@ -216,6 +216,73 @@ type CanvasAssistantPanelProps = {
     resizing?: boolean;
 };
 
+export type CinematicContinuationFailureDisposition = "abort" | "durable-ack" | "provider-failed";
+
+type CinematicContinuationLiveSessionState = { sessions: CanvasAssistantSession[]; activeChatId: string | null };
+
+type CanvasCinematicContinuationBoundaryInput<T> = {
+    projectId: string;
+    effectKey?: string;
+    signal?: AbortSignal;
+    readSnapshot: () => CanvasAgentSnapshot;
+    executeOps: () => Promise<T>;
+    completeSession: (effectKey?: string) => CanvasAssistantSession[];
+    readLiveSessionState: () => CinematicContinuationLiveSessionState;
+    restoreLiveSessions: (sessions: CanvasAssistantSession[], activeChatId: string | null) => void;
+    restoreLiveSnapshot: (state: Pick<CanvasAgentSnapshot, "nodes" | "connections">) => void;
+    failProvider: (error: unknown) => void;
+    onFailureDisposition?: (disposition: CinematicContinuationFailureDisposition, error: unknown) => void;
+    persistContinuation?: typeof persistCanvasCinematicSessionContinuationEffect;
+};
+
+export function handleCinematicContinuationFailure(error: unknown, failProvider: (error: unknown) => void): CinematicContinuationFailureDisposition {
+    if (isAgentSessionPollingAbort(error)) return "abort";
+    if (isCanvasGenerationDurableAckError(error)) return "durable-ack";
+    failProvider(error);
+    return "provider-failed";
+}
+
+export async function runCanvasCinematicContinuationBoundary<T>(input: CanvasCinematicContinuationBoundaryInput<T>) {
+    const previousSnapshot = input.readSnapshot();
+    const previousSessionState = input.readLiveSessionState();
+    try {
+        if (input.signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
+        const result = await input.executeOps();
+        const attemptedSnapshot = input.readSnapshot();
+        input.completeSession(input.effectKey);
+        const attemptedSessionState = input.readLiveSessionState();
+        if (input.effectKey) {
+            await (input.persistContinuation ?? persistCanvasCinematicSessionContinuationEffect)({
+                projectId: input.projectId,
+                effectKey: input.effectKey,
+                previousNodes: previousSnapshot.nodes,
+                nodes: attemptedSnapshot.nodes,
+                previousConnections: previousSnapshot.connections,
+                connections: attemptedSnapshot.connections,
+                previousChatSessions: previousSessionState.sessions,
+                chatSessions: attemptedSessionState.sessions,
+                previousActiveChatId: previousSessionState.activeChatId,
+                activeChatId: attemptedSessionState.activeChatId,
+                signal: input.signal,
+                readLiveSessionState: input.readLiveSessionState,
+                restoreLiveSessions: input.restoreLiveSessions,
+                restoreLiveSnapshot: input.restoreLiveSnapshot,
+            });
+        }
+        return result;
+    } catch (error) {
+        const disposition = handleCinematicContinuationFailure(error, input.failProvider);
+        input.onFailureDisposition?.(disposition, error);
+        throw error;
+    }
+}
+
+export const canvasCinematicContinuationEntryAdapters = {
+    "online-tool": runCanvasCinematicContinuationBoundary,
+    "submit-cinematic": runCanvasCinematicContinuationBoundary,
+    "resume-cinematic": runCanvasCinematicContinuationBoundary,
+} as const;
+
 export function CanvasAssistantPanel({
     nodes,
     selectedNodeIds,
@@ -256,7 +323,12 @@ export function CanvasAssistantPanel({
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
     const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
     const localSessionsRef = useRef(localSessions);
-    const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
+    const [localActiveSessionId, setLocalActiveSessionIdState] = useState<string | null>(activeSessionId);
+    const localActiveSessionIdRef = useRef(localActiveSessionId);
+    const setLocalActiveSessionId = (activeId: string | null) => {
+        localActiveSessionIdRef.current = activeId;
+        setLocalActiveSessionIdState(activeId);
+    };
     const applyingExternalSessionsRef = useRef(false);
     const chatListRef = useRef<HTMLDivElement>(null);
     const snapshotRef = useRef(snapshot);
@@ -324,6 +396,17 @@ export function CanvasAssistantPanel({
         localSessionsRef.current = next;
         setLocalSessions(next);
         return next;
+    };
+
+    const readCinematicSessionState = (): CinematicContinuationLiveSessionState => ({ sessions: localSessionsRef.current, activeChatId: localActiveSessionIdRef.current });
+
+    const restoreCinematicSessions = (sessions: CanvasAssistantSession[], activeId: string | null) => {
+        localSessionsRef.current = sessions;
+        setLocalSessions(sessions);
+        setLocalActiveSessionId(activeId);
+    };
+    const restoreCinematicSnapshot = (state: Pick<CanvasAgentSnapshot, "nodes" | "connections">) => {
+        snapshotRef.current = { ...snapshotRef.current, nodes: state.nodes, connections: state.connections };
     };
 
     const hasAgentGenerationEffect = (sessionId: string, effectKey?: string) => {
@@ -645,26 +728,21 @@ export function CanvasAssistantPanel({
             if (name === "canvas_create_cinematic_session") {
                 const cinematic = await runCinematicSession(sessionId, requireString(args.prompt, "prompt"), current, effectiveConfig);
                 let continuationResult: OnlineToolResult | undefined;
-                const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
-                    try {
-                        if (hasAgentGenerationEffect(sessionId, effectKey)) return;
-                        const result = await executeOps(cinematic.ops);
-                        const durableSessions = completeCinematicSession(sessionId, cinematic.backendSessionId, cinematic.ops, false, effectKey);
-                        if (effectKey) {
-                            await persistCanvasGenerationEffect({
-                                projectId,
-                                effectKey,
-                                nodes: snapshotRef.current.nodes,
-                                connections: snapshotRef.current.connections,
-                                chatSessions: durableSessions,
-                                activeChatId: localActiveSessionId,
-                            });
-                        }
-                        continuationResult = { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || "后端影视 Agent 已写回画布。" : result.noopReason, data: result };
-                    } catch (error) {
-                        failCinematicSession(sessionId, cinematic.backendSessionId, error);
-                        throw error;
-                    }
+                const applyContinuation = async ({ effectKey, signal }: { effectKey?: string; signal?: AbortSignal } = {}) => {
+                    if (hasAgentGenerationEffect(sessionId, effectKey)) return;
+                    const result = await canvasCinematicContinuationEntryAdapters["online-tool"]({
+                        projectId,
+                        effectKey,
+                        signal,
+                        readSnapshot: () => snapshotRef.current,
+                        executeOps: () => executeOps(cinematic.ops),
+                        completeSession: (key) => completeCinematicSession(sessionId, cinematic.backendSessionId, cinematic.ops, false, key),
+                        readLiveSessionState: readCinematicSessionState,
+                        restoreLiveSessions: restoreCinematicSessions,
+                        restoreLiveSnapshot: restoreCinematicSnapshot,
+                        failProvider: (failure) => failCinematicSession(sessionId, cinematic.backendSessionId, failure),
+                    });
+                    continuationResult = { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || "后端影视 Agent 已写回画布。" : result.noopReason, data: result };
                 };
                 if (cinematic.continuationTask) {
                     await consumeGenerationTaskAgent(cinematic.continuationTask, cinematic.backendSessionId, applyContinuation, { signal: generationConsumerControllerRef.current.signal });
@@ -782,25 +860,32 @@ export function CanvasAssistantPanel({
         setPrompt("");
         setIsRunning(true);
         let backendSessionId = "";
+        let continuationFailureDisposition: CinematicContinuationFailureDisposition | undefined;
         try {
             const cinematic = await runCinematicSession(session.id, value, snapshotRef.current, effectiveConfig, (createdId) => {
                 backendSessionId = createdId;
             });
-            const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
+            const applyContinuation = async ({ effectKey, signal }: { effectKey?: string; signal?: AbortSignal } = {}) => {
                 if (hasAgentGenerationEffect(session.id, effectKey)) return;
-                const next = await onApplyOps(cinematic.ops);
-                snapshotRef.current = next;
-                const durableSessions = completeCinematicSession(session.id, cinematic.backendSessionId, cinematic.ops, false, effectKey);
-                if (effectKey) {
-                    await persistCanvasGenerationEffect({
-                        projectId,
-                        effectKey,
-                        nodes: next.nodes,
-                        connections: next.connections,
-                        chatSessions: durableSessions,
-                        activeChatId: session.id,
-                    });
-                }
+                await canvasCinematicContinuationEntryAdapters["submit-cinematic"]({
+                    projectId,
+                    effectKey,
+                    signal,
+                    readSnapshot: () => snapshotRef.current,
+                    executeOps: async () => {
+                        const next = await onApplyOps(cinematic.ops);
+                        snapshotRef.current = next;
+                        return next;
+                    },
+                    completeSession: (key) => completeCinematicSession(session.id, cinematic.backendSessionId, cinematic.ops, false, key),
+                    readLiveSessionState: readCinematicSessionState,
+                    restoreLiveSessions: restoreCinematicSessions,
+                    restoreLiveSnapshot: restoreCinematicSnapshot,
+                    failProvider: (failure) => failCinematicSession(session.id, cinematic.backendSessionId, failure),
+                    onFailureDisposition: (disposition) => {
+                        continuationFailureDisposition = disposition;
+                    },
+                });
                 setCinematicEntryActive(false);
             };
             if (cinematic.continuationTask) {
@@ -809,9 +894,11 @@ export function CanvasAssistantPanel({
                 await applyContinuation();
             }
         } catch (error) {
-            if (isAgentSessionPollingAbort(error)) return;
-            if (backendSessionId) failCinematicSession(session.id, backendSessionId, error);
-            else appendMessage(session.id, { id: nanoid(), role: "error", title: "影视项目生成失败", text: error instanceof Error ? error.message : "影视项目生成失败" });
+            if (continuationFailureDisposition) return;
+            handleCinematicContinuationFailure(error, (failure) => {
+                if (backendSessionId) failCinematicSession(session.id, backendSessionId, failure);
+                else appendMessage(session.id, { id: nanoid(), role: "error", title: "影视项目生成失败", text: failure instanceof Error ? failure.message : "影视项目生成失败" });
+            });
         } finally {
             setIsRunning(false);
         }
@@ -823,24 +910,32 @@ export function CanvasAssistantPanel({
         cinematicSessionControllersRef.current.set(pending.id, controller);
         setIsRunning(true);
         addOnlineLog("恢复后端影视 Agent 会话", { backendSessionId: pending.id });
+        let continuationFailureDisposition: CinematicContinuationFailureDisposition | undefined;
         try {
             const detail = await resumeCinematicAgentSession(pending.id, { signal: controller.signal });
             const ops = requireOps(JSON.parse(cinematicAgentSessionOpsJson(detail)));
             const continuationTask = [...detail.tasks].reverse().find((task) => task.status === "succeeded");
-            const applyContinuation = async ({ effectKey }: { effectKey?: string } = {}) => {
+            const applyContinuation = async ({ effectKey, signal }: { effectKey?: string; signal?: AbortSignal } = {}) => {
                 if (hasAgentGenerationEffect(sessionId, effectKey)) return;
-                await executeOps(ops);
-                const durableSessions = completeCinematicSession(sessionId, pending.id, ops, true, effectKey);
-                if (effectKey) {
-                    await persistCanvasGenerationEffect({
-                        projectId,
-                        effectKey,
-                        nodes: snapshotRef.current.nodes,
-                        connections: snapshotRef.current.connections,
-                        chatSessions: durableSessions,
-                        activeChatId: sessionId,
-                    });
-                }
+                await canvasCinematicContinuationEntryAdapters["resume-cinematic"]({
+                    projectId,
+                    effectKey,
+                    signal,
+                    readSnapshot: () => snapshotRef.current,
+                    executeOps: () => executeOps(ops),
+                    completeSession: (key) => completeCinematicSession(sessionId, pending.id, ops, true, key),
+                    readLiveSessionState: readCinematicSessionState,
+                    restoreLiveSessions: restoreCinematicSessions,
+                    restoreLiveSnapshot: restoreCinematicSnapshot,
+                    failProvider: (failure) => {
+                        failCinematicSession(sessionId, pending.id, failure);
+                        addOnlineLog("后端影视 Agent 会话恢复失败", failure instanceof Error ? failure.message : failure);
+                    },
+                    onFailureDisposition: (disposition, error) => {
+                        continuationFailureDisposition = disposition;
+                        if (disposition === "durable-ack") addOnlineLog("后端影视 Agent 会话持久化失败，保留待恢复状态", error instanceof Error ? error.message : error);
+                    },
+                });
                 addOnlineLog("后端影视 Agent 会话恢复完成", { backendSessionId: pending.id });
             };
             if (continuationTask) {
@@ -849,10 +944,12 @@ export function CanvasAssistantPanel({
                 await applyContinuation();
             }
         } catch (error) {
-            if (!isAgentSessionPollingAbort(error)) {
-                failCinematicSession(sessionId, pending.id, error);
-                addOnlineLog("后端影视 Agent 会话恢复失败", error instanceof Error ? error.message : error);
-            }
+            if (continuationFailureDisposition) return;
+            const disposition = handleCinematicContinuationFailure(error, (failure) => {
+                failCinematicSession(sessionId, pending.id, failure);
+                addOnlineLog("后端影视 Agent 会话恢复失败", failure instanceof Error ? failure.message : failure);
+            });
+            if (disposition === "durable-ack") addOnlineLog("后端影视 Agent 会话持久化失败，保留待恢复状态", error instanceof Error ? error.message : error);
         } finally {
             if (cinematicSessionControllersRef.current.get(pending.id) === controller) cinematicSessionControllersRef.current.delete(pending.id);
             if (cinematicSessionControllersRef.current.size === 0) setIsRunning(false);
@@ -1788,6 +1885,7 @@ function backendAgentProviderConfig(config: ReturnType<typeof resolveModelReques
         apiFormat: config.apiFormat,
         interfaceType: config.interfaceType,
         baseUrl: config.baseUrl,
+        allowLocalChannel: config.allowLocalChannel === true,
         apiKey: config.apiKey,
         secretKey: config.secretKey,
         model: config.model,

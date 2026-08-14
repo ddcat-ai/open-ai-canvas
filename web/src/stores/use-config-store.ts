@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 
+import { projectDesktopLocalChannelRuntime } from "@/lib/desktop-local-channel";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
@@ -18,6 +19,7 @@ export type ModelChannel = {
     id: string;
     name: string;
     baseUrl: string;
+    allowLocalChannel?: boolean;
     apiKey: string;
     secretKey?: string;
     headers?: ChannelHeader[];
@@ -93,6 +95,7 @@ export const defaultConfig: AiConfig = {
             id: "default",
             name: "默认渠道",
             baseUrl: OPENAI_BASE_URL,
+            allowLocalChannel: false,
             apiKey: "",
             apiFormat: "openai",
             models: ["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"],
@@ -383,6 +386,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || "新渠道",
         baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : defaultBaseUrlForApiFormat(apiFormat)),
+        allowLocalChannel: channel?.allowLocalChannel === true,
         apiKey: channel?.apiKey || "",
         secretKey: channel?.secretKey || "",
         headers: Array.isArray(channel?.headers) ? channel.headers.map((header) => ({ name: String(header.name || ""), value: String(header.value || "") })) : [],
@@ -469,22 +473,27 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
+export function channelConnectionSignature(channel: ModelChannel) {
+    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", channel.allowLocalChannel === true ? "local:1" : "local:0", JSON.stringify(channel.headers || [])].join("\n");
+}
+
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
     const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
-    return {
+    return projectDesktopLocalChannelRuntime({
         ...config,
         model,
         baseUrl: channel.baseUrl,
+        allowLocalChannel: channel.allowLocalChannel === true,
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
         headers: channel.headers,
         apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? ("gemini" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",
-    };
+    });
 }
 
 function normalizeChannels(config: AiConfig, ensureDefault = true) {

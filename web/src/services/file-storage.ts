@@ -70,9 +70,9 @@ export async function deleteStoredMedia(keys: Iterable<string>) {
     );
 }
 
-export async function cleanupUnusedMedia(usedData: unknown) {
+export async function cleanupUnusedMedia(usedData: unknown, scope = getActiveUserScope()) {
     const usedKeys = collectMediaStorageKeys(usedData);
-    const currentScope = getActiveUserScope();
+    const currentScope = scope;
     const unused: string[] = [];
     await store.iterate((_value, key) => {
         const parts = key.split(":");

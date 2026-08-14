@@ -3,7 +3,7 @@ import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
-import { localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
+import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -160,6 +160,7 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
         ...(context.retryOf ? { retryOf: context.retryOf } : {}),
         ...(context.attemptGroupId ? { attemptGroupId: context.attemptGroupId } : {}),
     };
+    let latestPublicTask = task;
     options.onTaskUpdate?.(task);
     try {
         const references = await localGenerationReferences([...(options.referenceImages ?? []), ...(options.mask ? [options.mask] : [])], options.referenceVideos ?? [], options.referenceAudios ?? []);
@@ -181,7 +182,10 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
                 context,
             },
             options.signal,
-            (runtimeTask) => options.onTaskUpdate?.(projectLocalDreaminaTask(runtimeTask, task)),
+            (runtimeTask) => {
+                latestPublicTask = projectLocalDreaminaTask(runtimeTask, task);
+                options.onTaskUpdate?.(latestPublicTask);
+            },
         );
         const completedAt = dependencies.now();
         options.onTaskUpdate?.({ ...task, status: "succeeded", progress: 100, stage: "local_cli_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt });
@@ -191,21 +195,23 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
         const cancelled = isGenerationTaskCancelled(error, options.signal);
         const localWaitStopped = error instanceof LocalDreaminaGenerationClientError && error.code === LOCAL_DREAMINA_WAIT_STOPPED_CODE;
         const localErrorCode = error instanceof LocalDreaminaGenerationClientError ? error.code : undefined;
-        options.onTaskUpdate?.({
-            ...task,
-            status: cancelled ? "cancelled" : "failed",
-            stage: cancelled ? "local_cli_cancelled" : "local_cli_failed",
-            completedAt,
-            updatedAt: completedAt,
-            ...(localWaitStopped
-                ? { errorCode: error.code, error: error.message }
-                : !cancelled
-                  ? {
-                        ...(localErrorCode ? { errorCode: localErrorCode } : {}),
-                        error: error instanceof Error ? error.message : "即梦本机生成失败",
-                    }
-                  : {}),
-        });
+        if (!(cancelled && isLocalDreaminaBackgroundTask(latestPublicTask))) {
+            options.onTaskUpdate?.({
+                ...task,
+                status: cancelled ? "cancelled" : "failed",
+                stage: cancelled ? "local_cli_cancelled" : "local_cli_failed",
+                completedAt,
+                updatedAt: completedAt,
+                ...(localWaitStopped
+                    ? { errorCode: error.code, error: error.message }
+                    : !cancelled
+                      ? {
+                            ...(localErrorCode ? { errorCode: localErrorCode } : {}),
+                            error: error instanceof Error ? error.message : "即梦本机生成失败",
+                        }
+                      : {}),
+            });
+        }
         throw error;
     }
 }
@@ -404,6 +410,7 @@ export function backendProviderConfig(config: AiConfig) {
         apiFormat: requestConfig.apiFormat,
         interfaceType: requestConfig.interfaceType,
         baseUrl: requestConfig.baseUrl,
+        allowLocalChannel: requestConfig.allowLocalChannel === true,
         apiKey: requestConfig.apiKey,
         secretKey: requestConfig.secretKey,
         model: requestConfig.model,

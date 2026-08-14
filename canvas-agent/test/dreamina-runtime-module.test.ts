@@ -7,11 +7,13 @@ import { test } from "node:test";
 
 import { dreaminaCliInputSchema } from "../src/dreamina-cli-contract.js";
 import { DreaminaCliArbiter } from "../src/dreamina-cli-arbiter.js";
+import { LocalDreaminaGenerationError } from "../src/dreamina-generation.js";
 import { projectDreaminaModelCatalog } from "../src/dreamina-model-catalog.js";
 import { DreaminaProviderArtifactStore } from "../src/dreamina-provider-artifacts.js";
 import { DreaminaTaskProjector } from "../src/dreamina-task-projection.js";
 import { DreaminaTaskStore } from "../src/dreamina-task-store.js";
 import { createDreaminaHttpModule } from "../src/modules/dreamina-http.js";
+import { DreaminaCliError } from "../src/dreamina-cli-process.js";
 import type { DreaminaPublicStatus } from "../src/dreamina-cli.js";
 
 const installed: DreaminaPublicStatus = {
@@ -79,7 +81,12 @@ test("Dreamina module stages generated and configured references when another op
             resolutionType: "2k",
             referenceImages: [canvasReference],
         })));
-        assert.deepEqual(accepted, { ok: true, result: { state: "accepted", submitId: "receipt-submit-2" } });
+        assert.deepEqual(accepted, { ok: true, result: { state: "accepted", receiptRecorded: true } });
+        assert.doesNotMatch(JSON.stringify(accepted), /submitId|receipt-submit-2/);
+        const journal = JSON.parse(await fs.readFile(path.join(configDir, "dreamina-runtime-state.json"), "utf8")) as {
+            records: Array<{ idempotencyKey?: string; submitId?: string }>;
+        };
+        assert.equal(journal.records.find((record) => record.idempotencyKey === "canvas-reference-route-0001")?.submitId, "receipt-submit-2");
         assert.equal(calls.filter((args) => args[0] !== "query_result")[1]?.[0], "image2image");
     } finally {
         await module.dispose?.();
@@ -135,8 +142,8 @@ test("Dreamina production module startup reconciles due accepted work without ro
             submitId: "receipt-module-startup",
         }))), {
             ok: false,
-            code: "local_generation_request_invalid",
-            message: "本机生成请求无效",
+            code: "dreamina_request_invalid",
+            message: "Dreamina 请求参数无效",
         });
         assert.equal(queries, 1);
     } finally {
@@ -792,7 +799,7 @@ test("Dreamina module invokes generation only through the explicit strict run ro
     const accepted = await invoke(module, "/dreamina/run", body);
     assert.deepEqual(accepted, {
         ok: true,
-        result: { state: "accepted", submitId: "receipt-module" },
+        result: { state: "accepted", receiptRecorded: true },
     });
     assert.deepEqual(calls, ["run:text2image"]);
 
@@ -809,6 +816,210 @@ test("Dreamina module invokes generation only through the explicit strict run ro
         message: "Dreamina 请求参数无效",
     });
     assert.deepEqual(calls, ["run:text2image"]);
+});
+
+test("Dreamina run HTTP boundary fences hostile accepted Runtime results as submission unknown", async (t) => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "dreamina-module-hostile-result-"));
+    let runCalls = 0;
+    const module = createDreaminaHttpModule({
+        ownerId: "owner-dreamina-module-0001",
+        configDir,
+        dreamina: authenticatedLifecycleFixture(),
+        dreaminaRuntime: {
+            ...runtimeFixture([]),
+            run: async () => {
+                runCalls += 1;
+                return ({
+                    state: "accepted",
+                    submitId: "receipt-must-not-cross",
+                    prompt: "prompt-must-not-cross",
+                    path: "C:\\private\\result.png",
+                    token: "token-must-not-cross",
+                }) as never;
+            },
+        },
+    });
+    t.after(async () => {
+        await module.dispose?.();
+        await fs.rm(configDir, { recursive: true, force: true });
+    });
+
+    const response = await invoke(module, "/dreamina/run", Buffer.from(JSON.stringify({
+        operation: "text2image",
+        idempotencyKey: "attempt-hostile-result-0001",
+        prompt: "fixture",
+        resolutionType: "2k",
+    })));
+    assert.deepEqual(response, {
+        ok: false,
+        code: "dreamina_submission_unknown",
+        message: "Dreamina 提交结果不确定，已禁止自动重试；请按 receipt 查询或人工确认",
+    });
+    assert.equal(runCalls, 1);
+    assert.doesNotMatch(JSON.stringify(response), /submitId|receipt-must-not-cross|prompt-must-not-cross|private|token-must-not-cross/);
+});
+
+test("Dreamina run HTTP boundary maps hostile unknown action failures to submission unknown after one invocation", async (t) => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "dreamina-module-hostile-action-"));
+    let runCalls = 0;
+    const module = createDreaminaHttpModule({
+        ownerId: "owner-dreamina-module-0001",
+        configDir,
+        dreamina: authenticatedLifecycleFixture(),
+        dreaminaRuntime: {
+            ...runtimeFixture([]),
+            run: async () => {
+                runCalls += 1;
+                throw Object.assign(new DreaminaCliError(
+                    "hostile_transport_code",
+                    "hostile action failure prompt-must-not-cross token-must-not-cross",
+                    599,
+                ), {
+                    submitId: "receipt-must-not-cross",
+                    prompt: "prompt-must-not-cross",
+                    path: "C:\\private\\result.png",
+                    token: "token-must-not-cross",
+                });
+            },
+        },
+    });
+    t.after(async () => {
+        await module.dispose?.();
+        await fs.rm(configDir, { recursive: true, force: true });
+    });
+
+    const response = await invoke(module, "/dreamina/run", Buffer.from(JSON.stringify({
+        operation: "text2image",
+        idempotencyKey: "attempt-hostile-action-0001",
+        prompt: "fixture",
+        resolutionType: "2k",
+    })));
+    assert.deepEqual(response, {
+        ok: false,
+        code: "dreamina_submission_unknown",
+        message: "Dreamina 提交结果不确定，已禁止自动重试；请按 receipt 查询或人工确认",
+    });
+    assert.equal(runCalls, 1);
+    assert.doesNotMatch(JSON.stringify(response), /submitId|receipt-must-not-cross|prompt-must-not-cross|private|token-must-not-cross|hostile action failure/);
+});
+
+test("Dreamina run HTTP boundary uses fixed public errors and fences post-dispatch failures", async (t) => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "dreamina-module-public-errors-"));
+    const submissionUnknown = {
+        expectedCode: "dreamina_submission_unknown",
+        expectedMessage: "Dreamina 提交结果不确定，已禁止自动重试；请按 receipt 查询或人工确认",
+        expectedStatus: 409,
+    } as const;
+    const cases: Array<{
+        error: Error;
+        expectedCode: string;
+        expectedMessage: string;
+        expectedStatus: number;
+    }> = [
+        {
+            error: new DreaminaCliError("dreamina_request_invalid", "private request prompt token path", 599),
+            expectedCode: "dreamina_request_invalid",
+            expectedMessage: "Dreamina 请求参数无效",
+            expectedStatus: 400,
+        },
+        {
+            error: new DreaminaCliError("dreamina_idempotency_conflict", "private idempotency detail", 599),
+            expectedCode: "dreamina_idempotency_conflict",
+            expectedMessage: "同一幂等键不能用于不同 Dreamina 请求",
+            expectedStatus: 409,
+        },
+        {
+            error: new DreaminaCliError("dreamina_login_required", "private account detail", 599),
+            expectedCode: "dreamina_login_required",
+            expectedMessage: "Dreamina CLI 需要先登录",
+            expectedStatus: 401,
+        },
+        {
+            error: new DreaminaCliError("dreamina_missing", "private executable path", 599),
+            expectedCode: "dreamina_missing",
+            expectedMessage: "未检测到 Dreamina CLI",
+            expectedStatus: 404,
+        },
+        {
+            error: new DreaminaCliError("dreamina_reference_invalid", "private reference path", 599),
+            expectedCode: "dreamina_reference_invalid",
+            expectedMessage: "Dreamina 参考素材无效或不受信任",
+            expectedStatus: 400,
+        },
+        {
+            error: new DreaminaCliError("dreamina_reference_budget_exceeded", "private reference budget", 599),
+            expectedCode: "dreamina_reference_budget_exceeded",
+            expectedMessage: "Dreamina 参考素材超出大小限制",
+            expectedStatus: 413,
+        },
+        {
+            error: new DreaminaCliError("dreamina_generation_capacity_full", "private capacity detail", 599),
+            expectedCode: "dreamina_generation_capacity_full",
+            expectedMessage: "Dreamina 官方生成名额已满",
+            expectedStatus: 409,
+        },
+        {
+            error: new DreaminaCliError("dreamina_submit_spawn_failed", "private spawn path", 599),
+            expectedCode: "dreamina_submit_spawn_failed",
+            expectedMessage: "无法启动 Dreamina CLI 提交进程",
+            expectedStatus: 503,
+        },
+        {
+            error: new DreaminaCliError("dreamina_submission_unknown", "private uncertain receipt", 599),
+            ...submissionUnknown,
+        },
+        {
+            error: new DreaminaCliError("dreamina_internal_error", "prompt-must-not-cross token-must-not-cross path-must-not-cross", 500),
+            ...submissionUnknown,
+        },
+        {
+            error: new DreaminaCliError("dreamina_command_timeout", "private timeout detail", 504),
+            ...submissionUnknown,
+        },
+        {
+            error: new DreaminaCliError("dreamina_cancelled", "private cancel detail", 499),
+            ...submissionUnknown,
+        },
+        {
+            error: new LocalDreaminaGenerationError("local_generation_result_invalid", "private result path", 502),
+            ...submissionUnknown,
+        },
+    ];
+    let runCalls = 0;
+    let nextError: Error = cases[0]!.error;
+    const module = createDreaminaHttpModule({
+        ownerId: "owner-dreamina-module-0001",
+        configDir,
+        dreamina: authenticatedLifecycleFixture(),
+        dreaminaRuntime: {
+            ...runtimeFixture([]),
+            run: async () => {
+                runCalls += 1;
+                throw nextError;
+            },
+        },
+    });
+    t.after(async () => {
+        await module.dispose?.();
+        await fs.rm(configDir, { recursive: true, force: true });
+    });
+
+    for (const [index, item] of cases.entries()) {
+        nextError = item.error;
+        const response = await invoke(module, "/dreamina/run", Buffer.from(JSON.stringify({
+            operation: "text2image",
+            idempotencyKey: `attempt-public-error-${String(index).padStart(4, "0")}`,
+            prompt: "fixture",
+            resolutionType: "2k",
+        })), item.expectedStatus);
+        assert.deepEqual(response, {
+            ok: false,
+            code: item.expectedCode,
+            message: item.expectedMessage,
+        });
+        assert.equal(runCalls, index + 1);
+        assert.doesNotMatch(JSON.stringify(response), /private|prompt-must-not-cross|token-must-not-cross|path-must-not-cross/);
+    }
 });
 
 test("Dreamina module exposes atomic product effect claim renew complete and replay", async () => {
@@ -902,6 +1113,7 @@ async function invoke(
     module: ReturnType<typeof createDreaminaHttpModule>,
     path: string,
     body: Buffer | undefined,
+    expectedStatus?: number,
 ) {
     const route = module.routes.find((item) => item.path === path);
     assert(route);
@@ -924,7 +1136,9 @@ async function invoke(
     route.handler(req as never, res as never, (error?: unknown) => {
         if (error) resolve(Promise.reject(error));
     });
-    return await result;
+    const value = await result;
+    if (expectedStatus !== undefined) assert.equal(res.statusCode, expectedStatus);
+    return value;
 }
 
 async function waitForCondition(condition: () => Promise<boolean>) {
