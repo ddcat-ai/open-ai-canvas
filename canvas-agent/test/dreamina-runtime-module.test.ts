@@ -769,12 +769,18 @@ test("Dreamina module lifecycle routes work without a Canvas session and accept 
     assert.deepEqual(calls, ["status", "login", "logout"]);
 });
 
-test("Dreamina module invokes generation only through the explicit strict run route", async () => {
+test("Dreamina module invokes generation only through the explicit strict run route", async (t) => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "dreamina-module-strict-run-"));
     const calls: string[] = [];
     const module = createDreaminaHttpModule({
         ownerId: "owner-dreamina-module-0001",
+        configDir,
         dreamina: lifecycleFixture(calls),
         dreaminaRuntime: runtimeFixture(calls),
+    });
+    t.after(async () => {
+        await module.dispose?.();
+        await fs.rm(configDir, { recursive: true, force: true });
     });
     const body = Buffer.from(JSON.stringify({
         operation: "text2image",
