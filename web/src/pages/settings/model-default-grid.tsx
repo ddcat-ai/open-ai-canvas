@@ -1,4 +1,3 @@
-import { Tag } from "antd";
 import { AudioLines, Check, Film, Image, MessageSquareText } from "lucide-react";
 
 import { ModelIcon } from "@/components/model-picker";
@@ -31,14 +30,14 @@ const groups: Array<{
 export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onChange: (key: DefaultModelKey, model: string) => void }) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     return (
-        <div className="divide-y divide-border/70">
+        <div className="space-y-1">
             {groups.map((group) => {
                 const models = filterModelsByCapability(config.models, group.capability, config.channels);
                 const Icon = group.icon;
                 return (
                     <section key={group.capability} className="py-5 first:pt-0 last:pb-0" aria-labelledby={`default-${group.capability}-title`}>
                         <div className="mb-3 flex items-start gap-3">
-                            <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-muted/35 text-foreground/65"><Icon className="size-4" /></span>
+                            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-active text-foreground/65"><Icon className="size-4" /></span>
                             <div className="min-w-0">
                                 <h3 id={`default-${group.capability}-title`} className="text-sm font-semibold">{group.title}</h3>
                                 <p className="mt-0.5 text-xs text-foreground/48">{group.description}</p>
@@ -58,26 +57,24 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                             role="radio"
                                             aria-checked={selected}
                                             className={cn(
-                                                "group relative min-h-[76px] overflow-hidden rounded-md border px-3 py-2.5 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
-                                                selected
-                                                    ? "border-[var(--workspace-accent)] bg-[var(--workspace-accent-soft)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--workspace-accent)_28%,transparent)]"
-                                                    : "border-border/85 bg-background hover:border-foreground/25 hover:bg-muted/25",
+                                                "model-default-option group relative overflow-hidden rounded-md px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+                                                selected && "is-selected",
                                             )}
                                             onClick={() => onChange(group.modelKey, model)}
                                         >
                                             <span className="flex min-w-0 items-start gap-2.5">
-                                                <span className={cn("grid size-8 shrink-0 place-items-center rounded-md border", selected ? "border-[color-mix(in_srgb,var(--workspace-accent)_28%,transparent)] bg-background/70" : "border-border/70 bg-muted/35")}>
+                                                <span className="model-default-option-icon grid size-8 shrink-0 place-items-center rounded-md">
                                                     <ModelIcon model={model} />
                                                 </span>
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate text-xs font-semibold">{modelDisplayName(config, model)}</span>
                                                     <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--fs-tiny)] text-foreground/45">
                                                         <span className="max-w-full truncate">{channel.name || "未命名渠道"}</span>
-                                                        <span className="rounded border border-border/70 px-1 py-px text-[var(--fs-micro)]">{channel.scope === "system" ? "系统" : "自定义"}</span>
-                                                        {creditsEnabled && cost ? <Tag color="gold" className="!m-0 !px-1.5 !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{formatPrice(cost.unitPriceMicrocredits)} 积分/{cost.billingMode === "per_second" ? "秒" : "次"}</Tag> : null}
+                                                        <span className="model-default-option-scope">{channel.scope === "system" ? "系统" : "自定义"}</span>
+                                                        {creditsEnabled && cost ? <span className="model-default-price">{formatPrice(cost.unitPriceMicrocredits)} /{cost.billingMode === "per_second" ? "秒" : "次"}</span> : null}
                                                     </span>
                                                 </span>
-                                                <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", selected ? "border-[var(--workspace-accent)] bg-[var(--workspace-accent)] text-white" : "border-border text-transparent group-hover:border-foreground/30")}>
+                                                <span className={cn("model-default-option-check grid size-5 shrink-0 place-items-center rounded-full", selected ? "is-selected" : "text-transparent")}>
                                                     <Check className="size-3" strokeWidth={2.5} />
                                                 </span>
                                             </span>
@@ -86,7 +83,7 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                 })}
                             </div>
                         ) : (
-                            <div className="rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-foreground/45">当前渠道中没有可用的{capabilityLabel(group.capability)}模型</div>
+                            <div className="rounded-md bg-surface-active px-4 py-6 text-center text-xs text-foreground/45">当前渠道中没有可用的{capabilityLabel(group.capability)}模型</div>
                         )}
                     </section>
                 );
