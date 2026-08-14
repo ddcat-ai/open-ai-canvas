@@ -8,6 +8,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { buildTimelineImportSegments, type CanvasTimelineSegmentItem } from "@/lib/canvas/canvas-video-timeline-segments";
 import { listVideoReferenceModels } from "@/lib/canvas/canvas-video-regeneration";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { resolveMediaUrl } from "@/services/file-storage";
@@ -109,7 +110,15 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
     const isVideoMode = mode === "video";
     const durationSec = durationMs > 0 ? durationMs / 1000 : 0;
     const hasTimelineVideoClips = Boolean(timeline?.clips.some((clip) => clip.kind === "video"));
-    const videoProfile = useMemo(() => (model ? modelCapabilityConfigFor(config, model).video : undefined), [config, model]);
+    const hasPrompt = Boolean(prompt.trim());
+    const modelRequirements = useMemo<ModelRequirements>(() => ({
+        capability: "video",
+        input: { textCount: hasPrompt ? 1 : 0, imageCount: 0, videoCount: 1, audioCount: 0, characterCount: 0 },
+        videoOperation: operation,
+        videoSeconds: config.videoSeconds,
+    }), [config.videoSeconds, hasPrompt, operation]);
+    const resolvedModel = resolveCompatibleModel(config, model, modelRequirements) || model;
+    const videoProfile = useMemo(() => (resolvedModel ? modelCapabilityConfigFor(config, resolvedModel).video : undefined), [config, resolvedModel]);
     const defaultModel = config.videoModel || config.model || "";
     const defaultModelSupported = eligibleModels.includes(defaultModel);
     const hasEligibleModels = eligibleModels.length > 0;
@@ -185,7 +194,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                 startMs: 0,
                 endMs: 0,
                 segments: segments.map(({ id, startMs, endMs, sourceNodeId, sourceStorageKey, sourceUrl }) => ({ id, startMs, endMs, sourceNodeId, sourceStorageKey, sourceUrl })),
-                model,
+                model: resolvedModel,
                 operation,
                 prompt: prompt.trim(),
             });
@@ -321,7 +330,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                         <div className="grid gap-3 md:grid-cols-2">
                             <label className="block min-w-0">
                                 <div className="mb-1.5 text-sm font-medium">重生成模型</div>
-                                <ModelPicker config={config} value={model} onChange={setModel} capability="video" fullWidth onMissingConfig={() => message.warning("请先配置支持参考视频的视频模型")} />
+                                <ModelPicker config={config} value={resolvedModel} onChange={setModel} capability="video" requirements={modelRequirements} fullWidth onMissingConfig={() => message.warning("请先配置支持参考视频的视频模型")} />
                             </label>
                             <label className="block min-w-0">
                                 <div className="mb-1.5 text-sm font-medium">生成模式</div>

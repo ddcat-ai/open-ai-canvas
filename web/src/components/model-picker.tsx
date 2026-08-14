@@ -4,6 +4,7 @@ import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
+import { compatibleModelInGroup, groupModelsByDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -20,9 +21,10 @@ type ModelPickerProps = {
     onMissingConfig?: () => void;
     showSelectedPrice?: boolean;
     variant?: "default" | "creation";
+    requirements?: ModelRequirements;
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default" }: ModelPickerProps) {
+export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
@@ -43,15 +45,16 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 key: channel.id,
                 label: channel.name || "未命名渠道",
                 scope: channel.scope === "system" ? "系统渠道" : "自定义渠道",
-                models: options.filter((model) => resolveModelChannel(config, model).id === channel.id),
+                models: groupModelsByDisplayName(config, options.filter((model) => resolveModelChannel(config, model).id === channel.id)),
             }))
             .filter((group) => group.models.length);
-        const groupedModels = new Set(channelGroups.flatMap((group) => group.models));
+        const groupedModels = new Set(channelGroups.flatMap((group) => group.models.flatMap((modelGroup) => modelGroup.models)));
         const ungroupedModels = options.filter((model) => !groupedModels.has(model));
-        return ungroupedModels.length ? [...channelGroups, { key: "ungrouped", label: "其他模型", scope: "未指定渠道", models: ungroupedModels }] : channelGroups;
+        return ungroupedModels.length ? [...channelGroups, { key: "ungrouped", label: "其他模型", scope: "未指定渠道", models: groupModelsByDisplayName(config, ungroupedModels) }] : channelGroups;
     }, [config, options]);
     const current = value || "";
-    const currentPrice = modelMenuPrice(config, current);
+    const resolvedCurrent = resolveCompatibleModel(config, current, requirements) || current;
+    const currentPrice = modelMenuPrice(config, resolvedCurrent);
     const creationVariant = variant === "creation";
 
     useEffect(() => {
@@ -136,23 +139,30 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                             </span>
                         </div>
                         <div className="grid min-w-0 gap-1">
-                            {group.models.map((model) => {
-                                const selected = model === current;
+                            {group.models.map((modelGroup) => {
+                                const selected = modelGroup.models.includes(current);
+                                const model = compatibleModelInGroup(config, modelGroup.models, requirements, selected ? current : undefined);
+                                const displayModel = model || (selected ? current : modelGroup.models[0]);
+                                const disabledReason = model ? "" : modelCompatibilityError(config, modelGroup.models[0], requirements) || "当前输入不符合该模型能力";
                                 return (
                                     <button
-                                        key={model}
+                                        key={modelGroup.key}
                                         type="button"
                                         role="option"
                                         aria-selected={selected}
-                                        className="canvas-model-picker-option"
+                                        aria-disabled={Boolean(disabledReason)}
+                                        disabled={Boolean(disabledReason)}
+                                        title={disabledReason || modelOptionLabel(config, displayModel)}
+                                        className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
                                         style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
                                         onClick={() => {
+                                            if (!model) return;
                                             onChange(model);
                                             setOpen(false);
                                             window.requestAnimationFrame(() => triggerRef.current?.focus());
                                         }}
                                     >
-                                        <ModelLabel config={config} model={model} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} />
+                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} disabledReason={disabledReason} />
                                         {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                     </button>
                                 );
@@ -220,6 +230,7 @@ function ModelLabel({
     theme,
     creationVariant,
     showPrice,
+    disabledReason,
 }: {
     config: AiConfig;
     model: string;
@@ -227,10 +238,11 @@ function ModelLabel({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     creationVariant: boolean;
     showPrice: boolean;
+    disabledReason?: string;
 }) {
     const meta = modelMenuMeta(model, capability);
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
-    const capabilitySummary = videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description;
+    const capabilitySummary = disabledReason || (videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
             <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>

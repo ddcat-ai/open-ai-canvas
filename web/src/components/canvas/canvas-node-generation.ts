@@ -8,6 +8,7 @@ import { getGenerationResourceNodes } from "@/lib/canvas/canvas-resource-referen
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
+import type { ModelReferenceLimits } from "@/lib/model-selection";
 
 export type CharacterGenerationReference = {
     nodeId: string;
@@ -286,7 +287,7 @@ export function buildNodeResponseMessages(context: NodeGenerationContext): AiTex
     ];
 }
 
-export async function hydrateNodeGenerationContext(context: NodeGenerationContext, projectId: string, domainProjectId?: string, mode?: CanvasGenerationMode, includeCharacterVoiceSamples = false, includeCharacterPrompt = true) {
+export async function hydrateNodeGenerationContext(context: NodeGenerationContext, projectId: string, domainProjectId?: string, mode?: CanvasGenerationMode, includeCharacterVoiceSamples = false, includeCharacterPrompt = true, referenceLimits?: ModelReferenceLimits) {
     const { imageToDataUrl } = await import("@/services/image-storage");
     let referenceImages = await Promise.all(
         context.referenceImages.map(async (image) => {
@@ -299,7 +300,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     const { getProjectCharacter } = await import("@/services/api/projects");
     const { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
     const details = await Promise.all(context.characterReferences.map((reference) => getProjectCharacter(domainProjectId, reference.assetId)));
-    const remainingBudget = 9 - referenceImages.length;
+    const remainingBudget = Math.max(0, (referenceLimits?.maxImages ?? 9) - referenceImages.length);
     const selected = details.flatMap((detail) => {
         const representation = preferredCharacterRepresentation(detail.character.representations);
         return representation ? [representation] : [];
@@ -353,7 +354,8 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
             voiceSamples.push(voice);
         });
     }
-    if (context.referenceAudios.length + voiceSamples.length > 3) throw new Error(`当前模型参考音频容量不足：已连接 ${context.referenceAudios.length} 个音频，角色声音样本还需要 ${voiceSamples.length} 个名额`);
+    const maxAudios = referenceLimits?.maxAudios ?? 3;
+    if (context.referenceAudios.length + voiceSamples.length > maxAudios) throw new Error(`当前模型参考音频容量不足：已连接 ${context.referenceAudios.length} 个音频，角色声音样本还需要 ${voiceSamples.length} 个名额`);
     const characterVoiceAudios = voiceSamples.map((voice) => ({
         id: `character-voice-${voice.assetId}`,
         name: `${voice.characterName}-声音样本.mp3`,
@@ -370,6 +372,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
         referenceAudios,
         resolvedCharacterVersions,
         resolvedCharacterVoices,
+        imageCount: referenceImages.length,
         audioCount: referenceAudios.length,
     };
 }

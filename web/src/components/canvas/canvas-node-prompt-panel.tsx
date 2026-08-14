@@ -8,6 +8,7 @@ import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-genera
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -44,7 +45,6 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const simpleMode = workspaceMode === "simple";
     const mode = defaultMode(node.type);
-    const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const savedPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
@@ -54,6 +54,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
     const [promptContentHeight, setPromptContentHeight] = useState(0);
     const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
+    const activeReferences = mentionReferences.filter((item) => item.active && item.kind !== "skill");
+    const requirements: ModelRequirements = {
+        capability: mode,
+        input: {
+            textCount: (prompt.trim() ? 1 : 0) + activeReferences.filter((item) => item.kind === "text").length,
+            imageCount: activeReferences.filter((item) => item.kind === "image").length,
+            videoCount: activeReferences.filter((item) => item.kind === "video").length,
+            audioCount: activeReferences.filter((item) => item.kind === "audio").length,
+            characterCount: activeReferences.filter((item) => item.kind === "character").length,
+        },
+        videoOperation: node.metadata?.videoEditOperation,
+        videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
+    };
+    const config = buildNodeConfig(globalConfig, node, mode, requirements);
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const priceChannel = resolveModelChannel(config, config.model);
     const credits = requestCreditCost({
@@ -63,7 +77,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         count: mode === "image" ? generationCount : 1,
         seconds: mode === "video" ? config.videoSeconds : 1,
     });
-    const activeReferenceCount = mentionReferences.filter((item) => item.active && item.kind !== "skill").length;
+    const activeReferenceCount = activeReferences.length;
     const videoFrameOptions = mentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
     const darkSurface = themeName === "dark";
     const monochromeAccent = theme.node.activeStroke;
@@ -204,6 +218,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         value={config.model}
                         onChange={(model) => onConfigChange(node.id, { model })}
                         capability={mode}
+                        requirements={requirements}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         showSelectedPrice={false}
                     />
@@ -473,10 +488,11 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text || type === CanvasNodeType.Skill ? "text" : type === CanvasNodeType.Video ? "video" : type === CanvasNodeType.Audio ? "audio" : "image";
 }
 
-function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode): AiConfig {
+function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode, requirements: ModelRequirements): AiConfig {
     const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
-    const model = resolveCanvasGenerationModel(globalConfig, node.metadata?.model, mode) || resolveCanvasGenerationModel(globalConfig, defaultModel, mode) || fallbackModel;
+    const preferredModel = resolveCanvasGenerationModel(globalConfig, node.metadata?.model, mode) || resolveCanvasGenerationModel(globalConfig, defaultModel, mode) || fallbackModel;
+    const model = resolveCompatibleModel(globalConfig, preferredModel, requirements) || preferredModel;
     return {
         ...globalConfig,
         model,

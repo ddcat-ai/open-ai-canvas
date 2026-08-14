@@ -705,9 +705,10 @@ function InfiniteCanvasPage() {
         onNodesDeleted: handleNodesDeleted,
     });
 
-    const { cancelPendingConnectionCreate, closeConnectionCreateMenu, connectionTargetAnchorRatio, connectionTargetNodeId, connectingParams, createConnectedNode, handleConnectStart, mouseWorld, pendingConnectionCreate, setConnecting } =
+    const { cancelPendingConnectionCreate, closeConnectionCreateMenu, connectionTargetAnchorRatio, connectionTargetNodeId, connectingParams, createConnectedNode, getConnectionCreateDisabledReason, handleConnectStart, mouseWorld, pendingConnectionCreate, setConnecting } =
         useCanvasConnectionController({
             projectId,
+            config: effectiveConfig,
             defaultDrawingEngine,
             nodesRef,
             connectionsRef,
@@ -1786,6 +1787,7 @@ function InfiniteCanvasPage() {
                             viewportSize={size}
                             containerRef={containerRef}
                             canCreateDrawing={canCreateDrawingFromConnection}
+                            getDisabledReason={(type) => getConnectionCreateDisabledReason(type, pendingConnectionCreate)}
                             onCreate={(type) => void createConnectedNode(type, pendingConnectionCreate)}
                             onClose={cancelPendingConnectionCreate}
                         />
