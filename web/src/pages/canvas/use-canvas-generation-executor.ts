@@ -14,6 +14,7 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import type { Asset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 import { executeImageGeneration } from "./canvas-image-generation-executor";
@@ -24,6 +25,7 @@ type UseCanvasGenerationExecutorOptions = {
     projectId: string;
     domainProjectId?: string;
     addedSkills: Skill[];
+    assets: Asset[];
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -50,6 +52,7 @@ export function useCanvasGenerationExecutor({
     projectId,
     domainProjectId,
     addedSkills,
+    assets,
     nodesRef,
     connectionsRef,
     setNodes,
@@ -128,7 +131,7 @@ export function useCanvasGenerationExecutor({
             // 视频文本只保留输入框内容；连接的媒体仍作为结构化参考传递。
             const promptOnly = mode === "video";
             try {
-                const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, promptOnly);
+                const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, assets, promptOnly);
                 const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig.videoSeconds, true);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
                 const compatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, requirements);
@@ -267,7 +270,7 @@ export function useCanvasGenerationExecutor({
                 setRunningNodeId(null);
             }
         },
-        [addedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
+        [addedSkills, assets, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
 }
 

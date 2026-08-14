@@ -9,6 +9,7 @@ import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-refer
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
+import type { Asset } from "@/stores/use-asset-store";
 
 export type CharacterGenerationReference = {
     nodeId: string;
@@ -56,26 +57,27 @@ export type NodeGenerationInput = {
     character?: CharacterGenerationReference;
 };
 
-export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, promptOnly = false): NodeGenerationContext {
-    const inputs = buildNodeGenerationInputs(nodeId, nodes, connections);
+export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, assets: Asset[], promptOnly = false): NodeGenerationContext {
+    const connectedInputs = buildNodeGenerationInputs(nodeId, nodes, connections);
+    const inputs = [...connectedInputs, ...buildAssetGenerationInputs(assets)];
     const sourceNode = nodes.find((node) => node.id === nodeId);
     const storyboardInputs = getConnectedStoryboardRows(nodeId, nodes, connections);
-    const hasExplicitNodeMention = /@\[node:[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
-    if ((sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitNodeMention) {
+    const hasExplicitResourceMention = /@\[(?:node|asset):[^\]]+\]/.test(normalizeLegacyNodeMentions(prompt, inputs));
+    if ((sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) || hasExplicitResourceMention) {
         return buildComposerGenerationContext(inputs, prompt, [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id)), promptOnly);
     }
 
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
     const basePrompt = isStoryboardMedia && storyboardInputs.length ? removeTrailingInputBlocks(prompt, storyboardInputs) : prompt;
-    const textInputs = inputs.filter((input) => input.type === "text");
-    const characterReferences = inputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
+    const textInputs = connectedInputs.filter((input) => input.type === "text");
+    const characterReferences = connectedInputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
     const upstreamText = textInputs
         .map((input) => input.text)
         .filter(Boolean)
         .join("\n\n");
-    const referenceImages = inputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
-    const referenceVideos = inputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
-    const referenceAudios = inputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const referenceImages = connectedInputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
+    const referenceVideos = connectedInputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
+    const referenceAudios = connectedInputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
 
     return {
         prompt: promptOnly ? prompt : upstreamText ? `${basePrompt}\n\n${upstreamText}` : basePrompt,
@@ -112,7 +114,8 @@ function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]
 
 function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string, videoFrameNodeIds: string[] = [], promptOnly = false): NodeGenerationContext {
     const normalizedPrompt = normalizeLegacyNodeMentions(prompt, inputs);
-    const inputByNodeId = new Map(inputs.map((input) => [input.nodeId, input]));
+    const inputByToken = new Map(inputs.map((input) => [generationInputToken(input), input]));
+    const nodeInputById = new Map(inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => [input.nodeId, input]));
     const selectedInputs: NodeGenerationInput[] = [];
     const labelByNodeId = new Map<string, string>();
     const textBlocks: string[] = [];
@@ -121,11 +124,11 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     let lastIndex = 0;
     let nextPrompt = "";
 
-    for (const match of normalizedPrompt.matchAll(/@\[node:([^\]]+)\]/g)) {
+    for (const match of normalizedPrompt.matchAll(/@\[(node|asset):([^\]]+)\]/g)) {
         if (match.index === undefined) continue;
         hasToken = true;
         nextPrompt += normalizedPrompt.slice(lastIndex, match.index);
-        const input = inputByNodeId.get(match[1]);
+        const input = inputByToken.get(`${match[1]}:${match[2]}`);
         if (input) {
             let label = labelByNodeId.get(input.nodeId);
             if (!label) {
@@ -145,7 +148,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     // 首尾帧是结构化生成参数，不受提示词中的 @ 引用筛选影响。
     const selectedNodeIds = new Set(selectedInputs.map((input) => input.nodeId));
     videoFrameNodeIds.forEach((nodeId) => {
-        const input = inputByNodeId.get(nodeId);
+        const input = nodeInputById.get(nodeId);
         if (!input?.image || selectedNodeIds.has(nodeId)) return;
         selectedInputs.push(input);
         selectedNodeIds.add(nodeId);
@@ -189,7 +192,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 // 旧画布保存的是 @角色1 等显示标签；生成时升级为稳定节点 Token，避免标题或排序变化后引用错位。
 function normalizeLegacyNodeMentions(prompt: string, inputs: NodeGenerationInput[]) {
     const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
-    const labels = inputs.map((input) => {
+    const labels = inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => {
         const kind = input.sourceKind === "drawing" ? "drawing" : input.type;
         return { label: generationLabel(kind, counts[kind]++), nodeId: input.nodeId };
     }).sort((a, b) => b.label.length - a.label.length);
@@ -234,6 +237,22 @@ export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[
         if (text) return [{ nodeId: node.id, type: "text" as const, title: node.title, text }];
         return [];
     });
+}
+
+function buildAssetGenerationInputs(assets: Asset[]): NodeGenerationInput[] {
+    return assets.flatMap((asset): NodeGenerationInput[] => {
+        const nodeId = `asset:${asset.id}`;
+        if (asset.kind === "text") return [{ nodeId, type: "text", title: asset.title, text: asset.data.content }];
+        if (asset.kind === "image") return [{ nodeId, type: "image", title: asset.title, image: { id: asset.id, name: asset.title, type: asset.data.mimeType, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height } }];
+        if (asset.kind === "video") return [{ nodeId, type: "video", title: asset.title, video: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, durationMs: asset.data.durationMs } }];
+        if (asset.kind === "audio") return [{ nodeId, type: "audio", title: asset.title, audio: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, durationMs: asset.data.durationMs } }];
+        if (asset.kind === "entity" && asset.category === "character") return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
+        return [];
+    });
+}
+
+function generationInputToken(input: NodeGenerationInput) {
+    return input.nodeId.startsWith("asset:") ? input.nodeId : `node:${input.nodeId}`;
 }
 
 function getConnectedStoryboardRows(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
