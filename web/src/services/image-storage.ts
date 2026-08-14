@@ -3,7 +3,7 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { importResourceFromUrl, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, resolveResourceUrl, uploadResourceFile } from "@/services/api/resources";
+import { importResourceFromUrl, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { cacheResourceObjectUrl, getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
 
 export type UploadedImage = {
@@ -65,14 +65,15 @@ function shouldImportRemoteImage(input: string) {
 
 export async function resolveImageUrl(storageKey?: string, fallback = "", options?: { cacheMiss?: boolean }) {
     if (!storageKey) return fallback;
-    if (resourceIdFromStorageKey(storageKey)) {
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    if (resourceId) {
         const cached = await getCachedResourceObjectUrl(storageKey).catch(() => "");
         if (cached) return cached;
         if (options?.cacheMiss) {
             const populated = await cacheResourceObjectUrl(storageKey).catch(() => "");
             if (populated) return populated;
         }
-        return resolveResourceUrl(storageKey, fallback);
+        return resourceFileUrl(resourceId);
     }
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;

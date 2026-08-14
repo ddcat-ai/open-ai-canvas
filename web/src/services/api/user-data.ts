@@ -12,6 +12,14 @@ export type RemoteUserDataSummary = {
     updatedAt: string;
 };
 
+export type RemoteUserDataSnapshot = {
+    assets: Asset[];
+    projects: CanvasProject[];
+};
+
+export function getRemoteUserDataSnapshot() {
+    return request<RemoteUserDataSnapshot>(api.get("/user-data/snapshot"));
+}
 
 export function listRemoteAssets() {
     return request<{ assets: RemoteUserDataSummary[] }>(api.get("/assets"));

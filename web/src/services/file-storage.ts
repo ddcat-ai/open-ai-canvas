@@ -2,7 +2,7 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 
 import { getActiveUserScope } from "@/lib/user-scope";
-import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, resolveResourceUrl, uploadResourceFile } from "@/services/api/resources";
+import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
 
 export type UploadedFile = { url: string; storageKey: string; bytes: number; mimeType: string; width?: number; height?: number; durationMs?: number };
@@ -32,9 +32,10 @@ export async function uploadMediaFile(input: string | Blob, prefix = "file"): Pr
 
 export async function resolveMediaUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
-    if (resourceIdFromStorageKey(storageKey)) {
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    if (resourceId) {
         const cached = await getCachedResourceObjectUrl(storageKey).catch(() => "");
-        return cached || resolveResourceUrl(storageKey, fallback);
+        return cached || resourceFileUrl(resourceId);
     }
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;
