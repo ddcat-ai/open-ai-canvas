@@ -172,8 +172,8 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
         return () => clearTimeout(timer);
     }, [connected, endpoint, snapshot, token]);
 
-    const sendPrompt = async () => {
-        const text = prompt.trim();
+    const sendPrompt = async (overrideText?: string) => {
+        const text = (overrideText ?? prompt).trim();
         const files = attachments;
         const requestPrompt = promptWithAttachments(text, files);
         if (!connected || !requestPrompt || sending || waiting) return;
@@ -545,7 +545,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({ snaps
             ) : (
                 <>
                     <div ref={listRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                        {!messages.length && !pendingTool && !waiting ? <AgentChatEmptyState theme={theme} nodeCount={snapshot.nodes.length} onSelect={(prompt) => setAgentState({ prompt })} /> : null}
+                        {!messages.length && !pendingTool && !waiting ? <AgentChatEmptyState theme={theme} nodeCount={snapshot.nodes.length} onSelect={(text) => { setAgentState({ prompt: text }); void sendPrompt(text); }} /> : null}
                         {messages.map((item) => (
                             <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} />
                         ))}

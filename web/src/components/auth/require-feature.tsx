@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "antd";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
@@ -15,16 +15,18 @@ const featureNames: Record<FeatureKey, string> = {
     creditsEnabled: "积分中心",
 };
 
+let featureAvailabilityCheckedOnce = false;
+
 export function RequireFeature({ feature, children }: { feature: FeatureKey; children: ReactNode }) {
-    const location = useLocation();
     const navigate = useNavigate();
     const features = useUserStore((state) => state.features);
-    const [checking, setChecking] = useState(true);
+    const [checking, setChecking] = useState(() => !useUserStore.getState().features[feature]);
     const [error, setError] = useState("");
 
     useEffect(() => {
+        if (featureAvailabilityCheckedOnce) return;
+        featureAvailabilityCheckedOnce = true;
         let cancelled = false;
-        setChecking(true);
         setError("");
         refreshFeatureAvailability()
             .catch((reason) => {
@@ -36,7 +38,7 @@ export function RequireFeature({ feature, children }: { feature: FeatureKey; chi
         return () => {
             cancelled = true;
         };
-    }, [location.pathname]);
+    }, []);
 
     if (checking) return <WorkspacePage><WorkspaceLoadingState label="正在确认功能状态" detail={featureNames[feature]} rows={3} /></WorkspacePage>;
     if (error) return <WorkspacePage><WorkspaceErrorState title="无法确认功能状态" description={error} actionLabel="返回创作台" onRetry={() => navigate("/create", { replace: true })} /></WorkspacePage>;

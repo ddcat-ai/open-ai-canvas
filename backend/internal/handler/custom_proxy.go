@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -170,7 +171,11 @@ func writeCustomRelayError(c *gin.Context, resp *http.Response, apiKey string, m
 		c.Data(resp.StatusCode, "application/json; charset=utf-8", body)
 		return
 	}
-	fail(c, resp.StatusCode, errors.New("自定义渠道上游请求失败"))
+	snippet := strings.TrimSpace(string(body))
+	if len(snippet) > 200 {
+		snippet = snippet[:200] + "..."
+	}
+	fail(c, resp.StatusCode, fmt.Errorf("自定义渠道上游请求失败（%s）%s", resp.Status, snippet))
 }
 
 func copyCustomRelayStream(c *gin.Context, source io.Reader, apiKey string, maxBytes int64) {
