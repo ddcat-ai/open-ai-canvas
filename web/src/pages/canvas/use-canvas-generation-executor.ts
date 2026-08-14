@@ -3,12 +3,13 @@ import { App } from "antd";
 
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
-import { buildGenerationConfig, isGenerationCanceled, supportsVideoReferenceAudio } from "@/lib/canvas/canvas-project-generation";
+import { buildGenerationConfig, isGenerationCanceled } from "@/lib/canvas/canvas-project-generation";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
+import { modelCompatibilityError, modelGroupReferenceLimits, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -127,14 +128,25 @@ export function useCanvasGenerationExecutor({
             // 视频文本只保留输入框内容；连接的媒体仍作为结构化参考传递。
             const promptOnly = mode === "video";
             try {
+                const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, promptOnly);
+                const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig.videoSeconds, true);
+                generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
+                const compatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, requirements);
+                if (compatibilityError) throw new Error(`当前逻辑模型没有可用的细分模型：${compatibilityError}`);
+                const referenceLimits = modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
                 rawGenerationContext = await hydrateNodeGenerationContext(
-                    buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, promptOnly),
+                    baseContext,
                     projectId,
                     domainProjectId,
                     mode,
-                    mode === "video" && supportsVideoReferenceAudio(generationConfig),
+                    mode === "video" && Boolean(referenceLimits?.maxAudios),
                     !promptOnly,
+                    referenceLimits,
                 );
+                const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig.videoSeconds);
+                generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements);
+                const hydratedCompatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
+                if (hydratedCompatibilityError) throw new Error(`当前逻辑模型没有可用的细分模型：${hydratedCompatibilityError}`);
             } catch (error) {
                 const errorDetails = generationErrorMessage(error);
                 if (isPreparingEmptyImage) {
@@ -257,4 +269,19 @@ export function useCanvasGenerationExecutor({
         },
         [addedSkills, bindGenerationTask, domainProjectId, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, nodesRef, connectionsRef, projectId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, startGenerationRequest],
     );
+}
+
+function generationModelRequirements(mode: CanvasNodeGenerationMode, input: Pick<Awaited<ReturnType<typeof hydrateNodeGenerationContext>>, "textCount" | "imageCount" | "videoCount" | "audioCount" | "characterReferences">, sourceNode: CanvasNodeData | undefined, videoSeconds: string, includeCharacterMinimum = false): ModelRequirements {
+    return {
+        capability: mode,
+        input: {
+            textCount: input.textCount,
+            imageCount: input.imageCount,
+            videoCount: input.videoCount,
+            audioCount: input.audioCount,
+            characterCount: includeCharacterMinimum ? input.characterReferences.length : 0,
+        },
+        videoOperation: sourceNode?.metadata?.videoEditOperation,
+        videoSeconds,
+    };
 }
