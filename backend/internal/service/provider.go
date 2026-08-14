@@ -819,6 +819,17 @@ func normalizeGrokImageAspectRatio(size string) string {
 		return "4:3"
 	case h*3 == w*4 || (ratio > 0.7 && ratio < 0.85):
 		return "3:4"
+	// 像素尺寸路径必须显式覆盖 2:3 / 3:2 / 1:2 / 2:1：冒号字符串能直达（见上方 switch），
+	// 但像素路径只靠 w>h 兜底会把 768x1152（2:3，ratio 0.667）错标成 9:16、
+	// 1152x768（3:2，ratio 1.5）错标成 16:9，xAI 按错比例裁切生成图。
+	case w*3 == h*2 || (ratio >= 0.6 && ratio < 0.72):
+		return "2:3"
+	case w*2 == h*3 || (ratio > 1.35 && ratio < 1.6):
+		return "3:2"
+	case h == w*2 || (ratio > 0.45 && ratio < 0.55):
+		return "1:2"
+	case w == h*2 || (ratio > 1.85 && ratio < 2.2):
+		return "2:1"
 	case w > h:
 		return "16:9"
 	default:
