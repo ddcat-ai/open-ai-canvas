@@ -12,7 +12,7 @@ type ProjectPickerItem = { id: string; category: string; character?: ProjectAsse
 
 export function CanvasProjectAssetModal({ open, detail, initialCategory = "all", onClose, onInsert }: { open: boolean; detail?: ProjectDetail; initialCategory?: string; onClose: () => void; onInsert: (payloads: InsertAssetPayload[]) => Promise<void> | void }) {
     const mediaAssets = useAssetStore((state) => state.assets);
-    const items = useMemo(() => {
+    const items = useMemo<ProjectPickerItem[]>(() => {
         const mediaById = new Map(mediaAssets.map((asset) => [asset.id, asset]));
         const projectItems = (detail?.assets || []).flatMap((asset): ProjectPickerItem[] => {
             if (asset.category === "character" && asset.character) return [{ id: asset.id, category: "character", character: asset }];
@@ -23,7 +23,7 @@ export function CanvasProjectAssetModal({ open, detail, initialCategory = "all",
         // 自由画布（未关联短剧项目）或项目资产为空/后端未返回时，回退到本地素材库，避免弹窗空白
         return mediaAssets
             .filter((asset) => asset.kind !== "model" && asset.kind !== "entity")
-            .map((media) => ({ id: media.id, category: media.category || "other", media }));
+            .map((media): ProjectPickerItem => ({ id: media.id, category: media.category || "other", media }));
     }, [detail?.assets, mediaAssets]);
     const pickerItems = useMemo<AssetLibraryPickerItem[]>(() => items.map((item) => {
         const character = item.character;
