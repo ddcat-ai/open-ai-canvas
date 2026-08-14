@@ -1,6 +1,7 @@
 import { fetchFile } from "@ffmpeg/util";
 
 import { getMediaBlob } from "@/services/file-storage";
+import { buildExtractAudioArgs, buildSegmentTrimArgs, SEGMENT_INPUT_NAME, SEGMENT_OUTPUT_NAME } from "./canvas-video-segment-args";
 import { loadFFmpeg } from "./canvas-video-merge";
 
 export type VideoSegmentRange = {
@@ -18,8 +19,8 @@ export type VideoSegmentProgress = {
     progress: number;
 };
 
-const INPUT_NAME = "segment-input.mp4";
-const OUTPUT_NAME = "segment-output.mp4";
+const INPUT_NAME = SEGMENT_INPUT_NAME;
+const OUTPUT_NAME = SEGMENT_OUTPUT_NAME;
 
 function assertValidRange(range: VideoSegmentRange, durationMs?: number) {
     const startMs = Math.max(0, Math.round(range.startMs));
@@ -70,14 +71,7 @@ async function runSegmentJob(
 
 /** 按片段范围截取视频，输出统一编码 MP4（复用时间线 trim 的参数模板）。 */
 export async function trimVideoSegment(source: VideoSegmentSource, range: VideoSegmentRange, durationMs?: number, onProgress?: (progress: VideoSegmentProgress) => void) {
-    return runSegmentJob(
-        source,
-        range,
-        durationMs,
-        (startSec, durationSec) => ["-ss", startSec, "-i", INPUT_NAME, "-t", durationSec, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-movflags", "+faststart", OUTPUT_NAME],
-        onProgress,
-        "video/mp4",
-    );
+    return runSegmentJob(source, range, durationMs, (startSec, durationSec) => buildSegmentTrimArgs(startSec, durationSec), onProgress, "video/mp4");
 }
 
 /** 从视频片段提取声音为 MP3；优先 libmp3lame，内核不支持时回退默认 mp3 编码器。 */
@@ -91,7 +85,7 @@ export async function extractVideoAudio(source: VideoSegmentSource, range: Video
     const durationSec = String((range.endMs - range.startMs) / 1000);
     onProgress?.({ phase: "encoding", progress: 55 });
     try {
-        const args = (audioCodec: string) => ["-ss", startSec, "-i", INPUT_NAME, "-t", durationSec, "-vn", "-c:a", audioCodec, "-q:a", "2", OUTPUT_NAME];
+        const args = (audioCodec: string) => buildExtractAudioArgs(audioCodec, startSec, durationSec);
         let exitCode = await ffmpeg.exec(["-y", ...args("libmp3lame")]);
         if (exitCode !== 0) exitCode = await ffmpeg.exec(["-y", ...args("mp3")]);
         if (exitCode !== 0) throw new Error("音频提取失败：当前 FFmpeg 内核不支持 MP3 编码");
