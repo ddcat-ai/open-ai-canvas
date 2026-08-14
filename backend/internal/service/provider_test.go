@@ -259,7 +259,7 @@ func TestNormalizeGrokImageAspectRatioPixelSizes(t *testing.T) {
 		size string
 		want string
 	}{
-		{"768x1152", "2:3"},   // 1280x1920 同族：竖图 2:3
+		{"768x1152", "2:3"},  // 1280x1920 同族：竖图 2:3
 		{"1280x1920", "2:3"}, // 审查复现用例
 		{"1152x768", "3:2"},
 		{"1920x1280", "3:2"},
