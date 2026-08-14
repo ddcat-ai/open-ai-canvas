@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import localforage from "localforage";
 import { App, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
 import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import { Link } from "react-router";
 
+import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
@@ -1061,7 +1061,7 @@ function StoryboardShotResult({ result, onRetryFailure, onCreateVariant }: { res
         </div></div>;
     }
     if (status === "error") return <div className="storyboard-workbench-error"><span>{generationErrorMessage(result.error || "")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
-    if (mode === "text") return <div className="creation-message-content storyboard-workbench-text">{result.content ? <ReactMarkdown>{result.content}</ReactMarkdown> : <span>正在生成…</span>}</div>;
+    if (mode === "text") return <div className="creation-message-content storyboard-workbench-text">{result.content ? <AIMessageMarkdown isStreaming={status === "streaming"}>{result.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div>;
     if (!resultUrls.length) return <div className="storyboard-workbench-empty"><Film />没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
     const note = result.settings ? directorNoteFor(mode, result.settings) : "";
     return <>

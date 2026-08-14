@@ -743,7 +743,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, snapshot, project
                         <>
                             {messages.map((message) => (
                                 <div key={message.id} className="space-y-2">
-                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} />
+                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} isStreaming={agentBusy && message.id === messages.at(-1)?.id && message.role === "assistant"} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} />
                                     {message.references?.length ? <MessageReferences message={message} /> : null}
                                 </div>
                             ))}
