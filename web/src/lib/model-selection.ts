@@ -113,18 +113,21 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
     if (!groupModels.length) return undefined;
     const compatibleModels = requirements ? groupModels.filter((model) => !modelCompatibilityError(config, model, requirements)) : groupModels;
     const models = compatibleModels.length ? compatibleModels : groupModels;
-    return models.reduce<ModelReferenceLimits>((limits, model) => {
-        const profile = modelCapabilityConfigFor(config, model);
-        if (capability === "image") {
-            return { ...limits, maxImages: Math.max(limits.maxImages, profile.image!.references.maxImages) };
-        }
-        const references = profile.video!.references;
-        return {
-            maxImages: Math.max(limits.maxImages, references.maxImages),
-            maxVideos: Math.max(limits.maxVideos, references.maxVideos),
-            maxAudios: Math.max(limits.maxAudios, references.maxAudios),
-        };
-    }, { maxImages: 0, maxVideos: 0, maxAudios: 0 });
+    return models.reduce<ModelReferenceLimits>(
+        (limits, model) => {
+            const profile = modelCapabilityConfigFor(config, model);
+            if (capability === "image") {
+                return { ...limits, maxImages: Math.max(limits.maxImages, profile.image!.references.maxImages) };
+            }
+            const references = profile.video!.references;
+            return {
+                maxImages: Math.max(limits.maxImages, references.maxImages),
+                maxVideos: Math.max(limits.maxVideos, references.maxVideos),
+                maxAudios: Math.max(limits.maxAudios, references.maxAudios),
+            };
+        },
+        { maxImages: 0, maxVideos: 0, maxAudios: 0 },
+    );
 }
 
 export function inferVideoOperation(input: ModelInputSummary) {

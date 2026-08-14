@@ -45,7 +45,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 key: channel.id,
                 label: channel.name || "未命名渠道",
                 scope: channel.scope === "system" ? "系统渠道" : "自定义渠道",
-                models: groupModelsByDisplayName(config, options.filter((model) => resolveModelChannel(config, model).id === channel.id)),
+                models: groupModelsByDisplayName(
+                    config,
+                    options.filter((model) => resolveModelChannel(config, model).id === channel.id),
+                ),
             }))
             .filter((group) => group.models.length);
         const groupedModels = new Set(channelGroups.flatMap((group) => group.models.flatMap((modelGroup) => modelGroup.models)));
