@@ -1,9 +1,10 @@
+import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
-export const MEDIA_NODE_MIN_SIZE = { width: 300, height: 220 } as const;
-export const VIDEO_NODE_MAX_SIZE = { width: 480, height: 480 } as const;
+export const MEDIA_NODE_MIN_SIZE = { width: 420, height: 236 } as const;
+export const VIDEO_NODE_MAX_SIZE = { width: 720, height: 520 } as const;
 
-export function fitNodeSize(width: number, height: number, maxWidth = 640, maxHeight = 640, minWidth = MEDIA_NODE_MIN_SIZE.width, minHeight = MEDIA_NODE_MIN_SIZE.height) {
+export function fitNodeSize(width: number, height: number, maxWidth = 720, maxHeight = 520, minWidth = MEDIA_NODE_MIN_SIZE.width, minHeight = MEDIA_NODE_MIN_SIZE.height) {
     const w = Math.max(1, width);
     const h = Math.max(1, height);
     // 媒体节点既要保留原始比例，也要给生成状态、操作按钮留下稳定的可读空间。
@@ -30,8 +31,18 @@ export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: n
 
 export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
     if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return node;
+    const title = node.title === "New Generation" ? "图片" : node.title === "Video" ? "视频" : node.title;
     let width = node.width;
     let height = node.height;
+    const emptyStage = NODE_DEFAULT_SIZE[node.type];
+    const shouldPromoteEmptyStage = !node.metadata?.content
+        && !node.metadata?.freeResize
+        && !node.metadata?.locked
+        && width * height < emptyStage.width * emptyStage.height;
+    if (shouldPromoteEmptyStage) {
+        width = emptyStage.width;
+        height = emptyStage.height;
+    }
     const naturalWidth = node.metadata?.naturalWidth || 0;
     const naturalHeight = node.metadata?.naturalHeight || 0;
     const requestedSize = node.type === CanvasNodeType.Image && node.metadata?.generationType === "edit"
@@ -50,9 +61,10 @@ export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
         width *= scale;
         height *= scale;
     }
-    if (width === node.width && height === node.height) return node;
+    if (width === node.width && height === node.height && title === node.title) return node;
     return {
         ...node,
+        title,
         position: {
             x: node.position.x + node.width / 2 - width / 2,
             y: node.position.y + node.height / 2 - height / 2,

@@ -4,10 +4,10 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 
 export function canvasDockStyle(theme: CanvasTheme, color: string = theme.toolbar.item): CSSProperties {
     return {
-        background: theme.spatial.elevated,
-        borderColor: theme.toolbar.border,
+        background: "var(--dock-surface)",
+        borderColor: "var(--dock-border)",
         color,
-        boxShadow: `0 18px 52px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,.14)`,
+        boxShadow: "var(--elevation-overlay)",
         "--dock-command-bg": theme.spatial.surface,
         "--dock-command-hover": theme.toolbar.itemHover,
         "--dock-command-active": theme.toolbar.activeBg,
