@@ -252,6 +252,36 @@ func TestGrokImageRequestBodyMapsAspectRatio(t *testing.T) {
 	}
 }
 
+func TestNormalizeGrokImageAspectRatioPixelSizes(t *testing.T) {
+	// 像素尺寸路径必须覆盖 2:3 / 3:2 / 1:2 / 2:1：修复前 768x1152 会被 w>h 兜底错标成 9:16、
+	// 1152x768 错标成 16:9，xAI 按错比例裁切生成图。
+	cases := []struct {
+		size string
+		want string
+	}{
+		{"768x1152", "2:3"},   // 1280x1920 同族：竖图 2:3
+		{"1280x1920", "2:3"}, // 审查复现用例
+		{"1152x768", "3:2"},
+		{"1920x1280", "3:2"},
+		{"540x1080", "1:2"},
+		{"1080x540", "2:1"},
+		{"1280x720", "16:9"},
+		{"720x1280", "9:16"},
+		{"800x800", "1:1"},
+	}
+	for _, tc := range cases {
+		if got := normalizeGrokImageAspectRatio(tc.size); got != tc.want {
+			t.Errorf("normalizeGrokImageAspectRatio(%q) = %q, want %q", tc.size, got, tc.want)
+		}
+	}
+	// 冒号字符串路径回归：2:3 等比值字符串应原样透传。
+	for _, size := range []string{"2:3", "3:2", "1:2", "2:1"} {
+		if got := normalizeGrokImageAspectRatio(size); got != size {
+			t.Errorf("normalizeGrokImageAspectRatio(%q) = %q, want passthrough %q", size, got, size)
+		}
+	}
+}
+
 func TestNormalizeGrokImageResolution(t *testing.T) {
 	if got := normalizeGrokImageResolution("1k"); got != "1k" {
 		t.Fatalf("1k = %q", got)
