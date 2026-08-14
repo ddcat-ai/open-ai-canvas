@@ -1339,6 +1339,9 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	if input.Config.InterfaceType == "gemini-veo" {
 		return runGeminiVeoVideoTask(ctx, input)
 	}
+	if input.Config.InterfaceType == string(model.ChannelInterfaceNovitaVideo) {
+		return runNovitaVideoTask(ctx, input)
+	}
 	if input.Config.InterfaceType == "newapi-channel-2" {
 		return runNewAPIChannel2VideoTask(ctx, input)
 	}
@@ -1505,6 +1508,126 @@ func runGeminiVeoVideoTask(ctx context.Context, input canvasGenerationInput) (ma
 		}
 	}
 	return nil, fmt.Errorf("Gemini Veo 视频生成超时（任务 %s）", id)
+}
+
+func runNovitaVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if len(input.ReferenceImages) > 1 || len(input.ReferenceVideos) > 0 || len(input.ReferenceAudios) > 0 {
+		return nil, errors.New("Novita 视频当前只支持 1 张起始图，不支持参考视频或参考音频")
+	}
+	id := resumedProviderRequestID(ctx)
+	if id == "" {
+		body := map[string]interface{}{
+			"model":    input.Config.Model,
+			"prompt":   strings.TrimSpace(input.Prompt),
+			"duration": normalizeNovitaVideoDuration(input.Config.VideoSeconds),
+		}
+		if len(input.ReferenceImages) == 1 {
+			imageValue, err := novitaVideoImageValue(input.ReferenceImages[0])
+			if err != nil {
+				return nil, err
+			}
+			body["image"] = imageValue
+		} else {
+			body["aspect_ratio"] = normalizeNovitaVideoRatio(input.Config.Size)
+		}
+		var created map[string]interface{}
+		if err := postNovitaJSON(ctx, input.Config, "/video/create", body, &created); err != nil {
+			return nil, err
+		}
+		id = strings.TrimSpace(stringField(created, "task_id"))
+	}
+	if id == "" {
+		return nil, errors.New("Novita 视频接口没有返回任务 ID")
+	}
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+		var result map[string]interface{}
+		if err := getNovitaJSON(ctx, input.Config, "/async/task-result?task_id="+url.QueryEscape(id), &result); err != nil {
+			return nil, err
+		}
+		task, _ := result["task"].(map[string]interface{})
+		switch stringField(task, "status") {
+		case "TASK_STATUS_SUCCEED":
+			videos, _ := result["videos"].([]interface{})
+			if len(videos) == 0 {
+				return nil, fmt.Errorf("Novita 视频任务 %s 已完成但没有返回视频", id)
+			}
+			first, _ := videos[0].(map[string]interface{})
+			videoURL := strings.TrimSpace(stringField(first, "video_url"))
+			if videoURL == "" {
+				return nil, fmt.Errorf("Novita 视频任务 %s 已完成但没有返回视频地址", id)
+			}
+			data, mimeType, err := getExternalBinary(withProviderRequestKind(ctx, "download"), videoURL)
+			if err != nil {
+				return nil, fmt.Errorf("Novita 视频结果下载失败（任务 %s）：%w", id, err)
+			}
+			mimeType = normalizedMediaMimeType(mimeType, data)
+			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+		case "TASK_STATUS_FAILED":
+			reason := firstNonEmptyString(stringField(task, "reason"), "上游返回失败")
+			return nil, fmt.Errorf("Novita 视频生成失败（任务 %s）：%s", id, reason)
+		}
+		if err := sleepContext(ctx, 5*time.Second); err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("Novita 视频生成超时（任务 %s）", id)
+}
+
+func novitaVideoImageValue(media providerMedia) (string, error) {
+	if isPublicMediaURL(media.URL) {
+		if _, err := ValidateOutboundURL(media.URL); err != nil {
+			return "", err
+		}
+		return media.URL, nil
+	}
+	raw, mimeType, err := mediaBytes(media)
+	if err != nil {
+		return "", err
+	}
+	return dataURL(mimeType, raw), nil
+}
+
+func normalizeNovitaVideoDuration(value string) string {
+	if normalizeSeedanceDuration(value) >= 8 {
+		return "10"
+	}
+	return "5"
+}
+
+func normalizeNovitaVideoRatio(value string) string {
+	switch strings.TrimSpace(value) {
+	case "16:9", "9:16", "1:1":
+		return strings.TrimSpace(value)
+	default:
+		return "16:9"
+	}
+}
+
+func novitaVideoURL(baseURL string, path string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	return base + "/" + strings.TrimLeft(path, "/")
+}
+
+func postNovitaJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {
+	data, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, novitaVideoURL(config.BaseURL, path), bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	ApplyOutboundHeaders(req, config.Headers)
+	return doJSON(req, target)
+}
+
+func getNovitaJSON(ctx context.Context, config providerConfig, path string, target interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, novitaVideoURL(config.BaseURL, path), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
+	return doJSON(req, target)
 }
 
 func postGeminiJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {
@@ -2027,7 +2150,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
 		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true},
-		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true},
+		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true, "novita-video": true},
 		"audio": {"openai-audio": true, "async-audio": true},
 	}
 	if allowed[mode] != nil && !allowed[mode][interfaceType] {
