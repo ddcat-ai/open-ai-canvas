@@ -42,12 +42,13 @@ export async function runBackendCanvasGenerationTask({
     metadata?: Record<string, unknown>;
     onTaskCreated?: (task: GenerationTask) => void;
 }) {
+    const normalizedReferenceImages = mode === "image" ? limitCanvasImageReferences(config, referenceImages) : referenceImages;
     return runBackendGenerationTask({
         projectId,
         mode,
         prompt,
         config,
-        referenceImages,
+        referenceImages: normalizedReferenceImages,
         referenceVideos,
         referenceAudios,
         mask,
@@ -55,6 +56,14 @@ export async function runBackendCanvasGenerationTask({
         metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
         onTaskUpdate: onTaskCreated,
     });
+}
+
+// Canvas references can include a scene frame plus multiple character turnarounds. Keep
+// the earliest connected scene image when a provider accepts fewer images than the graph.
+export function limitCanvasImageReferences(config: AiConfig, referenceImages: ReferenceImage[]) {
+    const maxImages = modelCapabilityConfigFor(config, config.model).image?.references.maxImages;
+    if (maxImages === undefined || maxImages < 1 || referenceImages.length <= maxImages) return referenceImages;
+    return referenceImages.slice(0, maxImages);
 }
 
 export { backendProviderConfig };
