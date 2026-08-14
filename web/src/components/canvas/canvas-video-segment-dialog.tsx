@@ -111,12 +111,15 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
     const durationSec = durationMs > 0 ? durationMs / 1000 : 0;
     const hasTimelineVideoClips = Boolean(timeline?.clips.some((clip) => clip.kind === "video"));
     const hasPrompt = Boolean(prompt.trim());
-    const modelRequirements = useMemo<ModelRequirements>(() => ({
-        capability: "video",
-        input: { textCount: hasPrompt ? 1 : 0, imageCount: 0, videoCount: 1, audioCount: 0, characterCount: 0 },
-        videoOperation: operation,
-        videoSeconds: config.videoSeconds,
-    }), [config.videoSeconds, hasPrompt, operation]);
+    const modelRequirements = useMemo<ModelRequirements>(
+        () => ({
+            capability: "video",
+            input: { textCount: hasPrompt ? 1 : 0, imageCount: 0, videoCount: 1, audioCount: 0, characterCount: 0 },
+            videoOperation: operation,
+            videoSeconds: config.videoSeconds,
+        }),
+        [config.videoSeconds, hasPrompt, operation],
+    );
     const resolvedModel = resolveCompatibleModel(config, model, modelRequirements) || model;
     const videoProfile = useMemo(() => (resolvedModel ? modelCapabilityConfigFor(config, resolvedModel).video : undefined), [config, resolvedModel]);
     const defaultModel = config.videoModel || config.model || "";
