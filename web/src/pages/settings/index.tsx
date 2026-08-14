@@ -1,11 +1,10 @@
 import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Select, Tag, Tooltip } from "antd";
-import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, Info, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronUp, CircleCheck, Cloud, MessageSquareText, Plus, RadioTower, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { refreshSystemChannels } from "@/lib/user-session";
 import { fetchChannelModels, type ChannelModelCatalogItem } from "@/services/api/image";
@@ -249,30 +248,26 @@ export default function SettingsPage() {
     };
 
     return (
-        <main className="app-workspace-page flex h-full min-h-0 flex-col text-foreground">
-            <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
-                <div className="flex min-w-0 items-center gap-3">
+        <main className="settings-page app-workspace-page flex h-full min-h-0 flex-col text-foreground">
+            <header className="settings-topbar shrink-0">
+                <div className="flex min-w-0 items-center gap-2.5">
                     {shouldPromptContinue ? (
                         <button type="button" className="app-workspace-icon-button shrink-0" onClick={() => navigate(-1)} aria-label="返回创作页面" title="返回创作页面"><ArrowLeft className="size-4" /></button>
                     ) : null}
-                    <WorkspaceSignalIcon variant="settings" />
-                    <div className="min-w-0">
-                        <h1 className="truncate text-base font-semibold">配置与用户偏好</h1>
-                        <p className="mt-0.5 truncate text-xs text-foreground/50">模型连接、生成默认值与个人媒体存储</p>
-                    </div>
+                    <h1 className="truncate text-sm font-semibold">设置</h1>
                 </div>
-                {shouldPromptContinue ? <Button type="primary" onClick={finishConfig}>保存并返回创作</Button> : null}
+                {shouldPromptContinue ? <Button type="primary" size="small" onClick={finishConfig}>保存并返回</Button> : null}
             </header>
-            <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                <aside className="w-full shrink-0 border-b border-border/70 bg-transparent p-2 md:w-[224px] md:border-b-0 md:border-r md:p-3">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto md:block md:space-y-1" aria-label="配置分类">
+            <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
+                <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2.5" aria-label="配置分类">
                         {configSections.map((item) => {
                             const selected = item.key === activeTab;
                             return (
                                 <button
                                     key={item.key}
                                     type="button"
-                                    className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:w-full md:items-start md:gap-3 md:py-2.5 ${selected ? "bg-[var(--workspace-accent-soft)] text-foreground" : "text-foreground/58 hover:bg-muted/55 hover:text-foreground"}`}
+                                    className={`settings-nav-item flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:w-full md:items-start md:gap-3 md:py-2.5 ${selected ? "is-active" : "text-foreground/58 hover:bg-muted/55 hover:text-foreground"}`}
                                     onClick={() => selectSection(item.key)}
                                     aria-current={selected ? "page" : undefined}
                                 >
@@ -284,9 +279,9 @@ export default function SettingsPage() {
                     </nav>
                 </aside>
 
-                <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-transparent">
+                <section className="settings-content flex min-h-0 min-w-0 flex-1 flex-col">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className={activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}>
+                        <div className={`settings-surface-card ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
                     {([
                     {
                         key: "channels",
@@ -294,15 +289,10 @@ export default function SettingsPage() {
                         children: (
                             <SettingsPane>
                                 <Form layout="vertical" requiredMark={false}>
-                                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 text-xs text-foreground/65">
-                                                <Info className="size-3.5 shrink-0" />
-                                                <span>渠道只保存连接类型；拉取模型后，请在每个模型下配置能力与请求协议。</span>
-                                                <Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={() => selectSection("models")}>
-                                                    打开模型选择
-                                                </Button>
-                                            </div>
+                                    <div className="settings-pane-header">
+                                        <div className="min-w-0">
+                                            <h2>自定义渠道</h2>
+                                            <p>渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。<Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={() => selectSection("models")}>打开模型选择</Button></p>
                                         </div>
                                         <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
                                             <Button
@@ -320,7 +310,7 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                     {userChannels.length ? (
-                                        <div className="space-y-2">
+                                        <div className="settings-channel-list space-y-2">
                                             {userChannels.map((channel) => (
                                                 <section key={channel.id} aria-labelledby={`channel-${channel.id}-title`} className="rounded-md border border-border bg-background p-2.5 sm:p-3">
                                                     <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2.5">
@@ -371,6 +361,7 @@ export default function SettingsPage() {
                                                     </div>
                                                     <div id={`channel-${channel.id}-details`} hidden={collapsedChannelIds.has(channel.id)}>
                                                     <div className="grid gap-x-3 gap-y-2 lg:grid-cols-12">
+                                                        <div className="settings-field-group-label lg:col-span-12">连接信息</div>
                                                         <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 lg:col-span-3">
                                                             <Input
                                                                 id={`channel-${channel.id}-name`}
@@ -418,6 +409,7 @@ export default function SettingsPage() {
                                                                 onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })}
                                                             />
                                                         </Form.Item>
+                                                        <div className="settings-field-group-label lg:col-span-12">模型与能力</div>
                                                         <Form.Item label="模型列表" htmlFor={`channel-${channel.id}-models`} className="mb-0 lg:col-span-7">
                                                             <Select
                                                                 id={`channel-${channel.id}-models`}
@@ -458,7 +450,15 @@ export default function SettingsPage() {
                         label: "模型",
                         children: (
                             <SettingsPane>
-                                <ModelDefaultGrid config={config} onChange={(key, model) => updateConfig(key, model)} />
+                                <div className="settings-pane-header">
+                                    <div className="min-w-0">
+                                        <h2>模型选择</h2>
+                                        <p>按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。</p>
+                                    </div>
+                                </div>
+                                <div className="settings-section-card">
+                                    <ModelDefaultGrid config={config} onChange={(key, model) => updateConfig(key, model)} />
+                                </div>
                             </SettingsPane>
                         ),
                     },
@@ -467,6 +467,13 @@ export default function SettingsPage() {
                         label: "生成偏好",
                         children: (
                             <SettingsPane>
+                                <div className="settings-pane-header">
+                                    <div className="min-w-0">
+                                        <h2>生成偏好</h2>
+                                        <p>画布、视频与音频默认值，节点内仍可单独覆盖。</p>
+                                    </div>
+                                </div>
+                                <div className="settings-section-card">
                                 <Form layout="vertical" requiredMark={false}>
                                     <section className="border-b border-border pb-6">
                                         <div className="mb-4"><h3 className="text-sm font-semibold">画布生成</h3><p className="mt-1 text-xs text-foreground/55">设置新建生成任务时使用的初始值，节点内仍可单独覆盖。</p></div>
@@ -514,6 +521,7 @@ export default function SettingsPage() {
                                         </div>
                                     </section>
                                 </Form>
+                                </div>
                             </SettingsPane>
                         ),
                     },
@@ -532,7 +540,9 @@ export default function SettingsPage() {
                         ),
                         children: (
                             <SettingsPane>
-                                <UserOSSSettingsForm />
+                                <div className="settings-section-card">
+                                    <UserOSSSettingsForm />
+                                </div>
                             </SettingsPane>
                         ),
                     },

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Modal, Select } from "antd";
-import { ArrowDownAZ, Clock3, Download, FileUp, ListFilter, MoreHorizontal, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowDownAZ, Clock3, Download, FileUp, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { CollectionGrid, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
@@ -163,12 +163,14 @@ export default function CanvasPage() {
 
     return (
         <WorkspacePage grid className="canvas-library-page">
+            <div className="studio-band">
                 <PageHeader
-                    icon="canvas"
                     title="画布"
                     description="把镜头、素材和想法留在同一张画布里。"
+                    meta={<span className="app-projects-header-meta">{projects.length} 个</span>}
                     actions={(
                         <>
+                        <Button className="library-primary-action !h-9 !px-3.5" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>新建画布</Button>
                         {projects.length ? (
                                     <Dropdown menu={{ items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }] }} trigger={["click"]}>
                                 <Button className="!h-9 !w-9 !p-0" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
@@ -196,7 +198,9 @@ export default function CanvasPage() {
                     </div>
                     <span className="canvas-library-count"><strong>{String(filteredProjects.length).padStart(2, "0")}</strong><span>/ {String(projects.length).padStart(2, "0")} 画布</span></span>
                 </section>
+            </div>
 
+            <div className="canvas-library-frame">
                 {selectedIds.length ? (
                     <div className="app-canvas-selection-toolbar mt-2 flex min-h-10 flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
                         <strong className="mr-auto font-medium">已选 {selectedIds.length} 个画布</strong>
@@ -221,6 +225,7 @@ export default function CanvasPage() {
                 )}
 
                 <PaginationBar current={page} pageSize={pageSize} total={filteredProjects.length} pageSizeOptions={[12, 24, 48]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
+            </div>
 
                 <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
                 <Modal title="加入项目" open={associationOpen} okText="保存关联" cancelText="取消" okButtonProps={{ disabled: !associationProjectId, loading: projectQuery.isFetching }} onCancel={() => setAssociationOpen(false)} onOk={() => void associateSelected()}>

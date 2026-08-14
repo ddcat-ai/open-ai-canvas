@@ -26,7 +26,7 @@ export function SkillDetailDrawer({ skill, loading, mutating, categories, onClos
                     <section aria-labelledby="skill-instruction-title">
                         <div className="mb-2 flex items-center justify-between gap-3">
                             <h2 id="skill-instruction-title" className="text-sm font-semibold">技能指令</h2>
-                            {skill.markdown_url ? <Tooltip title="打开 Markdown 原文"><a className="inline-flex size-8 items-center justify-center rounded-md text-foreground/55 hover:bg-foreground/[.06] hover:text-foreground" href={skill.markdown_url} target="_blank" rel="noreferrer" aria-label="打开 Markdown 原文"><ExternalLink className="size-4" /></a></Tooltip> : null}
+                            {skill.markdown_url ? <Tooltip title="打开 Markdown 原文"><a className="inline-flex size-8 items-center justify-center rounded-md text-foreground/55 hover:bg-surface-hover hover:text-foreground" href={skill.markdown_url} target="_blank" rel="noreferrer" aria-label="打开 Markdown 原文"><ExternalLink className="size-4" /></a></Tooltip> : null}
                         </div>
                         {loading ? <Skeleton active paragraph={{ rows: 14 }} /> : <pre className="thin-scrollbar max-h-[52vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border/70 bg-foreground/[.025] p-4 font-mono text-xs leading-6 text-foreground/78">{skill.instruction || "暂无技能指令"}</pre>}
                     </section>

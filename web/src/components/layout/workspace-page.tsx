@@ -2,7 +2,6 @@ import { Button, Pagination } from "antd";
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { WorkspaceSignalIcon, type WorkspaceSignalIconVariant } from "@/components/ui/aceternity/workspace-signal-icon";
 import { cn } from "@/lib/utils";
 
 export function WorkspacePage({ children, className, grid = false, fluid = false }: { children: ReactNode; className?: string; grid?: boolean; fluid?: boolean }) {
@@ -13,14 +12,13 @@ export function WorkspacePage({ children, className, grid = false, fluid = false
     );
 }
 
-export function PageHeader({ title, description, meta, actions, icon }: { title: string; description?: string; meta?: ReactNode; actions?: ReactNode; icon?: WorkspaceSignalIconVariant }) {
+export function PageHeader({ title, description, meta, actions }: { title: string; description?: string; meta?: ReactNode; actions?: ReactNode }) {
     return (
-        <header className="app-page-header flex min-h-14 flex-col gap-3 border-b border-border/80 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <header className="app-page-header flex min-h-14 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-                {icon ? <WorkspaceSignalIcon variant={icon} /> : null}
                 <div className="min-w-0">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
-                        <h1 className="truncate text-[var(--fs-title)] font-semibold leading-7">{title}</h1>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                        <h1 className="app-page-header-title truncate font-semibold leading-7">{title}</h1>
                         {meta}
                     </div>
                     {description ? <p className="mt-1 text-xs leading-5 text-foreground/58">{description}</p> : null}
@@ -44,7 +42,7 @@ export function ListToolbar({ children, trailing, active, onReset, className }: 
 }
 
 export function TableSurface({ children, className }: { children: ReactNode; className?: string }) {
-    return <div className={cn("app-table-surface mt-4 min-w-0 overflow-hidden rounded-lg border border-border bg-background", className)}>{children}</div>;
+    return <div className={cn("app-table-surface mt-4 min-w-0 overflow-hidden rounded-lg border border-border bg-surface", className)}>{children}</div>;
 }
 
 export function CollectionGrid({ children, className }: { children: ReactNode; className?: string }) {
