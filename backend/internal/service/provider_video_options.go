@@ -160,6 +160,9 @@ func normalizeVideoResolution(value string) string {
 	if strings.EqualFold(value, "4k") {
 		return "2160p"
 	}
+	if strings.EqualFold(value, "2k") {
+		return "1440p"
+	}
 	if strings.HasSuffix(value, "p") {
 		return value
 	}
@@ -180,6 +183,8 @@ func normalizeXAIVideoResolution(value string) string {
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "1440", "1440p", "2k":
+		return "1440p"
 	case "2160", "2160p", "4k":
 		return "2160p"
 	default:
