@@ -9711,6 +9711,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 16%, transparent);
     content: "";
 }
+.assets-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.assets-header-action-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.assets-header-actions .assets-storage-usage { justify-content: flex-end; }
 .assets-storage-usage {
     display: flex;
     width: min(100%, 380px);

@@ -282,14 +282,16 @@ export default function AssetsPage() {
                     description="管理文本、图片、视频、音频和 3D 模型素材。"
                     meta={<span className="app-projects-header-meta assets-header-meta">{validAssets.length} 个素材</span>}
                     actions={(
-                        <>
+                        <div className="assets-header-actions">
+                            <div className="assets-header-action-buttons">
+                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>新增素材</Button>
+                                <Button title="导出全部素材" aria-label="导出全部素材" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()} />
+                                <Dropdown trigger={["click"]} menu={{ items: [{ key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() }, { key: "model", icon: <Upload className="size-4" />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() }] }}>
+                                    <Button title="导入素材" aria-label="导入素材" icon={<FileUp className="size-4" />} />
+                                </Dropdown>
+                            </div>
                             <AssetStorageUsage />
-                            <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>新增素材</Button>
-                            <Button title="导出全部素材" aria-label="导出全部素材" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()} />
-                            <Dropdown trigger={["click"]} menu={{ items: [{ key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() }, { key: "model", icon: <Upload className="size-4" />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() }] }}>
-                                <Button title="导入素材" aria-label="导入素材" icon={<FileUp className="size-4" />} />
-                            </Dropdown>
-                        </>
+                        </div>
                     )}
                 />
                 <ListToolbar className="library-toolbar" active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
