@@ -45,4 +45,16 @@ describe("creation library button", () => {
         expect(canvasSource).toContain("<AntImage");
         expect(canvasSource).toContain("onClick={() => onInsert(reference)}");
     });
+
+    test("promotes the first reference into the primary reference slot", () => {
+        const source = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
+
+        expect(source).toContain("const [primaryAttachment, ...secondaryAttachments] = props.attachments");
+        expect(source).toContain("<CreationAttachmentThumbnail item={primaryAttachment} primary");
+        expect(source).toContain("secondaryAttachments.map((item) => <CreationAttachmentThumbnail");
+        expect(source).toContain('className={primary ? "creation-chat-reference-media" : "creation-chat-attachment"}');
+        expect(source).toContain("if (attachments.length <= maxReferences) return");
+        expect(source).toContain("setAttachments((current) => current.slice(0, maxReferences))");
+        expect(source).toContain("removeReferenceTokens(current, removedReferences)");
+    });
 });
