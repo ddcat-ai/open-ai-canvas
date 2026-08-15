@@ -106,6 +106,19 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"resources": resources})
 	})
+	r.GET("/resources/storage-usage", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		usage, err := svc.AccountFileStorageUsage(user.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"usage": usage})
+	})
 	r.POST("/resources", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

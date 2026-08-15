@@ -41,6 +41,11 @@ export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | 
     accessKeySecret?: string;
 };
 
+export type AccountFileStorageUsage = {
+    usedBytes: number;
+    totalBytes: number;
+};
+
 const api = apiClient;
 const resourceCache = new Map<string, RemoteResource>();
 const resourceRequests = new Map<string, Promise<RemoteResource>>();
@@ -56,6 +61,11 @@ export function getUserOSSSetting() {
 
 export function updateUserOSSSetting(input: UserOSSSettingInput) {
     return request<{ setting: UserOSSSetting }>(api.patch("/settings/oss", input));
+}
+
+export async function getAccountFileStorageUsage() {
+    const data = await request<{ usage: AccountFileStorageUsage }>(api.get("/resources/storage-usage"));
+    return data.usage;
 }
 
 export function resourceIdFromStorageKey(storageKey?: string) {
