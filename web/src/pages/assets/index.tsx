@@ -280,7 +280,12 @@ export default function AssetsPage() {
                 <PageHeader
                     title="素材库"
                     description="管理文本、图片、视频、音频和 3D 模型素材。"
-                    meta={<span className="app-projects-header-meta assets-header-meta">{validAssets.length} 个素材</span>}
+                    meta={(
+                        <div className="assets-header-meta-group">
+                            <span className="app-projects-header-meta assets-header-meta">{validAssets.length} 个素材</span>
+                            <AssetStorageUsage />
+                        </div>
+                    )}
                     actions={(
                         <>
                             <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>新增素材</Button>
@@ -291,7 +296,6 @@ export default function AssetsPage() {
                         </>
                     )}
                 />
-                <AssetStorageUsage />
                 <ListToolbar className="library-toolbar" active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
                     <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索标题、内容、标签或来源" onChange={(event) => { setPage(1); setKeyword(event.target.value); }} />
                 </ListToolbar>

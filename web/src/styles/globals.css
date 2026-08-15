@@ -9702,6 +9702,7 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 /* ===== 素材库 · 重构（影策影视资产） =====
    与画布库共用 studio-band 毛玻璃页头与 frame 外壳；类型化封面、accent 反白筛选、
    批量操作条、banner+欢迎卡空态、资产档案抽屉。全局保持黑白单色。 */
+.assets-header-meta-group { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 10px; }
 .assets-library-page .assets-header-meta { gap: 6px; }
 .assets-library-page .assets-header-meta::before {
     width: 6px;
@@ -9713,11 +9714,10 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 .assets-storage-usage {
     display: flex;
-    width: min(100%, 560px);
+    width: min(100%, 380px);
     min-height: 24px;
     align-items: center;
     gap: 8px;
-    margin-top: 2px;
     color: color-mix(in srgb, var(--foreground) 48%, transparent);
 }
 .assets-storage-usage-icon {
@@ -9731,9 +9731,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 .assets-storage-usage-value { flex: none; color: color-mix(in srgb, var(--foreground) 76%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
 .assets-storage-usage-track {
     display: block;
-    flex: 1 1 160px;
+    flex: 1 1 96px;
     min-width: 48px;
-    max-width: 220px;
+    max-width: 120px;
     height: 4px;
     overflow: hidden;
     border-radius: var(--progress-bar-radius);
