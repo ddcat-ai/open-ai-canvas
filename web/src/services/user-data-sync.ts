@@ -1,6 +1,6 @@
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob, resolveImageUrl } from "@/services/image-storage";
-import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteUserDataSnapshot, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
+import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteAsset, getRemoteCanvasProject, listRemoteAssets, listRemoteCanvasProjects, upsertRemoteAsset, upsertRemoteCanvasProject, type RemoteUserDataSummary } from "@/services/api/user-data";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import type { Asset } from "@/stores/use-asset-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -12,6 +12,11 @@ let applyingRemoteState = false;
 let syncTimer: number | null = null;
 let syncPromise: Promise<void> | null = null;
 let syncQueued = false;
+let syncPauseCount = 0;
+let syncPauseTail: Promise<void> = Promise.resolve();
+let resumeSync: (() => void) | null = null;
+let syncResumed: Promise<void> | null = null;
+const activeRemoteSyncOperations = new Set<Promise<void>>();
 let subscriptionsInstalled = false;
 let remoteAssetVersions = new Map<string, string>();
 let remoteProjectVersions = new Map<string, string>();
@@ -19,22 +24,28 @@ let remoteProjectVersions = new Map<string, string>();
 const LOCAL_STORAGE_KEY_PATTERN = /^(image|video|audio|file|video-reference|audio-reference):/;
 
 export async function syncRemoteUserData(userId?: string | null) {
-    activeRemoteUserId = userId || "";
-    if (!activeRemoteUserId) return;
-    applyingRemoteState = true;
-    try {
-        const remoteSnapshot = await getRemoteUserDataSnapshot();
-        remoteProjectVersions = versionMap(remoteSnapshot.projects);
-        remoteAssetVersions = versionMap(remoteSnapshot.assets);
-        const localProjects = useCanvasStore.getState().projects;
-        const localAssets = useAssetStore.getState().assets;
-        const mergedProjects = mergeById(localProjects, remoteSnapshot.projects);
-        const mergedAssets = mergeById(localAssets, await hydrateAssets(remoteSnapshot.assets));
-        useCanvasStore.getState().replaceProjects(mergedProjects);
-        useAssetStore.getState().replaceAssets(mergedAssets);
-    } finally {
-        applyingRemoteState = false;
-    }
+    await runRemoteUserDataSyncOperation(async () => {
+        activeRemoteUserId = userId || "";
+        if (!activeRemoteUserId) return;
+        applyingRemoteState = true;
+        try {
+            const [remoteCanvas, remoteAssets] = await Promise.all([listRemoteCanvasProjects(), listRemoteAssets()]);
+            remoteProjectVersions = versionMap(remoteCanvas.projects);
+            remoteAssetVersions = versionMap(remoteAssets.assets);
+            const localProjects = useCanvasStore.getState().projects;
+            const localAssets = useAssetStore.getState().assets;
+            const [changedProjects, changedAssets] = await Promise.all([
+                fetchNewerRemoteItems(localProjects, remoteCanvas.projects, async (id) => (await getRemoteCanvasProject(id)).project),
+                fetchNewerRemoteItems(localAssets, remoteAssets.assets, async (id) => (await getRemoteAsset(id)).asset),
+            ]);
+            const mergedProjects = mergeById(localProjects, changedProjects);
+            const mergedAssets = mergeById(localAssets, await hydrateAssets(changedAssets));
+            useCanvasStore.getState().replaceProjects(mergedProjects);
+            useAssetStore.getState().replaceAssets(mergedAssets);
+        } finally {
+            applyingRemoteState = false;
+        }
+    });
     // 首次登录可能带有尚未创建到云端的本地画布；先完成一次 upsert，避免详情页保存/分享先于项目创建。
     try {
         await saveRemoteUserDataNow();
@@ -63,10 +74,76 @@ export function resetRemoteUserDataSync() {
         window.clearTimeout(syncTimer);
         syncTimer = null;
     }
+    syncQueued = false;
+}
+
+function waitForRemoteUserDataSyncResume() {
+    if (!syncPauseCount) return Promise.resolve();
+    if (!syncResumed) {
+        syncResumed = new Promise<void>((resolve) => {
+            resumeSync = resolve;
+        });
+    }
+    return syncResumed;
+}
+
+async function runRemoteUserDataSyncOperation<T>(operation: () => Promise<T>): Promise<T> {
+    while (syncPauseCount) await waitForRemoteUserDataSyncResume();
+    let finish!: () => void;
+    const active = new Promise<void>((resolve) => {
+        finish = resolve;
+    });
+    activeRemoteSyncOperations.add(active);
+    try {
+        return await operation();
+    } finally {
+        activeRemoteSyncOperations.delete(active);
+        finish();
+    }
+}
+
+export async function withRemoteUserDataSyncPaused<T>(operation: () => Promise<T>): Promise<T> {
+    syncPauseCount += 1;
+    if (syncTimer) {
+        window.clearTimeout(syncTimer);
+        syncTimer = null;
+        syncQueued = true;
+    }
+    let releaseTurn!: () => void;
+    const previousTurn = syncPauseTail;
+    syncPauseTail = new Promise<void>((resolve) => {
+        releaseTurn = resolve;
+    });
+    await previousTurn;
+    try {
+        if (activeRemoteSyncOperations.size) {
+            await Promise.allSettled([...activeRemoteSyncOperations]);
+        }
+        if (syncPromise) await syncPromise;
+        return await operation();
+    } finally {
+        releaseTurn();
+        syncPauseCount -= 1;
+        if (!syncPauseCount) {
+            const resolve = resumeSync;
+            resumeSync = null;
+            syncResumed = null;
+            resolve?.();
+            if (syncQueued) scheduleRemoteUserDataSync();
+        }
+    }
 }
 
 export function scheduleRemoteUserDataSync() {
     if (!activeRemoteUserId || applyingRemoteState) return;
+    if (syncPauseCount) {
+        syncQueued = true;
+        if (syncTimer) {
+            window.clearTimeout(syncTimer);
+            syncTimer = null;
+        }
+        return;
+    }
     if (syncPromise) {
         syncQueued = true;
         return;
@@ -92,15 +169,22 @@ export async function createCanvasProjectWithRemoteSync(title: string, projectId
 }
 
 export async function deleteAssetWithRemoteSync(id: string) {
-    if (activeRemoteUserId) {
-        await deleteRemoteAsset(id);
-        remoteAssetVersions.delete(id);
-    }
-    useAssetStore.getState().removeAsset(id);
+    await runRemoteUserDataSyncOperation(async () => {
+        if (activeRemoteUserId) {
+            await deleteRemoteAsset(id);
+            remoteAssetVersions.delete(id);
+        }
+        useAssetStore.getState().removeAsset(id);
+    });
 }
 
 export async function saveRemoteUserDataNow() {
     if (!activeRemoteUserId) return;
+    if (syncPauseCount) {
+        syncQueued = true;
+        await waitForRemoteUserDataSyncResume();
+        return saveRemoteUserDataNow();
+    }
     if (syncPromise) {
         syncQueued = true;
         return syncPromise;
@@ -272,6 +356,15 @@ function mergeById<T extends { id?: string; updatedAt?: string }>(local: T[], re
         if (!current || timeValue(item.updatedAt) >= timeValue(current.updatedAt)) items.set(item.id, item);
     });
     return Array.from(items.values()).sort((a, b) => timeValue(b.updatedAt) - timeValue(a.updatedAt));
+}
+
+async function fetchNewerRemoteItems<T extends { id: string; updatedAt?: string }>(local: T[], remote: RemoteUserDataSummary[], fetchItem: (id: string) => Promise<T>) {
+    const localById = new Map(local.map((item) => [item.id, item]));
+    const pending = remote.filter((item) => {
+        const current = localById.get(item.id);
+        return !current || timeValue(item.updatedAt) > timeValue(current.updatedAt);
+    });
+    return Promise.all(pending.map((item) => fetchItem(item.id)));
 }
 
 function versionMap(items: Array<{ id: string; updatedAt?: string }>) {

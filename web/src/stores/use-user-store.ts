@@ -28,6 +28,7 @@ export type FeatureAvailability = {
     shortDramaEnabled: boolean;
     taskCenterEnabled: boolean;
     creditsEnabled: boolean;
+    desktopLocalChannelsEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -37,6 +38,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     shortDramaEnabled: true,
     taskCenterEnabled: true,
     creditsEnabled: true,
+    desktopLocalChannelsEnabled: false,
 };
 
 type UserStore = {

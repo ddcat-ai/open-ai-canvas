@@ -39,13 +39,39 @@ export function readFileAsDataUrl(file: File) {
     });
 }
 
-export function readImageMeta(dataUrl: string) {
-    return new Promise<{ width: number; height: number; mimeType: string }>((resolve) => {
+export function readImageMeta(dataUrl: string, signal?: AbortSignal) {
+    return new Promise<{ width: number; height: number; mimeType: string }>((resolve, reject) => {
         const image = new Image();
-        const done = () => resolve({ width: image.naturalWidth || 1024, height: image.naturalHeight || 1024, mimeType: dataUrl.match(/^data:([^;]+)/)?.[1] || "image/png" });
-        image.onload = done;
-        image.onerror = done;
-        setTimeout(done, 3000);
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const cleanup = (cancelLoad = false) => {
+            if (timer !== undefined) clearTimeout(timer);
+            image.onload = null;
+            image.onerror = null;
+            signal?.removeEventListener("abort", onAbort);
+            if (cancelLoad) image.src = "";
+        };
+        const done = (cancelLoad = false) => {
+            if (settled) return;
+            settled = true;
+            cleanup(cancelLoad);
+            resolve({ width: image.naturalWidth || 1024, height: image.naturalHeight || 1024, mimeType: dataUrl.match(/^data:([^;]+)/)?.[1] || "image/png" });
+        };
+        const onAbort = () => {
+            if (settled) return;
+            settled = true;
+            cleanup(true);
+            reject(new DOMException("The operation was aborted", "AbortError"));
+        };
+
+        image.onload = () => done();
+        image.onerror = () => done();
+        signal?.addEventListener("abort", onAbort, { once: true });
+        timer = setTimeout(() => done(true), 3000);
+        if (signal?.aborted) {
+            onAbort();
+            return;
+        }
         image.src = dataUrl;
     });
 }

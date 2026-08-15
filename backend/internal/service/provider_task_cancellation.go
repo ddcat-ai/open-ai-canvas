@@ -80,6 +80,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	requestTask := *task
 	requestTask.InputJSON = mustJSON(input)
 	requestCtx = withProviderRequestKind(withProviderAnalytics(requestCtx, s, requestTask), "cancel")
+	requestCtx = withProviderOutboundPolicy(requestCtx, input.Config)
 	if err := cancelProviderTask(requestCtx, input.Config, task.ProviderRequestID); err != nil {
 		return s.markProviderCancellationUncertain(task, "上游取消请求结果不明确，费用待核对："+safeProviderLogError(err))
 	}
@@ -98,6 +99,7 @@ func (s *Service) reconcileProviderCancellation(ctx context.Context, task *model
 	queryTask := *task
 	queryTask.InputJSON = mustJSON(input)
 	queryCtx := withProviderRequestKind(withProviderAnalytics(ctx, s, queryTask), "cancel-query")
+	queryCtx = withProviderOutboundPolicy(queryCtx, input.Config)
 	outcome, providerStatus, err := queryProviderCancellation(queryCtx, input.Config, task.ProviderRequestID)
 	if err != nil {
 		if task.ProviderCancelAttempts >= providerCancellationMaxAttempts-1 {

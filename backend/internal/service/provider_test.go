@@ -1240,13 +1240,10 @@ func TestValidateGenerationInterfaceRejectsMismatchedType(t *testing.T) {
 }
 
 func TestProcessTaskValidatesInterfaceBeforeHydratingMedia(t *testing.T) {
-	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	defer server.Close()
 	input := canvasGenerationInput{
 		Mode:            "video",
 		Prompt:          "make it move",
-		Config:          providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "text-model", InterfaceType: "chat-completion"},
+		Config:          providerConfig{BaseURL: "https://8.8.8.8/v1", APIKey: "key", Model: "text-model", InterfaceType: "chat-completion"},
 		ReferenceImages: []providerMedia{{StorageKey: "resource:missing"}},
 	}
 	raw, _ := json.Marshal(input)

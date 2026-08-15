@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "dev": "tsx src/index.ts",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 test/*.test.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "prepack": "npm run build"
@@ -22,6 +22,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex": "^0.147.0",
     "express": "^5.2.1",
+    "json-canonicalize": "2.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
