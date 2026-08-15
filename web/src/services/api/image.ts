@@ -14,8 +14,13 @@ import { imageSizeRequest, modelCapabilityConfigFor, normalizeImageValue, type I
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
-    content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+    content: string | AiTextContentPart[];
 };
+
+export type AiTextContentPart =
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string } }
+    | { type: "file_url"; file_url: { url: string; name: string; mimeType: string } };
 
 export type ResponseToolCall = {
     id: string;
@@ -43,7 +48,7 @@ export type ToolResponseResult = {
 
 type ToolChoice = "auto" | "required" | { type: "function"; name: string };
 type ResponseMessageContent = AiTextMessage["content"] | string;
-type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
+type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string } | { type: "input_file"; filename: string; file_data?: string; file_url?: string };
 type ResponseInputItem = { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: "function_call_output"; call_id: string; output: string };
 type ResponseApiToolDefinition = {
     type: "function";
@@ -347,7 +352,13 @@ function toResponseInput(messages: ResponseInputMessage[]): ResponseInputItem[] 
 
 function toResponseContent(content: ResponseMessageContent): string | ResponseInputContent[] {
     if (!Array.isArray(content)) return String(content || "");
-    return content.map((item) => (item.type === "text" ? { type: "input_text" as const, text: item.text } : { type: "input_image" as const, image_url: item.image_url.url }));
+    return content.map((item) => {
+        if (item.type === "text") return { type: "input_text" as const, text: item.text };
+        if (item.type === "image_url") return { type: "input_image" as const, image_url: item.image_url.url };
+        return item.file_url.url.startsWith("data:")
+            ? { type: "input_file" as const, filename: item.file_url.name, file_data: item.file_url.url }
+            : { type: "input_file" as const, filename: item.file_url.name, file_url: item.file_url.url };
+    });
 }
 
 function toResponseTool(tool: ResponseFunctionTool): ResponseApiToolDefinition {
@@ -377,11 +388,22 @@ function toChatCompletionMessages(messages: ResponseInputMessage[]) {
         if (message.role === "tool") {
             result.push({ role: "tool", tool_call_id: message.tool_call_id, content: message.content });
         } else {
-            result.push({ role: message.role, content: message.content });
+            result.push({ role: message.role, content: toChatCompletionContent(message.content) });
         }
         index += 1;
     }
     return result;
+}
+
+function toChatCompletionContent(content: ResponseMessageContent) {
+    if (!Array.isArray(content)) return content;
+    return content.map((item) => {
+        if (item.type !== "file_url") return item;
+        const file = item.file_url.url.startsWith("data:")
+            ? { filename: item.file_url.name, file_data: item.file_url.url }
+            : { filename: item.file_url.name, file_url: item.file_url.url };
+        return { type: "file", file };
+    });
 }
 
 function toChatCompletionToolChoice(toolChoice: ToolChoice) {
@@ -653,18 +675,22 @@ function toGeminiContents(messages: ResponseInputMessage[]): GeminiContent[] {
 
 function toGeminiParts(content: ResponseMessageContent): GeminiPart[] {
     if (!Array.isArray(content)) return [{ text: String(content || "") }];
-    return content.map((item) => (item.type === "text" ? { text: item.text } : toGeminiImagePart(item.image_url.url)));
+    return content.map((item) => {
+        if (item.type === "text") return { text: item.text };
+        if (item.type === "image_url") return toGeminiFilePart(item.image_url.url, "image/png");
+        return toGeminiFilePart(item.file_url.url, item.file_url.mimeType);
+    });
 }
 
-function toGeminiImagePart(url: string): GeminiPart {
+function toGeminiFilePart(url: string, mimeType: string): GeminiPart {
     const match = url.match(/^data:([^;,]+);base64,(.+)$/);
     if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
-    return { fileData: { fileUri: url, mimeType: "image/png" } };
+    return { fileData: { fileUri: url, mimeType } };
 }
 
 function geminiTextContent(content: ResponseMessageContent) {
     if (!Array.isArray(content)) return String(content || "");
-    return content.map((item) => (item.type === "text" ? item.text : item.image_url.url)).join("\n");
+    return content.map((item) => item.type === "text" ? item.text : item.type === "image_url" ? item.image_url.url : `${item.file_url.name}: ${item.file_url.url}`).join("\n");
 }
 
 function jsonObject(value: string): Record<string, unknown> {
@@ -782,7 +808,7 @@ async function requestGeminiImages(config: AiConfig, prompt: string, references:
 async function requestGeminiImagesOnce(config: AiConfig, prompt: string, references: ReferenceImage[], options?: RequestOptions) {
     const parts: GeminiPart[] = [{ text: prompt }];
     for (const image of references) {
-        parts.push(toGeminiImagePart(await imageToDataUrl(image)));
+        parts.push(toGeminiFilePart(await imageToDataUrl(image), image.type || "image/png"));
     }
     const request = channelRequest(config, geminiApiUrl(config, "generateContent"), geminiHeaders(config));
     const response = await axios.post<GeminiPayload>(

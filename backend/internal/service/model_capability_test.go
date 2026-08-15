@@ -62,3 +62,38 @@ func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T) {
+	tests := map[string][]string{
+		"newapi-channel-2":        {"480p", "720p", "1080p", "1440p", "2160p"},
+		"volcengine-ark-video":    {"480p", "720p", "1080p"},
+		"volcengine-jimeng-video": {"720p"},
+		"gemini-veo":              {"720p", "1080p"},
+	}
+	for protocol, want := range tests {
+		t.Run(protocol, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel(protocol, "")
+			if profile == nil || profile.Video == nil {
+				t.Fatalf("DefaultModelCapabilityConfigForModel(%q) video profile = nil", protocol)
+			}
+			if fmt.Sprint(profile.Video.Resolutions) != fmt.Sprint(want) {
+				t.Fatalf("resolutions = %v, want %v", profile.Video.Resolutions, want)
+			}
+		})
+	}
+}
+
+func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
+	tests := map[string]string{
+		"1440":  "1440p",
+		"1440p": "1440p",
+		"2K":    "1440p",
+		"4K":    "2160p",
+		"768P":  "768p",
+	}
+	for input, want := range tests {
+		if got := normalizeResolution(input); got != want {
+			t.Fatalf("normalizeResolution(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
