@@ -9,6 +9,7 @@ import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } f
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
 
 export type ApiCallFormat = "openai" | "gemini";
@@ -345,9 +346,19 @@ function normalizeSelectedModel(value: string, channels: ModelChannel[], options
 
 export function useEffectiveConfig() {
     const config = useConfigStore((state) => state.config);
+    const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
     const catalogState = useLocalDreaminaModelStore((state) => state.state);
     const dreaminaModels = useLocalDreaminaModelStore((state) => state.models);
-    return useMemo(() => effectiveConfigWithDreamina(config, catalogState, dreaminaModels), [catalogState, config, dreaminaModels]);
+    return useMemo(
+        () => effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels),
+        [catalogState, config, customChannelsEnabled, dreaminaModels],
+    );
+}
+
+export function effectiveConfigForCustomChannels(config: AiConfig, customChannelsEnabled: boolean): AiConfig {
+    if (customChannelsEnabled) return config;
+    const channels = config.channels.filter((channel) => channel.scope === "system" || channel.transport === "local-runtime");
+    return normalizeConfigSnapshot({ config: { ...config, channels } }).config;
 }
 
 export function effectiveConfigWithDreamina(config: AiConfig, catalogState: "idle" | "loading" | "ready" | "error", dreaminaModels: DreaminaLocalModel[]): AiConfig {

@@ -27,6 +27,10 @@ func RegisterCustomRelayRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if err := svc.RequireFeature(service.FeatureCustomChannels); err != nil {
+			failService(c, err)
+			return
+		}
 		policy, available := loadRuntimePolicy(c, svc)
 		if !available || !enforceRateLimit(c, "custom-relay:"+user.ID, policy.Request.CustomRelayPerMinute, time.Minute) {
 			return

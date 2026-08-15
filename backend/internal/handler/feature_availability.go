@@ -42,8 +42,13 @@ func RegisterFeatureAvailabilityRoutes(r *gin.RouterGroup, svc *service.Service)
 			failService(c, err)
 			return
 		}
+		current, err := svc.AdminFeatureAvailability(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
-		var req service.FeatureAvailability
+		req := current.FeatureAvailability
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
