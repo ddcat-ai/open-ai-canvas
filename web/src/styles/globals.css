@@ -1559,6 +1559,168 @@
         border-radius: 4px;
     }
 
+    /* 全屏仅用于应用启动；骨架延续真实工作区结构，路由加载只占内容舞台。 */
+    .full-screen-loader {
+        position: fixed;
+        inset: 0;
+        z-index: var(--loader-z);
+        min-height: 100dvh;
+        overflow: hidden;
+        background: var(--workspace-page);
+        color: var(--foreground);
+        animation: loader-surface-enter var(--motion-panel) var(--motion-ease-out) both;
+    }
+
+    .full-screen-loader-shell {
+        display: flex;
+        width: 100%;
+        height: 100dvh;
+        flex-direction: column;
+    }
+
+    .full-screen-loader-topbar {
+        display: flex;
+        height: var(--page-topbar-h);
+        flex: 0 0 var(--page-topbar-h);
+        align-items: center;
+        justify-content: space-between;
+        padding-inline: var(--space-5);
+        background: var(--workspace-navigation);
+    }
+
+    .full-screen-loader-topbar-group {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .loader-placeholder {
+        display: block;
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
+
+    .loader-placeholder-control,
+    .loader-placeholder-mark,
+    .loader-placeholder-rail-item {
+        border-radius: var(--r-md);
+    }
+
+    .loader-placeholder-control { width: 36px; height: 36px; }
+    .loader-placeholder-mark { width: 28px; height: 28px; }
+    .loader-placeholder-wordmark { width: 40px; height: 10px; border-radius: var(--r-full); }
+    .loader-placeholder-action { width: 88px; height: 32px; border-radius: var(--r-md); }
+
+    .full-screen-loader-main {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+
+    .full-screen-loader-rail {
+        display: flex;
+        width: 64px;
+        flex: 0 0 64px;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-2);
+        padding-top: calc(var(--space-12) + var(--space-3));
+        background: var(--workspace-navigation);
+    }
+
+    .loader-placeholder-rail-item { width: 40px; height: 40px; }
+
+    .full-screen-loader-stage {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: var(--space-8);
+        background: var(--workspace-content);
+    }
+
+    .full-screen-loader-stage-header {
+        display: flex;
+        min-height: var(--space-10);
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+    }
+
+    .full-screen-loader-status,
+    .workspace-route-loader-content {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        color: color-mix(in srgb, var(--foreground) 54%, transparent);
+        font-size: var(--fs-caption);
+    }
+
+    .loading-signal {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 20px;
+        border: 2px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border-top-color: color-mix(in srgb, var(--foreground) 72%, transparent);
+        border-radius: var(--r-full);
+        animation: loading-signal-spin 900ms linear infinite;
+    }
+
+    .full-screen-loader-stage-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--space-4);
+        margin-top: var(--space-6);
+    }
+
+    .full-screen-loader-surface { min-width: 0; }
+    .loader-placeholder-media { aspect-ratio: 16 / 10; border-radius: var(--r-lg); }
+    .loader-placeholder-title { width: 58%; height: 10px; margin-top: var(--space-3); border-radius: var(--r-full); }
+    .loader-placeholder-meta { width: 34%; height: 8px; margin-top: var(--space-2); border-radius: var(--r-full); opacity: 0.72; }
+
+    .workspace-route-loader {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        min-height: 100%;
+        place-items: center;
+        background: var(--workspace-page);
+        color: var(--foreground);
+        opacity: 0;
+        transition: opacity var(--motion-instant) ease-out;
+    }
+
+    .workspace-route-loader.is-visible { opacity: 1; }
+    .workspace-route-loader-content { justify-content: center; }
+
+    @keyframes loader-surface-enter {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes loading-signal-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 1023px) {
+        .full-screen-loader-rail { display: none; }
+        .full-screen-loader-stage { padding: var(--space-6); }
+        .full-screen-loader-stage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 639px) {
+        .full-screen-loader-topbar { padding-inline: var(--space-4); }
+        .full-screen-loader-topbar-group:last-child .loader-placeholder-control:not(:last-child) { display: none; }
+        .full-screen-loader-stage { padding: var(--space-5) var(--space-4); }
+        .full-screen-loader-stage-grid { grid-template-columns: 1fr; }
+        .full-screen-loader-stage-grid .full-screen-loader-surface:nth-child(n + 3) { display: none; }
+        .loader-placeholder-action { width: var(--space-10); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .full-screen-loader { animation: none; }
+        .loading-signal { animation: none; }
+        .workspace-route-loader { transition: none; }
+    }
+
     :where(.ant-btn) {
         letter-spacing: 0;
         transition:
@@ -3405,13 +3567,6 @@
         box-shadow: 0 18px 54px color-mix(in srgb, var(--workspace-canvas) 62%, transparent), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
     }
 
-    .credit-balance-card {
-        border: 0;
-        background: var(--btn-solid-bg);
-        color: var(--btn-solid-fg);
-        box-shadow: none;
-    }
-
     .app-collection-card {
         position: relative;
         overflow: hidden;
@@ -4200,10 +4355,50 @@
     .skill-card-added-count { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
     .skill-card-owner-flag { flex: 1 1 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); }
 
+    /* 积分页使用同一工作台表面，通过排版而非反色卡片表达资产层级。 */
     .wallet-library-page .app-page-header { padding-bottom: 0; }
     .wallet-library-page .app-workspace-surface { border: 0; background: color-mix(in srgb, var(--workspace-surface-strong) 76%, transparent); box-shadow: none; }
+    .wallet-library-page .wallet-credit-meta { gap: 6px; }
+    .wallet-library-page .wallet-credit-meta svg { color: currentColor; }
+    .credit-balance-card { overflow: hidden; border: 0; border-radius: var(--r-lg); background: var(--library-surface); color: var(--foreground); box-shadow: none; }
+    .wallet-balance-inner { display: grid; min-height: 210px; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 32px; padding: 24px; }
+    .wallet-balance-primary { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; }
+    .wallet-balance-heading { display: flex; min-width: 0; align-items: center; gap: 12px; }
+    .wallet-balance-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+    .wallet-balance-heading strong { font-size: var(--fs-caption); font-weight: 600; }
+    .wallet-balance-heading div > span { overflow: hidden; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); text-overflow: ellipsis; white-space: nowrap; }
+    .wallet-balance-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: var(--library-icon-surface); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
+    .wallet-balance-icon svg { width: 17px; height: 17px; }
+    .wallet-balance-number { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 28px; }
+    .wallet-balance-number strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-display); font-variant-numeric: tabular-nums; font-weight: 620; line-height: 1; }
+    .wallet-balance-number > span { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-caption); }
+    .wallet-balance-details { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: end; gap: 20px; }
+    .wallet-account-status { display: inline-flex; grid-column: 1 / -1; align-items: center; justify-self: end; gap: 6px; color: color-mix(in srgb, var(--foreground) 58%, transparent); font-size: var(--fs-label); font-weight: 560; }
+    .wallet-account-status svg { width: 15px; height: 15px; }
+    .wallet-balance-metric { display: grid; min-width: 0; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 9px; }
+    .wallet-balance-metric-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 5%, transparent); color: color-mix(in srgb, var(--foreground) 42%, transparent); }
+    .wallet-balance-metric-icon svg { width: 14px; height: 14px; }
+    .wallet-balance-metric > div { display: flex; min-width: 0; flex-direction: column; }
+    .wallet-balance-metric span { color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-tiny); }
+    .wallet-balance-metric strong { margin-top: 3px; overflow: hidden; font-size: var(--fs-heading); font-variant-numeric: tabular-nums; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+    .wallet-balance-metric small { margin-top: 2px; overflow: hidden; color: color-mix(in srgb, var(--foreground) 35%, transparent); font-size: var(--fs-tiny); text-overflow: ellipsis; white-space: nowrap; }
+    .wallet-library-page .wallet-redeem-icon { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: color-mix(in srgb, var(--foreground) 72%, transparent); }
     .wallet-library-page .wallet-ledger-panel { margin-top: 28px; }
     .wallet-library-page .wallet-ledger-panel .app-table-surface { border: 0; box-shadow: none; }
+    .wallet-library-page .wallet-ledger-table .ant-table-thead > tr > th { height: 38px; padding: 8px 12px !important; background: color-mix(in srgb, var(--foreground) 4%, var(--background)) !important; color: color-mix(in srgb, var(--foreground) 52%, transparent) !important; font-size: var(--fs-label); font-weight: 500; }
+    .wallet-library-page .wallet-ledger-table .ant-table-tbody > tr > td { padding: 10px 12px !important; transition: background-color var(--motion-instant) ease-out; }
+    .wallet-library-page .wallet-ledger-table .ant-table-tbody > tr:hover > td { background: color-mix(in srgb, var(--foreground) 2.5%, var(--background)) !important; }
+    @media (max-width: 1120px) {
+        .wallet-balance-inner { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+        .wallet-balance-details { align-content: start; }
+        .wallet-account-status { grid-row: 2; grid-column: 1 / -1; justify-self: start; }
+    }
+    @media (max-width: 520px) {
+        .wallet-balance-inner { min-height: 0; gap: 22px; padding: 20px; }
+        .wallet-balance-number { margin-top: 32px; }
+        .wallet-balance-details { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+        .wallet-account-status { grid-row: auto; grid-column: auto; }
+    }
 
     .library-loading-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 18px; margin-top: 20px; }
     /* 画布骨架屏 - 使用新token */
@@ -10067,39 +10262,6 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 .assets-cover.is-light .assets-cover-more:hover { background: color-mix(in srgb, var(--foreground) 9%, transparent); color: var(--foreground); }
 .assets-cover.is-light .assets-cover-play::before { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); background: color-mix(in srgb, var(--surface-card) 78%, transparent); }
-
-/* ===== 积分中心页重构 ===== */
-
-/* 1. 页头 · 统一 studio band（全局 .studio-band 提供） */
-.wallet-library-page .wallet-credit-meta { gap: 6px; }
-.wallet-library-page .wallet-credit-meta svg { color: currentColor; }
-
-/* 2. 余额卡与其他工作台卡片一样不使用装饰边线和侧条。 */
-.wallet-library-page .wallet-balance-inner { padding-left: 0; }
-.wallet-library-page .wallet-balance-number { letter-spacing: 0; }
-
-/* 3. 兑换面板 · 去琥珀图标块 */
-.wallet-library-page .wallet-redeem-icon {
-    background: color-mix(in srgb, var(--foreground) 6%, transparent);
-    color: color-mix(in srgb, var(--foreground) 72%, transparent);
-}
-
-/* 4. 流水表 · 表头收敛 + 行 hover 节奏 */
-.wallet-library-page .wallet-ledger-table .ant-table-thead > tr > th {
-    height: 38px;
-    padding: 8px 12px !important;
-    background: color-mix(in srgb, var(--foreground) 4%, var(--background)) !important;
-    color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
-    font-size: 11px;
-    font-weight: 500;
-}
-.wallet-library-page .wallet-ledger-table .ant-table-tbody > tr > td {
-    padding: 10px 12px !important;
-    transition: background-color var(--motion-instant) ease-out;
-}
-.wallet-library-page .wallet-ledger-table .ant-table-tbody > tr:hover > td {
-    background: color-mix(in srgb, var(--foreground) 2.5%, var(--background)) !important;
-}
 
 /* ===== AI Markdown ===== */
 
