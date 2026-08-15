@@ -152,14 +152,17 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if billingMode == "per_second" && capability != "video" {
 		return nil, BadAuthRequest("只有视频模型可以按秒计费")
 	}
-	if billingMode == "token" && capability != "text" {
-		return nil, BadAuthRequest("只有文本模型可以按 Token 计费")
+	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
+		return nil, BadAuthRequest("Token 计费仅支持文本模型和火山方舟视频协议")
 	}
 	if req.UnitPriceMicrocredits < 0 || req.InputTokenPriceMicrocredits < 0 || req.OutputTokenPriceMicrocredits < 0 || req.CachedTokenPriceMicrocredits < 0 {
 		return nil, BadAuthRequest("模型积分价格不能小于 0")
 	}
 	if billingMode == "token" && req.InputTokenPriceMicrocredits == 0 && req.OutputTokenPriceMicrocredits == 0 && req.CachedTokenPriceMicrocredits == 0 {
 		return nil, BadAuthRequest("Token 计费至少需要配置一项价格")
+	}
+	if billingMode == "token" && capability == "video" && req.OutputTokenPriceMicrocredits == 0 {
+		return nil, BadAuthRequest("火山方舟视频 Token 计费需要配置每百万视频 Token 价格")
 	}
 	const maxTokenPriceMicrocredits = int64(1_000_000) * CreditScale
 	if req.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
@@ -220,6 +223,10 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, err
 	}
 	return item, nil
+}
+
+func supportsTokenBilling(capability string, protocol model.ChannelInterfaceType) bool {
+	return capability == "text" || (capability == "video" && protocol == model.ChannelInterfaceVolcengineArkVideo)
 }
 
 func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, channelID string, req ChannelModelRequest) (*AdminChannelModelTestResult, error) {
