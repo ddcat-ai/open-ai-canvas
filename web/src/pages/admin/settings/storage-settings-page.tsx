@@ -8,7 +8,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
 type StorageMode = "local" | "aliyun" | "tencent";
-type OSSFormValues = { mode: StorageMode; publicBaseUrl?: string; region?: string; endpoint?: string; bucket?: string; accessKeyId?: string; accessKeySecret?: string; pathPrefix?: string };
+type OSSFormValues = { mode: StorageMode; publicBaseUrl?: string; region?: string; endpoint?: string; cdnBaseUrl?: string; bucket?: string; accessKeyId?: string; accessKeySecret?: string; pathPrefix?: string };
 
 export default function StorageSettingsPage() {
     const { message } = App.useApp();
@@ -45,7 +45,7 @@ export default function StorageSettingsPage() {
         if (values.mode !== "local" && !values.accessKeyId?.trim()) return message.error(`请填写${values.mode === "tencent" ? " SecretId" : " AccessKey ID"}`);
         setSaving(true);
         try {
-            const result = await updateAdminOSSSetting({ enabled: values.mode !== "local", provider: values.mode === "local" ? setting?.provider || "aliyun" : values.mode, region: values.region?.trim() || "", endpoint: values.endpoint?.trim() || "", bucket: values.bucket?.trim() || "", accessKeyId: values.accessKeyId?.trim() || "", accessKeySecret: values.accessKeySecret?.trim() || "", publicBaseUrl: values.publicBaseUrl?.trim() || "", pathPrefix: values.pathPrefix?.trim() || "" });
+            const result = await updateAdminOSSSetting({ enabled: values.mode !== "local", provider: values.mode === "local" ? setting?.provider || "aliyun" : values.mode, region: values.region?.trim() || "", endpoint: values.endpoint?.trim() || "", cdnBaseUrl: values.cdnBaseUrl?.trim() || "", bucket: values.bucket?.trim() || "", accessKeyId: values.accessKeyId?.trim() || "", accessKeySecret: values.accessKeySecret?.trim() || "", publicBaseUrl: values.publicBaseUrl?.trim() || "", pathPrefix: values.pathPrefix?.trim() || "" });
             setSetting(result.setting);
             form.setFieldsValue(formValues(result.setting));
             message.success("存储配置已保存");
@@ -82,7 +82,7 @@ export default function StorageSettingsPage() {
                                     onChange={(value) => {
                                         const nextMode = value as StorageMode;
                                         const switchingProvider = nextMode !== "local" && ((mode !== "local" && mode !== nextMode) || (mode === "local" && setting?.provider !== nextMode));
-                                        if (switchingProvider) form.setFieldsValue({ region: "", endpoint: "", bucket: "", accessKeyId: "", accessKeySecret: "" });
+                                        if (switchingProvider) form.setFieldsValue({ region: "", endpoint: "", cdnBaseUrl: "", bucket: "", accessKeyId: "", accessKeySecret: "" });
                                     }}
                                 />
                             </Form.Item>
@@ -90,6 +90,9 @@ export default function StorageSettingsPage() {
                                 <>
                                     <Form.Item name="region" label="Region"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：ap-guangzhou" : "例如：oss-cn-hangzhou"} /></Form.Item>
                                     <Form.Item name="endpoint" label="Endpoint" extra={isTencentCOS ? "可留空，系统会根据 Region 生成标准 COS Endpoint。" : undefined}><Input autoComplete="off" placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : "https://oss-cn-hangzhou.aliyuncs.com"} /></Form.Item>
+                                    <Form.Item name="cdnBaseUrl" label="CDN 加速域名" extra={isTencentCOS ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶请先开启腾讯云 CDN 回源鉴权。" : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源，CDN URL 按官方要求不附带 OSS 签名。"} rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}>
+                                        <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
+                                    </Form.Item>
                                     <Form.Item name="bucket" label="Bucket"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：my-canvas-assets-1250000000" : "例如：my-canvas-assets"} /></Form.Item>
                                     <Form.Item name="pathPrefix" label="路径前缀"><Input autoComplete="off" placeholder="例如：uploads/infinite-canvas" /></Form.Item>
                                     <Form.Item name="accessKeyId" label={accessKeyIdLabel}><Input autoComplete="off" placeholder={isTencentCOS ? "腾讯云 SecretId" : "阿里云 AccessKey ID"} /></Form.Item>
@@ -130,7 +133,7 @@ export default function StorageSettingsPage() {
     );
 }
 
-function formValues(setting?: AdminOSSSetting | null): OSSFormValues { return { mode: setting?.enabled ? setting.provider === "tencent" ? "tencent" : "aliyun" : "local", publicBaseUrl: setting?.publicBaseUrl || "", region: setting?.region || "", endpoint: setting?.endpoint || "", bucket: setting?.bucket || "", accessKeyId: setting?.accessKeyId || "", accessKeySecret: "", pathPrefix: setting?.pathPrefix || "" }; }
+function formValues(setting?: AdminOSSSetting | null): OSSFormValues { return { mode: setting?.enabled ? setting.provider === "tencent" ? "tencent" : "aliyun" : "local", publicBaseUrl: setting?.publicBaseUrl || "", region: setting?.region || "", endpoint: setting?.endpoint || "", cdnBaseUrl: setting?.cdnBaseUrl || "", bucket: setting?.bucket || "", accessKeyId: setting?.accessKeyId || "", accessKeySecret: "", pathPrefix: setting?.pathPrefix || "" }; }
 function storageProviderLabel(provider?: AdminOSSSetting["provider"]) { return provider === "tencent" ? "腾讯云 COS" : "阿里云 OSS"; }
 function formatTime(value?: string) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--"; }
 function Notice({ icon, text }: { icon: ReactNode; text: string }) { return <div className="flex items-center gap-2 px-3 py-2.5"><span className="text-foreground/40">{icon}</span><span>{text}</span></div>; }

@@ -28,6 +28,7 @@ export type UserOSSSetting = {
     provider: "aliyun" | "tencent";
     region: string;
     endpoint: string;
+    cdnBaseUrl: string;
     bucket: string;
     accessKeyId: string;
     hasAccessKeySecret: boolean;
@@ -36,7 +37,7 @@ export type UserOSSSetting = {
     updatedAt?: string;
 };
 
-export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "bucket" | "accessKeyId" | "pathPrefix"> & {
+export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "pathPrefix"> & {
     accessKeySecret?: string;
 };
 

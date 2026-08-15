@@ -747,7 +747,11 @@ type ossObjectStream struct {
 }
 
 func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	if normalizeOSSSetting(setting).Provider == tencentCOSProvider {
+	setting = normalizeOSSSetting(setting)
+	if setting.CDNBaseURL != "" {
+		return getOSSObjectRangeViaCDN(setting, objectKey, rangeHeader)
+	}
+	if setting.Provider == tencentCOSProvider {
 		return getCOSObjectRange(setting, objectKey, rangeHeader)
 	}
 	return getAliyunOSSObjectRange(setting, objectKey, rangeHeader)
@@ -795,18 +799,25 @@ func decimalDigits(value string) bool {
 }
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	if normalizeOSSSetting(setting).Provider == tencentCOSProvider {
+	setting = normalizeOSSSetting(setting)
+	if setting.Provider == tencentCOSProvider {
 		return signedCOSObjectURL(setting, objectKey, expiresAt)
 	}
 	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt)
 }
 
 func signedAliyunOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	baseURL, err := ossBucketBaseURL(setting)
+	var baseURL *url.URL
+	var err error
+	if setting.CDNBaseURL != "" {
+		baseURL, err = ossCDNBaseURL(setting.CDNBaseURL)
+	} else {
+		baseURL, err = ossBucketBaseURL(setting)
+	}
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
+	if setting.CDNBaseURL == "" && (strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "") {
 		return "", errors.New("OSS 访问密钥不可用")
 	}
 	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
@@ -814,6 +825,10 @@ func signedAliyunOSSObjectURL(setting ossSettingValue, objectKey string, expires
 		return "", errors.New("OSS 对象路径为空")
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
+	// 阿里云私有 Bucket 回源会由 CDN 添加 Authorization；客户端携带 OSS 签名参数反而会导致 403。
+	if setting.CDNBaseURL != "" {
+		return baseURL.String(), nil
+	}
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
 	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, "/" + setting.Bucket + "/" + objectKey}, "\n")
 	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
@@ -858,6 +873,31 @@ func getCOSObjectRange(setting ossSettingValue, objectKey string, rangeHeader st
 	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
+func getOSSObjectRangeViaCDN(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
+	signedURL, err := signedOSSObjectURL(setting, objectKey, time.Now().Add(directResourceURLTTL))
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	ApplyDefaultOutboundHeaders(req)
+	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("对象存储 CDN 读取失败：%w", err)
+	}
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		defer resp.Body.Close()
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("对象存储 CDN 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
+	}
+	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+}
+
 func signedCOSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
 	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
 		return "", errors.New("COS 访问密钥不可用")
@@ -870,11 +910,21 @@ func signedCOSObjectURL(setting ossSettingValue, objectKey string, expiresAt tim
 	if expires <= 0 {
 		return "", errors.New("COS 签名有效期必须晚于当前时间")
 	}
-	client, err := newCOSClient(setting, 2*time.Minute)
+	bucketURL, err := cosBucketBaseURL(setting)
 	if err != nil {
 		return "", err
 	}
-	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil)
+	signHost := true
+	if setting.CDNBaseURL != "" {
+		bucketURL, err = ossCDNBaseURL(setting.CDNBaseURL)
+		if err != nil {
+			return "", err
+		}
+		// CDN 回源会改写 Host；只在 CDN 下载链路关闭 Host 签名，Endpoint 直连仍保持 SDK 默认安全行为。
+		signHost = false
+	}
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, OutboundHTTPClient(2*time.Minute))
+	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil, signHost)
 	if err != nil {
 		return "", err
 	}
@@ -918,6 +968,21 @@ func cosBucketBaseURL(setting ossSettingValue) (*url.URL, error) {
 			return nil, errors.New("COS Endpoint 中的 Bucket 与配置不一致")
 		}
 	}
+	return parsed, nil
+}
+
+func ossCDNBaseURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Hostname() == "" {
+		return nil, errors.New("对象存储 CDN 加速域名格式不正确")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, errors.New("对象存储 CDN 加速域名只支持 http/https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Trim(parsed.Path, "/") != "" {
+		return nil, errors.New("对象存储 CDN 加速域名不能包含认证信息、路径、查询参数或片段")
+	}
+	parsed.Path = ""
 	return parsed, nil
 }
 
