@@ -7335,6 +7335,15 @@ html:not(.dark) .app-workspace-shell.is-creation-workspace .app-workspace-stage 
 .creation-chat-reference.is-paper:hover:not(:disabled) { background: #2b2e37; color: #f1f3f5; transform: rotate(-4deg) translateY(-2px); }
 .creation-chat-reference.is-paper:active:not(:disabled) { transform: rotate(-4deg) translateY(0) scale(.97); }
 .creation-chat-reference.is-paper:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 3px; }
+.creation-chat-reference-media { position: relative; overflow: hidden; padding: 0; }
+.creation-chat-reference-media .creation-chat-attachment-preview > span { display: grid; }
+.creation-chat-reference-media:hover .creation-chat-attachment-remove,
+.creation-chat-reference-media .creation-chat-attachment-remove:focus-visible { opacity: 1; }
+.creation-chat-reference-media button svg { width: var(--space-3); height: var(--space-3); }
+.creation-chat-reference-add { position: absolute; bottom: var(--space-1); left: var(--space-1); display: grid; width: var(--space-5); height: var(--space-5); place-items: center; border: var(--stroke-1) solid color-mix(in srgb, var(--color-neutral-0) 18%, transparent); border-radius: var(--r-xs); background: color-mix(in srgb, var(--color-neutral-950) 76%, transparent); color: var(--color-neutral-0); transition: background-color var(--motion-dur-fast) var(--motion-ease-out), transform var(--motion-dur-fast) var(--motion-ease-out); }
+.creation-chat-reference-add:hover { background: color-mix(in srgb, var(--color-neutral-950) 90%, transparent); transform: translateY(-1px); }
+.creation-chat-reference-add:active { transform: scale(.96); }
+.creation-chat-reference-add:focus-visible { outline: var(--stroke-2) solid var(--control-focus-ring); outline-offset: var(--space-half); }
 .creation-chat-composer .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
 
 .creation-custom-value {

@@ -8,7 +8,6 @@ import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/componen
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelPicker } from "@/components/model-picker";
-import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { creationCanvasHandoffPath, creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { createGenerationBatchRetryContexts, createGenerationRetryContext, runGenerationOperationOnce, type GenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
 import { createClientId } from "@/lib/client-id";
@@ -30,7 +29,7 @@ import { beginGenerationConsumer, runGenerationConsumer } from "@/services/gener
 import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
-import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, selectedCreationReferences, type CreationReference } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationImageAsset, creationVideoAsset, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
@@ -171,6 +170,7 @@ export default function CreatePage() {
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
+    const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
     const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
@@ -184,7 +184,6 @@ export default function CreatePage() {
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setCount(normalized.count);
-        if (attachments.length > imageProfile.references.maxImages) setAttachments((current) => current.slice(0, imageProfile.references.maxImages));
     }, [mode, selectedModel, imageProfile]);
 
     useEffect(() => {
@@ -194,6 +193,13 @@ export default function CreatePage() {
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
     }, [mode, selectedModel, videoProfile]);
+
+    useEffect(() => {
+        const reconciled = reconcileCreationAttachmentLimit(attachments, mentionReferences, maxReferences);
+        if (reconciled.attachments === attachments) return;
+        setAttachments(reconciled.attachments);
+        if (reconciled.removedReferences.length) setPrompt((current) => removeCreationReferenceTokens(current, reconciled.removedReferences));
+    }, [attachments, maxReferences, mentionReferences]);
 
     useEffect(() => {
         let cancelled = false;
@@ -304,7 +310,6 @@ export default function CreatePage() {
         }
     };
 
-    const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
     const libraryItems = useMemo<AssetLibraryPickerItem[]>(() => assets
         .filter((asset): asset is Extract<Asset, { kind: "image" | "video" }> => asset.kind === "image" || asset.kind === "video")
         .map((asset) => ({
@@ -384,7 +389,7 @@ export default function CreatePage() {
     const removeAttachment = (id: string) => {
         const reference = mentionReferences.find((item) => item.attachmentId === id);
         setAttachments((current) => current.filter((item) => item.id !== id));
-        if (reference) setPrompt((current) => removeReferenceTokens(current, [reference]));
+        if (reference) setPrompt((current) => removeCreationReferenceTokens(current, [reference]));
     };
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
@@ -403,6 +408,11 @@ export default function CreatePage() {
         }
         if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
             toast.error("当前模型不支持所选视频时长，请重新选择");
+            releaseRetryLock();
+            return;
+        }
+        if (attachments.length > maxReferences) {
+            toast.warning("参考内容正在按当前模型能力调整，请稍后重试");
             releaseRetryLock();
             return;
         }
@@ -668,6 +678,7 @@ export default function CreatePage() {
         setPrompt,
         busy,
         attachments,
+        maxReferences,
         references: mentionReferences,
         onRemoveAttachment: removeAttachment,
         onOpenLibrary: () => setLibraryOpen(true),
@@ -820,6 +831,26 @@ function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: 
     return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <img className="creation-media-preview-image" src={url} alt="媒体预览" /> : null}</Modal>;
 }
 
+function CreationAttachmentThumbnail({ item, primary = false, canAddMore = false, onPreview, onRemove, onAdd }: {
+    item: CreationAttachment;
+    primary?: boolean;
+    canAddMore?: boolean;
+    onPreview: (type: "image" | "video", url: string) => void;
+    onRemove: (id: string) => void;
+    onAdd?: () => void;
+}) {
+    const isVideo = isVideoAttachment(item);
+    const url = isVideo ? item.url : item.previewUrl;
+    return <div className={primary ? "creation-chat-reference is-paper creation-chat-reference-media" : "creation-chat-attachment"}>
+        <button type="button" className="creation-chat-attachment-preview" onClick={() => onPreview(isVideo ? "video" : "image", url)} aria-label={`放大预览 ${item.name}`} disabled={!url}>
+            {isVideo ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} />}
+            <span aria-hidden="true"><Maximize2 /></span>
+        </button>
+        <button type="button" className="creation-chat-attachment-remove" onClick={() => onRemove(item.id)} aria-label={`移除 ${item.name}`}><X /></button>
+        {primary && canAddMore && onAdd ? <Tooltip title="添加更多参考内容"><button type="button" className="creation-chat-reference-add" onClick={onAdd} aria-label="添加更多参考内容"><Plus /></button></Tooltip> : null}
+    </div>;
+}
+
 type ComposerProps = {
     variant: "empty" | "thread";
     mode: CreationMode;
@@ -827,6 +858,7 @@ type ComposerProps = {
     setPrompt: (value: string) => void;
     busy: boolean;
     attachments: CreationAttachment[];
+    maxReferences: number;
     references: CreationReference[];
     onRemoveAttachment: (id: string) => void;
     onOpenLibrary: () => void;
@@ -867,18 +899,20 @@ function CreationComposer(props: ComposerProps) {
     const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
+    const [primaryAttachment, ...secondaryAttachments] = props.attachments;
+    const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
     const imageSettingsSupported = props.imageProfile.size.parameter !== "none" || props.imageProfile.quality.supported || props.imageProfile.maxOutputs > 1;
+    const previewAttachment = (type: "image" | "video", url: string) => {
+        setPreviewType(type);
+        setPreviewUrl(url);
+    };
     return <section className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
             <input ref={props.fileInputRef} type="file" hidden accept={props.mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={props.onFileChange} />
-            <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>
+            {primaryAttachment ? <CreationAttachmentThumbnail item={primaryAttachment} primary canAddMore={canAddMoreReferences && !props.busy} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} onAdd={props.onOpenLibrary} /> : <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>}
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
-                {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => {
-                    const isVideo = isVideoAttachment(item);
-                    const url = isVideo ? item.url : item.previewUrl;
-                    return <div key={item.id} className="creation-chat-attachment"><button type="button" className="creation-chat-attachment-preview" onClick={() => { setPreviewType(isVideo ? "video" : "image"); setPreviewUrl(url); }} aria-label={`放大预览 ${item.name}`} disabled={!url}>{isVideo ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} />}<span aria-hidden="true"><Maximize2 /></span></button><button type="button" className="creation-chat-attachment-remove" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>;
-                })}</div> : null}
+                {secondaryAttachments.length ? <div className="creation-chat-attachment-strip">{secondaryAttachments.map((item) => <CreationAttachmentThumbnail key={item.id} item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />)}</div> : null}
             </div>
         </div>
         <footer className="creation-chat-dock">
@@ -1201,10 +1235,6 @@ function isVideoAttachment(attachment: CreationAttachment): attachment is Creati
 
 function isImageAttachment(attachment: CreationAttachment): attachment is CreationAttachment & { dataUrl: string } {
     return !isVideoAttachment(attachment);
-}
-
-function removeReferenceTokens(value: string, references: CreationReference[]) {
-    return references.reduce((current, reference) => current.split(canvasResourceMentionToken(reference)).join(""), value);
 }
 
 type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationError?: string };
