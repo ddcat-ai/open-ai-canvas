@@ -4,7 +4,7 @@ import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
-import { compatibleModelInGroup, groupModelsByDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { compatibleModelInGroup, configuredModelDisplayName, groupModelsByDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -22,9 +22,10 @@ type ModelPickerProps = {
     showSelectedPrice?: boolean;
     variant?: "default" | "creation";
     requirements?: ModelRequirements;
+    showConfiguredModelName?: boolean;
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements }: ModelPickerProps) {
+export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements, showConfiguredModelName = false }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
@@ -129,7 +130,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             {creationVariant ? (
                 <div className="creation-model-picker-heading">
                     <span>选择模型</span>
-                    {current ? <strong>{modelDisplayName(config, current)}</strong> : null}
+                    {current ? <strong>{pickerModelDisplayName(config, current, showConfiguredModelName)}</strong> : null}
                 </div>
             ) : null}
             {optionGroups.length ? (
@@ -155,7 +156,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                         aria-selected={selected}
                                         aria-disabled={Boolean(disabledReason)}
                                         disabled={Boolean(disabledReason)}
-                                        title={disabledReason || modelOptionLabel(config, displayModel)}
+                                        title={disabledReason || pickerModelOptionLabel(config, displayModel, showConfiguredModelName)}
                                         className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
                                         style={{ background: "transparent", color: theme.node.text }}
                                         onClick={() => {
@@ -165,7 +166,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                             window.requestAnimationFrame(() => triggerRef.current?.focus());
                                         }}
                                     >
-                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showPrice={creditsEnabled} disabledReason={disabledReason} />
+                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showConfiguredModelName={showConfiguredModelName} showPrice={creditsEnabled} disabledReason={disabledReason} />
                                         {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                     </button>
                                 );
@@ -203,14 +204,14 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                     aria-haspopup="listbox"
                     aria-expanded={open}
                     aria-label={placeholder}
-                    title={current ? modelOptionLabel(config, current) : placeholder}
+                    title={current ? pickerModelOptionLabel(config, current, showConfiguredModelName) : placeholder}
                     onKeyDown={handleTriggerKeyDown}
                 >
                     <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5">
                         <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}>
                             <ModelIcon model={current} />
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? modelDisplayName(config, current) : modelOptionLabel(config, current)) : placeholder}</span>
+                        <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
@@ -232,6 +233,7 @@ function ModelLabel({
     capability,
     theme,
     creationVariant,
+    showConfiguredModelName,
     showPrice,
     disabledReason,
 }: {
@@ -240,6 +242,7 @@ function ModelLabel({
     capability?: ModelCapability;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     creationVariant: boolean;
+    showConfiguredModelName: boolean;
     showPrice: boolean;
     disabledReason?: string;
 }) {
@@ -252,7 +255,7 @@ function ModelLabel({
                 <ModelIcon model={model} />
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
-                <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{modelDisplayName(config, model)}</span>
+                <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{pickerModelDisplayName(config, model, showConfiguredModelName)}</span>
                 <span className="mt-1 block truncate text-[var(--fs-tiny)]" style={{ color: theme.node.muted }} title={capabilitySummary}>
                     {capabilitySummary}
                 </span>
@@ -273,15 +276,28 @@ function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapab
     return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
 }
 
-function modelMenuPrice(config: AiConfig, model: string): { value: number; unit: "次" | "秒" } | null | undefined {
+type ModelMenuPrice = { value: number; unit: "次" | "秒" | "百万 Token" };
+
+function modelMenuPrice(config: AiConfig, model: string): ModelMenuPrice | null | undefined {
     if (!model) return undefined;
     const channel = resolveModelChannel(config, model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
     if (!cost) return channel.scope === "system" ? null : undefined;
+    if (cost.billingMode === "token") {
+        return { value: (cost.outputTokenPriceMicrocredits || 0) / 1_000_000, unit: "百万 Token" };
+    }
     return { value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
 }
 
-function ModelPrice({ price, compact = false }: { price: { value: number; unit: "次" | "秒" } | null | undefined; compact?: boolean }) {
+function pickerModelDisplayName(config: AiConfig, model: string, showConfiguredModelName: boolean) {
+    return showConfiguredModelName ? configuredModelDisplayName(config, model) : modelDisplayName(config, model);
+}
+
+function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredModelName: boolean) {
+    return showConfiguredModelName ? `${configuredModelDisplayName(config, model)}（${resolveModelChannel(config, model).name}）` : modelOptionLabel(config, model);
+}
+
+function ModelPrice({ price, compact = false }: { price: ModelMenuPrice | null | undefined; compact?: boolean }) {
     if (price === undefined) return null;
     if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
     return (

@@ -40,7 +40,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
     {
         label: "系统配置",
         items: [
-            { path: "/admin/settings/features", label: "功能开放", description: "菜单、页面与积分模式", icon: <ToggleLeft className="size-4" /> },
+            { path: "/admin/settings/features", label: "功能开放", description: "菜单、渠道与积分模式", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
             { path: "/admin/settings/access", label: "登录与注册", description: "注册策略与 Linux.do", icon: <ShieldCheck className="size-4" /> },

@@ -88,6 +88,10 @@ export function modelProtocolCapability(value?: string) {
     return modelProtocolDefinition(value)?.capability;
 }
 
+export function modelProtocolSupportsTokenBilling(capability?: string, protocol?: string) {
+    return capability === "text" || (capability === "video" && protocol === "volcengine-ark-video");
+}
+
 export function protocolForModelCatalog(endpointTypes: string[] = []): ModelProtocol | undefined {
     const normalized = new Set(endpointTypes.map((value) => value.trim().toLowerCase()));
     if (normalized.has("openai-chat") || normalized.has("chat-completion") || normalized.has("chat")) return "chat-completion";

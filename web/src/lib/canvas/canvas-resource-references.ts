@@ -1,6 +1,7 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { Skill } from "@/services/api/skills";
+import type { Asset, AssetCategory } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 export type CanvasResourceKind = "image" | "video" | "audio" | "text" | "skill" | "character";
@@ -17,11 +18,36 @@ export type CanvasResourceReference = {
     active: boolean;
     sourceType?: CanvasNodeType;
     skill?: Skill;
+    assetId?: string;
+    category?: AssetCategory;
 };
 
 export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     if (reference.kind === "skill" && reference.skill?.skill_id) return `@[skill:${reference.skill.skill_id}]`;
+    if (reference.assetId) return `@[asset:${reference.assetId}]`;
     return `@[node:${reference.nodeId}]`;
+}
+
+export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceReference[] {
+    return assets.flatMap((asset): CanvasResourceReference[] => {
+        if (asset.kind === "model") return [];
+        const kind: CanvasResourceKind = asset.kind === "entity" ? "character" : asset.kind;
+        const previewUrl = asset.kind === "image" ? asset.data.dataUrl : asset.kind === "video" ? asset.data.url : asset.coverUrl;
+        const text = asset.kind === "text" ? asset.data.content : undefined;
+        return [{
+            id: `asset:${asset.id}`,
+            nodeId: "",
+            assetId: asset.id,
+            kind,
+            label: asset.title,
+            title: asset.title,
+            previewUrl,
+            storageKey: "storageKey" in asset.data ? asset.data.storageKey : undefined,
+            text,
+            active: false,
+            category: asset.category || "other",
+        }];
+    });
 }
 
 export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connections: CanvasConnection[], contextNodeId?: string | null) {

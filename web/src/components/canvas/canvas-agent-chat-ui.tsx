@@ -5,6 +5,7 @@ import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, UserRound,
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
 import type { LocalUser } from "@/stores/use-user-store";
+import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
 export type CanvasAgentMode = "online" | "local";
@@ -20,7 +21,7 @@ export type CanvasAgentChatMessage = {
 
 const WORKING_TEXT = "正在推演...";
 
-export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveTool }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void }) {
+export function AgentChatMessage({ item, theme, user, isStreaming = false, onRejectTool, onApproveTool }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
@@ -47,7 +48,7 @@ export function AgentChatMessage({ item, theme, user, onRejectTool, onApproveToo
         <div className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
             {!isUser ? <AgentAvatar theme={theme} /> : null}
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
-                <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>
+                {item.role === "assistant" ? <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>{item.text}</AIMessageMarkdown> : <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>}
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
             </div>

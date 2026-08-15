@@ -85,6 +85,7 @@ type AdminReferenceData struct {
 type ChannelRequest struct {
 	Name                 string           `json:"name"`
 	BaseURL              string           `json:"baseUrl"`
+	AllowLocalChannel    *bool            `json:"allowLocalChannel"`
 	APIKey               string           `json:"apiKey"`
 	SecretKey            string           `json:"secretKey"`
 	ConcurrencyLimit     *int             `json:"concurrencyLimit"`
@@ -95,22 +96,23 @@ type ChannelRequest struct {
 }
 
 type PublicModelChannel struct {
-	ID               string                    `json:"id"`
-	UserID           string                    `json:"userId"`
-	Scope            model.ChannelScope        `json:"scope"`
-	Enabled          bool                      `json:"enabled"`
-	Name             string                    `json:"name"`
-	BaseURL          string                    `json:"baseUrl"`
-	APIKey           string                    `json:"apiKey"`
-	APIFormat        string                    `json:"apiFormat"`
-	ConcurrencyLimit int                       `json:"concurrencyLimit"`
-	Models           []string                  `json:"models"`
-	ModelCosts       []PublicChannelModelPrice `json:"modelCosts"`
-	Headers          []OutboundHeader          `json:"headers,omitempty"`
-	HasAPIKey        bool                      `json:"hasApiKey"`
-	HasSecretKey     bool                      `json:"hasSecretKey"`
-	CreatedAt        time.Time                 `json:"createdAt"`
-	UpdatedAt        time.Time                 `json:"updatedAt"`
+	ID                string                    `json:"id"`
+	UserID            string                    `json:"userId"`
+	Scope             model.ChannelScope        `json:"scope"`
+	Enabled           bool                      `json:"enabled"`
+	Name              string                    `json:"name"`
+	BaseURL           string                    `json:"baseUrl"`
+	AllowLocalChannel bool                      `json:"allowLocalChannel,omitempty"`
+	APIKey            string                    `json:"apiKey"`
+	APIFormat         string                    `json:"apiFormat"`
+	ConcurrencyLimit  int                       `json:"concurrencyLimit"`
+	Models            []string                  `json:"models"`
+	ModelCosts        []PublicChannelModelPrice `json:"modelCosts"`
+	Headers           []OutboundHeader          `json:"headers,omitempty"`
+	HasAPIKey         bool                      `json:"hasApiKey"`
+	HasSecretKey      bool                      `json:"hasSecretKey"`
+	CreatedAt         time.Time                 `json:"createdAt"`
+	UpdatedAt         time.Time                 `json:"updatedAt"`
 }
 
 type PublicChannelModelPrice struct {
@@ -502,7 +504,7 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	channel, err := channelFromRequest(req, model.ModelChannel{ID: newID(), UserID: actor.ID, Scope: model.ChannelScopeSystem, Enabled: true})
+	channel, err := s.channelFromRequest(req, model.ModelChannel{ID: newID(), UserID: actor.ID, Scope: model.ChannelScopeSystem, Enabled: true})
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +537,7 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 		return nil, err
 	}
 	req = mergeChannelRequest(req, *channel)
-	next, err := channelFromRequest(req, *channel)
+	next, err := s.channelFromRequest(req, *channel)
 	if err != nil {
 		return nil, err
 	}
@@ -726,6 +728,10 @@ func (s *Service) APICallLogs(actor *model.User, limit int) ([]model.ApiCallLog,
 }
 
 func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.ModelChannel, error) {
+	return (&Service{}).channelFromRequest(req, channel)
+}
+
+func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.ModelChannel, error) {
 	name := strings.TrimSpace(req.Name)
 	baseURL := strings.TrimSpace(req.BaseURL)
 	if name == "" {
@@ -734,7 +740,14 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	if baseURL == "" {
 		return channel, BadAuthRequest("请填写 Base URL")
 	}
-	if _, err := ValidateOutboundURL(baseURL); err != nil {
+	requestedAllowLocal := channel.AllowLocalChannel
+	if req.AllowLocalChannel != nil {
+		requestedAllowLocal = *req.AllowLocalChannel
+	}
+	if requestedAllowLocal && !s.DesktopLocalChannelsEnabled() {
+		return channel, BadAuthRequest("当前后端未启用本机渠道")
+	}
+	if _, err := s.validateChannelOutboundURL(baseURL, requestedAllowLocal, false); err != nil {
 		return channel, err
 	}
 	models := uniqueNonEmpty(req.Models)
@@ -745,6 +758,7 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 	}
 	channel.Name = name
 	channel.BaseURL = strings.TrimRight(baseURL, "/")
+	channel.AllowLocalChannel = requestedAllowLocal
 	if req.APIKey != "" {
 		channel.APIKey = req.APIKey
 	}
@@ -783,6 +797,10 @@ func mergeChannelRequest(req ChannelRequest, channel model.ModelChannel) Channel
 	}
 	if req.Headers == nil {
 		req.Headers, _ = ParseOutboundHeadersJSON(channel.HeadersJSON)
+	}
+	if req.AllowLocalChannel == nil {
+		value := channel.AllowLocalChannel
+		req.AllowLocalChannel = &value
 	}
 	return req
 }
@@ -827,22 +845,23 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		apiKey = channel.APIKey
 	}
 	return PublicModelChannel{
-		ID:               channel.ID,
-		UserID:           channel.UserID,
-		Scope:            channel.Scope,
-		Enabled:          channel.Enabled,
-		Name:             channel.Name,
-		BaseURL:          baseURL,
-		APIKey:           apiKey,
-		APIFormat:        channel.APIFormat,
-		ConcurrencyLimit: channel.ConcurrencyLimit,
-		Models:           models,
-		ModelCosts:       modelCosts,
-		Headers:          headers,
-		HasAPIKey:        strings.TrimSpace(channel.APIKey) != "",
-		HasSecretKey:     strings.TrimSpace(channel.SecretKey) != "",
-		CreatedAt:        channel.CreatedAt,
-		UpdatedAt:        channel.UpdatedAt,
+		ID:                channel.ID,
+		UserID:            channel.UserID,
+		Scope:             channel.Scope,
+		Enabled:           channel.Enabled,
+		Name:              channel.Name,
+		BaseURL:           baseURL,
+		AllowLocalChannel: admin && channel.AllowLocalChannel,
+		APIKey:            apiKey,
+		APIFormat:         channel.APIFormat,
+		ConcurrencyLimit:  channel.ConcurrencyLimit,
+		Models:            models,
+		ModelCosts:        modelCosts,
+		Headers:           headers,
+		HasAPIKey:         strings.TrimSpace(channel.APIKey) != "",
+		HasSecretKey:      strings.TrimSpace(channel.SecretKey) != "",
+		CreatedAt:         channel.CreatedAt,
+		UpdatedAt:         channel.UpdatedAt,
 	}
 }
 

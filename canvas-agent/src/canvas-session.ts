@@ -1,14 +1,16 @@
 import crypto from "node:crypto";
 import type { ServerResponse } from "node:http";
 
+import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
 import { type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
-type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
+type PendingRequest = { clientId: string; recoverable: boolean; resolve: (value: unknown) => void; reject: (error: Error) => void };
+type CanvasClient = { response: ServerResponse; timer: NodeJS.Timeout; runtimeSessionId?: string };
 
 export class CanvasSession {
-    private clients = new Map<string, ServerResponse>();
+    private clients = new Map<string, CanvasClient>();
     private pending = new Map<string, PendingRequest>();
     private canvasState: CanvasSnapshot | null = null;
 
@@ -16,17 +18,36 @@ export class CanvasSession {
         return { ok: true, hasCanvas: Boolean(this.canvasState), clients: this.clients.size };
     }
 
-    openEvents(url: URL, res: ServerResponse) {
+    openEvents(url: URL, res: ServerResponse, runtimeSessionId?: string) {
         const clientId = url.searchParams.get("clientId") || crypto.randomUUID();
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
-        this.clients.set(clientId, res);
+        const previous = this.clients.get(clientId);
         sendEvent(res, "hello", { ok: true, clientId });
         const timer = setInterval(() => sendEvent(res, "ping", { time: Date.now() }), 15000);
+        this.clients.set(clientId, { response: res, timer, runtimeSessionId });
+        if (previous) {
+            clearInterval(previous.timer);
+            previous.response.end();
+        }
         res.on("close", () => {
             clearInterval(timer);
+            if (this.clients.get(clientId)?.response !== res) return;
             this.clients.delete(clientId);
             if (this.canvasState?.clientId === clientId) this.canvasState = null;
+            this.rejectPendingClient(clientId, new Error("画布连接已断开"), true);
         });
+    }
+
+    closeRuntimeSession(runtimeSessionId: string) {
+        const error = new Error("本机会话已撤销");
+        for (const [clientId, client] of [...this.clients]) {
+            if (client.runtimeSessionId !== runtimeSessionId) continue;
+            this.clients.delete(clientId);
+            clearInterval(client.timer);
+            if (this.canvasState?.clientId === clientId) this.canvasState = null;
+            this.rejectPendingClient(clientId, error);
+            client.response.end();
+        }
     }
 
     updateState(body: unknown, clientId?: string) {
@@ -41,7 +62,19 @@ export class CanvasSession {
     }
 
     emitAll(type: string, payload: unknown) {
-        this.clients.forEach((client) => sendEvent(client, type, payload));
+        this.clients.forEach((client) => sendEvent(client.response, type, payload));
+    }
+
+    dispose() {
+        this.clients.forEach(({ response, timer }) => {
+            clearInterval(timer);
+            response.end();
+        });
+        this.clients.clear();
+        this.canvasState = null;
+        const error = new Error("Canvas session disposed");
+        this.pending.forEach((request) => request.reject(error));
+        this.pending.clear();
     }
 
     async callTool(name: unknown, rawInput: unknown) {
@@ -137,8 +170,8 @@ export class CanvasSession {
             tool = "canvas_apply_ops";
         }
         if (tool === "canvas_run_generation") {
-            const data = input as { nodeId: string; mode?: string; prompt?: string };
-            input = { ops: [runGenerationOp(data.nodeId, generationMode(data.mode), data.prompt)] };
+            const data = input as { nodeId: string; mode?: string; prompt?: string; retry?: boolean };
+            input = { ops: [runGenerationOp(data.nodeId, generationMode(data.mode), data.prompt, data.retry)] };
             tool = "canvas_apply_ops";
         }
         if (tool !== "canvas_apply_ops") throw new Error(`未知工具：${tool}`);
@@ -148,17 +181,38 @@ export class CanvasSession {
 
     private async requestCanvasTool(name: ToolName, input: Record<string, unknown>) {
         const requestId = crypto.randomUUID();
-        const client = this.clients.get(this.canvasState?.clientId || "") || this.clients.values().next().value;
-        if (!client) throw new Error("当前没有已连接画布");
+        const stateClientId = this.canvasState?.clientId || "";
+        const selected = this.clients.has(stateClientId)
+            ? [stateClientId, this.clients.get(stateClientId)] as const
+            : this.clients.entries().next().value;
+        const clientId = selected?.[0];
+        const client = selected?.[1]?.response;
+        if (!clientId || !client) throw new Error("当前没有已连接画布");
         sendEvent(client, "tool_call", { requestId, name, input });
+        const recoverable = hasGenerationContinuation(name, input);
         return await new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 this.pending.delete(requestId);
                 reject(new Error("画布操作超时"));
-            }, 30000);
-            this.pending.set(requestId, { resolve: (value) => (clearTimeout(timer), resolve(value)), reject: (error) => (clearTimeout(timer), reject(error)) });
+            }, recoverable ? CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS : 30000);
+            if (recoverable) timer.unref();
+            this.pending.set(requestId, { clientId, recoverable, resolve: (value) => (clearTimeout(timer), resolve(value)), reject: (error) => (clearTimeout(timer), reject(error)) });
         });
     }
+
+    private rejectPendingClient(clientId: string, error: Error, preserveRecoverable = false) {
+        for (const [requestId, request] of this.pending) {
+            if (request.clientId !== clientId || (preserveRecoverable && request.recoverable)) continue;
+            this.pending.delete(requestId);
+            request.reject(error);
+        }
+    }
+}
+
+function hasGenerationContinuation(name: ToolName, input: Record<string, unknown>) {
+    if (name !== "canvas_apply_ops" || !Array.isArray(input.ops)) return false;
+    return input.ops.some((value) => value && typeof value === "object" && !Array.isArray(value)
+        && (value as Record<string, unknown>).type === "run_generation");
 }
 
 function sendEvent(res: ServerResponse, type: string, payload: unknown) {
@@ -232,8 +286,8 @@ function generationNodeType(mode: "text" | "image" | "video" | "audio"): CanvasN
     return "image";
 }
 
-function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string) {
-    return { type: "run_generation", nodeId, mode, prompt };
+function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string, retry?: boolean) {
+    return { type: "run_generation", nodeId, mode, prompt, ...(retry ? { retry: true } : {}) };
 }
 
 function generationMode(value: unknown): "text" | "image" | "video" | "audio" {

@@ -6,21 +6,22 @@ import (
 )
 
 type ModelChannel struct {
-	ID               string         `json:"id" gorm:"primaryKey;size:36"`
-	UserID           string         `json:"userId" gorm:"index;size:36"`
-	Scope            ChannelScope   `json:"scope" gorm:"index;size:24"`
-	Enabled          bool           `json:"enabled" gorm:"index"`
-	Name             string         `json:"name" gorm:"size:80"`
-	BaseURL          string         `json:"baseUrl"`
-	APIKey           string         `json:"-"`
-	SecretKey        string         `json:"-"`
-	APIFormat        string         `json:"apiFormat" gorm:"size:24"`
-	ConcurrencyLimit int            `json:"concurrencyLimit"`
-	ModelsJSON       string         `json:"modelsJson" gorm:"type:text"`
-	HeadersJSON      string         `json:"-" gorm:"type:text"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
-	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
+	ID                string         `json:"id" gorm:"primaryKey;size:36"`
+	UserID            string         `json:"userId" gorm:"index;size:36"`
+	Scope             ChannelScope   `json:"scope" gorm:"index;size:24"`
+	Enabled           bool           `json:"enabled" gorm:"index"`
+	Name              string         `json:"name" gorm:"size:80"`
+	BaseURL           string         `json:"baseUrl"`
+	AllowLocalChannel bool           `json:"allowLocalChannel" gorm:"default:false"`
+	APIKey            string         `json:"-"`
+	SecretKey         string         `json:"-"`
+	APIFormat         string         `json:"apiFormat" gorm:"size:24"`
+	ConcurrencyLimit  int            `json:"concurrencyLimit"`
+	ModelsJSON        string         `json:"modelsJson" gorm:"type:text"`
+	HeadersJSON       string         `json:"-" gorm:"type:text"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
+	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type ChannelModel struct {

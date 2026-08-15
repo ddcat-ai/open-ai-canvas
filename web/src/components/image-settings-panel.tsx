@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
 import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { type AiConfig } from "@/stores/use-config-store";
 
@@ -15,13 +16,17 @@ const qualityOptions = [
 ];
 const DIMENSION_STEP = 16;
 
-const aspectOptions = [
+type AspectOption = { value: string; label: string; width: number; height: number; icon: string; size?: string };
+
+const aspectOptions: AspectOption[] = [
     { value: "1:1", label: "1:1", width: 1024, height: 1024, icon: "square" },
     { value: "3:2", label: "3:2", width: 1536, height: 1024, icon: "landscape" },
     { value: "2:3", label: "2:3", width: 1024, height: 1536, icon: "portrait" },
     { value: "4:3", label: "4:3", width: 1360, height: 1024, icon: "landscape" },
     { value: "3:4", label: "3:4", width: 1024, height: 1360, icon: "portrait" },
     { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape" },
+    { value: "2:1", label: "2:1", size: "2048x1024", width: 2048, height: 1024, icon: "landscape" },
+    { value: "1:2", label: "1:2", size: "1024x2048", width: 1024, height: 2048, icon: "portrait" },
     { value: "21:9", label: "21:9", size: "2352x1008", width: 2352, height: 1008, icon: "landscape" },
     { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait" },
     { value: "1:1-2k", label: "1:1(2k)", size: "2048x2048", width: 2048, height: 2048, icon: "square" },
@@ -52,13 +57,32 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
     const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
     const activeSize = normalized.size;
-    const availableAspects = aspectOptions.filter((item) => imageOptionAllowed(profile, item));
-    const selectedAspect = availableAspects.find((item) => imageOptionValue(profile, item) === activeSize || item.value === activeSize);
+    const pixelSizeValues = profile.size.values.filter((value) => value.trim().toLowerCase() !== "auto");
+    const usesResolutionPicker = supportsImageResolutionPresets(profile.size);
+    const resolutionOptions = usesResolutionPicker ? buildImageResolutionOptions(pixelSizeValues) : [];
+    const activeResolution = activeSize === "auto" ? undefined : imageResolutionOption(resolutionOptions, activeSize);
+    const activeRatio = activeResolution?.ratio || imageRatioForSize(activeSize);
+    const resolutionChoices = usesResolutionPicker ? imageResolutionChoices(profile.size.values) : [];
+    const availableAspects: AspectOption[] = usesResolutionPicker && activeSize === "auto"
+        ? []
+        : usesResolutionPicker && activeResolution
+        ? resolutionOptions.filter((item) => item.tier === activeResolution.tier).map((item) => ({ value: item.ratio, label: item.ratio, size: item.size, width: item.width, height: item.height, icon: item.width === item.height ? "square" : item.width > item.height ? "landscape" : "portrait" }))
+        : aspectOptions.filter((item) => imageOptionAllowed(profile, item));
+    const selectedAspect = availableAspects.find((item) => imageOptionValue(profile, item) === activeSize || item.value === activeSize) || availableAspects.find((item) => item.label === activeRatio);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
     const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
     const selectAspect = (value: string) => {
-        const option = aspectOptions.find((item) => item.value === value);
+        const option = availableAspects.find((item) => item.value === value);
         onConfigChange("size", option ? imageOptionValue(profile, option) : "auto");
+    };
+    const selectResolution = (choice: ImageResolutionChoice) => {
+        if (choice === "auto") {
+            onConfigChange("size", "auto");
+            return;
+        }
+        const ratio = activeRatio || availableAspects[0]?.label;
+        const size = imageSizeForResolution(resolutionOptions, choice, ratio) || resolutionOptions.find((item) => item.tier === choice)?.size;
+        if (size) onConfigChange("size", size);
     };
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 1024));
@@ -104,23 +128,33 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         />
                     </span>
                 </div> : null}
-                {profile.size.parameter !== "none" ? <div className="space-y-2">
+                {resolutionChoices.length ? <div className="space-y-2">
+                    <SettingTitle color={theme.node.muted}>分辨率</SettingTitle>
+                    <div className={`grid gap-1.5 ${resolutionChoices.length <= 2 ? "grid-cols-2" : resolutionChoices.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+                        {resolutionChoices.map((choice) => (
+                            <OptionPill key={choice} selected={choice === "auto" ? activeSize === "auto" : activeResolution?.tier === choice} theme={theme} onClick={() => selectResolution(choice)}>
+                                {choice === "auto" ? "自动" : choice.toUpperCase()}
+                            </OptionPill>
+                        ))}
+                    </div>
+                </div> : null}
+                {profile.size.allowCustom ? <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
                         <SettingTitle color={theme.node.muted}>尺寸</SettingTitle>
-                        {profile.size.allowCustom ? <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
                             <span className="text-xs font-medium" style={{ color: theme.node.muted }}>
                                 16倍数对齐
                             </span>
                             <span title="输入完成后自动向上补成 16 的倍数" onMouseDown={(event) => event.stopPropagation()}>
                                 <Switch size="small" checked={snapDimensionToStep} onChange={setSnapDimensionToStep} />
                             </span>
-                        </div> : null}
+                        </div>
                     </div>
-                    {profile.size.allowCustom ? <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
                         <DimensionInput prefix="W" value={dimensions.width} disabled={activeSize === "auto"} theme={theme} alignToStep={snapDimensionToStep} onChange={(value) => updateDimension("width", value)} />
                         <span className="text-sm opacity-45">↔</span>
                         <DimensionInput prefix="H" value={dimensions.height} disabled={activeSize === "auto"} theme={theme} alignToStep={snapDimensionToStep} onChange={(value) => updateDimension("height", value)} />
-                    </div> : null}
+                    </div>
                 </div> : null}
                 {availableAspects.length ? <div className="space-y-2">
                     <SettingTitle color={theme.node.muted}>宽高比</SettingTitle>
@@ -158,13 +192,13 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     );
 }
 
-function imageOptionAllowed(profile: ImageCapabilityConfig, option: (typeof aspectOptions)[number]) {
+function imageOptionAllowed(profile: ImageCapabilityConfig, option: AspectOption) {
     if (profile.size.parameter === "none") return false;
     if (profile.size.allowCustom && profile.size.values.length === 0) return true;
     return [option.value, option.size, option.width && option.height ? `${option.width}x${option.height}` : ""].filter(Boolean).some((value) => profile.size.values.includes(String(value)));
 }
 
-function imageOptionValue(profile: ImageCapabilityConfig, option: (typeof aspectOptions)[number]) {
+function imageOptionValue(profile: ImageCapabilityConfig, option: AspectOption) {
     const candidates = [option.size, option.value, option.width && option.height ? `${option.width}x${option.height}` : ""].filter(Boolean).map(String);
     return candidates.find((value) => profile.size.values.includes(value)) || option.size || option.value || "auto";
 }
@@ -192,7 +226,8 @@ function isGrokResolutionQuality(profile: ImageCapabilityConfig) {
 }
 
 export function imageSizeLabel(size: string) {
-    return aspectOptions.find((item) => (item.size || item.value) === size || item.value === size)?.label || size;
+    const resolutionLabel = formatImageResolutionSize(size, buildImageResolutionOptions([size]));
+    return resolutionLabel !== size ? resolutionLabel : aspectOptions.find((item) => (item.size || item.value) === size || item.value === size)?.label || size;
 }
 
 function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {

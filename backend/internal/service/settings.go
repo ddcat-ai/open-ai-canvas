@@ -32,6 +32,7 @@ type OSSSettingRequest struct {
 	Provider        string `json:"provider"`
 	Region          string `json:"region"`
 	Endpoint        string `json:"endpoint"`
+	CDNBaseURL      string `json:"cdnBaseUrl"`
 	Bucket          string `json:"bucket"`
 	AccessKeyID     string `json:"accessKeyId"`
 	AccessKeySecret string `json:"accessKeySecret"`
@@ -44,6 +45,7 @@ type PublicOSSSetting struct {
 	Provider           string    `json:"provider"`
 	Region             string    `json:"region"`
 	Endpoint           string    `json:"endpoint"`
+	CDNBaseURL         string    `json:"cdnBaseUrl"`
 	Bucket             string    `json:"bucket"`
 	AccessKeyID        string    `json:"accessKeyId"`
 	HasAccessKeySecret bool      `json:"hasAccessKeySecret"`
@@ -59,6 +61,7 @@ type ossSettingValue struct {
 	Provider        string `json:"provider"`
 	Region          string `json:"region"`
 	Endpoint        string `json:"endpoint"`
+	CDNBaseURL      string `json:"cdnBaseUrl"`
 	Bucket          string `json:"bucket"`
 	AccessKeyID     string `json:"accessKeyId"`
 	AccessKeySecret string `json:"accessKeySecret"`
@@ -447,6 +450,7 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		Provider:        strings.TrimSpace(req.Provider),
 		Region:          strings.TrimSpace(req.Region),
 		Endpoint:        strings.TrimRight(strings.TrimSpace(req.Endpoint), "/"),
+		CDNBaseURL:      strings.TrimRight(strings.TrimSpace(req.CDNBaseURL), "/"),
 		Bucket:          strings.TrimSpace(req.Bucket),
 		AccessKeyID:     strings.TrimSpace(req.AccessKeyID),
 		AccessKeySecret: strings.TrimSpace(req.AccessKeySecret),
@@ -473,6 +477,14 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		}
 		if _, err := ValidateOutboundURL(next.Endpoint); err != nil {
 			return next, err
+		}
+		if next.CDNBaseURL != "" {
+			if _, err := ossCDNBaseURL(next.CDNBaseURL); err != nil {
+				return next, BadAuthRequest(err.Error())
+			}
+			if _, err := ValidateOutboundURL(next.CDNBaseURL); err != nil {
+				return next, err
+			}
 		}
 		if next.AccessKeyID == "" {
 			return next, BadAuthRequest("请填写 AccessKey ID")
@@ -520,6 +532,7 @@ func normalizeOSSSetting(value ossSettingValue) ossSettingValue {
 	if value.Provider == tencentCOSProvider && value.Endpoint == "" && value.Region != "" {
 		value.Endpoint = "https://cos." + value.Region + ".myqcloud.com"
 	}
+	value.CDNBaseURL = strings.TrimRight(strings.TrimSpace(value.CDNBaseURL), "/")
 	value.Bucket = strings.TrimSpace(value.Bucket)
 	value.AccessKeyID = strings.TrimSpace(value.AccessKeyID)
 	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
@@ -539,6 +552,7 @@ func publicOSSSetting(setting *model.SystemSetting, value ossSettingValue) Publi
 		Provider:           value.Provider,
 		Region:             value.Region,
 		Endpoint:           value.Endpoint,
+		CDNBaseURL:         value.CDNBaseURL,
 		Bucket:             value.Bucket,
 		AccessKeyID:        value.AccessKeyID,
 		HasAccessKeySecret: strings.TrimSpace(value.AccessKeySecret) != "",
@@ -559,6 +573,7 @@ func publicUserOSSSetting(setting *model.UserOSSSetting, value ossSettingValue) 
 		Provider:           value.Provider,
 		Region:             value.Region,
 		Endpoint:           value.Endpoint,
+		CDNBaseURL:         value.CDNBaseURL,
 		Bucket:             value.Bucket,
 		AccessKeyID:        value.AccessKeyID,
 		HasAccessKeySecret: strings.TrimSpace(value.AccessKeySecret) != "",

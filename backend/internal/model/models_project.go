@@ -2,6 +2,8 @@ package model
 
 import "time"
 
+const AssetIDMaxLength = 80
+
 type Resource struct {
 	ID       string         `json:"id" gorm:"primaryKey;size:36"`
 	UserID   string         `json:"userId" gorm:"index;size:36;index:idx_resources_user_created,priority:1"`
@@ -26,7 +28,7 @@ type Resource struct {
 }
 
 type Asset struct {
-	ID               string             `json:"id" gorm:"primaryKey;size:36"`
+	ID               string             `json:"id" gorm:"primaryKey;size:80"`
 	UserID           string             `json:"userId" gorm:"index;size:36;index:idx_assets_user_updated,priority:1"`
 	Kind             string             `json:"kind" gorm:"index;size:24"`
 	Category         AssetCategory      `json:"category" gorm:"index;size:32"`
@@ -41,7 +43,7 @@ type Asset struct {
 type ProjectAssetLink struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
 	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:1"`
-	AssetID   string    `json:"assetId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:2"`
+	AssetID   string    `json:"assetId" gorm:"index;size:80;uniqueIndex:idx_project_asset_links_unique,priority:2"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -54,14 +56,14 @@ type ProjectAssetCandidate struct {
 	Category        AssetCategory `json:"category" gorm:"index;size:32"`
 	Status          string        `json:"status" gorm:"index;size:32"`
 	DetailsJSON     string        `json:"detailsJson" gorm:"type:text"`
-	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:36"`
+	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:80"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
 
 type AssetVersion struct {
 	ID             string             `json:"id" gorm:"primaryKey;size:36"`
-	AssetID        string             `json:"assetId" gorm:"index;size:36;uniqueIndex:idx_asset_versions_number,priority:1"`
+	AssetID        string             `json:"assetId" gorm:"index;size:80;uniqueIndex:idx_asset_versions_number,priority:1"`
 	Version        int                `json:"version" gorm:"uniqueIndex:idx_asset_versions_number,priority:2"`
 	Status         AssetVersionStatus `json:"status" gorm:"index;size:24"`
 	DefinitionJSON string             `json:"definitionJson" gorm:"type:text"`

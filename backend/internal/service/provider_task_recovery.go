@@ -124,6 +124,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	defer func() { _ = s.repo.ReleaseTaskProviderRecovery(task.ID, owner) }()
 
 	queryCtx := withProviderAnalytics(ctx, s, *task)
+	queryCtx = withProviderOutboundPolicy(queryCtx, input.Config)
 	result, providerStatus, err := queryNewAPIChannel2VideoTask(queryCtx, input, providerRequestID)
 	if err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "人工查询上游视频任务失败", err.Error())

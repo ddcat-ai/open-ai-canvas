@@ -135,7 +135,7 @@ export function CanvasToolbar({
         onToggleSettingsPanel: () => { setAddOpen(false); setAppearanceOpen(false); setSettingsOpen((value) => !value); },
         onDeleteSelected: onDelete,
         // 以下为多选/节点悬停工具栏回调，主工具栏不使用，用 no-op 占位
-        onAlign: () => {}, onArrange: () => {}, onCreateStoryboard: () => {}, onCreateReferenceGroup: () => {}, onMergeVideos: () => {},
+        onAlign: () => {}, onArrange: () => {}, onCreateStoryboard: () => {}, onCreateReferenceGroup: () => {}, onBatchConnect: () => {}, onMergeVideos: () => {},
         onNodeInfo: () => {}, onNodeDelete: () => {}, onNodeRetry: () => {}, onNodeEditText: () => {}, onNodeDecreaseFont: () => {}, onNodeIncreaseFont: () => {},
         onNodeToggleDialog: () => {}, onNodeAnnotate: () => {}, onNodeGenerateImage: () => {}, onNodeUpload: () => {}, onNodeDownload: () => {}, onNodeSaveAsset: () => {},
         onNodeMaskEdit: () => {}, onNodeEmotion: () => {}, onNodePortraitTexture: () => {}, onNodeCrop: () => {}, onNodeSplit: () => {}, onNodeUpscale: () => {},
