@@ -82,3 +82,18 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 		})
 	}
 }
+
+func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
+	tests := map[string]string{
+		"1440":  "1440p",
+		"1440p": "1440p",
+		"2K":    "1440p",
+		"4K":    "2160p",
+		"768P":  "768p",
+	}
+	for input, want := range tests {
+		if got := normalizeResolution(input); got != want {
+			t.Fatalf("normalizeResolution(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

@@ -540,6 +540,9 @@ func ratioValue(value string) float64 {
 func normalizeResolution(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	value = strings.TrimSuffix(value, "p")
+	if value == "2k" {
+		return "1440p"
+	}
 	if value == "4k" {
 		return "2160p"
 	}

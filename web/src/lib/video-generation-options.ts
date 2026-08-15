@@ -1,5 +1,6 @@
 export const VIDEO_DURATION_OPTIONS = [6, 9, 10, 15] as const;
 export const VIDEO_RESOLUTION_OPTIONS = [480, 720, 1080, 1440, 2160] as const;
+export const VIDEO_RESOLUTION_CAPABILITY_OPTIONS = VIDEO_RESOLUTION_OPTIONS.map((value) => `${value}p`);
 export const VIDEO_DURATION_MIN = 1;
 
 export function normalizeVideoDuration(value: string | number | undefined) {

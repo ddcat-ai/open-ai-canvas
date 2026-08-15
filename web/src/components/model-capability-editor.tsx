@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol } from "@/lib/model-protocols";
+import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 
 const ratioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
-const resolutionOptions = ["480p", "720p", "1080p", "2160p"];
 const operationOptions = [
     { label: "文生视频", value: "text_to_video" },
     { label: "图生视频", value: "image_to_video" },
@@ -35,6 +35,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
     const durationValues = (profile.duration.values || []).join(",");
+    const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
 
     return (
         <div className="space-y-3 rounded-md border border-border/70 bg-muted/10 p-3">
@@ -75,7 +76,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                 <div className="grid gap-2 sm:grid-cols-2">
                     <Field label="画面比例"><Select mode="multiple" className="w-full" disabled={disabled} value={profile.ratios} options={ratioOptions.map((item) => ({ label: item, value: item }))} onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })} /></Field>
                     <Field label="默认比例"><Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} /></Field>
-                    <Field label="输出分辨率"><Select mode="multiple" className="w-full" disabled={disabled} value={profile.resolutions} options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "720p" })} /></Field>
+                    <Field label="输出分辨率"><Select mode="tags" className="w-full" disabled={disabled} value={profile.resolutions} tokenSeparators={[","]} placeholder="选择标准档位或输入 768p 等模型专属值" options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "720p" })} /></Field>
                     <Field label="默认分辨率"><Select className="w-full" disabled={disabled} value={profile.defaultResolution} options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(defaultResolution) => update({ defaultResolution })} /></Field>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
