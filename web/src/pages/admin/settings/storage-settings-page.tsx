@@ -18,6 +18,7 @@ export default function StorageSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<OSSFormValues>();
     const mode = Form.useWatch("mode", form) || "local";
+    const cdnBaseUrl = Form.useWatch("cdnBaseUrl", form);
     const isObjectStorage = mode !== "local";
     const isTencentCOS = mode === "tencent";
     const selectedProviderLabel = isTencentCOS ? "腾讯云 COS" : "阿里云 OSS";
@@ -90,7 +91,7 @@ export default function StorageSettingsPage() {
                                 <>
                                     <Form.Item name="region" label="Region"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：ap-guangzhou" : "例如：oss-cn-hangzhou"} /></Form.Item>
                                     <Form.Item name="endpoint" label="Endpoint" extra={isTencentCOS ? "可留空，系统会根据 Region 生成标准 COS Endpoint。" : undefined}><Input autoComplete="off" placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : "https://oss-cn-hangzhou.aliyuncs.com"} /></Form.Item>
-                                    <Form.Item name="cdnBaseUrl" label="CDN 加速域名" extra={isTencentCOS ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问，CDN URL 按官方要求不附带 COS 签名。" : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源，CDN URL 按官方要求不附带 OSS 签名。"} rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}>
+                                    <Form.Item name="cdnBaseUrl" label="CDN 加速域名" extra={isTencentCOS ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。" : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"} rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}>
                                         <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
                                     </Form.Item>
                                     <Form.Item name="bucket" label="Bucket"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：my-canvas-assets-1250000000" : "例如：my-canvas-assets"} /></Form.Item>
@@ -127,7 +128,7 @@ export default function StorageSettingsPage() {
                         </div>
                     </Form>
                 </SettingsSectionCard>
-                <div className="grid border-y border-border text-xs text-foreground/55 sm:grid-cols-3 sm:divide-x sm:divide-border"><Notice icon={isObjectStorage ? <Cloud className="size-3.5" /> : <HardDrive className="size-3.5" />} text={isObjectStorage ? `新资源写入${selectedProviderLabel}` : "新资源写入服务器数据卷"} /><Notice icon={<ShieldCheck className="size-3.5" />} text="历史资源位置保持不变" /><Notice icon={<KeyRound className="size-3.5" />} text="外部链接仅在签名有效期内可用" /></div>
+                <div className="grid border-y border-border text-xs text-foreground/55 sm:grid-cols-3 sm:divide-x sm:divide-border"><Notice icon={isObjectStorage ? <Cloud className="size-3.5" /> : <HardDrive className="size-3.5" />} text={isObjectStorage ? `新资源写入${selectedProviderLabel}` : "新资源写入服务器数据卷"} /><Notice icon={<ShieldCheck className="size-3.5" />} text="历史资源位置保持不变" /><Notice icon={<KeyRound className="size-3.5" />} text={isObjectStorage && cdnBaseUrl?.trim() ? "CDN 链接依赖 CDN 自身访问控制" : "外部链接仅在签名有效期内可用"} /></div>
             </div>
         </AdminPageFrame>
     );
