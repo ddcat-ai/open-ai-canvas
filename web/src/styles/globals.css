@@ -9702,7 +9702,6 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 /* ===== 素材库 · 重构（影策影视资产） =====
    与画布库共用 studio-band 毛玻璃页头与 frame 外壳；类型化封面、accent 反白筛选、
    批量操作条、banner+欢迎卡空态、资产档案抽屉。全局保持黑白单色。 */
-.assets-header-meta-group { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 10px; }
 .assets-library-page .assets-header-meta { gap: 6px; }
 .assets-library-page .assets-header-meta::before {
     width: 6px;
