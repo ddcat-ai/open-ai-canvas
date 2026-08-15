@@ -327,6 +327,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+	if err := s.requireCustomChannelsForTaskInput(normalizedInput); err != nil {
+		return nil, err
+	}
 	if err := s.ValidateTaskCapability(normalizedInput); err != nil {
 		return nil, err
 	}
@@ -396,6 +399,24 @@ func normalizeTaskInput(input map[string]any) (map[string]any, error) {
 		normalized["canvasSnapshot"] = compactPersistedValue(snapshot)
 	}
 	return normalized, nil
+}
+
+func (s *Service) requireCustomChannelsForTaskInput(input map[string]any) error {
+	if !taskInputUsesCustomChannel(input) {
+		return nil
+	}
+	return s.RequireFeature(FeatureCustomChannels)
+}
+
+func taskInputUsesCustomChannel(input map[string]any) bool {
+	config, ok := input["config"].(map[string]any)
+	if !ok {
+		return false
+	}
+	channelID, _ := config["channelId"].(string)
+	baseURL, _ := config["baseUrl"].(string)
+	apiKey, _ := config["apiKey"].(string)
+	return strings.TrimSpace(channelID) == "" && strings.TrimSpace(baseURL) != "" && strings.TrimSpace(apiKey) != ""
 }
 
 func compactPersistedValue(value interface{}) interface{} {
@@ -505,6 +526,9 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	}
 	var billingInput map[string]any
 	if err := json.Unmarshal([]byte(decryptedInput), &billingInput); err != nil {
+		return nil, err
+	}
+	if err := s.requireCustomChannelsForTaskInput(billingInput); err != nil {
 		return nil, err
 	}
 	billingOrder, err := s.taskBillingOrder(userID, task, billingInput)
