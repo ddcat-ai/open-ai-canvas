@@ -9,6 +9,7 @@ import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-
 import { cn } from "@/lib/utils";
 import { refreshFeatureAvailability } from "@/lib/user-session";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
+import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
@@ -60,6 +61,9 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                 to={`/${tool.slug}`}
                 title={tool.label}
                 onClick={handleNavClick}
+                onFocus={() => preloadWorkspaceRoute(tool.slug)}
+                onPointerDown={() => preloadWorkspaceRoute(tool.slug)}
+                onPointerEnter={() => preloadWorkspaceRoute(tool.slug)}
                 className={cn(
                     "app-workspace-nav-link app-workspace-rail-tile grid size-10 place-items-center rounded-md text-[var(--fs-tiny)] transition-colors",
                     active ? "is-active font-medium" : "",
@@ -167,6 +171,9 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                                 to={`/${tool.slug}`}
                                                 title={tool.label}
                                                 onClick={handleNavClick}
+                                                onFocus={() => preloadWorkspaceRoute(tool.slug)}
+                                                onPointerDown={() => preloadWorkspaceRoute(tool.slug)}
+                                                onPointerEnter={() => preloadWorkspaceRoute(tool.slug)}
                                                 className={cn("app-workspace-nav-link relative mb-1 flex h-11 shrink-0 items-center gap-3 rounded-md px-2.5 text-[var(--fs-body)] transition-colors", active ? "is-active font-medium" : "text-foreground/55 hover:bg-surface-hover hover:text-foreground/85")}
                                             >
                                                 <Icon className="app-workspace-nav-icon shrink-0" strokeWidth={1.8} />
