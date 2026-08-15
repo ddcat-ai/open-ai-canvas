@@ -213,6 +213,24 @@ test("effective config projects an asynchronously arriving Dreamina catalog with
     expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
 });
 
+test("effective config removes custom channels when administrators disable them", async () => {
+    const { createModelChannel, effectiveConfigForCustomChannels, normalizeConfigSnapshot } = await import("../src/stores/use-config-store");
+    const config = normalizeConfigSnapshot({
+        config: {
+            channels: [
+                createModelChannel({ id: "system-1", scope: "system", name: "系统渠道", baseUrl: "/api/ai/system/system-1", apiKey: "system", models: ["system-model"], modelCosts: [{ model: "system-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }] }),
+                createModelChannel({ id: "custom-1", scope: "user", name: "自定义渠道", baseUrl: "https://example.com", apiKey: "private-key", models: ["custom-model"] }),
+            ],
+        },
+    }).config;
+
+    const effective = effectiveConfigForCustomChannels(config, false);
+    expect(effective.channels.map((channel) => channel.id)).toEqual(["system-1"]);
+    expect(effective.models).toContain("system-1::system-model");
+    expect(effective.models).not.toContain("custom-1::custom-model");
+    expect(config.channels.map((channel) => channel.id)).toEqual(["system-1", "custom-1"]);
+});
+
 function catalogResponse() {
     return new Response(
         JSON.stringify({

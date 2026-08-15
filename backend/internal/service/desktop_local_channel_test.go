@@ -67,7 +67,7 @@ func TestRuntimeFeatureAvailabilityExposesDesktopCapabilityReadOnly(t *testing.T
 	if !features.DesktopLocalChannelsEnabled {
 		t.Fatal("public feature payload must expose the server-held desktop capability")
 	}
-	if writable := defaultFeatureAvailability(); writable.ShortDramaEnabled != features.ShortDramaEnabled || writable.TaskCenterEnabled != features.TaskCenterEnabled || writable.CreditsEnabled != features.CreditsEnabled {
+	if writable := defaultFeatureAvailability(); writable.ShortDramaEnabled != features.ShortDramaEnabled || writable.TaskCenterEnabled != features.TaskCenterEnabled || writable.CreditsEnabled != features.CreditsEnabled || writable.CustomChannelsEnabled != features.CustomChannelsEnabled {
 		t.Fatal("runtime capability must not alter writable feature availability")
 	}
 }
