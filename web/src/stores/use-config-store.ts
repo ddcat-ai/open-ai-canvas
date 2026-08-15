@@ -349,10 +349,7 @@ export function useEffectiveConfig() {
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
     const catalogState = useLocalDreaminaModelStore((state) => state.state);
     const dreaminaModels = useLocalDreaminaModelStore((state) => state.models);
-    return useMemo(
-        () => effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels),
-        [catalogState, config, customChannelsEnabled, dreaminaModels],
-    );
+    return useMemo(() => effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels), [catalogState, config, customChannelsEnabled, dreaminaModels]);
 }
 
 export function effectiveConfigForCustomChannels(config: AiConfig, customChannelsEnabled: boolean): AiConfig {

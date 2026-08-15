@@ -89,6 +89,13 @@ func TestCustomChannelTaskInputRequiresFeature(t *testing.T) {
 	if err := svc.requireCustomChannelsForTaskInput(systemInput); err != nil {
 		t.Fatalf("system channel task error = %v", err)
 	}
+	legacySystemInput, err := normalizeTaskInput(map[string]any{"config": providerConfig{BaseURL: "/api/ai/system/system-1", APIKey: "system", Model: "text-model"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.requireCustomChannelsForTaskInput(legacySystemInput); err != nil {
+		t.Fatalf("legacy system proxy task error = %v", err)
+	}
 }
 
 func TestTaskBillingOrderSkipsPricingWhenCreditsDisabled(t *testing.T) {
