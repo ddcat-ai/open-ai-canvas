@@ -8,7 +8,6 @@ import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/componen
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { ModelPicker } from "@/components/model-picker";
-import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { creationCanvasHandoffPath, creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { createGenerationBatchRetryContexts, createGenerationRetryContext, runGenerationOperationOnce, type GenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
 import { createClientId } from "@/lib/client-id";
@@ -30,7 +29,7 @@ import { beginGenerationConsumer, runGenerationConsumer } from "@/services/gener
 import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { modelDisplayName, modelOptionName, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
-import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { buildCreationMentionReferences, creationReferenceMetadata, displayCreationPrompt, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, selectedCreationReferences, type CreationReference } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationImageAsset, creationVideoAsset, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
@@ -196,11 +195,10 @@ export default function CreatePage() {
     }, [mode, selectedModel, videoProfile]);
 
     useEffect(() => {
-        if (attachments.length <= maxReferences) return;
-        const removedAttachmentIds = new Set(attachments.slice(maxReferences).map((item) => item.id));
-        const removedReferences = mentionReferences.filter((reference) => reference.attachmentId && removedAttachmentIds.has(reference.attachmentId));
-        setAttachments((current) => current.slice(0, maxReferences));
-        if (removedReferences.length) setPrompt((current) => removeReferenceTokens(current, removedReferences));
+        const reconciled = reconcileCreationAttachmentLimit(attachments, mentionReferences, maxReferences);
+        if (reconciled.attachments === attachments) return;
+        setAttachments(reconciled.attachments);
+        if (reconciled.removedReferences.length) setPrompt((current) => removeCreationReferenceTokens(current, reconciled.removedReferences));
     }, [attachments, maxReferences, mentionReferences]);
 
     useEffect(() => {
@@ -391,7 +389,7 @@ export default function CreatePage() {
     const removeAttachment = (id: string) => {
         const reference = mentionReferences.find((item) => item.attachmentId === id);
         setAttachments((current) => current.filter((item) => item.id !== id));
-        if (reference) setPrompt((current) => removeReferenceTokens(current, [reference]));
+        if (reference) setPrompt((current) => removeCreationReferenceTokens(current, [reference]));
     };
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
@@ -843,7 +841,7 @@ function CreationAttachmentThumbnail({ item, primary = false, canAddMore = false
 }) {
     const isVideo = isVideoAttachment(item);
     const url = isVideo ? item.url : item.previewUrl;
-    return <div className={primary ? "creation-chat-reference-media" : "creation-chat-attachment"}>
+    return <div className={primary ? "creation-chat-reference is-paper creation-chat-reference-media" : "creation-chat-attachment"}>
         <button type="button" className="creation-chat-attachment-preview" onClick={() => onPreview(isVideo ? "video" : "image", url)} aria-label={`放大预览 ${item.name}`} disabled={!url}>
             {isVideo ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} />}
             <span aria-hidden="true"><Maximize2 /></span>
@@ -1237,10 +1235,6 @@ function isVideoAttachment(attachment: CreationAttachment): attachment is Creati
 
 function isImageAttachment(attachment: CreationAttachment): attachment is CreationAttachment & { dataUrl: string } {
     return !isVideoAttachment(attachment);
-}
-
-function removeReferenceTokens(value: string, references: CreationReference[]) {
-    return references.reduce((current, reference) => current.split(canvasResourceMentionToken(reference)).join(""), value);
 }
 
 type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationError?: string };

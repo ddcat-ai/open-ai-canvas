@@ -20,6 +20,20 @@ export function selectedCreationReferences(prompt: string, references: CreationR
     return references.filter((reference) => prompt.includes(canvasResourceMentionToken(reference)));
 }
 
+export function reconcileCreationAttachmentLimit(attachments: CreationAttachment[], references: CreationReference[], maxReferences: number) {
+    const limit = Math.max(0, Math.floor(maxReferences));
+    if (attachments.length <= limit) return { attachments, removedReferences: [] as CreationReference[] };
+
+    const nextAttachments = attachments.slice(0, limit);
+    const removedAttachmentIds = new Set(attachments.slice(limit).map((attachment) => attachment.id));
+    const removedReferences = references.filter((reference) => reference.attachmentId && removedAttachmentIds.has(reference.attachmentId));
+    return { attachments: nextAttachments, removedReferences };
+}
+
+export function removeCreationReferenceTokens(value: string, references: CreationReference[]) {
+    return references.reduce((current, reference) => current.split(canvasResourceMentionToken(reference)).join(""), value);
+}
+
 export function displayCreationPrompt(prompt: string, references: CreationReference[]) {
     return references.reduce((value, reference) => value.split(canvasResourceMentionToken(reference)).join(`@${reference.label}`), prompt);
 }
