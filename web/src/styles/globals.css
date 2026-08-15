@@ -9712,43 +9712,38 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     content: "";
 }
 .assets-storage-usage {
-    display: grid;
-    width: min(100%, 520px);
-    grid-template-columns: 32px minmax(0, 1fr);
+    display: flex;
+    width: min(100%, 560px);
+    min-height: 24px;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     margin-top: 2px;
-    padding: 10px 12px;
-    border-radius: var(--r-lg);
-    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
 }
 .assets-storage-usage-icon {
-    display: grid;
-    width: 32px;
-    height: 32px;
-    place-items: center;
-    border-radius: var(--r-md);
-    background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    color: color-mix(in srgb, var(--foreground) 44%, transparent);
 }
-.assets-storage-usage-icon svg { width: 16px; height: 16px; }
-.assets-storage-usage-body { min-width: 0; }
-.assets-storage-usage-head,
-.assets-storage-usage-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.assets-storage-usage-title { color: var(--foreground); font-size: var(--fs-label); font-weight: 600; }
-.assets-storage-usage-value { flex: none; color: color-mix(in srgb, var(--foreground) 68%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+.assets-storage-usage-icon svg { width: 14px; height: 14px; }
+.assets-storage-usage-title { flex: none; color: color-mix(in srgb, var(--foreground) 62%, transparent); font-size: var(--fs-label); font-weight: 560; }
+.assets-storage-usage-value { flex: none; color: color-mix(in srgb, var(--foreground) 76%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
 .assets-storage-usage-track {
     display: block;
-    height: var(--progress-bar-height);
-    margin-top: 7px;
+    flex: 1 1 160px;
+    min-width: 48px;
+    max-width: 220px;
+    height: 4px;
     overflow: hidden;
     border-radius: var(--progress-bar-radius);
     background: color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 .assets-storage-usage-track > span { display: block; height: 100%; border-radius: inherit; background: var(--workspace-accent); transition: width var(--motion-state) var(--motion-ease-out); }
+.assets-storage-usage.has-usage .assets-storage-usage-track > span { min-width: 2px; }
 .assets-storage-usage.is-full .assets-storage-usage-track > span { background: var(--progress-bar-fill-error); }
-.assets-storage-usage-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-tiny); font-variant-numeric: tabular-nums; }
-.assets-storage-usage-status { display: block; margin-top: 4px; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-label); }
+.assets-storage-usage-percent { min-width: 38px; flex: none; font-size: var(--fs-tiny); font-variant-numeric: tabular-nums; text-align: right; }
+.assets-storage-usage-status { min-width: 0; font-size: var(--fs-label); }
 .assets-storage-usage-status button { margin-left: 6px; color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
 .assets-storage-usage-status button:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
 /* 页头主按钮：压过 light 主题下 app-page-header 按钮的白色背景覆盖。 */
