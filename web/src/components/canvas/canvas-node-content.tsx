@@ -213,7 +213,7 @@ function ErrorContent({ node, theme, onRetry }: Pick<CanvasNodeContentProps, "no
                     onMouseDown={(event) => event.stopPropagation()}
                 >
                     <RefreshCw className="size-3.5" />
-                    重试
+                    {node.metadata?.isBatchRoot ? "重试失败项" : "重试"}
                 </button>
             )}
         </div>

@@ -34,6 +34,7 @@ type UseCanvasKeyboardOptions = {
     focusMode: boolean;
     exitFocusMode: () => void;
     toggleFocusMode: () => void;
+    beginBatchConnection: () => void;
 };
 
 export function useCanvasKeyboard({
@@ -68,6 +69,7 @@ export function useCanvasKeyboard({
     focusMode,
     exitFocusMode,
     toggleFocusMode,
+    beginBatchConnection,
 }: UseCanvasKeyboardOptions) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,6 +108,11 @@ export function useCanvasKeyboard({
             if (isTextEditingTarget) return;
             const isCanvasControlTarget = Boolean(target?.closest("[data-canvas-no-zoom]"));
             if (isCanvasControlTarget && !(isModifierShortcut && !event.altKey && (key === "c" || key === "v"))) return;
+            if (event.altKey && !isModifierShortcut && key === "l") {
+                event.preventDefault();
+                if (!event.repeat && selectedNodeIdsRef.current.size > 1) beginBatchConnection();
+                return;
+            }
             if (event.key === "?" && !isModifierShortcut && !event.altKey) {
                 event.preventDefault();
                 setShortcutRequestNonce((value) => value + 1);
@@ -193,5 +200,5 @@ export function useCanvasKeyboard({
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("paste", handlePaste, true);
         };
-    }, [cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
+    }, [beginBatchConnection, cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
 }

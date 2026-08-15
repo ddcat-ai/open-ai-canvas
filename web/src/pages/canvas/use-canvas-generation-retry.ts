@@ -3,7 +3,7 @@ import { App } from "antd";
 
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
-import { buildEmotionImageArtifacts, emotionGenerationSize } from "@/lib/canvas/canvas-emotion";
+import { buildEmotionImageArtifacts, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
 import {
     buildAudioGenerationMetadata,
     buildGenerationConfig,
@@ -25,6 +25,7 @@ import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -288,18 +289,23 @@ export function useCanvasGenerationRetry({
                     if (!sourceDataUrl) throw new Error("无法读取情绪编辑源图片");
                     const artifacts = await buildEmotionImageArtifacts(sourceDataUrl, emotionEdit.faceBox, emotionSource.metadata.naturalWidth || 0, emotionSource.metadata.naturalHeight || 0);
                     const emotionConfig = { ...generationConfig, size: emotionGenerationSize(artifacts.editRegion), quality: !generationConfig.quality || generationConfig.quality === "auto" ? "high" : generationConfig.quality };
+                    const imageProfile = modelCapabilityConfigFor(emotionConfig, emotionConfig.model).image!;
+                    const editPlan = resolveEmotionEditPlan(imageProfile.references.maskSupported);
                     const sourceReference = sourceNodeReferenceImages(emotionSource)[0];
                     if (!sourceReference) throw new Error("情绪编辑源图片不可用");
                     const editReference = { id: `${emotionSource.id}-${emotionEdit.presetId}-edit-region`, name: "emotion-edit-region.png", type: "image/png", dataUrl: artifacts.sourceDataUrl };
                     const characterReference = { id: `${emotionSource.id}-${emotionEdit.presetId}-character`, name: `${emotionEdit.characterName}-face.jpg`, type: "image/jpeg", dataUrl: artifacts.characterDataUrl };
-                    const nextEmotionEdit = { ...emotionEdit, editRegion: artifacts.editRegion, sourceWidth: artifacts.imageWidth, sourceHeight: artifacts.imageHeight, providerSize: emotionConfig.size };
+                    const nextEmotionEdit = { ...emotionEdit, editRegion: artifacts.editRegion, sourceWidth: artifacts.imageWidth, sourceHeight: artifacts.imageHeight, providerSize: emotionConfig.size, editMode: editPlan.mode };
+                    const providerPrompt = normalizeEmotionPromptForProvider(mediaPrompt);
+                    const mask = emotionProviderMask(editPlan, { id: `${emotionSource.id}-emotion-mask`, name: "emotion-mask.png", type: "image/png", dataUrl: artifacts.maskDataUrl });
+                    if (editPlan.notice) message.info(editPlan.notice);
                     const generationMetadata = { ...buildImageGenerationMetadata("edit", emotionConfig, 1, [sourceReference]), size: `${artifacts.imageWidth}x${artifacts.imageHeight}` };
                     setNodes((current) =>
                         current.map((item) =>
                             item.id === node.id
                                 ? {
                                       ...item,
-                                      metadata: { ...item.metadata, prompt: mediaPrompt, ...generationMetadata, ...styleMetadata, emotionEdit: nextEmotionEdit },
+                                      metadata: { ...item.metadata, prompt: providerPrompt, ...generationMetadata, ...styleMetadata, emotionEdit: nextEmotionEdit },
                                   }
                                 : item,
                         ),
@@ -308,12 +314,12 @@ export function useCanvasGenerationRetry({
                         projectId,
                         nodeId: node.id,
                         mode: "image",
-                        prompt: mediaPrompt,
+                        prompt: providerPrompt,
                         config: emotionConfig,
                         referenceImages: [editReference, characterReference],
-                        mask: { id: `${emotionSource.id}-emotion-mask`, name: "emotion-mask.png", type: "image/png", dataUrl: artifacts.maskDataUrl },
+                        mask,
                         signal: controller.signal,
-                        metadata: { retry: true, sourceNodeId: emotionSource.id, edit: "emotion", emotion: nextEmotionEdit, resolvedCharacterVersions: context?.resolvedCharacterVersions || [], ...styleMetadata },
+                        metadata: { retry: true, sourceNodeId: emotionSource.id, edit: "emotion", emotionEditMode: editPlan.mode, emotion: nextEmotionEdit, resolvedCharacterVersions: context?.resolvedCharacterVersions || [], ...styleMetadata },
                     });
                     return;
                 }

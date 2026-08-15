@@ -179,6 +179,37 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 	}
 }
 
+func TestRunImageTaskOmitsAutomaticQualityAndSize(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if _, exists := body["quality"]; exists {
+			t.Errorf("quality = %#v, want omitted for auto", body["quality"])
+		}
+		if _, exists := body["size"]; exists {
+			t.Errorf("size = %#v, want omitted for auto", body["size"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"aGVsbG8="}]}`))
+	}))
+	defer server.Close()
+
+	profile := DefaultImageCapabilityConfig("openai-image", "gpt-image-2")
+	profile.Size = ImageSizeConfig{Parameter: "size", Values: []string{"auto", "1024x1024"}, Default: "1024x1024", AllowCustom: false}
+	profile.Quality = ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high"}, Default: "high"}
+	_, err := runImageTask(context.Background(), canvasGenerationInput{
+		Prompt:          "a product photo",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "gpt-image-2", InterfaceType: "openai-image", Size: "auto", Quality: "auto"},
+		ImageCapability: profile,
+	})
+	if err != nil {
+		t.Fatalf("runImageTask() error = %v", err)
+	}
+}
+
 func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -749,6 +780,53 @@ func TestRunVideoTaskUsesXAIVideoGenerationEndpoint(t *testing.T) {
 		t.Fatalf("video = %#v", result["video"])
 	}
 	want := "POST /v1/videos/generations,GET /v1/videos/video-1,GET /files/video.mp4"
+	if got := strings.Join(paths, ","); got != want {
+		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunVideoTaskXAIVideoUsesContentEndpointForLoopbackResultURL(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	paths := make([]string, 0, 3)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "POST /v1/videos/generations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"request_id":"video-loopback"}`))
+		case "GET /v1/videos/video-loopback":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"done","video":{"url":"http://127.0.0.2:1/unreachable.mp4"}}`))
+		case "GET /v1/videos/video-loopback/content":
+			if authorization := r.Header.Get("Authorization"); authorization != "Bearer test-key" {
+				t.Errorf("content Authorization = %q, want Bearer test-key", authorization)
+			}
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	result, err := runVideoTask(context.Background(), canvasGenerationInput{
+		Prompt: "make it move",
+		Config: providerConfig{
+			BaseURL:       server.URL + "/v1",
+			APIKey:        "test-key",
+			Model:         "grok-imagine-video",
+			InterfaceType: "xai-video",
+		},
+	})
+	if err != nil {
+		t.Fatalf("runVideoTask() error = %v", err)
+	}
+	video, ok := result["video"].(map[string]interface{})
+	if !ok || video["dataUrl"] != "data:video/mp4;base64,dmlkZW8=" {
+		t.Fatalf("video = %#v", result["video"])
+	}
+	want := "POST /v1/videos/generations,GET /v1/videos/video-loopback,GET /v1/videos/video-loopback/content"
 	if got := strings.Join(paths, ","); got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
 	}

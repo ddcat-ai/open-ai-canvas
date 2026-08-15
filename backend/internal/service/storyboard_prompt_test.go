@@ -73,12 +73,42 @@ func TestValidateStoryboardComplexityRejectsOverloadedShot(t *testing.T) {
 	}
 }
 
+func TestValidateStoryboardPlanTreatsComplexityAsAdvisory(t *testing.T) {
+	plan := agentStoryboardPlan{Shots: []agentStoryboardShot{{
+		Duration:     8,
+		CharacterIDs: []string{"a", "b", "c"},
+		MustHave:     []string{"一", "二", "三", "四"},
+		Motion:       "航拍推进并升降",
+	}}}
+	characters := []storyboardCharacterCard{{AssetID: "a"}, {AssetID: "b"}, {AssetID: "c"}}
+
+	if err := validateStoryboardPlan(plan, 0, 0, characters); err != nil {
+		t.Fatalf("complexity should be advisory for an otherwise valid plan: %v", err)
+	}
+}
+
 func TestValidateStoryboardComplexityAcceptsSingleDirectedMove(t *testing.T) {
 	plan := agentStoryboardPlan{Shots: []agentStoryboardShot{{
 		Duration: 8, CharacterIDs: []string{"a", "b"}, MustHave: []string{"身份稳定", "动作落点", "结尾状态"}, TimeBeats: "0-2秒：建立；2-6秒：动作；6-8秒：反应", Motion: "缓慢推近后停住", Dialogue: "你终于来了。",
 	}}}
 	if err := validateStoryboardComplexity(plan); err != nil {
 		t.Fatalf("expected focused shot to pass complexity validation: %v", err)
+	}
+}
+
+func TestNormalizeAutomaticStoryboardDurationsPreservesLongDialogue(t *testing.T) {
+	plan := agentStoryboardPlan{Shots: []agentStoryboardShot{{
+		Duration: 8,
+		Dialogue: strings.Repeat("字", 50),
+	}}}
+
+	normalizeAutomaticStoryboardDurations(&plan, 0)
+
+	if plan.Shots[0].Duration < 10 {
+		t.Fatalf("duration = %d, want at least 10", plan.Shots[0].Duration)
+	}
+	if err := validateStoryboardComplexity(plan); err != nil {
+		t.Fatalf("normalized automatic duration should pass: %v", err)
 	}
 }
 
