@@ -979,7 +979,8 @@ func ossCDNObjectURL(raw string, objectKey string) (string, error) {
 		return "", errors.New("对象存储对象路径为空")
 	}
 	// CDN 使用自己的访问鉴权与私有桶回源鉴权，不能携带 OSS/COS 的预签名参数。
-	baseURL.Path = "/" + escapeObjectKey(objectKey)
+	// url.URL.String 会负责转义 Path；这里保留未转义值，避免把 %20 再编码为 %2520。
+	baseURL.Path = "/" + objectKey
 	return baseURL.String(), nil
 }
 

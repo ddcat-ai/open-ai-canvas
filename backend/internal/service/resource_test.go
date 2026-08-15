@@ -75,7 +75,7 @@ func TestSignedOSSObjectURLUsesAliyunCDNBaseURLForDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || parsed.RawQuery != "" {
+	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || parsed.RawQuery != "" || !strings.Contains(value, "test%20image.png") {
 		t.Fatalf("Aliyun OSS CDN URL = %q", value)
 	}
 }
@@ -105,7 +105,7 @@ func TestSignedOSSObjectURLUsesTencentCOSCDNBaseURLWithoutCOSSignature(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || parsed.RawQuery != "" {
+	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || parsed.RawQuery != "" || !strings.Contains(value, "test%20image.png") {
 		t.Fatalf("signed COS CDN URL = %q", value)
 	}
 }
