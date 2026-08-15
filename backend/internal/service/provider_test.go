@@ -116,6 +116,22 @@ func TestProviderHTTPErrorWarnsAboutUncertain524Billing(t *testing.T) {
 	}
 }
 
+func TestNormalizeNewAPIChannel2ResolutionPreservesDeclaredTiers(t *testing.T) {
+	tests := map[string]string{
+		"1440": "1440p",
+		"2k":   "1440p",
+		"4K":   "2160p",
+		"768p": "768p",
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			if got := normalizeNewAPIChannel2Resolution(input, "custom-video-model"); got != want {
+				t.Fatalf("normalizeNewAPIChannel2Resolution(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+}
+
 func TestVolcengineArkImageBodyUsesJSONReferencesAndDownscalesSize(t *testing.T) {
 	body, err := volcengineArkImageBody(canvasGenerationInput{
 		Prompt: "combine the references",

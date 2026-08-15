@@ -623,6 +623,7 @@ function normalizeVideoSize(value: string) {
 function normalizeVideoResolution(value: string) {
     if (value === "low") return "480p";
     if (value === "auto" || value === "high" || value === "medium") return "720p";
+    if (value.toLowerCase() === "2k") return "1440p";
     if (value.toLowerCase() === "4k") return "2160p";
     const resolution = value.replace(/p$/i, "") || "720";
     return `${resolution}p`;

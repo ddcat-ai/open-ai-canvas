@@ -158,7 +158,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
 		Ratios:            []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"},
 		DefaultRatio:      "16:9",
-		Resolutions:       []string{"480p", "720p", "1080p", "2160p"},
+		Resolutions:       []string{"480p", "720p", "1080p", "1440p", "2160p"},
 		DefaultResolution: "720p",
 		GenerateAudio:     VideoBooleanConfig{Supported: false, Default: false},
 		Watermark:         VideoBooleanConfig{Supported: false, Default: false},
@@ -178,11 +178,15 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 15, 15
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
+		video.Resolutions = []string{"480p", "720p", "1080p"}
 	case model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3
 		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
 		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 15, 15
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
+		if model.ChannelInterfaceType(protocol) == model.ChannelInterfaceNewAPIChannel1 {
+			video.Resolutions = []string{"480p", "720p", "1080p"}
+		}
 	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceXAIVideo:
 		video.GenerateAudio = VideoBooleanConfig{Supported: false, Default: false}
 	case model.ChannelInterfaceNovitaVideo:
@@ -536,6 +540,9 @@ func ratioValue(value string) float64 {
 func normalizeResolution(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	value = strings.TrimSuffix(value, "p")
+	if value == "2k" {
+		return "1440p"
+	}
 	if value == "4k" {
 		return "2160p"
 	}
