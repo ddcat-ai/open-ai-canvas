@@ -800,6 +800,9 @@ func decimalDigits(value string) bool {
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
 	setting = normalizeOSSSetting(setting)
+	if setting.CDNBaseURL != "" {
+		return ossCDNObjectURL(setting.CDNBaseURL, objectKey)
+	}
 	if setting.Provider == tencentCOSProvider {
 		return signedCOSObjectURL(setting, objectKey, expiresAt)
 	}
@@ -807,17 +810,11 @@ func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt tim
 }
 
 func signedAliyunOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	var baseURL *url.URL
-	var err error
-	if setting.CDNBaseURL != "" {
-		baseURL, err = ossCDNBaseURL(setting.CDNBaseURL)
-	} else {
-		baseURL, err = ossBucketBaseURL(setting)
-	}
+	baseURL, err := ossBucketBaseURL(setting)
 	if err != nil {
 		return "", err
 	}
-	if setting.CDNBaseURL == "" && (strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "") {
+	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
 		return "", errors.New("OSS 访问密钥不可用")
 	}
 	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
@@ -825,10 +822,6 @@ func signedAliyunOSSObjectURL(setting ossSettingValue, objectKey string, expires
 		return "", errors.New("OSS 对象路径为空")
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/" + escapeObjectKey(objectKey)
-	// 阿里云私有 Bucket 回源会由 CDN 添加 Authorization；客户端携带 OSS 签名参数反而会导致 403。
-	if setting.CDNBaseURL != "" {
-		return baseURL.String(), nil
-	}
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
 	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, "/" + setting.Bucket + "/" + objectKey}, "\n")
 	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
@@ -910,21 +903,11 @@ func signedCOSObjectURL(setting ossSettingValue, objectKey string, expiresAt tim
 	if expires <= 0 {
 		return "", errors.New("COS 签名有效期必须晚于当前时间")
 	}
-	bucketURL, err := cosBucketBaseURL(setting)
+	client, err := newCOSClient(setting, 2*time.Minute)
 	if err != nil {
 		return "", err
 	}
-	signHost := true
-	if setting.CDNBaseURL != "" {
-		bucketURL, err = ossCDNBaseURL(setting.CDNBaseURL)
-		if err != nil {
-			return "", err
-		}
-		// CDN 回源会改写 Host；只在 CDN 下载链路关闭 Host 签名，Endpoint 直连仍保持 SDK 默认安全行为。
-		signHost = false
-	}
-	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, OutboundHTTPClient(2*time.Minute))
-	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil, signHost)
+	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, nil)
 	if err != nil {
 		return "", err
 	}
@@ -984,6 +967,20 @@ func ossCDNBaseURL(raw string) (*url.URL, error) {
 	}
 	parsed.Path = ""
 	return parsed, nil
+}
+
+func ossCDNObjectURL(raw string, objectKey string) (string, error) {
+	baseURL, err := ossCDNBaseURL(raw)
+	if err != nil {
+		return "", err
+	}
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if objectKey == "" {
+		return "", errors.New("对象存储对象路径为空")
+	}
+	// CDN 使用自己的访问鉴权与私有桶回源鉴权，不能携带 OSS/COS 的预签名参数。
+	baseURL.Path = "/" + escapeObjectKey(objectKey)
+	return baseURL.String(), nil
 }
 
 func newOSSRequest(method string, setting ossSettingValue, objectKey string, contentType string, body io.Reader) (*http.Request, error) {

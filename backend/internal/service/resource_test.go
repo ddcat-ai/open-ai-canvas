@@ -93,7 +93,7 @@ func TestAliyunOSSUploadRequestStillUsesEndpointWhenCDNConfigured(t *testing.T) 
 	}
 }
 
-func TestSignedOSSObjectURLUsesTencentCOSCDNBaseURLForDownloads(t *testing.T) {
+func TestSignedOSSObjectURLUsesTencentCOSCDNBaseURLWithoutCOSSignature(t *testing.T) {
 	value, err := signedOSSObjectURL(ossSettingValue{
 		Provider: tencentCOSProvider, Region: "ap-guangzhou", Bucket: "private-bucket-1250000000",
 		CDNBaseURL: "https://media.example.com", AccessKeyID: "secret-id", AccessKeySecret: "secret-key",
@@ -105,12 +105,8 @@ func TestSignedOSSObjectURLUsesTencentCOSCDNBaseURLForDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := parsed.Query()
-	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || query.Get("q-ak") != "secret-id" || query.Get("q-signature") == "" {
+	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || parsed.RawQuery != "" {
 		t.Fatalf("signed COS CDN URL = %q", value)
-	}
-	if query.Get("q-header-list") != "" {
-		t.Fatalf("CDN URL signed Host header: %q", value)
 	}
 }
 
@@ -193,8 +189,8 @@ func TestGetOSSObjectRangeUsesTencentCOSCDNBaseURL(t *testing.T) {
 		if r.Header.Get("Range") != "bytes=0-3" {
 			t.Errorf("Range = %q", r.Header.Get("Range"))
 		}
-		if r.Header.Get("Authorization") != "" || r.URL.Query().Get("q-signature") == "" {
-			t.Errorf("CDN request authentication = header %q, query %q", r.Header.Get("Authorization"), r.URL.RawQuery)
+		if r.Header.Get("Authorization") != "" || r.URL.RawQuery != "" {
+			t.Errorf("Tencent CDN request should not carry COS authentication: header %q, query %q", r.Header.Get("Authorization"), r.URL.RawQuery)
 		}
 		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("Content-Range", "bytes 0-3/7")

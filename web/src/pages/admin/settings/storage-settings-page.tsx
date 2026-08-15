@@ -90,7 +90,7 @@ export default function StorageSettingsPage() {
                                 <>
                                     <Form.Item name="region" label="Region"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：ap-guangzhou" : "例如：oss-cn-hangzhou"} /></Form.Item>
                                     <Form.Item name="endpoint" label="Endpoint" extra={isTencentCOS ? "可留空，系统会根据 Region 生成标准 COS Endpoint。" : undefined}><Input autoComplete="off" placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : "https://oss-cn-hangzhou.aliyuncs.com"} /></Form.Item>
-                                    <Form.Item name="cdnBaseUrl" label="CDN 加速域名" extra={isTencentCOS ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶请先开启腾讯云 CDN 回源鉴权。" : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源，CDN URL 按官方要求不附带 OSS 签名。"} rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}>
+                                    <Form.Item name="cdnBaseUrl" label="CDN 加速域名" extra={isTencentCOS ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问，CDN URL 按官方要求不附带 COS 签名。" : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源，CDN URL 按官方要求不附带 OSS 签名。"} rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}>
                                         <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
                                     </Form.Item>
                                     <Form.Item name="bucket" label="Bucket"><Input autoComplete="off" placeholder={isTencentCOS ? "例如：my-canvas-assets-1250000000" : "例如：my-canvas-assets"} /></Form.Item>

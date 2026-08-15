@@ -117,7 +117,7 @@ export function UserOSSSettingsForm() {
                     name="cdnBaseUrl"
                     label="CDN 加速域名"
                     extra={isTencentCOS
-                        ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶请先开启腾讯云 CDN 回源鉴权。"
+                        ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问，CDN URL 按官方要求不附带 COS 签名。"
                         : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源，CDN URL 按官方要求不附带 OSS 签名。"}
                     rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}
                     className="mb-3"
