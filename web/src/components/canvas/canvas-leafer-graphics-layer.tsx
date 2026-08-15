@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
+import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
 import type { CanvasTheme } from "@/lib/canvas-theme";
@@ -18,6 +19,7 @@ type CanvasLeaferGraphicsLayerProps = {
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
     connectingParams: ConnectionHandle | null;
+    batchConnectionPreview: CanvasBatchConnectionPreview | null;
     mouseWorld: Position;
     connectionTargetNodeId: string | null;
     connectionTargetAnchorRatio?: number;
@@ -42,6 +44,7 @@ type OverlayScene = LeaferScene & {
     selectionBounds: Rect;
     guides: Path;
     draft: Path;
+    batchDrafts: Group;
 };
 
 export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps) {
@@ -125,7 +128,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const overlay = overlayRef.current;
         if (!overlay) return;
         syncOverlayContent(overlay, props, viewportRef.current.k);
-    }, [props.connectingParams, props.connectionTargetAnchorRatio, props.connectionTargetNodeId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.selectedNodeBounds, props.selectionBox, props.theme]);
+    }, [props.batchConnectionPreview, props.connectingParams, props.connectionTargetAnchorRatio, props.connectionTargetNodeId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.selectedNodeBounds, props.selectionBox, props.theme]);
 
     useLayoutEffect(() => {
         const underlay = underlayRef.current;
@@ -180,12 +183,14 @@ function createOverlayScene(host: HTMLDivElement): OverlayScene {
     const selectionBounds = new Rect({ visible: false, hittable: false, fill: "transparent" });
     const guides = new Path({ visible: false, hittable: false });
     const draft = new Path({ visible: false, hittable: false });
+    const batchDrafts = new Group({ visible: false, hittable: false });
     world.add(selection);
     world.add(selectionBounds);
     world.add(guides);
     world.add(draft);
+    world.add(batchDrafts);
     leafer.add(world);
-    return { leafer, world, host, selection, selectionBounds, guides, draft };
+    return { leafer, world, host, selection, selectionBounds, guides, draft, batchDrafts };
 }
 
 function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLayerProps) {
@@ -236,6 +241,28 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
             opacity: 0.72,
         });
     }
+
+    scene.batchDrafts.removeAll(true);
+    const batch = props.batchConnectionPreview;
+    scene.batchDrafts.visible = Boolean(batch);
+    if (!batch) return;
+    const target = batch.targetNodeId ? props.nodeById.get(batch.targetNodeId) : undefined;
+    const stroke = batch.status === "invalid" ? props.theme.accent.danger : batch.status === "partial" ? props.theme.node.activeStroke : props.theme.accent.primary;
+    batch.sourceNodeIds.forEach((sourceNodeId) => {
+        const source = props.nodeById.get(sourceNodeId);
+        if (!source) return;
+        const handle: ConnectionHandle = { nodeId: source.id, handleType: "source" };
+        scene.batchDrafts.add(new Path({
+            path: activeConnectionPath(source, handle, batch.mouseWorld, target, props.scriptScrollTopById[source.id] || 0, batch.targetAnchorRatio),
+            stroke,
+            strokeWidth: 1.4,
+            strokeScaleFixed: true,
+            strokeCap: "round",
+            dashPattern: [8, 8],
+            opacity: 0.72,
+            hittable: false,
+        }));
+    });
 }
 
 function syncSelection(rect: Rect, selection: SelectionBox, theme: CanvasTheme) {

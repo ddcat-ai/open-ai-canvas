@@ -11,8 +11,8 @@ export function setActiveUserScope(userId?: string | null) {
     window.localStorage.setItem(ACTIVE_USER_SCOPE_KEY, userId || GUEST_SCOPE);
 }
 
-export function scopedStorageKey(name: string) {
-    return `${name}:user:${getActiveUserScope()}`;
+export function scopedStorageKey(name: string, scope = getActiveUserScope()) {
+    return `${name}:user:${scope}`;
 }
 
 export const scopedLocalStorage = {

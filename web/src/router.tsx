@@ -3,7 +3,8 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireFeature } from "@/components/auth/require-feature";
-import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { loadAssetsPage, loadCanvasPage, loadCreatePage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import UserLayout from "@/layouts/user-layout";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
@@ -23,25 +24,29 @@ const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/draw
 const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
-const AssetsPage = lazy(() => import("@/pages/assets"));
+const AssetsPage = lazy(loadAssetsPage);
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
-const CanvasPage = lazy(() => import("@/pages/canvas"));
+const CanvasPage = lazy(loadCanvasPage);
 const CanvasProjectPage = lazy(() => import("@/pages/canvas/project"));
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
-const CreatePage = lazy(() => import("@/pages/create"));
+const CreatePage = lazy(loadCreatePage);
 const HomePage = lazy(() => import("@/pages/home"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const SkillsPage = lazy(() => import("@/pages/skills"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
-const WalletPage = lazy(() => import("@/pages/wallet"));
-const ProjectsPage = lazy(() => import("@/pages/projects"));
+const WalletPage = lazy(loadWalletPage);
+const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(() => import("@/pages/projects/detail"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 
 function deferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader label="正在打开页面" detail="仅加载当前工作区所需内容" />}>{element}</Suspense>;
+    return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
+}
+
+function fullScreenDeferred(element: ReactNode) {
+    return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
 }
 
 export const router = createBrowserRouter([
@@ -49,11 +54,11 @@ export const router = createBrowserRouter([
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/login", element: deferred(<LoginPage />) },
-            { path: "/register", element: deferred(<RegisterPage />) },
+            { path: "/login", element: fullScreenDeferred(<LoginPage />) },
+            { path: "/register", element: fullScreenDeferred(<RegisterPage />) },
         ],
     },
-    { path: "/share/canvas/:token", element: deferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
+    { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     {
         element: (
             <UserLayout>
@@ -102,5 +107,5 @@ export const router = createBrowserRouter([
             },
         ],
     },
-    { path: "*", element: deferred(<NotFound />) },
+    { path: "*", element: fullScreenDeferred(<NotFound />) },
 ]);

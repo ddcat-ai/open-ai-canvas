@@ -28,6 +28,7 @@ export type UserOSSSetting = {
     provider: "aliyun" | "tencent";
     region: string;
     endpoint: string;
+    cdnBaseUrl: string;
     bucket: string;
     accessKeyId: string;
     hasAccessKeySecret: boolean;
@@ -36,8 +37,13 @@ export type UserOSSSetting = {
     updatedAt?: string;
 };
 
-export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "bucket" | "accessKeyId" | "pathPrefix"> & {
+export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | "region" | "endpoint" | "cdnBaseUrl" | "bucket" | "accessKeyId" | "pathPrefix"> & {
     accessKeySecret?: string;
+};
+
+export type AccountFileStorageUsage = {
+    usedBytes: number;
+    totalBytes: number;
 };
 
 const api = apiClient;
@@ -55,6 +61,11 @@ export function getUserOSSSetting() {
 
 export function updateUserOSSSetting(input: UserOSSSettingInput) {
     return request<{ setting: UserOSSSetting }>(api.patch("/settings/oss", input));
+}
+
+export async function getAccountFileStorageUsage() {
+    const data = await request<{ usage: AccountFileStorageUsage }>(api.get("/resources/storage-usage"));
+    return data.usage;
 }
 
 export function resourceIdFromStorageKey(storageKey?: string) {

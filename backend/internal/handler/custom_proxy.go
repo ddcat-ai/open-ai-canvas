@@ -18,12 +18,16 @@ import (
 
 const maxCustomRelayErrorResponseBytes int64 = 64 << 10
 
-var customRelayClient = service.CustomRelayHTTPClient
+var customRelayClient = service.CustomRelayHTTPClientForChannel
 
 func RegisterCustomRelayRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.Any("/ai/custom", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireFeature(service.FeatureCustomChannels); err != nil {
 			failService(c, err)
 			return
 		}
@@ -42,12 +46,17 @@ func RegisterCustomRelayRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		defer release()
-		proxyCustomRelayRequest(c, policy.Request)
+		proxyCustomRelayRequestWithCapabilities(c, policy.Request, svc.DesktopLocalChannelsEnabled())
 	})
 }
 
 func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy) {
-	target, err := service.ValidateCustomRelayURL(c.GetHeader("X-Canvas-Upstream-URL"))
+	proxyCustomRelayRequestWithCapabilities(c, policy, false)
+}
+
+func proxyCustomRelayRequestWithCapabilities(c *gin.Context, policy service.RuntimeRequestPolicy, desktopLocalChannelsEnabled bool) {
+	requestedAllowLocal := strings.TrimSpace(c.GetHeader(service.LocalChannelRequestHeader)) == "1"
+	target, err := service.ValidateCustomRelayChannelURL(c.GetHeader("X-Canvas-Upstream-URL"), c.GetHeader(service.LocalChannelBaseURLHeader), requestedAllowLocal, desktopLocalChannelsEnabled)
 	if err != nil {
 		failService(c, err)
 		return
@@ -111,7 +120,7 @@ func proxyCustomRelayRequest(c *gin.Context, policy service.RuntimeRequestPolicy
 		upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
-	resp, err := customRelayClient(time.Duration(policy.CustomRelayTimeoutMinutes) * time.Minute).Do(upstreamReq)
+	resp, err := customRelayClient(time.Duration(policy.CustomRelayTimeoutMinutes)*time.Minute, target, requestedAllowLocal, desktopLocalChannelsEnabled).Do(upstreamReq)
 	if err != nil {
 		fail(c, http.StatusBadGateway, errors.New("自定义渠道上游连接失败"))
 		return

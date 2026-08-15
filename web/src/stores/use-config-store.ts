@@ -3,10 +3,14 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 
+import { projectDesktopLocalChannelRuntime } from "@/lib/desktop-local-channel";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
+import { useUserStore } from "@/stores/use-user-store";
+import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ChannelInterfaceType = ModelProtocol;
@@ -16,6 +20,7 @@ export type ModelChannel = {
     id: string;
     name: string;
     baseUrl: string;
+    allowLocalChannel?: boolean;
     apiKey: string;
     secretKey?: string;
     headers?: ChannelHeader[];
@@ -39,6 +44,8 @@ export type ModelChannel = {
         cachedTokenPriceMicrocredits?: number;
         capabilityConfig?: ModelCapabilityConfig;
     }>;
+    transport?: "backend-channel" | "local-runtime";
+    localModels?: DreaminaLocalModel[];
 };
 
 export type AiConfig = {
@@ -89,6 +96,7 @@ export const defaultConfig: AiConfig = {
             id: "default",
             name: "默认渠道",
             baseUrl: OPENAI_BASE_URL,
+            allowLocalChannel: false,
             apiKey: "",
             apiFormat: "openai",
             models: ["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"],
@@ -134,29 +142,31 @@ export type ConfigStoreSnapshot = {
 
 function isVideoModelName(model: string) {
     const value = modelOptionName(model).toLowerCase();
-    return value.includes("seedance")
-        || value.includes("video")
-        || value.includes("sora")
-        || value.includes("veo")
-        || value.includes("kling")
-        || value.includes("wan")
-        || value.includes("hailuo")
-        || value.includes("pika")
-        || value.includes("runway")
-        || value.includes("gen-3")
-        || value.includes("gen3")
-        || value.includes("hunyuan-video")
-        || value.includes("hunyuanvideo")
-        || value.includes("cogvideo")
-        || value.includes("mochi")
-        || value.includes("latte")
-        || value.includes("stable-video")
-        || value.includes("svd")
-        || value.includes("animatediff")
-        || value.includes("ltx-video")
-        || value.includes("ltxvideo")
-        || value.includes("minimax-video")
-        || value.includes("abab-video");
+    return (
+        value.includes("seedance") ||
+        value.includes("video") ||
+        value.includes("sora") ||
+        value.includes("veo") ||
+        value.includes("kling") ||
+        value.includes("wan") ||
+        value.includes("hailuo") ||
+        value.includes("pika") ||
+        value.includes("runway") ||
+        value.includes("gen-3") ||
+        value.includes("gen3") ||
+        value.includes("hunyuan-video") ||
+        value.includes("hunyuanvideo") ||
+        value.includes("cogvideo") ||
+        value.includes("mochi") ||
+        value.includes("latte") ||
+        value.includes("stable-video") ||
+        value.includes("svd") ||
+        value.includes("animatediff") ||
+        value.includes("ltx-video") ||
+        value.includes("ltxvideo") ||
+        value.includes("minimax-video") ||
+        value.includes("abab-video")
+    );
 }
 
 function isImageModelName(model: string) {
@@ -206,6 +216,8 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
         const decoded = decodeChannelModel(model);
         const channel = decoded ? channels?.find((item) => item.id === decoded.channelId) : undefined;
         const modelName = decoded?.model || modelOptionName(model);
+        const local = channel?.localModels?.find((item) => item.id === modelName);
+        if (local) return local.modality === capability;
         const costEntry = channel?.modelCosts?.find((item) => item.model === modelName);
         // 协议层优先级最高：协议决定 API 端点，明确属于其他能力时直接排除，
         // 防止用户将 video/image/audio 协议的模型误标为 text 后混入文本下拉。
@@ -235,6 +247,7 @@ export function configuredModelMatchesCapability(config: AiConfig, model: string
 
 function isAiConfigReady(config: AiConfig, model: string) {
     const channel = resolveModelChannel(config, model);
+    if (channel.transport === "local-runtime") return channel.enabled !== false && Boolean(channel.localModels?.some((item) => item.id === modelOptionName(model)));
     return Boolean(model.trim() && channel.baseUrl.trim() && channel.apiKey.trim());
 }
 
@@ -309,7 +322,7 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
             audioFormat: config.audioFormat || defaultConfig.audioFormat,
             audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-			audioInstructions: config.audioInstructions || "",
+            audioInstructions: config.audioInstructions || "",
             // 旧版全局 systemPrompt 会跨任务污染请求；提示词定制现已按 operation 由服务端编译。
             systemPrompt: "",
             videoSeconds: normalizeVideoDuration(config.videoSeconds),
@@ -333,7 +346,44 @@ function normalizeSelectedModel(value: string, channels: ModelChannel[], options
 
 export function useEffectiveConfig() {
     const config = useConfigStore((state) => state.config);
-    return useMemo(() => ({ ...config, channelMode: "local" as const }), [config]);
+    const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
+    const catalogState = useLocalDreaminaModelStore((state) => state.state);
+    const dreaminaModels = useLocalDreaminaModelStore((state) => state.models);
+    return useMemo(() => effectiveConfigWithDreamina(effectiveConfigForCustomChannels(config, customChannelsEnabled), catalogState, dreaminaModels), [catalogState, config, customChannelsEnabled, dreaminaModels]);
+}
+
+export function effectiveConfigForCustomChannels(config: AiConfig, customChannelsEnabled: boolean): AiConfig {
+    if (customChannelsEnabled) return config;
+    const channels = config.channels.filter((channel) => channel.scope === "system" || channel.transport === "local-runtime");
+    return normalizeConfigSnapshot({ config: { ...config, channels } }).config;
+}
+
+export function effectiveConfigWithDreamina(config: AiConfig, catalogState: "idle" | "loading" | "ready" | "error", dreaminaModels: DreaminaLocalModel[]): AiConfig {
+    if (catalogState !== "ready" || !dreaminaModels.length) return { ...config, channelMode: "local" };
+    const channel: ModelChannel = {
+        id: "local:dreamina-cli",
+        name: "官方即梦 CLI",
+        baseUrl: "",
+        apiKey: "",
+        apiFormat: "openai",
+        models: dreaminaModels.map((item) => item.id),
+        scope: "user",
+        enabled: true,
+        transport: "local-runtime",
+        localModels: dreaminaModels,
+    };
+    const channels = [...config.channels.filter((item) => item.id !== channel.id), channel];
+    const models = modelOptionsFromChannels(channels);
+    return {
+        ...config,
+        channelMode: "local",
+        channels,
+        models,
+        imageModels: filterModelsByCapability(models, "image", channels),
+        videoModels: filterModelsByCapability(models, "video", channels),
+        textModels: filterModelsByCapability(models, "text", channels),
+        audioModels: filterModelsByCapability(models, "audio", channels),
+    };
 }
 
 export function createModelChannel(channel?: Partial<ModelChannel>): ModelChannel {
@@ -344,6 +394,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || "新渠道",
         baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : defaultBaseUrlForApiFormat(apiFormat)),
+        allowLocalChannel: channel?.allowLocalChannel === true,
         apiKey: channel?.apiKey || "",
         secretKey: channel?.secretKey || "",
         headers: Array.isArray(channel?.headers) ? channel.headers.map((header) => ({ name: String(header.name || ""), value: String(header.value || "") })) : [],
@@ -367,6 +418,8 @@ export function isChannelModelValue(value: string) {
 }
 
 export function decodeChannelModel(value: string) {
+    const local = /^local:dreamina-cli:([A-Za-z0-9][A-Za-z0-9._:-]{0,119})$/.exec(value.trim());
+    if (local) return { channelId: "local:dreamina-cli", model: local[1] };
     const index = value.indexOf(CHANNEL_MODEL_SEPARATOR);
     if (index < 0) return null;
     return { channelId: value.slice(0, index), model: value.slice(index + CHANNEL_MODEL_SEPARATOR.length) };
@@ -399,7 +452,7 @@ export function modelOptionsFromChannels(channels: ModelChannel[]) {
                 .map(normalizeRawModelName)
                 .filter(Boolean)
                 .filter((model) => channel.scope !== "system" || hasSystemModelPrice(channel, model))
-                .map((model) => encodeChannelModel(channel.id, model)),
+                .map((model) => (channel.transport === "local-runtime" ? `local:dreamina-cli:${model}` : encodeChannelModel(channel.id, model))),
         ),
     );
 }
@@ -428,22 +481,27 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
+export function channelConnectionSignature(channel: ModelChannel) {
+    return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", channel.allowLocalChannel === true ? "local:1" : "local:0", JSON.stringify(channel.headers || [])].join("\n");
+}
+
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
     const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
-    return {
+    return projectDesktopLocalChannelRuntime({
         ...config,
         model,
         baseUrl: channel.baseUrl,
+        allowLocalChannel: channel.allowLocalChannel === true,
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
         headers: channel.headers,
-        apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? "gemini" as const : "openai" as const) : channel.apiFormat,
+        apiFormat: interfaceType ? (interfaceType === "gemini-veo" ? ("gemini" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",
-    };
+    });
 }
 
 function normalizeChannels(config: AiConfig, ensureDefault = true) {
@@ -513,7 +571,14 @@ function uniqueRawModels(models: string[]) {
 }
 
 function uniqueModelOptions(models: string[]) {
-    return Array.from(new Set((models || []).filter((model): model is string => typeof model === "string").map((model) => model.trim()).filter(Boolean)));
+    return Array.from(
+        new Set(
+            (models || [])
+                .filter((model): model is string => typeof model === "string")
+                .map((model) => model.trim())
+                .filter(Boolean),
+        ),
+    );
 }
 
 function normalizeRawModelName(value: unknown) {
@@ -533,7 +598,9 @@ export function buildApiUrl(baseUrl: string, path: string) {
 export function resolveBackendApiUrl(value: string) {
     const url = value.trim();
     if (!url.startsWith("/api/")) return url;
-    const backendBaseUrl = String(import.meta.env.VITE_CANVAS_BACKEND_URL || "/api").trim().replace(/\/+$/, "");
+    const backendBaseUrl = String(import.meta.env.VITE_CANVAS_BACKEND_URL || "/api")
+        .trim()
+        .replace(/\/+$/, "");
     return backendBaseUrl === "/api" ? url : `${backendBaseUrl}${url.slice("/api".length)}`;
 }
 

@@ -1,7 +1,7 @@
 import { buildSkillMentionReferences, renderSkillPrompt } from "@/lib/canvas/canvas-skill-mentions";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
-import type { CreationAttachment } from "./creation-assets";
+import { creationAttachmentKind, type CreationAttachment } from "./creation-assets";
 
 export type CreationReference = CanvasResourceReference & {
     attachmentId?: string;
@@ -38,7 +38,8 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
         }
         if (reference.attachmentId) {
             const position = attachmentPositions.get(reference.attachmentId);
-            mediaMappings.push(`- @${reference.label}：参考${reference.kind === "video" ? "视频" : "图片"} ${position || 1}`);
+            const kindLabel = reference.kind === "video" ? "视频" : reference.kind === "audio" ? "音频" : "图片";
+            mediaMappings.push(`- @${reference.label}：参考${kindLabel} ${position || 1}`);
             return;
         }
     });
@@ -49,17 +50,18 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
 
 export function creationReferenceMetadata(references: CreationReference[]) {
     return {
-        skillIds: references.flatMap((reference) => reference.skill?.skill_id ? [reference.skill.skill_id] : []),
+        skillIds: references.flatMap((reference) => (reference.skill?.skill_id ? [reference.skill.skill_id] : [])),
     };
 }
 
 function attachmentReference(attachment: CreationAttachment, index: number): CreationReference {
-    const isVideo = attachment.type.startsWith("video/");
+    const kind = creationAttachmentKind(attachment);
+    const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : "图片";
     return {
         id: `upload:${attachment.id}`,
         nodeId: `upload:${attachment.id}`,
-        kind: isVideo ? "video" : "image",
-        label: `${isVideo ? "视频" : "图片"}${index + 1}`,
+        kind,
+        label: `${label}${index + 1}`,
         title: "当前参考内容",
         previewUrl: attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url),
         storageKey: attachment.storageKey,

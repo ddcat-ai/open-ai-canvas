@@ -729,7 +729,8 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		target += "?" + encodedQuery
 	}
-	if _, err := service.ValidateOutboundURL(target); err != nil {
+	validatedTarget, err := svc.ValidateChannelOutboundURL(target, channel.AllowLocalChannel, false)
+	if err != nil {
 		_ = svc.RefundBilling(billingOrderID, "系统渠道地址校验失败")
 		failService(c, err)
 		return
@@ -764,7 +765,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 			}
 		}
 	}
-	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, bytes.NewReader(body))
+	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, validatedTarget.String(), bytes.NewReader(body))
 	if err != nil {
 		_ = svc.RefundBilling(billingOrderID, "系统渠道请求构造失败")
 		fail(c, http.StatusBadRequest, err)
@@ -787,7 +788,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	status := model.ApiCallStatusSucceeded
 	statusCode := 0
 	errorText := ""
-	resp, err := service.OutboundHTTPClient(35 * time.Minute).Do(upstreamReq)
+	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget, channel.AllowLocalChannel).Do(upstreamReq)
 	if err != nil {
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()

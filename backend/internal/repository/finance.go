@@ -387,7 +387,9 @@ func (r *Repository) BillingUsage(orderID string) (*BillingUsage, error) {
 
 func billingUsage(db *gorm.DB, orderID string) (*BillingUsage, error) {
 	var log model.ApiCallLog
-	err := db.Where("billing_order_id = ? AND billable = ? AND status = ? AND usage_available = ?", orderID, true, model.ApiCallStatusSucceeded, true).
+	// 异步视频的真实 usage 由非计费的轮询请求返回；订单本身已经限定了归属，
+	// 结算应读取同订单最新的成功 usage，而不是只看创建请求。
+	err := db.Where("billing_order_id = ? AND status = ? AND usage_available = ?", orderID, model.ApiCallStatusSucceeded, true).
 		Order("created_at desc").First(&log).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrBillingUsageUnavailable
@@ -613,6 +615,9 @@ func (r *Repository) RefundBillingOrder(id string, errorText string) error {
 
 func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, error) {
 	if usage == nil {
+		return 0, ErrBillingUsageUnavailable
+	}
+	if order.Capability == "video" && usage.OutputTokens <= 0 {
 		return 0, ErrBillingUsageUnavailable
 	}
 	input := usage.InputTokens - usage.CachedTokens

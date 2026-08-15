@@ -41,6 +41,8 @@
 | <img src="assets/user-delve.jpg" alt="delve-s" width="80"> | delve-s | [3013141136@qq.com](mailto:3013141136@qq.com) | 我亦无他，惟手熟尔 |
 | <img src="assets/user-CyrusAuyeung.jpg" alt="CyrusAuyeung" width="80"> | CyrusAuyeung | [cyrusauyeungho@gmail.com](mailto:cyrusauyeungho@gmail.com) | HKUST(GZ) UG |
 | <img src="assets/user-nz.jpg" alt="奶大佬" width="80"> | 奶大佬 | [1304634970@qq.com](mailto:1304634970@qq.com) | 人生就是要不断的探索 |
+| <img src="assets/user-dyh.jpg" alt="dyh" width="80"> | dyh | [1613203335@qq.com](mailto:1613203335@qq.com) | 无 |
+| <img src="assets/user-kyori.jpg" alt="kyori" width="80"> | kyori | [1771634408@qq.com](mailto:1771634408@qq.com) | 励志成为未来最好用的画布仓库的贡献者 |
 
 ## 主要功能
 
@@ -244,6 +246,8 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml u
 
 后端默认通过 SSRF 防护拒绝本机、私网和链路本地上游。开发环境需要连接可信局域网模型服务时，在 `.local/docker-compose.dev.env` 中使用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=192.168.1.10` 精确放行；只填写主机名或 IP，多个值用英文逗号分隔，不包含协议、端口和路径。精确白名单中的自定义渠道可使用 HTTP，但 API Key 会在后端到上游的链路中明文传输，仅限可信网络；其他自定义渠道仍要求 HTTPS。保持 `CANVAS_ALLOW_PRIVATE_UPSTREAMS=false`，避免放行所有私网目标。
 
+桌面本机渠道使用独立安全能力，不复用上述私网白名单。该能力默认关闭；仅本机桌面启动后端时同时设置 `CANVAS_BACKEND_ADDR=127.0.0.1:8080` 与 `CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED=true` 才会启用，并且渠道自身仍需打开“允许本机渠道”。启用后只额外允许 Base URL 的文本主机精确为 `127.0.0.1` 或 `localhost`，例如 `http://127.0.0.1:8000`；不允许 `::1`、其他 127/8 写法、局域网、私网或链路本地地址，也不跟随重定向。云端、Docker 默认 `:8080` 绑定和普通 Web 部署即使持久化了该渠道标记也不会获得本机访问能力。
+
 Docker 一体化运行（静态前端和 release 后端，不提供源码热更新）：
 
 ```bash
@@ -254,7 +258,7 @@ docker compose -f docker-compose.local.yml up -d --build
 
 - 用户自定义 AI API Key 保存在浏览器本地；登录态拉取模型目录时会临时提交给自部署后端但不会保存，创建异步任务时会加密入队；仅应使用可信部署，生产环境必须启用 HTTPS。
 - 画布和素材登录后同步到后端，本地 `localForage` 继续承担缓存和降级存储。
-- 媒体资源在启用对象存储时可保存到私有阿里云 OSS 或腾讯云 COS，否则保存到后端数据目录；删除业务记录不会自动清理远端对象。
+- 媒体资源在启用对象存储时可保存到私有阿里云 OSS 或腾讯云 COS，否则保存到后端数据目录；两种对象存储均可选填 CDN 加速域名，让上传继续使用 Endpoint、下载与预览使用 CDN。CDN 地址不携带 OSS/COS 签名，敏感资源必须在 CDN 侧配置 URL 鉴权；删除业务记录不会自动清理远端对象。
 - 用户主动上传、Agent 会话附件和 AI 生成资源的单文件上限、账号容量及 UTC 日上传总量由后台“资源与策略”统一维护，默认分别为 50MB、32MB、64MB、2GB 和 200MB；管理员可按可信部署需要调整，单文件业务上限最高 999MB，Nginx 请求体硬上限为 1024MB。
 
 ## 公网部署安全

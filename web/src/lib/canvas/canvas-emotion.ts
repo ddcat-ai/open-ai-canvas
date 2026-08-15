@@ -40,6 +40,24 @@ export type CanvasEmotionParams = {
     faceBox: CanvasFaceBox;
 };
 
+export type CanvasEmotionEditMode = "provider-mask" | "local-composite";
+
+export type CanvasEmotionEditPlan = {
+    mode: CanvasEmotionEditMode;
+    includeMask: boolean;
+    notice?: string;
+};
+
+export function resolveEmotionEditPlan(maskSupported: boolean): CanvasEmotionEditPlan {
+    return maskSupported
+        ? { mode: "provider-mask", includeMask: true }
+        : { mode: "local-composite", includeMask: false, notice: "当前渠道不支持蒙版，使用脸部裁切与本地羽化融合" };
+}
+
+export function emotionProviderMask<T>(plan: CanvasEmotionEditPlan, mask: T) {
+    return plan.includeMask ? mask : undefined;
+}
+
 type BlendshapeName =
     | "browInnerUp"
     | "browDown_L"
@@ -167,12 +185,19 @@ export function buildEmotionPrompt(params: CanvasEmotionParams, editRegion: Canv
         `目标情绪：${preset.label}；表情要求：${preset.prompt}。情绪强度通过眉眼、嘴角和脸颊的肌肉张力表达，不要通过夸大嘴巴或重绘整张脸表达。`,
         "第一张输入图是唯一编辑目标，第二张输入图仅用于核对同一人物身份，不得复制第二张图的构图、背景或光线。",
         targetRegion,
-        "如果第一张输入图中出现其他人脸，其他人脸全部视为不可编辑背景；只允许修改目标框及其透明蒙版对应的这一张脸。",
+        "如果第一张输入图中出现其他人脸，其他人脸全部视为不可编辑背景；只允许修改目标人脸框及其邻近表情区域。",
         "只改变眉眼开合、眼角、嘴角、脸颊和口腔内部的表情细节；保持眼睛大小与方向、嘴裂宽度、牙齿数量大小排列、嘴唇厚度、下巴轮廓和脸型自然且与原图一致。",
-        "输入图已裁切到目标人物头部区域；透明蒙版内允许编辑，白色蒙版区域必须保持不变，蒙版外绝对不要生成或修改任何内容。",
+        "输入图已裁切到目标人物头部区域；只重绘目标人脸及其表情相关细节，不要生成或修改裁切图中的其他内容。",
         "严格保持人物身份、五官比例、肤色、发型、发丝、耳朵、配饰、服装、姿势、头部朝向、镜头、景深、光线、背景及画面其他人物不变；不要重绘眼镜、帽子或遮挡物。",
         "禁止夸张卡通笑、嘴巴过大或拉宽、牙齿像整齐白墙、露出不自然牙龈、眼睛变形或眯成线、脸颊鼓包、塑料磨皮、重复五官，以及任何身份漂移。",
     ].join("\n");
+}
+
+export function normalizeEmotionPromptForProvider(prompt: string) {
+    return prompt
+        .replaceAll("实际可编辑范围以该人脸周围的透明椭圆蒙版为最终边界。", "最终仅将该人脸周围的椭圆区域融合回原图。")
+        .replaceAll("只允许修改目标框及其透明蒙版对应的这一张脸。", "只允许修改目标人脸框及其邻近表情区域。")
+        .replaceAll("输入图已裁切到目标人物头部区域；透明蒙版内允许编辑，白色蒙版区域必须保持不变，蒙版外绝对不要生成或修改任何内容。", "输入图已裁切到目标人物头部区域；只重绘目标人脸及其表情相关细节，不要生成或修改裁切图中的其他内容。");
 }
 
 function describeEmotionTarget(box: CanvasFaceBox, region: CanvasEmotionEditRegion) {
@@ -182,7 +207,7 @@ function describeEmotionTarget(box: CanvasFaceBox, region: CanvasEmotionEditRegi
     const height = Math.max(1, Math.min(region.height - y, Math.round(box.height)));
     const centerX = Math.round(((x + width / 2) / Math.max(1, region.width)) * 100);
     const centerY = Math.round(((y + height / 2) / Math.max(1, region.height)) * 100);
-    return `目标人脸框（相对于第一张裁切输入图）：x=${x}px，y=${y}px，width=${width}px，height=${height}px；人脸中心约位于裁切图的 ${centerX}% 横向、${centerY}% 纵向。实际可编辑范围以该人脸周围的透明椭圆蒙版为最终边界。`;
+    return `目标人脸框（相对于第一张裁切输入图）：x=${x}px，y=${y}px，width=${width}px，height=${height}px；人脸中心约位于裁切图的 ${centerX}% 横向、${centerY}% 纵向。最终仅将该人脸周围的椭圆区域融合回原图。`;
 }
 
 export async function buildEmotionImageArtifacts(dataUrl: string, box: CanvasFaceBox, imageWidth: number, imageHeight: number): Promise<CanvasEmotionImageArtifacts> {

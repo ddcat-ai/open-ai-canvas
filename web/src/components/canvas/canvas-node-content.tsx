@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { BookOpenCheck, Clock3, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, Play, RefreshCw, Square, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, Clock3, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, Play, RefreshCw, Square, Video } from "lucide-react";
 
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
+import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
+import type { GenerationTask } from "@/services/api/task-center";
 import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
@@ -116,13 +118,23 @@ function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProp
 
 function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<CanvasNodeContentProps, "node" | "theme" | "onCancelTask" | "onOpenTaskDetails">) {
     const taskId = node.metadata?.taskId;
-    const progress = typeof node.metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(node.metadata.taskProgress))) : null;
-    const statusLabel = taskStatusLabel(node.metadata?.taskStatus);
+    const displayTask = {
+        provider: node.metadata?.taskProvider,
+        status: (node.metadata?.taskStatus || "running") as GenerationTask["status"],
+        stage: node.metadata?.taskStage,
+        officialStatus: node.metadata?.taskOfficialStatus,
+        errorCode: node.metadata?.taskErrorCode,
+    };
+    const submissionUncertain = Boolean(taskId) && isGenerationTaskSubmissionUncertain(displayTask);
+    const showsProgress = Boolean(taskId) && generationTaskShowsProgress(displayTask);
+    const progress = showsProgress && typeof node.metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(node.metadata.taskProgress))) : null;
+    const statusLabel = taskId ? generationTaskStatusLabel(displayTask) : "等待任务状态";
+    const stageLabel = taskId ? generationTaskStageLabel(displayTask) : "正在创建任务";
     const elapsed = useTaskElapsed(node.metadata?.taskCreatedAt);
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
-            <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[var(--fs-tiny)] font-semibold">{node.metadata?.taskStage || (taskId ? "任务处理中" : "正在创建任务")}</span>
+            {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
+            <span className="text-[var(--fs-tiny)] font-semibold">{stageLabel}</span>
             {taskId ? (
                 <div className="flex w-full max-w-[210px] flex-col items-center gap-1.5">
                     <div className="max-w-full truncate text-[var(--fs-label)] font-medium" style={{ color: theme.node.text }}>
@@ -139,7 +151,9 @@ function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<C
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
                         <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors" style={{ background: theme.toolbar.itemHover, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpenTaskDetails?.(node); }}><FileText className="size-3" />详情</button>
-                        <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors" style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCancelTask?.(node); }}><Square className="size-2.5 fill-current" />取消</button>
+                        {!submissionUncertain ? (
+                            <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors" style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCancelTask?.(node); }}><Square className="size-2.5 fill-current" />取消</button>
+                        ) : null}
                     </div>
                 </div>
             ) : null}
@@ -161,15 +175,6 @@ function useTaskElapsed(createdAt?: string) {
     return minutes < 60 ? `${minutes}分${seconds % 60}秒` : `${Math.floor(minutes / 60)}时${minutes % 60}分`;
 }
 
-function taskStatusLabel(status?: string) {
-    if (status === "queued") return "排队中";
-    if (status === "running") return "生成中";
-    if (status === "succeeded") return "任务已完成";
-    if (status === "failed") return "任务失败";
-    if (status === "cancelled") return "任务已取消";
-    return status ? "未知任务状态" : "等待任务状态";
-}
-
 function shortTaskId(id: string) {
     if (id.length <= 20) return id;
     return `${id.slice(0, 14)}...${id.slice(-4)}`;
@@ -177,10 +182,22 @@ function shortTaskId(id: string) {
 
 function ErrorContent({ node, theme, onRetry }: Pick<CanvasNodeContentProps, "node" | "theme" | "onRetry">) {
     const moderationFailure = node.metadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(node.metadata?.errorDetails);
+    const errorDisplayTask = {
+        provider: node.metadata?.taskProvider,
+        status: (node.metadata?.taskStatus || "failed") as GenerationTask["status"],
+        stage: node.metadata?.taskStage,
+        officialStatus: node.metadata?.taskOfficialStatus,
+        errorCode: node.metadata?.taskErrorCode,
+    };
+    const submissionUncertain = isGenerationTaskSubmissionUncertain(errorDisplayTask);
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
-            <div className="text-xs leading-5" style={{ color: theme.accent.danger }}>{generationErrorMessage(node.metadata?.errorDetails)}</div>
-            {moderationFailure ? (
+            <div className="text-xs leading-5" style={{ color: submissionUncertain ? theme.node.text : theme.accent.danger }}>{submissionUncertain ? generationTaskStatusLabel(errorDisplayTask) : generationErrorMessage(node.metadata?.errorDetails)}</div>
+            {submissionUncertain ? (
+                <div className="rounded-[var(--r-sm)] px-3 py-2 text-[var(--fs-label)] leading-4" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
+                    {generationTaskStageLabel(errorDisplayTask)}
+                </div>
+            ) : moderationFailure ? (
                 <div className="rounded-[var(--r-sm)] px-3 py-2 text-[var(--fs-label)] leading-4" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
                     修改节点提示词后，可重新点击生成。
                 </div>
@@ -196,7 +213,7 @@ function ErrorContent({ node, theme, onRetry }: Pick<CanvasNodeContentProps, "no
                     onMouseDown={(event) => event.stopPropagation()}
                 >
                     <RefreshCw className="size-3.5" />
-                    重试
+                    {node.metadata?.isBatchRoot ? "重试失败项" : "重试"}
                 </button>
             )}
         </div>

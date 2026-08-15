@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { createClientId } from "@/lib/client-id";
+import { projectDesktopLocalChannelRuntime } from "@/lib/desktop-local-channel";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
@@ -1089,7 +1090,7 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
     }
 }
 
-export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat">) {
+export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat"> & { allowLocalChannel?: boolean }) {
     try {
         if (config.apiFormat === "gemini") {
             const requestConfig = { ...defaultGeminiConfig, ...config };
@@ -1117,8 +1118,9 @@ export type ChannelModelCatalogItem = { id: string; supportedEndpointTypes?: str
 export type ChannelModelFetchResult = { models: string[]; catalog: ChannelModelCatalogItem[] };
 
 export async function fetchChannelModels(channel: ModelChannel, viaBackend = false): Promise<ChannelModelFetchResult> {
+    const runtimeChannel = projectDesktopLocalChannelRuntime(channel);
     if (!viaBackend) {
-        const models = await fetchImageModels({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, apiFormat: channel.apiFormat });
+        const models = await fetchImageModels({ baseUrl: runtimeChannel.baseUrl, allowLocalChannel: runtimeChannel.allowLocalChannel === true, apiKey: runtimeChannel.apiKey, apiFormat: runtimeChannel.apiFormat });
         return { models, catalog: models.map((id) => ({ id })) };
     }
     try {
@@ -1126,10 +1128,11 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
         const response = await axios.post<{ code?: number; data?: { models?: Array<string | ChannelModelCatalogItem> }; msg?: string }>(
             resolveBackendApiUrl("/api/ai/models"),
             {
-                baseUrl: channel.baseUrl,
-                apiKey: channel.apiKey,
-                apiFormat: channel.apiFormat,
-                headers: channel.headers,
+                baseUrl: runtimeChannel.baseUrl,
+                allowLocalChannel: runtimeChannel.allowLocalChannel === true,
+                apiKey: runtimeChannel.apiKey,
+                apiFormat: runtimeChannel.apiFormat,
+                headers: runtimeChannel.headers,
             },
             { withCredentials: true },
         );

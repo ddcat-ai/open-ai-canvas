@@ -244,6 +244,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
                         showSelectedPrice={false}
                         variant="creation"
+                        showConfiguredModelName
                     />
                 </div>
                 <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
@@ -284,6 +285,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <CanvasResourceMentionTextarea
                         value={prompt}
                         references={mentionReferences}
+                        includeAssetLibrary
                         onChange={updatePrompt}
                         onContentSizeChange={expanded ? setExpandedPromptContentHeight : setPromptContentHeight}
                         containerClassName="min-h-0 flex-1"
@@ -504,10 +506,21 @@ function PromptResizeHandle({ height, min, max, onResize }: { height: number; mi
             onPointerMove={(event) => {
                 const drag = dragRef.current;
                 if (!drag || drag.pointerId !== event.pointerId) return;
+                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    dragRef.current = null;
+                    return;
+                }
+                if ((event.buttons & 1) === 0) {
+                    finishResize(event);
+                    return;
+                }
                 onResize(Math.min(max, Math.max(min, drag.startHeight + event.clientY - drag.startY)));
             }}
             onPointerUp={finishResize}
             onPointerCancel={finishResize}
+            onLostPointerCapture={(event) => {
+                if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+            }}
         >
             <span aria-hidden />
         </button>

@@ -1,6 +1,6 @@
 import { type GenerationTask } from "@/services/api/task-center";
-import { backendProviderConfig, runBackendGenerationTask } from "@/services/api/generation-task";
-import { defaultConfig, modelMatchesCapability, modelOptionName, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { backendProviderConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
+import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
@@ -16,47 +16,62 @@ import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, typ
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export async function runBackendCanvasGenerationTask({
-    projectId,
-    nodeId,
-    mode,
-    prompt,
-    config,
-    referenceImages = [],
-    referenceVideos = [],
-    referenceAudios = [],
-    mask,
-    signal,
-    metadata,
-    onTaskCreated,
-}: {
-    projectId: string;
-    nodeId: string;
-    mode: CanvasNodeGenerationMode;
-    prompt: string;
-    config: AiConfig;
-    referenceImages?: ReferenceImage[];
-    referenceVideos?: ReferenceVideo[];
-    referenceAudios?: ReferenceAudio[];
-    mask?: ReferenceImage;
-    signal?: AbortSignal;
-    metadata?: Record<string, unknown>;
-    onTaskCreated?: (task: GenerationTask) => void;
-}) {
-    const normalizedReferenceImages = mode === "image" ? limitCanvasImageReferences(config, referenceImages) : referenceImages;
-    return runBackendGenerationTask({
+export async function runBackendCanvasGenerationTask(
+    {
         projectId,
+        nodeId,
         mode,
         prompt,
         config,
-        referenceImages: normalizedReferenceImages,
-        referenceVideos,
-        referenceAudios,
+        referenceImages = [],
+        referenceVideos = [],
+        referenceAudios = [],
         mask,
         signal,
-        metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
-        onTaskUpdate: onTaskCreated,
-    });
+        metadata,
+        onTaskCreated,
+        clientOperationId,
+        retryOf,
+        attemptGroupId,
+    }: {
+        projectId: string;
+        nodeId: string;
+        mode: CanvasNodeGenerationMode;
+        prompt: string;
+        config: AiConfig;
+        referenceImages?: ReferenceImage[];
+        referenceVideos?: ReferenceVideo[];
+        referenceAudios?: ReferenceAudio[];
+        mask?: ReferenceImage;
+        signal?: AbortSignal;
+        metadata?: Record<string, unknown>;
+        onTaskCreated?: (task: GenerationTask) => void;
+        clientOperationId?: string;
+        retryOf?: string;
+        attemptGroupId?: string;
+    },
+    dependencies?: GenerationTaskDependencies,
+) {
+    const normalizedReferenceImages = mode === "image" ? limitCanvasImageReferences(config, referenceImages) : referenceImages;
+    return runBackendGenerationTask(
+        {
+            projectId,
+            mode,
+            prompt,
+            config,
+            referenceImages: normalizedReferenceImages,
+            referenceVideos,
+            referenceAudios,
+            mask,
+            signal,
+            metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+            onTaskUpdate: onTaskCreated,
+            clientOperationId,
+            retryOf,
+            attemptGroupId,
+        },
+        dependencies,
+    );
 }
 
 // Canvas references can include a scene frame plus multiple character turnarounds. Keep
@@ -69,13 +84,74 @@ export function limitCanvasImageReferences(config: AiConfig, referenceImages: Re
 
 export { backendProviderConfig };
 
+const generationOperationLocks = new Map<string, Promise<unknown>>();
+
+export function runGenerationOperationOnce<T>(clientOperationId: string | undefined, operation: () => Promise<T>): Promise<T> {
+    if (!clientOperationId) return operation();
+    const existing = generationOperationLocks.get(clientOperationId) as Promise<T> | undefined;
+    if (existing) return existing;
+    const running = operation().finally(() => {
+        if (generationOperationLocks.get(clientOperationId) === running) generationOperationLocks.delete(clientOperationId);
+    });
+    generationOperationLocks.set(clientOperationId, running);
+    return running;
+}
+
+export async function runCanvasGenerationTaskToConsumer(
+    input: Parameters<typeof runBackendCanvasGenerationTask>[0],
+    dependencies: {
+        bindTask(task: GenerationTask): void;
+        consumeTask(task: GenerationTask): Promise<void>;
+        runTask?: (options: Parameters<typeof runBackendCanvasGenerationTask>[0]) => ReturnType<typeof runBackendCanvasGenerationTask>;
+    },
+) {
+    return runGenerationOperationOnce(input.clientOperationId, async () => {
+        let completedTask: GenerationTask | undefined;
+        const result = await (dependencies.runTask ?? runBackendCanvasGenerationTask)({
+            ...input,
+            onTaskCreated: (task) => {
+                input.onTaskCreated?.(task);
+                dependencies.bindTask(task);
+                if (task.status === "succeeded") completedTask = task;
+            },
+        });
+        if (!completedTask) throw new Error("生成任务缺少成功终态");
+        await dependencies.consumeTask(completedTask);
+        return result;
+    });
+}
+
+export type GenerationRetryContext = {
+    retryOf: string;
+    attemptGroupId: string;
+    clientOperationId: string;
+};
+
+export async function createGenerationRetryContext(retryOf: string, attemptGroupId = retryOf): Promise<GenerationRetryContext> {
+    const bytes = new TextEncoder().encode(`generation-retry\0${attemptGroupId}\0${retryOf}`);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return { retryOf, attemptGroupId, clientOperationId: `retry:${hex}` };
+}
+
+export function createGenerationBatchRetryContexts(taskIds: readonly string[], attemptGroupId: string) {
+    return Promise.all(taskIds.map((taskId) => createGenerationRetryContext(taskId, attemptGroupId)));
+}
+
 export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata {
     const progress = normalizeTaskProgress(task.progress, task.status);
     return {
         taskId: task.id,
+        taskClientOperationId: task.clientOperationId,
+        retryOf: task.retryOf,
+        attemptGroupId: task.attemptGroupId,
         taskStatus: task.status,
         taskProgress: progress,
         taskStage: task.stage,
+        taskProvider: task.provider,
+        taskErrorCode: task.errorCode,
+        taskOfficialStatus: task.officialStatus,
+        taskReceiptRecorded: task.receiptRecorded,
         taskCreatedAt: task.createdAt || task.created_at,
         taskUpdatedAt: task.updatedAt || task.updated_at,
     };
@@ -91,9 +167,16 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
         failedPromptFingerprint: undefined,
     };
     delete next.taskId;
+    delete next.taskClientOperationId;
+    delete next.retryOf;
+    delete next.attemptGroupId;
     delete next.taskStatus;
     delete next.taskProgress;
     delete next.taskStage;
+    delete next.taskProvider;
+    delete next.taskErrorCode;
+    delete next.taskOfficialStatus;
+    delete next.taskReceiptRecorded;
     delete next.taskCreatedAt;
     delete next.taskUpdatedAt;
     return next;
@@ -105,7 +188,6 @@ function normalizeTaskProgress(progress: number | undefined, status: GenerationT
     if (status === "succeeded") return 100;
     return undefined;
 }
-
 
 export function imageExtension(dataUrl: string) {
     return dataUrl.match(/^data:image[/]([^;]+)/)?.[1] || dataUrl.match(/image[/]([^;]+)/)?.[1] || "png";
@@ -285,7 +367,6 @@ export function getGenerationCount(count: string) {
     return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
 }
 
-
 export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefined, mode: CanvasNodeGenerationMode, requirements?: ModelRequirements): AiConfig {
     const defaultModel = mode === "image" ? config.imageModel : mode === "video" ? config.videoModel : mode === "audio" ? config.audioModel : config.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
@@ -293,7 +374,14 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const preferredModel = storedModel || resolveCanvasGenerationModel(config, defaultModel, mode) || fallbackModel;
     const model = resolveCompatibleModel(config, preferredModel, requirements) || preferredModel;
     const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
-    const normalizedImage = imageProfile ? normalizeImageValue(imageProfile, { quality: node?.metadata?.quality || config.quality || defaultConfig.quality, size: node?.metadata?.size || config.size || defaultConfig.size, transparentBackground: node?.metadata?.transparentBackground || config.transparentBackground, count: String(node?.metadata?.count || config.canvasImageCount || config.count || defaultConfig.count) }) : undefined;
+    const normalizedImage = imageProfile
+        ? normalizeImageValue(imageProfile, {
+              quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
+              size: node?.metadata?.size || config.size || defaultConfig.size,
+              transparentBackground: node?.metadata?.transparentBackground || config.transparentBackground,
+              count: String(node?.metadata?.count || config.canvasImageCount || config.count || defaultConfig.count),
+          })
+        : undefined;
     return {
         ...config,
         model,
@@ -316,7 +404,7 @@ export function resolveCanvasGenerationModel(config: AiConfig, model: string | u
     if (!model) return "";
     const normalized = normalizeModelOptionValue(model, config.channels);
     if (!normalized) return "";
-    return modelMatchesCapability(modelOptionName(normalized), mode) ? normalized : "";
+    return configuredModelMatchesCapability(config, normalized, mode) ? normalized : "";
 }
 
 export function supportsVideoReferenceAudio(config: AiConfig) {
@@ -328,7 +416,12 @@ export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
     const configHeight = NODE_DEFAULT_SIZE[CanvasNodeType.Config].height;
     return nodes.map((node) => {
         const mediaNode = ensureMediaNodeMinimumSize(node);
-        const resizedNode = mediaNode.type === CanvasNodeType.Config && mediaNode.height < configHeight ? { ...mediaNode, height: configHeight } : mediaNode.type === CanvasNodeType.Script && mediaNode.height < NODE_DEFAULT_SIZE[CanvasNodeType.Script].height ? { ...mediaNode, height: NODE_DEFAULT_SIZE[CanvasNodeType.Script].height } : mediaNode;
+        const resizedNode =
+            mediaNode.type === CanvasNodeType.Config && mediaNode.height < configHeight
+                ? { ...mediaNode, height: configHeight }
+                : mediaNode.type === CanvasNodeType.Script && mediaNode.height < NODE_DEFAULT_SIZE[CanvasNodeType.Script].height
+                  ? { ...mediaNode, height: NODE_DEFAULT_SIZE[CanvasNodeType.Script].height }
+                  : mediaNode;
         return resizedNode.metadata?.status === "loading" ? { ...resizedNode, metadata: { ...resizedNode.metadata, errorDetails: "正在从任务中心恢复生成状态..." } } : resizedNode;
     });
 }

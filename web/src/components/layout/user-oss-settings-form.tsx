@@ -10,6 +10,7 @@ type OSSFormValues = {
     provider: "aliyun" | "tencent";
     region?: string;
     endpoint?: string;
+    cdnBaseUrl?: string;
     bucket?: string;
     accessKeyId?: string;
     accessKeySecret?: string;
@@ -60,6 +61,7 @@ export function UserOSSSettingsForm() {
                 provider: values.provider || "aliyun",
                 region: values.region?.trim() || "",
                 endpoint: values.endpoint?.trim() || "",
+                cdnBaseUrl: values.cdnBaseUrl?.trim() || "",
                 bucket: values.bucket?.trim() || "",
                 accessKeyId: values.accessKeyId?.trim() || "",
                 accessKeySecret: values.accessKeySecret?.trim() || "",
@@ -101,7 +103,7 @@ export function UserOSSSettingsForm() {
                     <Select
                         options={[{ label: "阿里云 OSS", value: "aliyun" }, { label: "腾讯云 COS", value: "tencent" }]}
                         onChange={(nextProvider: OSSFormValues["provider"]) => {
-                            if (nextProvider !== provider) form.setFieldsValue({ region: "", endpoint: "", bucket: "", accessKeyId: "", accessKeySecret: "" });
+                            if (nextProvider !== provider) form.setFieldsValue({ region: "", endpoint: "", cdnBaseUrl: "", bucket: "", accessKeyId: "", accessKeySecret: "" });
                         }}
                     />
                 </Form.Item>
@@ -110,6 +112,17 @@ export function UserOSSSettingsForm() {
                 </Form.Item>
                 <Form.Item name="endpoint" label="Endpoint" extra={isTencentCOS ? "可留空，系统会根据 Region 生成标准 COS Endpoint。" : undefined} className="mb-3">
                     <Input inputMode="url" spellCheck={false} placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : "https://oss-cn-hangzhou.aliyuncs.com"} />
+                </Form.Item>
+                <Form.Item
+                    name="cdnBaseUrl"
+                    label="CDN 加速域名"
+                    extra={isTencentCOS
+                        ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
+                        : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"}
+                    rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}
+                    className="mb-3"
+                >
+                    <Input inputMode="url" spellCheck={false} placeholder="https://media.example.com" />
                 </Form.Item>
                 <Form.Item name="bucket" label="Bucket" className="mb-3">
                     <Input spellCheck={false} placeholder={isTencentCOS ? "my-canvas-assets-1250000000" : "my-canvas-assets"} />
@@ -148,6 +161,7 @@ function toFormValues(setting: UserOSSSetting): OSSFormValues {
         provider: setting.provider || "aliyun",
         region: setting.region,
         endpoint: setting.endpoint,
+        cdnBaseUrl: setting.cdnBaseUrl,
         bucket: setting.bucket,
         accessKeyId: setting.accessKeyId,
         accessKeySecret: "",

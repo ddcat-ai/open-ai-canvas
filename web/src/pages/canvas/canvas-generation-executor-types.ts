@@ -16,6 +16,7 @@ export type CanvasGenerationExecutorDependencies = {
     startGenerationRequest: (targetNodeId: string, originNodeId: string, runningId?: string, controller?: AbortController) => AbortController;
     finishGenerationRequest: (targetNodeId: string, controller: AbortController) => void;
     bindGenerationTask: (targetNodeId: string, task: GenerationTask) => void;
+    applyGenerationTaskResult: (targetNodeId: string, task: GenerationTask) => Promise<void>;
     showError: (content: string) => void;
 };
 
@@ -31,5 +32,7 @@ export type CanvasGenerationExecution = CanvasGenerationExecutorDependencies & {
     controller: AbortController;
     editingTextNode: boolean;
     styleMetadata: { styleProfileJson?: string; styleExecutionPlan?: StyleExecutionPlan };
+    taskContext?: { conversationId?: string; messageId?: string };
+    retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
     registerPendingNodeIds: (nodeIds: string[]) => void;
 };
