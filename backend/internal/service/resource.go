@@ -747,7 +747,11 @@ type ossObjectStream struct {
 }
 
 func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
-	if normalizeOSSSetting(setting).Provider == tencentCOSProvider {
+	setting = normalizeOSSSetting(setting)
+	if setting.CDNBaseURL != "" {
+		return getOSSObjectRangeViaCDN(setting, objectKey, rangeHeader)
+	}
+	if setting.Provider == tencentCOSProvider {
 		return getCOSObjectRange(setting, objectKey, rangeHeader)
 	}
 	return getAliyunOSSObjectRange(setting, objectKey, rangeHeader)
@@ -795,7 +799,11 @@ func decimalDigits(value string) bool {
 }
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
-	if normalizeOSSSetting(setting).Provider == tencentCOSProvider {
+	setting = normalizeOSSSetting(setting)
+	if setting.CDNBaseURL != "" {
+		return ossCDNObjectURL(setting.CDNBaseURL, objectKey)
+	}
+	if setting.Provider == tencentCOSProvider {
 		return signedCOSObjectURL(setting, objectKey, expiresAt)
 	}
 	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt)
@@ -854,6 +862,31 @@ func getCOSObjectRange(setting ossSettingValue, objectKey string, rangeHeader st
 			return &ossObjectStream{body: io.NopCloser(bytes.NewReader(nil)), statusCode: resp.StatusCode, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 		}
 		return nil, fmt.Errorf("COS 读取失败：%w", err)
+	}
+	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+}
+
+func getOSSObjectRangeViaCDN(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
+	signedURL, err := signedOSSObjectURL(setting, objectKey, time.Now().Add(directResourceURLTTL))
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	ApplyDefaultOutboundHeaders(req)
+	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("对象存储 CDN 读取失败：%w", err)
+	}
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		defer resp.Body.Close()
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("对象存储 CDN 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
@@ -919,6 +952,35 @@ func cosBucketBaseURL(setting ossSettingValue) (*url.URL, error) {
 		}
 	}
 	return parsed, nil
+}
+
+func ossCDNBaseURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Hostname() == "" {
+		return nil, errors.New("对象存储 CDN 加速域名格式不正确")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, errors.New("对象存储 CDN 加速域名只支持 http/https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Trim(parsed.Path, "/") != "" {
+		return nil, errors.New("对象存储 CDN 加速域名不能包含认证信息、路径、查询参数或片段")
+	}
+	parsed.Path = ""
+	return parsed, nil
+}
+
+func ossCDNObjectURL(raw string, objectKey string) (string, error) {
+	baseURL, err := ossCDNBaseURL(raw)
+	if err != nil {
+		return "", err
+	}
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if objectKey == "" {
+		return "", errors.New("对象存储对象路径为空")
+	}
+	// CDN 使用自己的访问鉴权与私有桶回源鉴权，不能携带 OSS/COS 的预签名参数。
+	baseURL.Path = "/" + escapeObjectKey(objectKey)
+	return baseURL.String(), nil
 }
 
 func newOSSRequest(method string, setting ossSettingValue, objectKey string, contentType string, body io.Reader) (*http.Request, error) {
