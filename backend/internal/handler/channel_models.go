@@ -17,6 +17,10 @@ func RegisterChannelModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		if err := svc.RequireFeature(service.FeatureCustomChannels); err != nil {
+			failService(c, err)
+			return
+		}
 		if !enforceRateLimit(c, "channel-models:"+user.ID, 30, time.Minute) {
 			return
 		}
