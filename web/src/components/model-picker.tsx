@@ -276,11 +276,16 @@ function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapab
     return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
 }
 
-function modelMenuPrice(config: AiConfig, model: string): { value: number; unit: "次" | "秒" } | null | undefined {
+type ModelMenuPrice = { value: number; unit: "次" | "秒" | "百万 Token" };
+
+function modelMenuPrice(config: AiConfig, model: string): ModelMenuPrice | null | undefined {
     if (!model) return undefined;
     const channel = resolveModelChannel(config, model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
     if (!cost) return channel.scope === "system" ? null : undefined;
+    if (cost.billingMode === "token") {
+        return { value: (cost.outputTokenPriceMicrocredits || 0) / 1_000_000, unit: "百万 Token" };
+    }
     return { value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
 }
 
@@ -292,7 +297,7 @@ function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredM
     return showConfiguredModelName ? `${configuredModelDisplayName(config, model)}（${resolveModelChannel(config, model).name}）` : modelOptionLabel(config, model);
 }
 
-function ModelPrice({ price, compact = false }: { price: { value: number; unit: "次" | "秒" } | null | undefined; compact?: boolean }) {
+function ModelPrice({ price, compact = false }: { price: ModelMenuPrice | null | undefined; compact?: boolean }) {
     if (price === undefined) return null;
     if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
     return (
