@@ -416,7 +416,10 @@ func taskInputUsesCustomChannel(input map[string]any) bool {
 	channelID, _ := config["channelId"].(string)
 	baseURL, _ := config["baseUrl"].(string)
 	apiKey, _ := config["apiKey"].(string)
-	return strings.TrimSpace(channelID) == "" && strings.TrimSpace(baseURL) != "" && strings.TrimSpace(apiKey) != ""
+	if strings.TrimSpace(channelID) != "" || systemChannelIDFromBaseURL(baseURL) != "" {
+		return false
+	}
+	return strings.TrimSpace(baseURL) != "" && strings.TrimSpace(apiKey) != ""
 }
 
 func compactPersistedValue(value interface{}) interface{} {

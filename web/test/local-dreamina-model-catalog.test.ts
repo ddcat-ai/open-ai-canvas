@@ -218,7 +218,15 @@ test("effective config removes custom channels when administrators disable them"
     const config = normalizeConfigSnapshot({
         config: {
             channels: [
-                createModelChannel({ id: "system-1", scope: "system", name: "系统渠道", baseUrl: "/api/ai/system/system-1", apiKey: "system", models: ["system-model"], modelCosts: [{ model: "system-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }] }),
+                createModelChannel({
+                    id: "system-1",
+                    scope: "system",
+                    name: "系统渠道",
+                    baseUrl: "/api/ai/system/system-1",
+                    apiKey: "system",
+                    models: ["system-model"],
+                    modelCosts: [{ model: "system-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }],
+                }),
                 createModelChannel({ id: "custom-1", scope: "user", name: "自定义渠道", baseUrl: "https://example.com", apiKey: "private-key", models: ["custom-model"] }),
             ],
         },
