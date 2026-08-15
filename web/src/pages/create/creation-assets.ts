@@ -4,9 +4,20 @@ import type { Asset, AudioAsset, ImageAsset, NewAsset } from "@/stores/use-asset
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export type CreationAttachment = (ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string };
+export type CreationDocumentAttachment = {
+    id: string;
+    name: string;
+    type: string;
+    url: string;
+    storageKey: string;
+    bytes: number;
+    previewUrl: string;
+};
+export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment;
 export type CreationMode = "text" | "image" | "video";
-export type CreationAttachmentKind = "image" | "video" | "audio";
+export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
+
+const textDocumentExtensions = [".pdf", ".txt", ".md", ".csv", ".json", ".html", ".xml", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"];
 
 export type CreationAssetIdentity = {
     taskId?: string;
@@ -15,17 +26,24 @@ export type CreationAssetIdentity = {
 };
 
 export function creationUploadAccept(mode: CreationMode) {
-    return mode === "video" ? "image/*,video/*,audio/*" : "image/*";
+    if (mode === "video") return "image/*,video/*,audio/*";
+    if (mode === "text") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
+    return "image/*";
 }
 
-export function creationFileAccepted(mode: CreationMode, file: Pick<File, "type">) {
-    return file.type.startsWith("image/") || (mode === "video" && (file.type.startsWith("video/") || file.type.startsWith("audio/")));
+export function creationFileAccepted(mode: CreationMode, file: Pick<File, "type" | "name">) {
+    if (file.type.startsWith("image/")) return true;
+    if (mode === "video") return file.type.startsWith("video/") || file.type.startsWith("audio/");
+    if (mode !== "text") return false;
+    const name = file.name.toLowerCase();
+    return file.type.startsWith("video/") || file.type.startsWith("audio/") || file.type.startsWith("text/") || textDocumentExtensions.some((extension) => name.endsWith(extension));
 }
 
 export function creationAttachmentKind(attachment: Pick<CreationAttachment, "type">): CreationAttachmentKind {
     if (attachment.type.startsWith("video/")) return "video";
     if (attachment.type.startsWith("audio/")) return "audio";
-    return "image";
+    if (attachment.type.startsWith("image/")) return "image";
+    return "file";
 }
 
 export function splitCreationAttachments(attachments: CreationAttachment[]) {
@@ -40,6 +58,16 @@ export function creationAttachmentPreview(attachment: CreationAttachment): { kin
     const kind = creationAttachmentKind(attachment);
     const url = kind === "image" ? attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "" : attachment.url || attachment.previewUrl;
     return { kind, url };
+}
+
+export function creationMediaAspectRatio(value: string | undefined, mode: CreationMode) {
+    const fallback = mode === "video" ? "16 / 9" : "1 / 1";
+    const match = value?.trim().match(/^(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)$/i);
+    if (!match) return fallback;
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return fallback;
+    return `${width} / ${height}`;
 }
 
 export function removeCreationAttachment<T extends { id: string }>(attachments: T[], id: string) {
@@ -105,6 +133,18 @@ export function creationAttachmentFromAudio(file: File, uploaded: UploadedFile):
         bytes: uploaded.bytes,
         durationMs: uploaded.durationMs,
         previewUrl: uploaded.url,
+    };
+}
+
+export function creationAttachmentFromDocument(file: File, uploaded: UploadedFile): CreationAttachment {
+    return {
+        id: `upload:${file.name}:${uploaded.storageKey}`,
+        name: file.name,
+        type: uploaded.mimeType || file.type || "application/octet-stream",
+        url: uploaded.url,
+        storageKey: uploaded.storageKey,
+        bytes: uploaded.bytes,
+        previewUrl: "",
     };
 }
 

@@ -2025,16 +2025,22 @@ func normalizeNewAPIChannel2Resolution(value string, modelName string) string {
 	if modelName == "grok-video-1.5-1080p" {
 		return "1080p"
 	}
-	switch strings.ToLower(strings.TrimSpace(value)) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
 	case "480", "480p", "low":
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "1440", "1440p", "2k":
+		return "1440p"
 	case "2160", "2160p", "4k":
 		return "2160p"
-	default:
-		return "720p"
 	}
+	numeric := strings.TrimSuffix(normalized, "p")
+	if resolution, err := strconv.Atoi(numeric); err == nil && resolution > 0 {
+		return strconv.Itoa(resolution) + "p"
+	}
+	return "720p"
 }
 
 func runNewAPIChannel1VideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {

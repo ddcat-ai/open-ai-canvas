@@ -145,14 +145,17 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         duration: { selection: "range", min: 1, max: 15, step: 1, default: 6 },
         ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
         defaultRatio: "16:9",
-        resolutions: ["480p", "720p", "1080p", "2160p"],
+        resolutions: ["480p", "720p", "1080p", "1440p", "2160p"],
         defaultResolution: "720p",
         generateAudio: { supported: false, default: false },
         watermark: { supported: false, default: false },
         operations: ["text_to_video", "image_to_video"],
         defaultOperation: "text_to_video",
     };
-    if (protocol === "volcengine-jimeng-video") video.duration = { selection: "enum", values: [5, 10], default: 5 };
+    if (protocol === "volcengine-jimeng-video") {
+        video.duration = { selection: "enum", values: [5, 10], default: 5 };
+        video.resolutions = ["720p"];
+    }
     if (protocol === "gemini-veo") {
         video.duration = { selection: "enum", values: [4, 6, 8], default: 6 };
         video.resolutions = ["720p", "1080p"];
@@ -166,6 +169,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.references.maxAudioDurationSeconds = 15;
         video.generateAudio = { supported: true, default: true };
     }
+    if (protocol === "volcengine-ark-video" || protocol === "newapi-channel-1") video.resolutions = ["480p", "720p", "1080p"];
     if (protocol === "volcengine-ark-video") video.watermark = { supported: true, default: false };
     if (protocol === "novita-video") {
         video.references.maxImages = 1;

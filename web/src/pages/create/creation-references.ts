@@ -52,7 +52,7 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
         }
         if (reference.attachmentId) {
             const position = attachmentPositions.get(reference.attachmentId);
-            const kindLabel = reference.kind === "video" ? "视频" : reference.kind === "audio" ? "音频" : "图片";
+            const kindLabel = reference.kind === "video" ? "视频" : reference.kind === "audio" ? "音频" : reference.kind === "text" ? "文件" : "图片";
             mediaMappings.push(`- @${reference.label}：参考${kindLabel} ${position || 1}`);
             return;
         }
@@ -70,11 +70,11 @@ export function creationReferenceMetadata(references: CreationReference[]) {
 
 function attachmentReference(attachment: CreationAttachment, index: number): CreationReference {
     const kind = creationAttachmentKind(attachment);
-    const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : "图片";
+    const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "file" ? "文件" : "图片";
     return {
         id: `upload:${attachment.id}`,
         nodeId: `upload:${attachment.id}`,
-        kind,
+        kind: kind === "file" ? "text" : kind,
         label: `${label}${index + 1}`,
         title: "当前参考内容",
         previewUrl: attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url),
