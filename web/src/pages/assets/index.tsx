@@ -1,5 +1,6 @@
 import { AudioLines, Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Image as ImageIcon, Link2, MoreHorizontal, PencilLine, Play, Plus, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { App, Button, Drawer, Dropdown, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { useNavigate } from "react-router";
@@ -17,6 +18,7 @@ import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
+import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
 import { deleteAssetWithRemoteSync } from "@/services/user-data-sync";
 
 type LibraryAsset = Exclude<Asset, { kind: "entity" }>;
@@ -65,6 +67,7 @@ const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
 export default function AssetsPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const copyText = useCopyText();
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -188,6 +191,7 @@ export default function AssetsPage() {
     const readImageFile = async (file?: File) => {
         if (!file || !file.type.startsWith("image/")) return;
         const image = await uploadImage(file);
+        void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
         const draft = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
         setImageDraft(draft);
         if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", draft.dataUrl);
@@ -197,6 +201,7 @@ export default function AssetsPage() {
     const readModelFile = async (file?: File) => {
         if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
         const uploaded = await uploadMediaFile(file, "model");
+        void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
         addAsset({ kind: "model", title: file.name.replace(/\.(glb|gltf)$/i, ""), coverUrl: "", tags: ["3D模型"], source: "手动上传", data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: file.name }, metadata: { source: "manual" } });
         message.success("3D 模型已保存");
     };
@@ -286,6 +291,7 @@ export default function AssetsPage() {
                         </>
                     )}
                 />
+                <AssetStorageUsage />
                 <ListToolbar className="library-toolbar" active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
                     <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索标题、内容、标签或来源" onChange={(event) => { setPage(1); setKeyword(event.target.value); }} />
                 </ListToolbar>
