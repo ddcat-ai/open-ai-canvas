@@ -449,7 +449,7 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 		capability = capabilityFromTaskType(task.Type)
 	}
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
-	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]), estimateTaskTokens(input))
+	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(input, capability))
 }
 
 func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
@@ -507,11 +507,14 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 		}
 		quantity = requestedQuantity
 	case "token":
-		if item.Capability != "text" || capability != "text" {
-			return nil, BadAuthRequest("Token 计费仅适用于文本生成")
+		if !supportsTokenBilling(item.Capability, item.Protocol) || item.Capability != capability {
+			return nil, BadAuthRequest("Token 计费仅支持文本生成和火山方舟视频生成")
 		}
-		if tokenEstimate.InputTokens <= 0 || tokenEstimate.OutputTokens <= 0 {
+		if capability == "text" && (tokenEstimate.InputTokens <= 0 || tokenEstimate.OutputTokens <= 0) {
 			return nil, BadAuthRequest("无法估算文本 Token 用量")
+		}
+		if capability == "video" && tokenEstimate.OutputTokens <= 0 {
+			return nil, BadAuthRequest("无法估算火山方舟视频 Token 用量")
 		}
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
@@ -549,6 +552,98 @@ func estimateTaskTokens(input map[string]any) tokenBillingEstimate {
 	return tokenBillingEstimate{InputTokens: estimatedTokens(encoded), OutputTokens: maxOutputTokens(input)}
 }
 
+func estimateTaskBillingTokens(input map[string]any, capability string) tokenBillingEstimate {
+	if capability == "video" {
+		return estimateArkVideoTokens(input)
+	}
+	return estimateTaskTokens(input)
+}
+
+// 方舟视频成功后才返回真实 completion_tokens；创建任务前按官方像素帧公式预授权，
+// 并保留少量帧率/取整余量，实际结算时会按 usage 自动退回差额。
+func estimateArkVideoTokens(input map[string]any) tokenBillingEstimate {
+	config, _ := input["config"].(map[string]any)
+	if config == nil {
+		return tokenBillingEstimate{}
+	}
+	durationSeconds, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(config["videoSeconds"])), 10, 64)
+	if err != nil || durationSeconds <= 0 {
+		return tokenBillingEstimate{}
+	}
+	pixels := arkVideoOutputPixels(fmt.Sprint(config["vquality"]), fmt.Sprint(config["size"]), fmt.Sprint(config["model"]))
+	if pixels <= 0 {
+		return tokenBillingEstimate{}
+	}
+
+	totalDurationMillis := durationSeconds * 1000
+	referenceCount := int64(0)
+	if references, ok := input["referenceVideos"].([]any); ok && len(references) > 0 {
+		referenceCount = int64(len(references))
+		knownDurationMillis := int64(0)
+		unknownDuration := false
+		for _, raw := range references {
+			media, _ := raw.(map[string]any)
+			durationMillis := firstInt64(media, "durationMs")
+			if durationMillis <= 0 {
+				unknownDuration = true
+				continue
+			}
+			knownDurationMillis += durationMillis
+		}
+		// 方舟参考视频总时长上限为 15 秒；缺少媒体元数据时按上限预留。
+		if unknownDuration {
+			knownDurationMillis = max(knownDurationMillis, int64(15_000))
+		}
+		totalDurationMillis += knownDurationMillis
+	}
+	frames := (totalDurationMillis*24+999)/1000 + 1 + referenceCount
+	if pixels > (1<<63-1-1023)/frames {
+		return tokenBillingEstimate{}
+	}
+	tokens := (pixels*frames + 1023) / 1024
+	if tokens > (1<<63-1-99)/110 {
+		return tokenBillingEstimate{}
+	}
+	return tokenBillingEstimate{OutputTokens: (tokens*110 + 99) / 100}
+}
+
+func arkVideoOutputPixels(resolution string, ratio string, modelName string) int64 {
+	resolution = normalizeSeedanceResolution(resolution, modelName)
+	ratio = normalizeSeedanceRatio(ratio)
+	pixelsByRatio := map[string]map[string]int64{
+		"480p": {
+			"16:9": 864 * 496, "4:3": 752 * 560, "1:1": 640 * 640,
+			"3:4": 560 * 752, "9:16": 496 * 864, "21:9": 992 * 432,
+		},
+		"720p": {
+			"16:9": 1280 * 720, "4:3": 1112 * 834, "1:1": 960 * 960,
+			"3:4": 834 * 1112, "9:16": 720 * 1280, "21:9": 1470 * 630,
+		},
+		"1080p": {
+			"16:9": 1920 * 1080, "4:3": 1664 * 1248, "1:1": 1440 * 1440,
+			"3:4": 1248 * 1664, "9:16": 1080 * 1920, "21:9": 2206 * 946,
+		},
+	}
+	values := pixelsByRatio[resolution]
+	if resolution == "2160p" {
+		values = make(map[string]int64, len(pixelsByRatio["1080p"]))
+		for key, value := range pixelsByRatio["1080p"] {
+			values[key] = value * 4
+		}
+	}
+	if len(values) == 0 {
+		return 0
+	}
+	if ratio != "adaptive" {
+		return values[ratio]
+	}
+	var largest int64
+	for _, value := range values {
+		largest = max(largest, value)
+	}
+	return largest
+}
+
 func estimateProxyTokens(body []byte) tokenBillingEstimate {
 	var payload map[string]any
 	_ = json.Unmarshal(body, &payload)
@@ -581,7 +676,7 @@ func maxOutputTokens(payload map[string]any) int64 {
 
 // Token 单价按每百万 Token 配置；预授权使用输入价估算缓存 Token，真实结算再按 usage 拆分。
 func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate, multiplierBPS int64) (int64, error) {
-	if item == nil || estimate.InputTokens <= 0 || estimate.OutputTokens <= 0 || multiplierBPS <= 0 {
+	if item == nil || estimate.InputTokens < 0 || estimate.OutputTokens <= 0 || multiplierBPS <= 0 {
 		return 0, errors.New("Token 计费参数无效")
 	}
 	inputAmount, ok := safeTokenProduct(estimate.InputTokens, item.InputTokenPriceMicrocredits)
