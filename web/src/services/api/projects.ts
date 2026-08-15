@@ -166,7 +166,6 @@ export type ProjectDetail = {
     assetCandidates: ProjectAssetCandidate[];
 };
 
-
 export function listProjects() {
     return request<{ projects: ProjectSummary[] }>(api.get("/projects"));
 }
@@ -223,16 +222,16 @@ export function unlinkCanvasProject(projectId: string, canvasId: string) {
     return request<{ canvasId: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/canvases/${encodeURIComponent(canvasId)}`));
 }
 
-export function linkProjectAsset(projectId: string, input: { assetId: string; category: string }) {
-    return request<{ asset: ProjectAsset }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets`, input));
+export function linkProjectAsset(projectId: string, input: { assetId: string; category: string }, signal?: AbortSignal) {
+    return request<{ asset: ProjectAsset }>(api.post(`/projects/${encodeURIComponent(projectId)}/assets`, input, { signal }));
 }
 
 export function unlinkProjectAsset(projectId: string, assetId: string) {
     return request<{ id: string }>(api.delete(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`));
 }
 
-export function updateProjectAssetCategory(projectId: string, assetId: string, category: string) {
-    return request<{ asset: ProjectAsset }>(api.patch(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`, { category }));
+export function updateProjectAssetCategory(projectId: string, assetId: string, category: string, signal?: AbortSignal) {
+    return request<{ asset: ProjectAsset }>(api.patch(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`, { category }, { signal }));
 }
 
 export function createProjectAssetVersion(projectId: string, assetId: string, input: { prompt?: string; definitionJson?: string; note?: string }) {

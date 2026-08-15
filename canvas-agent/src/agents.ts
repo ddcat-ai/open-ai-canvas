@@ -5,7 +5,8 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { AGENT_PROMPT, VERSION } from "./config.js";
+import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
+import { AGENT_PROMPT, CONFIG_DIR, VERSION } from "./config.js";
 import { assertCodexThreadWorkspace, codexThreadInWorkspace, resolveCodexThread } from "./codex-thread.js";
 import type { AgentAttachment, AgentEmit } from "./types.js";
 
@@ -19,6 +20,7 @@ let codexQueue: Promise<unknown> = Promise.resolve();
 let codexApp: CodexAppClient | null = null;
 let codexThreadId = "";
 const canvasAgentMcp = canvasAgentMcpCommand();
+const INTERNAL_CANVAS_MCP_TIMEOUT_MARGIN_MS = 60_000;
 const require = createRequire(import.meta.url);
 
 export function withAgentPrompt(prompt: string) {
@@ -263,15 +265,28 @@ class CodexAppClient {
     }
 }
 
-function canvasAgentMcpCommand() {
+export function canvasAgentMcpCommand() {
     const current = process.argv.find((arg) => /index\.(t|j)s$/.test(arg)) || "";
     const entry = path.resolve(current || fileURLToPath(new URL("./index.js", import.meta.url)));
     const tsx = path.join(path.dirname(entry), "..", "node_modules", "tsx", "dist", "cli.mjs");
-    return entry.endsWith(".ts") ? { command: process.execPath, args: [tsx, entry, "mcp"] } : { command: process.execPath, args: [entry, "mcp"] };
+    return entry.endsWith(".ts")
+        ? { command: process.execPath, args: [tsx, entry, "mcp", "--canvas-only"] }
+        : { command: process.execPath, args: [entry, "mcp", "--canvas-only"] };
 }
 
-function codexConfig() {
-    return { mcp_servers: { "infinite-canvas": { command: canvasAgentMcp.command, args: canvasAgentMcp.args, default_tools_approval_mode: "approve", startup_timeout_sec: 20, tool_timeout_sec: 90 } } };
+export function codexConfig(configDir = CONFIG_DIR) {
+    return {
+        mcp_servers: {
+            "infinite-canvas": {
+                command: canvasAgentMcp.command,
+                args: canvasAgentMcp.args,
+                env: { FRAMEFIELD_LOCAL_RUNTIME_CONFIG_DIR: configDir },
+                default_tools_approval_mode: "approve",
+                startup_timeout_sec: 20,
+                tool_timeout_sec: Math.ceil((CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS + INTERNAL_CANVAS_MCP_TIMEOUT_MARGIN_MS) / 1_000),
+            },
+        },
+    };
 }
 
 function codexInput(prompt: string, images: string[]) {

@@ -3,10 +3,21 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { ASSET_STORE_KEY, useAssetStore } from "@/stores/use-asset-store";
+import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import { CONFIG_STORE_KEY, defaultConfig, normalizeConfigSnapshot, useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData } from "@/services/user-data-sync";
+import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "@/services/user-data-sync";
+import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
+
+export async function switchUserStorageScope(userId?: string | null) {
+    await withGenerationConsumersPaused(async () => {
+        await withRemoteUserDataSyncPaused(async () => {
+            await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            resetRemoteUserDataSync();
+            setActiveUserScope(userId);
+        });
+    });
+}
 
 export async function applyUserSession(payload: AuthSessionPayload) {
     const previousUserId = useUserStore.getState().user?.id || "";
@@ -15,13 +26,8 @@ export async function applyUserSession(payload: AuthSessionPayload) {
     try {
         // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
         if (previousUserId !== nextUserId) appQueryClient.clear();
-        resetRemoteUserDataSync();
-        await flushCanvasStorePersistence();
-        setActiveUserScope(payload.user?.id);
-        const [persistedCanvas, persistedAssets] = await Promise.all([
-            localForageStorage.getItem(CANVAS_STORE_KEY),
-            localForageStorage.getItem(ASSET_STORE_KEY),
-        ]);
+        await switchUserStorageScope(payload.user?.id);
+        const [persistedCanvas, persistedAssets] = await Promise.all([localForageStorage.getItem(CANVAS_STORE_KEY), localForageStorage.getItem(ASSET_STORE_KEY)]);
         const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);

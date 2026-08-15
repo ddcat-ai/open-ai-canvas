@@ -244,6 +244,8 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml u
 
 后端默认通过 SSRF 防护拒绝本机、私网和链路本地上游。开发环境需要连接可信局域网模型服务时，在 `.local/docker-compose.dev.env` 中使用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=192.168.1.10` 精确放行；只填写主机名或 IP，多个值用英文逗号分隔，不包含协议、端口和路径。精确白名单中的自定义渠道可使用 HTTP，但 API Key 会在后端到上游的链路中明文传输，仅限可信网络；其他自定义渠道仍要求 HTTPS。保持 `CANVAS_ALLOW_PRIVATE_UPSTREAMS=false`，避免放行所有私网目标。
 
+桌面本机渠道使用独立安全能力，不复用上述私网白名单。该能力默认关闭；仅本机桌面启动后端时同时设置 `CANVAS_BACKEND_ADDR=127.0.0.1:8080` 与 `CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED=true` 才会启用，并且渠道自身仍需打开“允许本机渠道”。启用后只额外允许 Base URL 的文本主机精确为 `127.0.0.1` 或 `localhost`，例如 `http://127.0.0.1:8000`；不允许 `::1`、其他 127/8 写法、局域网、私网或链路本地地址，也不跟随重定向。云端、Docker 默认 `:8080` 绑定和普通 Web 部署即使持久化了该渠道标记也不会获得本机访问能力。
+
 Docker 一体化运行（静态前端和 release 后端，不提供源码热更新）：
 
 ```bash

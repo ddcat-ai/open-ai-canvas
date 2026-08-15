@@ -38,7 +38,9 @@ func main() {
 	}
 
 	repo := repository.New(db)
-	svc := service.New(repo, dataDir)
+	addr := env("CANVAS_BACKEND_ADDR", ":8080")
+	capabilities := service.RuntimeCapabilitiesForDeployment(addr, os.Getenv("CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED"))
+	svc := service.NewWithRuntimeCapabilities(repo, dataDir, capabilities)
 	if err := svc.ValidateRuntime(); err != nil {
 		log.Fatal(err)
 	}
@@ -91,7 +93,6 @@ func main() {
 	handler.RegisterProjectRoutes(projectAPI, svc)
 	handler.RegisterCanvasShareRoutes(api, svc)
 
-	addr := env("CANVAS_BACKEND_ADDR", ":8080")
 	log.Printf("影策 backend listening on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatal(err)
@@ -130,7 +131,7 @@ func cors() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
 		}
-		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format")
+		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Allow-Local-Channel, X-Canvas-Upstream-Base-URL")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Max-Age", "86400")
 		if c.Request.Method == "OPTIONS" {

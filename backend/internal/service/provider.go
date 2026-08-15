@@ -44,6 +44,7 @@ type providerConfig struct {
 	APIFormat             string                 `json:"apiFormat"`
 	InterfaceType         string                 `json:"interfaceType"`
 	BaseURL               string                 `json:"baseUrl"`
+	AllowLocalChannel     bool                   `json:"allowLocalChannel"`
 	APIKey                string                 `json:"apiKey"`
 	SecretKey             string                 `json:"secretKey"`
 	Headers               []OutboundHeader       `json:"headers"`
@@ -100,6 +101,12 @@ type providerHTTPError struct {
 }
 
 type providerAnalyticsKey struct{}
+type providerOutboundPolicyKey struct{}
+
+type providerOutboundPolicyContext struct {
+	scheme string
+	host   string
+}
 
 type providerAnalyticsContext struct {
 	Service           *Service
@@ -183,6 +190,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	input.Config = config
+	ctx = withProviderOutboundPolicy(ctx, input.Config)
 	if input.Mode == "image" && input.Metadata != nil {
 		if err := s.applyGenerationStyleProfile(userID, taskProjectID, &input); err != nil {
 			return nil, err
@@ -567,9 +575,10 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		channelID = systemChannelIDFromBaseURL(config.BaseURL)
 	}
 	if channelID == "" {
-		if _, err := ValidateOutboundURL(config.BaseURL); err != nil {
+		if _, err := s.validateChannelOutboundURL(config.BaseURL, config.AllowLocalChannel, false); err != nil {
 			return providerConfig{}, err
 		}
+		config.AllowLocalChannel = s.effectiveAllowLocalChannel(config.AllowLocalChannel)
 		return config, nil
 	}
 	channel, err := s.SystemChannel(channelID)
@@ -587,6 +596,9 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if !stringInSlice(modelName, channelModelNames(*channel)) {
 		return providerConfig{}, errors.New("当前系统渠道未授权该模型")
 	}
+	if _, err := s.validateChannelOutboundURL(channel.BaseURL, channel.AllowLocalChannel, false); err != nil {
+		return providerConfig{}, err
+	}
 	config.ChannelID = channel.ID
 	config.APIFormat = channel.APIFormat
 	channelModel, modelErr := s.repo.ChannelModelByKey(channel.ID, modelName)
@@ -601,6 +613,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		config.APIFormat = "openai"
 	}
 	config.BaseURL = channel.BaseURL
+	config.AllowLocalChannel = s.effectiveAllowLocalChannel(channel.AllowLocalChannel)
 	config.APIKey = channel.APIKey
 	config.SecretKey = channel.SecretKey
 	config.Headers, err = ParseOutboundHeadersJSON(channel.HeadersJSON)
@@ -2664,6 +2677,28 @@ func doJSON(req *http.Request, target interface{}) error {
 	return nil
 }
 
+func withProviderOutboundPolicy(ctx context.Context, config providerConfig) context.Context {
+	if !config.AllowLocalChannel {
+		return ctx
+	}
+	parsed, err := url.Parse(strings.TrimSpace(config.BaseURL))
+	if err != nil || !isExactDesktopLoopbackHost(parsed.Hostname()) {
+		return ctx
+	}
+	return context.WithValue(ctx, providerOutboundPolicyKey{}, providerOutboundPolicyContext{scheme: strings.ToLower(parsed.Scheme), host: strings.ToLower(parsed.Host)})
+}
+
+func providerLoopbackPolicyForRequest(req *http.Request) (OutboundPolicy, bool) {
+	policyContext, ok := req.Context().Value(providerOutboundPolicyKey{}).(providerOutboundPolicyContext)
+	if !ok || policyContext.scheme == "" || policyContext.host == "" {
+		return OutboundPolicy{}, false
+	}
+	if strings.ToLower(req.URL.Scheme) != policyContext.scheme || strings.ToLower(req.URL.Host) != policyContext.host {
+		return OutboundPolicy{}, false
+	}
+	return desktopLoopbackOutboundPolicy(nil), true
+}
+
 func doBinary(req *http.Request) ([]byte, string, error) {
 	startedAt := time.Now()
 	requestTimeout := providerHTTPTimeout
@@ -2707,12 +2742,21 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		}
 		defer release()
 	}
-	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
+	policy, loopback := providerLoopbackPolicyForRequest(req)
+	if loopback {
+		if _, err := validateOutboundURLWithPolicy(req.URL.String(), policy); err != nil {
+			recordProviderRequest(req, startedAt, 0, nil, err)
+			return nil, "", err
+		}
+	} else if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
 	ApplyDefaultOutboundHeaders(req)
 	client := OutboundHTTPClient(requestTimeout)
+	if loopback {
+		client = outboundHTTPClientWithPolicy(requestTimeout, policy)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		if runtimeService != nil {

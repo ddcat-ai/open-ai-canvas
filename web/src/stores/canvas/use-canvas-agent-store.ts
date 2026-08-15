@@ -12,8 +12,6 @@ export type AgentPanelTab = "chat" | "setup" | "history" | "log";
 
 type CanvasAgentStore = {
     width: number;
-    url: string;
-    token: string;
     connected: boolean;
     enabled: boolean;
     prompt: string;
@@ -39,8 +37,6 @@ type CanvasAgentStore = {
 
 export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     width: typeof window === "undefined" ? 440 : Number(localStorage.getItem("canvas-agent-panel-width")) || 440,
-    url: typeof window === "undefined" ? "http://127.0.0.1:17371" : localStorage.getItem("canvas-agent-url") || "http://127.0.0.1:17371",
-    token: typeof window === "undefined" ? "" : localStorage.getItem("canvas-agent-token") || "",
     connected: false,
     enabled: false,
     prompt: "",
