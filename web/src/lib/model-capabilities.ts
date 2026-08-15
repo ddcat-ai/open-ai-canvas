@@ -62,7 +62,14 @@ export type VideoCapabilityConfig = {
     defaultOperation: string;
 };
 
-const defaultImageSizes = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"];
+// Keep explicit pixel presets for each resolution tier so the settings panel can
+// switch between 1K, 2K and 4K without silently converting the requested ratio.
+const defaultImageSizes = [
+    "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16",
+    "1024x1024", "1360x1024", "1024x1360", "1536x1024", "1024x1536", "1024x1280", "1280x1024", "2048x878", "1824x1024", "1024x1824",
+    "2048x2048", "2304x1728", "1728x2304", "2496x1664", "1664x2496", "1792x2240", "2240x1792", "3136x1344", "2752x1536", "1536x2752",
+    "2880x2880", "3264x2448", "2448x3264", "3504x2336", "2336x3504", "2560x3200", "3200x2560", "3808x1632", "3840x2160", "2160x3840",
+];
 
 export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
     const image: ImageCapabilityConfig = {

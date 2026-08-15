@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -97,7 +98,7 @@ func DefaultModelCapabilityConfig(protocol string) *ModelCapabilityConfig {
 func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapabilityConfig {
 	image := &ImageCapabilityConfig{
 		References:            ImageReferenceConfig{PromptMaxChars: 32000, MaxImages: 16, MaxImageBytes: 30 * 1024 * 1024, MaskSupported: true},
-		Size:                  ImageSizeConfig{Parameter: "size", Values: []string{"1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"}, Default: "1:1", AllowCustom: true},
+		Size:                  ImageSizeConfig{Parameter: "size", Values: defaultImageSizeValues(), Default: "1:1", AllowCustom: true},
 		Quality:               ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high"}, Default: "auto"},
 		TransparentBackground: VideoBooleanConfig{Supported: true, Default: false},
 		ResponseFormat:        ParameterSupport{Supported: true},
@@ -140,6 +141,15 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.MaxOutputs = 1
 	}
 	return image
+}
+
+func defaultImageSizeValues() []string {
+	return []string{
+		"auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16",
+		"1024x1024", "1360x1024", "1024x1360", "1536x1024", "1024x1536", "1024x1280", "1280x1024", "2048x878", "1824x1024", "1024x1824",
+		"2048x2048", "2304x1728", "1728x2304", "2496x1664", "1664x2496", "1792x2240", "2240x1792", "3136x1344", "2752x1536", "1536x2752",
+		"2880x2880", "3264x2448", "2448x3264", "3504x2336", "2336x3504", "2560x3200", "3200x2560", "3808x1632", "3840x2160", "2160x3840",
+	}
 }
 
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
@@ -412,6 +422,14 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 	if profile == nil {
 		return nil
 	}
+	modelName := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(input.Config.Model)), "models/")
+	if input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) && modelName == "grok-imagine-image-quality" {
+		const maxPromptBytes = 8000
+		promptBytes := len(withSystemPrompt(input.Config, input.Prompt))
+		if promptBytes > maxPromptBytes {
+			return BadAuthRequest(fmt.Sprintf("Grok 图片完整提示词为 %d UTF-8 字节，超过上游 %d 字节限制。系统不会自动删改；请精简当前输入、连线文本、角色卡、画风或模板内容后重试", promptBytes, maxPromptBytes))
+		}
+	}
 	if len(input.ReferenceImages) > profile.References.MaxImages {
 		return BadAuthRequest(fmt.Sprintf("当前图片模型最多支持 %d 张参考图", profile.References.MaxImages))
 	}
@@ -426,12 +444,47 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 	if profile.Size.Parameter != "none" && !profile.Size.AllowCustom && strings.TrimSpace(input.Config.Size) != "" && !containsCapabilityString(profile.Size.Values, input.Config.Size) {
 		return BadAuthRequest("图片尺寸不在当前模型支持范围内")
 	}
+	if profile.Size.Parameter == "size" && profile.Size.AllowCustom && strings.HasPrefix(modelName, "gpt-image-2") && !containsCapabilityString(profile.Size.Values, input.Config.Size) {
+		if err := validateGPTImage2CustomSize(input.Config.Size); err != nil {
+			return BadAuthRequest(err.Error())
+		}
+	}
 	if profile.Quality.Supported && strings.TrimSpace(input.Config.Quality) != "" && !containsCapabilityString(profile.Quality.Values, input.Config.Quality) {
 		return BadAuthRequest("图片质量不在当前模型支持范围内")
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count))
 	if err == nil && count > profile.MaxOutputs {
 		return BadAuthRequest(fmt.Sprintf("当前图片模型单次最多生成 %d 张", profile.MaxOutputs))
+	}
+	return nil
+}
+
+func validateGPTImage2CustomSize(value string) error {
+	value = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "×", "x")))
+	if value == "" || value == "auto" {
+		return nil
+	}
+	parts := strings.Split(value, "x")
+	if len(parts) != 2 {
+		return errors.New("自定义图片尺寸请使用宽x高，例如 3840x1920")
+	}
+	width, widthErr := strconv.Atoi(parts[0])
+	height, heightErr := strconv.Atoi(parts[1])
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return errors.New("图片尺寸必须是正整数")
+	}
+	if width%16 != 0 || height%16 != 0 {
+		return errors.New("图片尺寸宽高必须是 16 的倍数")
+	}
+	if max(width, height) > 3840 {
+		return errors.New("图片尺寸最长边不能超过 3840px")
+	}
+	if max(width, height) > min(width, height)*3 {
+		return errors.New("图片宽高比不能超过 3:1")
+	}
+	pixels := int64(width) * int64(height)
+	if pixels < 655360 || pixels > 8294400 {
+		return errors.New("图片总像素需在 655360 到 8294400 之间")
 	}
 	return nil
 }

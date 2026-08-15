@@ -5,6 +5,7 @@ import { createGenerationTask, waitForGenerationTask, type GenerationTask } from
 import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, runLocalDreaminaGenerationTask, type LocalDreaminaGenerationInput, type LocalDreaminaGenerationTask } from "@/services/local-dreamina-generation";
 import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -85,6 +86,7 @@ export async function runBackendGenerationTask(
     dependencies: GenerationTaskDependencies = defaultDependencies,
 ) {
     throwIfAborted(signal);
+    assertClientPromptLimit(mode, prompt, config, metadata);
     if (isLocalDreaminaModel(config.model)) {
         return await runLocalDreaminaGeneration(
             { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId },
@@ -99,6 +101,7 @@ export async function runBackendGenerationTask(
 export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
+    assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
     if (isLocalDreaminaModel(options.config.model)) {
         return Promise.allSettled(
@@ -303,6 +306,13 @@ function isLocalDreaminaModel(model: string) {
 
 function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+}
+
+function assertClientPromptLimit(mode: BackendGenerationMode, prompt: string, config: AiConfig, metadata?: Record<string, unknown>) {
+    if (mode !== "image" || metadata?.promptTemplateOperation) return;
+    const requestConfig = resolveModelRequestConfig(config, config.model);
+    const promptLimitError = grokImagePromptLimitError(prompt, requestConfig.interfaceType, requestConfig.model);
+    if (promptLimitError) throw new Error(promptLimitError);
 }
 
 async function prepareGenerationReferences({

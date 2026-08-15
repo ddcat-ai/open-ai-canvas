@@ -17,9 +17,11 @@ function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.node
 function isEditableText(ctx: ToolContext) { return isText(ctx) && !isCharacterReference(ctx); }
 function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || isImage(ctx) || isVideo(ctx); }
 function simpleMode(ctx: ToolContext) { return ctx.workspaceMode === "simple"; }
+function isImageBatchRoot(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.isBatchRoot && ctx.nodeMetadata.batchChildIds?.length); }
 function canRetry(ctx: ToolContext) {
     const requiresPromptChange = ctx.nodeMetadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(ctx.nodeMetadata?.errorDetails);
-    return ctx.nodeMetadata?.status === "error" && !requiresPromptChange;
+    const batchHasFailures = isImageBatchRoot(ctx) && (ctx.nodeMetadata?.batchFailedCount || (ctx.nodeMetadata?.status === "error" ? 1 : 0)) > 0;
+    return (ctx.nodeMetadata?.status === "error" || (batchHasFailures && ctx.nodeMetadata?.status !== "loading")) && !requiresPromptChange;
 }
 
 export const nodeHoverToolbarTools: ToolDefinition[] = [
@@ -52,8 +54,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "retry",
         toolbar: "node-hover",
         category: "node-state",
-        label: "重新生成",
-        displayLabel: "重试",
+        label: (ctx) => isImageBatchRoot(ctx) ? "重试批次中的失败图片" : "重新生成",
+        displayLabel: (ctx) => isImageBatchRoot(ctx) ? "重试失败项" : "重试",
         icon: <RefreshCw className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 30,

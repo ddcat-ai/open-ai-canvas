@@ -1,8 +1,10 @@
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import { Link2 } from "lucide-react";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
@@ -40,6 +42,8 @@ type CanvasProjectWorldLayersProps = {
     mentionReferencesByNodeId: Map<string, CanvasResourceReference[]>;
     mediaEffectsDisabledNodeId?: string | null;
     selectedNodeBounds: NodeBounds;
+    batchSourceNodeIds: string[];
+    batchConnectionPreview: CanvasBatchConnectionPreview | null;
     isNodeDragging: boolean;
     selectionBoundsElementRef: RefObject<HTMLDivElement | null>;
     renderCanvasNodeContent: (node: CanvasNodeData) => ReactNode;
@@ -65,6 +69,7 @@ type CanvasProjectWorldLayersProps = {
     onOpenTextEditor: (node: CanvasNodeData) => void;
     onOpenDirector: (node: CanvasNodeData) => void;
     onOpenDrawing: (node: CanvasNodeData) => void;
+    onStartBatchConnection: (event: ReactPointerEvent, sourceNodeIds: string[]) => void;
 };
 
 const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
@@ -120,8 +125,9 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         isSelected={props.selectedNodeIds.has(node.id)}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
-                        isConnectionTarget={props.connectionTargetNodeId === node.id}
-                        isConnecting={Boolean(props.connectingParams)}
+                        isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}
+                        isConnecting={Boolean(props.connectingParams || props.batchConnectionPreview)}
+                        forceInputVisible={Boolean(props.batchConnectionPreview)}
                         batchCount={props.batchChildCountById.get(node.id) || 0}
                         batchExpanded={Boolean(node.metadata?.imageBatchExpanded)}
                         batchClosing={Boolean(node.metadata?.batchRootId && props.collapsingBatchIds.has(node.metadata.batchRootId))}
@@ -168,8 +174,44 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         width: props.selectedNodeBounds.width + 24 / viewportScale,
                         height: props.selectedNodeBounds.height + 24 / viewportScale,
                     }}
-                />
+                >
+                    {props.batchSourceNodeIds.length > 0 ? (
+                        <BatchConnectionHandle
+                            scale={viewportScale}
+                            count={props.batchSourceNodeIds.length}
+                            active={Boolean(props.batchConnectionPreview)}
+                            onPointerDown={(event) => props.onStartBatchConnection(event, props.batchSourceNodeIds)}
+                        />
+                    ) : null}
+                </div>
             ) : null}
         </>
+    );
+}
+
+function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {
+    const inverseScale = 1 / Math.max(scale, 0.05);
+    const buttonStyle: CSSProperties = {
+        right: -18 * inverseScale,
+        top: "50%",
+        width: 30 * inverseScale,
+        height: 30 * inverseScale,
+        background: active ? "var(--workspace-accent)" : "var(--workspace-surface-strong)",
+        borderColor: active ? "var(--workspace-accent)" : "var(--workspace-border)",
+        color: active ? "var(--workspace-accent-foreground)" : "var(--foreground)",
+    };
+    return (
+        <button
+            type="button"
+            data-canvas-no-zoom
+            className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={buttonStyle}
+            title={`批量连接 ${count} 个节点`}
+            aria-label={`批量连接 ${count} 个节点`}
+            onPointerDown={onPointerDown}
+        >
+            <Link2 style={{ width: 14 * inverseScale, height: 14 * inverseScale }} strokeWidth={2} />
+            <span className="sr-only">连接 {count} 个节点</span>
+        </button>
     );
 }

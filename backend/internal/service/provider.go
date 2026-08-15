@@ -685,7 +685,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
 			writeField(writer, "background", "transparent")
 		}
-		if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" {
+		if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" && !strings.EqualFold(strings.TrimSpace(input.Config.Quality), "auto") {
 			writeField(writer, "quality", normalizeImageQuality(input.Config.Quality))
 		}
 		if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
@@ -722,7 +722,7 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
 			body["background"] = "transparent"
 		}
-		if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" {
+		if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" && !strings.EqualFold(strings.TrimSpace(input.Config.Quality), "auto") {
 			body["quality"] = normalizeImageQuality(input.Config.Quality)
 		}
 		if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
@@ -1451,6 +1451,16 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		status := strings.ToLower(stringField(state, "status"))
 		if status == "completed" || status == "succeeded" || status == "success" || status == "done" {
 			if videoURL := newAPIVideoResultURL(state); videoURL != "" {
+				if input.Config.InterfaceType == "xai-video" {
+					if _, validationErr := ValidateOutboundURL(videoURL); validationErr != nil {
+						data, mimeType, err := getBinary(ctx, input.Config, "/videos/"+id+"/content")
+						if err != nil {
+							return nil, err
+						}
+						mimeType = normalizedMediaMimeType(mimeType, data)
+						return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+					}
+				}
 				data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
 				if err != nil {
 					return nil, fmt.Errorf("视频结果下载失败（任务 %s）：%w", id, err)

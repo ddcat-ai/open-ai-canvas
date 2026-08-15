@@ -64,8 +64,10 @@ import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-refer
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
 import { CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
+import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { createCanvasNode, getInputSummary, isHiddenBatchChild, persistCanvasWorkspaceMode, readCanvasWorkspaceMode } from "@/lib/canvas/canvas-project-domain";
 import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff";
+import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
@@ -785,6 +787,10 @@ function InfiniteCanvasPage() {
         createConnectedNode,
         getConnectionCreateDisabledReason,
         handleConnectStart,
+        handleBatchConnectionTargetClick,
+        batchConnectionPreview,
+        beginBatchConnectionMode,
+        startBatchConnection,
         mouseWorld,
         pendingConnectionCreate,
         setConnecting,
@@ -805,6 +811,10 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         setDrawingNodeId,
     });
+
+    const batchSourceNodeIds = useMemo(() => nodes
+        .filter((node) => selectedNodeIds.has(node.id) && !batchSourceRestriction(node))
+        .map((node) => node.id), [nodes, selectedNodeIds]);
 
     const handleCanvasSelectionStart = useCallback(() => {
         setContextMenu(null);
@@ -852,6 +862,7 @@ function InfiniteCanvasPage() {
         onCanvasSelectionStart: handleCanvasSelectionStart,
         onNodeInteractionStart: handleNodeInteractionStart,
         onNodeClick: handleSelectedNodeClick,
+        onBatchConnectionTarget: handleBatchConnectionTargetClick,
         onDeselect: handleCanvasDeselect,
         onSelectionBoxEnd: () => setCanvasTool((tool) => (tool === "box-select" ? "move" : tool)),
     });
@@ -975,7 +986,7 @@ function InfiniteCanvasPage() {
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
     const drawingNode = drawingNodeId ? nodeById.get(drawingNodeId) || null : null;
     const pendingConnectionSourceNode = pendingConnectionCreate?.connection.handleType === "source" ? nodeById.get(pendingConnectionCreate.connection.nodeId) : null;
-    const canCreateDrawingFromConnection = pendingConnectionSourceNode?.type === CanvasNodeType.Image && Boolean(pendingConnectionSourceNode.metadata?.content);
+    const canCreateDrawingFromConnection = !pendingConnectionCreate?.batchSourceNodeIds?.length && pendingConnectionSourceNode?.type === CanvasNodeType.Image && Boolean(pendingConnectionSourceNode.metadata?.content);
 
     const openTextNodeEditor = useCallback((node: CanvasNodeData) => {
         if (node.type !== CanvasNodeType.Text) return;
@@ -1131,6 +1142,7 @@ function InfiniteCanvasPage() {
         focusMode,
         exitFocusMode,
         toggleFocusMode,
+        beginBatchConnection: () => beginBatchConnectionMode(Array.from(selectedNodeIdsRef.current)),
     });
 
     const handleAssistantSessionsChange = useCallback((sessions: CanvasAssistantSession[], activeId: string | null) => {
@@ -1306,6 +1318,22 @@ function InfiniteCanvasPage() {
         bindGenerationTask,
         applyGenerationTaskResult,
     });
+    const reconcileImageBatchRootNode = useCallback((rootId: string) => {
+        setNodes((current) => {
+            const root = current.find((item) => item.id === rootId);
+            if (!root) return current;
+            const reconciled = reconcileImageBatchRoot(root, current);
+            return current.map((item) => item.id === root.id ? reconciled : item);
+        });
+    }, [setNodes]);
+    const retryImageBatchChildren = useCallback((rootId: string, children: CanvasNodeData[]) => {
+        const childIds = children.map((child) => child.id);
+        setNodes((current) => markImageBatchRetrying(rootId, childIds, current));
+        void Promise.allSettled(children.map(async (child) => {
+            await handleRetryNode(child);
+            setNodes((current) => current.map((item) => item.id === child.id ? restoreUnsubmittedImageBatchChild(item, child) : item));
+        })).finally(() => reconcileImageBatchRootNode(rootId));
+    }, [handleRetryNode, reconcileImageBatchRootNode, setNodes]);
 
     const generateImageFromTextNode = useCallback(
         (node: CanvasNodeData) => {
@@ -1519,9 +1547,23 @@ function InfiniteCanvasPage() {
                 void generateScriptRows(node.id, prompt);
                 return;
             }
+            if (node.type === CanvasNodeType.Image && node.metadata?.isBatchRoot) {
+                const failedChildren = failedImageBatchChildren(node, nodesRef.current);
+                if (!failedChildren.length) {
+                    message.info("当前批次没有需要重试的失败图片");
+                    return;
+                }
+                message.info(`正在重试 ${failedChildren.length} 个失败图片`);
+                retryImageBatchChildren(node.id, failedChildren);
+                return;
+            }
+            if (node.type === CanvasNodeType.Image && node.metadata?.batchRootId) {
+                retryImageBatchChildren(node.metadata.batchRootId, [node]);
+                return;
+            }
             void handleRetryNode(node);
         },
-        [generateScriptRows, handleRetryNode, message],
+        [generateScriptRows, handleRetryNode, message, nodesRef, retryImageBatchChildren],
     );
     const openCanvasNodeTaskDetails = useCallback(
         (node: CanvasNodeData) => {
@@ -1663,6 +1705,7 @@ function InfiniteCanvasPage() {
                                         relatedConnectionIds={relatedHighlight.connectionIds}
                                         scriptScrollTopById={scriptScrollTopById}
                                         connectingParams={connectingParams}
+                                        batchConnectionPreview={batchConnectionPreview}
                                         mouseWorld={mouseWorld}
                                         connectionTargetNodeId={connectionTargetNodeId}
                                         connectionTargetAnchorRatio={connectionTargetAnchorRatio}
@@ -1714,6 +1757,8 @@ function InfiniteCanvasPage() {
                                     mentionReferencesByNodeId={mentionReferencesByNodeId}
                                     mediaEffectsDisabledNodeId={emotionNodeId}
                                     selectedNodeBounds={selectedNodeBounds}
+                                    batchSourceNodeIds={batchSourceNodeIds}
+                                    batchConnectionPreview={batchConnectionPreview}
                                     isNodeDragging={isNodeDragging}
                                     selectionBoundsElementRef={selectionBoundsElementRef}
                                     renderCanvasNodeContent={renderCanvasNodeContent}
@@ -1748,6 +1793,7 @@ function InfiniteCanvasPage() {
                                     onOpenTextEditor={openTextNodeEditor}
                                     onOpenDirector={editCanvasDirector}
                                     onOpenDrawing={openDrawingNode}
+                                    onStartBatchConnection={startBatchConnection}
                                 />
                             </InfiniteCanvas>
 
@@ -1892,6 +1938,7 @@ function InfiniteCanvasPage() {
                             onArrange={arrangeSelectedNodes}
                             onCreateStoryboard={createStoryboardGroup}
                             onCreateReferenceGroup={createReferenceGroup}
+                            onBatchConnect={() => beginBatchConnectionMode(Array.from(selectedNodeIds))}
                             onMergeVideos={() => void mergeSelectedVideos()}
                         />
                     ) : null}
@@ -1951,7 +1998,7 @@ function InfiniteCanvasPage() {
                         extractingAudio={segmentRunningMode === "audio"}
                         trimmingVideo={segmentRunningMode === "video"}
                         onReversePrompt={createImageReversePromptNodes}
-                        onRetry={(node) => void handleRetryNode(node)}
+                        onRetry={retryCanvasNode}
                         onToggleFreeResize={(node) => toggleNodeFreeResize(node.id)}
                         onToggleLocked={(node) => toggleNodeLocked(node.id)}
                         onDelete={(node) => deleteNodes(new Set([node.id]))}

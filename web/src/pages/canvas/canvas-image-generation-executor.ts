@@ -85,6 +85,7 @@ export async function executeImageGeneration({
             size: generationConfig.size,
             isBatchRoot: count > 1,
             batchChildIds: count > 1 ? childIds : undefined,
+            batchFailedCount: count > 1 ? 0 : undefined,
             batchUsesReferenceImages: referenceImages.length > 0,
             primaryImageId: undefined,
             ...generationMetadata,
@@ -145,6 +146,7 @@ export async function executeImageGeneration({
     if (count > 1 && !directCopiedBatch) startGenerationRequest(rootId, nodeId, nodeId, controller);
     let hasSuccess = false;
     let hasFailure = false;
+    let failureCount = 0;
     let representativeFailure: GenerationFailureMetadata | undefined;
     await Promise.all(
         targetIds.map(async (targetId) => {
@@ -216,6 +218,7 @@ export async function executeImageGeneration({
                 const failure = generationFailureMetadata(error, prompt);
                 if (!representativeFailure || failure.generationErrorCode === CONTENT_MODERATION_ERROR_CODE) representativeFailure = failure;
                 hasFailure = true;
+                failureCount += 1;
                 setNodes((current) => current.map((node) => (node.id === targetId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, ...failure } } : node)));
                 return false;
             } finally {
@@ -230,19 +233,29 @@ export async function executeImageGeneration({
     }
     if (hasFailure) showError(hasSuccess ? "部分图片生成失败" : "全部图片生成失败");
     setNodes((current) =>
-        current.map((node) =>
-            node.id === nodeId && (isConfigNode || reuseSourceNode)
-                ? {
-                      ...node,
-                      metadata: {
-                          ...node.metadata,
-                          status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
-                          ...(hasSuccess ? { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } : representativeFailure || { errorDetails: "全部图片生成失败" }),
-                      },
-                  }
-                : !directCopiedBatch && node.id === rootId && !hasSuccess
-                  ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, ...(representativeFailure || { errorDetails: "全部图片生成失败" }) } }
-                  : node,
-        ),
+        current.map((node) => {
+            if (node.id === nodeId && isConfigNode) {
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
+                        ...(hasSuccess ? { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } : representativeFailure || { errorDetails: "全部图片生成失败" }),
+                    },
+                };
+            }
+            if (node.id === rootId && (reuseSourceNode || !directCopiedBatch)) {
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
+                        batchFailedCount: count > 1 ? failureCount : undefined,
+                        ...(hasSuccess ? { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } : representativeFailure || { errorDetails: "全部图片生成失败" }),
+                    },
+                };
+            }
+            return node;
+        }),
     );
 }

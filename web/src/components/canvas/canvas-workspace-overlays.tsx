@@ -13,6 +13,7 @@ export type PendingConnectionCreate = {
     connection: ConnectionHandle;
     position: Position;
     quick?: boolean;
+    batchSourceNodeIds?: string[];
 };
 
 export function CanvasSelectionToolbar({ anchorRef, containerRef, count, children }: { anchorRef: RefObject<HTMLDivElement | null>; containerRef: RefObject<HTMLDivElement | null>; count: number; children: ReactNode }) {
@@ -173,7 +174,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1 py-0.5">
                 <span className="flex min-w-0 items-center gap-2">
                     <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}><WandSparkles className="size-3.5" /></span>
-                    <span className="min-w-0"><span className="block truncate text-[var(--fs-label)] font-semibold">创建下一步</span><span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>引用当前节点</span></span>
+                    <span className="min-w-0"><span className="block truncate text-[var(--fs-label)] font-semibold">创建下一步</span><span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{pending.batchSourceNodeIds?.length ? `引用已选 ${pending.batchSourceNodeIds.length} 个节点` : "引用当前节点"}</span></span>
                 </span>
                 <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onClose} aria-label="关闭连线创建菜单"><X className="size-3" /></button>
             </div>

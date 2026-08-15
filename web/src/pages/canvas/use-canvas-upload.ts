@@ -470,6 +470,7 @@ export function useCanvasUpload({
                     isBatchRoot: undefined,
                     batchRootId: undefined,
                     batchChildIds: undefined,
+                    batchFailedCount: undefined,
                     batchUsesReferenceImages: undefined,
                     generationType: undefined,
                     model: undefined,

@@ -176,6 +176,7 @@ export type CanvasNodeMetadata = {
     isBatchRoot?: boolean;
     batchRootId?: string;
     batchChildIds?: string[];
+    batchFailedCount?: number;
     batchUsesReferenceImages?: boolean;
     primaryImageId?: string;
     imageBatchExpanded?: boolean;
@@ -316,6 +317,7 @@ export type CanvasNodeMetadata = {
         sourceHeight?: number;
         providerSize?: string;
         maskStorageKey?: string;
+        editMode?: "provider-mask" | "local-composite";
     };
     portraitTexture?: PortraitTextureSettings;
 };

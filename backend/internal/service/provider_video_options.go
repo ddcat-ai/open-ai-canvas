@@ -61,7 +61,10 @@ func imageSizeParameter(profile *ImageCapabilityConfig, value string) (string, s
 		return "size", normalizePixelSize(value)
 	}
 	value = strings.TrimSpace(value)
-	if value == "" || value == "auto" {
+	if strings.EqualFold(value, "auto") {
+		return "", ""
+	}
+	if value == "" {
 		value = strings.TrimSpace(profile.Size.Default)
 	}
 	switch profile.Size.Parameter {

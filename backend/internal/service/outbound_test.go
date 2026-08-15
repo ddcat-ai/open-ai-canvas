@@ -5,9 +5,46 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
+
+func TestOutboundTransportUsesEnvironmentProxyAndHonorsNoProxy(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://172.24.176.1:10808")
+	t.Setenv("HTTPS_PROXY", "http://172.24.176.1:10808")
+	t.Setenv("NO_PROXY", ".se7endot.top,100.64.0.0/10")
+	transport := newOutboundTransport(resolveOutboundHost)
+
+	proxiedRequest, _ := http.NewRequest(http.MethodGet, "https://api.mikoto.vip/v1/models", nil)
+	proxyURL, err := transport.Proxy(proxiedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantProxy, _ := url.Parse("http://172.24.176.1:10808")
+	if proxyURL == nil || proxyURL.String() != wantProxy.String() {
+		t.Fatalf("proxy = %v, want %v", proxyURL, wantProxy)
+	}
+
+	directRequest, _ := http.NewRequest(http.MethodGet, "https://api.se7endot.top/v1/models", nil)
+	proxyURL, err = transport.Proxy(directRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proxyURL != nil {
+		t.Fatalf("NO_PROXY request proxy = %v, want nil", proxyURL)
+	}
+}
+
+func TestConfiguredProxyHostIsTrustedAsDeploymentEgress(t *testing.T) {
+	t.Setenv("HTTPS_PROXY", "http://172.24.176.1:10808")
+	if !configuredProxyHost("172.24.176.1") {
+		t.Fatal("configuredProxyHost() rejected the configured private proxy")
+	}
+	if configuredProxyHost("172.24.176.2") {
+		t.Fatal("configuredProxyHost() accepted an unrelated private host")
+	}
+}
 
 func TestNormalizeOutboundHeadersAllowsCustomUserAgent(t *testing.T) {
 	headers, err := NormalizeOutboundHeaders([]OutboundHeader{{Name: "user-agent", Value: "Custom Gateway/2.0"}, {Name: "X-Gateway-Tenant", Value: "tenant-a"}})

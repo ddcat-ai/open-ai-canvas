@@ -1175,6 +1175,7 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 	text, _ := result["text"].(string)
 	plan, err := parseAgentStoryboardPlan(text)
 	if err == nil {
+		normalizeAutomaticStoryboardDurations(&plan, 0)
 		err = validateStoryboardPlan(plan, 0, 0, input.Characters)
 	}
 	if err != nil {
@@ -1182,6 +1183,9 @@ func (s *Service) processAgentStoryboardTask(ctx context.Context, task model.Tas
 		if err != nil {
 			return nil, nil, err
 		}
+	}
+	if complexityErr := validateStoryboardComplexity(plan); complexityErr != nil {
+		_ = s.log(task.UserID, task.ID, "warn", "分镜复杂度建议", complexityErr.Error())
 	}
 	return s.buildAgentStoryboardResult(task, plan, assets, input.ProjectStyle)
 }
@@ -1219,6 +1223,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 	text, _ := result["text"].(string)
 	plan, err := parseAgentStoryboardPlan(text)
 	if err == nil {
+		normalizeAutomaticStoryboardDurations(&plan, input.ShotDuration)
 		err = validateStoryboardPlan(plan, input.ShotDuration, input.ShotCount, input.Characters)
 	}
 	if err != nil {
@@ -1226,6 +1231,9 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 		if err != nil {
 			return nil, nil, err
 		}
+	}
+	if complexityErr := validateStoryboardComplexity(plan); complexityErr != nil {
+		_ = s.log(task.UserID, task.ID, "warn", "分镜复杂度建议", complexityErr.Error())
 	}
 	rows := make([]map[string]any, 0, len(plan.Shots))
 	for index, shot := range plan.Shots {
@@ -1277,6 +1285,7 @@ func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, inp
 		repairedText, _ := repaired["text"].(string)
 		plan, parseErr := parseAgentStoryboardPlan(repairedText)
 		if parseErr == nil {
+			normalizeAutomaticStoryboardDurations(&plan, shotDuration)
 			parseErr = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters)
 		}
 		if parseErr == nil {
@@ -1420,7 +1429,7 @@ func validateStoryboardPlan(plan agentStoryboardPlan, shotDuration int, shotCoun
 	if err := validateStoryboardCharacterIDs(plan, characters); err != nil {
 		return err
 	}
-	return validateStoryboardComplexity(plan)
+	return nil
 }
 
 func validateStoryboardShotCount(plan agentStoryboardPlan, target int) error {
@@ -1461,6 +1470,18 @@ func validateStoryboardComplexity(plan agentStoryboardPlan) error {
 		return nil
 	}
 	return fmt.Errorf("镜头复杂度超限：%s", strings.Join(issues, "；"))
+}
+
+func normalizeAutomaticStoryboardDurations(plan *agentStoryboardPlan, target int) {
+	if plan == nil || target != 0 {
+		return
+	}
+	for index := range plan.Shots {
+		shot := &plan.Shots[index]
+		dialogueLength := utf8.RuneCountInString(strings.TrimSpace(shot.Dialogue))
+		requiredDuration := (dialogueLength + 4) / 5
+		shot.Duration = min(60, max(1, shot.Duration, requiredDuration))
+	}
 }
 
 func validateStoryboardCharacterIDs(plan agentStoryboardPlan, characters []storyboardCharacterCard) error {
