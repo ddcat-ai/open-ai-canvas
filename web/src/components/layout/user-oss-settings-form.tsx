@@ -85,7 +85,7 @@ export function UserOSSSettingsForm() {
                         <Cloud className="size-4" />
                         我的对象存储
                     </div>
-                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">支持阿里云 OSS 与腾讯云 COS。启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。历史资源固定使用创建时的配置版本。</p>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">支持阿里云 OSS 与腾讯云 COS。启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。历史资源继续使用创建时的存储与密钥配置，同一存储位置的 CDN 域名会跟随当前配置。</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                     <Tag color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>
