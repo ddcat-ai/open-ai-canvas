@@ -987,11 +987,11 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		}
 		// 火山方舟视频的输入 Token 恒为 0；查询任务以 completion_tokens 为实际用量，
 		// 兼容只返回 total_tokens 的同协议中转实现。
-		if log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks") && log.OutputTokens == 0 {
-			log.OutputTokens = firstInt64(usage, "total_tokens")
-		}
-		if log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks") && log.OutputTokens <= 0 {
-			log.UsageAvailable = false
+		if log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks") {
+			if log.OutputTokens == 0 {
+				log.OutputTokens = firstInt64(usage, "total_tokens")
+			}
+			log.UsageAvailable = log.OutputTokens > 0
 		}
 		if details, ok := usage["input_tokens_details"].(map[string]any); ok {
 			log.CachedTokens = firstInt64(details, "cached_tokens")
