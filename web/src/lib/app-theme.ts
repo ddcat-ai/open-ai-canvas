@@ -220,6 +220,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 contentBg: elevatedBackground,
                 footerBg: "transparent",
                 titleFontSize: 16,
+                centered: true,
             },
             Form: {
                 itemMarginBottom: 18,
