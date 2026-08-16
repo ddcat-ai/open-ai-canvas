@@ -105,6 +105,30 @@ describe("public channel model catalog", () => {
         });
     });
 
+    test("treats endpoint-only video metadata as authoritative without inventing 720P", async () => {
+        const catalog: ChannelModelCatalogItem = {
+            id: "endpoint-video",
+            supportedEndpointTypes: ["openai-video"],
+        };
+        const config = configForCatalog([catalog], { videoSeconds: "6", size: "16:9", vquality: "720" });
+        const model = "flow::endpoint-video";
+        const cost = config.channels[0]!.modelCosts![0]!;
+
+        expect(cost.capability).toBe("video");
+        expect(cost.protocol).toBe("newapi-channel-2");
+        expect(cost.capabilityConfig?.video?.resolutions).toEqual([]);
+        expect(cost.capabilityConfig?.video?.defaultResolution).toBe("");
+        expect(selectableModelsByCapability(config, "video")).toEqual([model]);
+        expect(resolveModelRequestConfig(config, model).interfaceType).toBe("newapi-channel-2");
+
+        const canvasHtml = renderToStaticMarkup(React.createElement(CanvasVideoSettingsPopover, { config, onConfigChange: () => undefined }));
+        expect(canvasHtml).not.toContain("720P");
+
+        const createSource = await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text();
+        expect(createSource).toContain('const videoResolutionSupported = props.mode === "video" && resolutions.length > 0;');
+        expect(createSource).toContain("...(videoResolutionSupported ? [videoResolutionLabel(props.videoQuality)] : [])");
+    });
+
     test("preserves a manually configured capability profile when a catalog only returns an ID", () => {
         const channel = createModelChannel({
             id: "manual",

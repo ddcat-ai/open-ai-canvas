@@ -80,9 +80,7 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
         if (!protocol || !capability) continue;
         const protocolChanged = Boolean(existing && inferredProtocol && existing.protocol !== inferredProtocol);
         const replaceCapabilityConfig = !existing || catalogBackedCapability || protocolChanged;
-        const capabilityConfig = replaceCapabilityConfig && (capability === "image" || capability === "video")
-            ? (catalogBackedCapability ? catalogCapabilityConfig(item, protocol, capability) : defaultModelCapabilityConfig(protocol, item.id))
-            : undefined;
+        const capabilityConfig = replaceCapabilityConfig && (capability === "image" || capability === "video") ? (catalogBackedCapability ? catalogCapabilityConfig(item, protocol, capability) : defaultModelCapabilityConfig(protocol, item.id)) : undefined;
         if (existing) {
             next.push({
                 ...existing,
@@ -107,14 +105,7 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
 }
 
 function hasCatalogCapabilityMetadata(item: ChannelModelCatalogItem) {
-    return Boolean(
-        item.modelType ||
-        item.defaultParameters ||
-        item.options ||
-        item.supportsImages !== undefined ||
-        item.minImages !== undefined ||
-        item.maxImages !== undefined,
-    );
+    return Boolean(item.modelType || item.supportedEndpointTypes?.length || item.defaultParameters || item.options || item.supportsImages !== undefined || item.minImages !== undefined || item.maxImages !== undefined);
 }
 
 function catalogCapabilityConfig(item: ChannelModelCatalogItem, protocol: ModelProtocol, capability: "image" | "video"): ModelCapabilityConfig {
