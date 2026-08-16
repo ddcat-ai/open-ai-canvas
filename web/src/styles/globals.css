@@ -10322,9 +10322,11 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 .ai-message-markdown-list-item > .ai-message-markdown-list { margin-top: 0.25em; margin-bottom: 0.25em; }
 .ai-message-markdown-blockquote {
     margin: 0.75em 0;
-    padding: 0.1em 0 0.1em 0.85em;
-    border-left: 2px solid color-mix(in srgb, currentColor 24%, transparent);
-    color: color-mix(in srgb, currentColor 74%, transparent);
+    padding: 0.5em 0.85em;
+    border-left: 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 5%, transparent);
+    color: color-mix(in srgb, currentColor 72%, transparent);
 }
 .ai-message-markdown-code {
     padding: 0.12em 0.34em;
@@ -10334,12 +10336,54 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.88em;
 }
-.ai-message-markdown-pre {
+.ai-message-markdown-pre-wrap {
     margin: 0.8em 0;
-    padding: 0.8em 0.9em;
+    border-radius: 10px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--foreground) 6%, var(--background));
+}
+.ai-message-markdown-pre-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px 5px 12px;
+}
+.ai-message-markdown-pre-lang {
+    font-size: 11px;
+    color: color-mix(in srgb, currentColor 45%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.ai-message-markdown-pre-copy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: color-mix(in srgb, currentColor 45%, transparent);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.ai-message-markdown-pre-copy:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    color: inherit;
+}
+.ai-message-markdown-pre-copy:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+.ai-message-markdown-pre-wrap:hover .ai-message-markdown-pre-copy { opacity: 1; }
+.ai-message-markdown-pre-copy svg { width: 13px; height: 13px; }
+.ai-message-markdown-pre {
+    margin: 0;
+    padding: 10px 14px;
     overflow-x: auto;
-    border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--foreground) 7%, var(--background));
+    background: transparent;
     color: color-mix(in srgb, var(--foreground) 86%, transparent);
     font-size: 0.84em;
     line-height: 1.55;
@@ -10361,10 +10405,17 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     border: 0;
     border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
 }
+.ai-message-markdown-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin: 0.8em 0;
+}
 .ai-message-markdown-table-wrap {
     max-width: 100%;
     margin: 0.8em 0;
     overflow-x: auto;
+    border-radius: 8px;
 }
 .ai-message-markdown-table {
     width: 100%;
@@ -10373,15 +10424,18 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     font-size: 0.92em;
 }
 .ai-message-markdown-table-cell {
-    padding: 0.48em 0.65em;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    padding: 0.5em 0.7em;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
     text-align: left;
     vertical-align: top;
 }
 .ai-message-markdown-table-header {
-    color: color-mix(in srgb, currentColor 82%, transparent);
+    color: inherit;
     font-weight: 620;
-    background: color-mix(in srgb, currentColor 5%, transparent);
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.ai-message-markdown-table tbody tr:hover {
+    background: color-mix(in srgb, currentColor 3%, transparent);
 }
 .ai-message-markdown-task {
     width: 0.9em;
