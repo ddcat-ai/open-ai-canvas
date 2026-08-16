@@ -10437,6 +10437,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 .ai-message-markdown-table tbody tr:hover {
     background: color-mix(in srgb, currentColor 3%, transparent);
 }
+.ai-message-markdown-table tbody tr:last-child td {
+    border-bottom: 0;
+}
 .ai-message-markdown-task {
     width: 0.9em;
     height: 0.9em;
@@ -10444,6 +10447,434 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     vertical-align: -0.08em;
     accent-color: var(--primary);
 }
+
+/* ===== Artifact 分类输出 · 四层目录结构（Header / Toolbar / Body / Footer） ===== */
+.artifact-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin: 14px 0 0;
+}
+.artifact-block-card {
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--creation-surface-muted);
+    transition: box-shadow 180ms ease;
+}
+.artifact-block-card:hover {
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--shadow-color, #000) 8%, transparent);
+}
+
+/* ============ Header ============ */
+.artifact-block-header {
+    padding: 9px 14px;
+    background: color-mix(in srgb, var(--creation-text) 2.5%, transparent);
+}
+.artifact-block-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+.artifact-block-title-main {
+    display: flex; align-items: center; gap: 6px;
+    min-width: 0;
+}
+.artifact-block-icon {
+    width: 14px; height: 14px;
+    color: color-mix(in srgb, var(--creation-text) 55%, transparent);
+    flex-shrink: 0;
+}
+.artifact-block-label {
+    color: color-mix(in srgb, var(--creation-text) 45%, transparent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.artifact-block-divider {
+    color: color-mix(in srgb, var(--creation-text) 25%, transparent);
+}
+.artifact-block-name {
+    color: var(--creation-text);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.artifact-block-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+}
+.artifact-block-streaming {
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--status-info) 10%, transparent);
+    color: var(--status-info);
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.artifact-block-version {
+    padding: 2px 7px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--creation-text) 6%, transparent);
+    color: color-mix(in srgb, var(--creation-text) 60%, transparent);
+    letter-spacing: 0.3px;
+}
+
+/* 状态脉冲点 */
+.artifact-status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--creation-text) 30%, transparent);
+}
+.artifact-status-dot.is-streaming {
+    background: var(--status-info);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-info) 50%, transparent);
+    animation: artifact-dot-pulse 1.5s ease-in-out infinite;
+}
+.artifact-status-dot.is-idle {
+    background: var(--status-success, #10B981);
+}
+@keyframes artifact-dot-pulse {
+    0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--status-info) 55%, transparent); }
+    70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-info) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--status-info) 0%, transparent); }
+}
+
+/* ============ Toolbar（AI 快捷操作，仅 Idle 展示） ============ */
+.artifact-block-toolbar {
+    display: flex; align-items: center;
+    gap: 2px;
+    padding: 5px 12px;
+    background: color-mix(in srgb, var(--creation-text) 1.5%, transparent);
+}
+.artifact-toolbar-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 28px; height: 28px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in srgb, var(--creation-text) 55%, transparent);
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+}
+.artifact-toolbar-btn:hover {
+    background: color-mix(in srgb, var(--creation-text) 8%, transparent);
+    color: var(--creation-text);
+}
+.artifact-toolbar-btn svg { width: 14px; height: 14px; stroke-width: 1.75; }
+
+/* ============ Body（含流式自动滚动） ============ */
+.artifact-block-body {
+    padding: 0;
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+.artifact-block-body::-webkit-scrollbar { width: 6px; }
+.artifact-block-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--creation-text) 14%, transparent);
+    border-radius: 999px;
+}
+
+/* ============ Footer（版本 + 复制等） ============ */
+.artifact-block-footer {
+    display: flex; align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--creation-text) 2%, transparent);
+}
+.artifact-footer-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in srgb, var(--creation-text) 55%, transparent);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+}
+.artifact-footer-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--creation-text) 8%, transparent);
+    color: var(--creation-text);
+}
+.artifact-footer-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+.artifact-footer-btn svg { width: 14px; height: 14px; stroke-width: 1.75; }
+
+/* ============ Code Artifact ============ */
+.artifact-code-block { display: flex; flex-direction: column; }
+.artifact-code-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px 5px 14px;
+    background: color-mix(in srgb, var(--creation-text) 4%, transparent);
+}
+.artifact-code-lang-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.artifact-code-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: color-mix(in srgb, var(--creation-text) 35%, transparent);
+}
+.artifact-code-language {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--creation-text) 55%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+}
+.artifact-code-lines {
+    font-size: 11px;
+    color: color-mix(in srgb, var(--creation-text) 40%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.artifact-code-content-wrap {
+    position: relative;
+    max-height: 360px;
+    overflow: auto;
+}
+.artifact-code-content-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+.artifact-code-content-wrap::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--creation-text) 14%, transparent);
+    border-radius: 999px;
+}
+.artifact-code-content {
+    margin: 0;
+    padding: 12px 16px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--creation-text) 90%, transparent);
+    background: transparent;
+    tab-size: 4;
+}
+.artifact-code-content code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre; }
+/* Code 骨架屏 */
+.artifact-code-skeleton {
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 9px;
+}
+.artifact-code-skeleton span {
+    display: block;
+    height: 11px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--creation-text) 5%, transparent), color-mix(in srgb, var(--creation-text) 10%, transparent), color-mix(in srgb, var(--creation-text) 5%, transparent));
+    background-size: 200% 100%;
+    animation: artifact-skeleton 1.3s ease-in-out infinite;
+}
+.artifact-code-skeleton span:nth-child(1) { width: 42%; }
+.artifact-code-skeleton span:nth-child(2) { width: 78%; animation-delay: 0.12s; }
+.artifact-code-skeleton span:nth-child(3) { width: 56%; animation-delay: 0.24s; }
+
+/* ============ Sheet Artifact ============ */
+.artifact-sheet-scroll { padding: 10px 14px; }
+.artifact-sheet-info {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 4px 8px;
+    font-size: 11px;
+    color: color-mix(in srgb, var(--creation-text) 45%, transparent);
+}
+.artifact-streaming-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--status-info) 10%, transparent);
+    color: var(--status-info);
+    font-size: 11px;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.artifact-sheet-table-wrap {
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    background: transparent;
+}
+.artifact-sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.artifact-sheet-table th,
+.artifact-sheet-table td {
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+.artifact-sheet-table tbody tr + tr td {
+    border-top: 1px solid color-mix(in srgb, var(--creation-text) 5%, transparent);
+}
+.artifact-sheet-table thead th {
+    background: color-mix(in srgb, var(--creation-text) 6%, transparent);
+    font-weight: 620;
+    color: var(--creation-text);
+}
+.artifact-sheet-table tbody tr:hover {
+    background: color-mix(in srgb, var(--creation-text) 3%, transparent);
+}
+/* 表格底部多余线条：双重保险 */
+.artifact-sheet-table tbody tr:last-child td,
+.artifact-sheet-table tbody > tr:last-of-type td,
+.artifact-sheet-table-wrap > table > tbody tr:last-child td { border-bottom: 0 !important; }
+/* Markdown 表格底部线条同步修复 */
+.ai-message-markdown-table tbody tr:last-child td,
+.ai-message-markdown-table tbody > tr:last-of-type td,
+.ai-message-markdown-table-wrap > table tbody tr:last-child td { border-bottom: 0 !important; }
+.ai-message-markdown-table thead th { border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
+
+.artifact-sheet-stream-row td { padding: 0 !important; border: 0 !important; height: 22px; }
+.artifact-sheet-stream-cell {
+    display: block;
+    height: 10px;
+    margin: 6px 10px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--creation-text) 5%, transparent), color-mix(in srgb, var(--creation-text) 10%, transparent), color-mix(in srgb, var(--creation-text) 5%, transparent));
+    background-size: 200% 100%;
+    animation: artifact-skeleton 1.2s ease-in-out infinite;
+}
+.artifact-sheet-empty {
+    padding: 18px 14px;
+    text-align: center;
+    color: color-mix(in srgb, var(--creation-text) 40%, transparent);
+    font-size: 13px;
+}
+
+/* ============ Image Artifact ============ */
+.artifact-image-block { display: flex; flex-direction: column; padding: 10px 14px 14px; gap: 10px; }
+.artifact-image-meta {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--creation-text) 50%, transparent);
+}
+.artifact-image-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+}
+.artifact-image-dot.is-ready { background: var(--status-success, #10B981); }
+.artifact-image-name { font-weight: 500; color: var(--creation-text); }
+.artifact-image-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--creation-text) 4%, transparent);
+    aspect-ratio: 16 / 9;
+}
+.artifact-image-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+.artifact-image-img.is-loaded { opacity: 1; }
+.artifact-image-loading {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--creation-text) 6%, transparent), transparent);
+    background-size: 200% 100%;
+    animation: artifact-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes artifact-skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.artifact-image-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.artifact-image-action {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 10px;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--creation-text) 6%, transparent);
+    color: var(--creation-text);
+    font-size: 12px;
+    text-decoration: none;
+    transition: background 150ms ease, transform 150ms ease;
+}
+.artifact-image-action:hover { background: color-mix(in srgb, var(--creation-text) 10%, transparent); }
+.artifact-image-action svg { width: 14px; height: 14px; stroke-width: 1.75; }
+.artifact-image-error {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; color: color-mix(in srgb, var(--creation-text) 55%, transparent); font-size: 13px;
+    padding: 16px;
+    text-align: center;
+}
+.artifact-image-error a { color: var(--primary); text-decoration: underline; font-size: 12px; }
+.artifact-image-empty,
+.artifact-image-empty-inline {
+    padding: 22px 14px;
+    text-align: center;
+    color: color-mix(in srgb, var(--creation-text) 40%, transparent);
+    font-size: 13px;
+}
+
+/* ============ Text Artifact ============ */
+.artifact-text-block { display: flex; flex-direction: column; }
+.artifact-text-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px 6px 14px;
+    background: color-mix(in srgb, var(--creation-text) 3.5%, transparent);
+}
+.artifact-text-meta { display: inline-flex; align-items: center; gap: 6px; }
+.artifact-text-icon {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 13px;
+    color: color-mix(in srgb, var(--creation-text) 45%, transparent);
+    line-height: 1;
+}
+.artifact-text-streaming {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--creation-text) 50%, transparent);
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.artifact-text-stats {
+    font-size: 11px;
+    color: color-mix(in srgb, var(--creation-text) 45%, transparent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.artifact-text-content {
+    padding: 12px 18px;
+    font-size: 14px;
+    line-height: 1.75;
+    position: relative;
+    color: color-mix(in srgb, var(--creation-text) 92%, transparent);
+}
+/* Text 骨架屏 */
+.artifact-text-skeleton {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 4px 0;
+}
+.artifact-text-skel-line {
+    display: block;
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--creation-text) 5%, transparent), color-mix(in srgb, var(--creation-text) 10%, transparent), color-mix(in srgb, var(--creation-text) 5%, transparent));
+    background-size: 200% 100%;
+    animation: artifact-skeleton 1.3s ease-in-out infinite;
+}
+.artifact-text-skel-line.w-90 { width: 90%; }
+.artifact-text-skel-line.w-85 { width: 85%; animation-delay: 0.15s; }
+.artifact-text-skel-line.w-75 { width: 75%; animation-delay: 0.25s; }
+.artifact-text-skel-line.w-full { width: 100%; animation-delay: 0.08s; }
+
+/* 流式光标 */
+.artifact-stream-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--creation-text);
+    margin-left: 2px;
+    vertical-align: -0.1em;
+    animation: artifact-blink 1s steps(2, end) infinite;
+    border-radius: 1px;
+}
+@keyframes artifact-blink { 50% { opacity: 0; } }
 
 /* ===== 创作页 · 连续对话与媒体状态 ===== */
 .creation-home .creation-thread-workbench {
