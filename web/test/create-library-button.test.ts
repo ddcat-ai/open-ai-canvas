@@ -14,9 +14,16 @@ describe("creation library button", () => {
 
         expect(dockStart).toBeGreaterThanOrEqual(0);
         expect(dockEnd).toBeGreaterThan(dockStart);
-        expect(compactSource(source.slice(dockStart, dockEnd))).toMatch(
-            /<ModePicker mode=\{props\.mode\} onModeChange=\{props\.onModeChange\} \/> <Tooltip\b[^>]*>\s*<button(?=[^>]*className="creation-chat-control")(?=[^>]*onClick=\{props\.onOpenLibrary\})(?=[^>]*disabled=\{props\.busy \|\| !referencesSupported\})(?=[^>]*aria-label="打开素材库选择参考内容")[^>]*>\s*<FolderOpen \/>\s*<span>素材库<\/span>\s*<\/button>\s*<\/Tooltip>/,
-        );
+        const dockSource = compactSource(source.slice(dockStart, dockEnd));
+        const modePickerIndex = dockSource.indexOf("<ModePicker mode={props.mode}");
+        const attachmentIndex = dockSource.indexOf('aria-label="从本机上传附件"');
+        const libraryIndex = dockSource.indexOf('aria-label="打开素材库选择参考内容"');
+
+        expect(modePickerIndex).toBeGreaterThanOrEqual(0);
+        expect(attachmentIndex).toBeGreaterThan(modePickerIndex);
+        expect(libraryIndex).toBeGreaterThan(attachmentIndex);
+        expect(dockSource).toContain("onClick={props.onOpenLibrary}");
+        expect(dockSource).toContain("disabled={props.busy || !referencesSupported}");
     });
 
     test("uploads from the library without adding a reference before confirmation", () => {
@@ -39,7 +46,8 @@ describe("creation library button", () => {
         const createSource = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
         const canvasSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-prompt-panel.tsx"), "utf8");
 
-        expect(createSource).toContain('className="creation-chat-attachment-preview"');
+        expect(createSource).toContain('className="creation-user-message-attachments"');
+        expect(createSource).toContain('setPreviewType(kind === "video" ? "video" : "image")');
         expect(createSource).toContain("<CreationMediaPreviewModal url={previewUrl} type={previewType}");
         expect(canvasSource).toContain("canPreview ? setImagePreview(reference) : onInsert(reference)");
         expect(canvasSource).toContain("<AntImage");

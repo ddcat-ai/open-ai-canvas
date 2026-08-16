@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
   <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.43-2563eb?style=flat-square" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f97316?style=flat-square" alt="License"></a>
 </p>
 
 一个故事也许始于一页小说、一个人物，或一句还没写完的对白。影策从章节中梳理角色与情节，让人物的外观、声音和气质成为可复用的角色资产，再把分镜、图片、视频和音频组织在同一张画布上。从最初的文字到可以被看见、被听见的镜头，创作者始终掌握故事的方向。
@@ -258,7 +258,7 @@ docker compose -f docker-compose.local.yml up -d --build
 
 - 用户自定义 AI API Key 保存在浏览器本地；登录态拉取模型目录时会临时提交给自部署后端但不会保存，创建异步任务时会加密入队；仅应使用可信部署，生产环境必须启用 HTTPS。
 - 画布和素材登录后同步到后端，本地 `localForage` 继续承担缓存和降级存储。
-- 媒体资源在启用对象存储时可保存到私有阿里云 OSS 或腾讯云 COS，否则保存到后端数据目录；两种对象存储均可选填 CDN 加速域名，让上传继续使用 Endpoint、下载与预览使用 CDN。CDN 地址不携带 OSS/COS 签名，敏感资源必须在 CDN 侧配置 URL 鉴权；删除业务记录不会自动清理远端对象。
+- 媒体资源在启用对象存储时可保存到私有阿里云 OSS 或腾讯云 COS，否则保存到后端数据目录；两种对象存储均可选填 CDN 加速域名。上传继续使用 Endpoint，配置 CDN 后登录资源、公开画布分享及管理后台媒体的下载与预览会在权限校验后统一重定向到 CDN；需要同源 Blob 的内部读取仍由后端代理，但后端同样通过 CDN 取源。CDN 地址不携带 OSS/COS 签名，敏感资源必须在 CDN 侧配置 URL 鉴权，并为需要浏览器跨域读取的场景配置 CORS。用户删除素材时，后端会先检查项目、画布、任务、其他素材、工作流、风格和声音等引用；存在占用时保留素材并返回具体来源，不存在占用时同步删除对应的本地文件或 OSS/COS 对象及资源记录，物理对象删除失败也会阻止素材记录删除；删除画布、节点等其他业务记录仍不会自动清理远端对象。
 - 用户主动上传、Agent 会话附件和 AI 生成资源的单文件上限、账号容量及 UTC 日上传总量由后台“资源与策略”统一维护，默认分别为 50MB、32MB、64MB、2GB 和 200MB；管理员可按可信部署需要调整，单文件业务上限最高 999MB，Nginx 请求体硬上限为 1024MB。
 
 ## 公网部署安全
@@ -282,4 +282,4 @@ docker compose -f docker-compose.local.yml up -d --build
 
 本项目基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) `v0.5.0`（提交 `568f0f1838df8de31fe885a4e130e2f346dd14ab`）进行二次开发。上游项目由 `basketikun` 维护，该基线提交作者为 `HouYunFei`；上游作者和贡献者继续保留其对应代码的权利与署名。
 
-漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [AGPL-3.0](LICENSE) 协议。
+漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [MIT](LICENSE) 协议。

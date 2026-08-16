@@ -103,17 +103,9 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 }
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
-	if _, err := s.repo.AssetForUser(userID, id); err != nil {
-		return err
-	}
-	references, err := s.repo.AssetReferenceCount(id)
-	if err != nil {
-		return err
-	}
-	if references > 0 {
-		return BadAuthRequest("素材仍被项目或镜头引用，请先解除引用")
-	}
-	return s.repo.DeleteAsset(userID, id)
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	return s.deleteUserAssetWithResources(userID, id)
 }
 
 func (s *Service) UserAssets(userID string) ([]json.RawMessage, error) {

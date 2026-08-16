@@ -852,19 +852,7 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 }
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", id)
-		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.CharacterVoiceBinding{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.AssetRepresentation{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("asset_id = ?", id).Delete(&model.AssetVersion{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&model.Asset{}, "id = ? AND user_id = ?", id, userID).Error
-	})
+	return r.DeleteAssetAndResources(userID, id, nil)
 }
 
 func (r *Repository) ReplaceAssets(userID string, assets []model.Asset) error {
