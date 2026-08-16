@@ -590,11 +590,19 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		stream, err := svc.OpenAdminAPICallLogMediaRange(user, c.Param("id"), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAdminAPICallLogMediaDelivery(user, c.Param("id"), c.GetHeader("Range"))
 		if err != nil {
 			failService(c, err)
 			return
 		}
+		if delivery.RedirectURL != "" {
+			c.Header("Cache-Control", "private, no-store")
+			c.Header("Referrer-Policy", "no-referrer")
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)
+			return
+		}
+		stream := delivery.Stream
 		defer stream.Body.Close()
 		resource := stream.Resource
 		mimeType := resource.MimeType

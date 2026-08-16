@@ -142,7 +142,7 @@ export function resourceFileUrl(id: string) {
 
 function resourceProxyFileUrl(id: string) {
     const base = String(apiBaseURL).replace(/\/+$/, "");
-    return `${base}/resources/${encodeURIComponent(id)}/file`;
+    return `${base}/resources/${encodeURIComponent(id)}/file?proxy=1`;
 }
 
 export async function resolveResourceUrl(storageKey?: string, fallback = "") {
