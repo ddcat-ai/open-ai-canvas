@@ -278,6 +278,11 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                             }
                         }
                         if (event.key === "Enter") {
+                            // IME 组合中（中文拼音/日语假名选词阶段）的 Enter 只用于确认候选字，不做换行/发送。
+                            // 这一门控与下方 textarea 分支保持一致，避免不同渲染路径下 Enter 行为分叉。
+                            if (composingRef.current) {
+                                return;
+                            }
                             event.preventDefault();
                             const shouldSubmit = sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey;
                             if (onSubmit && shouldSubmit) {
@@ -362,7 +367,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                             return;
                         }
                     }
-                    const shouldSubmit = event.key === "Enter" && (sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey);
+                    // IME 组合中（中文拼音/日语假名选词阶段）的 Enter 只用于确认候选字，不做换行/发送。
+                    // 与上方 editable div 分支统一使用同一门控，避免 Enter 行为在两条渲染路径分叉。
+                    const isComposing = (event as unknown as React.KeyboardEvent<HTMLTextAreaElement>).nativeEvent?.isComposing ?? composingRef.current;
+                    const shouldSubmit = event.key === "Enter"
+                        && !isComposing
+                        && (sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey);
                     if (shouldSubmit && onSubmit) {
                         event.preventDefault();
                         onSubmit();
