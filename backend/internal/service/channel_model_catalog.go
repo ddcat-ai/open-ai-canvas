@@ -29,9 +29,28 @@ type channelModelsPayload struct {
 }
 
 type channelModelItem struct {
-	ID                     string   `json:"id"`
-	Name                   string   `json:"name"`
-	SupportedEndpointTypes []string `json:"supported_endpoint_types"`
+	ID                     string                        `json:"id"`
+	Name                   string                        `json:"name"`
+	DisplayName            string                        `json:"display_name"`
+	ModelType              string                        `json:"model_type"`
+	SupportedEndpointTypes []string                      `json:"supported_endpoint_types"`
+	DefaultParameters      channelModelCatalogParameters `json:"default_parameters"`
+	Options                channelModelCatalogOptions    `json:"options"`
+	SupportsImages         *bool                         `json:"supports_images"`
+	MinImages              *int                          `json:"min_images"`
+	MaxImages              *int                          `json:"max_images"`
+}
+
+type channelModelCatalogParameters struct {
+	AspectRatio     string `json:"aspect_ratio"`
+	DurationSeconds string `json:"duration_seconds"`
+	Resolution      string `json:"resolution"`
+}
+
+type channelModelCatalogOptions struct {
+	AspectRatio     []ChannelModelCatalogOption `json:"aspect_ratio"`
+	DurationSeconds []ChannelModelCatalogOption `json:"duration_seconds"`
+	Resolution      []ChannelModelCatalogOption `json:"resolution"`
 }
 
 func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]string, error) {
@@ -54,10 +73,34 @@ func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, inp
 }
 
 // ChannelModelCatalogItem 是前端自定义渠道拉取模型目录后的最小合同；
-// supportedEndpointTypes 由上游 /models 返回，前端据此推导能力与协议，不依赖模型名猜测。
+// 协议、能力和可选参数均来自上游公开元数据，不展开供应商内部兼容模型。
 type ChannelModelCatalogItem struct {
-	ID                     string   `json:"id"`
-	SupportedEndpointTypes []string `json:"supportedEndpointTypes,omitempty"`
+	ID                     string                               `json:"id"`
+	DisplayName            string                               `json:"displayName,omitempty"`
+	ModelType              string                               `json:"modelType,omitempty"`
+	SupportedEndpointTypes []string                             `json:"supportedEndpointTypes,omitempty"`
+	DefaultParameters      ChannelModelCatalogDefaultParameters `json:"defaultParameters,omitempty"`
+	Options                ChannelModelCatalogOptions           `json:"options,omitempty"`
+	SupportsImages         *bool                                `json:"supportsImages,omitempty"`
+	MinImages              *int                                 `json:"minImages,omitempty"`
+	MaxImages              *int                                 `json:"maxImages,omitempty"`
+}
+
+type ChannelModelCatalogDefaultParameters struct {
+	AspectRatio     string `json:"aspectRatio,omitempty"`
+	DurationSeconds string `json:"durationSeconds,omitempty"`
+	Resolution      string `json:"resolution,omitempty"`
+}
+
+type ChannelModelCatalogOptions struct {
+	AspectRatio     []ChannelModelCatalogOption `json:"aspectRatio,omitempty"`
+	DurationSeconds []ChannelModelCatalogOption `json:"durationSeconds,omitempty"`
+	Resolution      []ChannelModelCatalogOption `json:"resolution,omitempty"`
+}
+
+type ChannelModelCatalogOption struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
 }
 
 func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]ChannelModelCatalogItem, error) {
@@ -134,12 +177,54 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 			continue
 		}
 		seen[name] = true
-		catalog = append(catalog, ChannelModelCatalogItem{ID: name, SupportedEndpointTypes: normalizeCatalogEndpointTypes(item.SupportedEndpointTypes)})
+		catalog = append(catalog, ChannelModelCatalogItem{
+			ID:                     name,
+			DisplayName:            strings.TrimSpace(item.DisplayName),
+			ModelType:              normalizeCatalogModelType(item.ModelType),
+			SupportedEndpointTypes: normalizeCatalogEndpointTypes(item.SupportedEndpointTypes),
+			DefaultParameters: ChannelModelCatalogDefaultParameters{
+				AspectRatio:     strings.TrimSpace(item.DefaultParameters.AspectRatio),
+				DurationSeconds: strings.TrimSpace(item.DefaultParameters.DurationSeconds),
+				Resolution:      strings.TrimSpace(item.DefaultParameters.Resolution),
+			},
+			Options: ChannelModelCatalogOptions{
+				AspectRatio:     normalizeCatalogOptions(item.Options.AspectRatio),
+				DurationSeconds: normalizeCatalogOptions(item.Options.DurationSeconds),
+				Resolution:      normalizeCatalogOptions(item.Options.Resolution),
+			},
+			SupportsImages: item.SupportsImages,
+			MinImages:      item.MinImages,
+			MaxImages:      item.MaxImages,
+		})
 	}
 	sort.Slice(catalog, func(left int, right int) bool {
 		return catalog[left].ID < catalog[right].ID
 	})
 	return catalog, nil
+}
+
+func normalizeCatalogModelType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "text", "image", "video", "audio":
+		return normalized
+	default:
+		return ""
+	}
+}
+
+func normalizeCatalogOptions(options []ChannelModelCatalogOption) []ChannelModelCatalogOption {
+	seen := make(map[string]bool, len(options))
+	normalized := make([]ChannelModelCatalogOption, 0, len(options))
+	for _, option := range options {
+		value := strings.TrimSpace(option.Value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		normalized = append(normalized, ChannelModelCatalogOption{Value: value, Label: strings.TrimSpace(option.Label)})
+	}
+	return normalized
 }
 
 func normalizeCatalogEndpointTypes(values []string) []string {

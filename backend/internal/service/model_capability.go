@@ -405,7 +405,7 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if input.Config.Size != "" && !videoRatioAllowed(profile.Ratios, input.Config.Size) {
 		return BadAuthRequest("画面比例不在当前模型支持范围内")
 	}
-	if input.Config.VQuality != "" && !containsCapabilityString(profile.Resolutions, normalizeResolution(input.Config.VQuality)) {
+	if len(profile.Resolutions) > 0 && !isAutomaticVideoResolution(input.Config.VQuality) && videoResolutionNameRequest(profile, input.Config.VQuality) == "" {
 		return BadAuthRequest("输出分辨率不在当前模型支持范围内")
 	}
 	operation := metadataString(input.Metadata, "videoEditOperation")

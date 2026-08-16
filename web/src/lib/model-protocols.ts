@@ -92,7 +92,7 @@ export function modelProtocolSupportsTokenBilling(capability?: string, protocol?
     return capability === "text" || (capability === "video" && protocol === "volcengine-ark-video");
 }
 
-export function protocolForModelCatalog(endpointTypes: string[] = []): ModelProtocol | undefined {
+export function protocolForModelCatalog(endpointTypes: string[] = [], modelType?: string): ModelProtocol | undefined {
     const normalized = new Set(endpointTypes.map((value) => value.trim().toLowerCase()));
     if (normalized.has("openai-chat") || normalized.has("chat-completion") || normalized.has("chat")) return "chat-completion";
     if (normalized.has("openai-response") || normalized.has("responses")) return "openai-response";
@@ -102,6 +102,10 @@ export function protocolForModelCatalog(endpointTypes: string[] = []): ModelProt
     if (normalized.has("grok-image")) return "grok-image";
     if (normalized.has("gemini-veo") || normalized.has("gemini-video") || normalized.has("veo")) return "gemini-veo";
     if (normalized.has("volcengine-ark-video") || normalized.has("volcengine-ark")) return "volcengine-ark-video";
+    if (modelType?.trim().toLowerCase() === "video") return "newapi";
+    if (modelType?.trim().toLowerCase() === "image") return "openai-image";
+    if (modelType?.trim().toLowerCase() === "audio") return "openai-audio";
+    if (modelType?.trim().toLowerCase() === "text") return "chat-completion";
     return undefined;
 }
 
