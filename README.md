@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
   <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.43-2563eb?style=flat-square" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f97316?style=flat-square" alt="License"></a>
 </p>
 
 一个故事也许始于一页小说、一个人物，或一句还没写完的对白。影策从章节中梳理角色与情节，让人物的外观、声音和气质成为可复用的角色资产，再把分镜、图片、视频和音频组织在同一张画布上。从最初的文字到可以被看见、被听见的镜头，创作者始终掌握故事的方向。
@@ -282,4 +282,4 @@ docker compose -f docker-compose.local.yml up -d --build
 
 本项目基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) `v0.5.0`（提交 `568f0f1838df8de31fe885a4e130e2f346dd14ab`）进行二次开发。上游项目由 `basketikun` 维护，该基线提交作者为 `HouYunFei`；上游作者和贡献者继续保留其对应代码的权利与署名。
 
-漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [AGPL-3.0](LICENSE) 协议。
+漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [MIT](LICENSE) 协议。
