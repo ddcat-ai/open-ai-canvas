@@ -97,3 +97,22 @@ func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateVideoTaskIgnoresGlobalResolutionWhenCatalogDeclaresNone(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("newapi", "omni").Video
+	profile.Duration = VideoDurationConfig{Selection: "enum", Values: []int{8, 10}, Default: 10}
+	profile.Ratios = []string{"16:9", "9:16"}
+	profile.DefaultRatio = "16:9"
+	profile.Resolutions = nil
+	profile.DefaultResolution = ""
+	profile.References.MaxImages = 0
+	profile.Operations = []string{"text_to_video"}
+	profile.DefaultOperation = "text_to_video"
+
+	err := validateVideoTask(profile, canvasGenerationInput{
+		Config: providerConfig{Model: "omni", VideoSeconds: "10", Size: "16:9", VQuality: "720"},
+	})
+	if err != nil {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}

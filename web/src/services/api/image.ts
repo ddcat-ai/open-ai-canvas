@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRequestConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { sanitizeChannelModelCatalogItem, type ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
@@ -1139,8 +1140,6 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
     }
 }
 
-export type ChannelModelCatalogItem = { id: string; supportedEndpointTypes?: string[] };
-
 export type ChannelModelFetchResult = { models: string[]; catalog: ChannelModelCatalogItem[] };
 
 export async function fetchChannelModels(channel: ModelChannel, viaBackend = false): Promise<ChannelModelFetchResult> {
@@ -1167,8 +1166,8 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
         }
         const catalog = new Map<string, ChannelModelCatalogItem>();
         for (const item of response.data.data?.models || []) {
-            const entry = typeof item === "string" ? { id: item.trim() } : { id: String(item.id || "").trim(), supportedEndpointTypes: Array.isArray(item.supportedEndpointTypes) ? item.supportedEndpointTypes : undefined };
-            if (!entry.id) continue;
+            const entry = typeof item === "string" ? sanitizeChannelModelCatalogItem({ id: item }) : sanitizeChannelModelCatalogItem(item);
+            if (!entry) continue;
             const existing = catalog.get(entry.id);
             catalog.set(entry.id, existing || entry);
         }
