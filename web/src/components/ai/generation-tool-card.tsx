@@ -148,11 +148,15 @@ export function GenerationToolCard({
 }: GenerationToolCardProps) {
     const toolName = describeOperation(operation, mode);
 
-    // 默认展开态：错误/停止展开看错误；运行中展开看进度；完成/批量默认收起
+    // 默认展开态：
+    //   - 运行中/错误/停止：必须展开（用户看进度 / 错误信息）
+    //   - 已完成 + 非批量：默认展开 —— 输出区底部的「生成同款 / 添加到画布 / 下载」操作按钮不能被折叠壳藏住
+    //   - 已完成 + 批量（多图 4 张以上等）：默认收起，压缩列表高度；用户手动点 header 展开看全部结果
+    //   - defaultOpen 显式传入时优先覆盖
     const initialOpen = typeof defaultOpen === "boolean"
         ? defaultOpen
         : status === "running" || status === "error" || status === "denied" ? true
-        : isBulk ? false
+        : status === "completed" && !isBulk ? true
         : false;
 
     const [isOpen, setIsOpen] = useState(initialOpen);
