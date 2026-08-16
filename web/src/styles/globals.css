@@ -7440,23 +7440,23 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 /* 消息头像共用样式 */
 .creation-message-avatar {
     display: grid;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
     align-self: flex-start;
     place-items: center;
-    border-radius: 9px;
+    border-radius: 8px;
     background: var(--creation-surface-muted);
     color: var(--creation-muted);
 }
-.creation-message-avatar svg { width: 16px; height: 16px; }
+.creation-message-avatar svg { width: 14px; height: 14px; }
 .creation-message-avatar.is-user { color: var(--creation-faint); }
 html:not(.dark) .creation-message-avatar { background: rgba(28, 32, 37, .06); }
 
 .creation-user-message {
     display: flex;
-    max-width: min(72%, 640px);
-    margin: 0 0 28px auto;
+    max-width: min(80%, 56ch);
+    margin: 0 0 24px auto;
     gap: 10px;
     color: var(--creation-text);
 }
@@ -7469,11 +7469,11 @@ html:not(.dark) .creation-message-avatar { background: rgba(28, 32, 37, .06); }
     gap: 6px;
 }
 .creation-user-message-copy-wrap {
-    border-radius: 16px;
+    border-radius: 16px 16px 5px 16px;
     background: var(--creation-surface-muted);
-    padding: 12px 16px;
+    padding: 10px 14px;
     font-size: 14px;
-    line-height: 1.7;
+    line-height: 1.65;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     text-align: right;
@@ -7494,7 +7494,7 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 .creation-user-message-attachments button:focus-visible > span { opacity: 1; }
 .creation-user-message-attachments button > span svg { width: 10px; height: 10px; }
 
-.creation-assistant-message { display: flex; max-width: 900px; margin: 0 0 28px; gap: 10px; }
+.creation-assistant-message { display: flex; max-width: 900px; margin: 0 0 24px; gap: 12px; }
 .creation-assistant-message .creation-message-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .creation-message-heading { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--creation-faint); font-size: 12px; min-height: 20px; }
 .creation-message-heading strong { color: var(--creation-text); font-weight: 600; font-size: 13px; }
@@ -7506,14 +7506,10 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 
 .creation-message-content {
     max-width: 720px;
-    border-radius: 16px;
-    background: var(--creation-surface-muted);
-    padding: 12px 16px;
     color: var(--creation-text);
-    font-size: 15px;
-    line-height: 1.8;
+    font-size: 14px;
+    line-height: 1.7;
 }
-html:not(.dark) .creation-message-content { background: rgba(28, 32, 37, .045); }
 
 .creation-message-error { display: flex; max-width: 760px; align-items: center; gap: 10px; padding: 12px 0 0; color: #ee8585; font-size: 13px; line-height: 1.6; }
 .creation-message-error button { display: inline-flex; height: 28px; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: rgba(226, 96, 96, .12); color: #ef8b8b; padding: 0 8px; font-size: 11px; }
@@ -10528,13 +10524,14 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
     display: flex;
     width: min(680px, 86%);
     max-width: none;
-    margin: 0 0 28px auto;
+    margin: 0 0 24px auto;
     gap: 10px;
     border: 0;
     background: transparent;
     padding: 0;
     color: var(--creation-text);
     white-space: normal;
+    animation: creation-fade-up 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html:not(.dark) .creation-home .creation-user-message { background: transparent; }
@@ -10584,9 +10581,9 @@ html:not(.dark) .creation-home .creation-user-message { background: transparent;
 
 .creation-home .creation-user-message-copy-wrap {
     max-width: 100%;
-    border-radius: 16px;
+    border-radius: 16px 16px 5px 16px;
     background: var(--creation-surface-muted);
-    padding: 12px 16px;
+    padding: 10px 14px;
 }
 
 html:not(.dark) .creation-home .creation-user-message-copy-wrap { background: rgba(28, 32, 37, .06); }
@@ -10594,8 +10591,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { background: rg
 .creation-home .creation-user-message-copy-wrap p {
     margin: 0;
     color: var(--creation-text);
-    font-size: var(--fs-body);
-    line-height: 1.75;
+    font-size: 14px;
+    line-height: 1.65;
     text-align: right;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -10605,8 +10602,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { background: rg
     display: flex;
     width: min(780px, 100%);
     max-width: none;
-    margin: 0 0 28px;
-    gap: 10px;
+    margin: 0 0 24px;
+    gap: 12px;
     background: transparent;
 }
 
@@ -10633,11 +10630,10 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { background: rg
 
 .creation-home .creation-message-content {
     max-width: 720px;
-    border-radius: 16px;
-    background: var(--creation-surface-muted);
-    padding: 12px 16px;
+    color: var(--creation-text);
+    font-size: 14px;
+    line-height: 1.7;
 }
-html:not(.dark) .creation-home .creation-message-content { background: rgba(28, 32, 37, .045); }
 
 .creation-home .creation-media-pending {
     position: relative;
@@ -10758,6 +10754,11 @@ html:not(.dark) .creation-home .creation-message-content { background: rgba(28, 
 @keyframes creation-media-breathe {
     0%, 100% { background-position: 0% 50%; filter: brightness(.9) saturate(.82); }
     50% { background-position: 100% 50%; filter: brightness(1.12) saturate(1.18); }
+}
+
+@keyframes creation-fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes creation-media-breathe-layer {
