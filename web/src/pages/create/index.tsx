@@ -4,6 +4,8 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Dow
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
+import { GenerationToolCard, type ToolCallStatus } from "@/components/ai/generation-tool-card";
+import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
@@ -44,6 +46,7 @@ type CreationMessage = {
     role: "user" | "assistant";
     mode?: CreationMode;
     content: string;
+    reasoning?: string;
     createdAt: string;
     status?: CreationStatus;
     model?: string;
@@ -458,7 +461,7 @@ export default function CreatePage() {
                         ? await buildTextMessageContent(item)
                         : item.content,
                 })));
-                await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), { signal: requestLifecycle.signal });
+                await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), { signal: requestLifecycle.signal }, (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })));
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
                 const settled = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTaskBatch({
@@ -853,6 +856,19 @@ function CreationWorkspaceToolbar({ mode, onModeChange, onNewConversation, onOpe
     </header>;
 }
 
+function toToolCallStatus(item: CreationMessage, mode: CreationMode): ToolCallStatus {
+    switch (item.status) {
+        case "pending":
+        case "streaming": return "running";
+        case "error": return "error";
+        case "cancelled": return "denied";
+        case "done":
+        default:
+            void mode;
+            return "completed";
+    }
+}
+
 function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant, onCancel }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void }) {
     if (item.role === "user") return <CreationUserMessage item={item} />;
     const mode = item.mode || "text";
@@ -861,7 +877,23 @@ function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant,
         <div className="creation-message-avatar"><Sparkles /></div>
         <div className="creation-message-body">
             <div className="creation-message-heading"><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : "影策 AI"}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `影策正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>
-            {mode === "text" ? <div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} />}
+            {mode === "text" ? <>
+                {item.reasoning ? <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming" && !item.content} /> : null}
+                <div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : !item.reasoning ? <span className="creation-shimmer" aria-live="polite">影策正在思考…</span> : null}</div>
+            </> : <GenerationToolCard
+                status={toToolCallStatus(item, mode as CreationMode)}
+                mode={mode as CreationMode}
+                operation={item.generationOperation || (mode === "video" ? (item.references?.length ? "image_to_video" : "text_to_video") : item.references?.length ? "image_to_image" : "text_to_image")}
+                prompt={item.content}
+                settings={{
+                    ratio: item.settings?.ratio,
+                    model: item.model,
+                    quality: mode === "video" ? item.settings?.videoQuality : item.settings?.quality,
+                    duration: item.settings?.seconds,
+                    count: item.settings?.count,
+                }}
+                isBulk={Array.isArray(item.generationEffectKeys) && item.generationEffectKeys.length > 1}
+            ><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} /></GenerationToolCard>}
             {item.error && mode === "text" ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}
         </div>
     </article>;
@@ -1015,7 +1047,7 @@ function CreationComposer(props: ComposerProps) {
             <input ref={props.fileInputRef} type="file" hidden accept={creationUploadAccept(props.mode)} multiple onChange={props.onFileChange} />
             {primaryAttachment ? <CreationAttachmentThumbnail item={primaryAttachment} primary canAddMore={canAddMoreReferences && !props.busy} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} onAdd={props.onOpenLibrary} /> : <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>}
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
+                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={true} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；Enter 发送，Shift/Cmd/Ctrl+Enter 换行" spellCheck disabled={props.busy} />
                 {secondaryAttachments.length ? <div className="creation-chat-attachment-strip">{secondaryAttachments.map((item) => <CreationAttachmentThumbnail key={item.id} item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />)}</div> : null}
             </div>
         </div>

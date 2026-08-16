@@ -7514,6 +7514,279 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
     line-height: 1.7;
 }
 
+/* Shimmer 等待文案：AI 正在思考但还没输出文字时，用渐变扫光替代静态"正在生成…" */
+.creation-shimmer {
+    display: inline-block;
+    max-width: 240px;
+    background: linear-gradient(
+        90deg,
+        var(--creation-faint) 0%,
+        var(--creation-muted) 50%,
+        var(--creation-faint) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: creation-shimmer-sweep 1.6s var(--motion-ease-in-out) infinite;
+    user-select: none;
+}
+@keyframes creation-shimmer-sweep {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* 推理思维链折叠：用背景色差分区，不用线条；限制高度滚动 */
+.message-reasoning { margin-bottom: 8px; }
+.message-reasoning-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--creation-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: color 150ms var(--motion-ease-out);
+}
+.message-reasoning-trigger:hover { color: var(--creation-text); }
+.message-reasoning-chevron { transition: transform 200ms var(--motion-ease-out); }
+.message-reasoning-chevron.is-open { transform: rotate(180deg); }
+/* reasoning 内容区：彻底不要任何方向的滚动条 —— 折叠按钮本身控制高度
+   内部强制 100% 宽度内软换行，防止 pre/table 撑破父容器导致外层消息卡片左右滚动 */
+.message-reasoning-content {
+    margin-top: 6px;
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--creation-text) 3%, transparent);
+    padding: 10px 14px;
+    color: var(--creation-muted);
+    font-size: 13px;
+    line-height: 1.7;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    /* 关键：不要任何 overflow / max-height，避免自身形成滚动容器，
+       也避免 scrollbar 占位造成外层消息卡片 width 计算错位产生左右滚动 */
+}
+.message-reasoning-content .ai-message-markdown {
+    font-size: 13px;
+    max-width: 100%;
+    overflow: hidden; /* 子元素再想撑宽也直接裁在 Markdown 容器里，不会传到外层 */
+}
+.message-reasoning-content .ai-message-markdown-paragraph {
+    margin: 0 0 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+.message-reasoning-content .ai-message-markdown-paragraph:last-child { margin-bottom: 0; }
+
+/* 内部代码块：强制软换行（reasoning 不是正式代码输出，优先完整可见） */
+.message-reasoning-content .ai-message-markdown-pre-wrap {
+    margin: 6px 0;
+    border-radius: var(--r-sm);
+    /* 防止 pre-wrap 宽度超出 */
+    max-width: 100%;
+    overflow: hidden;
+}
+.message-reasoning-content .ai-message-markdown-pre-header {
+    padding: 3px 6px 3px 10px;
+}
+.message-reasoning-content .ai-message-markdown-pre {
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    /* 关键：代码也必须软换行，思维链中不能有硬换行导致的横向溢出 */
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow-x: hidden;
+}
+.message-reasoning-content .ai-message-markdown-code {
+    font-size: 0.82em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* 内部表格：强制 table-layout: fixed，配合单元格 word-break 不撑宽 */
+.message-reasoning-content .ai-message-markdown-table-wrap {
+    margin: 6px 0;
+    overflow: hidden;
+    max-width: 100%;
+}
+.message-reasoning-content .ai-message-markdown-table {
+    font-size: 11px;
+    /* fixed 布局：由第一行决定列宽，超出在单元格内折行 */
+    table-layout: fixed;
+    width: 100%;
+    min-width: 0;
+}
+.message-reasoning-content .ai-message-markdown-table-cell {
+    padding: 4px 6px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+/* 内部图片：限制 max-width，防止原始分辨率图片撑宽 */
+.message-reasoning-content .ai-message-markdown-image {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: var(--r-sm);
+    margin: 4px 0;
+}
+
+/* 内部长列表不超出 */
+.message-reasoning-content .ai-message-markdown-list {
+    padding-left: 18px;
+    margin: 0 0 6px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* ===== Generation Tool Card：统一工具调用卡片（借鉴 chatbot-main/tool.tsx 分层） ===== */
+/* 设计原则：无左侧竖杠、无硬边框、分区靠背景色差；状态靠小圆点，不靠花哨色 */
+.generation-tool-card {
+    margin-top: 10px;
+    max-width: 860px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--creation-text) 2%, transparent);
+}
+/* 运行中：极轻的 1.2% 主色 tint（不是硬边框） */
+.generation-tool-card.tool-status-is-running { background: color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--creation-text) 2%, transparent)); }
+/* 失败：主色错误红 tint */
+.generation-tool-card.tool-status-is-error { background: color-mix(in srgb, #ef4444 5%, color-mix(in srgb, var(--creation-text) 2%, transparent)); }
+/* 停止：橙 tint（不强调） */
+.generation-tool-card.tool-status-is-denied { background: color-mix(in srgb, #f97316 4%, color-mix(in srgb, var(--creation-text) 2%, transparent)); }
+
+/* Header */
+.tool-card-header {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    border: 0;
+    padding: 10px 14px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    border-radius: var(--r-md);
+    transition: background 160ms var(--motion-ease-out);
+}
+.tool-card-header:hover { background: color-mix(in srgb, var(--creation-text) 2%, transparent); }
+.tool-card-title-wrap { display: inline-flex; align-items: center; gap: 8px; }
+.tool-card-wrench { color: var(--creation-muted); flex-shrink: 0; }
+.tool-card-name { font-size: 13px; font-weight: 500; color: var(--creation-text); }
+.tool-card-chevron { color: var(--creation-muted); transition: transform 200ms var(--motion-ease-out); flex-shrink: 0; }
+.tool-card-chevron.is-open { transform: rotate(180deg); }
+
+/* Status Badge */
+.tool-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--creation-text) 5%, transparent);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--creation-muted);
+}
+.tool-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+.tool-status-badge.is-running { color: var(--primary); }
+.tool-status-badge.is-running .tool-status-dot { animation: tool-dot-pulse 1.2s ease-in-out infinite; }
+.tool-status-badge.is-completed { color: #10b981; }
+.tool-status-badge.is-error { color: #ef4444; }
+.tool-status-badge.is-denied { color: #f97316; }
+@keyframes tool-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(.85); }
+}
+
+/* Body */
+.tool-card-body {
+    padding: 2px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.tool-card-section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--creation-faint);
+    margin-bottom: 4px;
+}
+
+/* Input */
+.tool-card-input {
+    border-radius: var(--r-sm);
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--creation-text) 2%, transparent);
+    font-size: 12px;
+    line-height: 1.55;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+.tool-card-operation {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--creation-text);
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+.tool-card-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.tool-card-setting {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--creation-text) 5%, transparent);
+    font-size: 11px;
+}
+.tool-card-setting-key { color: var(--creation-faint); }
+.tool-card-setting-val { color: var(--creation-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.tool-card-prompt {
+    color: var(--creation-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* Output */
+.tool-card-output {
+    font-size: 12px;
+}
+/* ToolCard 内嵌原 MediaResult：margin 归零，避免重复间距 */
+.tool-card-output > .creation-media-result { padding: 0; max-width: 100%; }
+.tool-card-output > .creation-media-pending { margin: 0; }
+.tool-card-output > .creation-media-empty { margin: 0; }
+.tool-card-output > .creation-media-error { padding: 0; }
+/* reduced-motion：tool-dot-pulse 取消 */
+@media (prefers-reduced-motion: reduce) {
+    .tool-status-badge.is-running .tool-status-dot { animation: none; }
+    .tool-card-chevron { transition: none; }
+}
+
 .creation-message-error { display: flex; max-width: 760px; align-items: center; gap: 10px; padding: 12px 0 0; color: #ee8585; font-size: 13px; line-height: 1.6; }
 .creation-message-error button { display: inline-flex; height: 28px; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: rgba(226, 96, 96, .12); color: #ef8b8b; padding: 0 8px; font-size: 11px; }
 .creation-message-error button:hover { background: rgba(226, 96, 96, .2); }
@@ -11264,6 +11537,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { background: rg
     .creation-home .creation-media-pending,
     .creation-home .creation-media-pending::before,
     .creation-home .creation-media-pending-icon { animation: none; }
+    .creation-shimmer { animation: none; color: var(--creation-muted); -webkit-text-fill-color: var(--creation-muted); }
+    .message-reasoning-chevron { transition: none; }
 }
 
 @media (max-width: 800px) {
