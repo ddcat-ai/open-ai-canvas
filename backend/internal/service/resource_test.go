@@ -358,6 +358,123 @@ func TestDirectResourceURLChecksOwnershipAndSignsOSSResource(t *testing.T) {
 	}
 }
 
+func TestPrepareResourceDeliveryPrefersConfiguredCDN(t *testing.T) {
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: tencentCOSProvider, Endpoint: "https://cos.ap-shanghai.myqcloud.com", CDNBaseURL: "https://media.example.com",
+		Bucket: "private-bucket-1250000000", AccessKeyID: "secret-id", AccessKeySecret: "secret-key",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-cdn-delivery", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: tencentCOSProvider, Endpoint: "https://cos.ap-shanghai.myqcloud.com", Bucket: "private-bucket-1250000000",
+		ObjectKey: "users/user-1/image/test image.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.Resource == nil || delivery.Resource.ID != resource.ID || delivery.RedirectURL != "https://media.example.com/users/user-1/image/test%20image.png" {
+		t.Fatalf("PrepareResourceDelivery() = %#v", delivery)
+	}
+}
+
+func TestPrepareResourceDeliveryAllowsExplicitProxyWithCDN(t *testing.T) {
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://oss-cn-test.aliyuncs.com", CDNBaseURL: "https://media.example.com",
+		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-cdn-proxy", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: aliyunOSSProvider, Endpoint: "https://oss-cn-test.aliyuncs.com", Bucket: "private-bucket",
+		ObjectKey: "users/user-1/image/proxy.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceDeliveryOptions{ForceProxy: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.Resource == nil || delivery.Resource.ID != resource.ID || delivery.RedirectURL != "" {
+		t.Fatalf("PrepareResourceDelivery(force proxy) = %#v", delivery)
+	}
+}
+
+func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	svc := newResourceTestService(t)
+	actor := &model.User{ID: "user-1"}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: server.URL, Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	historical, _, err := svc.readUserOSSSetting(actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-user-cdn", UserID: actor.ID, Kind: "image", Status: model.ResourceStatusReady,
+		Provider: aliyunOSSProvider, Endpoint: server.URL, Bucket: "private-bucket", StorageSettingID: historical.ID,
+		ObjectKey: "users/user-1/image/historical.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: server.URL, CDNBaseURL: server.URL, Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.RedirectURL != server.URL+"/users/user-1/image/historical.png" {
+		t.Fatalf("PrepareResourceDelivery(historical user resource) = %#v", delivery)
+	}
+}
+
+func TestPrepareResourceDeliveryKeepsForcedOriginDirectWithoutCDN(t *testing.T) {
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://oss-cn-test.aliyuncs.com", Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-origin-direct", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: aliyunOSSProvider, Endpoint: "https://oss-cn-test.aliyuncs.com", Bucket: "private-bucket",
+		ObjectKey: "users/user-1/image/direct.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceDeliveryOptions{ForceDirect: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(delivery.RedirectURL, "private-bucket.oss-cn-test.aliyuncs.com/users/user-1/image/direct.png") || !strings.Contains(delivery.RedirectURL, "Signature=") {
+		t.Fatalf("PrepareResourceDelivery(force direct) = %#v", delivery)
+	}
+}
+
 func TestNormalizeSingleByteRange(t *testing.T) {
 	tests := map[string]string{
 		"bytes=0-1023":       "bytes=0-1023",

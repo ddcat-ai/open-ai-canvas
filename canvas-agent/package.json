@@ -43,7 +43,7 @@
     "url": "https://github.com/ddcat-ai/open-ai-canvas.git",
     "directory": "canvas-agent"
   },
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   }

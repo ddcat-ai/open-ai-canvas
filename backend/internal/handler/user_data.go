@@ -214,24 +214,23 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		resource, err := svc.Resource(user.ID, c.Param("id"))
+		delivery, err := svc.PrepareResourceDelivery(user.ID, c.Param("id"), service.ResourceDeliveryOptions{
+			ForceDirect: c.Query("direct") == "1",
+			ForceProxy:  c.Query("proxy") == "1",
+		})
 		if err != nil {
-			fail(c, http.StatusNotFound, err)
+			failService(c, err)
 			return
 		}
-		if c.Query("direct") == "1" && resource.Provider != "local" {
-			directURL, err := svc.DirectResourceURL(user.ID, resource.ID)
-			if err != nil {
-				failService(c, err)
-				return
-			}
-			// 签名 URL 不进入应用、代理或浏览器缓存，也不作为后续请求的 Referer 泄露。
+		if delivery.RedirectURL != "" {
+			// CDN 或对象存储直连地址不进入应用缓存，也不作为后续请求的 Referer 泄露。
 			c.Header("Cache-Control", "private, no-store")
 			c.Header("Referrer-Policy", "no-referrer")
 			c.Header("X-Content-Type-Options", "nosniff")
-			c.Redirect(http.StatusTemporaryRedirect, directURL)
+			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)
 			return
 		}
+		resource := delivery.Resource
 		etag := resourceResponseETag(resource)
 		// 私有资源允许浏览器保存响应，但每次复用前必须重新鉴权；304 会在读取 OSS 前返回。
 		c.Header("Cache-Control", "private, no-cache")
