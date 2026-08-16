@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
@@ -914,15 +915,26 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 	if log.ProviderRequestID == "" {
 		log.ProviderRequestID = providerRequestIDFromPath(log.Path)
 	}
-	if len(responseBody) == 0 || !json.Valid(responseBody) {
+	payloads := providerResponsePayloads(responseBody)
+	if len(payloads) == 0 {
 		return
 	}
-	var payload map[string]any
-	if json.Unmarshal(responseBody, &payload) != nil {
-		return
+	for _, payload := range payloads {
+		s.enrichAPICallLogPayload(log, payload)
 	}
+}
+
+func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[string]any) {
 	if data, ok := payload["data"].(map[string]any); ok {
 		for key, value := range data {
+			if _, exists := payload[key]; !exists {
+				payload[key] = value
+			}
+		}
+	}
+	// Responses API 的终态 SSE 把实际响应（包括 usage）放在 response 字段中。
+	if response, ok := payload["response"].(map[string]any); ok {
+		for key, value := range response {
 			if _, exists := payload[key]; !exists {
 				payload[key] = value
 			}
@@ -937,9 +949,17 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 	}
 	usage, _ := payload["usage"].(map[string]any)
 	if usage != nil {
-		log.UsageAvailable = true
-		log.InputTokens = firstInt64(usage, "input_tokens", "prompt_tokens")
-		log.OutputTokens = firstInt64(usage, "output_tokens", "completion_tokens")
+		inputTokens, inputAvailable := firstInt64Value(usage, "input_tokens", "prompt_tokens")
+		outputTokens, outputAvailable := firstInt64Value(usage, "output_tokens", "completion_tokens")
+		if inputAvailable {
+			log.InputTokens = inputTokens
+		}
+		if outputAvailable {
+			log.OutputTokens = outputTokens
+		}
+		if inputAvailable || outputAvailable {
+			log.UsageAvailable = true
+		}
 		// 火山方舟视频的输入 Token 恒为 0；查询任务以 completion_tokens 为实际用量，
 		// 兼容只返回 total_tokens 的同协议中转实现。
 		if log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks") && log.OutputTokens == 0 {
@@ -956,9 +976,17 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 		}
 	}
 	if usageMetadata, ok := payload["usageMetadata"].(map[string]any); ok {
-		log.UsageAvailable = true
-		log.InputTokens = firstInt64(usageMetadata, "promptTokenCount")
-		log.OutputTokens = firstInt64(usageMetadata, "candidatesTokenCount")
+		inputTokens, inputAvailable := firstInt64Value(usageMetadata, "promptTokenCount")
+		outputTokens, outputAvailable := firstInt64Value(usageMetadata, "candidatesTokenCount")
+		if inputAvailable {
+			log.InputTokens = inputTokens
+		}
+		if outputAvailable {
+			log.OutputTokens = outputTokens
+		}
+		if inputAvailable || outputAvailable {
+			log.UsageAvailable = true
+		}
 		log.CachedTokens = firstInt64(usageMetadata, "cachedContentTokenCount")
 	}
 	log.ProviderRequestID = firstNonEmpty(stringField(payload, "task_id"), stringField(payload, "id"), stringField(payload, "request_id"), stringField(payload, "name"), log.ProviderRequestID)
@@ -978,6 +1006,45 @@ func (s *Service) EnrichAPICallLog(log *model.ApiCallLog, responseBody []byte) {
 	}
 }
 
+func providerResponsePayloads(responseBody []byte) []map[string]any {
+	if len(responseBody) == 0 {
+		return nil
+	}
+	var payload map[string]any
+	if json.Unmarshal(responseBody, &payload) == nil {
+		return []map[string]any{payload}
+	}
+
+	// 流式文本的用量只出现在最后一个 SSE data 事件中，不能把整段响应当作 JSON。
+	result := make([]map[string]any, 0)
+	scanner := bufio.NewScanner(bytes.NewReader(responseBody))
+	scanner.Buffer(make([]byte, 64<<10), max(len(responseBody)+1, 64<<10))
+	dataLines := make([]string, 0, 1)
+	flush := func() {
+		raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
+		dataLines = dataLines[:0]
+		if raw == "" || raw == "[DONE]" {
+			return
+		}
+		var event map[string]any
+		if json.Unmarshal([]byte(raw), &event) == nil {
+			result = append(result, event)
+		}
+	}
+	for scanner.Scan() {
+		line := strings.TrimSuffix(scanner.Text(), "\r")
+		if line == "" {
+			flush()
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
+		}
+	}
+	flush()
+	return result
+}
+
 func providerRequestIDFromPath(path string) string {
 	parts := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
 	for index := len(parts) - 1; index >= 0; index-- {
@@ -994,18 +1061,23 @@ func providerRequestIDFromPath(path string) string {
 }
 
 func firstInt64(values map[string]any, keys ...string) int64 {
+	value, _ := firstInt64Value(values, keys...)
+	return value
+}
+
+func firstInt64Value(values map[string]any, keys ...string) (int64, bool) {
 	for _, key := range keys {
 		switch value := values[key].(type) {
 		case float64:
-			return int64(value)
+			return int64(value), true
 		case int64:
-			return value
+			return value, true
 		case json.Number:
-			parsed, _ := value.Int64()
-			return parsed
+			parsed, err := value.Int64()
+			return parsed, err == nil
 		}
 	}
-	return 0
+	return 0, false
 }
 
 func (s *Service) recordActivity(userID string, event string, count int) {
