@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ComponentType, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Trash2, User, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -36,7 +36,6 @@ import { buildCreationMentionReferences, creationReferenceMetadata, displayCreat
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 
 type CreationMode = "text" | "image" | "video";
-type CreationViewMode = "chat" | "storyboard";
 type CreationStatus = "streaming" | "pending" | "done" | "error" | "cancelled";
 type CreationSettings = { ratio: string; seconds: string; quality: string; videoQuality: string; count: string };
 type CreationRetryContext = GenerationRetryContext & { retryContextsByBatchIndex?: GenerationRetryContext[] };
@@ -97,22 +96,6 @@ function newMessage(role: CreationMessage["role"], content: string, extra: Parti
     return { id: createClientId(), role, content, createdAt: new Date().toISOString(), ...extra };
 }
 
-type CreationShot = { user?: CreationMessage; result?: CreationMessage };
-
-function shotsFromMessages(messages: CreationMessage[]): CreationShot[] {
-    const shots: CreationShot[] = [];
-    for (const message of messages) {
-        if (message.role === "user") {
-            shots.push({ user: message });
-        } else if (shots.length) {
-            shots[shots.length - 1].result = message;
-        } else {
-            shots.push({ result: message });
-        }
-    }
-    return shots;
-}
-
 function completedCreationGenerationTask(input: { taskId: string; task?: GenerationTask; mode: "image" | "video"; prompt: string; result: BackendGenerationResult; conversationId: string; messageId: string; batchIndex?: number; batchCount?: number }): GenerationTask {
     const now = new Date().toISOString();
     const task = input.task ?? { id: input.taskId, type: input.mode, status: "succeeded" as const, prompt: input.prompt, attempts: 1, createdAt: now, updatedAt: now };
@@ -140,9 +123,6 @@ export default function CreatePage() {
     const [videoQuality, setVideoQuality] = useState(config.vquality || "720");
     const [count, setCount] = useState(String(Math.max(1, Math.min(4, Number(config.count) || 1))));
     const [busy, setBusy] = useState(false);
-    const [viewMode, setViewMode] = useState<CreationViewMode>("chat");
-    const [selectedShotIndex, setSelectedShotIndex] = useState(-1);
-    const [composingNextShot, setComposingNextShot] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
@@ -181,8 +161,6 @@ export default function CreatePage() {
     const isEmpty = !activeConversation?.messages.length;
     const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
-    const shots = useMemo(() => shotsFromMessages(activeConversation?.messages || []), [activeConversation]);
-    const visibleShotIndex = shots.length ? selectedShotIndex >= 0 && selectedShotIndex < shots.length ? selectedShotIndex : shots.length - 1 : -1;
 
     useEffect(() => {
         if (mode !== "image") return;
@@ -467,8 +445,6 @@ export default function CreatePage() {
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setSelectedShotIndex(-1);
-        setComposingNextShot(false);
         setBusy(true);
         const controller = new AbortController();
         const requestLifecycle = beginGenerationConsumer(controller.signal);
@@ -583,8 +559,6 @@ export default function CreatePage() {
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setSelectedShotIndex(-1);
-        setComposingNextShot(false);
         setHistoryOpen(false);
     };
 
@@ -594,9 +568,28 @@ export default function CreatePage() {
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setSelectedShotIndex(-1);
-        setComposingNextShot(false);
         setHistoryOpen(false);
+    };
+
+    const deleteConversation = (conversationId: string) => {
+        const next = conversationsRef.current.filter((item) => item.id !== conversationId);
+        conversationsRef.current = next;
+        setConversations(next);
+        void saveCreationConversations(next);
+        if (activeId === conversationId) {
+            const fallback = next[0];
+            if (fallback) setActiveId(fallback.id);
+            else startNewConversation();
+        }
+    };
+
+    const renameConversation = (conversationId: string, title: string) => {
+        const trimmed = title.trim();
+        if (!trimmed) return;
+        const next = updateCreationConversationSnapshot(conversationsRef.current, conversationId, (conversation) => ({ ...conversation, title: trimmed }));
+        conversationsRef.current = next;
+        setConversations(next);
+        void saveCreationConversations(next);
     };
 
     const restoreMessageDraft = (item: CreationMessage) => {
@@ -622,8 +615,6 @@ export default function CreatePage() {
         const restoreForRetry = () => {
             followLatestMessageRef.current = true;
             restoreMessageDraft(previous);
-            setSelectedShotIndex(-1);
-            setComposingNextShot(false);
             const removedIds = new Set([item.id, previous.id]);
             updateActive((conversation) => {
                 const messages = conversation.messages.filter((message) => !removedIds.has(message.id));
@@ -680,16 +671,6 @@ export default function CreatePage() {
         followLatestMessageRef.current = container.scrollHeight - container.scrollTop - container.clientHeight <= 160;
     };
 
-    const nextShotNumber = shots.length + 1;
-
-    const beginComposeNextShot = () => {
-        setComposingNextShot(true);
-        setSelectedShotIndex(-1);
-        window.requestAnimationFrame(() => composerFocusRef.current?.focus());
-    };
-
-    const cancelComposeNextShot = () => setComposingNextShot(false);
-
     const composerProps = {
         mode,
         prompt,
@@ -720,13 +701,10 @@ export default function CreatePage() {
         count,
         setCount,
         composerFocusRef,
-        placeholderOverride: viewMode === "storyboard" && composingNextShot ? `SC.${String(nextShotNumber).padStart(2, "0")} · 写下这一镜的镜头、画面或故事` : undefined,
+        placeholderOverride: undefined,
         onSubmit: () => void submit(),
         onStop: () => abortRef.current?.abort(),
     };
-
-    const visibleShot = shots[visibleShotIndex];
-    const visibleShotResultIndex = visibleShot?.result ? activeConversation.messages.indexOf(visibleShot.result) : -1;
 
     return <>
         <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
@@ -749,8 +727,8 @@ export default function CreatePage() {
                     onOpenLibrary={() => { selectMode("image"); setLibraryOpen(true); }}
                 />
             </main>
-            </> : viewMode === "chat" ? <div className="creation-thread-workbench">
-                <CreationWorkspaceToolbar viewMode={viewMode} onViewModeChange={setViewMode} onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} />
+            </> : <div className="creation-thread-workbench">
+                <CreationWorkspaceToolbar mode={mode} onModeChange={selectMode} onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} />
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
                     <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <CreationMessageView
                         key={item.id}
@@ -762,38 +740,9 @@ export default function CreatePage() {
                     />)}</div></section>
                 </main>
                 <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
-            </div> : <div className="storyboard-workbench">
-                <StoryboardToolbar
-                    shots={shots}
-                    activeIndex={visibleShotIndex}
-                    composing={composingNextShot}
-                    onSelect={(index) => { setSelectedShotIndex(index); setComposingNextShot(false); }}
-                    onBeginCompose={beginComposeNextShot}
-                    onCancelCompose={cancelComposeNextShot}
-                    onNewConversation={startNewConversation}
-                    onOpenHistory={() => setHistoryOpen(true)}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                />
-                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="storyboard-workbench-stage creation-scrollbar">
-                    <div className="storyboard-workbench-stage-inner">
-                        {composingNextShot ? <StoryboardNextShotCard shotNumber={nextShotNumber} onCancel={cancelComposeNextShot} /> : visibleShot ? <StoryboardShotCard
-                            shot={visibleShot}
-                            shotNumber={visibleShotIndex + 1}
-                            modelName={visibleShot.result?.model ? modelDisplayName(config, visibleShot.result.model) : ""}
-                            busy={busy}
-                            onRetryFailure={() => { if (visibleShotResultIndex >= 0 && visibleShot.result) retryFailedMessage(visibleShot.result, visibleShotResultIndex); }}
-                            onCreateVariant={() => { if (visibleShotResultIndex >= 0 && visibleShot.result) createVariant(visibleShot.result, visibleShotResultIndex); }}
-                            onCancel={() => { if (visibleShot.result) void cancelPendingMessage(visibleShot.result); }}
-                        /> : null}
-                    </div>
-                </main>
-                <section className="storyboard-workbench-composer">
-                    <CreationComposer {...composerProps} variant="thread" />
-                </section>
             </div>}
         </div>
-        <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} />
+        <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} onDelete={deleteConversation} onRename={renameConversation} />
         <AssetLibraryPickerModal
             open={libraryOpen}
             items={libraryItems}
@@ -808,11 +757,14 @@ export default function CreatePage() {
 
 const creationAssetCategoryLabels: Record<string, string> = { all: "全部素材", character: "角色", environment: "场景", wardrobe: "服饰", prop: "道具", weapon: "武器", style: "画风", other: "其他" };
 
-function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelect }: { open: boolean; conversations: CreationConversation[]; activeId: string; onClose: () => void; onSelect: (conversation: CreationConversation) => void }) {
+function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelect, onDelete, onRename }: { open: boolean; conversations: CreationConversation[]; activeId: string; onClose: () => void; onSelect: (conversation: CreationConversation) => void; onDelete: (conversationId: string) => void; onRename: (conversationId: string, title: string) => void }) {
     const [keyword, setKeyword] = useState("");
+    const [editingId, setEditingId] = useState("");
+    const [editingTitle, setEditingTitle] = useState("");
+    const { modal: modalInst } = App.useApp();
 
     useEffect(() => {
-        if (open) setKeyword("");
+        if (open) { setKeyword(""); setEditingId(""); }
     }, [open]);
 
     const visibleConversations = useMemo(() => {
@@ -830,6 +782,28 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
         });
     }, [conversations, keyword]);
 
+    const confirmDelete = (conversation: CreationConversation) => {
+        modalInst.confirm({
+            title: "删除对话",
+            content: `确定删除"${conversation.title.trim() || "新创作"}"吗？此操作不可撤销。`,
+            okText: "删除",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: () => onDelete(conversation.id),
+        });
+    };
+
+    const startRename = (conversation: CreationConversation) => {
+        setEditingId(conversation.id);
+        setEditingTitle(conversation.title.trim() || "新创作");
+    };
+
+    const commitRename = () => {
+        if (editingId) onRename(editingId, editingTitle);
+        setEditingId("");
+        setEditingTitle("");
+    };
+
     return <Drawer open={open} onClose={onClose} placement="right" size="min(440px, 100vw)" closeIcon={<X className="size-4" />} className="creation-history-drawer" rootClassName="creation-history-drawer-root" styles={{ body: { padding: 0 } }} title={<div className="creation-history-title"><span>历史对话</span><small>{conversations.length} 个对话</small></div>}>
         <div className="creation-history-content">
             <label className="creation-history-search">
@@ -840,12 +814,17 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
                 {visibleConversations.map((conversation) => {
                     const latest = conversationPreviewMessage(conversation);
                     const active = conversation.id === activeId;
+                    const isEditing = editingId === conversation.id;
                     return <li key={conversation.id} className={active ? "is-active" : undefined}>
                         <button type="button" aria-current={active ? "page" : undefined} onClick={() => onSelect(conversation)}>
                             <span className="creation-history-time"><time dateTime={conversation.updatedAt}>{formatConversationTime(conversation.updatedAt)}</time><em>{latest?.mode ? modeLabels[latest.mode] : "创作"}</em></span>
-                            <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
+                            {isEditing ? <input className="creation-history-rename-input" value={editingTitle} autoFocus onChange={(e) => setEditingTitle(e.target.value)} onBlur={commitRename} onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditingId(""); }} onClick={(e) => e.stopPropagation()} /> : <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>}
                             <span className="creation-history-snippet">{latest ? displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作" : "还没有开始创作"}</span>
                         </button>
+                        <div className="creation-history-item-actions">
+                            <Tooltip title="重命名"><button type="button" className="creation-history-item-action" aria-label="重命名对话" onClick={(e) => { e.stopPropagation(); startRename(conversation); }}><FileText /></button></Tooltip>
+                            <Tooltip title="删除"><button type="button" className="creation-history-item-action is-danger" aria-label="删除对话" onClick={(e) => { e.stopPropagation(); confirmDelete(conversation); }}><Trash2 /></button></Tooltip>
+                        </div>
                     </li>;
                 })}
             </ul> : <div className="creation-history-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>}
@@ -853,19 +832,23 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
     </Drawer>;
 }
 
-function CreationViewSwitch({ viewMode, onChange }: { viewMode: CreationViewMode; onChange: (mode: CreationViewMode) => void }) {
-    return <div className="creation-view-switch" role="group" aria-label="创作视图">
-        <button type="button" aria-pressed={viewMode === "chat"} onClick={() => onChange("chat")}><MessageSquareText />连续对话</button>
-        <button type="button" aria-pressed={viewMode === "storyboard"} onClick={() => onChange("storyboard")}><Clapperboard />镜头创作</button>
-    </div>;
-}
-
-function CreationWorkspaceToolbar({ viewMode, onViewModeChange, onNewConversation, onOpenHistory }: { viewMode: CreationViewMode; onViewModeChange: (mode: CreationViewMode) => void; onNewConversation: () => void; onOpenHistory: () => void }) {
+function CreationWorkspaceToolbar({ mode, onModeChange, onNewConversation, onOpenHistory }: { mode: CreationMode; onModeChange: (mode: CreationMode) => void; onNewConversation: () => void; onOpenHistory: () => void }) {
+    const modes: { value: CreationMode; icon: ComponentType<{ className?: string }>; label: string }[] = [
+        { value: "text", icon: MessageSquareText, label: "文本" },
+        { value: "image", icon: ImageIcon, label: "图片" },
+        { value: "video", icon: Film, label: "视频" },
+    ];
     return <header className="creation-thread-toolbar">
-        <CreationViewSwitch viewMode={viewMode} onChange={onViewModeChange} />
-        <div className="storyboard-workbench-bar-actions">
-            <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="storyboard-workbench-bar-action" onClick={onNewConversation}><Plus /></button></Tooltip>
-            <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" className="storyboard-workbench-bar-action" onClick={onOpenHistory}><History /></button></Tooltip>
+        <div className="creation-toolbar-actions">
+            <div className="creation-toolbar-mode-switch" role="group" aria-label="创作模式">
+                {modes.map(({ value, icon: Icon, label }) => <Tooltip key={value} title={`${label}创作`}>
+                    <button type="button" aria-label={`${label}创作`} aria-pressed={mode === value} className={`creation-toolbar-icon-btn${mode === value ? " is-active" : ""}`} onClick={() => onModeChange(value)}>
+                        <Icon />
+                    </button>
+                </Tooltip>)}
+            </div>
+            <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="creation-toolbar-icon-btn" onClick={onNewConversation}><Plus /></button></Tooltip>
+            <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" className="creation-toolbar-icon-btn" onClick={onOpenHistory}><History /></button></Tooltip>
         </div>
     </header>;
 }
@@ -875,9 +858,12 @@ function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant,
     const mode = item.mode || "text";
     const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
     return <article className={`creation-assistant-message is-${mode}`}>
-        <div className="creation-message-heading"><span className="creation-message-mark"><Sparkles /></span><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : "影策 AI"}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `影策正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>
-        {mode === "text" ? <div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} />}
-        {item.error && mode === "text" ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}
+        <div className="creation-message-avatar"><Sparkles /></div>
+        <div className="creation-message-body">
+            <div className="creation-message-heading"><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : "影策 AI"}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `影策正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</div>
+            {mode === "text" ? <div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div> : <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} />}
+            {item.error && mode === "text" ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}
+        </div>
     </article>;
 }
 
@@ -887,15 +873,18 @@ function CreationUserMessage({ item }: { item: CreationMessage }) {
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
     return <article className="creation-user-message">
-        <div className="creation-user-message-meta"><span>你</span>{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}<Tooltip title="复制消息"><button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}><Copy /></button></Tooltip></div>
-        <div className="creation-user-message-copy-wrap"><p>{visiblePrompt}</p></div>
-        {item.references?.length ? <CreationMessageReferences references={item.references} /> : null}
-        {item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => {
-            const kind = creationAttachmentKind(attachment);
-            const previewable = kind === "image" || kind === "video";
-            const url = attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "";
-            return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : url); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !url}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <img src={url} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
-        })}</div> : null}
+        <div className="creation-message-body">
+            <div className="creation-message-heading"><strong>你</strong>{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}<Tooltip title="复制消息"><button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}><Copy /></button></Tooltip></div>
+            <div className="creation-user-message-copy-wrap"><p>{visiblePrompt}</p></div>
+            {item.references?.length ? <CreationMessageReferences references={item.references} /> : null}
+            {item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => {
+                const kind = creationAttachmentKind(attachment);
+                const previewable = kind === "image" || kind === "video";
+                const url = attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "";
+                return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : url); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !url}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <img src={url} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
+            })}</div> : null}
+        </div>
+        <div className="creation-message-avatar is-user"><User /></div>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
     </article>;
 }
@@ -1183,181 +1172,6 @@ function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt:
             </button>;
         })}
     </div>;
-}
-
-type CreationThinking = { title: string; hint: string; steps: string[] };
-
-function thinkingFor(mode: CreationMode): CreationThinking {
-    if (mode === "image") return { title: "正在为你画这一镜", hint: "影策正在理解你的构图意图，并把画面交给模型出图。", steps: ["理解构图", "定调画风", "生成画面"] };
-    if (mode === "text") return { title: "正在为你写这段", hint: "影策正在梳理你的创作脉络，组织语言与结构。", steps: ["梳理脉络", "组织语言", "输出段落"] };
-    return { title: "正在为你拍这一镜", hint: "影策正在拆解你的镜头脚本，设计运镜与光线，并交给模型渲染成片。", steps: ["拆解镜头", "设计运镜", "定调布光", "渲染成片"] };
-}
-
-function directorNoteFor(mode: CreationMode, settings: CreationSettings): string {
-    if (mode === "video") return `已按 ${settings.seconds}s · ${videoResolutionLabel(settings.videoQuality)} · ${settings.ratio} 渲染这一镜，等待你的下一句指令。`;
-    if (mode === "image") return `已按 ${settings.ratio} 出图 ${settings.count} 张，等待你的下一句指令。`;
-    return "";
-}
-
-function StoryboardToolbar({ shots, activeIndex, composing, onSelect, onBeginCompose, onCancelCompose, onNewConversation, onOpenHistory, viewMode, onViewModeChange }: { shots: CreationShot[]; activeIndex: number; composing: boolean; onSelect: (index: number) => void; onBeginCompose: () => void; onCancelCompose: () => void; onNewConversation: () => void; onOpenHistory: () => void; viewMode: CreationViewMode; onViewModeChange: (mode: CreationViewMode) => void }) {
-    const [railOpen, setRailOpen] = useState(false);
-    const nextShotNumber = shots.length + 1;
-    const closeRail = () => setRailOpen(false);
-    const statusOf = (shot: CreationShot) => shot.result?.status || "queued";
-    const shotTitle = (shot: CreationShot) => shot.user ? displayCreationPrompt(shot.user.content, shot.user.references || []).trim() || "未命名镜头" : "镜头";
-    return <header className="storyboard-workbench-bar" aria-label="镜头工具条">
-        <div className="storyboard-workbench-rail">
-            <Tooltip title="镜头时间线"><button type="button" className={`storyboard-workbench-rail-button${railOpen ? " is-open" : ""}${composing ? " is-draft" : ""}`} aria-expanded={railOpen} aria-label="镜头时间线" onClick={() => setRailOpen((value) => !value)}><Film /><span className="storyboard-workbench-rail-badge">{composing ? nextShotNumber : shots.length}</span></button></Tooltip>
-            {railOpen ? <div className="storyboard-workbench-rail-pop" role="listbox" aria-label="镜头列表">
-                <div className="storyboard-workbench-rail-pop-head"><span className="storyboard-workbench-rail-pop-title"><Clapperboard />镜头时间线<small>{composing ? `下一镜 SC.${String(nextShotNumber).padStart(2, "0")}` : `${shots.length} 个镜头`}</small></span><button type="button" className="storyboard-workbench-rail-pop-close" aria-label="关闭镜头列表" onClick={closeRail}><X /></button></div>
-                <ul className="creation-scrollbar">
-                    {shots.map((shot, index) => {
-                        const status = statusOf(shot);
-                        const title = shotTitle(shot);
-                        const thumbUrl = shot.result?.resultUrls?.[0];
-                        const thumbIsVideo = shot.result?.mode === "video";
-                        return <li key={shot.user?.id || shot.result?.id || index}>
-                            <button type="button" className={`storyboard-workbench-rail-row${index === activeIndex && !composing ? " is-active" : ""}`} onClick={() => { onSelect(index); closeRail(); }}>
-                                <span className="storyboard-workbench-rail-thumb">{thumbUrl ? (thumbIsVideo ? <video muted preload="metadata" src={thumbUrl} /> : <img src={thumbUrl} alt="" />) : <span className="storyboard-workbench-rail-thumb-ph"><Clapperboard /><em>SC.{String(index + 1).padStart(2, "0")}</em></span>}</span>
-                                <span className="storyboard-workbench-rail-info">
-                                    <span className="storyboard-workbench-rail-head"><span className="storyboard-workbench-rail-row-shot">SC.{String(index + 1).padStart(2, "0")}</span><span className={`storyboard-workbench-rail-row-state is-${status}`}>{status === "pending" ? "生成中" : status === "error" ? "失败" : status === "done" ? "完成" : "待生成"}</span>{shot.result?.createdAt ? <time dateTime={shot.result.createdAt}>{formatMessageTime(shot.result.createdAt)}</time> : null}</span>
-                                    <span className="storyboard-workbench-rail-row-title">{title}</span>
-                                </span>
-                            </button>
-                        </li>;
-                    })}
-                    {composing ? <li><button type="button" className="storyboard-workbench-rail-row is-draft" onClick={() => { onCancelCompose(); closeRail(); }}><span className="storyboard-workbench-rail-thumb"><span className="storyboard-workbench-rail-thumb-ph"><Clapperboard /><em>SC.{String(nextShotNumber).padStart(2, "0")}</em></span></span><span className="storyboard-workbench-rail-info"><span className="storyboard-workbench-rail-head"><span className="storyboard-workbench-rail-row-shot">SC.{String(nextShotNumber).padStart(2, "0")}</span><span className="storyboard-workbench-rail-row-state">待撰写</span></span><span className="storyboard-workbench-rail-row-title">等待你的脚本</span></span></button></li> : null}
-                </ul>
-                <button type="button" className="storyboard-workbench-rail-pop-add" onClick={() => { closeRail(); onBeginCompose(); }}><Plus />新增镜头</button>
-            </div> : null}
-        </div>
-        <div className="storyboard-workbench-bar-actions">
-            <CreationViewSwitch viewMode={viewMode} onChange={onViewModeChange} />
-            <Tooltip title={composing ? "收起下一镜" : "新增镜头"}><button type="button" aria-label={composing ? "收起下一镜" : "新增镜头"} className="storyboard-workbench-bar-action" onClick={composing ? onCancelCompose : onBeginCompose}>{composing ? <X /> : <Clapperboard />}</button></Tooltip>
-            <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="storyboard-workbench-bar-action" onClick={onNewConversation}><Plus /></button></Tooltip>
-            <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" className="storyboard-workbench-bar-action" onClick={onOpenHistory}><History /></button></Tooltip>
-        </div>
-    </header>;
-}
-
-function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure, onCreateVariant, onCancel }: { shot: CreationShot; shotNumber: number; modelName: string; busy: boolean; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void }) {
-    const user = shot.user;
-    const result = shot.result;
-    const status = result?.status || "queued";
-    const mode = result?.mode || user?.mode || "video";
-    const briefVisible = Boolean(user?.content.trim() || user?.references?.length || user?.attachments?.length);
-    const copyText = useCopyText();
-    const assets = useAssetStore((state) => state.assets);
-    const visiblePrompt = user ? displayCreationPrompt(user.content, user.references || []) : "";
-    const resultUrls = result?.resultUrls || [];
-    const resultAssetIds = result && resultUrls.length ? creationResultAssetIds(assets, { messageId: result.id, taskIds: result.taskIds || [], resultUrls }) : [];
-    const canvasHandoffPath = result ? creationCanvasHandoffPath(resultAssetIds, resultUrls.length) : "";
-    const canvasPath = canvasHandoffPath || "/canvas";
-    return <article className={`storyboard-workbench-card is-${status}`}>
-        <header className="storyboard-workbench-card-head">
-            <div className="storyboard-workbench-card-heading">
-                <span className="storyboard-workbench-card-shot"><span className="storyboard-workbench-card-shot-index">SC.{String(shotNumber).padStart(2, "0")}</span>镜头 {shotNumber}</span>
-                <span className="storyboard-workbench-card-mode">{mode === "video" ? <Film /> : mode === "image" ? <ImageIcon /> : <MessageSquareText />}{modeLabels[mode]}</span>
-                {modelName ? <span className="storyboard-workbench-card-model">{modelName}</span> : null}
-                {status === "pending" ? <span className="storyboard-workbench-card-state is-pending"><LoaderCircle className="animate-spin" />生成中</span> : status === "error" ? <span className="storyboard-workbench-card-state is-error">生成失败</span> : status === "done" ? <span className="storyboard-workbench-card-state is-done"><Check />已完成</span> : <span className="storyboard-workbench-card-state">待生成</span>}
-            </div>
-            <div className="storyboard-workbench-card-actions">
-                {status === "error" ? <button type="button" onClick={onRetryFailure} disabled={busy}><RefreshCw />重新生成</button> : null}
-                {status === "done" && result?.resultUrls?.length ? <button type="button" onClick={onCreateVariant} disabled={busy}><RefreshCw />生成变体</button> : null}
-                {status === "done" && resultUrls.length ? <Link to={canvasPath}>{canvasHandoffPath ? "添加到画布" : "打开画布"}</Link> : null}
-                {resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}
-            </div>
-        </header>
-        <div className="storyboard-workbench-card-body">
-            <div className="storyboard-workbench-thread" aria-label={`镜头 ${shotNumber} 的对话过程`}>
-                {briefVisible && user ? <div className="storyboard-workbench-turn is-user">
-                    <div className="storyboard-workbench-turn-copy">
-                        <div className="storyboard-workbench-turn-meta"><span className="storyboard-workbench-turn-role">{shotScriptLabels[mode]}</span>{user.createdAt ? <time className="storyboard-workbench-turn-time" dateTime={user.createdAt}>{formatMessageTime(user.createdAt)}</time> : null}<Tooltip title="复制消息"><button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}><Copy /></button></Tooltip></div>
-                        <div className="storyboard-workbench-turn-bubble">
-                            <p className="storyboard-workbench-turn-text">{visiblePrompt}</p>
-                            {user.references?.length ? <CreationMessageReferences references={user.references} /> : null}
-                            {user.attachments?.length ? <StoryboardBriefAttachments attachments={user.attachments} /> : null}
-                        </div>
-                    </div>
-                </div> : null}
-                {briefVisible && user ? <div className="storyboard-workbench-handoff" aria-hidden="true"><span className="storyboard-workbench-handoff-rail" /><span className="storyboard-workbench-handoff-badge"><ArrowDown />交给影策 AI</span><span className="storyboard-workbench-handoff-rail" /></div> : null}
-                <div className="storyboard-workbench-turn is-ai">
-                    <span className="storyboard-workbench-ai-avatar"><Clapperboard /></span>
-                    <div className="storyboard-workbench-turn-copy">
-                        <div className="storyboard-workbench-turn-meta"><span className="storyboard-workbench-turn-role is-ai"><Sparkles />影策 AI</span>{modelName ? <span className="storyboard-workbench-turn-model">{modelName}</span> : null}{result?.createdAt ? <time className="storyboard-workbench-turn-time" dateTime={result.createdAt}>{formatMessageTime(result.createdAt)}</time> : null}</div>
-                        <div className="storyboard-workbench-turn-bubble">
-                            <StoryboardShotResult result={result} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} canvasPath={canvasPath} canvasHandoffAvailable={Boolean(canvasHandoffPath)} />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </article>;
-}
-
-function StoryboardNextShotCard({ shotNumber, onCancel }: { shotNumber: number; onCancel: () => void }) {
-    return <article className="storyboard-workbench-card is-next">
-        <header className="storyboard-workbench-card-head">
-            <div className="storyboard-workbench-card-heading">
-                <span className="storyboard-workbench-card-shot"><span className="storyboard-workbench-card-shot-index">SC.{String(shotNumber).padStart(2, "0")}</span>下一镜 {shotNumber}</span>
-                <span className="storyboard-workbench-card-state is-draft"><Clapperboard />待撰写</span>
-            </div>
-            <div className="storyboard-workbench-card-actions">
-                <button type="button" onClick={onCancel}><X />取消撰写</button>
-            </div>
-        </header>
-        <div className="storyboard-workbench-card-body">
-            <div className="storyboard-workbench-next-panel">
-                <span className="storyboard-workbench-next-panel-icon"><Clapperboard /></span>
-                <div className="storyboard-workbench-next-panel-copy">
-                    <strong>SC.{String(shotNumber).padStart(2, "0")} 等待你的脚本</strong>
-                    <span>在下方写下这一镜的镜头、画面或故事。影策会拆解脚本、设计运镜并渲染成片，这一镜会作为 SC.{String(shotNumber).padStart(2, "0")} 自动加入镜头轨道。</span>
-                </div>
-            </div>
-        </div>
-    </article>;
-}
-
-function StoryboardBriefAttachments({ attachments }: { attachments: CreationAttachment[] }) {    const [previewUrl, setPreviewUrl] = useState("");
-    const [previewType, setPreviewType] = useState<"image" | "video">("image");
-    return <><div className="creation-user-message-attachments storyboard-workbench-brief-attachments">{attachments.map((attachment) => {
-        const kind = creationAttachmentKind(attachment);
-        const previewable = kind === "image" || kind === "video";
-        const url = attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url) || "";
-        return <button key={attachment.id} type="button" className={!previewable ? "is-file" : undefined} onClick={() => { if (!previewable) return; setPreviewType(kind === "video" ? "video" : "image"); setPreviewUrl(kind === "video" ? attachment.url || "" : url); }} aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"} disabled={previewable && !url}>{kind === "video" ? <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" /> : kind === "image" ? <img src={url} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" /> : kind === "audio" ? <Music2 /> : <FileText />}{previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}</button>;
-    })}</div><CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} /></>;
-}
-
-function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, onCancel, canvasPath, canvasHandoffAvailable }: { result?: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void; canvasPath: string; canvasHandoffAvailable: boolean }) {
-    const [previewUrl, setPreviewUrl] = useState("");
-    const [previewType, setPreviewType] = useState<"image" | "video">("image");
-    const openPreview = (url: string, type: "image" | "video") => { setPreviewType(type); setPreviewUrl(url); };
-    if (!result) return <div className="storyboard-workbench-empty"><Film />这一镜还没开始——在下方写出你的脚本，我来接手。</div>;
-    const mode = result.mode || "video";
-    const status = result.status || "queued";
-    const resultUrls = result.resultUrls || [];
-    if (status === "pending" || status === "queued") {
-        const thinking = thinkingFor(mode);
-        const cancellationCopy = result.taskIds?.map((taskId) => localDreaminaCancellationCopy({ id: taskId, status: "running", stage: result.generationStage, receiptRecorded: result.generationStage === "submitted" || result.generationStage === "generating" })).find(Boolean);
-        const hasLocalDreaminaTask = Boolean(result.taskIds?.some(isLocalDreaminaTaskId));
-        const showCancellationAction = !hasLocalDreaminaTask || Boolean(cancellationCopy);
-        return <div className="storyboard-workbench-pending"><div className="storyboard-workbench-thinking">
-            <span className="storyboard-workbench-thinking-copy"><strong>{thinking.title}</strong><span>{thinking.hint}</span></span>
-            <span className="storyboard-workbench-pipeline" aria-hidden="true">{thinking.steps.map((step, index) => <em key={step} style={{ "--step": index } as CSSProperties}><i>{String(index + 1).padStart(2, "0")}</i>{step}</em>)}</span>
-            {result.taskIds?.length && showCancellationAction ? <button type="button" onClick={onCancel}>{cancellationCopy?.action || "取消任务"}</button> : null}
-        </div></div>;
-    }
-    if (status === "error") return <div className="storyboard-workbench-error"><span>{generationErrorMessage(result.error || "")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
-    if (status === "cancelled") return <div className="storyboard-workbench-error"><span>{result.content || "已停止"}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
-    if (mode === "text") return <div className="creation-message-content storyboard-workbench-text">{result.content ? <AIMessageMarkdown isStreaming={status === "streaming"}>{result.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div>;
-    if (!resultUrls.length) return <div className="storyboard-workbench-empty"><Film />没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
-    const note = result.settings ? directorNoteFor(mode, result.settings) : "";
-    return <>
-        {mode === "video" ? <button type="button" className="creation-video-result" onClick={() => openPreview(resultUrls[0], "video")} aria-label="预览生成视频"><video muted preload="metadata" className="size-full object-cover" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => openPreview(url, "image")} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}
-        {note ? <p className="storyboard-workbench-director-note"><span>导演手记</span>{note}</p> : null}
-        <div className="storyboard-workbench-media-meta"><span>{mode === "video" ? "视频结果" : `${resultUrls.length} 张图片`}</span><button type="button" onClick={onCreateVariant}><RefreshCw />生成变体</button><Link to={canvasPath}>{canvasHandoffAvailable ? "添加到画布" : "打开画布"}</Link>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div>
-        <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
-    </>;
 }
 
 function videoResolutionLabel(value: string | number) {
