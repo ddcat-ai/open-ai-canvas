@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -28,7 +28,7 @@ import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
 import { beginGenerationConsumer, runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
-import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -120,7 +120,7 @@ function completedCreationGenerationTask(input: { taskId: string; task?: Generat
 }
 
 export default function CreatePage() {
-    const { message: toast } = App.useApp();
+    const { message: toast, modal } = App.useApp();
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const assets = useAssetStore((state) => state.assets);
@@ -128,6 +128,7 @@ export default function CreatePage() {
     const [conversations, setConversations] = useState<CreationConversation[]>([]);
     const conversationsRef = useRef<CreationConversation[]>([]);
     const [activeId, setActiveId] = useState("");
+    const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
     const [mode, setMode] = useState<CreationMode>("video");
     const [prompt, setPrompt] = useState("");
@@ -224,6 +225,10 @@ export default function CreatePage() {
     }, []);
 
     useEffect(() => () => abortRef.current?.abort(), []);
+
+    useEffect(() => {
+        activeIdRef.current = activeId;
+    }, [activeId]);
 
     useEffect(() => {
         conversationsRef.current = conversations;
@@ -599,6 +604,44 @@ export default function CreatePage() {
         setHistoryOpen(false);
     };
 
+    const confirmDeleteConversation = (conversation: CreationConversation) => {
+        const title = conversation.title.trim() || "新创作";
+        const label = title.length > 32 ? `${title.slice(0, 32)}...` : title;
+        modal.confirm({
+            className: "workspace-modal workspace-modal-compact",
+            title: "删除历史对话？",
+            content: `确定删除「${label}」吗？这只会删除历史对话记录，不会删除已上传或生成的任何素材。此操作不可撤销。`,
+            okText: "删除对话",
+            okButtonProps: { danger: true },
+            cancelText: "保留",
+            onOk: async () => {
+                try {
+                    const remaining = removeCreationConversationSnapshot(conversationsRef.current, conversation.id);
+                    const sortedRemaining = [...remaining].sort((left, right) => conversationTimestamp(right.updatedAt) - conversationTimestamp(left.updatedAt));
+                    const fallback = sortedRemaining.find((item) => item.messages.length > 0) || sortedRemaining[0] || newConversation();
+                    const next = remaining.length ? remaining : [fallback];
+                    await saveCreationConversations(next);
+                    conversationsRef.current = next;
+                    setConversations(next);
+                    if (activeIdRef.current === conversation.id) {
+                        followLatestMessageRef.current = true;
+                        activeIdRef.current = fallback.id;
+                        setActiveId(fallback.id);
+                        setPrompt("");
+                        setAttachments([]);
+                        setDraftReferences([]);
+                        setSelectedShotIndex(-1);
+                        setComposingNextShot(false);
+                    }
+                    toast.success("历史对话已删除，素材仍保留");
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "历史对话删除失败");
+                    throw error;
+                }
+            },
+        });
+    };
+
     const restoreMessageDraft = (item: CreationMessage) => {
         const nextMode = item.mode || "text";
         const nextSettings = item.settings;
@@ -793,7 +836,7 @@ export default function CreatePage() {
                 </section>
             </div>}
         </div>
-        <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} />
+        <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} />
         <AssetLibraryPickerModal
             open={libraryOpen}
             items={libraryItems}
@@ -808,7 +851,7 @@ export default function CreatePage() {
 
 const creationAssetCategoryLabels: Record<string, string> = { all: "全部素材", character: "角色", environment: "场景", wardrobe: "服饰", prop: "道具", weapon: "武器", style: "画风", other: "其他" };
 
-function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelect }: { open: boolean; conversations: CreationConversation[]; activeId: string; onClose: () => void; onSelect: (conversation: CreationConversation) => void }) {
+function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelect, onDelete }: { open: boolean; conversations: CreationConversation[]; activeId: string; onClose: () => void; onSelect: (conversation: CreationConversation) => void; onDelete: (conversation: CreationConversation) => void }) {
     const [keyword, setKeyword] = useState("");
 
     useEffect(() => {
@@ -841,11 +884,12 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
                     const latest = conversationPreviewMessage(conversation);
                     const active = conversation.id === activeId;
                     return <li key={conversation.id} className={active ? "is-active" : undefined}>
-                        <button type="button" aria-current={active ? "page" : undefined} onClick={() => onSelect(conversation)}>
+                        <button type="button" className="creation-history-item-main" aria-current={active ? "page" : undefined} onClick={() => onSelect(conversation)}>
                             <span className="creation-history-time"><time dateTime={conversation.updatedAt}>{formatConversationTime(conversation.updatedAt)}</time><em>{latest?.mode ? modeLabels[latest.mode] : "创作"}</em></span>
                             <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
                             <span className="creation-history-snippet">{latest ? displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作" : "还没有开始创作"}</span>
                         </button>
+                        <Tooltip title="删除对话"><button type="button" className="creation-history-delete" aria-label={`删除对话：${conversation.title.trim() || "新创作"}`} onClick={() => onDelete(conversation)}><Trash2 /></button></Tooltip>
                     </li>;
                 })}
             </ul> : <div className="creation-history-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>}

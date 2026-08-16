@@ -7933,11 +7933,15 @@ html:not(.dark) .creation-history-drawer-root {
 .creation-history-search input::placeholder { color: var(--creation-history-muted); }
 
 .creation-history-list { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
-.creation-history-list > li { min-width: 0; }
-.creation-history-list button { display: flex; width: 100%; min-height: 78px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; padding: 12px 10px 13px; color: var(--creation-history-text); text-align: left; transition: background-color 150ms ease, border-color 150ms ease; }
-.creation-history-list button:hover { background: var(--creation-history-hover); }
-.creation-history-list button:focus-visible { outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 68%, transparent); outline-offset: -2px; }
-.creation-history-list > li.is-active button { border-color: color-mix(in srgb, var(--creation-history-accent) 28%, transparent); background: color-mix(in srgb, var(--creation-history-accent) 7%, var(--creation-history-surface)); }
+.creation-history-list > li { position: relative; min-width: 0; }
+.creation-history-item-main { display: flex; width: 100%; min-height: 78px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; padding: 12px 50px 13px 10px; color: var(--creation-history-text); text-align: left; transition: background-color 150ms ease, border-color 150ms ease; }
+.creation-history-item-main:hover { background: var(--creation-history-hover); }
+.creation-history-item-main:focus-visible { outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 68%, transparent); outline-offset: -2px; }
+.creation-history-list > li.is-active .creation-history-item-main { border-color: color-mix(in srgb, var(--creation-history-accent) 28%, transparent); background: color-mix(in srgb, var(--creation-history-accent) 7%, var(--creation-history-surface)); }
+.creation-history-delete { position: absolute; z-index: 1; top: 50%; right: 9px; display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--creation-history-muted); transform: translateY(-50%); transition: background-color 150ms ease, color 150ms ease; }
+.creation-history-delete svg { width: 16px; height: 16px; }
+.creation-history-delete:hover { background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); }
+.creation-history-delete:focus-visible { outline: 2px solid color-mix(in srgb, var(--destructive) 60%, transparent); outline-offset: 1px; }
 .creation-history-time { display: flex; width: 100%; align-items: center; justify-content: space-between; color: var(--creation-history-muted); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; line-height: 1.3; }
 .creation-history-time em { border: 1px solid var(--creation-history-line); border-radius: var(--r-xs); padding: 2px 5px; color: var(--creation-history-muted); font-size: var(--fs-micro); font-style: normal; }
 .creation-history-item-heading { width: 100%; min-width: 0; overflow: hidden; font-size: var(--fs-label); font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }

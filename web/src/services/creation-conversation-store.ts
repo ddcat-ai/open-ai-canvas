@@ -20,6 +20,14 @@ export function updateCreationConversationSnapshot<T extends { id: string }>(con
     return conversations.map((conversation) => (conversation.id === conversationId ? updater(conversation) : conversation));
 }
 
+// 对话、生成任务与素材是独立持久状态；删除历史记录不能在这里级联清理任务或资源。
+export function removeCreationConversationSnapshot<T extends { id: string }>(conversations: T[], conversationId: string) {
+    if (!conversationId) throw new Error("缺少要删除的创作对话 ID");
+    const next = conversations.filter((conversation) => conversation.id !== conversationId);
+    if (next.length === conversations.length) throw new Error("要删除的创作对话不存在");
+    return next;
+}
+
 export function pendingCreationMediaKey(conversations: StoredCreationConversation[]) {
     return conversations
         .flatMap((conversation) => conversation.messages.flatMap((message) => (message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { createGenerationTaskSubscriptionService, type GenerationTask } from "../src/services/api/task-center";
-import { updateCreationConversationSnapshot } from "../src/services/creation-conversation-store";
+import { removeCreationConversationSnapshot, updateCreationConversationSnapshot } from "../src/services/creation-conversation-store";
 
 test("Create exposes one accessible copy action beside each displayed user prompt", async () => {
     const source = await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text();
@@ -33,6 +33,17 @@ test("Create keeps optimistic messages when the first local task binds immediate
 
     expect(bound[0].messages).toHaveLength(2);
     expect(bound[0].messages[1]).toMatchObject({ id: "assistant-0001", taskIds: ["local:dreamina-cli:task-0001"] });
+});
+
+test("Create history deletion removes only the selected conversation snapshot", () => {
+    const assets = [{ id: "asset-0001", storageKey: "resource:asset-0001" }];
+    const conversations = [
+        { id: "conversation-0001", messages: [{ id: "message-0001", resultUrls: ["resource:asset-0001"] }] },
+        { id: "conversation-0002", messages: [{ id: "message-0002", attachments: [{ storageKey: "resource:asset-0001" }] }] },
+    ];
+
+    expect(removeCreationConversationSnapshot(conversations, "conversation-0001")).toEqual([conversations[1]]);
+    expect(assets).toEqual([{ id: "asset-0001", storageKey: "resource:asset-0001" }]);
 });
 
 test("Create refresh subscriptions share one durable scheduler observation without page polling", async () => {
