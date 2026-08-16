@@ -1,7 +1,7 @@
 Open AI Canvas
 Copyright (C) 2026 ddcat
 
-This program is licensed under the GNU Affero General Public License v3.0.
+This program is licensed under the MIT License.
 The complete license text is provided in LICENSE.
 
 This project is a derivative work based on:
@@ -13,7 +13,10 @@ This project is a derivative work based on:
 
 The upstream project is maintained under the basketikun account. The base
 commit is authored by HouYunFei. Upstream authors and contributors retain
-their copyright and attribution for their respective contributions.
+their copyright and attribution for their respective contributions. The
+upstream project was relicensed to MIT in commit
+890ba95858bbb13496d23978003716656109abb2; its copyright and permission notice
+are preserved in LICENSE.
 
 Material changes in this repository are maintained by ddcat. They include a
 multi-user Go backend, task processing and analytics, private resource
