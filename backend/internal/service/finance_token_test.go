@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -81,5 +82,51 @@ func TestEnrichAPICallLogReadsArkVideoUsage(t *testing.T) {
 	(&Service{}).EnrichAPICallLog(missing, []byte(`{"usage":{}}`))
 	if missing.UsageAvailable {
 		t.Fatalf("EnrichAPICallLog() accepted empty Ark usage: %#v", missing)
+	}
+}
+
+func TestEnrichAPICallLogReadsChatCompletionStreamUsage(t *testing.T) {
+	log := &model.ApiCallLog{Capability: "text", Path: "/v1/chat/completions"}
+	stream := []byte("data: {\"id\":\"chatcmpl-test\",\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":23,\"completion_tokens\":7,\"prompt_tokens_details\":{\"cached_tokens\":5}}}\n\n" +
+		"data: [DONE]\n\n")
+	(&Service{}).EnrichAPICallLog(log, stream)
+	if !log.UsageAvailable || log.InputTokens != 23 || log.OutputTokens != 7 || log.CachedTokens != 5 {
+		t.Fatalf("EnrichAPICallLog() = %#v", log)
+	}
+}
+
+func TestEnrichAPICallLogReadsResponsesStreamUsage(t *testing.T) {
+	log := &model.ApiCallLog{Capability: "text", Path: "/v1/responses"}
+	stream := []byte("event: response.output_text.delta\n" +
+		"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n" +
+		"event: response.completed\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-test\",\"status\":\"completed\",\"usage\":{\"input_tokens\":31,\"output_tokens\":11,\"input_tokens_details\":{\"cached_tokens\":9}}}}\n\n")
+	(&Service{}).EnrichAPICallLog(log, stream)
+	if !log.UsageAvailable || log.InputTokens != 31 || log.OutputTokens != 11 || log.CachedTokens != 9 || log.ProviderRequestID != "resp-test" {
+		t.Fatalf("EnrichAPICallLog() = %#v", log)
+	}
+}
+
+func TestEnrichAPICallLogRejectsEmptyTextUsage(t *testing.T) {
+	log := &model.ApiCallLog{Capability: "text", Path: "/v1/chat/completions"}
+	(&Service{}).EnrichAPICallLog(log, []byte(`{"usage":{}}`))
+	if log.UsageAvailable {
+		t.Fatalf("EnrichAPICallLog() accepted empty text usage: %#v", log)
+	}
+}
+
+func TestEnsureChatCompletionStreamUsageRequest(t *testing.T) {
+	data, err := EnsureChatCompletionStreamUsageRequest([]byte(`{"model":"gpt-test","stream":true,"stream_options":{"custom":true}}`))
+	if err != nil {
+		t.Fatalf("EnsureChatCompletionStreamUsageRequest() error = %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	options, _ := payload["stream_options"].(map[string]any)
+	if options["include_usage"] != true || options["custom"] != true {
+		t.Fatalf("stream_options = %#v", options)
 	}
 }
