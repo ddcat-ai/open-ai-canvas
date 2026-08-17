@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,66 @@ func TestCustomModelCatalogConsumesAllowLocalChannelAndServerCapability(t *testi
 	if len(catalog) != 1 || catalog[0].ID != "local-model" {
 		t.Fatalf("catalog = %#v", catalog)
 	}
+}
+
+func TestCustomModelCatalogPreservesPublicCapabilityMetadataWithoutCompatibilityIDs(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"image-fast","display_name":"Image Fast","model_type":"image"},
+			{"id":"image-quality","display_name":"Image Quality","model_type":"image"},
+			{"id":"omni","capability_id":"omni-flash","display_name":"Omni Flash","model_type":"video","supports_images":false,"min_images":0,"max_images":0,"default_parameters":{"aspect_ratio":"16:9","duration_seconds":"10"},"options":{"aspect_ratio":[{"value":"16:9"},{"value":"9:16"}],"duration_seconds":[{"value":"8"},{"value":"10"}]},"compatibility_map":[{"parameters":{"aspect_ratio":"9:16","duration_seconds":"10"},"model_id":"omni_portrait_10s"}]},
+			{"id":"veo-lite","display_name":"Veo Lite","model_type":"video"},
+			{"id":"veo-fast","display_name":"Veo Fast","model_type":"video"},
+			{"id":"veo-quality","display_name":"Veo Quality","model_type":"video"}
+		]}`))
+	}))
+	defer upstream.Close()
+
+	svc := &Service{runtimeCapabilities: RuntimeCapabilities{desktopLocalChannels: true}}
+	catalog, err := svc.FetchChannelModelCatalog(context.Background(), &model.User{ID: "user-1"}, ChannelModelsRequest{
+		BaseURL: upstream.URL, APIKey: "test-key", APIFormat: "openai", AllowLocalChannel: true,
+	})
+	if err != nil {
+		t.Fatalf("FetchChannelModelCatalog() error = %v", err)
+	}
+	if len(catalog) != 6 {
+		t.Fatalf("catalog length = %d; want 6", len(catalog))
+	}
+	var omni *ChannelModelCatalogItem
+	for index := range catalog {
+		if catalog[index].ID == "omni" {
+			omni = &catalog[index]
+			break
+		}
+	}
+	if omni == nil {
+		t.Fatal("catalog is missing public omni capability")
+	}
+	if omni.DisplayName != "Omni Flash" || omni.ModelType != "video" {
+		t.Fatalf("omni metadata = %#v", omni)
+	}
+	if omni.DefaultParameters.AspectRatio != "16:9" || omni.DefaultParameters.DurationSeconds != "10" {
+		t.Fatalf("omni defaults = %#v", omni.DefaultParameters)
+	}
+	if got := optionValues(omni.Options.DurationSeconds); len(got) != 2 || got[0] != "8" || got[1] != "10" {
+		t.Fatalf("omni duration options = %#v", got)
+	}
+	encoded, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "omni_portrait_10s") || strings.Contains(string(encoded), "compatibility") {
+		t.Fatalf("ordinary catalog exposed compatibility IDs: %s", encoded)
+	}
+}
+
+func optionValues(options []ChannelModelCatalogOption) []string {
+	values := make([]string, 0, len(options))
+	for _, option := range options {
+		values = append(values, option.Value)
+	}
+	return values
 }
 
 func TestSystemWorkerRestartReevaluatesStoredLocalFlagAgainstServerCapability(t *testing.T) {

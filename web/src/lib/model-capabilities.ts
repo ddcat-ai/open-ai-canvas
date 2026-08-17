@@ -228,6 +228,22 @@ export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { sec
     return { seconds: String(duration), ratio, resolution };
 }
 
+export function videoResolutionRequest(profile: VideoCapabilityConfig, value: string | undefined) {
+    const requested = String(value || "").trim().toLowerCase();
+    if (!requested || requested === "auto" || requested === "default" || requested === "medium" || requested === "high") return undefined;
+    const candidates = [requested];
+    if (/^\d+$/.test(requested)) candidates.push(`${requested}p`);
+    if (requested === "low") candidates.push("480p");
+    if (requested === "4k") candidates.push("2160p");
+    if (requested === "2160" || requested === "2160p") candidates.push("4k");
+    const supported = new Map(profile.resolutions.map((resolution) => [resolution.trim().toLowerCase(), resolution.trim()]));
+    for (const candidate of candidates) {
+        const match = supported.get(candidate);
+        if (match) return match;
+    }
+    return undefined;
+}
+
 function normalizeRangeDuration(profile: VideoCapabilityConfig, value: number) {
     const min = profile.duration.min || 1;
     const max = profile.duration.max || min;

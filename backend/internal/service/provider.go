@@ -1451,7 +1451,9 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if size := normalizeVideoSize(input.Config.Size); size != "" {
 			writeField(writer, "size", size)
 		}
-		writeField(writer, "resolution_name", normalizeVideoResolution(input.Config.VQuality))
+		if resolution := videoResolutionNameRequest(input.VideoCapability, input.Config.VQuality); resolution != "" {
+			writeField(writer, "resolution_name", resolution)
+		}
 		writeField(writer, "preset", "normal")
 		if shouldSendNewAPIVideoImages(input) {
 			for _, image := range input.ReferenceImages {
