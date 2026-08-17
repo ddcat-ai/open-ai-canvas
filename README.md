@@ -43,6 +43,8 @@
 | <img src="assets/user-nz.jpg" alt="奶大佬" width="80"> | 奶大佬 | [1304634970@qq.com](mailto:1304634970@qq.com) | 人生就是要不断的探索 |
 | <img src="assets/user-dyh.jpg" alt="dyh" width="80"> | dyh | [1613203335@qq.com](mailto:1613203335@qq.com) | 无 |
 | <img src="assets/user-kyori.jpg" alt="kyori" width="80"> | kyori | [1771634408@qq.com](mailto:1771634408@qq.com) | 励志成为未来最好用的画布仓库的贡献者 |
+| <img src="assets/user-bowen.jpg" alt="Bowen" width="80"> | Bowen | [admin@bowen.games](mailto:admin@bowen.games) | 剑走偏峰，雷厉风行。 |
+| <img src="assets/user-ken.jpg" alt="ken" width="80"> | ken | [2506802@qq.com](mailto:2506802@qq.com) | 走自己的路 |
 
 ## 主要功能
 
