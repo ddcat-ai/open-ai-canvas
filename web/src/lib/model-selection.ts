@@ -110,14 +110,17 @@ export function resolveCompatibleModel(config: AiConfig, selected: string, requi
 
 // 同显示名分组的模型族：尺寸/比例/分辨率选项取组内全部模型配置的并集，
 // 让用户能看到并选择任意成员支持的能力，选中后由兼容路由落到具体模型。
+// 质量、透明背景等其余能力取当前选中（路由后）模型的配置，与创作页面一致。
 export function mergedImageCapabilityConfig(config: AiConfig, selected: string): ImageCapabilityConfig {
     const options = selectableModelsByCapability(config, "image");
     const group = options.length ? groupModelsByDisplayName(config, options).find((item) => item.models.includes(selected)) : undefined;
     const models = group?.models.length ? group.models : [selected];
+    const selectedProfile = modelCapabilityConfigFor(config, selected).image;
     const profiles = models.map((model) => modelCapabilityConfigFor(config, model).image).filter((profile): profile is ImageCapabilityConfig => Boolean(profile));
-    if (profiles.length <= 1) return profiles[0] || defaultImageCapabilityConfig();
+    if (profiles.length <= 1) return selectedProfile || defaultImageCapabilityConfig();
     const values = Array.from(new Set(profiles.flatMap((profile) => profile.size.values)));
-    return { ...profiles[0], size: { ...profiles[0].size, values } };
+    const base = selectedProfile || profiles[0];
+    return { ...base, size: { ...base.size, values } };
 }
 
 // 切换模型后初始化图片参数为该模型能力默认值，避免旧参数在目标模型族不兼容导致无法切换。
