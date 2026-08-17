@@ -677,6 +677,64 @@ func TestRunVideoTaskUsesNewAPIForAnyVideoModel(t *testing.T) {
 	}
 }
 
+func TestRunVideoTaskSendsOnlyDeclaredResolutionName(t *testing.T) {
+	tests := []struct {
+		name           string
+		resolutions    []string
+		quality        string
+		withoutProfile bool
+		want           string
+	}{
+		{name: "catalog omits resolution capability", quality: "720"},
+		{name: "auto never invents 720p", resolutions: []string{"720p", "1080p"}, quality: "auto"},
+		{name: "legacy auto never invents 720p", quality: "auto", withoutProfile: true},
+		{name: "missing profile explicit 720 never invents resolution", quality: "720", withoutProfile: true},
+		{name: "declared HD resolution", resolutions: []string{"1080p"}, quality: "1080", want: "1080p"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+			var got string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method + " " + r.URL.Path {
+				case "POST /v1/videos":
+					if err := r.ParseMultipartForm(1 << 20); err != nil {
+						t.Fatalf("ParseMultipartForm() error = %v", err)
+					}
+					got = r.FormValue("resolution_name")
+					_, _ = w.Write([]byte(`{"id":"video-resolution","status":"queued"}`))
+				case "GET /v1/videos/video-resolution":
+					_, _ = w.Write([]byte(`{"id":"video-resolution","status":"completed"}`))
+				case "GET /v1/videos/video-resolution/content":
+					w.Header().Set("Content-Type", "video/mp4")
+					_, _ = w.Write([]byte("video"))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			profile := DefaultModelCapabilityConfigForModel("newapi", "public-video").Video
+			profile.Resolutions = test.resolutions
+			profile.DefaultResolution = ""
+			if test.withoutProfile {
+				profile = nil
+			}
+			_, err := runVideoTask(context.Background(), canvasGenerationInput{
+				Prompt:          "synthetic prompt",
+				Config:          providerConfig{BaseURL: server.URL + "/v1", APIKey: "test-key", Model: "public-video", VideoSeconds: "8", Size: "16:9", VQuality: test.quality},
+				VideoCapability: profile,
+			})
+			if err != nil {
+				t.Fatalf("runVideoTask() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("resolution_name = %q; want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestRunVideoTaskUsesNestedURLBeforeResultURL(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	paths := make([]string, 0, 3)
