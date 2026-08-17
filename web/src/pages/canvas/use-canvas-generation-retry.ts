@@ -13,7 +13,7 @@ import {
     findRetrySourceNode,
     generationReferenceUrls,
     isGenerationCanceled,
-    limitCanvasImageReferences,
+    canvasImageReferenceLimitError,
     resolveMetadataReferences,
     resolveStoredReferenceImages,
     runBackendCanvasGenerationTask,
@@ -108,7 +108,10 @@ export function useCanvasGenerationRetry({
             try {
                 const promptOnly = retryMode === "video";
                 const baseContext = buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryContextPrompt, assets, promptOnly);
-                rawContext = hasSavedImageMetadata && !baseContext.characterReferences.length ? null : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig), !promptOnly);
+                rawContext =
+                    hasSavedImageMetadata && !baseContext.characterReferences.length
+                        ? null
+                        : await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, retryMode, retryMode === "video" && supportsVideoReferenceAudio(generationConfig), !promptOnly);
             } catch (error) {
                 const failure = generationFailureMetadata(error, retryPromptSource);
                 message.error(failure.errorDetails);
@@ -168,7 +171,14 @@ export function useCanvasGenerationRetry({
                 message.error("参考图片已丢失，无法继续重试");
                 return;
             }
-            const retryImages = retryMode === "image" ? limitCanvasImageReferences(generationConfig, retryReferenceImages || []) : retryReferenceImages || [];
+            const retryImages = retryReferenceImages || [];
+            if (retryMode === "image") {
+                const referenceLimitError = canvasImageReferenceLimitError(generationConfig, retryImages);
+                if (referenceLimitError) {
+                    message.error(referenceLimitError);
+                    return;
+                }
+            }
             const storedVideoImages = node.type === CanvasNodeType.Video && !context?.referenceImages.length ? await resolveStoredReferenceImages(node.metadata?.references) : [];
             if (storedVideoImages === null) {
                 markMissingReferences(node.id, setNodes);
