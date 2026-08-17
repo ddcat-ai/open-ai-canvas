@@ -1278,9 +1278,12 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 	}))
 	defer server.Close()
 
+	profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", "grok-image-video").Video
+	profile.Resolutions = []string{"720p"}
+	profile.DefaultResolution = "720p"
 	result, err := runVideoTask(context.Background(), canvasGenerationInput{
 		Prompt: "make it move",
-		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "grok-image-video", InterfaceType: "newapi-channel-2", VideoSeconds: "15", Size: "720x1280", VQuality: "high"},
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "grok-image-video", InterfaceType: "newapi-channel-2", VideoSeconds: "15", Size: "720x1280", VQuality: "720"},
 		ReferenceImages: []providerMedia{
 			{ID: "image-1", DataURL: testReferenceImageDataURL},
 			{ID: "image-2", DataURL: testReferenceImageDataURL},
@@ -1288,6 +1291,7 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 		ReferenceVideos: []providerMedia{{ID: "video-1", URL: server.URL + "/reference.mp4"}},
 		ReferenceAudios: []providerMedia{{ID: "audio-1", URL: server.URL + "/reference.mp3"}},
 		Metadata:        map[string]interface{}{"videoEditOperation": "image_to_video"},
+		VideoCapability: profile,
 	})
 	if err != nil {
 		t.Fatalf("runVideoTask() error = %v", err)
@@ -1351,6 +1355,50 @@ func TestNewAPIChannel2SingleImageModelsRequireOneReference(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "当前 0 张") {
 		t.Fatalf("newAPIChannel2VideoBody() error = %q", err)
+	}
+}
+
+func TestNewAPIChannel2SendsOnlyDeclaredResolution(t *testing.T) {
+	tests := []struct {
+		name        string
+		model       string
+		quality     string
+		resolutions []string
+		want        string
+	}{
+		{name: "catalog omits resolution", model: "endpoint-video", quality: "720"},
+		{name: "declared 2K alias", model: "declared-video", quality: "2K", resolutions: []string{"1440p"}, want: "1440p"},
+		{name: "fixed grok 1080p model", model: "grok-video-1.5-1080p", quality: "720", want: "1080p"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", test.model).Video
+			profile.Resolutions = test.resolutions
+			profile.DefaultResolution = ""
+			input := canvasGenerationInput{
+				Config:          providerConfig{Model: test.model, VideoSeconds: "6", Size: "16:9", VQuality: test.quality},
+				VideoCapability: profile,
+			}
+			if strings.HasPrefix(test.model, "grok-video-1.5") {
+				input.ReferenceImages = []providerMedia{{ID: "image-1", DataURL: testReferenceImageDataURL}}
+			}
+
+			body, err := newAPIChannel2VideoRequestBody(input)
+			if err != nil {
+				t.Fatalf("newAPIChannel2VideoRequestBody() error = %v", err)
+			}
+			if body.Resolution != test.want {
+				t.Fatalf("resolution = %q, want %q", body.Resolution, test.want)
+			}
+			mapped, err := requestAsMap(body)
+			if err != nil {
+				t.Fatalf("requestAsMap() error = %v", err)
+			}
+			_, hasResolution := mapped["resolution"]
+			if hasResolution != (test.want != "") {
+				t.Fatalf("resolution presence = %v, want %v; body = %#v", hasResolution, test.want != "", mapped)
+			}
+		})
 	}
 }
 

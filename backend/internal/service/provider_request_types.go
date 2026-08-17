@@ -19,7 +19,7 @@ type newAPIVideoRequest struct {
 	Prompt        string   `json:"prompt"`
 	Seconds       string   `json:"seconds"`
 	AspectRatio   string   `json:"aspect_ratio"`
-	Resolution    string   `json:"resolution"`
+	Resolution    string   `json:"resolution,omitempty"`
 	GenerateAudio *bool    `json:"generate_audio,omitempty"`
 	ImageURLs     []string `json:"image_urls,omitempty"`
 	VideoURLs     []string `json:"video_urls,omitempty"`

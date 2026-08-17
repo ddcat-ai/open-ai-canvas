@@ -47,7 +47,8 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
             <CapabilityGroup title="引用限制">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <NumberField label="提示词字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(value) => updateReferences({ promptMaxChars: value || 1 })} />
-                    <NumberField label="最大图片引用" value={profile.references.maxImages} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxImages: value || 0 })} />
+                    <NumberField label="最少图片引用" value={profile.references.minImages} min={0} max={profile.references.maxImages} disabled={disabled} onChange={(value) => updateReferences({ minImages: value || 0 })} />
+                    <NumberField label="最大图片引用" value={profile.references.maxImages} min={0} disabled={disabled} onChange={(value) => { const maxImages = value || 0; updateReferences({ maxImages, minImages: Math.min(profile.references.minImages, maxImages) }); }} />
                     <NumberField label="图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxImageBytes: mbToBytes(value) })} />
                     <NumberField label="最大视频引用" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
                     <NumberField label="视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideoBytes: mbToBytes(value) })} />
@@ -76,7 +77,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                 <div className="grid gap-2 sm:grid-cols-2">
                     <Field label="画面比例"><Select mode="multiple" className="w-full" disabled={disabled} value={profile.ratios} options={ratioOptions.map((item) => ({ label: item, value: item }))} onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })} /></Field>
                     <Field label="默认比例"><Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} /></Field>
-                    <Field label="输出分辨率"><Select mode="tags" className="w-full" disabled={disabled} value={profile.resolutions} tokenSeparators={[","]} placeholder="选择标准档位或输入 768p 等模型专属值" options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "720p" })} /></Field>
+                    <Field label="输出分辨率"><Select mode="tags" className="w-full" disabled={disabled} value={profile.resolutions} tokenSeparators={[","]} placeholder="选择标准档位或输入 768p 等模型专属值" options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })} /></Field>
                     <Field label="默认分辨率"><Select className="w-full" disabled={disabled} value={profile.defaultResolution} options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(defaultResolution) => update({ defaultResolution })} /></Field>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -163,8 +164,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     return <label className="block min-w-0"><span className="mb-1 block text-[var(--fs-tiny)] text-foreground/48">{label}</span>{children}</label>;
 }
 
-function NumberField({ label, value, min, disabled, onChange }: { label: string; value?: number; min: number; disabled: boolean; onChange: (value: number | null) => void }) {
-    return <Field label={label}><InputNumber className="w-full" disabled={disabled} min={min} precision={0} value={value} onChange={onChange} /></Field>;
+function NumberField({ label, value, min, max, disabled, onChange }: { label: string; value?: number; min: number; max?: number; disabled: boolean; onChange: (value: number | null) => void }) {
+    return <Field label={label}><InputNumber className="w-full" disabled={disabled} min={min} max={max} precision={0} value={value} onChange={onChange} /></Field>;
 }
 
 function BooleanField({ label, value, disabled, onChange }: { label: string; value: { supported: boolean; default: boolean }; disabled: boolean; onChange: (value: { supported: boolean; default: boolean }) => void }) {

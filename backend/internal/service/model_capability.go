@@ -67,6 +67,7 @@ type VideoCapabilityConfig struct {
 
 type VideoReferenceConfig struct {
 	PromptMaxChars   int   `json:"promptMaxChars"`
+	MinImages        int   `json:"minImages"`
 	MaxImages        int   `json:"maxImages"`
 	MaxImageBytes    int64 `json:"maxImageBytes"`
 	MaxVideos        int   `json:"maxVideos"`
@@ -154,7 +155,7 @@ func defaultImageSizeValues() []string {
 
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
 	video := &VideoCapabilityConfig{
-		References:        VideoReferenceConfig{PromptMaxChars: 1000, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
+		References:        VideoReferenceConfig{PromptMaxChars: 1000, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
 		Ratios:            []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"},
 		DefaultRatio:      "16:9",
@@ -277,10 +278,13 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if value.References.PromptMaxChars < 1 || value.References.PromptMaxChars > 1000000 {
 		return BadAuthRequest("提示词最大字符数必须在 1-1000000 之间")
 	}
-	for name, number := range map[string]int{"最大图片引用数": value.References.MaxImages, "最大视频引用数": value.References.MaxVideos, "最大音频引用数": value.References.MaxAudios} {
+	for name, number := range map[string]int{"最少图片引用数": value.References.MinImages, "最大图片引用数": value.References.MaxImages, "最大视频引用数": value.References.MaxVideos, "最大音频引用数": value.References.MaxAudios} {
 		if number < 0 || number > 100 {
 			return BadAuthRequest(name + "必须在 0-100 之间")
 		}
+	}
+	if value.References.MinImages > value.References.MaxImages {
+		return BadAuthRequest("最少图片引用数不能超过最大图片引用数")
 	}
 	if value.References.MaxImageBytes < 0 || value.References.MaxVideoBytes < 0 || value.References.MaxAudioBytes < 0 || value.References.MaxVideoDuration < 0 || value.References.MaxAudioDuration < 0 {
 		return BadAuthRequest("引用素材限制不能小于 0")
@@ -291,8 +295,12 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if len(value.Ratios) == 0 || strings.TrimSpace(value.DefaultRatio) == "" || !containsCapabilityString(value.Ratios, value.DefaultRatio) {
 		return BadAuthRequest("请至少配置一个画面比例，并选择默认比例")
 	}
-	if len(value.Resolutions) == 0 || strings.TrimSpace(value.DefaultResolution) == "" || !containsCapabilityString(value.Resolutions, value.DefaultResolution) {
-		return BadAuthRequest("请至少配置一个输出分辨率，并选择默认分辨率")
+	if len(value.Resolutions) == 0 {
+		if strings.TrimSpace(value.DefaultResolution) != "" {
+			return BadAuthRequest("未配置输出分辨率时不能设置默认分辨率")
+		}
+	} else if strings.TrimSpace(value.DefaultResolution) == "" || !containsCapabilityString(value.Resolutions, value.DefaultResolution) {
+		return BadAuthRequest("默认输出分辨率必须属于支持值")
 	}
 	if len(value.Operations) == 0 || strings.TrimSpace(value.DefaultOperation) == "" || !containsCapabilityString(value.Operations, value.DefaultOperation) {
 		return BadAuthRequest("请至少配置一个生成模式，并选择默认模式")
@@ -376,6 +384,9 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInput) error {
 	if len(input.ReferenceImages) > profile.References.MaxImages || len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
 		return BadAuthRequest("参考素材数量超过当前模型限制")
+	}
+	if len(input.ReferenceImages) < profile.References.MinImages {
+		return BadAuthRequest(fmt.Sprintf("当前视频模型至少需要 %d 张参考图", profile.References.MinImages))
 	}
 	for _, media := range input.ReferenceImages {
 		if profile.References.MaxImageBytes > 0 && media.Bytes > profile.References.MaxImageBytes {
