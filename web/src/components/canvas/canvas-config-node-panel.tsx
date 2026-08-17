@@ -8,7 +8,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue } from "@/lib/model-capabilities";
-import { modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { modelCompatibilityError, resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -153,7 +153,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 <div className="mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
             ) : (
                 <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
-                    <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} requirements={requirements} onMissingConfig={() => navigateToSettings({ continueCreation: true })} fullWidth showSelectedPrice={creditsEnabled} />
+                    <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })} capability={mode} requirements={requirements} onMissingConfig={() => navigateToSettings({ continueCreation: true })} fullWidth showSelectedPrice={creditsEnabled} />
                     {mode === "video" ? (
                         <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                     ) : mode === "image" ? (
@@ -227,7 +227,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = node.metadata?.model;
     const preferredModel = storedModel && configuredModelMatchesCapability(globalConfig, storedModel, mode) ? storedModel : defaultModel && configuredModelMatchesCapability(globalConfig, defaultModel, mode) ? defaultModel : fallbackModel;
-    const model = resolveCompatibleModel(globalConfig, preferredModel, requirements) || preferredModel;
+    const model = resolveCompatibleModel(globalConfig, preferredModel, mode === "image" ? { ...requirements, imageSize: node.metadata?.size || globalConfig.size || defaultConfig.size } : requirements) || preferredModel;
     const imageProfile = mode === "image" ? modelCapabilityConfigFor(globalConfig, model).image! : undefined;
     const normalizedImage = imageProfile ? normalizeImageValue(imageProfile, { size: node.metadata?.size || globalConfig.size || defaultConfig.size, quality: node.metadata?.quality || globalConfig.quality || defaultConfig.quality, transparentBackground: node.metadata?.transparentBackground || globalConfig.transparentBackground, count: String(node.metadata?.count || globalConfig.canvasImageCount || globalConfig.count || defaultConfig.count) }) : undefined;
     const videoProfile = mode === "video" ? modelCapabilityConfigFor(globalConfig, model).video! : undefined;

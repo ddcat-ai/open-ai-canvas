@@ -3,7 +3,8 @@ import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
-import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { mergedImageCapabilityConfig } from "@/lib/model-selection";
 import { type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
@@ -50,7 +51,7 @@ type ImageSettingsPanelProps = {
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3 }: ImageSettingsPanelProps) {
     const [snapDimensionToStep, setSnapDimensionToStep] = useState(true);
-    const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image!;
+    const profile = mergedImageCapabilityConfig(config, config.model || config.imageModel);
     const normalized = normalizeImageValue(profile, config);
     const quality = normalized.quality;
     const transparentBackground = normalized.transparentBackground === "true";

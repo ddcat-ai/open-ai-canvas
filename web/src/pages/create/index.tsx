@@ -17,7 +17,7 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
-import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
@@ -173,7 +173,8 @@ export default function CreatePage() {
             characterCount: 0,
         },
         videoSeconds: seconds,
-    }), [attachments, hasPrompt, mode, seconds]);
+        imageSize: mode === "image" ? ratio : undefined,
+    }), [attachments, hasPrompt, mode, ratio, seconds]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
@@ -1127,15 +1128,17 @@ function GenerationSettingsMenu(props: ComposerProps) {
     const [customRatioOpen, setCustomRatioOpen] = useState(!ratioOptions.some((option) => option.value === props.ratio));
     const activeQualityOptions = props.imageProfile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value.toUpperCase(), description: "模型支持的质量/分辨率" });
     const qualityLabel = activeQualityOptions.find((item) => item.value === props.quality)?.label || qualityOptions.find((item) => item.value === props.quality)?.label || props.quality || "自动";
-    const usesImageResolutionPicker = props.mode === "image" && supportsImageResolutionPresets(props.imageProfile.size);
-    const imageResolutionOptions = usesImageResolutionPicker ? buildImageResolutionOptions(props.imageProfile.size.values) : [];
+    // 尺寸/比例/分辨率选项取同显示名分组内全部模型的并集，路由模型只决定发送参数。
+    const mergedProfile = mergedImageCapabilityConfig(props.config, props.model || props.config.imageModel);
+    const usesImageResolutionPicker = props.mode === "image" && supportsImageResolutionPresets(mergedProfile.size);
+    const imageResolutionOptions = usesImageResolutionPicker ? buildImageResolutionOptions(mergedProfile.size.values) : [];
     const activeImageResolution = usesImageResolutionPicker ? imageResolutionOption(imageResolutionOptions, props.ratio) : undefined;
     const activeImageRatio = activeImageResolution?.ratio || imageRatioForSize(props.ratio) || (props.ratio.includes(":") ? props.ratio : "1:1");
     const activeImageResolutionChoice: ImageResolutionChoice = activeImageResolution?.tier || "auto";
-    const imageResolutionChoiceOptions = usesImageResolutionPicker ? imageResolutionChoices(props.imageProfile.size.values) : [];
+    const imageResolutionChoiceOptions = usesImageResolutionPicker ? imageResolutionChoices(mergedProfile.size.values) : [];
     const imageRatios = usesImageResolutionPicker
         ? Array.from(new Set(imageResolutionOptions.filter((item) => !activeImageResolution || item.tier === activeImageResolution.tier).map((item) => item.ratio)))
-        : props.imageProfile.size.values.length ? props.imageProfile.size.values : ratioOptions.map((item) => item.value);
+        : mergedProfile.size.values.length ? mergedProfile.size.values : ratioOptions.map((item) => item.value);
     const ratios = props.mode === "video" ? props.videoProfile.ratios : imageRatios;
     const resolutions = props.mode === "video" ? props.videoProfile.resolutions.map((value) => ({ value: value.replace(/p$/i, ""), label: videoResolutionLabel(value) })) : resolutionOptions;
     const selectImageRatio = (nextRatio: string) => {
@@ -1147,20 +1150,20 @@ function GenerationSettingsMenu(props: ComposerProps) {
     };
     const selectImageResolution = (choice: ImageResolutionChoice) => {
         if (choice === "auto") {
-            props.setRatio(props.imageProfile.size.values.includes("auto") ? "auto" : activeImageRatio);
+            props.setRatio(mergedProfile.size.values.includes("auto") ? "auto" : activeImageRatio);
             return;
         }
         const nextSize = imageSizeForResolution(imageResolutionOptions, choice, activeImageRatio) || imageResolutionOptions.find((item) => item.tier === choice)?.size;
         if (nextSize) props.setRatio(nextSize);
     };
     const imageSummary = [
-        ...(props.imageProfile.size.parameter !== "none" ? [usesImageResolutionPicker ? formatImageResolutionSize(props.ratio, imageResolutionOptions) : props.ratio] : []),
+        ...(mergedProfile.size.parameter !== "none" ? [usesImageResolutionPicker ? formatImageResolutionSize(props.ratio, imageResolutionOptions) : props.ratio] : []),
         ...(props.imageProfile.quality.supported ? [qualityLabel] : []),
         ...(props.imageProfile.maxOutputs > 1 ? [props.count] : []),
     ].join(" · ");
     const summary = props.mode === "video" ? `${props.ratio} · ${videoResolutionLabel(props.videoQuality)}` : imageSummary;
     const panel = <div className="creation-parameter-menu">
-        {props.mode === "video" || props.imageProfile.size.parameter !== "none" ? <SettingSection title="画幅" value={props.mode === "image" && usesImageResolutionPicker ? activeImageRatio : props.ratio}><div className="creation-parameter-content"><div className="creation-choice-grid is-ratio">{ratios.map((value) => { const selected = props.mode === "image" && usesImageResolutionPicker ? value === activeImageRatio : value === props.ratio; return <button key={value} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => { if (props.mode === "image") selectImageRatio(value); else props.setRatio(value); setCustomRatioOpen(false); }}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>; })}</div>{props.mode !== "video" && props.imageProfile.size.allowCustom && (customRatioOpen ? <label className="creation-custom-value"><span>宽 x 高</span><input value={props.ratio} onFocus={(event) => event.currentTarget.select()} onChange={(event) => props.setRatio(event.target.value)} placeholder="1920x1080 或 2:1" aria-label="自定义图片尺寸或比例" /></label> : <button type="button" className="creation-custom-trigger" onClick={() => setCustomRatioOpen(true)}><Plus />输入自定义尺寸</button>)}</div></SettingSection> : null}
+        {props.mode === "video" || mergedProfile.size.parameter !== "none" ? <SettingSection title="画幅" value={props.mode === "image" && usesImageResolutionPicker ? activeImageRatio : props.ratio}><div className="creation-parameter-content"><div className="creation-choice-grid is-ratio">{ratios.map((value) => { const selected = props.mode === "image" && usesImageResolutionPicker ? value === activeImageRatio : value === props.ratio; return <button key={value} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => { if (props.mode === "image") selectImageRatio(value); else props.setRatio(value); setCustomRatioOpen(false); }}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>; })}</div>{props.mode !== "video" && mergedProfile.size.allowCustom && (customRatioOpen ? <label className="creation-custom-value"><span>宽 x 高</span><input value={props.ratio} onFocus={(event) => event.currentTarget.select()} onChange={(event) => props.setRatio(event.target.value)} placeholder="1920x1080 或 2:1" aria-label="自定义图片尺寸或比例" /></label> : <button type="button" className="creation-custom-trigger" onClick={() => setCustomRatioOpen(true)}><Plus />输入自定义尺寸</button>)}</div></SettingSection> : null}
         {props.mode === "video" ? <SettingSection title="清晰度" value={videoResolutionLabel(props.videoQuality)}><div className="creation-choice-grid is-resolution">{resolutions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.videoQuality} className={option.value === props.videoQuality ? "is-selected" : ""} onClick={() => props.setVideoQuality(option.value)}>{option.label}</button>)}</div></SettingSection> : <>
             {imageResolutionChoiceOptions.length ? <SettingSection title="分辨率" value={activeImageResolutionChoice === "auto" ? "自动" : activeImageResolutionChoice.toUpperCase()}><div className="creation-choice-grid is-resolution">{imageResolutionChoiceOptions.map((choice) => <button key={choice} type="button" aria-pressed={choice === activeImageResolutionChoice} className={choice === activeImageResolutionChoice ? "is-selected" : ""} onClick={() => selectImageResolution(choice)}>{choice === "auto" ? "自动" : choice.toUpperCase()}</button>)}</div></SettingSection> : null}
             {props.imageProfile.quality.supported ? <SettingSection title={activeQualityOptions.some((item) => item.value === "1k" || item.value === "2k") ? "分辨率" : "图片质量"} value={qualityLabel}><div className="creation-choice-grid is-quality">{activeQualityOptions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.quality} className={option.value === props.quality ? "is-selected" : ""} onClick={() => props.setQuality(option.value)}><span>{option.label}</span><small>{option.description}</small></button>)}</div></SettingSection> : null}

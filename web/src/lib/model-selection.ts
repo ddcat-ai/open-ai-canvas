@@ -1,4 +1,4 @@
-import { modelCapabilityConfigFor, videoDurationAllowed } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, modelCapabilityConfigFor, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
@@ -14,6 +14,7 @@ export type ModelRequirements = {
     input?: ModelInputSummary;
     videoOperation?: string;
     videoSeconds?: string;
+    imageSize?: string;
 };
 
 export type DisplayModelGroup = {
@@ -56,8 +57,9 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
     if (capability === "image") {
         if (input.videoCount > 0) return "图片模型不支持参考视频";
         if (input.audioCount > 0) return "图片模型不支持参考音频";
-        const maxImages = modelCapabilityConfigFor(config, model).image!.references.maxImages;
-        if (visualInputCount > maxImages) return `最多支持 ${maxImages} 张参考图`;
+        const image = modelCapabilityConfigFor(config, model).image!;
+        if (visualInputCount > image.references.maxImages) return `最多支持 ${image.references.maxImages} 张参考图`;
+        if (requirements.imageSize && !image.size.allowCustom && !image.size.values.includes(requirements.imageSize)) return "不支持当前尺寸";
         return "";
     }
 
@@ -81,8 +83,15 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
 }
 
 export function compatibleModelInGroup(config: AiConfig, models: string[], requirements?: ModelRequirements, preferred?: string) {
-    const ordered = preferred && models.includes(preferred) ? [preferred, ...models.filter((model) => model !== preferred)] : models;
-    return ordered.find((model) => !modelCompatibilityError(config, model, requirements)) || "";
+    const compatible = models.filter((model) => !modelCompatibilityError(config, model, requirements));
+    if (!compatible.length) return "";
+    if (compatible.length === 1) return compatible[0];
+    const priceOf = (model: string) => {
+        const channel = resolveModelChannel(config, model);
+        const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+        return cost && Number.isFinite(cost.unitPriceMicrocredits) ? cost.unitPriceMicrocredits : Number.POSITIVE_INFINITY;
+    };
+    return compatible.sort((left, right) => priceOf(left) - priceOf(right) || (left === preferred ? -1 : right === preferred ? 1 : 0))[0];
 }
 
 export function resolveCompatibleModel(config: AiConfig, selected: string, requirements?: ModelRequirements) {
@@ -92,6 +101,29 @@ export function resolveCompatibleModel(config: AiConfig, selected: string, requi
     const selectedGroup = groupModelsByDisplayName(config, options).find((group) => group.models.includes(selected));
     if (!selectedGroup) return selected;
     return compatibleModelInGroup(config, selectedGroup.models, requirements, selected);
+}
+
+// 同显示名分组的模型族：尺寸/比例/分辨率选项取组内全部模型配置的并集，
+// 让用户能看到并选择任意成员支持的能力，选中后由兼容路由落到具体模型。
+export function mergedImageCapabilityConfig(config: AiConfig, selected: string): ImageCapabilityConfig {
+    const options = selectableModelsByCapability(config, "image");
+    const group = options.length ? groupModelsByDisplayName(config, options).find((item) => item.models.includes(selected)) : undefined;
+    const models = group?.models.length ? group.models : [selected];
+    const profiles = models.map((model) => modelCapabilityConfigFor(config, model).image).filter((profile): profile is ImageCapabilityConfig => Boolean(profile));
+    if (profiles.length <= 1) return profiles[0] || defaultImageCapabilityConfig();
+    const values = Array.from(new Set(profiles.flatMap((profile) => profile.size.values)));
+    return { ...profiles[0], size: { ...profiles[0].size, values } };
+}
+
+// 切换模型后初始化图片参数为该模型能力默认值，避免旧参数在目标模型族不兼容导致无法切换。
+export function defaultImageParamsForModel(config: AiConfig, model: string): Pick<AiConfig, "size" | "quality" | "transparentBackground"> {
+    const image = modelCapabilityConfigFor(config, model).image;
+    if (!image) return { size: "1:1", quality: "auto", transparentBackground: "false" };
+    return {
+        size: image.size.default || image.size.values[0] || "1:1",
+        quality: image.quality.default || "auto",
+        transparentBackground: String(image.transparentBackground.default ?? false),
+    };
 }
 
 export function maxModelInputCapacity(config: AiConfig, capability: "image" | "video", kind: "image" | "video" | "audio") {

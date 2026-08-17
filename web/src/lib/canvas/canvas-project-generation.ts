@@ -372,7 +372,8 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = resolveCanvasGenerationModel(config, node?.metadata?.model, mode);
     const preferredModel = storedModel || resolveCanvasGenerationModel(config, defaultModel, mode) || fallbackModel;
-    const model = resolveCompatibleModel(config, preferredModel, requirements) || preferredModel;
+    const imageSize = mode === "image" ? node?.metadata?.size || config.size || defaultConfig.size : undefined;
+    const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...requirements, imageSize } : requirements) || preferredModel;
     const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
     const normalizedImage = imageProfile
         ? normalizeImageValue(imageProfile, {
