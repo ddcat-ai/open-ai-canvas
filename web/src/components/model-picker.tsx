@@ -145,28 +145,26 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                         <div className="grid min-w-0 gap-1">
                             {group.models.map((modelGroup) => {
                                 const selected = modelGroup.models.includes(current);
-                                const model = compatibleModelInGroup(config, modelGroup.models, requirements, selected ? current : undefined);
-                                const displayModel = model || (selected ? current : modelGroup.models[0]);
-                                const disabledReason = model ? "" : modelCompatibilityError(config, modelGroup.models[0], requirements) || "当前输入不符合该模型能力";
+                                const compatibleModel = compatibleModelInGroup(config, modelGroup.models, requirements, selected ? current : undefined);
+                                const model = compatibleModel || modelGroup.models[0];
+                                const displayModel = model;
+                                const incompatibleReason = compatibleModel ? "" : modelCompatibilityError(config, modelGroup.models[0], requirements) || "当前输入不符合该模型能力，切换后将重置参数";
                                 return (
                                     <button
                                         key={modelGroup.key}
                                         type="button"
                                         role="option"
                                         aria-selected={selected}
-                                        aria-disabled={Boolean(disabledReason)}
-                                        disabled={Boolean(disabledReason)}
-                                        title={disabledReason || pickerModelOptionLabel(config, displayModel, showConfiguredModelName)}
-                                        className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
+                                        title={incompatibleReason || pickerModelOptionLabel(config, displayModel, showConfiguredModelName)}
+                                        className="canvas-model-picker-option"
                                         style={{ background: "transparent", color: theme.node.text }}
                                         onClick={() => {
-                                            if (!model) return;
                                             onChange(model);
                                             setOpen(false);
                                             window.requestAnimationFrame(() => triggerRef.current?.focus());
                                         }}
                                     >
-                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showConfiguredModelName={showConfiguredModelName} showPrice={creditsEnabled} disabledReason={disabledReason} />
+                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showConfiguredModelName={showConfiguredModelName} showPrice={creditsEnabled} disabledReason={incompatibleReason} />
                                         {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                     </button>
                                 );

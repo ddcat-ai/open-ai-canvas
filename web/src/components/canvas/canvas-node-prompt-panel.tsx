@@ -8,7 +8,7 @@ import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-genera
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
-import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
+import { resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -238,7 +238,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         fullWidth
                         config={config}
                         value={config.model}
-                        onChange={(model) => onConfigChange(node.id, { model })}
+                        onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })}
                         capability={mode}
                         requirements={requirements}
                         onMissingConfig={() => navigateToSettings({ continueCreation: true })}
@@ -546,7 +546,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
     const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const preferredModel = resolveCanvasGenerationModel(globalConfig, node.metadata?.model, mode) || resolveCanvasGenerationModel(globalConfig, defaultModel, mode) || fallbackModel;
-    const model = resolveCompatibleModel(globalConfig, preferredModel, requirements) || preferredModel;
+    const model = resolveCompatibleModel(globalConfig, preferredModel, mode === "image" ? { ...requirements, imageSize: node.metadata?.size || globalConfig.size || defaultConfig.size } : requirements) || preferredModel;
     return {
         ...globalConfig,
         model,

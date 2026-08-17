@@ -3,7 +3,8 @@ import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
-import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { mergedImageCapabilityConfig } from "@/lib/model-selection";
 import { type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
@@ -50,7 +51,7 @@ type ImageSettingsPanelProps = {
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3 }: ImageSettingsPanelProps) {
     const [snapDimensionToStep, setSnapDimensionToStep] = useState(true);
-    const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image!;
+    const profile = mergedImageCapabilityConfig(config, config.model || config.imageModel);
     const normalized = normalizeImageValue(profile, config);
     const quality = normalized.quality;
     const transparentBackground = normalized.transparentBackground === "true";
@@ -67,7 +68,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
         ? []
         : usesResolutionPicker && activeResolution
         ? resolutionOptions.filter((item) => item.tier === activeResolution.tier).map((item) => ({ value: item.ratio, label: item.ratio, size: item.size, width: item.width, height: item.height, icon: item.width === item.height ? "square" : item.width > item.height ? "landscape" : "portrait" }))
-        : aspectOptions.filter((item) => imageOptionAllowed(profile, item));
+        : imageAspectOptions(profile);
     const selectedAspect = availableAspects.find((item) => imageOptionValue(profile, item) === activeSize || item.value === activeSize) || availableAspects.find((item) => item.label === activeRatio);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
     const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
@@ -196,6 +197,34 @@ function imageOptionAllowed(profile: ImageCapabilityConfig, option: AspectOption
     if (profile.size.parameter === "none") return false;
     if (profile.size.allowCustom && profile.size.values.length === 0) return true;
     return [option.value, option.size, option.width && option.height ? `${option.width}x${option.height}` : ""].filter(Boolean).some((value) => profile.size.values.includes(String(value)));
+}
+
+// 宽高比选项直接取模型配置 values（与创作页面一致），不在白名单里的比例（如 8:1）也能显示。
+function imageAspectOptions(profile: ImageCapabilityConfig): AspectOption[] {
+    if (profile.size.parameter === "none") return [];
+    const values = profile.size.values.filter((value) => value.trim().toLowerCase() !== "auto");
+    if (!values.length) return profile.size.allowCustom ? aspectOptions.filter((item) => item.value !== "auto") : [];
+    return values.map((value) => {
+        const known = aspectOptions.find((item) => (item.size || item.value) === value || item.value === value);
+        if (known) return known;
+        const parts = ratioParts(value);
+        return { value, label: value, size: value, width: parts?.width || 0, height: parts?.height || 0, icon: "custom" };
+    });
+}
+
+function ratioParts(value: string) {
+    const pixel = value.trim().match(/^(\d+)x(\d+)$/i);
+    if (pixel) {
+        const divisor = gcd(Number(pixel[1]), Number(pixel[2]));
+        return { width: Number(pixel[1]) / divisor, height: Number(pixel[2]) / divisor };
+    }
+    const ratio = value.trim().match(/^(\d+):(\d+)$/);
+    if (!ratio) return undefined;
+    return { width: Number(ratio[1]), height: Number(ratio[2]) };
+}
+
+function gcd(a: number, b: number): number {
+    return b ? gcd(b, a % b) : a;
 }
 
 function imageOptionValue(profile: ImageCapabilityConfig, option: AspectOption) {
