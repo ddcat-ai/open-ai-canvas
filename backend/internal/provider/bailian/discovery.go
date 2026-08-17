@@ -1,11 +1,7 @@
 package bailian
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"sort"
+	"net/url"
 	"strings"
 
 	"infinite-canvas/backend/internal/provider"
@@ -26,109 +22,18 @@ func (d *Discovery) GetProviderID() string {
 
 // Match 判断是否匹配阿里云百炼
 func (d *Discovery) Match(baseURL string, headers map[string]string) bool {
-	// 匹配阿里云百炼域名
-	return strings.Contains(baseURL, "dashscope") ||
-		strings.Contains(baseURL, "maas.aliyuncs.com")
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	dashscopeHost := host == "dashscope.aliyuncs.com" || strings.HasSuffix(host, ".dashscope.aliyuncs.com") || (strings.HasPrefix(host, "dashscope-") && strings.HasSuffix(host, ".aliyuncs.com"))
+	return dashscopeHost || host == "maas.aliyuncs.com" || strings.HasSuffix(host, ".maas.aliyuncs.com")
 }
 
-// DiscoverModels 发现模型列表
-func (d *Discovery) DiscoverModels(ctx context.Context, config provider.DiscoveryConfig) ([]provider.Model, error) {
-	// 1. 调用标准 /v1/models 获取文本模型
-	textModels, err := d.fetchStandardModels(ctx, config)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 添加百炼特有的多模态模型
-	extendedModels := d.getExtendedModels(config.Region)
-
-	// 3. 合并并去重
-	allModels := append(textModels, extendedModels...)
-	return d.deduplicate(allModels), nil
-}
-
-// fetchStandardModels 调用标准 /v1/models 接口（自己实现，不依赖 openai 包）
-func (d *Discovery) fetchStandardModels(ctx context.Context, config provider.DiscoveryConfig) ([]provider.Model, error) {
-	// 构建 URL
-	target := config.BaseURL
-	if !strings.HasSuffix(target, "/models") {
-		if strings.HasSuffix(target, "/") {
-			target += "models"
-		} else {
-			target += "/models"
-		}
-	}
-
-	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// 设置认证头
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-	for k, v := range config.Headers {
-		req.Header.Set(k, v)
-	}
-
-	// 执行请求
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	// 解析响应
-	var payload struct {
-		Data []struct {
-			ID                     string   `json:"id"`
-			Name                   string   `json:"name"`
-			SupportedEndpointTypes []string `json:"supported_generation_methods"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// 转换为统一格式
-	models := make([]provider.Model, 0, len(payload.Data))
-	seen := make(map[string]bool)
-
-	for _, item := range payload.Data {
-		name := strings.TrimSpace(item.ID)
-		if name == "" {
-			name = strings.TrimSpace(item.Name)
-		}
-		name = strings.TrimPrefix(name, "models/")
-
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-
-		models = append(models, provider.Model{
-			ID:                     name,
-			DisplayName:            name,
-			Provider:               "bailian",
-			Capability:             []string{"text"},
-			SupportedEndpointTypes: item.SupportedEndpointTypes,
-			Metadata: map[string]any{
-				"source": "standard",
-			},
-		})
-	}
-
-	sort.Slice(models, func(i, j int) bool {
-		return models[i].ID < models[j].ID
-	})
-
-	return models, nil
+// AdditionalModels 只返回百炼标准 /models 未暴露的补充目录。
+func (d *Discovery) AdditionalModels(_ provider.DiscoveryConfig) []provider.Model {
+	return d.deduplicate(d.getExtendedModels())
 }
 
 // GetMetadata 返回插件元数据
@@ -143,7 +48,7 @@ func (d *Discovery) GetMetadata() provider.ProviderMetadata {
 }
 
 // getExtendedModels 获取百炼特有的扩展模型列表
-func (d *Discovery) getExtendedModels(region string) []provider.Model {
+func (d *Discovery) getExtendedModels() []provider.Model {
 	models := []provider.Model{
 		// === 视频生成模型 ===
 		{
@@ -154,8 +59,8 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
 			},
 		},
@@ -167,8 +72,8 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "image_to_video",
 			},
 		},
@@ -180,8 +85,8 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "reference_to_video",
 			},
 		},
@@ -193,12 +98,12 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "video_edit",
 			},
 		},
-		
+
 		// Wan 系列视频生成模型
 		{
 			ID:                     "wan2.7-t2v-2026-06-12",
@@ -208,8 +113,8 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
 			},
 		},
@@ -221,8 +126,8 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "image_to_video",
 			},
 		},
@@ -234,12 +139,12 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "reference_to_video",
 			},
 		},
-		
+
 		// Kling（可灵）系列视频生成模型
 		{
 			ID:                     "kling/kling-v3-omni-video-generation",
@@ -249,10 +154,10 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
-				"resolution":     "up to 4K",
-				"duration":       "3-15s",
+				"source":           "extended",
+				"model_type":       "video_generation",
+				"resolution":       "up to 4K",
+				"duration":         "3-15s",
 				"generation_modes": []string{"text_to_video", "image_to_video", "reference_to_video", "video_edit"},
 			},
 		},
@@ -264,14 +169,14 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
-				"resolution":     "720P-4K",
-				"duration":       "3-15s",
+				"source":           "extended",
+				"model_type":       "video_generation",
+				"resolution":       "720P-4K",
+				"duration":         "3-15s",
 				"generation_modes": []string{"text_to_video", "image_to_video"},
 			},
 		},
-		
+
 		// PixVerse（爱诗）系列 - 文生视频
 		{
 			ID:                     "pixverse/pixverse-c1-t2v",
@@ -281,11 +186,11 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"recommended":    "action scenes, effects",
-				"duration":       "1-15s",
+				"recommended":     "action scenes, effects",
+				"duration":        "1-15s",
 			},
 		},
 		{
@@ -296,11 +201,11 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"recommended":    "general purpose",
-				"duration":       "1-15s",
+				"recommended":     "general purpose",
+				"duration":        "1-15s",
 			},
 		},
 		{
@@ -311,13 +216,13 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"deprecated":     "recommend upgrade to v6",
+				"deprecated":      "recommend upgrade to v6",
 			},
 		},
-		
+
 		// PixVerse（爱诗）系列 - 图生视频
 		{
 			ID:                     "pixverse/pixverse-c1-it2v",
@@ -327,10 +232,10 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "image_to_video",
-				"duration":       "1-15s",
+				"duration":        "1-15s",
 			},
 		},
 		{
@@ -341,10 +246,10 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "image_to_video",
-				"duration":       "1-15s",
+				"duration":        "1-15s",
 			},
 		},
 		{
@@ -355,12 +260,12 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "image_to_video",
 			},
 		},
-		
+
 		// Vidu 系列视频生成模型
 		{
 			ID:                     "vidu/viduq3-pro_text2video",
@@ -370,11 +275,11 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"resolution":     "540P-1080P",
-				"duration":       "1-16s",
+				"resolution":      "540P-1080P",
+				"duration":        "1-16s",
 			},
 		},
 		{
@@ -385,11 +290,11 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"resolution":     "540P-1080P",
-				"duration":       "1-16s",
+				"resolution":      "540P-1080P",
+				"duration":        "1-16s",
 			},
 		},
 		{
@@ -400,27 +305,11 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 			SupportedEndpointTypes: []string{"video"},
 			APIPath:                "/api/v1/services/aigc/video-generation/video-synthesis",
 			Metadata: map[string]any{
-				"source":         "extended",
-				"model_type":     "video_generation",
+				"source":          "extended",
+				"model_type":      "video_generation",
 				"generation_mode": "text_to_video",
-				"resolution":     "540P-1080P",
-				"duration":       "1-10s",
-			},
-		},
-
-		// === 3D 生成模型 ===
-		{
-			ID:                     "Tripo/Tripo-H3.1",
-			DisplayName:            "Tripo H3.1 3D生成",
-			Provider:               "bailian",
-			Capability:             []string{"image"},  // 前端无 3d 分类，暂归 image
-			SupportedEndpointTypes: []string{"image"},
-			APIPath:                "/api/v1/services/aigc/3d-generation",
-			RequiresPlan:           true,
-			Metadata: map[string]any{
-				"source":     "extended",
-				"model_type": "3d_generation",
-				"note":       "frontend lacks 3d category, classified as image",
+				"resolution":      "540P-1080P",
+				"duration":        "1-10s",
 			},
 		},
 
@@ -451,21 +340,6 @@ func (d *Discovery) getExtendedModels(region string) []provider.Model {
 		},
 	}
 
-	// 根据地域过滤（如果指定了地域）
-	if region != "" {
-		models = d.filterByRegion(models, region)
-	}
-
-	return models
-}
-
-// filterByRegion 根据地域过滤模型
-func (d *Discovery) filterByRegion(models []provider.Model, region string) []provider.Model {
-	// 美国地域可能不支持某些国内模型
-	if region == "us-east-1" {
-		// 过滤逻辑：保留所有模型（示例）
-		// 实际可以根据需要过滤
-	}
 	return models
 }
 

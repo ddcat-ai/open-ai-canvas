@@ -104,12 +104,6 @@ type ChannelModelCatalogOption struct {
 }
 
 func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.User, input ChannelModelsRequest) ([]ChannelModelCatalogItem, error) {
-	// 功能开关：如果启用插件机制，使用新实现
-	if s.isPluginEnabled() {
-		return s.FetchChannelModelCatalogWithPlugin(ctx, actor, input)
-	}
-	
-	// 否则使用原有实现（向后兼容）
 	if actor == nil || strings.TrimSpace(actor.ID) == "" {
 		return nil, Unauthorized("请先登录")
 	}
@@ -206,6 +200,9 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 	sort.Slice(catalog, func(left int, right int) bool {
 		return catalog[left].ID < catalog[right].ID
 	})
+	if s.isPluginEnabled() {
+		catalog = extendChannelModelCatalog(baseURL, apiFormat, headers, catalog)
+	}
 	return catalog, nil
 }
 

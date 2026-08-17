@@ -1,11 +1,8 @@
 package provider
 
-import (
-	"context"
-)
-
-// ModelDiscovery 模型发现插件接口
-type ModelDiscovery interface {
+// ModelCatalogPlugin 只补充标准 /models 没有暴露的厂商目录项。
+// 标准目录请求、鉴权和出站安全边界仍由 service 统一负责。
+type ModelCatalogPlugin interface {
 	// GetProviderID 返回服务商唯一标识
 	GetProviderID() string
 
@@ -13,8 +10,8 @@ type ModelDiscovery interface {
 	// 基于 baseURL、headers 等信息判断
 	Match(baseURL string, headers map[string]string) bool
 
-	// DiscoverModels 发现模型列表
-	DiscoverModels(ctx context.Context, config DiscoveryConfig) ([]Model, error)
+	// AdditionalModels 返回标准目录之外的补充模型。
+	AdditionalModels(config DiscoveryConfig) []Model
 
 	// GetMetadata 返回插件元数据
 	GetMetadata() ProviderMetadata
@@ -22,13 +19,10 @@ type ModelDiscovery interface {
 
 // DiscoveryConfig 模型发现配置
 type DiscoveryConfig struct {
-	BaseURL           string            // API 基础 URL
-	APIKey            string            // API 密钥
-	SecretKey         string            // 可选的密钥对
-	APIFormat         string            // API 格式：openai, gemini, anthropic
-	Headers           map[string]string // 自定义请求头
-	AllowLocalChannel bool              // 是否允许本地渠道
-	Region            string            // 地域（从 baseURL 解析或指定）
+	BaseURL   string
+	APIFormat string
+	Headers   map[string]string
+	Region    string
 }
 
 // Model 统一的模型定义
