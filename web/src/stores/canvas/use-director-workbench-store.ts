@@ -12,6 +12,7 @@ type DirectorWorkbenchStore = {
     playing: boolean;
     autoKey: boolean;
     sequencerHeight: number;
+    sequencerVisible: boolean;
     setSelectedObjectId: (id: string | null) => void;
     setSelectedBone: (bone: string | null) => void;
     setSelectedLightId: (id: string | null) => void;
@@ -21,10 +22,11 @@ type DirectorWorkbenchStore = {
     setPlaying: (playing: boolean) => void;
     setAutoKey: (autoKey: boolean) => void;
     setSequencerHeight: (height: number) => void;
+    setSequencerVisible: (visible: boolean) => void;
     reset: () => void;
 };
 
-const initialState = { selectedObjectId: null, selectedBone: null, selectedLightId: null, transformMode: "translate" as const, renderMode: "beauty" as const, playhead: 0, playing: false, autoKey: true, sequencerHeight: 300 };
+const initialState = { selectedObjectId: null, selectedBone: null, selectedLightId: null, transformMode: "translate" as const, renderMode: "beauty" as const, playhead: 0, playing: false, autoKey: true, sequencerHeight: 300, sequencerVisible: true };
 
 export const useDirectorWorkbenchStore = create<DirectorWorkbenchStore>((set) => ({
     ...initialState,
@@ -37,5 +39,6 @@ export const useDirectorWorkbenchStore = create<DirectorWorkbenchStore>((set) =>
     setPlaying: (playing) => set({ playing }),
     setAutoKey: (autoKey) => set({ autoKey }),
     setSequencerHeight: (sequencerHeight) => set({ sequencerHeight: Math.max(180, Math.min(620, sequencerHeight)) }),
+    setSequencerVisible: (sequencerVisible) => set({ sequencerVisible }),
     reset: () => set(initialState),
 }));
