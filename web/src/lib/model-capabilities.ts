@@ -35,6 +35,7 @@ export type ImageCapabilityConfig = {
 export type VideoCapabilityConfig = {
     references: {
         promptMaxChars: number;
+        minImages: number;
         maxImages: number;
         maxImageBytes: number;
         maxVideos: number;
@@ -133,6 +134,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: 1000,
+            minImages: 0,
             maxImages: 9,
             maxImageBytes: 30 * 1024 * 1024,
             maxVideos: 0,
@@ -189,9 +191,11 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
-    return cost?.capabilityConfig
-        ? { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video: cost.capabilityConfig.video || fallback.video }
-        : fallback;
+    if (!cost?.capabilityConfig) return fallback;
+    const video = cost.capabilityConfig.video
+        ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } }
+        : fallback.video;
+    return { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
@@ -234,6 +238,8 @@ export function videoResolutionRequest(profile: VideoCapabilityConfig, value: st
     const candidates = [requested];
     if (/^\d+$/.test(requested)) candidates.push(`${requested}p`);
     if (requested === "low") candidates.push("480p");
+    if (requested === "2k") candidates.push("1440p");
+    if (requested === "1440" || requested === "1440p") candidates.push("2k");
     if (requested === "4k") candidates.push("2160p");
     if (requested === "2160" || requested === "2160p") candidates.push("4k");
     const supported = new Map(profile.resolutions.map((resolution) => [resolution.trim().toLowerCase(), resolution.trim()]));

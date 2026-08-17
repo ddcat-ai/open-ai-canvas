@@ -1,4 +1,4 @@
-import { defaultModelCapabilityConfig, type ModelCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, protocolForModelCatalog, type ModelProtocol } from "@/lib/model-protocols";
 import type { ModelChannel } from "@/stores/use-config-store";
 
@@ -66,31 +66,32 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
     const next: ChannelModelCost[] = [];
     for (const item of catalog) {
         const existing = existingByModel.get(item.id);
-        const catalogBackedCapability = hasCatalogCapabilityMetadata(item);
-        const inferredProtocol = protocolForModelCatalog(item.supportedEndpointTypes, item.modelType);
-        if (existing && !catalogBackedCapability && !inferredProtocol) {
-            next.push({
-                ...existing,
-                ...(item.displayName ? { displayName: item.displayName } : {}),
-            });
-            continue;
-        }
-        const protocol = inferredProtocol || existing?.protocol || channel.interfaceType;
-        const capability = modelProtocolCapability(protocol) || item.modelType;
-        if (!protocol || !capability) continue;
-        const protocolChanged = Boolean(existing && inferredProtocol && existing.protocol !== inferredProtocol);
-        const replaceCapabilityConfig = !existing || catalogBackedCapability || protocolChanged;
-        const capabilityConfig = replaceCapabilityConfig && (capability === "image" || capability === "video") ? (catalogBackedCapability ? catalogCapabilityConfig(item, protocol, capability) : defaultModelCapabilityConfig(protocol, item.id)) : undefined;
+        const inferredProtocol = protocolForModelCatalog(item.supportedEndpointTypes);
+        const inferredCapability = modelProtocolCapability(inferredProtocol) || item.modelType;
         if (existing) {
+            const protocol = inferredProtocol || existing.protocol;
+            const capability = inferredCapability || existing.capability;
+            const capabilityChanged = capability !== existing.capability;
+            const patchCapabilityConfig = hasCatalogCapabilityConfig(item) && (capability === "image" || capability === "video");
+            const capabilityConfig = patchCapabilityConfig
+                ? catalogCapabilityConfig(item, protocol || channel.interfaceType, capability, capabilityChanged ? undefined : existing.capabilityConfig, false)
+                : capabilityChanged
+                  ? undefined
+                  : existing.capabilityConfig;
             next.push({
                 ...existing,
                 ...(item.displayName ? { displayName: item.displayName } : {}),
                 capability,
-                protocol,
-                ...(replaceCapabilityConfig ? { capabilityConfig } : {}),
+                ...(inferredProtocol ? { protocol: inferredProtocol } : {}),
+                ...(patchCapabilityConfig || capabilityChanged ? { capabilityConfig } : {}),
             });
             continue;
         }
+
+        const capability = inferredCapability || modelProtocolCapability(channel.interfaceType);
+        const protocol = inferredProtocol || protocolTemplateForNewCatalogModel(capability, channel.interfaceType);
+        if (!protocol || !capability) continue;
+        const capabilityConfig = capability === "image" || capability === "video" ? catalogCapabilityConfig(item, protocol, capability, undefined, true) : undefined;
         next.push({
             model: item.id,
             ...(item.displayName ? { displayName: item.displayName } : {}),
@@ -104,12 +105,21 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
     return next;
 }
 
-function hasCatalogCapabilityMetadata(item: ChannelModelCatalogItem) {
-    return Boolean(item.modelType || item.supportedEndpointTypes?.length || item.defaultParameters || item.options || item.supportsImages !== undefined || item.minImages !== undefined || item.maxImages !== undefined);
+function protocolTemplateForNewCatalogModel(capability: ChannelModelCost["capability"] | undefined, channelProtocol: ModelProtocol | undefined): ModelProtocol | undefined {
+    if (!capability) return channelProtocol;
+    if (modelProtocolCapability(channelProtocol) === capability) return channelProtocol;
+    const templates: Record<ChannelModelCost["capability"], ModelProtocol> = { text: "chat-completion", image: "openai-image", video: "newapi", audio: "openai-audio" };
+    return templates[capability];
 }
 
-function catalogCapabilityConfig(item: ChannelModelCatalogItem, protocol: ModelProtocol, capability: "image" | "video"): ModelCapabilityConfig {
-    const config = defaultModelCapabilityConfig(protocol, item.id);
+function hasCatalogCapabilityConfig(item: ChannelModelCatalogItem) {
+    return Boolean(item.defaultParameters || item.options || item.supportsImages !== undefined || item.minImages !== undefined || item.maxImages !== undefined);
+}
+
+function catalogCapabilityConfig(item: ChannelModelCatalogItem, protocol: ModelProtocol | undefined, capability: "image" | "video", existing: ModelCapabilityConfig | undefined, isNew: boolean): ModelCapabilityConfig {
+    const fallback = defaultModelCapabilityConfig(protocol, item.id);
+    const existingProfile = capability === "image" ? existing?.image : existing?.video;
+    const config = structuredClone(existingProfile ? existing! : fallback);
     if (capability === "image") {
         if (item.supportsImages === false) config.image!.references.maxImages = 0;
         else if (item.maxImages !== undefined) config.image!.references.maxImages = item.maxImages;
@@ -117,6 +127,10 @@ function catalogCapabilityConfig(item: ChannelModelCatalogItem, protocol: ModelP
     }
 
     const video = config.video!;
+    if (isNew) {
+        video.resolutions = [];
+        video.defaultResolution = "";
+    }
     const durations = uniqueNumbers(optionValues(item.options?.durationSeconds));
     const defaultDuration = positiveNumber(item.defaultParameters?.durationSeconds);
     if (durations.length) {
@@ -138,15 +152,26 @@ function catalogCapabilityConfig(item: ChannelModelCatalogItem, protocol: ModelP
     // explicitly advertises compatible values. An empty list means omit it.
     const resolutions = optionValues(item.options?.resolution);
     const defaultResolution = item.defaultParameters?.resolution?.trim() || "";
-    video.resolutions = resolutions;
-    video.defaultResolution = resolutions.includes(defaultResolution) ? defaultResolution : resolutions[0] || "";
+    if (resolutions.length || defaultResolution) {
+        video.resolutions = resolutions.length ? resolutions : [defaultResolution];
+        video.defaultResolution = video.resolutions.includes(defaultResolution) ? defaultResolution : video.resolutions[0] || "";
+    }
 
-    if (item.supportsImages === false) {
+    if (item.supportsImages === false || item.maxImages === 0) {
+        video.references.minImages = 0;
         video.references.maxImages = 0;
         video.operations = video.operations.filter((operation) => operation !== "image_to_video");
-        video.defaultOperation = "text_to_video";
-    } else if (item.maxImages !== undefined) {
-        video.references.maxImages = item.maxImages;
+        if (!video.operations.length) video.operations = ["text_to_video"];
+        video.defaultOperation = video.operations.includes(video.defaultOperation) ? video.defaultOperation : video.operations[0]!;
+    } else {
+        if (item.maxImages !== undefined) video.references.maxImages = item.maxImages;
+        if (item.minImages !== undefined) video.references.minImages = item.minImages;
+        if (video.references.minImages > 0) {
+            video.references.maxImages = Math.max(video.references.minImages, video.references.maxImages);
+            video.operations = video.operations.filter((operation) => operation !== "text_to_video");
+            if (!video.operations.includes("image_to_video")) video.operations.unshift("image_to_video");
+            video.defaultOperation = "image_to_video";
+        }
     }
     return config;
 }

@@ -1973,7 +1973,10 @@ func newAPIChannel2VideoRequestBody(input canvasGenerationInput) (newAPIVideoReq
 		seconds = 6
 	}
 	ratio := normalizeNewAPIChannel2Ratio(input.Config.Size, modelName)
-	resolution := normalizeNewAPIChannel2Resolution(input.Config.VQuality, modelName)
+	resolution := videoResolutionNameRequest(input.VideoCapability, input.Config.VQuality)
+	if modelName == "grok-video-1.5-1080p" {
+		resolution = "1080p"
+	}
 	body := newAPIVideoRequest{
 		Model:       input.Config.Model,
 		Prompt:      strings.TrimSpace(input.Prompt),
