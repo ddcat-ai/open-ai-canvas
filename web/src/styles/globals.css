@@ -5030,16 +5030,17 @@
         box-shadow: 0 24px 72px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.16);
     }
 
+    /* Dock 命令按钮：BottomMenu 式干净状态——透明默认 + hover/active 仅换底色，
+       去掉描边/内阴影/发光阴影的多层反馈，hover 与 active 用同一套视觉语言，
+       保持 dock 整体性（参考 uselayouts BottomMenu 的 bg-muted/bg-accent 切换）。*/
     .aceternity-dock-command {
-        border-color: color-mix(in srgb, currentColor 11%, transparent);
-        background: var(--dock-command-bg);
+        border-color: transparent;
+        background: transparent;
         color: inherit;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 5px 15px rgba(15, 23, 42, 0.08);
+        box-shadow: none;
         transition:
-            border-color var(--motion-instant) ease-out,
             background-color var(--motion-instant) ease-out,
-            color var(--motion-instant) ease-out,
-            box-shadow var(--motion-instant) ease-out;
+            color var(--motion-instant) ease-out;
     }
 
     .aceternity-dock-command > span:first-child svg {
@@ -5049,33 +5050,12 @@
     }
 
     .aceternity-dock-command:hover:not(:disabled) {
-        border-color: color-mix(in srgb, currentColor 20%, transparent);
         background: var(--dock-command-hover);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 12px 30px rgba(15, 23, 42, 0.14);
-    }
-
-    .aceternity-dock-command.is-labeled {
-        border-color: transparent;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .aceternity-dock-command.is-labeled:hover:not(:disabled) {
-        border-color: transparent;
-        background: var(--dock-command-hover);
-        box-shadow: none;
-    }
-
-    .aceternity-dock-command.is-labeled.is-active {
-        border-color: transparent;
-        box-shadow: none;
     }
 
     .aceternity-dock-command.is-active {
-        border-color: color-mix(in srgb, var(--dock-command-active) 28%, transparent);
         background: var(--dock-command-active);
         color: var(--dock-command-active-text);
-        box-shadow: 0 12px 30px color-mix(in srgb, var(--dock-command-active) 22%, transparent);
     }
 
     .aceternity-dock-command.is-active > span:first-child,
@@ -5083,19 +5063,6 @@
         color: var(--dock-command-active-text);
         stroke: currentColor;
         opacity: 1;
-    }
-
-    .aceternity-dock-command.is-quiet {
-        border-color: transparent;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .aceternity-dock-command.is-quiet:hover:not(:disabled),
-    .aceternity-dock-command.is-quiet.is-active {
-        border-color: transparent;
-        background: var(--dock-command-hover);
-        box-shadow: none;
     }
 
     .aceternity-dock-command.is-danger {
