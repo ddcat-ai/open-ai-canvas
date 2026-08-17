@@ -50,29 +50,34 @@ export function configuredModelDisplayName(config: AiConfig, value: string) {
 
 export function modelCompatibilityError(config: AiConfig, model: string, requirements?: ModelRequirements) {
     const capability = requirements?.capability;
+    if (!capability) return "";
     const input = requirements?.input;
-    if (!capability || !input) return "";
-    const visualInputCount = input.imageCount + input.characterCount;
+    const visualInputCount = input ? input.imageCount + input.characterCount : 0;
 
     if (capability === "image") {
+        const image = modelCapabilityConfigFor(config, model).image!;
+        // 尺寸兼容不依赖输入摘要：无输入时（如画布重试/工具链）也要按尺寸过滤组内模型。
+        if (requirements.imageSize && !image.size.allowCustom && !image.size.values.includes(requirements.imageSize)) return "不支持当前尺寸";
+        if (!input) return "";
         if (input.videoCount > 0) return "图片模型不支持参考视频";
         if (input.audioCount > 0) return "图片模型不支持参考音频";
-        const image = modelCapabilityConfigFor(config, model).image!;
         if (visualInputCount > image.references.maxImages) return `最多支持 ${image.references.maxImages} 张参考图`;
-        if (requirements.imageSize && !image.size.allowCustom && !image.size.values.includes(requirements.imageSize)) return "不支持当前尺寸";
         return "";
     }
 
     if (capability === "video") {
         const profile = modelCapabilityConfigFor(config, model).video!;
+        if (requirements.videoSeconds && !videoDurationAllowed(profile, Number(requirements.videoSeconds))) return "不支持当前视频时长";
+        if (!input) return "";
         if (visualInputCount > profile.references.maxImages) return `最多支持 ${profile.references.maxImages} 张参考图`;
         if (input.videoCount > profile.references.maxVideos) return `最多支持 ${profile.references.maxVideos} 个参考视频`;
         if (input.audioCount > profile.references.maxAudios) return `最多支持 ${profile.references.maxAudios} 个参考音频`;
-        if (requirements.videoSeconds && !videoDurationAllowed(profile, Number(requirements.videoSeconds))) return "不支持当前视频时长";
         const operation = resolveVideoOperation(input, requirements.videoOperation);
         if (operation !== "concat" && !profile.operations.includes(operation)) return `不支持${videoOperationLabel(operation)}`;
         return "";
     }
+
+    if (!input) return "";
 
     if (capability === "text") {
         return input.audioCount > 0 ? "文本模型不支持参考音频" : "";

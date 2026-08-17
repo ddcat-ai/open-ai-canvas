@@ -373,7 +373,10 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const storedModel = resolveCanvasGenerationModel(config, node?.metadata?.model, mode);
     const preferredModel = storedModel || resolveCanvasGenerationModel(config, defaultModel, mode) || fallbackModel;
     const imageSize = mode === "image" ? node?.metadata?.size || config.size || defaultConfig.size : undefined;
-    const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...requirements, imageSize } : requirements) || preferredModel;
+    // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
+    // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
+    const baseRequirements = requirements?.capability ? requirements : { capability: mode };
+    const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel;
     const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
     const normalizedImage = imageProfile
         ? normalizeImageValue(imageProfile, {
