@@ -45,6 +45,7 @@ export type ResponseFunctionTool = {
 export type ToolResponseResult = {
     content: string;
     toolCalls: ResponseToolCall[];
+    reasoning?: string;
 };
 
 type ToolChoice = "auto" | "required" | { type: "function"; name: string };
@@ -67,16 +68,16 @@ type ResponseApiPayload = {
     code?: number;
     msg?: string;
 };
-type ResponseStreamState = { buffer: string; text: string; payload?: ResponseApiPayload; error?: string };
+type ResponseStreamState = { buffer: string; text: string; reasoning: string; payload?: ResponseApiPayload; error?: string };
 type ChatCompletionToolCall = { id?: string; type?: "function"; function?: { name?: string; arguments?: string } };
 type ChatCompletionPayload = {
-    choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatCompletionToolCall[] } }>;
+    choices?: Array<{ message?: { content?: string | null; reasoning_content?: string | null; tool_calls?: ChatCompletionToolCall[] } }>;
     error?: { message?: string };
     code?: number;
     msg?: string;
 };
 type ChatCompletionStreamToolCall = { id: string; name: string; arguments: string };
-type ChatCompletionStreamState = { buffer: string; text: string; toolCalls: Map<number, ChatCompletionStreamToolCall>; error?: string };
+type ChatCompletionStreamState = { buffer: string; text: string; reasoning: string; toolCalls: Map<number, ChatCompletionStreamToolCall>; error?: string };
 
 type ImageApiResponse = {
     data?: Array<Record<string, unknown>>;
@@ -86,6 +87,7 @@ type ImageApiResponse = {
 };
 type GeminiPart = {
     text?: string;
+    thought?: boolean;
     inlineData?: { mimeType?: string; data?: string };
     inline_data?: { mime_type?: string; mimeType?: string; data?: string };
     fileData?: { mimeType?: string; fileUri?: string };
@@ -101,8 +103,8 @@ type GeminiPayload = {
     error?: { message?: string };
     promptFeedback?: { blockReason?: string };
 };
-type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string };
+type GeminiStreamState = { buffer: string; text: string; reasoning: string; toolCalls: ResponseToolCall[]; error?: string };
+type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string; onReasoning?: (text: string) => void };
 
 const QUALITY_BASE: Record<string, number> = {
     low: 1024,
@@ -427,7 +429,7 @@ function parseChatCompletionPayload(payload: ChatCompletionPayload): ToolRespons
             function: { name: call.function?.name || "", arguments: call.function?.arguments || "{}" },
         }))
         .filter((call) => call.id && call.function.name);
-    return { content: message?.content || "", toolCalls };
+    return { content: message?.content || "", toolCalls, ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}) };
 }
 
 function parseToolResponse(payload: ResponseApiPayload): ToolResponseResult {
@@ -495,7 +497,7 @@ async function readJsonPayload<T>(response: Response, fallback: string): Promise
     }
 }
 
-function consumeResponseStreamBlock(block: string, state: ResponseStreamState, onDelta?: (text: string) => void) {
+function consumeResponseStreamBlock(block: string, state: ResponseStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -515,6 +517,14 @@ function consumeResponseStreamBlock(block: string, state: ResponseStreamState, o
         state.text = event.text;
         onDelta?.(state.text);
     }
+    if (["response.reasoning.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta"].includes(type) && typeof event.delta === "string") {
+        state.reasoning += event.delta;
+        onReasoning?.(state.reasoning);
+    }
+    if (["response.reasoning.done", "response.reasoning_text.done", "response.reasoning_summary_text.done"].includes(type) && !state.reasoning && typeof event.text === "string") {
+        state.reasoning = event.text;
+        onReasoning?.(state.reasoning);
+    }
     if (type === "response.completed" && isRecord(event.response)) {
         state.payload = event.response as ResponseApiPayload;
     } else if (Array.isArray(event.output)) {
@@ -522,17 +532,17 @@ function consumeResponseStreamBlock(block: string, state: ResponseStreamState, o
     }
 }
 
-function consumeResponseStreamText(state: ResponseStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeResponseStreamText(state: ResponseStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeResponseStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeResponseStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeResponseStreamBlock(state.buffer, state, onDelta);
+        consumeResponseStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
@@ -555,22 +565,22 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: ResponseStreamState = { buffer: "", text: "" };
+    const state: ResponseStreamState = { buffer: "", text: "", reasoning: "" };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeResponseStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeResponseStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeResponseStreamText(state, decoder.decode(), onDelta, true);
+    consumeResponseStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
-    if (!state.payload) return { content: state.text, toolCalls: [] };
+    if (!state.payload) return { content: state.text, toolCalls: [], ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
     validateResponsePayload(state.payload);
     const result = parseToolResponse(state.payload);
-    return { ...result, content: state.text || result.content };
+    return { ...result, content: state.text || result.content, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
-function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionStreamState, onDelta?: (text: string) => void) {
+function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -589,6 +599,11 @@ function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionSt
         state.text += delta.content;
         onDelta?.(state.text);
     }
+    const reasoningDelta = stringValue(delta.reasoning_content) || stringValue(delta.reasoning) || stringValue(delta.reasoning_text);
+    if (reasoningDelta) {
+        state.reasoning += reasoningDelta;
+        onReasoning?.(state.reasoning);
+    }
     const chunks = Array.isArray(delta.tool_calls) ? delta.tool_calls : [];
     chunks.forEach((value, fallbackIndex) => {
         if (!isRecord(value)) return;
@@ -603,17 +618,17 @@ function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionSt
     });
 }
 
-function consumeChatCompletionStreamText(state: ChatCompletionStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeChatCompletionStreamText(state: ChatCompletionStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeChatCompletionStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeChatCompletionStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeChatCompletionStreamBlock(state.buffer, state, onDelta);
+        consumeChatCompletionStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
@@ -629,24 +644,28 @@ async function requestStreamingChatCompletion(config: AiConfig, body: Record<str
     });
     if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
     const contentType = response.headers.get("content-type") || "";
-    if (!response.body || !contentType.includes("text/event-stream")) return parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, "请求失败"));
+    if (!response.body || !contentType.includes("text/event-stream")) {
+        const result = parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, "请求失败"));
+        if (result.reasoning) options?.onReasoning?.(result.reasoning);
+        return result;
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: ChatCompletionStreamState = { buffer: "", text: "", toolCalls: new Map() };
+    const state: ChatCompletionStreamState = { buffer: "", text: "", reasoning: "", toolCalls: new Map() };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeChatCompletionStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeChatCompletionStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeChatCompletionStreamText(state, decoder.decode(), onDelta, true);
+    consumeChatCompletionStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
     const toolCalls = Array.from(state.toolCalls.entries())
         .sort(([left], [right]) => left - right)
         .map(([, call]) => ({ id: call.id, type: "function" as const, function: { name: call.name, arguments: call.arguments || "{}" } }))
         .filter((call) => call.id && call.function.name);
-    return { content: state.text, toolCalls };
+    return { content: state.text, toolCalls, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
 function toGeminiBody(config: AiConfig, messages: ResponseInputMessage[], extra?: Record<string, unknown>) {
@@ -733,39 +752,41 @@ async function requestGeminiStreamingResponse(config: AiConfig, body: Record<str
     if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
     if (!response.body) {
         const payload = (await response.json()) as GeminiPayload;
-        return parseGeminiToolResponse(payload);
+        const result = parseGeminiToolResponse(payload);
+        if (result.reasoning) options?.onReasoning?.(result.reasoning);
+        return result;
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: GeminiStreamState = { buffer: "", text: "", toolCalls: [] };
+    const state: GeminiStreamState = { buffer: "", text: "", reasoning: "", toolCalls: [] };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeGeminiStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeGeminiStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeGeminiStreamText(state, decoder.decode(), onDelta, true);
+    consumeGeminiStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
-    return { content: state.text, toolCalls: state.toolCalls };
+    return { content: state.text, toolCalls: state.toolCalls, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
-function consumeGeminiStreamText(state: GeminiStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeGeminiStreamText(state: GeminiStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeGeminiStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeGeminiStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeGeminiStreamBlock(state.buffer, state, onDelta);
+        consumeGeminiStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
 
-function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDelta?: (text: string) => void) {
+function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -774,6 +795,10 @@ function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDel
         .trim();
     if (!data || data === "[DONE]") return;
     const result = parseGeminiToolResponse(JSON.parse(data) as GeminiPayload);
+    if (result.reasoning) {
+        state.reasoning += result.reasoning;
+        onReasoning?.(state.reasoning);
+    }
     if (result.content) {
         state.text += result.content;
         onDelta?.(state.text);
@@ -784,7 +809,8 @@ function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDel
 function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
     validateGeminiPayload(payload);
     const parts = payload.candidates?.flatMap((candidate) => candidate.content?.parts || []) || [];
-    const content = parts.map((part) => part.text || "").join("");
+    const content = parts.filter((part) => !part.thought).map((part) => part.text || "").join("");
+    const reasoning = parts.filter((part) => part.thought).map((part) => part.text || "").join("");
     const toolCalls = parts
         .map((part) => part.functionCall)
         .filter((call): call is NonNullable<GeminiPart["functionCall"]> => Boolean(call?.name))
@@ -798,7 +824,7 @@ function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
                 ...(thoughtSignature ? { thoughtSignature } : {}),
             };
         });
-    return { content, toolCalls };
+    return { content, toolCalls, ...(reasoning ? { reasoning } : {}) };
 }
 
 async function requestGeminiImages(config: AiConfig, prompt: string, references: ReferenceImage[], count: number, options?: RequestOptions) {
