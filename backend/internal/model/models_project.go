@@ -12,7 +12,7 @@ type Resource struct {
 	Provider string         `json:"provider" gorm:"size:24"`
 	Endpoint string         `json:"endpoint"`
 	Bucket   string         `json:"bucket" gorm:"size:160"`
-	// 用户 OSS 每次修改都会生成新版本，资源固定引用创建时的存储与密钥；同一存储位置的 CDN 域名可跟随当前配置。
+	// 用户 OSS 每次修改都会生成新版本，资源固定引用创建时的存储与密钥；只有同一存储位置才可复用当前 CDN。
 	StorageSettingID string    `json:"-" gorm:"index;size:36"`
 	ObjectKey        string    `json:"objectKey" gorm:"index"`
 	PublicURL        string    `json:"publicUrl"`

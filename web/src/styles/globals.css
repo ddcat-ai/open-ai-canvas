@@ -4269,7 +4269,7 @@
     .assets-library-page .assets-library-grid > .asset-library-card > button:last-child { flex: 1 1 auto; }
     .assets-library-page .asset-library-card > .library-card-media, .assets-library-page .library-create-cover { aspect-ratio: 4 / 3; flex: 0 0 auto; }
     .assets-library-page .asset-library-card > .library-card-media > button:first-child { height: 100%; }
-    .assets-library-page .asset-library-card > .library-card-media > button:first-child > :where(img, video) { height: 100%; aspect-ratio: auto; }
+    .assets-library-page .asset-library-card > .library-card-media > button:first-child > :where(img, video, .cached-resource-image-shell) { height: 100%; aspect-ratio: auto; }
     .assets-library-page .library-create-card { padding-bottom: var(--space-4); }
     .project-assets-grid { align-items: start; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; }
     .project-assets-grid > .asset-library-card { min-height: 0; height: auto; }
@@ -8647,6 +8647,13 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     box-shadow: none !important;
 }
 
+/* Modal 关闭后会把焦点还给触发按钮；收窄该按钮的键盘焦点环，避免出现持续的粗灰边。 */
+.canvas-topbar-import-button:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
+}
+
 :where([class*="card"], [class*="Card"]):focus:not(:focus-visible),
 :where([class*="card"], [class*="Card"]):has(:focus:not(:focus-visible)) {
     outline: none !important;
@@ -8742,8 +8749,9 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
 .asset-picker-card.is-selected { box-shadow: inset 0 0 0 1px var(--library-selected-stroke); }
 .asset-picker-card.is-disabled { cursor: not-allowed; opacity: .46; }
 .asset-picker-card-media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--library-cover-surface); }
-.asset-picker-card-media > img, .asset-picker-card-media > video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.asset-picker-card-media > img.is-contain { object-fit: contain; padding: 4px; }
+.cached-resource-image-shell { display: grid; width: 100%; height: 100%; place-items: center; }
+.asset-picker-card-media > img, .asset-picker-card-media > video, .asset-picker-card-media > .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.asset-picker-card-media > img.is-contain, .asset-picker-card-media > .cached-resource-image-shell > img.is-contain { object-fit: contain; padding: 4px; }
 .asset-picker-card-check { position: absolute; top: 9px; right: 9px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgba(255, 255, 255, .72); border-radius: var(--r-xs); background: rgba(0, 0, 0, .28); color: transparent; backdrop-filter: blur(5px); }
 .asset-picker-card-check svg { width: 13px; height: 13px; }
 .asset-picker-card.is-selected .asset-picker-card-check { border-color: var(--control-check-bg); background: var(--control-check-bg); color: var(--control-check-fg); }

@@ -187,7 +187,7 @@ export function useCanvasProjectLifecycle({
         renameProject(projectId, title);
     }, [projectId, renameProject]);
 
-    const saveCanvasProject = useCallback(async () => {
+    const saveCanvasProject = useCallback(async (): Promise<boolean> => {
         try {
             updateProject(projectId, {
                 nodes: nodesRef.current,
@@ -202,7 +202,7 @@ export function useCanvasProjectLifecycle({
             await flushCanvasStorePersistence();
         } catch {
             message.error("画布保存失败，请稍后重试");
-            return;
+            return false;
         }
         try {
             await saveRemoteUserDataNow();
@@ -211,6 +211,7 @@ export function useCanvasProjectLifecycle({
             const detail = error instanceof Error ? error.message : "未知错误";
             message.warning(`本地画布布局已保存，云端同步失败：${detail}`);
         }
+        return true;
     }, [activeChatId, backgroundMode, chatSessions, connectionsRef, currentProject?.directorScenes, message, nodesRef, projectId, showImageInfo, updateProject, viewportRef]);
 
     const clearCanvasFiles = useCallback(() => {

@@ -96,28 +96,20 @@ export type ModelCapability = "image" | "video" | "text" | "audio";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+const LEGACY_DEFAULT_MODEL_NAMES = new Set(["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"]);
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
     baseUrl: OPENAI_BASE_URL,
     apiKey: "",
     apiFormat: "openai",
-    channels: [
-        {
-            id: "default",
-            name: "默认渠道",
-            baseUrl: OPENAI_BASE_URL,
-            allowLocalChannel: false,
-            apiKey: "",
-            apiFormat: "openai",
-            models: ["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"],
-        },
-    ],
-    model: "default::gpt-image-2",
-    imageModel: "default::gpt-image-2",
-    videoModel: "default::grok-imagine-video",
-    textModel: "default::gpt-5.5",
-    audioModel: "default::gpt-4o-mini-tts",
+    // 创作端模型目录只能来自后台公开逻辑模型和用户自定义渠道，不能内置供应商模型。
+    channels: [],
+    model: "",
+    imageModel: "",
+    videoModel: "",
+    textModel: "",
+    audioModel: "",
     audioVoice: "alloy",
     audioFormat: "mp3",
     audioSpeed: "1",
@@ -127,11 +119,11 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "true",
     videoWatermark: "false",
     systemPrompt: "",
-    models: ["default::gpt-image-2", "default::grok-imagine-video", "default::gpt-5.5", "default::gpt-4o-mini-tts"],
-    imageModels: ["default::gpt-image-2"],
-    videoModels: ["default::grok-imagine-video"],
-    textModels: ["default::gpt-5.5"],
-    audioModels: ["default::gpt-4o-mini-tts"],
+    models: [],
+    imageModels: [],
+    videoModels: [],
+    textModels: [],
+    audioModels: [],
     quality: "auto",
     size: "1:1",
     transparentBackground: "false",
@@ -246,14 +238,17 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
 }
 
 export function selectableModelsByCapability(config: AiConfig, capability?: ModelCapability) {
-    if (!capability) return config.models;
-    return filterModelsByCapability(config.models, capability, config.channels);
+    // 选项目录只从当前有效渠道重建，不能信任旧快照里残留的 config.models。
+    // 这样旧版本内置模型、未绑定渠道的裸模型不会再次进入创作端。
+    const models = modelOptionsFromChannels(config.channels);
+    if (!capability) return models;
+    return filterModelsByCapability(models, capability, config.channels);
 }
 
 export function configuredModelMatchesCapability(config: AiConfig, model: string, capability?: ModelCapability) {
     const normalized = normalizeModelOptionValue(model, config.channels);
-    if (!normalized || !config.models.includes(normalized)) return false;
-    return capability ? selectableModelsByCapability(config, capability).includes(normalized) : true;
+    if (!normalized) return false;
+    return selectableModelsByCapability(config, capability).includes(normalized);
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
@@ -327,7 +322,7 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             models,
             model,
             imageModel: normalizeSelectedModel(config.imageModel || model, channels, imageModels),
-            videoModel: normalizeSelectedModel(config.videoModel || "grok-imagine-video", channels, videoModels),
+            videoModel: normalizeSelectedModel(config.videoModel, channels, videoModels),
             textModel: normalizeSelectedModel(config.textModel || model, channels, textModels),
             audioModel: normalizeSelectedModel(config.audioModel || defaultConfig.audioModel, channels, audioModels),
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
@@ -555,8 +550,9 @@ function isEmptyDefaultChannel(channel: ModelChannel) {
     const baseUrl = channel.baseUrl.trim().replace(/\/+$/, "");
     const defaultBaseUrl = defaultConfig.baseUrl.trim().replace(/\/+$/, "");
     if (baseUrl && baseUrl !== defaultBaseUrl) return false;
-    const defaultModels = new Set((defaultConfig.channels[0]?.models || []).map(modelOptionName));
-    return !channel.models.length || channel.models.every((model) => defaultModels.has(modelOptionName(model)));
+    // 只清理旧版本写入浏览器的无密钥“默认渠道”和内置模型；没有 API Key 但已填写自定义模型时仍保留，
+    // 让用户可以先保存模型目录再补充密钥，而不是把真实自定义配置误判为空。
+    return !channel.models.length || channel.models.every((model) => LEGACY_DEFAULT_MODEL_NAMES.has(modelOptionName(model)));
 }
 
 export function defaultBaseUrlForApiFormat(apiFormat: ApiCallFormat) {

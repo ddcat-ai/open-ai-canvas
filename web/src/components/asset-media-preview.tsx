@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import type { Asset } from "@/stores/use-asset-store";
 
 type AssetMediaPreviewProps = {
@@ -32,7 +33,8 @@ export function AssetMediaPreview({ asset, alt, className = "", fallback = null 
         );
     }
 
+    const storageKey = asset.kind === "image" ? asset.data.storageKey : undefined;
     const imageUrl = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
-    if (!imageUrl) return fallback;
-    return <img src={imageUrl} alt={alt} loading="lazy" decoding="async" className={className} />;
+    if (!imageUrl && !storageKey) return fallback;
+    return <CachedResourceImage storageKey={storageKey} src={imageUrl} alt={alt} loading="lazy" decoding="async" className={className} fallback={fallback} />;
 }

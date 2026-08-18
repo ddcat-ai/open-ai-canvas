@@ -6,7 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { createCanvasShare, deleteCanvasShare, getCanvasShare, type CanvasShareStatus } from "@/services/api/canvas-share";
 import { useThemeStore } from "@/stores/use-theme-store";
 
-export function CanvasShareModal({ projectId, open, onClose, beforeCreate }: { projectId: string; open: boolean; onClose: () => void; beforeCreate: () => Promise<void> }) {
+export function CanvasShareModal({ projectId, open, onClose, beforeCreate }: { projectId: string; open: boolean; onClose: () => void; beforeCreate: () => Promise<boolean | void> }) {
     const { message, modal } = App.useApp();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [share, setShare] = useState<CanvasShareStatus>({ enabled: false });
@@ -40,7 +40,8 @@ export function CanvasShareModal({ projectId, open, onClose, beforeCreate }: { p
     const create = async (rotate = false) => {
         setSubmitting(true);
         try {
-            await beforeCreate();
+            const saved = await beforeCreate();
+            if (saved === false) return;
             const result = await createCanvasShare(projectId, { expiresDays, rotate });
             setShare(result.share);
             const url = result.share.token ? `${window.location.origin}/share/canvas/${result.share.token}` : "";

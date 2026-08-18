@@ -24,6 +24,7 @@ const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runt
 const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
 const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
 const ResponseInterceptionSettingsPage = lazy(() => import("@/pages/admin/settings/response-interception-settings-page"));
+const ThirdPartySettingsPage = lazy(() => import("@/pages/admin/settings/libtv-settings-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
 const AssetsPage = lazy(loadAssetsPage);
@@ -149,6 +150,8 @@ export const router = createBrowserRouter([
                     { path: "settings/email", element: deferred(<EmailSettingsPage />) },
                     { path: "settings/storage", element: deferred(<StorageSettingsPage />) },
                     { path: "settings/response-interception", element: deferred(<ResponseInterceptionSettingsPage />) },
+                    { path: "settings/third-party", element: deferred(<ThirdPartySettingsPage />) },
+                    { path: "settings/libtv", element: <Navigate to="/admin/settings/third-party" replace /> },
                 ],
             },
         ],

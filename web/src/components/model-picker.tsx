@@ -35,12 +35,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const [open, setOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const options = useMemo(() => {
-        const filtered = selectableModelsByCapability(config, capability);
-        const current = value?.trim();
-        const currentIncluded = current ? filtered.includes(current) : true;
-        return Array.from(new Set([...filtered, ...(!currentIncluded && current ? [current] : [])].filter((model): model is string => Boolean(model))));
-    }, [capability, config, value]);
+    const options = useMemo(() => Array.from(new Set(selectableModelsByCapability(config, capability).filter(Boolean))), [capability, config]);
     const optionGroups = useMemo(() => {
         const channelGroups = config.channels
             .map((channel) => ({
@@ -53,13 +48,15 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 ),
             }))
             .filter((group) => group.models.length);
-        const groupedModels = new Set(channelGroups.flatMap((group) => group.models.flatMap((modelGroup) => modelGroup.models)));
-        const ungroupedModels = options.filter((model) => !groupedModels.has(model));
-        return ungroupedModels.length ? [...channelGroups, { key: "ungrouped", label: "其他模型", scope: "未指定渠道", models: groupModelsByDisplayName(config, ungroupedModels) }] : channelGroups;
+        // options 已由当前有效渠道重建；任何无法解析渠道的旧值都直接丢弃，
+        // 不再显示“其他模型 / 未指定渠道”这种不可用入口。
+        return channelGroups;
     }, [config, options]);
-    const current = value || "";
-    const resolvedCurrent = resolveCompatibleModel(config, current, requirements) || current;
-    const currentPrice = modelMenuPrice(config, resolvedCurrent);
+    const storedCurrent = value?.trim() || "";
+    const resolvedCurrent = resolveCompatibleModel(config, storedCurrent, requirements) || storedCurrent;
+    // 旧画布可能保存过已下架或前端历史内置模型；它们不能重新进入当前可选目录。
+    const current = options.includes(resolvedCurrent) ? resolvedCurrent : "";
+    const currentPrice = modelMenuPrice(config, current);
     const creationVariant = variant === "creation";
 
     useEffect(() => {

@@ -8,6 +8,7 @@ import {
     HardDrive,
     Home,
     Infinity as InfinityIcon,
+    KeyRound,
     Layers3,
     Mail,
     MessageSquareText,
@@ -72,6 +73,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
             { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码 SMTP", icon: <Mail className="size-4" /> },
             { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
             { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "替换用户可见的上游异常", icon: <ShieldAlert className="size-4" /> },
+            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "集中维护第三方平台凭证", icon: <KeyRound className="size-4" /> },
         ],
     },
 ];

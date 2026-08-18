@@ -695,27 +695,56 @@ func (s *Service) ossSettingForResource(userID string, resource *model.Resource)
 			if currentErr != nil {
 				return ossSettingValue{}, currentErr
 			}
-			// 密钥继续固定在历史版本；同一存储位置的 CDN 域名跟随当前配置，使已有资源也立即切换。
+			// 密钥固定在资源绑定的历史版本；只有存储位置完全一致时，才允许沿用当前 CDN。
 			if resourceStorageMatches(current, resource) {
 				setting.CDNBaseURL = current.CDNBaseURL
 			}
 		}
 	} else {
-		_, setting, err = s.readOSSSetting()
+		// 早期资源没有 StorageSettingID，但资源本身仍记录了 provider/endpoint/bucket。
+		// 先从用户 OSS 历史版本中按存储位置反查，不能把当前七牛配置猜给历史阿里云对象。
+		setting, err = s.userOSSSettingForResource(userID, resource)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			_, setting, err = s.readOSSSetting()
+		}
 	}
 	if err != nil {
 		return ossSettingValue{}, err
 	}
+	resourceProvider := strings.ToLower(strings.TrimSpace(resource.Provider))
+	resourceMatchesSetting := resourceStorageMatches(setting, resource)
 	setting, err = ossSettingForProvider(setting, firstNonEmpty(resource.Provider, setting.Provider))
 	if err != nil {
 		return ossSettingValue{}, err
 	}
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
+	// CDN 是具体存储位置的出口，不得在 provider/endpoint/bucket 不匹配时继续沿用，
+	// 否则切换到七牛后会把历史阿里云 objectKey 拼成七牛域名。
+	if !resourceMatchesSetting || (resourceProvider != "" && resourceProvider != setting.Provider) {
+		setting.CDNBaseURL = ""
+	}
 	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return ossSettingValue{}, errors.New("对象存储访问密钥不可用")
 	}
 	return setting, nil
+}
+
+func (s *Service) userOSSSettingForResource(userID string, resource *model.Resource) (ossSettingValue, error) {
+	settings, err := s.repo.UserOSSSettingsForUser(userID)
+	if err != nil {
+		return ossSettingValue{}, err
+	}
+	for index := range settings {
+		value, valueErr := s.userOSSSettingValue(&settings[index])
+		if valueErr != nil {
+			return ossSettingValue{}, valueErr
+		}
+		if resourceStorageMatches(value, resource) {
+			return value, nil
+		}
+	}
+	return ossSettingValue{}, gorm.ErrRecordNotFound
 }
 
 func resourceStorageMatches(setting ossSettingValue, resource *model.Resource) bool {

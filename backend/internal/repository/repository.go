@@ -781,6 +781,12 @@ func (r *Repository) LatestUserOSSSetting(userID string) (*model.UserOSSSetting,
 	return &setting, nil
 }
 
+func (r *Repository) UserOSSSettingsForUser(userID string) ([]model.UserOSSSetting, error) {
+	var settings []model.UserOSSSetting
+	err := r.db.Where("user_id = ?", userID).Order("created_at desc, id desc").Find(&settings).Error
+	return settings, err
+}
+
 func (r *Repository) UserOSSSettingForUser(userID string, id string) (*model.UserOSSSetting, error) {
 	var setting model.UserOSSSetting
 	if err := r.db.First(&setting, "id = ? AND user_id = ?", id, userID).Error; err != nil {

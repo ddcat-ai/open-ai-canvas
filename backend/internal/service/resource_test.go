@@ -261,7 +261,7 @@ func TestTencentCOSSettingDerivesEndpointAndDoesNotReuseAliyunSecret(t *testing.
 	_, err := ossSettingFromRequest(OSSSettingRequest{
 		Enabled: true, Provider: tencentCOSProvider, Endpoint: server.URL, Bucket: "private-bucket-1250000000", AccessKeyID: "secret-id",
 	}, ossSettingValue{Provider: aliyunOSSProvider, AccessKeySecret: "aliyun-secret"})
-	if err == nil || !strings.Contains(err.Error(), "AccessKey Secret") {
+	if err == nil || !strings.Contains(err.Error(), "访问密钥 SecretKey") {
 		t.Fatalf("ossSettingFromRequest() error = %v", err)
 	}
 	next, err := ossSettingFromRequest(OSSSettingRequest{
@@ -446,6 +446,101 @@ func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testi
 	}
 	if delivery.RedirectURL != server.URL+"/users/user-1/image/historical.png" {
 		t.Fatalf("PrepareResourceDelivery(historical user resource) = %#v", delivery)
+	}
+}
+
+func TestBoundHistoricalUserResourceDoesNotFollowCurrentProviderCDN(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	newTestServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	}
+	aliyunEndpoint := newTestServer()
+	aliyunCDN := newTestServer()
+	qiniuEndpoint := newTestServer()
+	qiniuCDN := newTestServer()
+	defer aliyunEndpoint.Close()
+	defer aliyunCDN.Close()
+	defer qiniuEndpoint.Close()
+	defer qiniuCDN.Close()
+
+	svc := newResourceTestService(t)
+	actor := &model.User{ID: "user-1"}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
+		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	historical, _, err := svc.readUserOSSSetting(actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: qiniuKodoProvider, Endpoint: qiniuEndpoint.URL, CDNBaseURL: qiniuCDN.URL, Bucket: "qiniu-bucket",
+		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-bound-historical-storage", UserID: actor.ID, Kind: "image", Status: model.ResourceStatusReady,
+		Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, Bucket: "aliyun-bucket", StorageSettingID: historical.ID,
+		ObjectKey: "ai/users/user-1/image/bound.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := aliyunCDN.URL + "/ai/users/user-1/image/bound.png"
+	if delivery.RedirectURL != want || strings.Contains(delivery.RedirectURL, qiniuCDN.URL) {
+		t.Fatalf("PrepareResourceDelivery(bound historical resource) = %q, want %q", delivery.RedirectURL, want)
+	}
+}
+
+func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	newTestServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	}
+	aliyunEndpoint := newTestServer()
+	aliyunCDN := newTestServer()
+	qiniuEndpoint := newTestServer()
+	qiniuCDN := newTestServer()
+	defer aliyunEndpoint.Close()
+	defer aliyunCDN.Close()
+	defer qiniuEndpoint.Close()
+	defer qiniuCDN.Close()
+	svc := newResourceTestService(t)
+	actor := &model.User{ID: "user-1"}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
+		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
+		Enabled: true, Provider: qiniuKodoProvider, Endpoint: qiniuEndpoint.URL, CDNBaseURL: qiniuCDN.URL, Bucket: "qiniu-bucket",
+		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-legacy-user-storage", UserID: actor.ID, Kind: "image", Status: model.ResourceStatusReady,
+		Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, Bucket: "aliyun-bucket",
+		ObjectKey: "ai/users/user-1/image/legacy.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := aliyunCDN.URL + "/ai/users/user-1/image/legacy.png"
+	if delivery.RedirectURL != want || strings.Contains(delivery.RedirectURL, qiniuCDN.URL) {
+		t.Fatalf("PrepareResourceDelivery(legacy user resource) = %q, want %q", delivery.RedirectURL, want)
 	}
 }
 
