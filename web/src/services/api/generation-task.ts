@@ -7,6 +7,7 @@ import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreamin
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -46,6 +47,7 @@ export type GenerationTaskDependencies = {
     runLocal: (input: LocalDreaminaGenerationInput, signal?: AbortSignal, onTaskUpdate?: (task: LocalDreaminaGenerationTask) => void) => ReturnType<typeof runLocalDreaminaGenerationTask>;
     createId: () => string;
     now: () => string;
+    ensureLocalDreaminaReady?: (signal?: AbortSignal) => Promise<unknown>;
 };
 
 const defaultDependencies: GenerationTaskDependencies = {
@@ -54,6 +56,7 @@ const defaultDependencies: GenerationTaskDependencies = {
     runLocal: (input, signal, onTaskUpdate) => runLocalDreaminaGenerationTask(input, { onTaskUpdate }, signal),
     createId: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),
+    ensureLocalDreaminaReady: (signal) => useLocalDreaminaModelStore.getState().ensureReady(signal),
 };
 
 type PreparedGenerationReferences = {
@@ -88,6 +91,8 @@ export async function runBackendGenerationTask(
     throwIfAborted(signal);
     assertClientPromptLimit(mode, prompt, config, metadata);
     if (isLocalDreaminaModel(config.model)) {
+        await dependencies.ensureLocalDreaminaReady?.(signal);
+        throwIfAborted(signal);
         return await runLocalDreaminaGeneration(
             { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, mask, signal, metadata, onTaskUpdate, localIdempotencyKey, localResumeOnly, clientOperationId, retryOf, attemptGroupId },
             dependencies,
@@ -104,6 +109,8 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
     if (isLocalDreaminaModel(options.config.model)) {
+        await dependencies.ensureLocalDreaminaReady?.(options.signal);
+        throwIfAborted(options.signal);
         return Promise.allSettled(
             Array.from({ length: count }, (_, batchIndex) => {
                 const retryContext = options.retryContextsByBatchIndex?.[batchIndex];
@@ -191,7 +198,8 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
             },
         );
         const completedAt = dependencies.now();
-        options.onTaskUpdate?.({ ...task, status: "succeeded", progress: 100, stage: "local_cli_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt });
+        latestPublicTask = { ...latestPublicTask, status: "succeeded", progress: 100, stage: "local_cli_succeeded", resultJson: JSON.stringify(result), completedAt, updatedAt: completedAt };
+        options.onTaskUpdate?.(latestPublicTask);
         return result;
     } catch (error) {
         const completedAt = dependencies.now();
@@ -200,7 +208,7 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
         const localErrorCode = error instanceof LocalDreaminaGenerationClientError ? error.code : undefined;
         if (!(cancelled && isLocalDreaminaBackgroundTask(latestPublicTask))) {
             options.onTaskUpdate?.({
-                ...task,
+                ...latestPublicTask,
                 status: cancelled ? "cancelled" : "failed",
                 stage: cancelled ? "local_cli_cancelled" : "local_cli_failed",
                 completedAt,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -12,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
@@ -1303,6 +1307,59 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 	want := "POST /v1/video/generations,GET /v1/video/generations/grok-task,GET /video.mp4"
 	if got := strings.Join(paths, ","); got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunNewAPIChannel2VideoTaskResumesOriginalProviderTaskWithoutAnotherPost(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	paths := make([]string, 0, 2)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "GET /v1/video/generations/existing-provider-task":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":"success","data":{"task_id":"existing-provider-task","status":"SUCCESS","result_url":"` + server.URL + `/video.mp4"}}`))
+		case "GET /video.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	input := canvasGenerationInput{
+		Mode:   "video",
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "video-model", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)},
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := withProviderAnalytics(context.Background(), nil, model.Task{
+		ID: "task-1", Type: "canvas_video", ProviderRequestID: "existing-provider-task", InputJSON: string(inputJSON),
+	})
+	result, err := runNewAPIChannel2VideoTask(ctx, input)
+	if err != nil {
+		t.Fatalf("runNewAPIChannel2VideoTask() error = %v", err)
+	}
+	if result["video"] == nil {
+		t.Fatalf("result = %#v", result)
+	}
+	want := "GET /v1/video/generations/existing-provider-task,GET /video.mp4"
+	if got := strings.Join(paths, ","); got != want {
+		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunNewAPIChannel2VideoTaskReturnsTypedDeadlineWhenPollingWindowEnds(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	ctx = withProviderAnalytics(ctx, nil, model.Task{ID: "task-1", Type: "canvas_video", ProviderRequestID: "existing-provider-task"})
+	_, err := runNewAPIChannel2VideoTask(ctx, canvasGenerationInput{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("runNewAPIChannel2VideoTask() error = %v, want context deadline exceeded", err)
 	}
 }
 
