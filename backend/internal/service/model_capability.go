@@ -143,6 +143,14 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.TransparentBackground.Supported = false
 		image.ResponseFormat.Supported = false
 		image.OutputFormat.Supported = false
+	case model.ChannelInterfaceGeminiImage:
+		image.References.MaskSupported = false
+		// Gemini Images uses imageConfig.aspectRatio, not the OpenAI-style pixel size field.
+		image.Size = ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"auto", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"}, Default: "1:1", AllowCustom: false}
+		image.TransparentBackground.Supported = false
+		image.ResponseFormat.Supported = false
+		image.OutputFormat.Supported = false
+		image.MaxOutputs = 4
 	}
 	if model.ChannelInterfaceType(protocol) != model.ChannelInterfaceGrokImage && strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "grok-imagine-image") {
 		image.References.MaxImages = 0

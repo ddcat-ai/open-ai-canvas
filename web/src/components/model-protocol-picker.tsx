@@ -42,7 +42,11 @@ export function CapabilityCardPicker({ value, onChange, density = "comfortable" 
                         onClick={() => onChange?.(item.value)}
                     >
                         <span className={cn("grid place-items-center rounded-md", density === "compact" ? "size-6" : "size-8", selected ? "bg-foreground text-background" : "bg-muted text-foreground/65")}>{item.icon}</span>
-                        {selected ? <span className={cn("absolute grid place-items-center rounded-full bg-foreground text-background", density === "compact" ? "right-1.5 top-1.5 size-4" : "right-2.5 top-2.5 size-5")}><Check className={density === "compact" ? "size-2.5" : "size-3"} /></span> : null}
+                        {selected ? (
+                            <span className={cn("absolute grid place-items-center rounded-full bg-foreground text-background", density === "compact" ? "right-1.5 top-1.5 size-4" : "right-2.5 top-2.5 size-5")}>
+                                <Check className={density === "compact" ? "size-2.5" : "size-3"} />
+                            </span>
+                        ) : null}
                         <span className={cn("block font-semibold", density === "compact" ? "mt-1 text-xs" : "mt-2 text-sm")}>{item.label}</span>
                         <span className={cn("block text-foreground/48", density === "compact" ? "text-[var(--fs-micro)]" : "text-xs")}>{item.description}</span>
                         {density === "comfortable" ? <BrandIconRow models={item.brands} className="mt-auto pt-2" /> : null}
@@ -79,14 +83,20 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
                                 <div className={cn("mt-0.5 truncate font-mono text-foreground/48", density === "compact" ? "text-[var(--fs-micro)]" : "text-[var(--fs-tiny)]")}>{protocol.create}</div>
                             </div>
                         </div>
-                        {selected ? <span className={cn("absolute grid place-items-center rounded-full bg-foreground text-background", density === "compact" ? "right-1.5 top-1.5 size-4" : "right-2.5 top-2.5 size-5")}><Check className={density === "compact" ? "size-2.5" : "size-3"} /></span> : null}
-                        {density === "comfortable" ? <>
-                            <div className="mt-2 line-clamp-2 text-xs leading-5 text-foreground/58">{protocol.media}</div>
-                            <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-[var(--fs-tiny)] text-foreground/42">
-                                <span className="truncate">{protocol.contentType}</span>
-                                {protocol.poll ? <span className="shrink-0">异步轮询</span> : <span className="shrink-0">同步响应</span>}
-                            </div>
-                        </> : null}
+                        {selected ? (
+                            <span className={cn("absolute grid place-items-center rounded-full bg-foreground text-background", density === "compact" ? "right-1.5 top-1.5 size-4" : "right-2.5 top-2.5 size-5")}>
+                                <Check className={density === "compact" ? "size-2.5" : "size-3"} />
+                            </span>
+                        ) : null}
+                        {density === "comfortable" ? (
+                            <>
+                                <div className="mt-2 line-clamp-2 text-xs leading-5 text-foreground/58">{protocol.media}</div>
+                                <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-[var(--fs-tiny)] text-foreground/42">
+                                    <span className="truncate">{protocol.contentType}</span>
+                                    {protocol.poll ? <span className="shrink-0">异步轮询</span> : <span className="shrink-0">同步响应</span>}
+                                </div>
+                            </>
+                        ) : null}
                     </button>
                 );
             })}
@@ -103,16 +113,24 @@ export function ModelCapabilityProtocolModal({ value, onChange }: { value: { cap
     }, [open, value]);
 
     const updateCapability = (capability: ModelCapabilityChoice) => {
-        const protocol = draft.protocol && MODEL_PROTOCOLS.some((item) => item.value === draft.protocol && item.capability === capability)
-            ? draft.protocol
-            : MODEL_PROTOCOLS.find((item) => item.capability === capability)?.value || "chat-completion";
+        const protocol = draft.protocol && MODEL_PROTOCOLS.some((item) => item.value === draft.protocol && item.capability === capability) ? draft.protocol : MODEL_PROTOCOLS.find((item) => item.capability === capability)?.value || "chat-completion";
         setDraft({ capability, protocol });
     };
 
     return (
         <>
-            <Button size="small" className="max-w-full justify-start" icon={<Settings2 className="size-3.5" />} onClick={() => { setDraft(value); setOpen(true); }}>
-                <span className="max-w-[min(56vw,360px)] truncate">{capabilityLabel(value.capability)} · {modelProtocolLabel(value.protocol)}</span>
+            <Button
+                size="small"
+                className="max-w-full justify-start"
+                icon={<Settings2 className="size-3.5" />}
+                onClick={() => {
+                    setDraft(value);
+                    setOpen(true);
+                }}
+            >
+                <span className="max-w-[min(56vw,360px)] truncate">
+                    {capabilityLabel(value.capability)} · {modelProtocolLabel(value.protocol)}
+                </span>
             </Button>
             <Modal
                 title="配置模型能力与请求协议"
@@ -123,7 +141,10 @@ export function ModelCapabilityProtocolModal({ value, onChange }: { value: { cap
                 onCancel={() => setOpen(false)}
                 okText="应用配置"
                 cancelText="取消"
-                onOk={() => { onChange(draft); setOpen(false); }}
+                onOk={() => {
+                    onChange(draft);
+                    setOpen(false);
+                }}
             >
                 <div className="space-y-4">
                     <section>
@@ -143,17 +164,36 @@ export function ModelCapabilityProtocolModal({ value, onChange }: { value: { cap
 function ProtocolBrandMark({ protocol, compact = false }: { protocol: ModelProtocolDefinition; compact?: boolean }) {
     const iconSize = compact ? "size-6" : "size-8";
     if (protocol.value === "chat-completion") return <BrandIconRow models={["openai", "deepseek", "glm"]} compact={compact} />;
-    if (protocol.value.startsWith("volcengine-jimeng-")) return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Sparkles className={compact ? "size-3" : "size-4"} /></span>;
-    if (protocol.value.startsWith("volcengine-")) return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Flame className={compact ? "size-3" : "size-4"} /></span>;
-    if (protocol.value.startsWith("newapi-channel-") || protocol.value === "novita-video") return <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}><Network className={compact ? "size-3" : "size-4"} /></span>;
-    const brand = protocol.value === "gemini-veo" ? "gemini" : protocol.value === "grok-image" || protocol.value === "xai-video" ? "grok" : "openai";
+    if (protocol.value.startsWith("volcengine-jimeng-"))
+        return (
+            <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}>
+                <Sparkles className={compact ? "size-3" : "size-4"} />
+            </span>
+        );
+    if (protocol.value.startsWith("volcengine-"))
+        return (
+            <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}>
+                <Flame className={compact ? "size-3" : "size-4"} />
+            </span>
+        );
+    if (protocol.value.startsWith("newapi-channel-") || protocol.value === "novita-video")
+        return (
+            <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}>
+                <Network className={compact ? "size-3" : "size-4"} />
+            </span>
+        );
+    const brand = protocol.value === "gemini-veo" || protocol.value === "gemini-image" ? "gemini" : protocol.value === "grok-image" || protocol.value === "xai-video" ? "grok" : "openai";
     return <BrandIconRow models={[brand]} compact={compact} />;
 }
 
 function BrandIconRow({ models, compact = false, className }: { models: string[]; compact?: boolean; className?: string }) {
     return (
         <span className={cn("flex items-center -space-x-1", compact && "shrink-0", className)} aria-hidden="true">
-            {models.map((model) => <span key={model} className={cn("grid shrink-0 place-items-center rounded-md border border-border/70 bg-background", compact ? "size-6" : "size-6")} title={modelBrandLabel(model)}><ModelIcon model={model} /></span>)}
+            {models.map((model) => (
+                <span key={model} className={cn("grid shrink-0 place-items-center rounded-md border border-border/70 bg-background", compact ? "size-6" : "size-6")} title={modelBrandLabel(model)}>
+                    <ModelIcon model={model} />
+                </span>
+            ))}
         </span>
     );
 }

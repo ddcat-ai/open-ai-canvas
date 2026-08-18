@@ -805,7 +805,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	}
 	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
 	service.ApplyDefaultOutboundHeaders(upstreamReq)
-	if protocol == model.ChannelInterfaceGeminiVeo {
+	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
 		upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
 	} else {
 		upstreamReq.Header.Set("Authorization", "Bearer "+channel.APIKey)
@@ -867,7 +867,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID string, capability string, protocol model.ChannelInterfaceType, method string, path string, target string, body []byte, contentType string, status model.ApiCallStatus, statusCode int, duration time.Duration, errorText string, concurrencyLimit int) model.ApiCallLog {
 	requestKind := "create"
 	apiFormat := "openai"
-	if protocol == model.ChannelInterfaceGeminiVeo {
+	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
 		apiFormat = "gemini"
 	}
 	if method == http.MethodGet {

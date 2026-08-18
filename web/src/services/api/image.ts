@@ -12,16 +12,14 @@ import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { imageSizeRequest, modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
     content: string | AiTextContentPart[];
 };
 
-export type AiTextContentPart =
-    | { type: "text"; text: string }
-    | { type: "image_url"; image_url: { url: string } }
-    | { type: "file_url"; file_url: { url: string; name: string; mimeType: string } };
+export type AiTextContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } } | { type: "file_url"; file_url: { url: string; name: string; mimeType: string } };
 
 export type ResponseToolCall = {
     id: string;
@@ -358,9 +356,7 @@ function toResponseContent(content: ResponseMessageContent): string | ResponseIn
     return content.map((item) => {
         if (item.type === "text") return { type: "input_text" as const, text: item.text };
         if (item.type === "image_url") return { type: "input_image" as const, image_url: item.image_url.url };
-        return item.file_url.url.startsWith("data:")
-            ? { type: "input_file" as const, filename: item.file_url.name, file_data: item.file_url.url }
-            : { type: "input_file" as const, filename: item.file_url.name, file_url: item.file_url.url };
+        return item.file_url.url.startsWith("data:") ? { type: "input_file" as const, filename: item.file_url.name, file_data: item.file_url.url } : { type: "input_file" as const, filename: item.file_url.name, file_url: item.file_url.url };
     });
 }
 
@@ -402,9 +398,7 @@ function toChatCompletionContent(content: ResponseMessageContent) {
     if (!Array.isArray(content)) return content;
     return content.map((item) => {
         if (item.type !== "file_url") return item;
-        const file = item.file_url.url.startsWith("data:")
-            ? { filename: item.file_url.name, file_data: item.file_url.url }
-            : { filename: item.file_url.name, file_url: item.file_url.url };
+        const file = item.file_url.url.startsWith("data:") ? { filename: item.file_url.name, file_data: item.file_url.url } : { filename: item.file_url.name, file_url: item.file_url.url };
         return { type: "file", file };
     });
 }
@@ -710,7 +704,7 @@ function toGeminiFilePart(url: string, mimeType: string): GeminiPart {
 
 function geminiTextContent(content: ResponseMessageContent) {
     if (!Array.isArray(content)) return String(content || "");
-    return content.map((item) => item.type === "text" ? item.text : item.type === "image_url" ? item.image_url.url : `${item.file_url.name}: ${item.file_url.url}`).join("\n");
+    return content.map((item) => (item.type === "text" ? item.text : item.type === "image_url" ? item.image_url.url : `${item.file_url.name}: ${item.file_url.url}`)).join("\n");
 }
 
 function jsonObject(value: string): Record<string, unknown> {
@@ -809,8 +803,14 @@ function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDel
 function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
     validateGeminiPayload(payload);
     const parts = payload.candidates?.flatMap((candidate) => candidate.content?.parts || []) || [];
-    const content = parts.filter((part) => !part.thought).map((part) => part.text || "").join("");
-    const reasoning = parts.filter((part) => part.thought).map((part) => part.text || "").join("");
+    const content = parts
+        .filter((part) => !part.thought)
+        .map((part) => part.text || "")
+        .join("");
+    const reasoning = parts
+        .filter((part) => part.thought)
+        .map((part) => part.text || "")
+        .join("");
     const toolCalls = parts
         .map((part) => part.functionCall)
         .filter((call): call is NonNullable<GeminiPart["functionCall"]> => Boolean(call?.name))
@@ -827,21 +827,27 @@ function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
     return { content, toolCalls, ...(reasoning ? { reasoning } : {}) };
 }
 
-async function requestGeminiImages(config: AiConfig, prompt: string, references: ReferenceImage[], count: number, options?: RequestOptions) {
-    const requests = Array.from({ length: count }, () => requestGeminiImagesOnce(config, prompt, references, options));
+async function requestGeminiImages(config: AiConfig, prompt: string, references: ReferenceImage[], count: number, generationConfig: GeminiImageGenerationConfig, options?: RequestOptions) {
+    // 参考图先完整读取并校验一次，再复用已解析的 inlineData；不能让每个输出重新读取 storageKey，
+    // 否则资源缓存瞬时未命中时会出现“偶发缺参考图”或把 storageKey 当 URL 请求的问题。
+    const referenceParts = await Promise.all(
+        references.map(async (image) => {
+            const dataUrl = await imageToDataUrl(image);
+            const inlineData = parseGeminiImageDataUrl(dataUrl);
+            return { inlineData };
+        }),
+    );
+    const requests = Array.from({ length: count }, () => requestGeminiImagesOnce(config, prompt, referenceParts, generationConfig, options));
     return (await Promise.all(requests)).flat();
 }
 
-async function requestGeminiImagesOnce(config: AiConfig, prompt: string, references: ReferenceImage[], options?: RequestOptions) {
-    const parts: GeminiPart[] = [{ text: prompt }];
-    for (const image of references) {
-        parts.push(toGeminiFilePart(await imageToDataUrl(image), image.type || "image/png"));
-    }
+async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referenceParts: GeminiPart[], generationConfig: GeminiImageGenerationConfig, options?: RequestOptions) {
+    const parts: GeminiPart[] = [{ text: prompt }, ...referenceParts];
     const request = channelRequest(config, geminiApiUrl(config, "generateContent"), geminiHeaders(config));
     const response = await axios.post<GeminiPayload>(
         request.url,
         {
-            ...toGeminiBody(config, [{ role: "user", content: prompt }], { generationConfig: { responseModalities: ["TEXT", "IMAGE"] } }),
+            ...toGeminiBody(config, [{ role: "user", content: prompt }], { generationConfig }),
             contents: [{ role: "user", parts }],
         },
         { headers: request.headers, withCredentials: request.credentials === "include", signal: options?.signal },
@@ -872,9 +878,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     validateImageCapability(imageProfile, []);
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
-    if (requestConfig.apiFormat === "gemini") {
+    if (requestConfig.interfaceType === "gemini-image") {
         try {
-            return await requestGeminiImages(requestConfig, prompt, [], n, options);
+            return await requestGeminiImages(requestConfig, prompt, [], n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
         }
@@ -959,10 +965,10 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);
-    if (requestConfig.apiFormat === "gemini") {
+    if (requestConfig.interfaceType === "gemini-image") {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
         try {
-            return await requestGeminiImages(requestConfig, requestPrompt, references, n, options);
+            return await requestGeminiImages(requestConfig, requestPrompt, references, n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
         }

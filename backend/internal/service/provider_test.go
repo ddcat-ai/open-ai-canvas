@@ -19,6 +19,7 @@ import (
 )
 
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
+const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 	var body bytes.Buffer
@@ -233,6 +234,86 @@ func TestVolcengineArkImageRejectsMaskBeforeRequest(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "不支持蒙版") {
 		t.Fatalf("runImageTask() error = %v", err)
+	}
+}
+
+func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1beta/models/gemini-test:generateContent" {
+			t.Errorf("path = %q, want /v1beta/models/gemini-test:generateContent", r.URL.Path)
+		}
+		if got := r.Header.Get("x-goog-api-key"); got != "test-key" {
+			t.Errorf("x-goog-api-key = %q, want test-key", got)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		contents, ok := body["contents"].([]interface{})
+		if !ok || len(contents) != 1 {
+			t.Fatalf("contents = %#v", body["contents"])
+		}
+		content, _ := contents[0].(map[string]interface{})
+		parts, ok := content["parts"].([]interface{})
+		if !ok || len(parts) != 2 {
+			t.Fatalf("parts = %#v", content["parts"])
+		}
+		textPart, _ := parts[0].(map[string]interface{})
+		if textPart["text"] != "edit this image" {
+			t.Errorf("text part = %#v", textPart)
+		}
+		imagePart, _ := parts[1].(map[string]interface{})
+		inlineData, _ := imagePart["inlineData"].(map[string]interface{})
+		if inlineData["mimeType"] != "image/png" || inlineData["data"] != "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" {
+			t.Errorf("inlineData = %#v", inlineData)
+		}
+		generationConfig, _ := body["generationConfig"].(map[string]interface{})
+		modalities, _ := generationConfig["responseModalities"].([]interface{})
+		if !reflect.DeepEqual(modalities, []interface{}{"TEXT", "IMAGE"}) {
+			t.Errorf("responseModalities = %#v", modalities)
+		}
+		imageConfig, _ := generationConfig["imageConfig"].(map[string]interface{})
+		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+			t.Errorf("imageConfig = %#v", imageConfig)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
+	}))
+	defer server.Close()
+
+	result, err := runImageTask(context.Background(), canvasGenerationInput{
+		Prompt:          "edit this image",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high"},
+		ReferenceImages: []providerMedia{{DataURL: testGeminiReferenceImageDataURL}},
+	})
+	if err != nil {
+		t.Fatalf("runImageTask() error = %v", err)
+	}
+	images, _ := result["images"].([]map[string]string)
+	if len(images) != 1 || images[0]["dataUrl"] != testReferenceImageDataURL {
+		t.Fatalf("images = %#v", result["images"])
+	}
+}
+
+func TestRunGeminiImageTaskRejectsInvalidReferenceBeforeRequest(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		http.Error(w, "unexpected upstream request", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	_, err := runImageTask(context.Background(), canvasGenerationInput{
+		Prompt:          "edit this image",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image"},
+		ReferenceImages: []providerMedia{{DataURL: "data:text/plain;base64,aGVsbG8="}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "读取 Gemini Images 参考图失败") || !strings.Contains(err.Error(), "MIME 类型无效") {
+		t.Fatalf("runImageTask() error = %v", err)
+	}
+	if called {
+		t.Fatal("invalid reference image must be rejected before upstream request")
 	}
 }
 

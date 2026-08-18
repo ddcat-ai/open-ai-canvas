@@ -77,10 +77,45 @@ export type VideoCapabilityConfig = {
 // Keep explicit pixel presets for each resolution tier so the settings panel can
 // switch between 1K, 2K and 4K without silently converting the requested ratio.
 const defaultImageSizes = [
-    "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16",
-    "1024x1024", "1360x1024", "1024x1360", "1536x1024", "1024x1536", "1024x1280", "1280x1024", "2048x878", "1824x1024", "1024x1824",
-    "2048x2048", "2304x1728", "1728x2304", "2496x1664", "1664x2496", "1792x2240", "2240x1792", "3136x1344", "2752x1536", "1536x2752",
-    "2880x2880", "3264x2448", "2448x3264", "3504x2336", "2336x3504", "2560x3200", "3200x2560", "3808x1632", "3840x2160", "2160x3840",
+    "auto",
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "21:9",
+    "9:16",
+    "1024x1024",
+    "1360x1024",
+    "1024x1360",
+    "1536x1024",
+    "1024x1536",
+    "1024x1280",
+    "1280x1024",
+    "2048x878",
+    "1824x1024",
+    "1024x1824",
+    "2048x2048",
+    "2304x1728",
+    "1728x2304",
+    "2496x1664",
+    "1664x2496",
+    "1792x2240",
+    "2240x1792",
+    "3136x1344",
+    "2752x1536",
+    "1536x2752",
+    "2880x2880",
+    "3264x2448",
+    "2448x3264",
+    "3504x2336",
+    "2336x3504",
+    "2560x3200",
+    "3200x2560",
+    "3808x1632",
+    "3840x2160",
+    "2160x3840",
 ];
 
 export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
@@ -122,6 +157,20 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.transparentBackground.supported = false;
         image.responseFormat.supported = false;
         image.outputFormat.supported = false;
+    }
+    if (protocol === "gemini-image") {
+        image.references.maskSupported = false;
+        // Gemini Images uses imageConfig.aspectRatio, not the OpenAI-style pixel size field.
+        image.size = {
+            parameter: "aspect_ratio",
+            values: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"],
+            default: "1:1",
+            allowCustom: false,
+        };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: false };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 4;
     }
     if (protocol !== "grok-image" && model.trim().toLowerCase().startsWith("grok-imagine-image")) {
         image.references.maxImages = 0;
@@ -207,20 +256,14 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
     if (!cost?.capabilityConfig) return fallback;
-    const text = cost.capabilityConfig.text
-        ? { ...fallback.text!, ...cost.capabilityConfig.text, references: { ...fallback.text!.references, ...cost.capabilityConfig.text.references } }
-        : fallback.text;
-    const video = cost.capabilityConfig.video
-        ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } }
-        : fallback.video;
+    const text = cost.capabilityConfig.text ? { ...fallback.text!, ...cost.capabilityConfig.text, references: { ...fallback.text!.references, ...cost.capabilityConfig.text.references } } : fallback.text;
+    const video = cost.capabilityConfig.video ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } } : fallback.video;
     return { ...fallback, ...cost.capabilityConfig, text, image: cost.capabilityConfig.image || fallback.image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
     const size = normalizeImageSizeSetting(profile, value.size);
-    const quality = profile.quality.supported
-        ? (value.quality && profile.quality.values.includes(value.quality) ? value.quality : profile.quality.default || "auto")
-        : profile.quality.default || "auto";
+    const quality = profile.quality.supported ? (value.quality && profile.quality.values.includes(value.quality) ? value.quality : profile.quality.default || "auto") : profile.quality.default || "auto";
     const count = String(Math.max(1, Math.min(profile.maxOutputs, Math.floor(Math.abs(Number(value.count)) || 1))));
     const transparentBackground = profile.transparentBackground.supported && value.transparentBackground === "true" ? "true" : "false";
     return { size, quality, count, transparentBackground };
@@ -242,16 +285,16 @@ export function imageSizeRequest(profile: ImageCapabilityConfig, value?: string)
 }
 
 export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { seconds?: string; ratio?: string; resolution?: string }) {
-    const duration = profile.duration.selection === "enum"
-        ? (profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default
-        : normalizeRangeDuration(profile, Number(value.seconds));
+    const duration = profile.duration.selection === "enum" ? ((profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default) : normalizeRangeDuration(profile, Number(value.seconds));
     const ratio = profile.ratios.includes(value.ratio || "") ? value.ratio! : profile.defaultRatio;
     const resolution = profile.resolutions.includes(value.resolution || "") ? value.resolution! : profile.defaultResolution;
     return { seconds: String(duration), ratio, resolution };
 }
 
 export function videoResolutionRequest(profile: VideoCapabilityConfig, value: string | undefined) {
-    const requested = String(value || "").trim().toLowerCase();
+    const requested = String(value || "")
+        .trim()
+        .toLowerCase();
     if (!requested || requested === "auto" || requested === "default" || requested === "medium" || requested === "high") return undefined;
     const candidates = [requested];
     if (/^\d+$/.test(requested)) candidates.push(`${requested}p`);

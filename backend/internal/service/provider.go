@@ -210,7 +210,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			return nil, err
 		}
 	}
-	if input.Config.APIFormat == "gemini" && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiVeo) {
+	if input.Config.APIFormat == "gemini" && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiVeo) && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiImage) {
 		return nil, errors.New("后端任务队列暂不支持 Gemini 调用格式，请使用 OpenAI 兼容渠道")
 	}
 	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
@@ -621,7 +621,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	}
 	config.InterfaceType = string(channelModel.Protocol)
 	// 模型协议是实际请求契约；混合渠道中鉴权格式也必须随模型协议切换。
-	if config.InterfaceType == string(model.ChannelInterfaceGeminiVeo) {
+	if config.InterfaceType == string(model.ChannelInterfaceGeminiVeo) || config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {
 		config.APIFormat = "gemini"
 	} else if config.InterfaceType != "" {
 		config.APIFormat = "openai"
@@ -673,6 +673,9 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkImage) {
 		return runVolcengineArkImageTask(ctx, input)
+	}
+	if input.Config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {
+		return runGeminiImageTask(ctx, input)
 	}
 	var payload imageResponse
 	if input.Mask != nil {
@@ -751,6 +754,143 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+func runGeminiImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Mask != nil {
+		return nil, errors.New("Gemini Images 不支持蒙版编辑，请移除蒙版后重试")
+	}
+	if len(input.ReferenceVideos) > 0 || len(input.ReferenceAudios) > 0 {
+		return nil, errors.New("Gemini Images 不支持参考视频或音频")
+	}
+
+	parts := make([]geminiImageContentPart, 0, 1+len(input.ReferenceImages))
+	if prompt := strings.TrimSpace(input.Prompt); prompt != "" {
+		parts = append(parts, geminiImageContentPart{Text: prompt})
+	}
+	for _, image := range input.ReferenceImages {
+		raw, mimeType, err := geminiImageBytes(image)
+		if err != nil {
+			return nil, fmt.Errorf("读取 Gemini Images 参考图失败：%w", err)
+		}
+		parts = append(parts, geminiImageContentPart{InlineData: &geminiImageInlineData{MIMEType: mimeType, Data: base64.StdEncoding.EncodeToString(raw)}})
+	}
+	if len(parts) == 0 {
+		return nil, errors.New("Gemini Images 请求缺少提示词或参考图")
+	}
+
+	body := geminiImageRequest{
+		Contents: []geminiImageContent{{Role: "user", Parts: parts}},
+		GenerationConfig: geminiImageGenerationConfig{
+			ResponseModalities: []string{"TEXT", "IMAGE"},
+			ImageConfig:        geminiImageConfigFor(input.Config),
+		},
+	}
+	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
+		body.SystemInstruction = &geminiImageContent{Parts: []geminiImageContentPart{{Text: systemPrompt}}}
+	}
+	var payload map[string]interface{}
+	path := "/models/" + url.PathEscape(input.Config.Model) + ":generateContent"
+	if err := postGeminiJSON(ctx, input.Config, path, body, &payload); err != nil {
+		return nil, err
+	}
+	images, err := geminiImageDataURLs(payload)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+func geminiImageConfigFor(config providerConfig) *geminiImageConfig {
+	imageConfig := &geminiImageConfig{}
+	size := strings.TrimSpace(config.Size)
+	if size != "" && size != "auto" && strings.Count(size, ":") == 1 {
+		imageConfig.AspectRatio = size
+	}
+	switch strings.ToLower(strings.TrimSpace(config.Quality)) {
+	case "low", "1k":
+		imageConfig.ImageSize = "1K"
+	case "medium", "2k":
+		imageConfig.ImageSize = "2K"
+	case "high", "4k":
+		imageConfig.ImageSize = "4K"
+	}
+	if imageConfig.AspectRatio == "" && imageConfig.ImageSize == "" {
+		return nil
+	}
+	return imageConfig
+}
+
+func geminiImageBytes(media providerMedia) ([]byte, string, error) {
+	raw, mimeType, err := mediaBytes(media)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(raw) == 0 {
+		return nil, "", errors.New("参考图片数据为空")
+	}
+	detected := strings.TrimSpace(strings.Split(http.DetectContentType(raw), ";")[0])
+	if !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+		if !strings.HasPrefix(strings.ToLower(detected), "image/") {
+			return nil, "", fmt.Errorf("参考图片 MIME 类型无效：%s", defaultString(mimeType, detected))
+		}
+		mimeType = detected
+	} else if !strings.HasPrefix(strings.ToLower(detected), "image/") {
+		// 以实际字节签名为准，避免错误的 data URL MIME 把非图片内容伪装成图片。
+		return nil, "", fmt.Errorf("参考图片内容不是有效图片：%s", defaultString(detected, mimeType))
+	}
+	return raw, mimeType, nil
+}
+
+func geminiImageDataURLs(payload map[string]interface{}) ([]map[string]string, error) {
+	if errorValue, ok := payload["error"].(map[string]interface{}); ok {
+		if message := stringField(errorValue, "message"); message != "" {
+			return nil, errors.New(message)
+		}
+	}
+	candidates, _ := payload["candidates"].([]interface{})
+	images := make([]map[string]string, 0)
+	for _, candidateValue := range candidates {
+		candidate, _ := candidateValue.(map[string]interface{})
+		content, _ := candidate["content"].(map[string]interface{})
+		parts, _ := content["parts"].([]interface{})
+		for _, partValue := range parts {
+			part, _ := partValue.(map[string]interface{})
+			inlineData, _ := part["inlineData"].(map[string]interface{})
+			if inlineData == nil {
+				inlineData, _ = part["inline_data"].(map[string]interface{})
+			}
+			if inlineData != nil {
+				data := strings.TrimSpace(stringField(inlineData, "data"))
+				mimeType := firstNonEmptyString(stringField(inlineData, "mimeType"), stringField(inlineData, "mime_type"))
+				if data == "" {
+					continue
+				}
+				if mimeType == "" {
+					mimeType = "image/png"
+				}
+				if !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+					return nil, fmt.Errorf("Gemini Images 返回了非图片 MIME 类型：%s", mimeType)
+				}
+				decoded, err := base64.StdEncoding.DecodeString(data)
+				if err != nil {
+					return nil, fmt.Errorf("Gemini Images 返回的图片数据无效：%w", err)
+				}
+				images = append(images, map[string]string{"dataUrl": dataURL(mimeType, decoded)})
+				continue
+			}
+			fileData, _ := part["fileData"].(map[string]interface{})
+			if fileData != nil {
+				if fileURL := firstNonEmptyString(stringField(fileData, "fileUri"), stringField(fileData, "file_uri")); fileURL != "" {
+					images = append(images, map[string]string{"dataUrl": fileURL})
+				}
+			}
+		}
+	}
+	if len(images) == 0 {
+		return nil, errors.New("Gemini Images 接口没有返回图片")
+	}
+	return images, nil
 }
 
 func runGrokImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -2257,7 +2397,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	}
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
-		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true},
+		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true, "gemini-image": true},
 		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true, "novita-video": true},
 		"audio": {"openai-audio": true, "async-audio": true},
 	}
