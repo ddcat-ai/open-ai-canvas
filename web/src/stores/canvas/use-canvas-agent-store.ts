@@ -35,10 +35,50 @@ type CanvasAgentStore = {
     clearEventLogs: () => void;
 };
 
+const CANVAS_AGENT_ENABLED_STORAGE_KEY = "canvas-agent-enabled";
+
+type CanvasAgentPreferenceStorage = {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+};
+
+export function readCanvasAgentEnabledPreference(storage: Pick<CanvasAgentPreferenceStorage, "getItem"> | undefined = browserPreferenceStorage()) {
+    try {
+        return storage?.getItem(CANVAS_AGENT_ENABLED_STORAGE_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+
+export function writeCanvasAgentEnabledPreference(enabled: boolean, storage: Pick<CanvasAgentPreferenceStorage, "setItem"> | undefined = browserPreferenceStorage()) {
+    try {
+        storage?.setItem(CANVAS_AGENT_ENABLED_STORAGE_KEY, String(enabled));
+    } catch {
+        // 浏览器隐私模式可能拒绝本地偏好写入；连接本身仍可继续。
+    }
+}
+
+export function canvasAgentConnectionStartingPatch() {
+    return { enabled: true, connected: false, activity: "连接中", connectError: "", activeTab: "setup" as const };
+}
+
+export function canvasAgentTransientDisconnectPatch(activity: string, connectError: string) {
+    return { enabled: true, connected: false, activity, connectError, waiting: false, sending: false };
+}
+
+export function canvasAgentConnectionStatusText({ enabled, connected, activity, connectError }: Pick<CanvasAgentStore, "enabled" | "connected" | "activity" | "connectError">) {
+    if (enabled && !connected && activity === "正在重连") return activity;
+    return connectError ? "连接失败" : connected ? activity : enabled ? "连接中" : "未连接";
+}
+
+function browserPreferenceStorage(): CanvasAgentPreferenceStorage | undefined {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+}
+
 export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     width: typeof window === "undefined" ? 440 : Number(localStorage.getItem("canvas-agent-panel-width")) || 440,
     connected: false,
-    enabled: false,
+    enabled: readCanvasAgentEnabledPreference(),
     prompt: "",
     attachments: [],
     sending: false,
@@ -54,7 +94,10 @@ export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     activity: "就绪",
     connectError: "",
     pendingTool: null,
-    setAgentState: (patch) => set(patch),
+    setAgentState: (patch) => {
+        if (typeof patch.enabled === "boolean") writeCanvasAgentEnabledPreference(patch.enabled);
+        set(patch);
+    },
     addMessage: (item) => set((state) => ({ messages: [...state.messages.slice(-120), item] })),
     addEventLog: (item) => set((state) => ({ eventLogs: [...state.eventLogs.slice(-160), item] })),
     clearEventLogs: () => set({ eventLogs: [] }),

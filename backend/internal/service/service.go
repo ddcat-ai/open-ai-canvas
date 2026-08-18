@@ -990,6 +990,14 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 			return nil
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
+			decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
+			if decryptErr == nil && s.shouldDeferVideoProviderTask(*task, decryptedInput, err) {
+				if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "后台仍在生成", 15*time.Second); deferErr != nil {
+					return deferErr
+				}
+				_ = s.log(task.UserID, task.ID, "info", "前台等待结束，上游视频仍在生成，将继续回查原任务", task.PollStage)
+				return nil
+			}
 			err = errors.New(taskTimeoutMessage(task.Type))
 		}
 		task.Status = model.TaskStatusFailed
@@ -1079,7 +1087,7 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	case taskType == "agent_storyboard" || taskType == "agent_storyboard_rows":
 		return time.Duration(policy.StoryboardTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_video") || strings.HasPrefix(taskType, "video_"):
-		return time.Duration(policy.VideoTimeoutMinutes) * time.Minute
+		return max(time.Duration(policy.VideoTimeoutMinutes)*time.Minute, 5*time.Minute)
 	case strings.HasPrefix(taskType, "canvas_image"):
 		return time.Duration(policy.ImageTimeoutMinutes) * time.Minute
 	case strings.HasPrefix(taskType, "canvas_audio"):
@@ -1089,6 +1097,18 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	default:
 		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
 	}
+}
+
+func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
+	if !errors.Is(err, context.DeadlineExceeded) || strings.TrimSpace(task.ProviderRequestID) == "" || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+		return false
+	}
+	var input canvasGenerationInput
+	if json.Unmarshal([]byte(decryptedInput), &input) != nil {
+		return false
+	}
+	resolved, resolveErr := s.resolveProviderConfig(input.Config)
+	return resolveErr == nil && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
 }
 
 func taskTimeoutMessage(taskType string) string {
