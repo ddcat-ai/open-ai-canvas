@@ -1876,7 +1876,10 @@ func runNewAPIChannel2VideoTask(ctx context.Context, input canvasGenerationInput
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("NewAPI Video Generations 视频生成超时（任务 %s）", id)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, context.DeadlineExceeded
 }
 
 // 单次查询只读取既有上游任务，不创建新任务；自动轮询和人工恢复共用这条安全边界。
