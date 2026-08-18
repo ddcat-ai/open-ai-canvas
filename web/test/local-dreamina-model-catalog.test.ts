@@ -296,10 +296,7 @@ test("Dreamina catalog timeout releases a hung shared request so generation can 
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
     await Bun.sleep(20);
 
-    const recovered = await Promise.race([
-        store.getState().ensureReady(),
-        Bun.sleep(40).then(() => "stuck" as const),
-    ]);
+    const recovered = await Promise.race([store.getState().ensureReady(), Bun.sleep(40).then(() => "stuck" as const)]);
     expect(recovered).not.toBe("stuck");
     expect(recovered).toMatchObject([{ id: "seedance-recovered" }]);
     expect(store.getState()).toMatchObject({ state: "ready", cacheScope: `${"a".repeat(64)}:4` });
