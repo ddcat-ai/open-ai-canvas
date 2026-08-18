@@ -207,18 +207,22 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
     const handleModelPointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
         if (!selected || !rig) return;
-        let nearest: { bone: string; distance: number } | null = null;
+        let nearestBone: string | null = null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
         Object.entries(rig.boneMap).forEach(([bone, name]) => {
             if (!name) return;
             const target = model?.getObjectByName(name);
             if (!target) return;
             const distance = event.ray.distanceSqToPoint(target.getWorldPosition(new Vector3()));
-            if (distance <= 0.12 ** 2 && (!nearest || distance < nearest.distance)) nearest = { bone, distance };
+            if (distance <= 0.12 ** 2 && distance < nearestDistance) {
+                nearestBone = bone;
+                nearestDistance = distance;
+            }
         });
-        if (!nearest) return;
+        if (!nearestBone) return;
         // 模型表面可能先于关节控制球被射线命中，用最近骨骼保证点击仍可选中。
         event.stopPropagation();
-        onSelectBone(nearest.bone);
+        onSelectBone(nearestBone);
     }, [model, onSelectBone, rig, selected]);
 
     useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
