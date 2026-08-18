@@ -122,7 +122,23 @@ export function interpolateDirectorBoneRotation(base: DirectorQuat, keyframes: D
 }
 
 export function directorBoneLabel(bone: string) {
-    return ({ hips: "骨盆", spine: "脊柱", chest: "胸腔", neck: "颈部", head: "头部", leftShoulder: "左肩", leftUpperArm: "左上臂", leftLowerArm: "左前臂", leftHand: "左手", rightShoulder: "右肩", rightUpperArm: "右上臂", rightLowerArm: "右前臂", rightHand: "右手", leftUpperLeg: "左大腿", leftLowerLeg: "左小腿", leftFoot: "左脚", rightUpperLeg: "右大腿", rightLowerLeg: "右小腿", rightFoot: "右脚" } as Record<string, string>)[bone] || bone;
+    return ({
+        hips: "骨盆", spine: "脊柱", chest: "胸腔", neck: "颈部", head: "头部",
+        leftShoulder: "左肩", leftUpperArm: "左上臂", leftLowerArm: "左前臂", leftHand: "左手",
+        rightShoulder: "右肩", rightUpperArm: "右上臂", rightLowerArm: "右前臂", rightHand: "右手",
+        leftUpperLeg: "左大腿", leftLowerLeg: "左小腿", leftFoot: "左脚",
+        rightUpperLeg: "右大腿", rightLowerLeg: "右小腿", rightFoot: "右脚",
+        leftThumb1: "左拇指·根", leftThumb2: "左拇指·中", leftThumb3: "左拇指·尖",
+        leftIndex1: "左食指·根", leftIndex2: "左食指·中", leftIndex3: "左食指·尖",
+        leftMiddle1: "左中指·根", leftMiddle2: "左中指·中", leftMiddle3: "左中指·尖",
+        leftRing1: "左无名指·根", leftRing2: "左无名指·中", leftRing3: "左无名指·尖",
+        leftPinky1: "左小指·根", leftPinky2: "左小指·中", leftPinky3: "左小指·尖",
+        rightThumb1: "右拇指·根", rightThumb2: "右拇指·中", rightThumb3: "右拇指·尖",
+        rightIndex1: "右食指·根", rightIndex2: "右食指·中", rightIndex3: "右食指·尖",
+        rightMiddle1: "右中指·根", rightMiddle2: "右中指·中", rightMiddle3: "右中指·尖",
+        rightRing1: "右无名指·根", rightRing2: "右无名指·中", rightRing3: "右无名指·尖",
+        rightPinky1: "右小指·根", rightPinky2: "右小指·中", rightPinky3: "右小指·尖",
+    } as Record<string, string>)[bone] || bone;
 }
 
 export function directorPoseLabel(pose: DirectorPose) {

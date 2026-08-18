@@ -1,7 +1,7 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { AnimationClip, AnimationMixer, Box3, Bone, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, Quaternion, Scene, SkeletonHelper, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
+import { AnimationClip, AnimationMixer, Box3, Bone, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Quaternion, Scene, SkeletonHelper, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
 import type { Material } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
@@ -205,6 +205,21 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     const motion = object.motionClips?.find((item) => item.id === object.activeMotionClipId);
     const activeAnimation = motion ? animations.find((item) => item.name === motion.sourceAnimation) : undefined;
     const modelUrl = object.kind === "actor" || object.primitive === "character" ? DIRECTOR_DEFAULT_ACTOR_URL : object.url;
+    const handleModelPointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
+        if (!selected || !rig) return;
+        let nearest: { bone: string; distance: number } | null = null;
+        Object.entries(rig.boneMap).forEach(([bone, name]) => {
+            if (!name) return;
+            const target = model?.getObjectByName(name);
+            if (!target) return;
+            const distance = event.ray.distanceSqToPoint(target.getWorldPosition(new Vector3()));
+            if (distance <= 0.12 ** 2 && (!nearest || distance < nearest.distance)) nearest = { bone, distance };
+        });
+        if (!nearest) return;
+        // 模型表面可能先于关节控制球被射线命中，用最近骨骼保证点击仍可选中。
+        event.stopPropagation();
+        onSelectBone(nearest.bone);
+    }, [model, onSelectBone, rig, selected]);
 
     useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
 
@@ -276,10 +291,14 @@ function DirectorModel({ object, selected, selectedBone, playhead, onSelectBone,
     });
 
     if (!model) return <DirectorMannequin color={object.color} selected={selected} />;
-    return <group>
+    return <group onPointerDown={handleModelPointerDown}>
         <primitive object={model} />
         {selected && helper ? <primitive object={helper} /> : null}
-        {selected && rig ? Object.entries(rig.boneMap).filter(([, name]) => Boolean(name)).map(([bone, name]) => <BoneController key={bone} bone={model.getObjectByName(name!)} model={model} selected={selectedBone === bone} onSelect={() => onSelectBone(bone)} />) : null}
+        {selected && rig ? Object.entries(rig.boneMap).filter(([, name]) => Boolean(name)).map(([bone, name]) => {
+            const fingerGroup = directorFingerGroup(bone);
+            const selectedFingerGroup = directorFingerGroup(selectedBone);
+            return <BoneController key={bone} bone={model.getObjectByName(name!)} selected={selectedBone === bone} dimmed={Boolean(fingerGroup && selectedFingerGroup && fingerGroup !== selectedFingerGroup)} onSelect={() => onSelectBone(bone)} />;
+        }) : null}
         {selected && selectedBoneObject ? <TransformControls object={selectedBoneObject} mode="rotate" size={0.55} onMouseUp={() => onBoneTransform(selectedBone!, selectedBoneObject.quaternion.toArray() as DirectorQuat)} /> : null}
     </group>;
 }
@@ -303,17 +322,55 @@ function LoadingBone({ from, to, color }: { from: DirectorVec3; to: DirectorVec3
     return <mesh position={midpoint} quaternion={rotation}><cylinderGeometry args={[0.025, 0.025, direction.length(), 8]} /><meshBasicMaterial color={color} transparent opacity={0.62} /></mesh>;
 }
 
-function BoneController({ bone, model, selected, onSelect }: { bone: Object3D | undefined; model: Object3D; selected: boolean; onSelect: () => void }) {
+function BoneController({ bone, selected, dimmed, onSelect }: { bone: Object3D | undefined; selected: boolean; dimmed: boolean; onSelect: () => void }) {
     const ref = useRef<Group>(null);
+    const visibleRef = useRef<Mesh>(null);
+    const hitRef = useRef<Mesh>(null);
     const world = useMemo(() => new Vector3(), []);
+    const local = useMemo(() => new Vector3(), []);
+    const cameraWorld = useMemo(() => new Vector3(), []);
+    const { camera, size } = useThree();
     useFrame(() => {
         if (!bone || !ref.current) return;
+        const parent = ref.current.parent;
+        if (!parent) return;
+        // 控制点与模型根节点是兄弟关系，必须转换到控制点父级坐标，否则点击区域会与骨骼错位。
         bone.getWorldPosition(world);
-        model.worldToLocal(world);
-        ref.current.position.copy(world);
+        camera.getWorldPosition(cameraWorld);
+        local.copy(world);
+        parent.worldToLocal(local);
+        ref.current.position.copy(local);
+        const distance = cameraWorld.distanceTo(world);
+        const visualPixels = selected ? 5 : dimmed ? 2.5 : 3.5;
+        const hitPixels = selected ? 12 : 10;
+        visibleRef.current?.scale.setScalar(screenPixelsToWorldRadius(camera, distance, visualPixels, size.height));
+        hitRef.current?.scale.setScalar(screenPixelsToWorldRadius(camera, distance, hitPixels, size.height));
     });
     if (!bone) return null;
-    return <group ref={ref} onPointerDown={(event) => { event.stopPropagation(); onSelect(); }}><mesh><sphereGeometry args={[selected ? 0.07 : 0.045, 12, 8]} /><meshBasicMaterial color={selected ? "#f0b36a" : "#78a9ff"} depthTest={false} transparent opacity={selected ? 1 : 0.75} /></mesh></group>;
+    const handlePointerDown = (event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); onSelect(); };
+    return <group ref={ref}>
+        <mesh ref={visibleRef} onPointerDown={handlePointerDown} frustumCulled={false}>
+            <sphereGeometry args={[1, 12, 8]} />
+            <meshBasicMaterial color={selected ? "#f0b36a" : "#78a9ff"} depthTest={false} transparent opacity={selected ? 1 : dimmed ? 0.14 : 0.68} />
+        </mesh>
+        {/* 可视点保持小尺寸，透明球只负责提供稳定的点击面积。 */}
+        <mesh ref={hitRef} onPointerDown={handlePointerDown} frustumCulled={false}>
+            <sphereGeometry args={[1, 8, 6]} />
+            <meshBasicMaterial transparent opacity={0} depthTest={false} />
+        </mesh>
+    </group>;
+}
+
+function screenPixelsToWorldRadius(camera: Camera, distance: number, pixels: number, viewportHeight: number) {
+    const height = Math.max(1, viewportHeight);
+    if (camera instanceof PerspectiveCamera) return (pixels * 2 * Math.max(0.01, distance) * Math.tan((camera.fov * Math.PI) / 360)) / (height * Math.max(0.01, camera.zoom));
+    if (camera instanceof OrthographicCamera) return (pixels * (camera.top - camera.bottom)) / (height * Math.max(0.01, camera.zoom));
+    return pixels * 0.001;
+}
+
+function directorFingerGroup(bone: string | null) {
+    const match = bone?.match(/^(left|right)(Thumb|Index|Middle|Ring|Pinky)\d$/);
+    return match ? `${match[1]}${match[2]}` : null;
 }
 
 function normalizeModel(root: Object3D, castShadow: boolean, receiveShadow: boolean) {
@@ -367,10 +424,26 @@ function readRigRestRotations(root: Object3D, rig: DirectorRig) {
 function inferDirectorRig(root: Object3D, animationNames: string[]): DirectorRig {
     const names = new Map<string, string>();
     root.traverse((child) => { if (child instanceof Bone) names.set(normalizeBoneName(child.name), child.name); });
+    const fingerPatterns = (side: "left" | "right", finger: "thumb" | "index" | "middle" | "ring" | "pinky", segment: 1 | 2 | 3) => [
+        new RegExp(`^mixamorig${side}hand${finger}${segment}$`),
+        new RegExp(`^${side}hand${finger}${segment}$`),
+        new RegExp(`^${side}${finger}${segment}$`),
+        new RegExp(`^${finger}0?${segment}${side === "left" ? "l" : "r"}$`),
+    ];
     const patterns: Record<DirectorHumanoidBone, RegExp[]> = {
         root: [/^root$/, /armature/], hips: [/hips|pelvis/, /mixamorig.*hip/], spine: [/spine1?$|lowerback/], chest: [/spine2|chest|upperback/], neck: [/neck/], head: [/head/],
-        leftShoulder: [/leftshoulder|shoulder_l|mixamorigleftshoulder/], leftUpperArm: [/leftupperarm|leftarm|upperarm_l|mixamorigleftarm/], leftLowerArm: [/leftforearm|leftlowerarm|forearm_l|mixamorigleftforearm/], leftHand: [/lefthand|hand_l|mixamoriglefthand/],
-        rightShoulder: [/rightshoulder|shoulder_r|mixamorigrightshoulder/], rightUpperArm: [/rightupperarm|rightarm|upperarm_r|mixamorigrightarm/], rightLowerArm: [/rightforearm|rightlowerarm|forearm_r|mixamorigrightforearm/], rightHand: [/righthand|hand_r|mixamorigrighthand/],
+        leftShoulder: [/leftshoulder|shoulder_l|mixamorigleftshoulder/], leftUpperArm: [/leftupperarm|leftarm|upperarm_l|mixamorigleftarm/], leftLowerArm: [/leftforearm|leftlowerarm|forearm_l|mixamorigleftforearm/], leftHand: [/^lefthand$/, /^handl$/, /^mixamoriglefthand$/],
+        leftThumb1: fingerPatterns("left", "thumb", 1), leftThumb2: fingerPatterns("left", "thumb", 2), leftThumb3: fingerPatterns("left", "thumb", 3),
+        leftIndex1: fingerPatterns("left", "index", 1), leftIndex2: fingerPatterns("left", "index", 2), leftIndex3: fingerPatterns("left", "index", 3),
+        leftMiddle1: fingerPatterns("left", "middle", 1), leftMiddle2: fingerPatterns("left", "middle", 2), leftMiddle3: fingerPatterns("left", "middle", 3),
+        leftRing1: fingerPatterns("left", "ring", 1), leftRing2: fingerPatterns("left", "ring", 2), leftRing3: fingerPatterns("left", "ring", 3),
+        leftPinky1: fingerPatterns("left", "pinky", 1), leftPinky2: fingerPatterns("left", "pinky", 2), leftPinky3: fingerPatterns("left", "pinky", 3),
+        rightShoulder: [/rightshoulder|shoulder_r|mixamorigrightshoulder/], rightUpperArm: [/rightupperarm|rightarm|upperarm_r|mixamorigrightarm/], rightLowerArm: [/rightforearm|rightlowerarm|forearm_r|mixamorigrightforearm/], rightHand: [/^righthand$/, /^handr$/, /^mixamorigrighthand$/],
+        rightThumb1: fingerPatterns("right", "thumb", 1), rightThumb2: fingerPatterns("right", "thumb", 2), rightThumb3: fingerPatterns("right", "thumb", 3),
+        rightIndex1: fingerPatterns("right", "index", 1), rightIndex2: fingerPatterns("right", "index", 2), rightIndex3: fingerPatterns("right", "index", 3),
+        rightMiddle1: fingerPatterns("right", "middle", 1), rightMiddle2: fingerPatterns("right", "middle", 2), rightMiddle3: fingerPatterns("right", "middle", 3),
+        rightRing1: fingerPatterns("right", "ring", 1), rightRing2: fingerPatterns("right", "ring", 2), rightRing3: fingerPatterns("right", "ring", 3),
+        rightPinky1: fingerPatterns("right", "pinky", 1), rightPinky2: fingerPatterns("right", "pinky", 2), rightPinky3: fingerPatterns("right", "pinky", 3),
         leftUpperLeg: [/leftupleg|leftthigh|thigh_l|mixamorigleftupleg/], leftLowerLeg: [/leftleg|leftcalf|calf_l|mixamorigleftleg/], leftFoot: [/leftfoot|foot_l|mixamorigleftfoot/], rightUpperLeg: [/rightupleg|rightthigh|thigh_r|mixamorigrightupleg/], rightLowerLeg: [/rightleg|rightcalf|calf_r|mixamorigrightleg/], rightFoot: [/rightfoot|foot_r|mixamorigrightfoot/],
     };
     const boneMap = Object.fromEntries(Object.entries(patterns).map(([bone, candidates]) => [bone, candidates.map((pattern) => [...names.entries()].find(([normalized]) => pattern.test(normalized))?.[1]).find(Boolean)]).filter(([, name]) => Boolean(name))) as DirectorRig["boneMap"];

@@ -2227,6 +2227,7 @@ function InfiniteCanvasPage() {
                                 onClose={() => setDirectorNodeId(null)}
                                 onChange={saveDirectorScene}
                                 onApply={applyDirectorOutput}
+                                onDeleteImageNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                             />
                         </Suspense>
                     ) : null}
