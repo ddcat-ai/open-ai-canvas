@@ -98,6 +98,73 @@ test("Canvas Agent UI store contains no Runtime endpoint, bearer, or session fie
     expect("session" in state).toBe(false);
 });
 
+test("Canvas Agent reconnect intent persists while transient disconnects preserve the active conversation", async () => {
+    const module = await import("../src/stores/canvas/use-canvas-agent-store").catch(() => ({}));
+    const connectionStartingPatch = (
+        module as {
+            canvasAgentConnectionStartingPatch?: () => Record<string, unknown>;
+        }
+    ).canvasAgentConnectionStartingPatch;
+    const transientDisconnectPatch = (
+        module as {
+            canvasAgentTransientDisconnectPatch?: (activity: string, connectError: string) => Record<string, unknown>;
+        }
+    ).canvasAgentTransientDisconnectPatch;
+    const writeEnabled = (
+        module as {
+            writeCanvasAgentEnabledPreference?: (enabled: boolean, storage: { setItem(key: string, value: string): void }) => void;
+        }
+    ).writeCanvasAgentEnabledPreference;
+    const readEnabled = (
+        module as {
+            readCanvasAgentEnabledPreference?: (storage: { getItem(key: string): string | null }) => boolean;
+        }
+    ).readCanvasAgentEnabledPreference;
+
+    expect(typeof connectionStartingPatch).toBe("function");
+    expect(typeof transientDisconnectPatch).toBe("function");
+    expect(typeof writeEnabled).toBe("function");
+    expect(typeof readEnabled).toBe("function");
+    if (!connectionStartingPatch || !transientDisconnectPatch || !writeEnabled || !readEnabled) return;
+
+    const durable = {
+        messages: [{ id: "message-1", role: "assistant", text: "kept" }],
+        threads: [{ id: "thread-1", preview: "kept" }],
+        activeThreadId: "thread-1",
+        workspacePath: "D:/workspace",
+        pendingTool: { requestId: "tool-1", name: "canvas_get_state" },
+    };
+    const starting = { ...durable, ...connectionStartingPatch() };
+    expect(starting).toMatchObject({ enabled: true, connected: false, activity: "连接中", ...durable });
+
+    const reconnecting = { ...starting, ...transientDisconnectPatch("正在重连", "连接已断开") };
+    expect(reconnecting).toMatchObject({ enabled: true, connected: false, activity: "正在重连", connectError: "连接已断开", ...durable });
+
+    const values = new Map<string, string>();
+    const storage = {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+    };
+    writeEnabled(true, storage);
+    expect(readEnabled(storage)).toBe(true);
+    writeEnabled(false, storage);
+    expect(readEnabled(storage)).toBe(false);
+});
+
+test("Canvas Agent status shows reconnecting instead of a stale connection failure", async () => {
+    const module = await import("../src/stores/canvas/use-canvas-agent-store").catch(() => ({}));
+    const statusText = (
+        module as {
+            canvasAgentConnectionStatusText?: (state: { enabled: boolean; connected: boolean; activity: string; connectError: string }) => string;
+        }
+    ).canvasAgentConnectionStatusText;
+    expect(typeof statusText).toBe("function");
+    if (!statusText) return;
+
+    expect(statusText({ enabled: true, connected: false, activity: "正在重连", connectError: "连接已断开" })).toBe("正在重连");
+    expect(statusText({ enabled: true, connected: false, activity: "连接失败", connectError: "首次连接失败" })).toBe("连接失败");
+});
+
 test("Canvas connection reuses the shared Runtime store and requires the canvas module", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection");
     const prepare = (

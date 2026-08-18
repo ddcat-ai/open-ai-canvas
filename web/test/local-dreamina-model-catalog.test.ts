@@ -213,6 +213,125 @@ test("effective config projects an asynchronously arriving Dreamina catalog with
     expect(defaultConfig.channels.some((channel) => channel.id === "local:dreamina-cli")).toBe(false);
 });
 
+test("Dreamina catalog readiness is loading immediately and shares one in-flight bootstrap", async () => {
+    const module = await import("../src/stores/use-local-dreamina-model-store").catch(() => ({}));
+    const createStore = (
+        module as {
+            createLocalDreaminaModelStore?: (dependencies: Record<string, unknown>) => {
+                getState(): {
+                    state: string;
+                    models: Array<{ id: string }>;
+                    ensureReady(signal?: AbortSignal): Promise<Array<{ id: string }>>;
+                };
+            };
+        }
+    ).createLocalDreaminaModelStore;
+    expect(typeof createStore).toBe("function");
+    if (!createStore) return;
+
+    let requests = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const store = createStore({
+        getRuntimeState: () => ({ connection: "connected", modules: [{ id: "dreamina", scopes: ["dreamina:models"] }] }),
+        getClient: () => ({ request: async () => catalogResponse() }),
+        loadSnapshot: async () => {
+            requests += 1;
+            await gate;
+            return {
+                accountBinding: "a".repeat(64),
+                sessionEpoch: 3,
+                models: [
+                    {
+                        provider: "dreamina-cli",
+                        id: "seedance2.0mini",
+                        displayName: "seedance2.0mini",
+                        modality: "video",
+                        operations: ["text-to-video"],
+                        adapterSupported: true,
+                        accountEntitlement: "unknown",
+                        currentlyObservedAvailable: "unknown",
+                        settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
+                        source: "runtime-execution-contract",
+                    },
+                ],
+            };
+        },
+    });
+
+    const first = store.getState().ensureReady();
+    const second = store.getState().ensureReady();
+    expect(store.getState().state).toBe("loading");
+    expect(requests).toBe(1);
+    release();
+    const [firstModels, secondModels] = await Promise.all([first, second]);
+    expect(firstModels.map((item) => item.id)).toEqual(["seedance2.0mini"]);
+    expect(secondModels).toEqual(firstModels);
+    expect(store.getState()).toMatchObject({ state: "ready", cacheScope: `${"a".repeat(64)}:3` });
+    expect(requests).toBe(1);
+});
+
+test("Dreamina catalog timeout releases a hung shared request so generation can recover without reload", async () => {
+    const { createLocalDreaminaModelStore } = await import("../src/stores/use-local-dreamina-model-store");
+    let requests = 0;
+    const store = createLocalDreaminaModelStore({
+        getRuntimeState: () => ({ connection: "connected", modules: [{ id: "dreamina", scopes: ["dreamina:models"] }] }),
+        getClient: () => ({ request: async () => catalogResponse() }),
+        requestTimeoutMs: 10,
+        loadSnapshot: async (_client, signal) => {
+            requests += 1;
+            if (requests > 1) return catalogSnapshot("seedance-recovered", 4);
+            if (!signal) return await new Promise<ReturnType<typeof catalogSnapshot>>(() => undefined);
+            return await new Promise<ReturnType<typeof catalogSnapshot>>((_resolve, reject) => {
+                signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+            });
+        },
+    });
+
+    const caller = new AbortController();
+    const first = store.getState().ensureReady(caller.signal);
+    caller.abort();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    await Bun.sleep(20);
+
+    const recovered = await Promise.race([store.getState().ensureReady(), Bun.sleep(40).then(() => "stuck" as const)]);
+    expect(recovered).not.toBe("stuck");
+    expect(recovered).toMatchObject([{ id: "seedance-recovered" }]);
+    expect(store.getState()).toMatchObject({ state: "ready", cacheScope: `${"a".repeat(64)}:4` });
+    expect(requests).toBe(2);
+});
+
+test("Dreamina catalog forced resync ignores a late result from the previous Runtime scope", async () => {
+    const { createLocalDreaminaModelStore } = await import("../src/stores/use-local-dreamina-model-store");
+    let requests = 0;
+    let releaseOld!: (snapshot: ReturnType<typeof catalogSnapshot>) => void;
+    const oldRequest = new Promise<ReturnType<typeof catalogSnapshot>>((resolve) => {
+        releaseOld = resolve;
+    });
+    const store = createLocalDreaminaModelStore({
+        getRuntimeState: () => ({ connection: "connected", modules: [{ id: "dreamina", scopes: ["dreamina:models"] }] }),
+        getClient: () => ({ request: async () => catalogResponse() }),
+        requestTimeoutMs: 100,
+        loadSnapshot: async () => {
+            requests += 1;
+            return requests === 1 ? oldRequest : catalogSnapshot("seedance-current", 5);
+        },
+    });
+
+    const oldSync = store.getState().sync();
+    const currentSync = store.getState().sync();
+    const currentResult = await Promise.race([currentSync.then(() => "ready" as const), Bun.sleep(40).then(() => "stuck" as const)]);
+    expect(currentResult).toBe("ready");
+    expect(requests).toBe(2);
+    expect(store.getState()).toMatchObject({ state: "ready", cacheScope: `${"a".repeat(64)}:5`, models: [{ id: "seedance-current" }] });
+
+    releaseOld(catalogSnapshot("seedance-stale", 3));
+    await oldSync;
+    expect(store.getState()).toMatchObject({ state: "ready", cacheScope: `${"a".repeat(64)}:5`, models: [{ id: "seedance-current" }] });
+});
+
 test("effective config removes custom channels when administrators disable them", async () => {
     const { createModelChannel, effectiveConfigForCustomChannels, normalizeConfigSnapshot } = await import("../src/stores/use-config-store");
     const config = normalizeConfigSnapshot({
@@ -263,4 +382,25 @@ function catalogResponse() {
         }),
         { status: 200, headers: { "content-type": "application/json" } },
     );
+}
+
+function catalogSnapshot(id: string, sessionEpoch: number) {
+    return {
+        accountBinding: "a".repeat(64),
+        sessionEpoch,
+        models: [
+            {
+                provider: "dreamina-cli" as const,
+                id,
+                displayName: id,
+                modality: "video" as const,
+                operations: ["text-to-video" as const],
+                adapterSupported: true,
+                accountEntitlement: "unknown" as const,
+                currentlyObservedAvailable: "unknown" as const,
+                settings: { aliases: [], aspects: ["16:9"], maxReferenceImages: 9, minDuration: 4, maxDuration: 15, tiers: ["720p"] },
+                source: "runtime-execution-contract" as const,
+            },
+        ],
+    };
 }

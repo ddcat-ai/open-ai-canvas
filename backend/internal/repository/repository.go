@@ -294,7 +294,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 	now := time.Now()
 	leaseExpiresAt := now.Add(leaseDuration)
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		query := tx.Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", model.TaskStatusQueued, model.TaskStatusRunning, now).
+		query := tx.Where("(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_poll_at IS NULL OR next_poll_at <= ?)", model.TaskStatusQueued, model.TaskStatusRunning, now, now).
 			Order("created_at asc").Limit(1)
 		if r.Dialect() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"})
@@ -309,7 +309,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 		}
 		claim := tx.Model(&model.Task{}).Where("id = ?", task.ID)
 		if r.Dialect() != "postgres" {
-			claim = claim.Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", model.TaskStatusQueued, model.TaskStatusRunning, now)
+			claim = claim.Where("(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_poll_at IS NULL OR next_poll_at <= ?)", model.TaskStatusQueued, model.TaskStatusRunning, now, now)
 		}
 		updated := claim.
 			Updates(map[string]any{
@@ -320,6 +320,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 				"started_at":       gorm.Expr("COALESCE(started_at, ?)", now),
 				"lease_owner":      owner,
 				"lease_expires_at": leaseExpiresAt,
+				"next_poll_at":     nil,
 				"updated_at":       now,
 			})
 		if updated.Error != nil {
@@ -356,6 +357,23 @@ func (r *Repository) UpdateTaskProviderState(id string, providerRequestID string
 		updates["provider_request_id"] = strings.TrimSpace(providerRequestID)
 	}
 	return r.db.Model(&model.Task{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *Repository) DeferRunningTaskForProviderPoll(id string, owner string, stage string, delay time.Duration) error {
+	now := time.Now()
+	result := r.db.Model(&model.Task{}).
+		Where("id = ? AND status = ? AND lease_owner = ?", id, model.TaskStatusRunning, owner).
+		Updates(map[string]any{
+			"stage": stage, "error": "", "completed_at": nil, "next_poll_at": now.Add(delay),
+			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrTaskStateConflict
+	}
+	return nil
 }
 
 // 人工恢复仅锁定失败任务；旧 worker 的租约可覆盖，但未过期的人工恢复租约不能并发抢占。
