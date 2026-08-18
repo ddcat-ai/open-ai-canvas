@@ -20,7 +20,7 @@ import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSi
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
-import { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
+import { isGenerationTaskCancelled, logicalModelIDForConfig, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { cancelGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
@@ -172,12 +172,17 @@ export default function CreatePage() {
             textCount: hasPrompt ? 1 : 0,
             imageCount: attachments.filter(isImageAttachment).length,
             videoCount: attachments.filter(isVideoAttachment).length,
-            audioCount: 0,
+            audioCount: attachments.filter((attachment) => creationAttachmentKind(attachment) === "audio").length,
             characterCount: 0,
         },
         videoSeconds: seconds,
         imageSize: mode === "image" ? ratio : undefined,
-    }), [attachments, hasPrompt, mode, ratio, seconds]);
+		options: mode === "image"
+			? { size: ratio, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
+			: mode === "video"
+				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
+				: {},
+	}), [attachments, config.transparentBackground, config.videoGenerateAudio, config.videoWatermark, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
@@ -485,16 +490,34 @@ export default function CreatePage() {
         const requestConfig = { ...config, model: selectedModel, imageModel: selectedModel, videoModel: selectedModel, textModel: selectedModel, size: ratio, videoSeconds: seconds, quality, vquality: videoQuality, count };
         try {
             if (mode === "text") {
-                const history = await Promise.all([...(activeConversation.messages || []), userMessage].map(async (item) => ({
-                    role: item.role,
-                    content: item.role === "user"
-                        ? await buildTextMessageContent(item)
-                        : item.content,
-                })));
-                await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), {
-                    signal: requestLifecycle.signal,
-                    onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
-                });
+				if (logicalModelIDForConfig(requestConfig)) {
+					const result = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTask({
+						mode: "text",
+						prompt: expandedPrompt,
+						config: requestConfig,
+						referenceImages,
+						referenceVideos,
+						referenceAudios,
+						textHistory: (activeConversation.messages || []).filter((item) => item.content.trim()).map((item) => ({ role: item.role, content: item.content })),
+						signal: requestLifecycle.signal,
+						metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
+						onTaskUpdate: bindTask,
+						...retryContext,
+					}));
+					if (!result.text?.trim()) throw new Error("后端任务没有返回文本");
+					updateOriginAssistant((item) => ({ ...item, content: result.text || "" }));
+				} else {
+					const history = await Promise.all([...(activeConversation.messages || []), userMessage].map(async (item) => ({
+						role: item.role,
+						content: item.role === "user"
+							? await buildTextMessageContent(item)
+							: item.content,
+					})));
+					await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), {
+						signal: requestLifecycle.signal,
+						onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
+					});
+				}
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
                 const settled = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTaskBatch({

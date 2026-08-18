@@ -131,6 +131,59 @@ func TestNormalizeVideoCapabilityAllowsOmittedResolution(t *testing.T) {
 	}
 }
 
+func TestCapabilitySpecFromModelCapabilityConfigProjectsImageSizeOnce(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			References: ImageReferenceConfig{MaxImages: 3, MaskSupported: false},
+			Size:       ImageSizeConfig{Parameter: "size", Values: []string{"1:1", "16:9"}, AllowCustom: true},
+			MaxOutputs: 4,
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	if got := spec.Options["size"].Values; len(got) != 1 || got[0] != "*" {
+		t.Fatalf("size projection = %#v, want wildcard", got)
+	}
+	if got := spec.Inputs["image"].Max; got != 3 {
+		t.Fatalf("image input max = %d, want 3", got)
+	}
+	if got := spec.Options["count"].Max; got == nil || *got != 4 {
+		t.Fatalf("count max = %v, want 4", got)
+	}
+}
+
+func TestCapabilitySpecFromModelCapabilityConfigProjectsCustomImageSizeAsWildcard(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			Size:       ImageSizeConfig{Parameter: "size", Values: []string{"1:1"}, AllowCustom: true},
+			MaxOutputs: 1,
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	if got := spec.Options["size"].Values; len(got) != 1 || got[0] != "*" {
+		t.Fatalf("custom size projection = %#v, want wildcard", got)
+	}
+}
+
+func TestCapabilitySpecFromModelCapabilityConfigAllowsAudioWithoutConfig(t *testing.T) {
+	spec, err := CapabilitySpecFromModelCapabilityConfig(nil, "audio")
+	if err != nil {
+		t.Fatalf("audio projection error = %v", err)
+	}
+	if spec.Capability != "audio" || len(spec.Inputs) != 0 || len(spec.Options) != 0 {
+		t.Fatalf("audio projection = %#v", spec)
+	}
+}
+
 func TestValidateVideoTaskRequiresDeclaredMinimumImages(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", "image-required-video").Video
 	profile.References.MinImages = 1

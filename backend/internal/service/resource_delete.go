@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+
+	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
+	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
 )
 
 func (s *Service) deleteUserAssetWithResources(userID string, assetID string) error {
@@ -288,6 +291,12 @@ func (s *Service) deleteStoredResourceObject(userID string, resource *model.Reso
 			return fmt.Errorf("无法读取腾讯云 COS 配置：%w", err)
 		}
 		return deleteTencentCOSObject(setting, resource.ObjectKey)
+	case qiniuKodoProvider:
+		setting, err := s.ossSettingForResource(userID, resource)
+		if err != nil {
+			return fmt.Errorf("无法读取七牛云 Kodo 配置：%w", err)
+		}
+		return deleteQiniuObject(setting, resource.ObjectKey)
 	default:
 		return fmt.Errorf("资源 %s 使用了不支持的存储类型 %q", resource.ID, resource.Provider)
 	}
@@ -364,6 +373,24 @@ func deleteTencentCOSObject(setting ossSettingValue, objectKey string) error {
 			return nil
 		}
 		return fmt.Errorf("删除腾讯云 COS 对象失败：%w", err)
+	}
+	return nil
+}
+
+func deleteQiniuObject(setting ossSettingValue, objectKey string) error {
+	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
+		return errors.New("七牛云 Kodo 访问密钥不可用")
+	}
+	if setting.Bucket == "" || strings.TrimSpace(objectKey) == "" {
+		return errors.New("七牛云 Kodo Bucket 或对象路径为空")
+	}
+	mac := qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret)
+	manager := qiniuStorage.NewBucketManager(mac, &qiniuStorage.Config{Region: qiniuRegion(setting.Region), UseHTTPS: true})
+	if err := manager.Delete(setting.Bucket, strings.TrimLeft(objectKey, "/")); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "no such") || strings.Contains(strings.ToLower(err.Error()), "not found") {
+			return nil
+		}
+		return fmt.Errorf("删除七牛云 Kodo 对象失败：%w", err)
 	}
 	return nil
 }

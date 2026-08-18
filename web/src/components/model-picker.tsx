@@ -1,14 +1,15 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, ChevronDown, Coins, Cpu } from "lucide-react";
+import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
 import { compatibleModelInGroup, configuredModelDisplayName, groupModelsByDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { cn } from "@/lib/utils";
-import { modelDisplayName, modelOptionLabel, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { modelDisplayName, modelIcon, modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { ModelLogo } from "@/components/model-logo";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -45,7 +46,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             .map((channel) => ({
                 key: channel.id,
                 label: channel.name || "未命名渠道",
-                scope: channel.scope === "system" ? "系统渠道" : "自定义渠道",
+                scope: channel.id === PUBLIC_MODEL_CATALOG_ID ? "" : channel.scope === "system" ? "平台服务" : "我的模型",
                 models: groupModelsByDisplayName(
                     config,
                     options.filter((model) => resolveModelChannel(config, model).id === channel.id),
@@ -138,9 +139,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                     <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
                         <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
                             <span className="truncate">{group.label}</span>
-                            <span className="shrink-0" style={{ color: theme.node.muted }}>
-                                {group.scope}
-                            </span>
+                            {group.scope ? <span className="shrink-0" style={{ color: theme.node.muted }}>{group.scope}</span> : null}
                         </div>
                         <div className="grid min-w-0 gap-1">
                             {group.models.map((modelGroup) => {
@@ -207,7 +206,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 >
                     <span className="canvas-model-picker-label flex min-w-0 items-center gap-1.5">
                         <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}>
-                            <ModelIcon model={current} />
+                            <ModelIcon config={config} model={current} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} compact /> : null}
@@ -221,8 +220,8 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
 
 function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     const label = capability === "image" ? "生图" : capability === "video" ? "视频" : capability === "text" ? "文本" : capability === "audio" ? "音频" : "";
-    if (capability && config.models.length) return `当前渠道没有匹配的${label}模型`;
-    return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里添加渠道和模型";
+    if (capability && config.models.length) return `暂无支持当前输入的${label}模型`;
+    return config.models.length ? `暂无匹配的${label}模型` : "当前没有可用模型，请联系管理员或检查模型配置";
 }
 
 function ModelLabel({
@@ -245,12 +244,15 @@ function ModelLabel({
     disabledReason?: string;
 }) {
     const meta = modelMenuMeta(model, capability);
+    const channel = resolveModelChannel(config, model);
+    const logicalCost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    const logicalSpec = logicalCost?.logicalCapabilitySpec;
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
-    const capabilitySummary = disabledReason || (videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
+    const capabilitySummary = disabledReason || logicalCost?.description?.trim() || (logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
             <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>
-                <ModelIcon model={model} />
+                <ModelIcon config={config} model={model} />
             </span>
             <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="block min-w-0 truncate text-[var(--fs-label)] font-medium leading-none">{pickerModelDisplayName(config, model, showConfiguredModelName)}</span>
@@ -266,6 +268,59 @@ function ModelLabel({
             ) : null}
         </span>
     );
+}
+
+function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>) {
+    const operationLabels: Record<string, string> = {
+        text_to_video: "文生视频",
+        image_to_video: "图生视频",
+        audio_to_video: "音频生视频",
+        extend: "视频续写",
+        inpaint: "局部修改",
+        replace_element: "元素替换",
+        camera_motion: "运镜调整",
+        style_transfer: "风格迁移",
+    };
+    const inputLabels: Record<string, { label: string; unit: string }> = {
+        image: { label: spec.capability === "text" ? "图片理解" : "参考图片", unit: "张" },
+        video: { label: spec.capability === "text" ? "视频理解" : "参考视频", unit: "个" },
+        audio: { label: "参考音频", unit: "个" },
+        mask: { label: "蒙版", unit: "张" },
+    };
+    const optionLabels: Record<string, string> = {
+        size: "画面比例",
+        aspectRatio: "画面比例",
+        quality: "生成质量",
+        count: "输出数量",
+        videoSeconds: "视频时长",
+        duration: "视频时长",
+        vquality: "输出分辨率",
+        resolution: "输出分辨率",
+        audioVoice: "音色",
+        audioFormat: "音频格式",
+        audioSpeed: "语速",
+    };
+    const values: string[] = [];
+    values.push(...(spec.operations || []).map((operation) => operationLabels[operation] || operation));
+    for (const [name, constraint] of Object.entries(spec.inputs || {})) {
+        if (constraint.max <= 0) continue;
+        const definition = inputLabels[name];
+        if (!definition) continue;
+        values.push(spec.capability === "text" ? `支持${definition.label}` : `${definition.label}最多 ${constraint.max}${definition.unit}`);
+    }
+    for (const [name, constraint] of Object.entries(spec.options || {})) {
+        const label = optionLabels[name];
+        if (!label) continue;
+        if (constraint.values?.length) values.push(`${label} ${constraint.values.map(publicScalarLabel).join("/")}`);
+        else if (constraint.min !== undefined && constraint.max !== undefined) values.push(`${label} ${constraint.min}-${constraint.max}`);
+    }
+    return values.slice(0, 2).join(" · ") || "智能匹配当前输入";
+}
+
+function publicScalarLabel(value: unknown) {
+    if (value === true) return "支持";
+    if (value === false) return "关闭";
+    return String(value);
 }
 
 function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>) {
@@ -292,7 +347,9 @@ function pickerModelDisplayName(config: AiConfig, model: string, showConfiguredM
 }
 
 function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredModelName: boolean) {
-    return showConfiguredModelName ? `${configuredModelDisplayName(config, model)}（${resolveModelChannel(config, model).name}）` : modelOptionLabel(config, model);
+    const displayName = showConfiguredModelName ? configuredModelDisplayName(config, model) : modelDisplayName(config, model);
+    const channel = resolveModelChannel(config, model);
+    return channel.scope === "system" ? displayName : `${displayName}（${channel.name}）`;
 }
 
 function ModelPrice({ price, compact = false }: { price: ModelMenuPrice | null | undefined; compact?: boolean }) {
@@ -324,25 +381,9 @@ function modelMenuMeta(model: string, capability?: ModelCapability): { descripti
     if (name.includes("claude")) return { description: "长文本、推理与创意写作", time: "10s" };
     if (name.includes("gemini")) return { description: "多模态理解与快速文本生成", time: "10s" };
     if (name.includes("deepseek")) return { description: "推理、代码和结构化文本", time: "10s" };
-    return { description: capability === "text" ? "文本生成模型" : "当前渠道模型", time: "10s" };
+    return { description: capability === "text" ? "文本生成模型" : "当前模型", time: "10s" };
 }
 
-export function ModelIcon({ model }: { model: string }) {
-    const icon = resolveModelIcon(modelOptionName(model));
-    const monochrome = icon === "/icons/openai.svg" || icon === "/icons/grok.svg";
-    return icon ? <img src={icon} alt="" className={cn("size-3.5 shrink-0", monochrome && "dark:invert")} /> : <Cpu className="size-3.5 shrink-0 opacity-70" />;
-}
-
-export function resolveModelIcon(model: string) {
-    const name = model.toLowerCase();
-    if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
-    // Flow2API 短名：Nano Banana / Imagen / Veo / Omni 均属 Google Gemini 系。
-    if (name.includes("gemini") || name.includes("google") || name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen") || name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) {
-        return "/icons/gemini.svg";
-    }
-    if (name.includes("gpt") || name.includes("openai") || name.includes("dall-e") || name.includes("dalle")) return "/icons/openai.svg";
-    if (name.includes("grok")) return "/icons/grok.svg";
-    if (name.includes("deepseek")) return "/icons/deepseek.svg";
-    if (name.includes("glm") || name.includes("chatglm")) return "/icons/glm.svg";
-    return "";
+export function ModelIcon({ config, model, icon }: { config?: AiConfig; model?: string; icon?: string }) {
+    return <ModelLogo icon={icon || (config && model ? modelIcon(config, model) : "")} size={14} className="opacity-80" />;
 }

@@ -19,7 +19,7 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
                 if (!cancelled) await applyUserSession(payload);
             })
             .catch(async () => {
-                if (!cancelled) await applyUserSession({ user: null, systemChannels: [] });
+                if (!cancelled) await applyUserSession({ user: null, logicalModels: [] });
             });
         return () => {
             cancelled = true;

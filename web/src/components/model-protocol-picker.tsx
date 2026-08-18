@@ -35,7 +35,7 @@ export function CapabilityCardPicker({ value, onChange, density = "comfortable" 
                         role="radio"
                         aria-checked={selected}
                         className={cn(
-                            "relative flex min-w-0 flex-col rounded-md border text-left outline-none transition-colors focus-visible:ring-1 focus-visible:ring-foreground/40",
+                            "relative flex min-w-0 flex-col rounded-md border text-left outline-none focus-visible:ring-1 focus-visible:ring-foreground/40",
                             density === "compact" ? "min-h-16 p-2" : "min-h-24 p-2.5",
                             selected ? "border-foreground/70 bg-foreground/[.04]" : "border-border/75 bg-background hover:border-foreground/25 hover:bg-muted/30",
                         )}
@@ -56,7 +56,7 @@ export function CapabilityCardPicker({ value, onChange, density = "comfortable" 
 export function ProtocolCardPicker({ capability, value, onChange, density = "comfortable" }: { capability?: ModelCapabilityChoice; value?: ModelProtocol; onChange?: (value: ModelProtocol) => void; density?: PickerDensity }) {
     const protocols = MODEL_PROTOCOLS.filter((item) => item.capability === capability);
     return (
-        <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", density === "compact" && "gap-1.5")} role="radiogroup" aria-label="模型请求协议">
+        <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", density === "compact" && "gap-1.5 xl:grid-cols-3")} role="radiogroup" aria-label="模型请求协议">
             {protocols.map((protocol) => {
                 const selected = value === protocol.value;
                 return (
@@ -66,7 +66,7 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
                         role="radio"
                         aria-checked={selected}
                         className={cn(
-                            "relative flex min-w-0 flex-col rounded-md border text-left outline-none transition-colors focus-visible:ring-1 focus-visible:ring-foreground/40",
+                            "relative flex min-w-0 flex-col rounded-md border text-left outline-none focus-visible:ring-1 focus-visible:ring-foreground/40",
                             density === "compact" ? "min-h-16 p-2" : "min-h-24 p-2.5",
                             selected ? "border-foreground/70 bg-foreground/[.04]" : "border-border/75 bg-background hover:border-foreground/25 hover:bg-muted/30",
                         )}

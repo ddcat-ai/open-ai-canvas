@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip } from "antd";
+import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useSearchParams } from "react-router";
 
-import { ListToolbar } from "@/components/layout/workspace-page";
+import { ListToolbar, PaginationBar } from "@/components/layout/workspace-page";
 import {
     createAdminModelPricing,
     deleteAdminModelPricing,
@@ -20,7 +20,7 @@ import {
     type AnalyticsFilters,
     type ModelPricing,
 } from "@/services/api/auth";
-import { AdminExportButton } from "./admin-ui";
+import { AdminDataTable, AdminExportButton, AdminFilterChip, AdminRowActions, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 type Props = {
     users: AdminReferenceData["users"];
@@ -63,7 +63,12 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [savingPricing, setSavingPricing] = useState(false);
     const [userOptions, setUserOptions] = useState(users);
     const [searchingUsers, setSearchingUsers] = useState(false);
+    const [modelPage, setModelPage] = useState(1);
+    const [userPage, setUserPage] = useState(1);
+    const [failurePage, setFailurePage] = useState(1);
+    const [pricingPage, setPricingPage] = useState(1);
     const [form] = Form.useForm<PricingFormValues>();
+    const analyticsPageSize = 20;
 
     const filters = useMemo<AnalyticsFilters>(
         () => ({
@@ -98,6 +103,13 @@ export default function AnalyticsPanel({ users, channels }: Props) {
         }
         setSearchParams(next, { replace: true });
         void reload();
+    }, [filters]);
+
+    useEffect(() => {
+        setModelPage(1);
+        setUserPage(1);
+        setFailurePage(1);
+        setPricingPage(1);
     }, [filters]);
 
     useEffect(() => {
@@ -227,7 +239,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     ];
 
     const failureColumns: ColumnsType<AdminAnalytics["failures"][number]> = [
-        { title: "错误类型", dataIndex: "type", width: 120, render: (value) => <Tag color={value === "超时" ? "orange" : "red"}>{value}</Tag> },
+        { title: "错误类型", dataIndex: "type", width: 120, render: (value) => <AdminStatusBadge label={value} tone={value === "超时" ? "warning" : "error"} /> },
         { title: "模型", dataIndex: "model", width: 220 },
         { title: "次数", dataIndex: "count", width: 90 },
         { title: "最近错误", dataIndex: "lastError", ellipsis: true, render: (value) => <Tooltip title={value}>{value || "--"}</Tooltip> },
@@ -259,39 +271,52 @@ export default function AnalyticsPanel({ users, channels }: Props) {
         },
         {
             title: "操作",
-            fixed: "right",
-            width: 90,
-            render: (_, row) => (
-                <Space size={4}>
-                    <Button type="text" size="small" icon={<Pencil className="size-3.5" />} onClick={() => openPricing(row)} />
-                    <Popconfirm title="删除价格配置？" okText="删除" cancelText="取消" onConfirm={() => void removePricing(row.id)}>
-                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} />
-                    </Popconfirm>
-                </Space>
-            ),
+            width: 170,
+            render: (_, row) => <AdminRowActions primary={{ label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openPricing(row) }} actions={[{ key: "delete", label: "删除", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除价格配置？", description: "删除后新的调用不再使用这条价格配置，历史费用不受影响。", okText: "确认删除" }, onClick: () => removePricing(row.id) }]} />,
         },
     ];
 
+    const trend = data?.trend || [];
+    const currentTrend = trend[trend.length - 1];
+    const previousTrend = trend[trend.length - 2];
+    const modelRows = data?.models || [];
+    const userRows = data?.users || [];
+    const failureRows = data?.failures || [];
+    const pricingRows = pricings;
+    const pageRows = <T,>(rows: T[], page: number) => rows.slice((page - 1) * analyticsPageSize, page * analyticsPageSize);
+
     return (
         <div className="space-y-5">
-            <ListToolbar trailing={<><Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>刷新</Button><AdminExportButton exportFile={() => exportAdminAnalytics(filters)} fileName={() => `usage-${filters.from}-${filters.to}.csv`} label="导出 CSV" /></>}>
+            <ListToolbar
+                active={Boolean(userId || model || channelId || capability)}
+                activeFilters={(
+                    <>
+                        {userId ? <AdminFilterChip label={`用户：${userOptions.find((user) => user.id === userId)?.displayName || userId}`} onRemove={() => setUserId(undefined)} /> : null}
+                        {model ? <AdminFilterChip label={`模型：${model}`} onRemove={() => setModel(undefined)} /> : null}
+                        {channelId ? <AdminFilterChip label={`渠道：${channels.find((channel) => channel.id === channelId)?.name || channelId}`} onRemove={() => setChannelId(undefined)} /> : null}
+                        {capability ? <AdminFilterChip label={`能力：${capabilityLabel(capability)}`} onRemove={() => setCapability(undefined)} /> : null}
+                    </>
+                )}
+                onReset={() => { setUserId(undefined); setModel(undefined); setChannelId(undefined); setCapability(undefined); }}
+                trailing={<><Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>刷新</Button><AdminExportButton exportFile={() => exportAdminAnalytics(filters)} fileName={() => `usage-${filters.from}-${filters.to}.csv`} label="导出 CSV" /></>}
+                filters={<><FilterSelect label="用户" value={userId} onChange={setUserId} options={userOptions.map((user) => ({ label: user.displayName || user.username, value: user.id }))} filterOption={false} loading={searchingUsers} onSearch={(value) => void searchUsers(value)} /><FilterSelect label="模型" value={model} onChange={setModel} options={modelOptions} width={210} /><FilterSelect label="渠道" value={channelId} onChange={setChannelId} options={channels.map((channel) => ({ label: channel.name, value: channel.id }))} /><FilterSelect label="能力" value={capability} onChange={setCapability} options={capabilityOptions} /></>}
+            >
                 <div>
                     <div className="mb-1 text-xs text-foreground/55">时间范围</div>
                     <DatePicker.RangePicker allowClear={false} value={range} onChange={(value) => value?.[0] && value?.[1] && setRange([value[0], value[1]])} />
                 </div>
-                <FilterSelect label="用户" value={userId} onChange={setUserId} options={userOptions.map((user) => ({ label: user.displayName || user.username, value: user.id }))} filterOption={false} loading={searchingUsers} onSearch={(value) => void searchUsers(value)} />
-                <FilterSelect label="模型" value={model} onChange={setModel} options={modelOptions} width={210} />
-                <FilterSelect label="渠道" value={channelId} onChange={setChannelId} options={channels.map((channel) => ({ label: channel.name, value: channel.id }))} />
-                <FilterSelect label="能力" value={capability} onChange={setCapability} options={capabilityOptions} />
             </ListToolbar>
 
-            <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 xl:grid-cols-6">
-                <Metric label="活跃用户" value={data?.kpi.activeUsers ?? "--"} detail={data ? `DAU ${data.kpi.dau} · WAU ${data.kpi.wau} · MAU ${data.kpi.mau}` : undefined} />
-                <Metric label="生成任务" value={data?.kpi.generationTasks ?? "--"} detail={data ? `上游请求 ${data.kpi.upstreamRequests}` : undefined} />
-                <Metric label="请求成功率" value={data ? percent(data.kpi.successRate) : "--"} />
-                <Metric label="P95 耗时" value={data ? formatDuration(data.kpi.p95DurationMs) : "--"} />
-                <Metric label="当前队列" value={data?.kpi.currentQueuedTasks ?? "--"} detail="排队 + 运行中" />
-                <Metric label="估算费用" value={data ? formatCost(data.kpi.estimatedCostMicros, data.kpi.currency, data.kpi.costAvailable) : "--"} />
+            <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 xl:grid-cols-4">
+                <AdminStatTile label="活跃用户" value={data ? formatNumber(data.kpi.activeUsers) : "--"} trend={formatCountDelta(currentTrend?.activeUsers, previousTrend?.activeUsers)} detail={data ? `DAU ${formatNumber(data.kpi.dau)} · WAU ${formatNumber(data.kpi.wau)} · MAU ${formatNumber(data.kpi.mau)}` : undefined} />
+                <AdminStatTile label="上游请求" value={data ? formatNumber(data.kpi.upstreamRequests) : "--"} trend={formatCountDelta(currentTrend?.requests, previousTrend?.requests)} detail="当前统计范围" />
+                <AdminStatTile label="生成任务" value={data ? formatNumber(data.kpi.generationTasks) : "--"} trend={formatCountDelta(currentTrend?.tasks, previousTrend?.tasks)} detail={data ? `队列 ${formatNumber(data.kpi.currentQueuedTasks)}` : undefined} />
+                <AdminStatTile label="请求成功率" value={data ? percent(data.kpi.successRate) : "--"} trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate)} detail={data ? `P95 ${formatDuration(data.kpi.p95DurationMs)}` : undefined} />
+            </div>
+            <div className="grid gap-x-4 gap-y-2 border-b border-border pb-4 text-xs text-foreground/55 sm:grid-cols-3">
+                <div>当前队列 <span className="ml-1 font-medium text-foreground">{data ? formatNumber(data.kpi.currentQueuedTasks) : "--"}</span></div>
+                <div>P95 耗时 <span className="ml-1 font-medium text-foreground">{data ? formatDuration(data.kpi.p95DurationMs) : "--"}</span></div>
+                <div>估算费用 <span className="ml-1 font-medium text-foreground">{data ? formatCost(data.kpi.estimatedCostMicros, data.kpi.currency, data.kpi.costAvailable) : "--"}</span></div>
             </div>
 
             <section className="border-y border-border py-4">
@@ -308,9 +333,9 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                             <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
                             <ChartTooltip labelFormatter={(value) => `日期 ${value}`} />
                             <Legend wrapperStyle={{ fontSize: 12 }} />
-                            <Area yAxisId="count" type="monotone" dataKey="tasks" name="生成任务" stroke="#2563eb" fill="#2563eb" fillOpacity={0.1} />
-                            <Area yAxisId="count" type="monotone" dataKey="requests" name="上游请求" stroke="#0f766e" fill="#0f766e" fillOpacity={0.08} />
-                            <Line yAxisId="rate" type="monotone" dataKey="requestSuccessRate" name="成功率" stroke="#d97706" dot={false} strokeWidth={2} />
+                            <Area yAxisId="count" type="monotone" dataKey="tasks" name="生成任务" stroke="var(--admin-chart-primary)" fill="var(--admin-chart-primary)" fillOpacity={0.1} />
+                            <Area yAxisId="count" type="monotone" dataKey="requests" name="上游请求" stroke="var(--admin-chart-secondary)" fill="var(--admin-chart-secondary)" fillOpacity={0.08} />
+                            <Line yAxisId="rate" type="monotone" dataKey="requestSuccessRate" name="成功率" stroke="var(--admin-chart-warning)" dot={false} strokeWidth={2} />
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
@@ -321,33 +346,32 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     {
                         key: "models",
                         label: "模型分析",
-                        children: <Table rowKey={(row) => `${row.model}:${row.capability}`} size="small" loading={loading} columns={modelColumns} dataSource={data?.models || []} pagination={{ pageSize: 10 }} scroll={{ x: 1250 }} />,
+                        children: <AdminDataTable table={{ rowKey: (row) => `${row.model}:${row.capability}`, size: "small", loading, columns: modelColumns, dataSource: pageRows(modelRows, modelPage), pagination: false, scroll: { x: 1250 } }} empty={<AdminTableEmpty />} skeletonColumns={9} footer={<PaginationBar alwaysShow current={modelPage} pageSize={analyticsPageSize} total={modelRows.length} onChange={(page) => setModelPage(page)} pageSizeOptions={[analyticsPageSize]} />} />,
                     },
-                    { key: "users", label: "用户活动", children: <Table rowKey="userId" size="small" loading={loading} columns={userColumns} dataSource={data?.users || []} pagination={{ pageSize: 10 }} scroll={{ x: 900 }} /> },
+                    { key: "users", label: "用户活动", children: <AdminDataTable table={{ rowKey: "userId", size: "small", loading, columns: userColumns, dataSource: pageRows(userRows, userPage), pagination: false, scroll: { x: 900 } }} empty={<AdminTableEmpty />} skeletonColumns={7} footer={<PaginationBar alwaysShow current={userPage} pageSize={analyticsPageSize} total={userRows.length} onChange={(page) => setUserPage(page)} pageSizeOptions={[analyticsPageSize]} />} /> },
                     {
                         key: "failures",
                         label: `异常定位${data?.failures.length ? ` (${data.failures.reduce((sum, item) => sum + item.count, 0)})` : ""}`,
-                        children: <Table rowKey={(row) => `${row.type}:${row.model}`} size="small" loading={loading} columns={failureColumns} dataSource={data?.failures || []} pagination={{ pageSize: 10 }} scroll={{ x: 900 }} />,
+                        children: <AdminDataTable table={{ rowKey: (row) => `${row.type}:${row.model}`, size: "small", loading, columns: failureColumns, dataSource: pageRows(failureRows, failurePage), pagination: false, scroll: { x: 900 } }} empty={<AdminTableEmpty />} skeletonColumns={5} footer={<PaginationBar alwaysShow current={failurePage} pageSize={analyticsPageSize} total={failureRows.length} onChange={(page) => setFailurePage(page)} pageSizeOptions={[analyticsPageSize]} />} />,
                     },
                     {
                         key: "pricing",
                         label: "模型价格",
                         children: (
                             <div>
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className="text-xs text-foreground/55">价格使用最小货币单位的百万分之一保存；修改只影响后续调用，不改写历史费用。</p>
+                                <div className="mb-3 flex items-center justify-end">
                                     <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openPricing()}>
                                         新增价格
                                     </Button>
                                 </div>
-                                <Table rowKey="id" size="small" columns={pricingColumns} dataSource={pricings} pagination={false} scroll={{ x: 980 }} />
+                                <AdminDataTable table={{ rowKey: "id", size: "small", loading, columns: pricingColumns, dataSource: pageRows(pricingRows, pricingPage), pagination: false, scroll: { x: 980 } }} empty={<AdminTableEmpty />} skeletonColumns={5} footer={<PaginationBar alwaysShow current={pricingPage} pageSize={analyticsPageSize} total={pricingRows.length} onChange={(page) => setPricingPage(page)} pageSizeOptions={[analyticsPageSize]} />} />
                             </div>
                         ),
                     },
                 ]}
             />
 
-            <Modal title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={680}>
+            <Modal title={editingPricing ? "编辑模型价格" : "新增模型价格"} open={pricingModalOpen} onCancel={() => setPricingModalOpen(false)} onOk={() => void savePricing()} confirmLoading={savingPricing} okText="保存" cancelText="取消" width={760}>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
                         <Form.Item name="model" label="模型" rules={[{ required: true, message: "请填写模型名" }]}>
@@ -384,16 +408,6 @@ function FilterSelect({ label, value, onChange, options, width = 150, filterOpti
     );
 }
 
-function Metric({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
-    return (
-        <div className="min-h-24 border-b border-r border-border p-4 last:border-r-0 xl:border-b-0">
-            <div className="text-xs text-foreground/55">{label}</div>
-            <div className="mt-2 text-2xl font-semibold tracking-normal">{value}</div>
-            {detail ? <div className="mt-1 text-xs text-foreground/45">{detail}</div> : null}
-        </div>
-    );
-}
-
 function PriceInput({ name, label }: { name: keyof PricingFormValues; label: string }) {
     return (
         <Form.Item name={name} label={`${label}（币种单位）`} rules={[{ type: "number", min: 0, message: "价格不能小于 0" }]}>
@@ -417,6 +431,21 @@ function formatDuration(value: number) {
 
 function formatNumber(value: number) {
     return new Intl.NumberFormat("zh-CN", { notation: value >= 100000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatCountDelta(current?: number, previous?: number) {
+    if (current === undefined || previous === undefined) return undefined;
+    const delta = current - previous;
+    const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+    const value = previous === 0 ? formatNumber(Math.abs(delta)) : `${Math.abs((delta / previous) * 100).toFixed(1)}%`;
+    return { value: `${direction} ${value}`, tone: delta >= 0 ? "success" as const : "warning" as const };
+}
+
+function formatRateDelta(current?: number, previous?: number) {
+    if (current === undefined || previous === undefined) return undefined;
+    const delta = current - previous;
+    const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+    return { value: `${direction} ${Math.abs(delta).toFixed(1)}pp`, tone: delta >= 0 ? "success" as const : "warning" as const };
 }
 
 function formatCost(micros: number, currency?: string, available?: boolean) {

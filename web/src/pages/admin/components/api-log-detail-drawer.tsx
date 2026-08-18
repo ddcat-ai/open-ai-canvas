@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Drawer, Empty, Skeleton, Tabs, Tag, Typography } from "antd";
+import { App, Button, Descriptions, Drawer, Empty, Skeleton, Tabs, Typography } from "antd";
 import { RefreshCw } from "lucide-react";
 
 import { getAdminApiLog, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
+import { AdminStatusBadge } from "./admin-ui";
 
 export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message } = App.useApp();
@@ -44,7 +45,7 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
     };
 
     return (
-        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden>
+        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden rootClassName="admin-drawer">
             {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <Empty description="没有请求详情" />}
         </Drawer>
     );
@@ -56,7 +57,7 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
     const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
     const items = [
         ["时间", new Date(log.startedAt || log.createdAt).toLocaleString("zh-CN", { hour12: false })],
-        ["状态", <Tag color={failed ? "error" : processing ? "processing" : "success"}>{failed ? "失败" : processing ? "处理中" : "成功"}</Tag>],
+        ["状态", <AdminStatusBadge label={failed ? "失败" : processing ? "处理中" : "成功"} tone={failed ? "error" : processing ? "warning" : "success"} />],
         ["用户", <span>{log.userDisplayName || log.userAccount || "未知用户"}{log.userAccount ? <span className="ml-2 text-foreground/45">@{log.userAccount}</span> : null}</span>],
         ["渠道 / 模型", `${log.channelName || "未记录渠道"} / ${log.model || "未识别模型"}`],
         ["能力", capabilityText(log.capability)],

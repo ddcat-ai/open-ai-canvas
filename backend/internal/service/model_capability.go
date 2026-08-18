@@ -14,8 +14,21 @@ import (
 // ModelCapabilityConfig 是模型能力声明，不包含供应商字段名；协议适配器负责把统一参数映射到上游请求。
 type ModelCapabilityConfig struct {
 	Version int                    `json:"version"`
+	Text    *TextCapabilityConfig  `json:"text,omitempty"`
 	Image   *ImageCapabilityConfig `json:"image,omitempty"`
 	Video   *VideoCapabilityConfig `json:"video,omitempty"`
+}
+
+type TextCapabilityConfig struct {
+	References TextReferenceConfig `json:"references"`
+}
+
+type TextReferenceConfig struct {
+	PromptMaxChars int   `json:"promptMaxChars"`
+	MaxImages      int   `json:"maxImages"`
+	MaxImageBytes  int64 `json:"maxImageBytes"`
+	MaxVideos      int   `json:"maxVideos"`
+	MaxVideoBytes  int64 `json:"maxVideoBytes"`
 }
 
 type ImageCapabilityConfig struct {
@@ -154,6 +167,8 @@ func defaultImageSizeValues() []string {
 }
 
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
+	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
+	text := &TextCapabilityConfig{References: TextReferenceConfig{PromptMaxChars: 32000}}
 	video := &VideoCapabilityConfig{
 		References:        VideoReferenceConfig{PromptMaxChars: 1000, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
@@ -197,7 +212,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Resolutions = []string{"1080p"}
 		video.DefaultResolution = "1080p"
 	}
-	return &ModelCapabilityConfig{Version: 1, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
+	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }
 
 func DecodeModelCapabilityConfig(raw string) (*ModelCapabilityConfig, error) {
@@ -212,8 +227,18 @@ func DecodeModelCapabilityConfig(raw string) (*ModelCapabilityConfig, error) {
 }
 
 func NormalizeModelCapabilityConfig(capability string, _ string, input *ModelCapabilityConfig) (*ModelCapabilityConfig, error) {
-	if capability != "image" && capability != "video" {
+	if capability != "text" && capability != "image" && capability != "video" {
 		return nil, nil
+	}
+	if capability == "text" {
+		if input == nil || input.Text == nil {
+			return nil, BadAuthRequest("请配置文本模型能力参数")
+		}
+		value := &ModelCapabilityConfig{Version: 1, Text: input.Text}
+		if err := validateTextCapabilityConfig(value.Text); err != nil {
+			return nil, err
+		}
+		return value, nil
 	}
 	if capability == "image" {
 		if input == nil || input.Image == nil {
@@ -233,6 +258,110 @@ func NormalizeModelCapabilityConfig(capability string, _ string, input *ModelCap
 		return nil, err
 	}
 	return value, nil
+}
+
+// CapabilitySpecFromModelCapabilityConfig 将渠道模型的真实供应能力投影为路由能力快照。
+// 这是唯一的转换入口：渠道模型能力参数负责定义事实，variant 只保存兼容路由表的投影，
+// 不再允许管理员在 variant 上重复维护尺寸、比例、数量等字段。
+func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capability string) (CapabilitySpec, error) {
+	spec := CapabilitySpec{Version: 1, Capability: capability, Inputs: map[string]InputConstraint{}, Options: map[string]OptionConstraint{}}
+	// 音频模型当前没有可编辑的渠道能力 JSON，使用空能力规格表示“无额外路由约束”。
+	if capability == "audio" {
+		return spec, nil
+	}
+	if config == nil {
+		return spec, BadAuthRequest("渠道模型尚未配置能力参数")
+	}
+	switch capability {
+	case "text":
+		if config.Text == nil {
+			return spec, BadAuthRequest("渠道文本模型尚未配置能力参数")
+		}
+		addInputConstraint(spec.Inputs, "image", 0, config.Text.References.MaxImages)
+		addInputConstraint(spec.Inputs, "video", 0, config.Text.References.MaxVideos)
+	case "image":
+		if config.Image == nil {
+			return spec, BadAuthRequest("渠道图片模型尚未配置能力参数")
+		}
+		image := config.Image
+		addInputConstraint(spec.Inputs, "image", 0, image.References.MaxImages)
+		if image.References.MaskSupported {
+			addInputConstraint(spec.Inputs, "mask", 0, 1)
+		}
+		if image.Size.Parameter != "none" {
+			if image.Size.AllowCustom {
+				spec.Options["size"] = OptionConstraint{Values: []any{"*"}}
+			} else {
+				spec.Options["size"] = anyValues(image.Size.Values)
+			}
+		}
+		if image.Quality.Supported {
+			spec.Options["quality"] = anyValues(image.Quality.Values)
+		}
+		if image.TransparentBackground.Supported {
+			spec.Options["transparentBackground"] = boolValues(true)
+		} else {
+			spec.Options["transparentBackground"] = boolValues(false)
+		}
+		spec.Options["count"] = numericRange(1, float64(image.MaxOutputs), 1)
+	case "video":
+		if config.Video == nil {
+			return spec, BadAuthRequest("渠道视频模型尚未配置能力参数")
+		}
+		video := config.Video
+		spec.Operations = append([]string(nil), video.Operations...)
+		addInputConstraint(spec.Inputs, "image", video.References.MinImages, video.References.MaxImages)
+		addInputConstraint(spec.Inputs, "video", 0, video.References.MaxVideos)
+		addInputConstraint(spec.Inputs, "audio", 0, video.References.MaxAudios)
+		if video.Duration.Selection == "enum" {
+			values := make([]any, 0, len(video.Duration.Values))
+			for _, value := range video.Duration.Values {
+				values = append(values, value)
+			}
+			spec.Options["videoSeconds"] = OptionConstraint{Values: values}
+		} else {
+			spec.Options["videoSeconds"] = numericRange(float64(video.Duration.Min), float64(video.Duration.Max), float64(video.Duration.Step))
+		}
+		spec.Options["size"] = anyValues(video.Ratios)
+		if len(video.Resolutions) > 0 {
+			spec.Options["vquality"] = anyValues(video.Resolutions)
+		}
+		if video.GenerateAudio.Supported {
+			spec.Options["videoGenerateAudio"] = boolValues(true)
+		} else {
+			spec.Options["videoGenerateAudio"] = boolValues(false)
+		}
+		if video.Watermark.Supported {
+			spec.Options["videoWatermark"] = boolValues(true)
+		} else {
+			spec.Options["videoWatermark"] = boolValues(false)
+		}
+	default:
+		return spec, BadAuthRequest("未知模型能力类型")
+	}
+	return spec, nil
+}
+
+func addInputConstraint(inputs map[string]InputConstraint, name string, min int, max int) {
+	if min <= 0 && max <= 0 {
+		return
+	}
+	inputs[name] = InputConstraint{Min: min, Max: max}
+}
+
+func validateTextCapabilityConfig(value *TextCapabilityConfig) error {
+	if value.References.PromptMaxChars < 1 || value.References.PromptMaxChars > 1000000 {
+		return BadAuthRequest("提示词最大字符数必须在 1-1000000 之间")
+	}
+	for name, number := range map[string]int{"最大图片引用数": value.References.MaxImages, "最大视频引用数": value.References.MaxVideos} {
+		if number < 0 || number > 100 {
+			return BadAuthRequest(name + "必须在 0-100 之间")
+		}
+	}
+	if value.References.MaxImageBytes < 0 || value.References.MaxVideoBytes < 0 {
+		return BadAuthRequest("引用素材大小限制不能小于 0")
+	}
+	return nil
 }
 
 func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {

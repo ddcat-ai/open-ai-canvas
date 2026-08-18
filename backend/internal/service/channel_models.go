@@ -116,11 +116,18 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 			continue
 		}
 		// 自动发现不能绕过定价边界；新模型由管理员定价后再手动启用。
-		missing = append(missing, model.ChannelModel{ID: newID(), ChannelID: channelID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
+		modelID, idErr := s.repo.NextPrefixedID("MODEL")
+		if idErr != nil {
+			return nil, idErr
+		}
+		missing = append(missing, model.ChannelModel{ID: modelID, ChannelID: channelID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
 	}
 	added, err := s.repo.CreateMissingChannelModels(missing)
 	if err != nil {
 		return nil, err
+	}
+	if added > 0 {
+		s.invalidateRouteCatalog()
 	}
 	return &AdminChannelModelFetchResult{Models: models, Added: added}, nil
 }
@@ -137,7 +144,15 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
-	if capability == "image" || capability == "video" {
+	// 先检查同渠道重复模型，避免无关能力校验或生成无用序列号掩盖真正的冲突。
+	conflict, conflictErr := s.repo.ChannelModelByKeyIncludingDisabled(channelID, modelKey)
+	if conflictErr != nil && !errors.Is(conflictErr, gorm.ErrRecordNotFound) {
+		return nil, conflictErr
+	}
+	if conflict != nil && conflict.ID != strings.TrimSpace(id) {
+		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
+	}
+	if capability == "text" || capability == "image" || capability == "video" {
 		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
@@ -168,20 +183,17 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if req.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || req.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
 		return nil, BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
 	}
-	item := &model.ChannelModel{ID: newID(), ChannelID: channelID, Enabled: true, PriceVersion: 1}
+	modelID, err := s.repo.NextPrefixedID("MODEL")
+	if err != nil {
+		return nil, err
+	}
+	item := &model.ChannelModel{ID: modelID, ChannelID: channelID, Enabled: true, PriceVersion: 1}
 	if id != "" {
 		item, err = s.repo.ChannelModelByID(channelID, id)
 		if err != nil {
 			return nil, err
 		}
 		item.PriceVersion++
-	}
-	conflict, conflictErr := s.repo.ChannelModelByKeyIncludingDisabled(channelID, modelKey)
-	if conflictErr != nil && !errors.Is(conflictErr, gorm.ErrRecordNotFound) {
-		return nil, conflictErr
-	}
-	if conflict != nil && conflict.ID != item.ID {
-		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
 	item.ModelKey = modelKey
 	item.DisplayName = strings.TrimSpace(req.DisplayName)
@@ -196,7 +208,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.OutputTokenPriceMicrocredits = req.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = req.CachedTokenPriceMicrocredits
 	item.PriceConfigured = req.PriceConfigured
-	if capability == "image" || capability == "video" {
+	if capability == "text" || capability == "image" || capability == "video" {
 		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
@@ -216,9 +228,12 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
+	// 可用配置不再保存独立能力范围；路由能力会在读取时从当前渠道模型能力实时投影。
+	// 因此修改尺寸、比例或数量时无需拿旧快照做冲突校验，也不会留下第二个事实来源。
 	if err := s.repo.SaveChannelModel(item); err != nil {
 		return nil, err
 	}
+	s.invalidateRouteCatalog()
 	if err := s.syncChannelModelNames(channel); err != nil {
 		return nil, err
 	}
@@ -241,7 +256,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if err != nil {
 		return nil, err
 	}
-	if capability == "image" || capability == "video" {
+	if capability == "text" || capability == "image" || capability == "video" {
 		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
@@ -411,6 +426,9 @@ func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, i
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return BadAuthRequest("渠道模型不存在或已删除")
 	}
+	if err == nil {
+		s.invalidateRouteCatalog()
+	}
 	return err
 }
 
@@ -437,7 +455,11 @@ func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []
 			}
 			continue
 		}
-		item := model.ChannelModel{ID: newID(), ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1}
+		modelID, idErr := s.repo.NextPrefixedID("MODEL")
+		if idErr != nil {
+			return idErr
+		}
+		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1}
 		if err := s.repo.SaveChannelModel(&item); err != nil {
 			return err
 		}

@@ -32,11 +32,17 @@ type canvasGenerationInput struct {
 	ReferenceImages []providerMedia        `json:"referenceImages"`
 	ReferenceVideos []providerMedia        `json:"referenceVideos"`
 	ReferenceAudios []providerMedia        `json:"referenceAudios"`
+	TextHistory     []providerTextMessage  `json:"textHistory"`
 	Mask            *providerMedia         `json:"mask"`
 	Metadata        map[string]interface{} `json:"metadata"`
 	ImageCapability *ImageCapabilityConfig `json:"-"`
 	StreamText      bool                   `json:"-"` // 分镜请求使用上游 SSE 保活；最终结构仍在流结束后统一校验。
 	VideoCapability *VideoCapabilityConfig `json:"-"`
+}
+
+type providerTextMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type providerConfig struct {
@@ -98,6 +104,7 @@ type providerHTTPError struct {
 	StatusCode int
 	Status     string
 	Body       string
+	RetryAfter time.Duration
 }
 
 type providerAnalyticsKey struct{}
@@ -1039,6 +1046,7 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
 		messages = append(messages, map[string]interface{}{"role": "system", "content": systemPrompt})
 	}
+	messages = append(messages, validatedTextHistory(input.TextHistory)...)
 	userContent, err := textChatContent(input)
 	if err != nil {
 		return nil, err
@@ -1054,19 +1062,33 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 
 func textResponseInput(input canvasGenerationInput) (interface{}, error) {
 	systemPrompt := strings.TrimSpace(input.Config.SystemPrompt)
-	if len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
+	if len(input.TextHistory) == 0 && len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
 		return withSystemPrompt(input.Config, input.Prompt), nil
 	}
-	messages := make([]map[string]interface{}, 0, 2)
+	messages := make([]map[string]interface{}, 0, len(input.TextHistory)+2)
 	if systemPrompt != "" {
 		messages = append(messages, map[string]interface{}{"role": "system", "content": systemPrompt})
 	}
+	messages = append(messages, validatedTextHistory(input.TextHistory)...)
 	content, err := textResponseContent(input)
 	if err != nil {
 		return nil, err
 	}
 	messages = append(messages, map[string]interface{}{"role": "user", "content": content})
 	return messages, nil
+}
+
+func validatedTextHistory(history []providerTextMessage) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(history))
+	for _, message := range history {
+		role := strings.ToLower(strings.TrimSpace(message.Role))
+		content := strings.TrimSpace(message.Content)
+		if (role != "user" && role != "assistant") || content == "" {
+			continue
+		}
+		result = append(result, map[string]interface{}{"role": role, "content": content})
+	}
+	return result
 }
 
 func textResponseContent(input canvasGenerationInput) ([]map[string]interface{}, error) {
@@ -2851,7 +2873,7 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		if runtimeService != nil {
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
 		}
-		httpErr := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data)}
+		httpErr := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 		recordProviderRequest(req, startedAt, resp.StatusCode, data, httpErr)
 		return nil, "", httpErr
 	}
@@ -2860,6 +2882,20 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 		_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
 	}
 	return data, mimeType, nil
+}
+
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if at, err := http.ParseTime(value); err == nil && at.After(now) {
+		return at.Sub(now)
+	}
+	return 0
 }
 
 func providerPollingDeadline(ctx context.Context) time.Time {

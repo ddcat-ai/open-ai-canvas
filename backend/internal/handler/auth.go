@@ -116,7 +116,11 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		channels, _ := svc.PublicSystemChannels()
+		logicalModels, logicalModelsErr := svc.PublicLogicalModels(nil)
+		if logicalModelsErr != nil {
+			failService(c, logicalModelsErr)
+			return
+		}
 		limits, err := svc.PublicRuntimeLimits()
 		if err != nil {
 			failService(c, err)
@@ -132,10 +136,15 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
+		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(actor); err != nil {
 			failService(c, err)
 			return
 		}

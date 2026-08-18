@@ -22,20 +22,28 @@ import (
 )
 
 type Service struct {
-	repo                *repository.Repository
-	dataDir             string
-	runtimeCapabilities RuntimeCapabilities
-	cancelMu            sync.Mutex
-	registrationMu      sync.Mutex
-	emailCodeMu         sync.Mutex
-	redeemBatchMu       sync.Mutex
-	storageMu           sync.Mutex
-	characterTaskMu     sync.Mutex
-	activeCancels       map[string]context.CancelFunc
-	pendingStorage      map[string]int64
-	coordinator         *runtimeCoordinator
-	runtimeErr          error
-	workerID            string
+	repo                  *repository.Repository
+	dataDir               string
+	runtimeCapabilities   RuntimeCapabilities
+	cancelMu              sync.Mutex
+	registrationMu        sync.Mutex
+	emailCodeMu           sync.Mutex
+	redeemBatchMu         sync.Mutex
+	storageMu             sync.Mutex
+	characterTaskMu       sync.Mutex
+	activeCancels         map[string]context.CancelFunc
+	pendingStorage        map[string]int64
+	coordinator           *runtimeCoordinator
+	runtimeErr            error
+	workerID              string
+	routeCatalogMu        sync.RWMutex
+	routeCatalogRefreshMu sync.Mutex
+	routeCatalog          *routeCatalogSnapshot
+	routeCatalogTTL       time.Duration
+	routeCatalogMaxStale  time.Duration
+	routeCatalogVersion   int64
+	routeHealthMu         sync.Mutex
+	routeHealthBlocked    map[string]time.Time
 }
 
 const taskWorkerConcurrency = 3
@@ -51,17 +59,19 @@ type CreateSessionRequest struct {
 	ProjectStyle   storyboardProjectStyle    `json:"projectStyle"`
 	Characters     []storyboardCharacterCard `json:"characters"`
 	Config         providerConfig            `json:"config"`
+	LogicalModelID string                    `json:"logicalModelId"`
 }
 
 type CreateTaskRequest struct {
-	SessionID string         `json:"sessionId"`
-	ProjectID string         `json:"projectId"`
-	Type      string         `json:"type"`
-	Operation string         `json:"operation"`
-	Prompt    string         `json:"prompt"`
-	Provider  string         `json:"provider"`
-	Model     string         `json:"model"`
-	Input     map[string]any `json:"input"`
+	SessionID      string         `json:"sessionId"`
+	ProjectID      string         `json:"projectId"`
+	Type           string         `json:"type"`
+	Operation      string         `json:"operation"`
+	Prompt         string         `json:"prompt"`
+	Provider       string         `json:"provider"`
+	Model          string         `json:"model"`
+	LogicalModelID string         `json:"logicalModelId"`
+	Input          map[string]any `json:"input"`
 }
 
 type SessionDetail struct {
@@ -196,7 +206,7 @@ func New(repo *repository.Repository, dataDir string) *Service {
 
 func NewWithRuntimeCapabilities(repo *repository.Repository, dataDir string, capabilities RuntimeCapabilities) *Service {
 	coordinator, err := newRuntimeCoordinator(repo.Dialect())
-	return &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, workerID: newID()}
+	return &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time)}
 }
 
 func (s *Service) StartWorker() {
@@ -277,7 +287,7 @@ func (s *Service) CreateSession(userID string, req CreateSessionRequest) (*Sessi
 		return nil, err
 	}
 	s.storageMu.Unlock()
-	taskReq := CreateTaskRequest{SessionID: session.ID, ProjectID: req.ProjectID, Type: "agent_storyboard", Operation: "storyboard", Prompt: prompt, Provider: "openai-compatible", Model: req.Config.Model, Input: map[string]any{"references": req.References, "canvasSnapshot": compactedSnapshot, "requirements": req.Requirements, "canvasAssets": req.CanvasAssets, "projectStyle": req.ProjectStyle, "characters": req.Characters, "config": req.Config}}
+	taskReq := CreateTaskRequest{SessionID: session.ID, ProjectID: req.ProjectID, Type: "agent_storyboard", Operation: "storyboard", Prompt: prompt, Provider: "openai-compatible", Model: req.Config.Model, LogicalModelID: req.LogicalModelID, Input: map[string]any{"mode": "text", "references": req.References, "canvasSnapshot": compactedSnapshot, "requirements": req.Requirements, "canvasAssets": req.CanvasAssets, "projectStyle": req.ProjectStyle, "characters": req.Characters, "config": req.Config}}
 	if _, err := s.CreateTask(userID, taskReq); err != nil {
 		s.storageMu.Lock()
 		cleanupErr := s.repo.DeleteSessionDraft(userID, session.ID)
@@ -327,6 +337,16 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+	var routed *RoutedModel
+	logicalModelID := strings.TrimSpace(req.LogicalModelID)
+	if logicalModelID != "" {
+		intent := ModelRequestIntentFromTaskInput(normalizedInput, req.Type, req.Operation)
+		routed, err = s.ResolveLogicalModel(logicalModelID, intent)
+		if err != nil {
+			return nil, err
+		}
+		normalizedInput = applyRoutedProviderSelection(normalizedInput, routed)
+	}
 	if err := s.requireCustomChannelsForTaskInput(normalizedInput); err != nil {
 		return nil, err
 	}
@@ -352,6 +372,15 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		taskType = "video_image_to_video"
 	}
 	task := model.Task{ID: newID(), UserID: userID, SessionID: req.SessionID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	if routed != nil {
+		task.LogicalModelID = routed.LogicalModel.ID
+		task.LogicalModelRevisionID = routed.Revision.ID
+		task.RouteID = routed.Route.ID
+		task.PhysicalVariantID = routed.Variant.ID
+		task.RouteRun = 1
+		task.Model = routed.LogicalModel.Code
+		task.Provider = "managed"
+	}
 	if err := s.ensureTaskProjectActive(userID, req.ProjectID); err != nil {
 		return nil, err
 	}
@@ -380,6 +409,49 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	s.recordActivity(userID, "task", 1)
 	_ = s.log(userID, task.ID, "info", "任务已进入队列", "")
 	return taskForOutput(task), nil
+}
+
+func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map[string]any {
+	config, _ := input["config"].(map[string]any)
+	nextConfig := make(map[string]any, len(config)+2)
+	for key, value := range config {
+		switch key {
+		case "channelId", "apiFormat", "interfaceType", "baseUrl", "allowLocalChannel", "apiKey", "secretKey", "headers", "model", "capabilityConfig":
+			continue
+		default:
+			nextConfig[key] = value
+		}
+	}
+	for key, value := range routed.Defaults {
+		canonical := canonicalCapabilityOptionName(key)
+		if existing, exists := nextConfig[canonical]; !exists || existing == nil || strings.TrimSpace(fmt.Sprint(existing)) == "" {
+			nextConfig[canonical] = providerConfigOptionValue(value)
+		}
+	}
+	// 路由匹配和真实请求必须使用同一组参数；逻辑能力参数覆盖空的页面配置，但不携带供应链字段。
+	if options, ok := input["capabilityOptions"].(map[string]any); ok {
+		for key, value := range options {
+			canonical := canonicalCapabilityOptionName(key)
+			if isProviderCapabilityOption(canonical) {
+				nextConfig[canonical] = providerConfigOptionValue(value)
+			}
+		}
+	}
+	nextConfig["channelId"] = routed.ChannelModel.ChannelID
+	nextConfig["model"] = routed.ChannelModel.ModelKey
+	input["config"] = nextConfig
+	return input
+}
+
+func providerConfigOptionValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case json.Number:
+		return typed.String()
+	default:
+		return fmt.Sprint(value)
+	}
 }
 
 // 所有任务输入先收敛为 JSON 对象，确保计费与密钥保护不会因 Go 结构体类型不同而被绕过。
@@ -520,6 +592,11 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	if task.ProviderCancelStatus == model.ProviderCancelStatusRequested {
 		return nil, BadAuthRequest("上游取消状态仍在确认中，请确认费用结果后再重试")
 	}
+	if task.BillingOrderID != "" {
+		if order, orderErr := s.repo.BillingOrder(task.BillingOrderID); orderErr == nil && order.Status == model.BillingStatusUncertain {
+			return nil, BadAuthRequest("上一次调用费用仍在核对中，处理完成前不能重复提交")
+		}
+	}
 	if isContentModerationFailure(task.Error) {
 		return nil, BadAuthRequest(contentModerationRetryMessage)
 	}
@@ -529,6 +606,9 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	}
 	var billingInput map[string]any
 	if err := json.Unmarshal([]byte(decryptedInput), &billingInput); err != nil {
+		return nil, err
+	}
+	if err := s.prepareLogicalTaskRetry(task, billingInput); err != nil {
 		return nil, err
 	}
 	if err := s.requireCustomChannelsForTaskInput(billingInput); err != nil {
@@ -545,7 +625,7 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 	if err := s.ensureTaskProjectActive(userID, task.ProjectID); err != nil {
 		return nil, err
 	}
-	task, err = s.repo.RetryTaskWithBilling(userID, task.ID, billingOrder, policy.Task.ActiveTaskLimit)
+	task, err = s.repo.RetryTaskWithBilling(userID, task, billingOrder, policy.Task.ActiveTaskLimit)
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}
@@ -811,6 +891,10 @@ func truncateRunes(value string, limit int) string {
 
 func taskForOutput(task model.Task) *model.Task {
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
+	// 普通任务接口只暴露前台模型身份；可用配置和供应线路属于管理员内部信息。
+	task.LogicalModelRevisionID = ""
+	task.RouteID = ""
+	task.PhysicalVariantID = ""
 	return &task
 }
 
@@ -940,18 +1024,54 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 	task.Stage = "调用生成模型"
 	task.Progress = 35
 	_ = s.repo.UpdateTaskProgress(task.ID, task.Stage, task.Progress)
+	routeAttempt, err := s.beginTaskRouteAttempt(task)
+	if err != nil {
+		task.Status = model.TaskStatusFailed
+		task.Stage = "路由准备失败"
+		task.Error = s.UserFacingErrorMessage(err)
+		task.CompletedAt = ptr(time.Now())
+		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
+		if isRouteDispatchUncertain(err) {
+			_ = s.MarkBillingUncertain(task.BillingOrderID, task.Error)
+		} else {
+			_ = s.RefundBilling(task.BillingOrderID, "路由准备失败，上游请求未发出")
+		}
+		return err
+	}
 	if err := s.MarkBillingRunning(task.BillingOrderID); err != nil {
 		task.Status = model.TaskStatusFailed
 		task.Stage = "计费准备失败"
-		task.Error = taskFailureMessage(err)
+		task.Error = s.UserFacingErrorMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
 		_ = s.RefundBilling(task.BillingOrderID, "计费准备失败，上游请求未发出")
 		return err
 	}
-	result, canvasOps, err := s.processTask(ctx, *task)
-	if stateErr := s.refreshTaskProviderState(task); stateErr != nil {
-		return stateErr
+	var result map[string]interface{}
+	var canvasOps []map[string]interface{}
+	for {
+		if dispatchErr := s.markRouteAttemptDispatching(routeAttempt); dispatchErr != nil {
+			err = dispatchErr
+			break
+		}
+		result, canvasOps, err = s.processTask(ctx, *task)
+		if stateErr := s.refreshTaskProviderState(task); stateErr != nil {
+			return stateErr
+		}
+		s.finishTaskRouteAttempt(routeAttempt, task, err)
+		if err == nil {
+			break
+		}
+		nextAttempt, routeErr := s.nextRouteAttemptAfterFailure(task, routeAttempt, err)
+		if routeErr != nil {
+			_ = s.log(task.UserID, task.ID, "warn", "备用路由不可用，保留原始失败", routeErr.Error())
+			break
+		}
+		if nextAttempt == nil {
+			break
+		}
+		routeAttempt = nextAttempt
+		_ = s.log(task.UserID, task.ID, "warn", "上游未创建任务，切换备用能力路由", nextAttempt.RouteID)
 	}
 	providerSucceeded := err == nil
 	if err == nil {
@@ -994,7 +1114,7 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		}
 		task.Status = model.TaskStatusFailed
 		task.Stage = "任务失败"
-		task.Error = taskFailureMessage(err)
+		task.Error = s.UserFacingErrorMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
 		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {
@@ -1039,7 +1159,7 @@ func (s *Service) processClaimedTask(task *model.Task) error {
 		}
 		task.Status = model.TaskStatusFailed
 		task.Stage = "任务结果保存失败"
-		task.Error = taskFailureMessage(err)
+		task.Error = s.UserFacingErrorMessage(err)
 		task.CompletedAt = ptr(time.Now())
 		_, _ = s.repo.UpdateTaskTerminalState(task.ID, model.TaskStatusRunning, task.Status, task.Stage, task.Error, *task.CompletedAt)
 		if compactErr := s.finalizeTaskTextReplay(task.ID, model.TaskStatusFailed); compactErr != nil {

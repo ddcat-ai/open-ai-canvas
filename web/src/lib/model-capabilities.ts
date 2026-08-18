@@ -2,8 +2,19 @@ import type { ModelProtocol } from "@/lib/model-protocols";
 
 export type ModelCapabilityConfig = {
     version: number;
+    text?: TextCapabilityConfig;
     image?: ImageCapabilityConfig;
     video?: VideoCapabilityConfig;
+};
+
+export type TextCapabilityConfig = {
+    references: {
+        promptMaxChars: number;
+        maxImages: number;
+        maxImageBytes: number;
+        maxVideos: number;
+        maxVideoBytes: number;
+    };
 };
 
 export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
@@ -131,6 +142,10 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 }
 
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
+    const text: TextCapabilityConfig = {
+        // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。
+        references: { promptMaxChars: 32000, maxImages: 0, maxImageBytes: 0, maxVideos: 0, maxVideoBytes: 0 },
+    };
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: 1000,
@@ -181,7 +196,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.resolutions = ["1080p"];
         video.defaultResolution = "1080p";
     }
-    return { version: 1, image: defaultImageCapabilityConfig(protocol, model), video };
+    return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 
 export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
@@ -192,10 +207,13 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
     if (!cost?.capabilityConfig) return fallback;
+    const text = cost.capabilityConfig.text
+        ? { ...fallback.text!, ...cost.capabilityConfig.text, references: { ...fallback.text!.references, ...cost.capabilityConfig.text.references } }
+        : fallback.text;
     const video = cost.capabilityConfig.video
         ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } }
         : fallback.video;
-    return { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video };
+    return { ...fallback, ...cost.capabilityConfig, text, image: cost.capabilityConfig.image || fallback.image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {

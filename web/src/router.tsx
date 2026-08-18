@@ -17,11 +17,13 @@ const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").
 const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
 const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
+const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
 const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
 const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
+const ResponseInterceptionSettingsPage = lazy(() => import("@/pages/admin/settings/response-interception-settings-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
 const AssetsPage = lazy(loadAssetsPage);
@@ -70,16 +72,58 @@ export const router = createBrowserRouter([
             { path: "/", element: <Navigate to="/create" replace /> },
             { path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
             { path: "/home", element: deferred(<HomePage />) },
-            { path: "/tasks", element: <RequireAuth><RequireFeature feature="taskCenterEnabled">{deferred(<TasksPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/tasks",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="taskCenterEnabled">{deferred(<TasksPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
             { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
-            { path: "/wallet", element: <RequireAuth><RequireFeature feature="creditsEnabled">{deferred(<WalletPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/wallet",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="creditsEnabled">{deferred(<WalletPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
             { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
-            { path: "/projects", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId/:view", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
-            { path: "/projects/:projectId/chapters/:chapterId", element: <RequireAuth><RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/projects",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/projects/:projectId",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/projects/:projectId/:view",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/projects/:projectId/chapters/:chapterId",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
             { path: "/canvas/:id", element: <RequireAuth>{deferred(<CanvasProjectPage />)}</RequireAuth> },
             {
@@ -89,6 +133,7 @@ export const router = createBrowserRouter([
                     { index: true, element: deferred(<AnalyticsPage />) },
                     { path: "users", element: deferred(<UsersPage />) },
                     { path: "channels", element: deferred(<ChannelsPage />) },
+                    { path: "models", element: deferred(<LogicalModelsPage />) },
                     { path: "prompt-templates", element: deferred(<StoryboardPromptsPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: deferred(<AnnouncementsPage />) },
@@ -103,6 +148,7 @@ export const router = createBrowserRouter([
                     { path: "settings/access", element: deferred(<AccessSettingsPage />) },
                     { path: "settings/email", element: deferred(<EmailSettingsPage />) },
                     { path: "settings/storage", element: deferred(<StorageSettingsPage />) },
+                    { path: "settings/response-interception", element: deferred(<ResponseInterceptionSettingsPage />) },
                 ],
             },
         ],

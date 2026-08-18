@@ -8,7 +8,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue } from "@/lib/model-capabilities";
-import { modelCompatibilityError, resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
+import { modelCompatibilityError, modelRequestOptions, resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -51,6 +51,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         input: inputSummary,
         videoOperation: node.metadata?.videoEditOperation,
         videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
+		options: modelRequestOptions({ ...globalConfig, size: node.metadata?.size || globalConfig.size, quality: node.metadata?.quality || globalConfig.quality, count: String(node.metadata?.count || globalConfig.count), videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds, vquality: node.metadata?.vquality || globalConfig.vquality, videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio, videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark, audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice, audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat, audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed }, mode),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
     const videoProfile = mode === "video" ? modelCapabilityConfigFor(config, config.model).video! : undefined;

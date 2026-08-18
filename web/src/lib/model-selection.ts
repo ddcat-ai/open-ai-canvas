@@ -15,6 +15,7 @@ export type ModelRequirements = {
     videoOperation?: string;
     videoSeconds?: string;
     imageSize?: string;
+    options?: Record<string, unknown>;
 };
 
 export type DisplayModelGroup = {
@@ -53,6 +54,18 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
     if (!capability) return "";
     const input = requirements?.input;
     const visualInputCount = input ? input.imageCount + input.characterCount : 0;
+    const channel = resolveModelChannel(config, model);
+    const logicalCost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    const logicalSpecs = logicalCost?.logicalCapabilityProfiles?.length ? logicalCost.logicalCapabilityProfiles : logicalCost?.logicalCapabilitySpec ? [logicalCost.logicalCapabilitySpec] : [];
+    if (logicalSpecs.length) {
+        const publicOptionNames = logicalCost?.logicalCapabilitySpec?.options || {};
+        const logicalRequirements = {
+            ...requirements,
+            options: Object.fromEntries(Object.entries(requirements.options || {}).filter(([name]) => Boolean(publicOptionNames[name]))),
+        };
+        const errors = logicalSpecs.map((spec) => logicalModelCompatibilityError(spec, logicalRequirements, visualInputCount));
+        return errors.some((error) => !error) ? "" : errors[0] || "当前输入不受支持";
+    }
 
     if (capability === "image") {
         const image = modelCapabilityConfigFor(config, model).image!;
@@ -85,6 +98,71 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
 
     if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";
     return input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0 ? "音频模型只接受文本或单个角色卡输入" : "";
+}
+
+export function modelRequestOptions(config: AiConfig, capability: ModelCapability) {
+    switch (capability) {
+        case "image":
+            return { size: config.size, quality: config.quality, transparentBackground: config.transparentBackground === "true", count: Number(config.count) };
+        case "video":
+            return { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" };
+        case "audio":
+            return { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) };
+        default:
+            return {};
+    }
+}
+
+function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>, requirements: ModelRequirements, visualInputCount: number) {
+    if (requirements.capability && spec.capability !== requirements.capability) return "不支持当前生成类型";
+    const input = requirements.input;
+    const counts: Record<string, number> = {
+        text: 0,
+        image: visualInputCount,
+        video: input?.videoCount || 0,
+        audio: input?.audioCount || 0,
+    };
+    for (const [kind, count] of Object.entries(counts)) {
+        const constraint = spec.inputs?.[kind];
+        if (!constraint && count > 0) return `不支持${kind}输入`;
+        if (constraint && (count < constraint.min || count > constraint.max)) return `${kind}输入需为 ${constraint.min}-${constraint.max} 个`;
+    }
+    const operation = requirements.capability === "video" && input ? resolveVideoOperation(input, requirements.videoOperation) : requirements.videoOperation;
+    if (operation && spec.operations?.length && !spec.operations.includes(operation)) return "不支持当前生成模式";
+    const options = { ...requirements.options, ...(requirements.videoSeconds ? { videoSeconds: requirements.videoSeconds } : {}), ...(requirements.imageSize ? { size: requirements.imageSize } : {}) };
+    for (const [name, value] of Object.entries(options)) {
+        if (value === undefined || value === null || value === "") continue;
+        const constraint = spec.options?.[name];
+        if (!constraint || !logicalOptionMatches(constraint, value)) return logicalOptionError(name);
+    }
+    return "";
+}
+
+function logicalOptionMatches(constraint: { values?: unknown[]; min?: number; max?: number; step?: number }, value: unknown) {
+    if (constraint.values?.length) return constraint.values.some((candidate) => String(candidate).toLowerCase() === String(value).toLowerCase());
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return false;
+    if (constraint.min !== undefined && numeric < constraint.min) return false;
+    if (constraint.max !== undefined && numeric > constraint.max) return false;
+    if (constraint.step !== undefined && constraint.min !== undefined) return Math.abs((numeric - constraint.min) / constraint.step - Math.round((numeric - constraint.min) / constraint.step)) < 1e-9;
+    return true;
+}
+
+function logicalOptionError(name: string) {
+    const label: Record<string, string> = {
+        size: "尺寸",
+        quality: "质量",
+        transparentBackground: "透明背景",
+        count: "输出数量",
+        videoSeconds: "时长",
+        vquality: "分辨率",
+        videoGenerateAudio: "同步音频",
+        videoWatermark: "水印设置",
+        audioVoice: "音色",
+        audioFormat: "音频格式",
+        audioSpeed: "语速",
+    };
+    return `不支持当前${label[name] || name}`;
 }
 
 export function compatibleModelInGroup(config: AiConfig, models: string[], requirements?: ModelRequirements, preferred?: string) {

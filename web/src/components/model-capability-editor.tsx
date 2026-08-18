@@ -1,7 +1,7 @@
 import { Input, InputNumber, Segmented, Select, Switch } from "antd";
 import type { ReactNode } from "react";
 
-import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol } from "@/lib/model-protocols";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 
@@ -21,12 +21,15 @@ type Props = {
     value?: ModelCapabilityConfig;
     onChange?: (value: ModelCapabilityConfig) => void;
     protocol?: ModelProtocol;
-    capability?: "image" | "video";
+    capability?: "text" | "image" | "video";
     model?: string;
     disabled?: boolean;
 };
 
 export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", disabled = false }: Props) {
+    if (capability === "text") {
+        return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} />;
+    }
     if (capability === "image") {
         return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} />;
     }
@@ -38,7 +41,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
 
     return (
-        <div className="space-y-3 rounded-md border border-border/70 bg-muted/10 p-3">
+        <div className="admin-capability-editor space-y-3 rounded-md bg-muted/10 p-3">
             <div className="flex items-center justify-between gap-3">
                 <div><div className="text-sm font-medium">视频能力参数</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">这些参数会同步到创造页、画布和生成校验</div></div>
                 <span className="text-[var(--fs-tiny)] text-foreground/40">协议模板可继续调整</span>
@@ -77,7 +80,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                 <div className="grid gap-2 sm:grid-cols-2">
                     <Field label="画面比例"><Select mode="multiple" className="w-full" disabled={disabled} value={profile.ratios} options={ratioOptions.map((item) => ({ label: item, value: item }))} onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })} /></Field>
                     <Field label="默认比例"><Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} /></Field>
-                    <Field label="输出分辨率"><Select mode="tags" className="w-full" disabled={disabled} value={profile.resolutions} tokenSeparators={[","]} placeholder="选择标准档位或输入 768p 等模型专属值" options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })} /></Field>
+                    <Field label="输出分辨率"><Select mode="tags" className="admin-capability-tags w-full" disabled={disabled} value={profile.resolutions} tokenSeparators={[","]} placeholder="选择标准档位或输入 768p 等模型专属值" options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })} /></Field>
                     <Field label="默认分辨率"><Select className="w-full" disabled={disabled} value={profile.defaultResolution} options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))} onChange={(defaultResolution) => update({ defaultResolution })} /></Field>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -96,6 +99,31 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     );
 }
 
+function TextCapabilityEditor({ value, onChange, protocol, disabled }: Pick<Props, "value" | "onChange" | "protocol" | "disabled">) {
+    const profile = value?.text || defaultModelCapabilityConfig(protocol).text!;
+    const updateReferences = (patch: Partial<TextCapabilityConfig["references"]>) => {
+        onChange?.({ version: 1, text: { references: { ...profile.references, ...patch } } });
+    };
+
+    return (
+        <div className="admin-capability-editor space-y-3 rounded-md bg-muted/20 p-3">
+            <div>
+                <div className="text-sm font-medium">文本理解能力</div>
+                <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">默认不假设支持图片或视频，只有明确配置后相关请求才会进入该模型。</div>
+            </div>
+            <CapabilityGroup title="输入限制">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ promptMaxChars: next || 1 })} />
+                    <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
+                    <NumberField label="单张图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImageBytes: mbToBytes(next) })} />
+                    <NumberField label="最大参考视频数" value={profile.references.maxVideos} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideos: next || 0 })} />
+                    <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideoBytes: mbToBytes(next) })} />
+                </div>
+            </CapabilityGroup>
+        </div>
+    );
+}
+
 function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol">) {
     const profile = value?.image || defaultImageCapabilityConfig(protocol, model);
     const update = (patch: Partial<ImageCapabilityConfig>) => onChange?.({ version: 1, image: { ...profile, ...patch } });
@@ -104,7 +132,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
     const updateQuality = (patch: Partial<ImageCapabilityConfig["quality"]>) => update({ quality: { ...profile.quality, ...patch } });
 
     return (
-        <div className="space-y-3 rounded-md border border-border/70 bg-muted/10 p-3">
+        <div className="admin-capability-editor space-y-3 rounded-md bg-muted/10 p-3">
             <div className="flex items-center justify-between gap-3">
                 <div><div className="text-sm font-medium">图片能力参数</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">生成界面和后端请求都会按此处裁剪参数</div></div>
                 <span className="text-[var(--fs-tiny)] text-foreground/40">当前模型独立生效</span>
@@ -132,7 +160,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
                     }}
                 />
                 {profile.size.parameter !== "none" ? <>
-                    <Field label="支持值"><Select mode="tags" className="w-full" disabled={disabled} value={profile.size.values} tokenSeparators={[","]} placeholder="例如 1:1、1024x1024" onChange={(values) => updateSize({ values, default: values.includes(profile.size.default) || profile.size.allowCustom ? profile.size.default : values[0] || "auto" })} /></Field>
+                    <Field label="支持值"><Select mode="tags" className="admin-capability-tags w-full" disabled={disabled} value={profile.size.values} tokenSeparators={[","]} placeholder="例如 1:1、1024x1024" onChange={(values) => updateSize({ values, default: values.includes(profile.size.default) || profile.size.allowCustom ? profile.size.default : values[0] || "auto" })} /></Field>
                     <div className="grid gap-2 sm:grid-cols-2">
                         <Field label="默认值"><Select className="w-full" disabled={disabled} value={profile.size.default} options={profile.size.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateSize({ default: defaultValue })} /></Field>
                         <ParameterField label="允许自定义" description="允许用户输入支持值之外的尺寸" supported={profile.size.allowCustom} disabled={disabled} onChange={(allowCustom) => updateSize({ allowCustom })} />
@@ -143,7 +171,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
             <CapabilityGroup title="可选生成参数">
                 <ParameterField label="图片质量" description="发送 quality 参数" supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
                 {profile.quality.supported ? <div className="grid gap-2 sm:grid-cols-2">
-                    <Field label="质量支持值"><Select mode="tags" className="w-full" disabled={disabled} value={profile.quality.values} tokenSeparators={[","]} onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })} /></Field>
+                    <Field label="质量支持值"><Select mode="tags" className="admin-capability-tags w-full" disabled={disabled} value={profile.quality.values} tokenSeparators={[","]} onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })} /></Field>
                     <Field label="默认质量"><Select className="w-full" disabled={disabled} value={profile.quality.default} options={profile.quality.values.map((item) => ({ label: item, value: item }))} onChange={(defaultValue) => updateQuality({ default: defaultValue })} /></Field>
                 </div> : null}
                 <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
@@ -157,7 +185,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, disabled }: R
 }
 
 function CapabilityGroup({ title, children }: { title: string; children: ReactNode }) {
-    return <section className="space-y-2"><div className="text-xs font-semibold text-foreground/65">{title}</div>{children}</section>;
+    return <details open className="admin-capability-group rounded-lg bg-muted/10 p-3"><summary className="cursor-pointer list-none text-xs font-semibold text-foreground/70">{title}</summary><div className="mt-3 space-y-2">{children}</div></details>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -165,7 +193,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function NumberField({ label, value, min, max, disabled, onChange }: { label: string; value?: number; min: number; max?: number; disabled: boolean; onChange: (value: number | null) => void }) {
-    return <Field label={label}><InputNumber className="w-full" disabled={disabled} min={min} max={max} precision={0} value={value} onChange={onChange} /></Field>;
+    return <div className="flex items-center justify-between gap-3"><span className="min-w-0 text-xs text-foreground/62">{label}</span><InputNumber className="w-32 shrink-0" disabled={disabled} min={min} max={max} precision={0} value={value} onChange={onChange} /></div>;
 }
 
 function BooleanField({ label, value, disabled, onChange }: { label: string; value: { supported: boolean; default: boolean }; disabled: boolean; onChange: (value: { supported: boolean; default: boolean }) => void }) {

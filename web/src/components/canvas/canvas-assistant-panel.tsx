@@ -4,7 +4,7 @@ import { Copy, Cpu, History, MessageSquareText, Plus, ScrollText, Settings2, Tra
 import { Button, Modal, Segmented, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
-import { modelDisplayName, modelOptionName, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
@@ -22,6 +22,7 @@ import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessi
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
+import { ModelLogo } from "@/components/model-logo";
 import { AgentChatEmptyState, AgentPanelChrome } from "./canvas-agent-panel-chrome";
 import { CanvasLocalAgentPanel } from "./canvas-local-agent-panel";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
@@ -1170,50 +1171,46 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
                 value={current || undefined}
                 className="agent-text-model-select w-full"
                 popupMatchSelectWidth={288}
-                options={options.map((model) => ({ value: model, label: `${modelDisplayName(config, model)} ${resolveModelChannel(config, model).name}` }))}
+                options={options.map((model) => ({ value: model, label: agentModelLabel(config, model) }))}
                 notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">暂无文本模型</span>}
                 optionRender={(option) => {
                     const model = String(option.value);
                     return (
                         <span className="flex min-w-0 items-center gap-2">
-                            <AgentModelIcon model={model} />
+                            <AgentModelIcon config={config} model={model} />
                             <span className="min-w-0 flex-1 truncate">{modelDisplayName(config, model)}</span>
-                            <span className="shrink-0 text-xs opacity-55">{resolveModelChannel(config, model).name}</span>
+                            {agentModelSource(config, model) ? <span className="shrink-0 text-xs opacity-55">{agentModelSource(config, model)}</span> : null}
                         </span>
                     );
                 }}
                 labelRender={() => (
                     <span className="flex min-w-0 items-center gap-1.5">
-                        <AgentModelIcon model={current} />
+                        <AgentModelIcon config={config} model={current} />
                         <span className="min-w-0 truncate">{current ? modelDisplayName(config, current) : "选择文本模型"}</span>
-                        {current ? <span className="shrink-0 opacity-55">{resolveModelChannel(config, current).name}</span> : null}
+                        {current && agentModelSource(config, current) ? <span className="shrink-0 opacity-55">{agentModelSource(config, current)}</span> : null}
                     </span>
                 )}
                 onChange={onChange}
                 aria-label="选择 Agent 文本模型"
-                title={current ? `${modelDisplayName(config, current)} · ${resolveModelChannel(config, current).name}` : "选择文本模型"}
+                title={current ? agentModelLabel(config, current) : "选择文本模型"}
             />
         </div>
     );
 }
 
-function AgentModelIcon({ model }: { model: string }) {
-    const icon = resolveModelIcon(modelOptionName(model));
-    return icon ? <img src={icon} alt="" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
+function agentModelSource(config: AiConfig, model: string) {
+    const channel = resolveModelChannel(config, model);
+    return channel.scope === "system" ? "" : channel.name;
 }
 
-function resolveModelIcon(model: string) {
-    // 与 model-picker 保持同一套厂商图标规则。
-    const name = model.toLowerCase();
-    if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
-    if (name.includes("gemini") || name.includes("google") || name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen") || name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) {
-        return "/icons/gemini.svg";
-    }
-    if (name.includes("gpt") || name.includes("openai") || name.includes("dall-e") || name.includes("dalle")) return "/icons/openai.svg";
-    if (name.includes("grok")) return "/icons/grok.svg";
-    if (name.includes("deepseek")) return "/icons/deepseek.svg";
-    if (name.includes("glm") || name.includes("chatglm")) return "/icons/glm.svg";
-    return "";
+function agentModelLabel(config: AiConfig, model: string) {
+    const source = agentModelSource(config, model);
+    return source ? `${modelDisplayName(config, model)} · ${source}` : modelDisplayName(config, model);
+}
+
+function AgentModelIcon({ config, model }: { config: AiConfig; model: string }) {
+    const icon = modelIcon(config, model);
+    return icon ? <span className="inline-flex size-4 shrink-0 items-center justify-center"><ModelLogo icon={icon} size={16} /></span> : <Cpu className="size-4 shrink-0 opacity-70" />;
 }
 
 function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessions: CanvasAssistantSession[]; activeSession: CanvasAssistantSession | null; onOpen: (id: string) => void; onDelete: (id: string) => void }) {

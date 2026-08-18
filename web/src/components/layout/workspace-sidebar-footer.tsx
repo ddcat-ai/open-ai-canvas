@@ -37,7 +37,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
     const handleLogout = async () => {
         try {
             await logout();
-            await applyUserSession({ user: null, systemChannels: [] });
+            await applyUserSession({ user: null, logicalModels: [] });
             setMenuOpen(false);
             message.success("已退出登录");
             navigate("/login", { replace: true });

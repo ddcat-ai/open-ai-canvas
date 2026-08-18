@@ -3,18 +3,24 @@ package model
 import "time"
 
 type Task struct {
-	ID                        string               `json:"id" gorm:"primaryKey;size:36"`
-	UserID                    string               `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1"`
-	SessionID                 string               `json:"sessionId" gorm:"index;size:36"`
-	ProjectID                 string               `json:"projectId" gorm:"index;size:80"`
-	Type                      string               `json:"type" gorm:"index;size:64"`
-	Status                    TaskStatus           `json:"status" gorm:"index;size:24;index:idx_tasks_status_created,priority:1;index:idx_tasks_claim,priority:1;index:idx_tasks_provider_cancel,priority:1"`
-	Stage                     string               `json:"stage" gorm:"size:80"`
-	Progress                  int                  `json:"progress"`
-	Prompt                    string               `json:"prompt"`
-	Operation                 string               `json:"operation" gorm:"size:64"`
-	Provider                  string               `json:"provider" gorm:"size:64"`
-	Model                     string               `json:"model" gorm:"size:120"`
+	ID                     string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID                 string     `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1"`
+	SessionID              string     `json:"sessionId" gorm:"index;size:36"`
+	ProjectID              string     `json:"projectId" gorm:"index;size:80"`
+	Type                   string     `json:"type" gorm:"index;size:64"`
+	Status                 TaskStatus `json:"status" gorm:"index;size:24;index:idx_tasks_status_created,priority:1;index:idx_tasks_claim,priority:1;index:idx_tasks_provider_cancel,priority:1"`
+	Stage                  string     `json:"stage" gorm:"size:80"`
+	Progress               int        `json:"progress"`
+	Prompt                 string     `json:"prompt"`
+	Operation              string     `json:"operation" gorm:"size:64"`
+	Provider               string     `json:"provider" gorm:"size:64"`
+	Model                  string     `json:"model" gorm:"size:120"`
+	LogicalModelID         string     `json:"logicalModelId,omitempty" gorm:"size:36;index"`
+	LogicalModelRevisionID string     `json:"logicalModelRevisionId,omitempty" gorm:"size:36;index"`
+	RouteID                string     `json:"routeId,omitempty" gorm:"size:36;index"`
+	PhysicalVariantID      string     `json:"physicalVariantId,omitempty" gorm:"size:36;index"`
+	// RouteRun 只在用户主动重试时递增；worker 租约恢复不应创建新的路由选择世代。
+	RouteRun                  int                  `json:"-" gorm:"index"`
 	BillingOrderID            string               `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	ProviderRequestID         string               `json:"providerRequestId,omitempty" gorm:"index;size:160"`
 	ProviderCancelStatus      ProviderCancelStatus `json:"providerCancelStatus,omitempty" gorm:"index;size:24;index:idx_tasks_provider_cancel,priority:2"`

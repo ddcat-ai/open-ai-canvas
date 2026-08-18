@@ -11,10 +11,14 @@ import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
+import type { CapabilitySpec } from "@/services/api/logical-models";
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
+
+// 这是只读目录适配器的内部键，不是供应渠道或数据库实体 ID。
+export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
 export type ModelChannel = {
     id: string;
@@ -35,14 +39,21 @@ export type ModelChannel = {
     modelCosts?: Array<{
         model: string;
         displayName?: string;
+        description?: string;
+        icon?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
+        pricePolicy?: "channel" | "unified";
         billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
         inputTokenPriceMicrocredits?: number;
         outputTokenPriceMicrocredits?: number;
         cachedTokenPriceMicrocredits?: number;
         capabilityConfig?: ModelCapabilityConfig;
+        logicalModelId?: string;
+        logicalCapabilitySpec?: CapabilitySpec;
+        logicalCapabilityProfiles?: CapabilitySpec[];
+        defaultOptions?: Record<string, unknown>;
     }>;
     transport?: "backend-channel" | "local-runtime";
     localModels?: DreaminaLocalModel[];
@@ -437,12 +448,19 @@ export function modelDisplayName(config: AiConfig, value: string) {
     return channel.scope === "system" ? "系统模型" : model;
 }
 
+export function modelIcon(config: AiConfig, value: string) {
+    const model = modelOptionName(value);
+    return resolveModelChannel(config, value).modelCosts?.find((item) => item.model === model)?.icon || "";
+}
+
 export function modelOptionLabel(config: AiConfig, value: string) {
     const decoded = decodeChannelModel(value);
     if (!decoded) return modelDisplayName(config, value);
     const channel = config.channels.find((item) => item.id === decoded.channelId);
     const displayName = modelDisplayName(config, value);
-    return channel ? `${displayName}（${channel.name}）` : displayName;
+    // 平台前台模型只展示公开名称；供应来源和内部目录适配器不属于创作端信息。
+    if (!channel || channel.scope === "system") return displayName;
+    return `${displayName}（${channel.name}）`;
 }
 
 export function modelOptionsFromChannels(channels: ModelChannel[]) {

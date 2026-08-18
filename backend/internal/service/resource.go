@@ -28,6 +28,8 @@ import (
 
 	"infinite-canvas/backend/internal/model"
 
+	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
+	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
 	"gorm.io/gorm"
 )
@@ -747,8 +749,8 @@ func validateActiveOSSSetting(setting ossSettingValue, disabledMessage string, i
 	if !setting.Enabled {
 		return ossSettingValue{}, BadAuthRequest(disabledMessage)
 	}
-	if setting.Provider != aliyunOSSProvider && setting.Provider != tencentCOSProvider {
-		return ossSettingValue{}, BadAuthRequest("仅支持阿里云 OSS 和腾讯云 COS")
+	if setting.Provider != aliyunOSSProvider && setting.Provider != tencentCOSProvider && setting.Provider != qiniuKodoProvider {
+		return ossSettingValue{}, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS 和七牛云 Kodo")
 	}
 	if setting.Bucket == "" || setting.Endpoint == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return ossSettingValue{}, BadAuthRequest(incompleteMessage)
@@ -782,8 +784,12 @@ func ossObjectKey(setting ossSettingValue, userID string, kind string, fileName 
 }
 
 func putOSSObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	if normalizeOSSSetting(setting).Provider == tencentCOSProvider {
+	setting = normalizeOSSSetting(setting)
+	if setting.Provider == tencentCOSProvider {
 		return putCOSObject(setting, objectKey, mimeType, size, body)
+	}
+	if setting.Provider == qiniuKodoProvider {
+		return putQiniuObject(setting, objectKey, mimeType, size, body)
 	}
 	return putAliyunOSSObject(setting, objectKey, mimeType, size, body)
 }
@@ -827,6 +833,9 @@ func getOSSObjectRange(setting ossSettingValue, objectKey string, rangeHeader st
 	}
 	if setting.Provider == tencentCOSProvider {
 		return getCOSObjectRange(setting, objectKey, rangeHeader)
+	}
+	if setting.Provider == qiniuKodoProvider {
+		return getQiniuObjectRange(setting, objectKey, rangeHeader)
 	}
 	return getAliyunOSSObjectRange(setting, objectKey, rangeHeader)
 }
@@ -874,6 +883,9 @@ func decimalDigits(value string) bool {
 
 func signedOSSObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
 	setting = normalizeOSSSetting(setting)
+	if setting.Provider == qiniuKodoProvider {
+		return signedQiniuObjectURL(setting, objectKey, expiresAt)
+	}
 	if setting.CDNBaseURL != "" {
 		return ossCDNObjectURL(setting.CDNBaseURL, objectKey)
 	}
@@ -924,6 +936,30 @@ func putCOSObject(setting ossSettingValue, objectKey string, mimeType string, si
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
 }
 
+func putQiniuObject(setting ossSettingValue, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
+		return "", errors.New("七牛云 Kodo 访问密钥不可用")
+	}
+	if setting.Bucket == "" || objectKey == "" {
+		return "", errors.New("七牛云 Kodo Bucket 或对象路径为空")
+	}
+	config := qiniuStorage.NewConfig()
+	config.Region = qiniuRegion(setting.Region)
+	config.UpHost = strings.TrimRight(setting.Endpoint, "/")
+	uploader := qiniuStorage.NewFormUploader(config)
+	policy := qiniuStorage.PutPolicy{Scope: setting.Bucket + ":" + strings.TrimLeft(objectKey, "/"), Expires: 3600}
+	token := policy.UploadToken(qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret))
+	ret := qiniuStorage.PutRet{}
+	extra := &qiniuStorage.PutExtra{MimeType: mimeType}
+	if size < 0 {
+		size = 0
+	}
+	if err := uploader.Put(context.Background(), &ret, token, strings.TrimLeft(objectKey, "/"), body, size, extra); err != nil {
+		return "", fmt.Errorf("七牛云 Kodo 上传失败：%w", err)
+	}
+	return ret.Hash, nil
+}
+
 func getCOSObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
 	client, err := newCOSClient(setting, 2*time.Minute)
 	if err != nil {
@@ -936,6 +972,31 @@ func getCOSObjectRange(setting ossSettingValue, objectKey string, rangeHeader st
 			return &ossObjectStream{body: io.NopCloser(bytes.NewReader(nil)), statusCode: resp.StatusCode, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 		}
 		return nil, fmt.Errorf("COS 读取失败：%w", err)
+	}
+	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+}
+
+func getQiniuObjectRange(setting ossSettingValue, objectKey string, rangeHeader string) (*ossObjectStream, error) {
+	signedURL, err := signedQiniuObjectURL(setting, objectKey, time.Now().Add(directResourceURLTTL))
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	ApplyDefaultOutboundHeaders(req)
+	resp, err := OutboundHTTPClient(2 * time.Minute).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%w", err)
+	}
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		defer resp.Body.Close()
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return &ossObjectStream{body: resp.Body, statusCode: resp.StatusCode, contentLength: resp.ContentLength, contentRange: resp.Header.Get("Content-Range"), acceptRanges: firstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
@@ -986,6 +1047,42 @@ func signedCOSObjectURL(setting ossSettingValue, objectKey string, expiresAt tim
 		return "", err
 	}
 	return signedURL.String(), nil
+}
+
+func signedQiniuObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
+	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
+		return "", errors.New("七牛云 Kodo 访问密钥不可用")
+	}
+	if setting.CDNBaseURL == "" {
+		return "", errors.New("七牛云 Kodo 绑定域名为空")
+	}
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if objectKey == "" {
+		return "", errors.New("七牛云 Kodo 对象路径为空")
+	}
+	deadline := expiresAt.Unix()
+	if deadline <= time.Now().Unix() {
+		return "", errors.New("七牛云 Kodo 签名有效期必须晚于当前时间")
+	}
+	mac := qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret)
+	return qiniuStorage.MakePrivateURLv2(mac, strings.TrimRight(setting.CDNBaseURL, "/"), objectKey, deadline), nil
+}
+
+func qiniuRegion(region string) *qiniuStorage.Region {
+	switch strings.ToLower(strings.TrimSpace(region)) {
+	case "z1", "cn-north-1":
+		return &qiniuStorage.ZoneHuabei
+	case "z2", "cn-south-1":
+		return &qiniuStorage.ZoneHuanan
+	case "na0", "us-north-1":
+		return &qiniuStorage.ZoneBeimei
+	case "as0", "ap-southeast-1":
+		return &qiniuStorage.ZoneXinjiapo
+	case "cn-east-2", "zhejiang2":
+		return &qiniuStorage.ZoneHuadongZheJiang2
+	default:
+		return &qiniuStorage.ZoneHuadong
+	}
 }
 
 func newCOSClient(setting ossSettingValue, timeout time.Duration) (*cos.Client, error) {

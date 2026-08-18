@@ -25,6 +25,7 @@ const encryptedSettingPrefix = "enc:v1:"
 const (
 	aliyunOSSProvider  = "aliyun"
 	tencentCOSProvider = "tencent"
+	qiniuKodoProvider  = "qiniu"
 )
 
 type OSSSettingRequest struct {
@@ -457,8 +458,8 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		PublicBaseURL:   strings.TrimRight(strings.TrimSpace(req.PublicBaseURL), "/"),
 		PathPrefix:      strings.Trim(strings.TrimSpace(req.PathPrefix), "/"),
 	})
-	if next.Provider != aliyunOSSProvider && next.Provider != tencentCOSProvider {
-		return next, BadAuthRequest("仅支持阿里云 OSS 和腾讯云 COS")
+	if next.Provider != aliyunOSSProvider && next.Provider != tencentCOSProvider && next.Provider != qiniuKodoProvider {
+		return next, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS 和七牛云 Kodo")
 	}
 	current = normalizeOSSSetting(current)
 	// 不同云厂商的密钥不能复用；只有继续使用同一厂商时，留空才表示保留原密钥。
@@ -473,6 +474,9 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 			if next.Provider == tencentCOSProvider {
 				return next, BadAuthRequest("请填写腾讯云 COS Region 或 Endpoint")
 			}
+			if next.Provider == qiniuKodoProvider {
+				return next, BadAuthRequest("请填写七牛云 Kodo 上传 Endpoint")
+			}
 			return next, BadAuthRequest("请填写阿里云 OSS Endpoint")
 		}
 		if _, err := ValidateOutboundURL(next.Endpoint); err != nil {
@@ -486,11 +490,14 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 				return next, err
 			}
 		}
+		if next.Provider == qiniuKodoProvider && next.CDNBaseURL == "" {
+			return next, BadAuthRequest("请填写七牛云 Kodo 绑定域名")
+		}
 		if next.AccessKeyID == "" {
-			return next, BadAuthRequest("请填写 AccessKey ID")
+			return next, BadAuthRequest("请填写访问密钥 AccessKey")
 		}
 		if next.AccessKeySecret == "" {
-			return next, BadAuthRequest("请填写 AccessKey Secret")
+			return next, BadAuthRequest("请填写访问密钥 SecretKey")
 		}
 	}
 	return next, nil

@@ -1,5 +1,5 @@
 import { type GenerationTask } from "@/services/api/task-center";
-import { backendProviderConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
+import { backendProviderConfig, logicalModelIDForConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
 import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
@@ -8,7 +8,7 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
-import { resolveCompatibleModel, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
+import { modelRequestOptions, resolveCompatibleModel, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -85,7 +85,7 @@ export function assertCanvasImageReferenceLimit(config: AiConfig, referenceImage
     if (error) throw new Error(error);
 }
 
-export { backendProviderConfig };
+export { backendProviderConfig, logicalModelIDForConfig };
 
 const generationOperationLocks = new Map<string, Promise<unknown>>();
 
@@ -375,35 +375,46 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const storedModel = resolveCanvasGenerationModel(config, node?.metadata?.model, mode);
     const preferredModel = storedModel || resolveCanvasGenerationModel(config, defaultModel, mode) || fallbackModel;
-    const imageSize = mode === "image" ? node?.metadata?.size || config.size || defaultConfig.size : undefined;
+    // 先合并节点上的实时选择，再做兼容性匹配。否则路由只看到全局默认值，节点改过的时长、分辨率或布尔能力无法参与分流。
+    const requestedConfig: AiConfig = {
+        ...config,
+        quality: node?.metadata?.quality ?? config.quality ?? defaultConfig.quality,
+        size: node?.metadata?.size ?? config.size ?? defaultConfig.size,
+        transparentBackground: node?.metadata?.transparentBackground ?? config.transparentBackground ?? defaultConfig.transparentBackground,
+        videoSeconds: normalizeVideoDuration(node?.metadata?.seconds ?? config.videoSeconds ?? defaultConfig.videoSeconds),
+        vquality: normalizeVideoResolution(node?.metadata?.vquality ?? config.vquality ?? defaultConfig.vquality),
+        videoGenerateAudio: node?.metadata?.generateAudio ?? config.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
+        videoWatermark: node?.metadata?.watermark ?? config.videoWatermark ?? defaultConfig.videoWatermark,
+        audioVoice: node?.metadata?.audioVoice ?? config.audioVoice ?? defaultConfig.audioVoice,
+        audioFormat: node?.metadata?.audioFormat ?? config.audioFormat ?? defaultConfig.audioFormat,
+        audioSpeed: node?.metadata?.audioSpeed ?? config.audioSpeed ?? defaultConfig.audioSpeed,
+        audioInstructions: node?.metadata?.audioInstructions ?? config.audioInstructions ?? defaultConfig.audioInstructions,
+        count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count || defaultConfig.count : config.count || defaultConfig.count)),
+    };
+    const imageSize = mode === "image" ? requestedConfig.size : undefined;
     // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
     // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
-    const baseRequirements = requirements?.capability ? requirements : { capability: mode };
+	const liveOptions = modelRequestOptions(requestedConfig, mode);
+	const baseRequirements = requirements?.capability
+		? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } }
+		: { capability: mode, options: liveOptions };
     const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel;
     const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
     const normalizedImage = imageProfile
         ? normalizeImageValue(imageProfile, {
-              quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
-              size: node?.metadata?.size || config.size || defaultConfig.size,
-              transparentBackground: node?.metadata?.transparentBackground || config.transparentBackground,
-              count: String(node?.metadata?.count || config.canvasImageCount || config.count || defaultConfig.count),
+              quality: requestedConfig.quality,
+              size: requestedConfig.size,
+              transparentBackground: requestedConfig.transparentBackground,
+              count: requestedConfig.count,
           })
         : undefined;
     return {
-        ...config,
+        ...requestedConfig,
         model,
-        quality: normalizedImage?.quality || node?.metadata?.quality || config.quality || defaultConfig.quality,
-        size: normalizedImage?.size || node?.metadata?.size || config.size || defaultConfig.size,
-        transparentBackground: normalizedImage?.transparentBackground || ((node?.metadata?.transparentBackground || config.transparentBackground) === "true" ? "true" : "false"),
-        videoSeconds: normalizeVideoDuration(node?.metadata?.seconds || config.videoSeconds || defaultConfig.videoSeconds),
-        vquality: normalizeVideoResolution(node?.metadata?.vquality || config.vquality || defaultConfig.vquality),
-        videoGenerateAudio: node?.metadata?.generateAudio || config.videoGenerateAudio || defaultConfig.videoGenerateAudio,
-        videoWatermark: node?.metadata?.watermark || config.videoWatermark || defaultConfig.videoWatermark,
-        audioVoice: node?.metadata?.audioVoice || config.audioVoice || defaultConfig.audioVoice,
-        audioFormat: node?.metadata?.audioFormat || config.audioFormat || defaultConfig.audioFormat,
-        audioSpeed: node?.metadata?.audioSpeed || config.audioSpeed || defaultConfig.audioSpeed,
-        audioInstructions: node?.metadata?.audioInstructions || config.audioInstructions || defaultConfig.audioInstructions,
-        count: normalizedImage?.count || String(node?.metadata?.count || (mode === "image" ? config.canvasImageCount || config.count : config.count) || defaultConfig.count),
+        quality: normalizedImage?.quality || requestedConfig.quality,
+        size: normalizedImage?.size || requestedConfig.size,
+        transparentBackground: normalizedImage?.transparentBackground || (requestedConfig.transparentBackground === "true" ? "true" : "false"),
+        count: normalizedImage?.count || requestedConfig.count,
     };
 }
 

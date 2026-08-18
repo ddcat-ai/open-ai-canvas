@@ -4995,8 +4995,14 @@
         caret-color: #f5f5f5;
     }
 
-    :where(.ant-modal, .ant-drawer, .ant-select-dropdown, .ant-dropdown, .ant-popover) {
+:where(.ant-modal, .ant-drawer, .ant-select-dropdown, .ant-dropdown, .ant-popover) {
         overscroll-behavior: contain;
+    }
+
+    /* Logo 选择器只负责定位，不引入弹出/收起动画。 */
+    .model-logo-picker-popover {
+        animation: none !important;
+        transition: none !important;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -7484,6 +7490,617 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     .creation-message-content, .creation-message-error, .creation-media-result { padding-left: 0; }
     .creation-media-pending, .creation-media-empty { margin-left: 0; }
     .creation-image-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */
+.admin-shell,
+.admin-drawer,
+.admin-secondary-drawer,
+.admin-modal-root,
+.admin-channel-modal-root {
+    --admin-layer-0: #f7f7f5;
+    --admin-layer-1: #ffffff;
+    --admin-layer-2: #f5f4f2;
+    --admin-sidebar: #f0efe9;
+    --admin-status-success: oklch(0.52 0.14 155);
+    --admin-status-warning: oklch(0.62 0.14 78);
+    --admin-status-error: var(--destructive);
+    --admin-status-info: oklch(0.54 0.13 250);
+    --admin-chart-primary: var(--workspace-accent);
+    --admin-chart-secondary: oklch(0.55 0.11 180);
+    --admin-chart-warning: oklch(0.64 0.14 78);
+}
+
+.dark .admin-shell,
+.dark .admin-drawer,
+.dark .admin-secondary-drawer,
+.dark .admin-modal-root,
+.dark .admin-channel-modal-root {
+    --admin-layer-0: #0d0d0d;
+    --admin-layer-1: #111111;
+    --admin-layer-2: #1a1a1a;
+    --admin-sidebar: #0a0a0a;
+    --admin-status-success: oklch(0.72 0.14 155);
+    --admin-status-warning: oklch(0.78 0.14 78);
+    --admin-status-info: oklch(0.76 0.13 250);
+    --admin-chart-secondary: oklch(0.72 0.11 180);
+    --admin-chart-warning: oklch(0.78 0.14 78);
+}
+
+.admin-shell .admin-nav-group-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-shell .admin-nav-group-label::before,
+.admin-shell .admin-nav-group-label::after {
+    height: 1px;
+    flex: 1 1 auto;
+    background: color-mix(in srgb, var(--foreground) 12%, transparent);
+    content: "";
+}
+
+.admin-shell .admin-nav-group-label span {
+    flex: 0 0 auto;
+}
+
+.admin-shell .app-workspace-nav-link {
+    position: relative;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+.admin-shell .app-workspace-brand-link {
+    color: var(--foreground);
+}
+
+.admin-shell .app-workspace-nav-link.is-active {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.admin-shell .app-workspace-nav-link.is-active::before {
+    display: none;
+}
+
+.admin-shell .app-workspace-nav-link:hover:not(.is-active) {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+
+.admin-shell .app-workspace-nav-link > svg {
+    width: 14px;
+    height: 14px;
+}
+
+.admin-shell .app-workspace-nav-link:focus-visible,
+.admin-shell .app-workspace-icon-button:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 58%, transparent);
+    outline-offset: -1px;
+    box-shadow: none;
+}
+
+.admin-shell .app-workspace-sidebar,
+.admin-shell .admin-sidebar {
+    background: var(--admin-sidebar);
+}
+
+.admin-shell .app-user-content,
+.admin-shell .app-workspace-page,
+.admin-shell .admin-page-root {
+    background: var(--admin-layer-0);
+}
+
+.admin-shell .app-table-surface,
+.admin-shell .admin-table-surface,
+.admin-shell .ant-table-wrapper,
+.admin-shell .ant-table,
+.admin-shell .ant-table-container {
+    background: var(--admin-layer-1);
+}
+
+.admin-shell .ant-input,
+.admin-shell .ant-input-affix-wrapper,
+.admin-shell .ant-select-selector,
+.admin-shell .ant-picker,
+.admin-shell .ant-input-number,
+.admin-shell .ant-input-number-input-wrap {
+    background: var(--admin-layer-2) !important;
+}
+
+.admin-page-root > div {
+    height: 100%;
+}
+
+.admin-page-frame {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    padding: 12px 16px 0;
+}
+
+.admin-page-header {
+    min-height: 44px;
+}
+
+.admin-data-table {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.admin-list-toolbar {
+    flex: 0 0 auto;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.admin-list-toolbar-main .app-list-search {
+    min-width: 180px;
+    width: auto !important;
+    flex: 1 1 280px;
+}
+
+.admin-filter-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.admin-list-toolbar-filters {
+    display: none;
+    flex: 0 0 auto;
+}
+
+.admin-list-toolbar-filters.is-open {
+    display: flex;
+}
+
+.admin-list-toolbar-chips {
+    display: inline-flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-filter-chip {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--foreground) 5%, var(--admin-layer-1));
+    padding: 0 8px 0 9px;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: 11px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease;
+}
+
+.admin-filter-chip:hover {
+    background: color-mix(in srgb, var(--foreground) 10%, var(--admin-layer-1));
+    color: var(--foreground);
+}
+
+.admin-filter-chip:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.admin-filter-chip:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-filter-active-dot {
+    width: 5px;
+    height: 5px;
+    margin-left: 2px;
+    border-radius: var(--r-full);
+    background: var(--foreground);
+}
+
+.admin-table-surface {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.admin-table-scroll {
+    height: 100%;
+    overflow: auto;
+    min-width: 100%;
+    min-height: 0;
+}
+
+.admin-table-pagination {
+    flex: 0 0 auto;
+    min-height: 44px;
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    background: color-mix(in srgb, var(--admin-layer-1) 92%, transparent);
+    backdrop-filter: blur(10px);
+}
+
+.admin-table-pagination .app-pagination-bar {
+    min-height: 44px;
+}
+
+.admin-shell .admin-table-surface .ant-table-wrapper {
+    min-width: 100%;
+}
+
+.admin-shell .admin-table-surface .ant-table-thead > tr > th,
+.admin-modal-root .admin-table-surface .ant-table-thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 38px;
+    padding: 8px 16px !important;
+    background: var(--admin-layer-1) !important;
+    color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td {
+    height: 48px;
+    padding: 10px 16px !important;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr:hover > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr:hover > td {
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1)) !important;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td:first-child,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td:first-child {
+    border-inline-start: 0;
+}
+
+.admin-shell .admin-table-clickable-row {
+    cursor: pointer;
+}
+
+.admin-shell .admin-table-pagination .ant-pagination-total-text {
+    margin-inline-end: auto;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-pagination-bar {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+}
+
+.admin-pagination-total {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.admin-pagination-bar .ant-pagination {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+}
+
+.admin-pagination-bar .ant-pagination-item,
+.admin-pagination-bar .ant-pagination-prev,
+.admin-pagination-bar .ant-pagination-next,
+.admin-pagination-bar .ant-pagination-jump-prev,
+.admin-pagination-bar .ant-pagination-jump-next {
+    min-width: 26px;
+    height: 26px;
+    margin: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    line-height: 26px;
+}
+
+.admin-pagination-bar .ant-pagination-item a,
+.admin-pagination-bar .ant-pagination-prev button,
+.admin-pagination-bar .ant-pagination-next button {
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+.admin-pagination-bar .ant-pagination-item-active {
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+    font-weight: 600;
+}
+
+.admin-pagination-bar .ant-pagination-item-active a {
+    color: var(--foreground);
+}
+
+.admin-pagination-bar .ant-pagination-item:hover,
+.admin-pagination-bar .ant-pagination-prev:hover,
+.admin-pagination-bar .ant-pagination-next:hover {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.admin-pagination-bar .ant-pagination-options {
+    margin-inline-start: 8px;
+}
+
+.admin-pagination-bar .ant-pagination-options .ant-select {
+    min-width: 88px;
+}
+
+.admin-pagination-bar .ant-pagination-options .ant-select-selector {
+    min-height: 28px !important;
+    border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent) !important;
+    border-radius: var(--r-sm) !important;
+    background: var(--admin-layer-2) !important;
+    box-shadow: none !important;
+    color: var(--foreground);
+}
+
+.admin-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.admin-row-action.ant-btn {
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    transition: none !important;
+}
+
+.admin-row-action.ant-btn:hover:not(:disabled),
+.admin-row-action.ant-btn:active:not(:disabled),
+.admin-row-action.ant-btn:focus:not(:disabled),
+.admin-row-action.ant-btn.ant-dropdown-open {
+    background: transparent !important;
+    color: var(--foreground);
+}
+
+.admin-row-action-primary.ant-btn {
+    color: color-mix(in srgb, var(--foreground) 88%, transparent);
+    font-weight: 600;
+}
+
+.admin-row-action-danger.ant-btn {
+    color: var(--destructive);
+}
+
+.admin-row-action-more.ant-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: color-mix(in srgb, var(--foreground) 54%, transparent);
+}
+
+.admin-row-action-chevron {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    stroke-width: 1.75;
+}
+
+.admin-modal-data-table-shell {
+    display: flex;
+    height: min(58vh, 540px);
+    min-height: 320px;
+}
+
+.admin-shell :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-drawer :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-secondary-drawer :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-modal-root :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-channel-modal-root :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none !important;
+}
+
+.admin-shell :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-drawer :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-secondary-drawer :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-modal-root :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-channel-modal-root :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+    box-shadow: none !important;
+}
+
+.admin-shell :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-shell .ant-select-focused .ant-select-selector,
+.admin-drawer :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-drawer .ant-select-focused .ant-select-selector,
+.admin-secondary-drawer :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-secondary-drawer .ant-select-focused .ant-select-selector,
+.admin-modal-root :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-modal-root .ant-select-focused .ant-select-selector,
+.admin-channel-modal-root :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-channel-modal-root .ant-select-focused .ant-select-selector {
+    border-color: color-mix(in srgb, var(--ring) 58%, transparent) !important;
+    box-shadow: none !important;
+}
+
+.admin-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 20px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    padding: 2px 7px;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.admin-status-badge::before {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: var(--r-full);
+    background: currentColor;
+    content: "";
+}
+
+.admin-status-badge[data-tone="success"] { color: var(--admin-status-success); }
+.admin-status-badge[data-tone="warning"] { color: var(--admin-status-warning); }
+.admin-status-badge[data-tone="error"] { color: var(--admin-status-error); }
+.admin-status-badge[data-tone="info"] { color: var(--admin-status-info); }
+
+.admin-stat-tile {
+    min-width: 0;
+    padding: var(--space-3);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--foreground) 7%, var(--admin-layer-1)), var(--admin-layer-1) 72%);
+}
+
+.admin-stat-tile + .admin-stat-tile {
+    border-left: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+.admin-stat-tile-label {
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+}
+
+.admin-stat-tile-value {
+    margin-top: var(--space-1);
+    color: var(--foreground);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.admin-stat-tile-detail {
+    margin-top: var(--space-1);
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: 11px;
+}
+
+.admin-settings-section {
+    margin-top: 12px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
+}
+
+.admin-settings-section > :last-child {
+    min-width: 0;
+}
+
+.admin-drawer .ant-drawer-body,
+.admin-secondary-drawer .ant-drawer-body {
+    background: var(--admin-layer-0);
+}
+
+.admin-drawer .ant-drawer-footer,
+.admin-secondary-drawer .ant-drawer-footer {
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: color-mix(in srgb, var(--admin-layer-0) 94%, transparent);
+    backdrop-filter: blur(10px);
+}
+
+.admin-form-section {
+    margin-top: 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--foreground) 4%, var(--admin-layer-1));
+    padding: 20px;
+}
+
+.admin-form-section:first-child {
+    margin-top: 0;
+}
+
+.admin-form-section h2,
+.admin-settings-section h2 {
+    font-size: 13px;
+}
+
+.admin-capability-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-capability-tags .ant-select-selector {
+    max-height: 96px;
+    overflow-y: auto;
+}
+
+.admin-channel-modal .ant-modal-body {
+    max-height: min(70vh, 620px);
+    overflow-y: auto;
+}
+
+.admin-shell .admin-monospace {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+}
+
+.admin-shell .admin-table-primary-link {
+    color: inherit;
+    text-align: left;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.admin-shell .admin-table-primary-link:hover {
+    color: var(--foreground);
+}
+
+@media (max-width: 639px) {
+    .admin-list-toolbar-filters {
+        width: 100%;
+        padding-top: 2px;
+    }
+
+    .admin-list-toolbar-chips {
+        width: 100%;
+    }
+
+    .admin-list-toolbar-filters.is-open {
+        display: flex;
+    }
+
+    .admin-list-toolbar-main .app-list-search {
+        min-width: 0;
+        flex-basis: 100%;
+    }
+
+    .admin-shell .app-workspace-nav-link.is-active::before { display: none; }
+    .admin-stat-tile + .admin-stat-tile { border-top: var(--stroke-1) solid var(--color-border); border-left: 0; }
 }
 
 /* 旧创作规则位于 utilities 层且使用 !important；必须在同层覆盖。 */

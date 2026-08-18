@@ -1,9 +1,9 @@
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Table, Tag } from "antd";
+import { App, Button, Form, Input, Modal, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { BellRing, CircleAlert, Info, Plus, Search, ShieldAlert, Wrench } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
     closeAdminAnnouncement,
@@ -14,6 +14,7 @@ import {
     type AnnouncementStatus,
     type SystemAnnouncement,
 } from "@/services/api/announcements";
+import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 type AnnouncementFormValues = {
     title: string;
@@ -28,11 +29,11 @@ const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
     { value: "critical", label: "重要通知" },
 ];
 
-const levelMeta: Record<AnnouncementLevel, { label: string; color: string; icon: typeof Info }> = {
-    info: { label: "平台通知", color: "blue", icon: Info },
-    success: { label: "状态恢复", color: "green", icon: Wrench },
-    warning: { label: "服务提醒", color: "orange", icon: CircleAlert },
-    critical: { label: "重要通知", color: "red", icon: ShieldAlert },
+const levelMeta: Record<AnnouncementLevel, { label: string; tone: "info" | "success" | "warning" | "error" }> = {
+    info: { label: "平台通知", tone: "info" },
+    success: { label: "状态恢复", tone: "success" },
+    warning: { label: "服务提醒", tone: "warning" },
+    critical: { label: "重要通知", tone: "error" },
 };
 
 export default function AdminAnnouncementsPanel() {
@@ -130,15 +131,14 @@ export default function AdminAnnouncementsPanel() {
             width: 120,
             render: (level: AnnouncementLevel) => {
                 const meta = levelMeta[level] || levelMeta.info;
-                const Icon = meta.icon;
-                return <Tag color={meta.color} icon={<Icon className="size-3" />}>{meta.label}</Tag>;
+                return <AdminStatusBadge label={meta.label} tone={meta.tone} />;
             },
         },
         {
             title: "状态",
             dataIndex: "status",
             width: 100,
-            render: (value: AnnouncementStatus) => value === "active" ? <Tag color="green">发布中</Tag> : <Tag>已关闭</Tag>,
+            render: (value: AnnouncementStatus) => <AdminStatusBadge label={value === "active" ? "发布中" : "已关闭"} tone={value === "active" ? "success" : "neutral"} />,
         },
         {
             title: "发布时间",
@@ -155,52 +155,26 @@ export default function AdminAnnouncementsPanel() {
         {
             title: "操作",
             key: "actions",
-            fixed: "right",
             width: 160,
-            render: (_, announcement) => (
-                <div className="flex items-center gap-1">
-                    <Button type="text" size="small" onClick={() => openEditModal(announcement)}>编辑</Button>
-                    {announcement.status === "active" ? (
-                        <Popconfirm title="关闭这条公告？" description="关闭后用户公告中心将不再展示，历史记录会保留。" okText="关闭公告" cancelText="取消" onConfirm={() => void closeAnnouncement(announcement)}>
-                            <Button type="text" danger size="small" loading={closingId === announcement.id}>关闭</Button>
-                        </Popconfirm>
-                    ) : null}
-                </div>
-            ),
+            render: (_, announcement) => <AdminRowActions primary={{ label: "编辑", onClick: () => openEditModal(announcement) }} actions={announcement.status === "active" ? [{ key: "close", label: "关闭", danger: true, disabled: closingId === announcement.id, onClick: () => void closeAnnouncement(announcement), confirm: { title: "关闭这条公告？", description: "关闭后用户公告中心将不再展示，历史记录会保留。", okText: "关闭公告" } }] : []} />,
         },
     ];
 
     return (
         <>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-                <div className="flex min-w-0 items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-muted/45 text-foreground"><BellRing className="size-4" /></span>
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground">共保留 {total} 条公告记录</div>
-                        <div className="mt-0.5 text-xs text-foreground/50">关闭公告会立即从用户公告中心移除</div>
-                    </div>
-                </div>
-                <Button type="primary" icon={<Plus className="size-4" />} onClick={openPublishModal}>发布公告</Button>
-            </div>
+            <AdminDataTable
+                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />}
+                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "active" ? "发布中" : "已关闭"}`} onRemove={() => { setStatus("all"); setPage(1); }} /> : null}</>}
+                toolbarActive={Boolean(keyword || status !== "all")}
+                toolbarFilters={<Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "发布中", value: "active" }, { label: "已关闭", value: "closed" }]} />}
+                onReset={() => { setKeyword(""); setStatus("all"); setPage(1); }}
+                trailing={<Button type="primary" size="small" icon={<Plus className="size-4" />} onClick={openPublishModal}>发布公告</Button>}
+                table={{ rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: announcements, scroll: { x: 1020 } }}
+                empty={<AdminTableEmpty filtered={Boolean(keyword || status !== "all")} title="暂无公告" />}
+                footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
+            />
 
-            <ListToolbar active={Boolean(keyword || status !== "all")} onReset={() => { setKeyword(""); setStatus("all"); setPage(1); }}>
-                <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                <Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "发布中", value: "active" }, { label: "已关闭", value: "closed" }]} />
-            </ListToolbar>
-            <TableSurface>
-                <Table
-                    className="app-data-table"
-                    size="middle"
-                    rowKey="id"
-                    loading={loading}
-                    columns={columns}
-                    dataSource={announcements}
-                    pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 条`, onChange: (nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); } }}
-                    scroll={{ x: 1020 }}
-                />
-            </TableSurface>
-
-            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={680} centered okText={editingAnnouncement ? "保存并重新发布" : "立即发布"} cancelText="取消" confirmLoading={publishing} onOk={() => void publish()} onCancel={() => { setModalOpen(false); setEditingAnnouncement(null); }} destroyOnHidden>
+            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={760} centered okText={editingAnnouncement ? "保存并重新发布" : "立即发布"} cancelText="取消" confirmLoading={publishing} onOk={() => void publish()} onCancel={() => { setModalOpen(false); setEditingAnnouncement(null); }} destroyOnHidden>
                 <Form form={form} layout="vertical" className="pt-3" requiredMark={false}>
                     <Form.Item name="title" label="公告标题" rules={[{ required: true, whitespace: true, message: "请填写公告标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
                         <Input maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />

@@ -20,6 +20,12 @@ func Models() []any {
 		&model.EmailVerificationCode{},
 		&model.ModelChannel{},
 		&model.ChannelModel{},
+		&model.IDSequence{},
+		&model.LogicalModel{},
+		&model.LogicalModelRevision{},
+		&model.PhysicalCapabilityVariant{},
+		&model.LogicalModelRoute{},
+		&model.RouteAttempt{},
 		&model.ApiCallLog{},
 		&model.ModelPricing{},
 		&model.CreditAccount{},
@@ -81,11 +87,18 @@ func MigrateSchema(db *gorm.DB) error {
 	if err := db.AutoMigrate(Models()...); err != nil {
 		return err
 	}
+	// 为升级前已存在的逻辑模型回填版本序列，避免首次保存时从 0 重新分配。
+	if err := db.Exec(`UPDATE logical_models SET revision_sequence = COALESCE((SELECT MAX(version) FROM logical_model_revisions WHERE logical_model_id = logical_models.id), 0) WHERE revision_sequence = 0`).Error; err != nil {
+		return err
+	}
 	// 逻辑删除后的同名模型允许重新添加，旧唯一索引不能继续覆盖已删除记录。
 	if err := db.Exec("DROP INDEX IF EXISTS idx_channel_model_key").Error; err != nil {
 		return err
 	}
 	if err := db.Exec("DROP INDEX IF EXISTS idx_users_email").Error; err != nil {
+		return err
+	}
+	if err := db.Exec("DROP INDEX IF EXISTS idx_route_attempt_task_number").Error; err != nil {
 		return err
 	}
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error

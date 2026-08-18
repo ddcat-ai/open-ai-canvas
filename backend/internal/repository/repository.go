@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -46,6 +47,37 @@ func New(db *gorm.DB) *Repository {
 
 func (r *Repository) Dialect() string {
 	return r.db.Dialector.Name()
+}
+
+// NextPrefixedID 在数据库事务中递增序列，避免 UUID/父子字符串拼接导致的不可读和不可排序 ID。
+// prefix 只决定展示前缀，关联关系仍由独立外键维护。
+func (r *Repository) NextPrefixedID(prefix string) (string, error) {
+	return r.nextPrefixedID(r.db, prefix)
+}
+
+func (r *Repository) nextPrefixedID(db *gorm.DB, prefix string) (string, error) {
+	prefix = strings.ToUpper(strings.TrimSpace(prefix))
+	if prefix == "" || len(prefix) > 16 {
+		return "", errors.New("invalid id prefix")
+	}
+	sequence := "id:" + prefix
+	var item model.IDSequence
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.IDSequence{Name: sequence, UpdatedAt: time.Now()}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.IDSequence{}).Where("name = ?", sequence).Updates(map[string]any{
+			"value":      gorm.Expr("value + ?", 1),
+			"updated_at": time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+		return tx.First(&item, "name = ?", sequence).Error
+	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s_%06d", prefix, item.Value), nil
 }
 
 func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {

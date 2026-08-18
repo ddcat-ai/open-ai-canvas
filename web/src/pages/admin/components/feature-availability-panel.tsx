@@ -75,7 +75,6 @@ export default function FeatureAvailabilityPanel() {
             <SettingsSectionCard
                 icon={<ToggleLeft className="size-4" />}
                 title="用户功能开放"
-                description="统一控制用户工作台入口、页面访问、渠道能力和积分消费策略。"
                 status={{ label: features ? `${enabledCount}/${featureRows.length} 已开放` : "读取中", color: enabledCount === featureRows.length ? "success" : "default" }}
             >
                 <div className="divide-y divide-border/75">
@@ -87,7 +86,6 @@ export default function FeatureAvailabilityPanel() {
                                     <h3 className="text-sm font-medium">{item.title}</h3>
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
-                                <p className="mt-1 text-xs leading-5 text-foreground/55">{item.description}</p>
                             </div>
                             <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
                         </div>

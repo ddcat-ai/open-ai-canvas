@@ -3,7 +3,7 @@ import { App, Button, Form, Input, Select, Space, Switch, Tag } from "antd";
 import { MailCheck } from "lucide-react";
 
 import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
-import { configuredSecretText, SettingsSectionCard } from "./admin-ui";
+import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
 type EmailFormValues = Omit<EmailSetting, "hasPassword" | "updatedAt">;
 
@@ -47,8 +47,7 @@ export default function EmailSettingsPanel() {
         <SettingsSectionCard
             icon={<MailCheck className="size-4" />}
             title="注册验证邮件"
-            description="通过 SMTP 发送普通用户注册验证码。"
-            status={<Space size={6}><Tag variant="filled" color={setting?.enabled ? "success" : "default"}>{setting?.enabled ? "已启用" : "未启用"}</Tag>{setting?.hasPassword ? <Tag variant="filled" color="blue">{configuredSecretText}</Tag> : null}</Space>}
+            status={<Space size={6}><AdminStatusBadge label={setting?.enabled ? "已启用" : "未启用"} tone={setting?.enabled ? "success" : "neutral"} />{setting?.hasPassword ? <AdminStatusBadge label={configuredSecretText} tone="info" /> : null}</Space>}
             footer={<><span className="text-xs text-foreground/45">SMTP 密码使用服务端密钥加密，接口不回显明文。</span><Button type="primary" loading={saving} onClick={() => void save()}>保存邮件配置</Button></>}
         >
             <Form form={form} layout="vertical" requiredMark={false} disabled={loading}>

@@ -1,10 +1,12 @@
-import { getFeatureAvailability, getSystemChannels, type AuthSessionPayload } from "@/services/api/auth";
+import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
+import { listLogicalModels, type CapabilitySpec, type OptionConstraint, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
-import { CONFIG_STORE_KEY, defaultConfig, normalizeConfigSnapshot, useConfigStore } from "@/stores/use-config-store";
+import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelChannel } from "@/stores/use-config-store";
+import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
 import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "@/services/user-data-sync";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
@@ -41,7 +43,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
             // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
             const initialSystemConfig = {
                 ...defaultConfig,
-                channels: payload.systemChannels || [],
+                channels: managedModelChannels(payload.logicalModels || []),
                 imageModels: undefined,
                 videoModels: undefined,
                 textModels: undefined,
@@ -49,7 +51,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
             };
             useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
         } else {
-            useConfigStore.getState().mergeSystemChannels(payload.systemChannels || []);
+            useConfigStore.getState().mergeSystemChannels(managedModelChannels(payload.logicalModels || []));
         }
         installRemoteUserDataAutoSync();
         if (payload.user?.id) await syncRemoteUserData(payload.user.id);
@@ -60,9 +62,100 @@ export async function applyUserSession(payload: AuthSessionPayload) {
 }
 
 export async function refreshSystemChannels() {
-    // 系统模型由后端统一维护，后台变更后只刷新这一层，避免重跑整套用户数据同步。
-    const payload = await getSystemChannels();
-    useConfigStore.getState().mergeSystemChannels(payload.channels || []);
+    // 创作端只刷新公开前台模型；供应渠道目录仅管理员页面可见。
+    const logicalPayload = await listLogicalModels();
+    useConfigStore.getState().mergeSystemChannels(managedModelChannels(logicalPayload.models || []));
+}
+
+function managedModelChannels(models: PublicLogicalModel[]) {
+    const availableModels = models.filter((item) => item.available);
+    if (!availableModels.length) return [];
+    const managed: ModelChannel = {
+        id: PUBLIC_MODEL_CATALOG_ID,
+        name: "平台模型",
+        baseUrl: "/api",
+        apiKey: "system",
+        apiFormat: "openai",
+        scope: "system",
+        enabled: true,
+        models: availableModels.map((item) => item.id),
+        modelCosts: availableModels.map((item) => ({
+            model: item.id,
+            displayName: item.name,
+            description: item.description,
+            icon: item.icon,
+            capability: item.capability,
+            pricePolicy: item.pricePolicy,
+            billingMode: item.billingMode,
+            unitPriceMicrocredits: item.unitPriceMicrocredits,
+            inputTokenPriceMicrocredits: item.inputPriceMicrocredits,
+            outputTokenPriceMicrocredits: item.outputPriceMicrocredits,
+            cachedTokenPriceMicrocredits: item.cachedPriceMicrocredits,
+            capabilityConfig: projectLogicalCapability(item.capabilitySpec, item.defaultOptions),
+            logicalModelId: item.id,
+            logicalCapabilitySpec: item.capabilitySpec,
+            logicalCapabilityProfiles: item.capabilityProfiles,
+            defaultOptions: item.defaultOptions,
+        })),
+    };
+    return [managed];
+}
+
+function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string, unknown>): ModelCapabilityConfig {
+    const projected = defaultModelCapabilityConfig();
+    if (spec.capability === "image" && projected.image) {
+        projected.image.references.maxImages = spec.inputs?.image?.max ?? 0;
+        projected.image.references.maskSupported = (spec.inputs?.mask?.max ?? 0) > 0;
+        projected.image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
+        projected.image.quality = { supported: false, values: [], default: "auto" };
+        projected.image.transparentBackground = { supported: false, default: false };
+        applyStringOption(spec.options?.size || spec.options?.aspectRatio, defaults.size, (values, initial) => {
+            projected.image!.size = { parameter: "size", values, default: initial, allowCustom: false };
+        });
+        applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {
+            projected.image!.quality = { supported: true, values, default: initial };
+        });
+        projected.image.maxOutputs = maxNumericOption(spec.options?.count, 1);
+        projected.image.transparentBackground = booleanOption(spec.options?.transparentBackground, defaults.transparentBackground);
+    }
+    if (spec.capability === "video" && projected.video) {
+        projected.video.references.minImages = spec.inputs?.image?.min ?? 0;
+        projected.video.references.maxImages = spec.inputs?.image?.max ?? 0;
+        projected.video.references.maxVideos = spec.inputs?.video?.max ?? 0;
+        projected.video.references.maxAudios = spec.inputs?.audio?.max ?? 0;
+        projected.video.operations = spec.operations || [];
+        projected.video.defaultOperation = spec.operations?.[0] || "";
+        const duration = spec.options?.videoSeconds || spec.options?.duration;
+        if (duration?.values?.length) projected.video.duration = { selection: "enum", values: duration.values.map(Number).filter(Number.isFinite), default: Number(defaults.videoSeconds ?? duration.values[0]) };
+        else if (duration?.min !== undefined && duration.max !== undefined) projected.video.duration = { selection: "range", min: duration.min, max: duration.max, step: duration.step || 1, default: Number(defaults.videoSeconds ?? duration.min) };
+        projected.video.ratios = stringValues(spec.options?.size || spec.options?.aspectRatio);
+        projected.video.defaultRatio = String(defaults.size ?? projected.video.ratios[0] ?? "");
+        projected.video.resolutions = stringValues(spec.options?.vquality || spec.options?.resolution);
+        projected.video.defaultResolution = String(defaults.vquality ?? projected.video.resolutions[0] ?? "");
+        projected.video.generateAudio = booleanOption(spec.options?.videoGenerateAudio, defaults.videoGenerateAudio);
+        projected.video.watermark = booleanOption(spec.options?.videoWatermark, defaults.videoWatermark);
+    }
+    return projected;
+}
+
+function applyStringOption(option: OptionConstraint | undefined, fallback: unknown, apply: (values: string[], initial: string) => void) {
+    const values = stringValues(option);
+    if (values.length) apply(values, String(fallback ?? values[0]));
+}
+
+function stringValues(option?: OptionConstraint) {
+    return (option?.values || []).map(String);
+}
+
+function maxNumericOption(option: OptionConstraint | undefined, fallback: number) {
+    if (option?.max !== undefined) return option.max;
+    const values = (option?.values || []).map(Number).filter(Number.isFinite);
+    return values.length ? Math.max(...values) : fallback;
+}
+
+function booleanOption(option: OptionConstraint | undefined, fallback: unknown) {
+    const supported = (option?.values || []).some((value) => value === true || value === "true");
+    return { supported, default: supported && String(fallback) === "true" };
 }
 
 export async function refreshFeatureAvailability() {

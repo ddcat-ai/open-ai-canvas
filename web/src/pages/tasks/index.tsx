@@ -7,7 +7,7 @@ import { ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/compone
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, isGenerationTaskSubmissionUncertain, operationOptions, statusLabel } from "@/lib/generation-task-display";
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
 import { cancelGenerationTask, createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { localDreaminaCancellationCopy, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
@@ -395,7 +395,7 @@ export default function TasksPage() {
                     return;
                 }
                 const requestConfig = resolveModelRequestConfig(effectiveConfig, textModel);
-                const detail = await createAgentSession({ projectId: values.projectId, prompt: values.prompt, config: backendProviderConfig(requestConfig) });
+                const detail = await createAgentSession({ projectId: values.projectId, prompt: values.prompt, config: backendProviderConfig(requestConfig), ...(logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}) });
                 setTasks((items) => [...detail.tasks, ...items]);
             } else {
                 const videoModel = values.model?.trim() || effectiveConfig.videoModel || effectiveConfig.model;
@@ -411,6 +411,7 @@ export default function TasksPage() {
                     prompt: values.prompt,
                     provider: values.operation === "compare_versions" ? "internal-agent" : "openai-compatible",
                     model: values.operation === "compare_versions" ? "version-router" : requestConfig.model,
+					...(values.operation !== "compare_versions" && logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}),
                     input: {
                         source: "tasks-page",
                         mode: values.operation === "compare_versions" ? "workflow" : "video",
@@ -711,32 +712,6 @@ function formatTaskJson(value?: string) {
     } catch {
         return value;
     }
-}
-
-function backendProviderConfig(config: ReturnType<typeof resolveModelRequestConfig>) {
-    return {
-        channelId: config.channelId,
-        apiFormat: config.apiFormat,
-        interfaceType: config.interfaceType,
-        baseUrl: config.baseUrl,
-        apiKey: config.apiKey,
-        secretKey: config.secretKey,
-        model: config.model,
-        size: config.size,
-        quality: config.quality,
-        transparentBackground: config.transparentBackground,
-        count: config.count,
-        videoSeconds: config.videoSeconds,
-        vquality: config.vquality,
-        videoGenerateAudio: config.videoGenerateAudio,
-        videoWatermark: config.videoWatermark,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
-        audioSpeed: config.audioSpeed,
-        audioInstructions: config.audioInstructions,
-        capabilityConfig: modelCapabilityConfigFor(config, config.model),
-        systemPrompt: config.systemPrompt,
-    };
 }
 
 function buildVideoOperationPrompt(operation: string, prompt: string) {

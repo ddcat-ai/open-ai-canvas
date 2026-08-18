@@ -8,7 +8,7 @@ import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-genera
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
-import { resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
+import { modelRequestOptions, resolveCompatibleModel, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -78,6 +78,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         },
         videoOperation: node.metadata?.videoEditOperation,
         videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
+		options: modelRequestOptions({ ...globalConfig, size: node.metadata?.size || globalConfig.size, quality: node.metadata?.quality || globalConfig.quality, count: String(node.metadata?.count || globalConfig.count), videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds, vquality: node.metadata?.vquality || globalConfig.vquality, videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio, videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark, audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice, audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat, audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed }, mode),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));

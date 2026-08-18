@@ -19,6 +19,7 @@
         "@ffmpeg/core": "0.12.10",
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
+        "@lobehub/icons": "5.16.0",
         "@mediapipe/tasks-vision": "^1.0.1",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.6.1",
