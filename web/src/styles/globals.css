@@ -1231,6 +1231,19 @@
         box-shadow: none;
     }
 
+    /* 侧栏折叠后主区四周贴齐视口：取消外壳留白、行间距与卡片圆角，四周无间隙 */
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-main-row {
+        gap: 0;
+    }
+
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-stage {
+        border-radius: 0;
+    }
+
 
     .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
         scrollbar-width: none;
