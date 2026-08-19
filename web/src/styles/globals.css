@@ -408,6 +408,8 @@
 
     --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
 
+    --workspace-card-gap: 4px;       /* 侧边栏与主区卡片之间间隙（组件 token）*/
+
     /* --- Semantic 层（引用 Primitive，随主题切换）--- */
     /* 通用语义色（引用 Primitive neutral 色板）*/
     --bg: var(--color-neutral-0);
@@ -1341,7 +1343,7 @@
 
     .app-workspace-main-row {
         display: flex;
-        gap: var(--workspace-shell-gutter);
+        gap: var(--workspace-card-gap);
         min-height: 0;
         min-width: 0;
         flex: 1 1 auto;
