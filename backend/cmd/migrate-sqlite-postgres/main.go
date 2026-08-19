@@ -260,7 +260,6 @@ func migrations() []tableMigration {
 		migrateTable[model.Announcement]("announcements"),
 		migrateTable[model.UserAnnouncementRead]("user_announcement_reads"),
 		migrateTable[model.Task]("tasks"),
-		migrateTable[model.TaskTextDelta]("task_text_delta"),
 		migrateTable[model.Session]("sessions"),
 		migrateTable[model.Message]("messages"),
 		migrateTable[model.TaskLog]("task_logs"),

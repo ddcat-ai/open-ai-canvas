@@ -85,23 +85,6 @@ export type ProviderTaskQueryResult = {
     billingSettled: boolean;
 };
 
-export type TaskTextDelta = {
-    id: string;
-    taskId: string;
-    sequence: number;
-    content: string;
-    byteCount: number;
-    createdAt: string;
-    expiresAt: string;
-};
-
-export type TaskTextReplay = {
-    deltas: TaskTextDelta[];
-    textDraft?: string;
-    finalText?: string;
-    complete: boolean;
-};
-
 export type AgentSession = {
     id: string;
     projectId?: string;
@@ -383,14 +366,6 @@ const generationTaskSubscriptionService = createGenerationTaskSubscriptionServic
 
 export function subscribeGenerationTasks(ids: readonly string[], listener: (task: GenerationTask) => void) {
     return generationTaskSubscriptionService.subscribe(ids, listener);
-}
-
-export function appendTaskTextDelta(id: string, content: string) {
-    return request<TaskTextDelta>(api.post(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content }));
-}
-
-export function queryTaskTextReplay(id: string, after = 0) {
-    return request<TaskTextReplay>(api.get(`/tasks/${encodeURIComponent(id)}/text-deltas`, { params: { after } }));
 }
 
 export function retryGenerationTask(id: string) {

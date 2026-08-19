@@ -20,10 +20,6 @@ var ErrTaskProviderCancellationConflict = errors.New("task provider cancellation
 
 var ErrTaskStateConflict = errors.New("task state changed concurrently")
 
-var ErrTextReplayQuotaExceeded = errors.New("text replay quota exceeded")
-
-var ErrTextReplayClosed = errors.New("text replay task is closed")
-
 type Repository struct {
 	db *gorm.DB
 }
@@ -564,12 +560,9 @@ func (r *Repository) DeleteSessionDraft(userID string, id string) error {
 			return err
 		}
 		if len(taskIDs) > 0 {
-			if err := tx.Delete(&model.TaskTextDelta{}, "user_id = ? AND task_id IN ?", userID, taskIDs).Error; err != nil {
+			if err := tx.Delete(&model.Message{}, "user_id = ? AND session_id = ?", userID, id).Error; err != nil {
 				return err
 			}
-		}
-		if err := tx.Delete(&model.Message{}, "user_id = ? AND session_id = ?", userID, id).Error; err != nil {
-			return err
 		}
 		return tx.Delete(&model.Session{}, "id = ? AND user_id = ?", id, userID).Error
 	})

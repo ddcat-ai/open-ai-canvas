@@ -372,9 +372,6 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 	if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
 		return err
 	}
-	if err := s.repo.DeleteUserTaskTextDeltas(user.ID); err != nil {
-		return err
-	}
 	// 有资金流水后必须保留用户主体，删除入口改为停用并清除全部登录态。
 	user.Status = model.UserStatusDisabled
 	user.UpdatedAt = time.Now()

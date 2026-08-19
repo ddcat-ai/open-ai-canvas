@@ -245,9 +245,6 @@ func (r *Repository) RetryTaskWithBilling(userID string, taskID string, order *m
 		if updated.RowsAffected != 1 {
 			return ErrTaskNotRetryable
 		}
-		if err := tx.Delete(&model.TaskTextDelta{}, "user_id = ? AND task_id = ?", userID, taskID).Error; err != nil {
-			return err
-		}
 		return tx.First(&task, "id = ? AND user_id = ?", taskID, userID).Error
 	})
 	return &task, err
