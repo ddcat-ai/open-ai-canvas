@@ -1335,21 +1335,12 @@
         position: relative;
         z-index: var(--z-toolbar);
         height: 44px;
-        margin: 8px 10px;
-        border: 1px solid color-mix(in srgb, var(--foreground) 5%, transparent);
-        border-radius: var(--r-lg);
-        background: var(--workspace-surface-strong);
-        box-shadow:
-            0 6px 18px color-mix(in srgb, var(--foreground) 6%, transparent),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
-    }
-
-    .dark .app-workspace-topbar {
-        box-shadow:
-            0 6px 18px rgba(0, 0, 0, 0.4),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
     }
 
     .app-workspace-topbar-icon-button {
