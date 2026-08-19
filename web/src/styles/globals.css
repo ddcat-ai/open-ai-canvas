@@ -3735,6 +3735,40 @@
         padding-inline: 0;
     }
 
+    /* 技能中心 hero：GalleryGridBlock 式标题区——徽章 + 大标题 + 描述居中，背景点阵 + 双光斑，底部淡出到页面背景。仅技能页。 */
+    .skills-hero { position: relative; overflow: hidden; margin-top: 4px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 2%, transparent); }
+    .skills-hero::before { position: absolute; inset: 0; background-image: radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 42%), radial-gradient(circle at 84% 8%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 40%), radial-gradient(circle at 50% 130%, color-mix(in srgb, var(--foreground) 10%, transparent), transparent 46%), radial-gradient(circle, color-mix(in srgb, var(--foreground) 4.5%, transparent) 1px, transparent 1.6px); background-size: 100% 100%, 100% 100%, 100% 100%, 22px 22px; content: ""; pointer-events: none; }
+    .skills-hero::after { position: absolute; right: 0; bottom: 0; left: 0; height: 40px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--workspace-content) 92%, transparent)); content: ""; pointer-events: none; }
+    .skills-hero-inner { position: relative; display: flex; min-height: 128px; flex-direction: column; align-items: center; justify-content: center; padding: 20px 24px 24px; text-align: center; }
+    .skills-hero-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 4px 12px; color: var(--primary); font-size: var(--fs-caption); font-weight: 560; line-height: 1.4; }
+    .skills-hero-badge svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .skills-hero-title { color: var(--foreground); font-size: var(--fs-display); font-weight: 720; letter-spacing: -0.02em; line-height: 1.15; }
+    .skills-hero-description { margin-top: 6px; max-width: 460px; color: color-mix(in srgb, var(--foreground) 56%, transparent); font-size: var(--fs-body); line-height: 1.6; }
+    .skills-hero-meta { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 4px 12px; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+    /* 移动端收窄 hero 高度，避免抢占首屏。 */
+    @media (max-width: 640px) { .skills-hero-inner { min-height: 112px; padding: 16px 18px 20px; } .skills-hero-title { font-size: var(--fs-title); } }
+
+    /* 技能页工具栏与 hero 圆角容器之间留出小间隙（共享 .library-toolbar 的 margin-top 8px 会被 Tailwind mt-7 覆盖，故用更高特异性局部类固定 20px）。 */
+    .library-toolbar.skills-toolbar { margin-top: 20px; }
+    /* 技能中心 scope 切换：shadcn TabsList 语言——底托 + 激活胶囊，图标 + 计数徽章；内容区切换淡入上移。 */
+    .skills-tabs { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; max-width: 100%; align-items: center; gap: 2px; overflow-x: auto; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 5%, transparent); padding: 4px; }
+    /* tab 按钮须为定位元素（DOM 顺序在指示器之后）以渲染在胶囊之上，否则 absolute 指示器会遮住文字与图标。 */
+    .skills-tab { position: relative; display: inline-flex; height: 32px; flex: 0 0 auto; align-items: center; gap: 5px; border: 0; border-radius: var(--r-lg); background: transparent; padding-inline: 10px; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-body); font-weight: 520; transition: color 160ms ease-out; }
+    .skills-tab:hover { color: color-mix(in srgb, var(--foreground) 76%, transparent); }
+    .skills-tab.is-active { color: var(--foreground); font-weight: 560; }
+    .skills-tabs-indicator { position: absolute; top: 4px; bottom: 4px; left: 0; border-radius: var(--r-lg); background: var(--workspace-content); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: left 300ms cubic-bezier(0.16, 1, 0.3, 1), width 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+    /* 深主题：激活胶囊须亮于底托（--workspace-content 在深色下与页面底色相同，会形成黑块），用白色叠加提亮，白字在亮灰胶囊上保持可读。 */
+    .dark .skills-tabs-indicator { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .skills-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+    .skills-tab svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .skills-tab-count { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 9%, transparent); padding-inline: 5px; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; line-height: 1; }
+    /* 激活徽章用实底 primary + primary-foreground：明暗主题均为一对已定义的前景/背景组合，避免深主题下浅底亮字对比不足。 */
+    .skills-tab.is-active .skills-tab-count { background: var(--primary); color: var(--primary-foreground); }
+    @keyframes skills-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .skills-scope-panel { animation: skills-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .skill-group-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+    .skill-group-icon svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
     .canvas-library-page .studio-band .canvas-library-discovery {
         border: 0;
         border-radius: 0;
@@ -3932,19 +3966,25 @@
     .library-primary-action { border: 0 !important; border-radius: var(--r-md) !important; background: var(--btn-solid-bg) !important; color: var(--btn-solid-fg) !important; box-shadow: none !important; font-weight: 620; }
     .library-toolbar { min-height: 50px; margin-top: 8px; border-bottom: 0; padding: 7px 0 10px; }
     .library-toolbar .ant-input-affix-wrapper,
+    .library-toolbar .ant-select,
+    .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
     .library-toolbar .ant-select-selector,
     .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar .ant-select-selector { border-radius: var(--r-md) !important; }
-    .library-toolbar .ant-segmented { border-radius: var(--r-md); }
+    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-xl) !important; height: 40px; padding: 4px 10px; }
+    /* 搜索框作为与 tab 容器同构的圆角容器：外壳 12px 圆角 + 浅底 + 内边距，内部输入区透明融入。 */
+    .library-toolbar .ant-input-affix-wrapper .ant-input { border: 0; background: transparent; box-shadow: none; }
+    /* AntD v6 单选 Select 的边框/圆角/背景/高度全部在 .ant-select 根元素上（.ant-select-selector 类已不存在），覆盖必须命中根元素并带 !important。 */
+    .library-toolbar .ant-select { border-radius: var(--r-xl) !important; display: flex; height: 40px !important; align-items: center !important; padding-inline: 10px !important; }
+    /* tab 切换后搜索框输入与下拉选中文字与 tab 激活态（--foreground）同色；占位符与图标维持各自 token 不变。 */
+    .library-toolbar .ant-input,
+    .library-toolbar .ant-select { color: var(--foreground) !important; }
+    .library-toolbar .ant-segmented { border-radius: var(--r-xl); }
     .library-toolbar .ant-btn { border: 0; background: transparent; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .library-toolbar .ant-btn:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
-    .library-toolbar-controls .ant-input-affix-wrapper,
-    .library-toolbar-controls .ant-select-selector { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar-controls .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar-controls .ant-select-selector { border-radius: var(--r-md) !important; }
     .library-grid { display: grid; align-items: start; gap: 26px 18px; }
     .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    /* 库页图标瓦片共享基础：grid 居中 + 浅底；尺寸/圆角/颜色由各用例类覆盖（skill-card-icon、wallet-balance-icon、suggest-icon 共用）。 */
+    .library-icon-tile { display: grid; flex: 0 0 auto; place-items: center; background: var(--library-icon-surface); }
     .library-card-surface { background: var(--library-surface); box-shadow: none; }
     .library-card-surface:hover, .library-card-surface:focus-within { background: var(--library-surface-hover); box-shadow: none; }
     .library-card-surface.is-selected { box-shadow: inset 0 0 0 1px var(--library-selected-stroke); }
@@ -3960,7 +4000,7 @@
     .library-create-title { margin-top: 15px; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.3; }
     .library-create-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
     /* 技能网格里的创建卡要和技能卡等高，不然首格会短一截。 */
-    .skill-library-grid .library-create-card { justify-content: center; min-height: 218px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
+    .skill-library-grid .library-create-card { justify-content: center; min-height: 260px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
     .skill-library-grid .library-create-cover { aspect-ratio: auto; min-height: 96px; flex: 1 1 auto; border-radius: var(--r-lg); }
     .skill-library-grid .library-create-title { margin-top: 13px; font-size: var(--fs-body-lg); }
 
@@ -4311,31 +4351,39 @@
     }
 
     /* 技能卡与其他作品库卡片共用无框表面，仅选中态显示状态描边。 */
-    .skill-library-card { display: flex; min-height: 218px; flex-direction: column; border-radius: var(--r-xl); padding: 16px 16px 14px; }
+    .skill-library-card { display: flex; min-height: 260px; flex-direction: column; padding: 16px 16px 14px; animation: skill-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+    /* 画廊入场：切换 scope/翻页时卡片依次淡入上浮（stagger 由内联 animation-delay 控制），入场后保持 transform 复位以免影响 hover。 */
+    @keyframes skill-card-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .skill-card-icon { width: 48px; height: 48px; margin-bottom: 12px; border-radius: var(--r-lg); color: color-mix(in srgb, var(--foreground) 64%, transparent); transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out, transform var(--motion-state) ease-out; transform: translateY(0); }
+    .skill-card-icon svg { width: 22px; height: 22px; stroke-width: 1.8; }
+    .skill-library-card:hover .skill-card-icon, .skill-library-card:focus-within .skill-card-icon { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); transform: translateY(-2px); }
     .skill-card-top { display: flex; min-height: 0; align-items: flex-start; gap: 8px; }
     .skill-card-title-button { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; padding: 0; color: inherit; text-align: left; }
     .skill-card-title-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-library-card h3 { display: -webkit-box; overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .skill-library-card h3 { overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-more { display: inline-flex; width: 28px; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; margin: -3px -5px 0 0; border: 0; border-radius: var(--r-sm); background: transparent; color: color-mix(in srgb, var(--foreground) 40%, transparent); opacity: 0; transition: opacity 180ms ease-out, background-color 160ms ease-out; }
     .skill-library-card:hover .skill-card-more, .skill-card-more:focus-visible, .skill-library-card:focus-within .skill-card-more { opacity: 1; }
     .skill-card-more:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
     .skill-card-description { min-height: 0; flex: 1 1 auto; margin-top: 8px; border: 0; background: transparent; padding: 0; text-align: left; }
     .skill-card-description:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
     .skill-card-footer { display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 12px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); }
     .skill-card-like { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: inherit; font-variant-numeric: tabular-nums; transition: color 160ms ease-out; }
     .skill-card-like:hover { color: var(--foreground); }
     .skill-card-like:disabled { cursor: wait; }
-    .skill-card-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-author { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-tag { flex: 0 0 auto; max-width: 76px; overflow: hidden; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 7%, transparent); padding: 2px 7px; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-flag { margin-left: auto; flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .skill-card-action { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
-    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 34%, transparent); border-radius: var(--r-md); background: transparent; padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: border-color 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out; }
+    /* 加入按钮：无边框浅底（与 tab/搜索容器同语言），is-added 态弱化表达已加入。 */
+    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: background-color 160ms ease-out, color 160ms ease-out; }
     .skill-card-join svg { color: currentColor; }
-    .skill-card-join:hover { border-color: color-mix(in srgb, var(--foreground) 58%, transparent); background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .skill-card-join:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); color: var(--foreground); }
     .skill-card-join:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
     .skill-card-join:disabled { cursor: wait; opacity: .6; }
-    .skill-card-join.is-added { border-color: color-mix(in srgb, var(--foreground) 18%, transparent); background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
-    .skill-card-join.is-added:hover { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
+    .skill-card-join.is-added { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
+    .skill-card-join.is-added:hover { background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
     .skill-card-added-count { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
     .skill-card-owner-flag { flex: 1 1 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); }
 
@@ -4351,7 +4399,7 @@
     .wallet-balance-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
     .wallet-balance-heading strong { font-size: var(--fs-caption); font-weight: 600; }
     .wallet-balance-heading div > span { overflow: hidden; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); text-overflow: ellipsis; white-space: nowrap; }
-    .wallet-balance-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: var(--library-icon-surface); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
+    .wallet-balance-icon { width: 36px; height: 36px; border-radius: var(--r-md); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
     .wallet-balance-icon svg { width: 17px; height: 17px; }
     .wallet-balance-number { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 28px; }
     .wallet-balance-number strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-display); font-variant-numeric: tabular-nums; font-weight: 620; line-height: 1; }
@@ -4506,13 +4554,16 @@
         white-space: nowrap;
     }
 
-    .app-pagination-bar .ant-pagination {
-        display: flex;
-        min-width: 0;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: var(--space-1) 0;
-    }
+    /* 自研分页：页码胶囊 28px、r-md 圆角、无边框、hover 浅底、激活实底胶囊。选中用“普通选中”色角色（workspace-content 实底 + foreground 文字，与 skills-tabs 激活胶囊同语言），不占用 primary（主操作按钮专属）。 */
+    .app-pagination-total { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .app-pagination-size.ant-select { display: flex; height: 28px !important; align-items: center !important; border-radius: var(--r-md) !important; padding-inline: 8px !important; }
+    .app-pagination-pages { display: inline-flex; align-items: center; gap: 2px; }
+    .app-pagination-btn { display: inline-flex; height: 28px; min-width: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--r-md); background: transparent; padding-inline: 6px; color: color-mix(in srgb, var(--foreground) 62%, transparent); font-size: var(--fs-body); line-height: 1; font-variant-numeric: tabular-nums; transition: background-color 160ms ease-out, color 160ms ease-out; }
+    .app-pagination-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .app-pagination-btn.is-active, .app-pagination-btn.is-active:hover { background: var(--workspace-content); color: var(--foreground); }
+    .dark .app-pagination-btn.is-active, .dark .app-pagination-btn.is-active:hover { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .app-pagination-btn:disabled { color: color-mix(in srgb, var(--foreground) 30%, transparent); cursor: not-allowed; }
+    .app-pagination-ellipsis { display: inline-flex; height: 28px; min-width: 16px; align-items: center; justify-content: center; color: color-mix(in srgb, var(--foreground) 30%, transparent); font-size: var(--fs-body); }
 
     :where(.ant-modal-content, .ant-drawer-content) {
         border: 1px solid var(--border);
@@ -9781,13 +9832,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .creation-empty-suggest .suggest-icon {
-    display: grid;
     width: 36px;
     height: 36px;
-    flex: 0 0 auto;
-    place-items: center;
     border-radius: var(--r-sm);
-    background: var(--library-icon-surface);
     color: color-mix(in srgb, var(--creation-text) 82%, transparent);
 }
 
