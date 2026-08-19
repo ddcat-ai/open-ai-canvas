@@ -918,15 +918,6 @@
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
 
-    .app-workspace-shell.is-spatial {
-        position: relative;
-        gap: 0;
-        padding: 0;
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-main-row {
-        gap: 0;
-    }
 
     .app-workspace-sidebar-scrim {
         position: absolute;
@@ -937,20 +928,6 @@
         backdrop-filter: blur(2px);
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-sidebar {
-        width: var(--workspace-sidebar-width, 260px) !important;
-        border: 0;
-        border-right: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-        border-radius: 0;
-        background: var(--workspace-sidebar);
-        box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-    }
-
-    .dark .app-workspace-shell.is-spatial .app-workspace-sidebar {
-        box-shadow: none;
-    }
 
     /* 侧栏导航子项展开引导线：替代每组子项自行维护的分割线 */
     .app-workspace-nav-guide-line {
@@ -1087,12 +1064,6 @@
     }
 
 
-    .app-workspace-shell.is-spatial .app-workspace-stage {
-        border: 0;
-        border-radius: 0;
-        box-shadow: none;
-        background: var(--workspace-content);
-    }
 
     /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */
     .app-spatial-workspace .app-workspace-scroll {
@@ -1182,14 +1153,6 @@
     }
 
     @media (max-width: 639px) {
-        .app-workspace-shell.is-spatial {
-            gap: 0;
-            padding: 0;
-        }
-
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 0;
-        }
 
         /* 窄屏下侧栏常驻，收缩到图标主轨，避免遮挡主内容 */
         .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
@@ -1229,6 +1192,17 @@
         background: var(--workspace-page);
     }
 
+    /* 画布编辑器与运营后台（hideChrome 契约）：保持全屏连体，不套圆角卡片 */
+    .app-workspace-shell:not(.is-spatial) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:not(.is-spatial) .app-workspace-stage {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
     .app-workspace-sidebar {
         width: var(--workspace-sidebar-width, 260px);
         border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
@@ -1252,14 +1226,6 @@
         box-shadow: none;
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-sidebar {
-        border-right: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
-        width: 0 !important;
-        border-right: 0;
-    }
 
     .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
         scrollbar-width: none;
@@ -1368,13 +1334,13 @@
     .app-workspace-topbar {
         position: relative;
         z-index: var(--z-toolbar);
-        height: var(--page-topbar-h);
+        height: 48px;
         margin: 10px 12px;
-        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        border: 1px solid color-mix(in srgb, var(--foreground) 5%, transparent);
         border-radius: var(--r-lg);
         background: var(--workspace-surface-strong);
         box-shadow:
-            0 8px 24px color-mix(in srgb, var(--foreground) 8%, transparent),
+            0 6px 18px color-mix(in srgb, var(--foreground) 6%, transparent),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
@@ -1382,7 +1348,7 @@
 
     .dark .app-workspace-topbar {
         box-shadow:
-            0 8px 24px rgba(0, 0, 0, 0.45),
+            0 6px 18px rgba(0, 0, 0, 0.4),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
     }
 
@@ -3257,18 +3223,6 @@
         .creation-user-message { max-width: 82%; }
     }
 
-    @media (min-width: 1024px) {
-        .app-workspace-shell.is-spatial {
-            gap: 0;
-            padding: 0;
-            background: var(--workspace-canvas);
-        }
-
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 0;
-            background: transparent;
-        }
-    }
 
     @media (max-width: 800px) {
         .creation-new-button {
