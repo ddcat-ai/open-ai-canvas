@@ -146,7 +146,7 @@ export default function WalletPage() {
                         <div className="wallet-balance-inner">
                             <div className="wallet-balance-primary">
                                 <div className="wallet-balance-heading">
-                                    <span className="wallet-balance-icon"><Coins /></span>
+                                    <span className="library-icon-tile wallet-balance-icon"><Coins /></span>
                                     <div><strong>可用创作积分</strong><span>最近更新 {formatTime(account?.updatedAt)}</span></div>
                                 </div>
                                 <div className="wallet-balance-number">
