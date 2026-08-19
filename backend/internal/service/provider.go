@@ -3054,12 +3054,11 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		return
 	}
 	status := model.ApiCallStatusSucceeded
+	errorCode := ""
 	errorText := ""
 	if requestErr != nil || statusCode < 200 || statusCode >= 300 {
 		status = model.ApiCallStatusFailed
-		if requestErr != nil {
-			errorText = safeProviderLogError(requestErr)
-		}
+		errorCode, errorText = providerRequestErrorDetails(requestErr)
 	}
 	requestKind := providerRequestKind(req.Method, req.URL.Path)
 	if metadata.RequestKind != "" {
@@ -3075,7 +3074,7 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		RequestKind: requestKind, Billable: req.Method == http.MethodPost && requestKind != "cancel",
 		APIFormat: apiFormat, Method: req.Method, Path: req.URL.Path, Model: metadata.Model,
 		Status: status, StatusCode: statusCode, DurationMs: time.Since(startedAt).Milliseconds(),
-		Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
+		ErrorCode: errorCode, Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
 		ProviderRequestID: metadata.ProviderRequestID, RequestContentType: req.Header.Get("Content-Type"), RequestBody: requestPayloadForLog(req), ResponseBody: SanitizeAPICallPayload(responseBody, ""),
 	}
 	channelSlotFailure := false
@@ -3100,6 +3099,19 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 			_ = metadata.Service.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对")
 		}
 	}
+}
+
+func providerRequestErrorDetails(err error) (string, string) {
+	if err == nil {
+		return "", ""
+	}
+	if errors.Is(err, context.Canceled) {
+		return "request_cancelled", "任务取消，中断上游请求"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "upstream_timeout", "等待上游响应超时"
+	}
+	return "", safeProviderLogError(err)
 }
 
 func safeProviderLogError(err error) string {

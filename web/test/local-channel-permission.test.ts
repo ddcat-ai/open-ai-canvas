@@ -120,4 +120,12 @@ describe("允许本机渠道前端请求合同", () => {
         setLocalChannelRuntime(true, "localhost");
         expect(channelRequest(config, "http://127.0.0.1:8000/v1/responses").headers["x-canvas-allow-local-channel"]).toBe("1");
     });
+
+    test("非法自定义渠道 Base URL 返回可读错误，而不是原生 URL 异常", () => {
+        expect(() => channelRequest({ baseUrl: "api.example.com/v1", apiKey: "key", apiFormat: "openai" }, "api.example.com/v1/images/generations")).toThrow("当前模型渠道 Base URL 无效");
+    });
+
+    test("非法上游请求地址返回可读错误", () => {
+        expect(() => channelRequest({ baseUrl: "https://api.example.com/v1", apiKey: "key", apiFormat: "openai" }, "api.example.com/v1/images/generations")).toThrow("当前模型请求地址 无效");
+    });
 });

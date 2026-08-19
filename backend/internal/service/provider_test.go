@@ -21,6 +21,27 @@ import (
 const testReferenceImageDataURL = "data:image/png;base64,aGVsbG8="
 const testGeminiReferenceImageDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
+func TestProviderRequestErrorDetails(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+		text string
+	}{
+		{name: "cancelled", err: context.Canceled, code: "request_cancelled", text: "任务取消，中断上游请求"},
+		{name: "timeout", err: context.DeadlineExceeded, code: "upstream_timeout", text: "等待上游响应超时"},
+		{name: "network error", err: errors.New("dial tcp: connection refused"), text: "dial tcp: connection refused"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, text := providerRequestErrorDetails(tt.err)
+			if code != tt.code || text != tt.text {
+				t.Fatalf("providerRequestErrorDetails() = (%q, %q), want (%q, %q)", code, text, tt.code, tt.text)
+			}
+		})
+	}
+}
+
 func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
