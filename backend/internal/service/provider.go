@@ -920,10 +920,11 @@ func volcengineArkImageDataURLs(ctx context.Context, config providerConfig, payl
 
 func volcengineArkImageBody(input canvasGenerationInput) (map[string]interface{}, error) {
 	body := map[string]interface{}{
-		"model":     input.Config.Model,
-		"prompt":    withSystemPrompt(input.Config, input.Prompt),
-		"n":         1,
-		"watermark": false,
+		"model":           input.Config.Model,
+		"prompt":          withSystemPrompt(input.Config, input.Prompt),
+		"n":               1,
+		"response_format": "b64_json",
+		"watermark":       false,
 	}
 	if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
 		if key == "size" {

@@ -154,6 +154,9 @@ func TestVolcengineArkImageBodyUsesJSONReferencesAndDownscalesSize(t *testing.T)
 	if watermark, ok := body["watermark"].(bool); !ok || watermark {
 		t.Fatalf("watermark = %#v, want false", body["watermark"])
 	}
+	if responseFormat, _ := body["response_format"].(string); responseFormat != "b64_json" {
+		t.Fatalf("response_format = %#v, want b64_json", body["response_format"])
+	}
 	size, _ := body["size"].(string)
 	parts := strings.Split(size, "x")
 	if len(parts) != 2 {

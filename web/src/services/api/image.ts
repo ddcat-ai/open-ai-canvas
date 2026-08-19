@@ -913,6 +913,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
+                  response_format: "b64_json",
                   watermark: false,
                   ...(normalizedRequestSize ? { [normalizedRequestSize.parameter]: normalizedRequestSize.value } : {}),
               }
@@ -1008,6 +1009,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     n,
+                    response_format: "b64_json",
                     watermark: false,
                     ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
                     ...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
