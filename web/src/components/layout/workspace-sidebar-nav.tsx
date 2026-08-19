@@ -368,6 +368,9 @@ export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: 
                 >
                     <Search className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground/70" strokeWidth={1.6} />
                     <span className="flex-1 truncate">快速搜索</span>
+                    <kbd className="flex h-5 shrink-0 items-center justify-center rounded-sm border border-[var(--workspace-border)] bg-background/50 px-1.5 font-mono text-[var(--fs-tiny)] font-medium text-foreground/55">
+                        ⌘K
+                    </kbd>
                 </button>
             </div>
 
