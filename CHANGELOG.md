@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.1.3
+
 - 修复系统文本模型中转先读取完整响应才返回的问题，恢复 OpenAI Responses、Chat Completions 与 Gemini 的 SSE 增量输出，并补齐多层 Nginx 的禁缓冲信号传递。
 - 火山方舟 Seedream 图片生成显式关闭“AI 生成”水印，并要求生成响应直接返回 Base64 后写入服务器或对象存储，避免为持久化结果再次请求方舟 CDN；中转服务忽略返回格式时仍保留 URL 下载兼容。
 - 项目开源协议由 AGPL-3.0 调整为 MIT，保留上游及项目贡献者版权声明。
