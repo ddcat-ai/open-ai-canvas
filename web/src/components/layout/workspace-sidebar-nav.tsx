@@ -308,11 +308,11 @@ export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: 
                 <button
                     type="button"
                     onClick={onOpenSearch}
-                    className="group flex h-9 w-full items-center gap-2 rounded-[var(--r-lg)] bg-foreground/5 px-3 text-left text-[var(--fs-caption)] text-foreground/30 transition-colors hover:bg-foreground/[.07] hover:text-foreground/55"
+                    className="group flex h-9 w-full items-center gap-2 rounded-[var(--r-lg)] bg-foreground/5 px-3 text-left text-[var(--fs-caption)] text-foreground/45 transition-colors hover:bg-foreground/[.07] hover:text-foreground/70"
                 >
                     <Search className="size-4 shrink-0 text-foreground/45 group-hover:text-foreground/70" strokeWidth={1.6} />
                     <span className="flex-1 truncate">快速搜索</span>
-                    <kbd className="flex h-5 shrink-0 items-center justify-center rounded-sm border border-[var(--workspace-border)] bg-background/60 px-1.5 font-mono text-[var(--fs-tiny)] font-medium text-foreground/45">⌘K</kbd>
+                    <span className="flex-1 truncate">快速搜索</span>
                 </button>
             </div>
 
