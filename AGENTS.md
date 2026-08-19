@@ -90,7 +90,7 @@
 - 后端 JSON 不得因为“方便”改用裸 `fetch`；若确需例外，必须在所属 service 写清响应合同、状态检查和错误转换。
 - 资源 URL 使用 `resource:<id>` storage key；资源文件下载和 OSS URL 解析统一通过 `services/api/resources.ts`，不要在组件里直接拼接 `/resources/...`。
 - 文本 SSE 合同是 `GET /api/tasks/:id/text-events`，事件包含 `delta` 和终态 `terminal`；游标是单调递增事件 `id`，断线恢复使用 `Last-Event-ID` 或 `?after=`，不能把任务 ID 当游标。
-- SSE 只对该路径关闭代理缓冲、缓存和 gzip；不得把长超时和 `proxy_buffering off` 复制到所有 `/api/` 请求。
+- SSE 只对文本任务事件路径和系统模型的 `responses`、`chat/completions`、Gemini `:streamGenerateContent` 路径关闭代理缓冲、缓存和 gzip；自定义渠道仅透传后端按响应类型设置的 `X-Accel-Buffering`。不得把长超时和 `proxy_buffering off` 复制到所有 `/api/` 请求。
 - blob 下载、图片/视频生成结果和 OSS 私有资源不得把敏感 URL、Cookie、API Key 写入日志、localStorage 或错误上报。
 
 ### 4.4 后端响应、权限和安全合同
@@ -169,7 +169,7 @@
 - 默认不启动 dev server；只有用户明确要求浏览器预览或联调时才启动，并先确认端口和数据目录。
 - Docker 部署只对外暴露网页容器 `3000`；后端 `8080` 留在 Compose 网络内。健康检查只能证明入口可用，不能替代 SSE/登录/生成路径验证。
 - 生产必须设置明确的 `CANVAS_CORS_ORIGINS`，保持公开注册关闭，HTTPS 终止后保留 Host、X-Forwarded-*，并限制数据库、备份、数据目录和 `.settings-key` 权限。
-- Nginx/Caddy 只对 `/api/tasks/<id>/text-events` 配置 SSE 的 flush、长超时、禁缓冲和禁缓存，不把这套配置复制给所有接口。
+- Nginx/Caddy 只对文本任务和明确的系统模型事件流路径配置 flush、长超时、禁缓冲和禁缓存；自定义渠道依赖响应头动态关闭缓冲，不把这套配置复制给所有接口。
 
 ## 9. 验证纪律
 
