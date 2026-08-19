@@ -142,6 +142,13 @@ export type CanvasSkillSnapshot = {
 };
 
 export type CanvasNodeMetadata = {
+    importSource?: {
+        provider: "tapnow";
+        shareId: string;
+        nodeId: string;
+        batchId: string;
+        sourceType?: string;
+    };
     content?: string;
     richText?: Record<string, unknown>;
     composerContent?: string;
