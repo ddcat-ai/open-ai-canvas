@@ -1,7 +1,8 @@
 .next/
 out/
 node_modules/
-docs/
+docs/*
+!docs/design/
 .env*
 !.env.example
 data/
