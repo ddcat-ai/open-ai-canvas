@@ -44,7 +44,6 @@ function buildNav(features: FeatureAvailability, balance: string): { groups: Wor
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { id: "search", title: "搜索", icon: Search, shortcut: "⌘K", action: "search" },
                 { id: "home", title: "首页", icon: Home, to: "/home" },
                 toolItem("create", "/create"),
                 ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
@@ -304,6 +303,18 @@ export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: 
     return (
         <div className="flex h-full w-[var(--workspace-sidebar-nav-width)] shrink-0 flex-col">
             <WorkspaceSwitcher onNavigate={onNavigate} />
+
+            <div className="shrink-0 px-3 pb-1 pt-2">
+                <button
+                    type="button"
+                    onClick={onOpenSearch}
+                    className="group flex h-9 w-full items-center gap-2 rounded-[var(--r-sm)] border border-[var(--workspace-border)] bg-foreground/5 px-3 text-left text-[var(--fs-caption)] text-foreground/42 transition-colors hover:border-[var(--workspace-border-strong)] hover:text-foreground/70"
+                >
+                    <Search className="size-4 shrink-0" strokeWidth={1.6} />
+                    <span className="flex-1 truncate">Quick search</span>
+                    <kbd className="flex h-5 shrink-0 items-center justify-center rounded-sm border border-[var(--workspace-border)] bg-background/60 px-1.5 font-mono text-[var(--fs-tiny)] font-medium text-foreground/50">⌘K</kbd>
+                </button>
+            </div>
 
             <div
                 ref={scrollRef}
