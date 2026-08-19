@@ -344,7 +344,7 @@ export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: 
                 ))}
             </div>
 
-            <div className="app-workspace-sidebar-footer shrink-0 border-t border-[var(--workspace-border)] px-3 py-3">
+            <div className="app-workspace-sidebar-footer shrink-0 rounded-b-[var(--r-xl)] bg-foreground/[.04] px-3 py-3">
                 <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
                         <NavItem
