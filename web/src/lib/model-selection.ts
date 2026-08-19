@@ -1,4 +1,4 @@
-import { defaultImageCapabilityConfig, modelCapabilityConfigFor, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, modelCapabilityConfigFor, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
@@ -133,19 +133,26 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
     for (const [name, value] of Object.entries(options)) {
         if (value === undefined || value === null || value === "") continue;
         const constraint = spec.options?.[name];
-        if (!constraint || !logicalOptionMatches(constraint, value)) return logicalOptionError(name);
+        if (!constraint || !logicalOptionMatches(name, constraint, value)) return logicalOptionError(name);
     }
     return "";
 }
 
-function logicalOptionMatches(constraint: { values?: unknown[]; min?: number; max?: number; step?: number }, value: unknown) {
-    if (constraint.values?.length) return constraint.values.some((candidate) => String(candidate).toLowerCase() === String(value).toLowerCase());
+function logicalOptionMatches(name: string, constraint: { values?: unknown[]; min?: number; max?: number; step?: number }, value: unknown) {
+    if (constraint.values?.length) return constraint.values.some((candidate) => logicalOptionValueMatches(name, candidate, value));
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return false;
     if (constraint.min !== undefined && numeric < constraint.min) return false;
     if (constraint.max !== undefined && numeric > constraint.max) return false;
     if (constraint.step !== undefined && constraint.min !== undefined) return Math.abs((numeric - constraint.min) / constraint.step - Math.round((numeric - constraint.min) / constraint.step)) < 1e-9;
     return true;
+}
+
+function logicalOptionValueMatches(name: string, candidate: unknown, value: unknown) {
+    const left = String(candidate).trim().toLowerCase();
+    const right = String(value).trim().toLowerCase();
+    if (name === "vquality" || name === "resolution") return left.replace(/p$/, "") === right.replace(/p$/, "");
+    return left === right;
 }
 
 function logicalOptionError(name: string) {
@@ -196,17 +203,21 @@ export function mergedImageCapabilityConfig(config: AiConfig, selected: string):
     const selectedProfile = modelCapabilityConfigFor(config, selected).image;
     const profiles = models.map((model) => modelCapabilityConfigFor(config, model).image).filter((profile): profile is ImageCapabilityConfig => Boolean(profile));
     if (profiles.length <= 1) return selectedProfile || defaultImageCapabilityConfig();
-    const values = Array.from(new Set(profiles.flatMap((profile) => profile.size.values)));
+    const concreteValues = Array.from(new Set(profiles.flatMap((profile) => profile.size.values).filter((value) => value !== "*")));
+    const allowCustom = profiles.some((profile) => profile.size.allowCustom || profile.size.values.includes("*"));
+    const values = concreteValues.length ? concreteValues : allowCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
     const base = selectedProfile || profiles[0];
-    return { ...base, size: { ...base.size, values } };
+    return { ...base, size: { ...base.size, values, allowCustom } };
 }
 
 // 切换模型后初始化图片参数为该模型能力默认值，避免旧参数在目标模型族不兼容导致无法切换。
 export function defaultImageParamsForModel(config: AiConfig, model: string): Pick<AiConfig, "size" | "quality" | "transparentBackground"> {
     const image = modelCapabilityConfigFor(config, model).image;
     if (!image) return { size: "1:1", quality: "auto", transparentBackground: "false" };
+    const sizeValues = image.size.values.filter((value) => value !== "*");
+    const sizeDefault = image.size.default !== "*" && image.size.default ? image.size.default : sizeValues[0] || "1:1";
     return {
-        size: image.size.default || image.size.values[0] || "1:1",
+        size: sizeDefault,
         quality: image.quality.default || "auto",
         transparentBackground: String(image.transparentBackground.default ?? false),
     };

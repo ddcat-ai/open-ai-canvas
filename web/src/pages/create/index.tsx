@@ -196,7 +196,12 @@ export default function CreatePage() {
 
     useEffect(() => {
         if (mode !== "image") return;
-        const normalized = normalizeImageValue(imageProfile, { size: ratio, quality, count });
+        // 前台逻辑模型的默认参数优先于旧的全局创作参数；否则旧的合法值会一直覆盖后台刚配置的默认值。
+        const normalized = normalizeImageValue(imageProfile, {
+            size: imageProfile.size.default,
+            quality: imageProfile.quality.default,
+            count,
+        });
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setCount(normalized.count);
@@ -204,7 +209,12 @@ export default function CreatePage() {
 
     useEffect(() => {
         if (mode !== "video") return;
-        const normalized = normalizeVideoValue(videoProfile, { seconds, ratio, resolution: `${videoQuality}p` });
+        // 前台逻辑模型的默认参数必须直接落到创作端状态，提交任务时才不会被旧状态覆盖。
+        const normalized = normalizeVideoValue(videoProfile, {
+            seconds: String(videoProfile.duration.default),
+            ratio: videoProfile.defaultRatio,
+            resolution: videoProfile.defaultResolution,
+        });
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));

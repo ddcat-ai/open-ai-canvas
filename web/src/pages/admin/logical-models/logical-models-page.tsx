@@ -32,6 +32,7 @@ import {
     capabilitySourceError,
     emptyCapabilitySpec,
     mergeCapabilitySpecs,
+    normalizeCapabilitySpecForSources,
     operationLabel,
     sanitizeDefaults,
     type CapabilityKind,
@@ -157,7 +158,7 @@ export default function LogicalModelsPage() {
         }
         setSaving(true);
         try {
-            const payload = logicalModelPayload(values);
+            const payload = logicalModelPayload(values, modelSourceSpecs);
             await (editingModel ? updateAdminLogicalModel(editingModel.id, payload) : createAdminLogicalModel(payload));
             setEditingModel(undefined);
             await reload();
@@ -450,7 +451,7 @@ function RouteFields({
                                     const options = selectOptions.map((option) => ({ ...option, disabled: option.disabled || selectedByOthers.has(option.value) }));
                                     const selected = variants.find((item) => item.id === routes[field.name]?.physicalVariantId);
                                     return (
-										<div key={field.key} className="rounded-lg border border-border bg-muted/5 p-4">
+                                        <div key={field.key} className="rounded-lg border border-border bg-muted/5 p-4">
                                             <div className="mb-2 flex items-center justify-between gap-2">
                                                 <div className="min-w-0">
                                                     <div className="text-xs font-semibold">供应配置 {fields.indexOf(field) + 1}</div>
@@ -616,8 +617,8 @@ function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
     };
 }
 
-function logicalModelPayload(values: LogicalModelFormValues): LogicalModelMutation {
-    const capabilitySpec = { ...values.capabilitySpec, capability: values.capability, version: 1 as const };
+function logicalModelPayload(values: LogicalModelFormValues, sourceSpecs: CapabilitySpec[] = []): LogicalModelMutation {
+    const capabilitySpec = normalizeCapabilitySpecForSources({ ...values.capabilitySpec, capability: values.capability, version: 1 as const }, sourceSpecs) || emptyCapabilitySpec(values.capability);
     return {
         code: values.code.trim(),
         name: values.name.trim(),

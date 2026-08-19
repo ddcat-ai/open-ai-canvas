@@ -74,6 +74,21 @@ export type VideoCapabilityConfig = {
     defaultOperation: string;
 };
 
+// 旧版本的“允许自定义”可能只保存了 `*`，前台需要用这组标准值恢复可选项。
+export const STANDARD_IMAGE_SIZE_VALUES = [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "21:9",
+    "9:16",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+] as const;
+
 // Keep explicit pixel presets for each resolution tier so the settings panel can
 // switch between 1K, 2K and 4K without silently converting the requested ratio.
 const defaultImageSizes = [
@@ -258,7 +273,30 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     if (!cost?.capabilityConfig) return fallback;
     const text = cost.capabilityConfig.text ? { ...fallback.text!, ...cost.capabilityConfig.text, references: { ...fallback.text!.references, ...cost.capabilityConfig.text.references } } : fallback.text;
     const video = cost.capabilityConfig.video ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } } : fallback.video;
-    return { ...fallback, ...cost.capabilityConfig, text, image: cost.capabilityConfig.image || fallback.image, video };
+    const configuredImage = cost.capabilityConfig.image;
+    const image = configuredImage
+        ? (() => {
+              const configuredSize = configuredImage.size;
+              const configuredValues = configuredSize?.values;
+              const allowCustom = Boolean(configuredSize?.allowCustom || configuredValues?.includes("*"));
+              const concreteValues = configuredValues?.filter((value) => value !== "*") || [];
+              const values = !configuredValues ? fallback.image!.size.values : concreteValues.length || !allowCustom ? concreteValues : [...STANDARD_IMAGE_SIZE_VALUES];
+              const configuredDefault = configuredSize?.default?.trim();
+              const defaultValue = configuredDefault && configuredDefault !== "*" && values.includes(configuredDefault) ? configuredDefault : values.find((value) => value !== "*") || fallback.image!.size.default;
+              return {
+                  ...fallback.image!,
+                  ...configuredImage,
+                  size: {
+                      ...fallback.image!.size,
+                      ...configuredSize,
+                      values,
+                      default: defaultValue,
+                      allowCustom,
+                  },
+              };
+          })()
+        : fallback.image;
+    return { ...fallback, ...cost.capabilityConfig, text, image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
@@ -287,7 +325,8 @@ export function imageSizeRequest(profile: ImageCapabilityConfig, value?: string)
 export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { seconds?: string; ratio?: string; resolution?: string }) {
     const duration = profile.duration.selection === "enum" ? ((profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default) : normalizeRangeDuration(profile, Number(value.seconds));
     const ratio = profile.ratios.includes(value.ratio || "") ? value.ratio! : profile.defaultRatio;
-    const resolution = profile.resolutions.includes(value.resolution || "") ? value.resolution! : profile.defaultResolution;
+    // 前端状态历史上保存过 `720`，而能力配置和供应商通常使用 `720p`；统一按能力中的原始值返回，避免被误判为不支持。
+    const resolution = videoResolutionRequest(profile, value.resolution) || profile.defaultResolution || profile.resolutions[0] || "";
     return { seconds: String(duration), ratio, resolution };
 }
 

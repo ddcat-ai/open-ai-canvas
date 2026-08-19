@@ -165,6 +165,11 @@ func (s *Service) PublicLogicalModels(intent *ModelRequestIntent) ([]PublicLogic
 
 func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogicalModel {
 	item := cached.Model
+	routeSpecs := make([]CapabilitySpec, 0, len(cached.Routes))
+	for _, route := range cached.Routes {
+		routeSpecs = append(routeSpecs, route.VariantSpec)
+	}
+	productSpec := capabilitySpecWithRoutePresets(cached.ProductSpec, routeSpecs)
 	variants := make([]CapabilitySpec, 0, len(cached.Routes))
 	seen := make(map[string]bool, len(cached.Routes))
 	for _, route := range cached.Routes {
@@ -177,7 +182,37 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 			variants = append(variants, route.VariantSpec)
 		}
 	}
-	return PublicLogicalModel{ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon, Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder, PricePolicy: item.PricePolicy, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputPriceMicrocredits: item.InputPriceMicrocredits, OutputPriceMicrocredits: item.OutputPriceMicrocredits, CachedPriceMicrocredits: item.CachedPriceMicrocredits, CapabilitySpec: cached.ProductSpec, CapabilityProfiles: variants, DefaultOptions: cached.Defaults, Available: available}
+	return PublicLogicalModel{ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon, Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder, PricePolicy: item.PricePolicy, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputPriceMicrocredits: item.InputPriceMicrocredits, OutputPriceMicrocredits: item.OutputPriceMicrocredits, CachedPriceMicrocredits: item.CachedPriceMicrocredits, CapabilitySpec: productSpec, CapabilityProfiles: variants, DefaultOptions: cached.Defaults, Available: available}
+}
+
+// capabilitySpecWithRoutePresets repairs old front-model snapshots that stored
+// only `*` for a custom size. The wildcard remains for matching custom values,
+// while route presets are restored for admin and creator-side selectors.
+func capabilitySpecWithRoutePresets(spec CapabilitySpec, routes []CapabilitySpec) CapabilitySpec {
+	result := spec
+	result.Options = make(map[string]OptionConstraint, len(spec.Options))
+	for name, constraint := range spec.Options {
+		if !isWildcardOptionConstraint(constraint) {
+			result.Options[name] = constraint
+			continue
+		}
+		values := append([]any(nil), constraint.Values...)
+		seen := make(map[string]bool, len(values))
+		for _, value := range values {
+			seen[normalizedScalar(value)] = true
+		}
+		for _, route := range routes {
+			for _, value := range route.Options[name].Values {
+				key := normalizedScalar(value)
+				if key != "" && !seen[key] {
+					seen[key] = true
+					values = append(values, value)
+				}
+			}
+		}
+		result.Options[name] = OptionConstraint{Values: values}
+	}
+	return result
 }
 
 // capabilityFingerprint 用规范化后的结构去重能力画像；不能直接依赖原始 JSON，
@@ -250,10 +285,6 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 	if err != nil {
 		return nil, err
 	}
-	defaults, err := decodeLogicalDefaults(graph.Revision.DefaultOptionsJSON, productSpec)
-	if err != nil {
-		return nil, err
-	}
 	variantByID := make(map[string]model.PhysicalCapabilityVariant, len(graph.Variants))
 	for _, variant := range graph.Variants {
 		variantByID[variant.ID] = variant
@@ -262,7 +293,7 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 	for _, channelModel := range graph.ChannelModels {
 		channelModelByID[channelModel.ID] = channelModel
 	}
-	admin := AdminLogicalModel{PublicLogicalModel: publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: defaults}, false), Enabled: item.Enabled, ActiveRevisionID: graph.Revision.ID, RevisionVersion: graph.Revision.Version, Routes: []AdminLogicalRoute{}}
+	admin := AdminLogicalModel{PublicLogicalModel: publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: map[string]any{}}, false), Enabled: item.Enabled, ActiveRevisionID: graph.Revision.ID, RevisionVersion: graph.Revision.Version, Routes: []AdminLogicalRoute{}}
 	for _, route := range graph.Routes {
 		variant, variantOK := variantByID[route.PhysicalVariantID]
 		if !variantOK {
@@ -281,6 +312,20 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		available := structurallyAvailable && (item.PricePolicy != "channel" || channelModel.PriceConfigured)
 		admin.Routes = append(admin.Routes, AdminLogicalRoute{ID: route.ID, PhysicalVariantID: variant.ID, PhysicalVariantName: variant.Name, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, PhysicalModelKey: channelModel.ModelKey, PhysicalModelName: channelModel.DisplayName, Enabled: route.Enabled, Priority: route.Priority, Weight: route.Weight, Available: available, structurallyAvailable: structurallyAvailable, CapabilitySpec: variantSpec})
 	}
+	routeSpecs := make([]CapabilitySpec, 0, len(admin.Routes))
+	for _, route := range admin.Routes {
+		routeSpecs = append(routeSpecs, route.CapabilitySpec)
+	}
+	productSpec = capabilitySpecWithRoutePresets(productSpec, routeSpecs)
+	defaults, err := decodeLogicalDefaults(graph.Revision.DefaultOptionsJSON, productSpec)
+	if err != nil {
+		return nil, err
+	}
+	admin.PublicLogicalModel = publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: defaults}, false)
+	// publicLogicalModel above has no route list; admin routes are already attached
+	// and the enriched product spec is the source used by the editor.
+	admin.CapabilitySpec = productSpec
+	admin.DefaultOptions = defaults
 	structuralRouteSpecs := structuralAdminRouteSpecs(admin.Routes)
 	settlementRouteSpecs := settlementReadyAdminRouteSpecs(admin.Routes)
 	admin.ConfigurationError = logicalModelConfigurationError(productSpec, structuralRouteSpecs)
@@ -532,8 +577,17 @@ func normalizeLogicalDefaults(spec CapabilitySpec, defaults map[string]any) (map
 			return nil, BadAuthRequest("默认参数存在重复别名：" + name)
 		}
 		constraint, ok := spec.Options[name]
-		if !ok || !matchOptionConstraint(constraint, value) {
+		if !ok || !matchOptionConstraint(name, constraint, value) {
 			return nil, BadAuthRequest("默认参数 " + name + " 不在前台模型能力范围内")
+		}
+		// `*` 只表示允许任意自定义值，不能作为创作端默认参数发送。
+		if normalizedScalar(value) == "*" {
+			for _, candidate := range constraint.Values {
+				if normalizedScalar(candidate) != "*" {
+					value = candidate
+					break
+				}
+			}
 		}
 		result[name] = value
 	}
@@ -751,13 +805,10 @@ func validateVariantWithinChannelModel(channelModel model.ChannelModel, spec Cap
 			}
 		}
 		physical := map[string]OptionConstraint{
-			"size":                  anyValues(image.Size.Values),
+			"size":                  imageSizeOptionConstraint(image.Size),
 			"quality":               anyValues(image.Quality.Values),
 			"transparentBackground": boolValues(image.TransparentBackground.Supported),
 			"count":                 numericRange(1, float64(image.MaxOutputs), 1),
-		}
-		if image.Size.AllowCustom {
-			physical["size"] = OptionConstraint{Values: []any{"*"}}
 		}
 		return validateKnownVariantOptions(spec.Options, physical)
 	case "video":
@@ -884,13 +935,13 @@ func optionConstraintCovered(candidate OptionConstraint, name string, routeSpecs
 		return false
 	}
 	for _, routeConstraint := range routeConstraints {
-		if len(routeConstraint.Values) == 1 && normalizedScalar(routeConstraint.Values[0]) == "*" {
+		if isWildcardOptionConstraint(routeConstraint) {
 			return true
 		}
 	}
 	if len(candidate.Values) > 0 {
 		for _, value := range candidate.Values {
-			if !optionValueSupported(value, routeConstraints) {
+			if !optionValueSupported(name, value, routeConstraints) {
 				return false
 			}
 		}
@@ -900,7 +951,7 @@ func optionConstraintCovered(candidate OptionConstraint, name string, routeSpecs
 		return false
 	}
 	if math.Abs(*candidate.Max-*candidate.Min) < 1e-9 {
-		return optionValueSupported(*candidate.Min, routeConstraints)
+		return optionValueSupported(name, *candidate.Min, routeConstraints)
 	}
 	if candidate.Step == nil {
 		return continuousOptionRangeCovered(*candidate.Min, *candidate.Max, routeConstraints)
@@ -910,7 +961,7 @@ func optionConstraintCovered(candidate OptionConstraint, name string, routeSpecs
 	if count <= 10000 {
 		for index := 0; index < count; index++ {
 			value := *candidate.Min + float64(index)*step
-			if !optionValueSupported(value, routeConstraints) {
+			if !optionValueSupported(name, value, routeConstraints) {
 				return false
 			}
 		}
@@ -933,12 +984,21 @@ func optionConstraintCovered(candidate OptionConstraint, name string, routeSpecs
 	return false
 }
 
-func optionValueSupported(value any, constraints []OptionConstraint) bool {
+func optionValueSupported(name string, value any, constraints []OptionConstraint) bool {
 	for _, constraint := range constraints {
-		if len(constraint.Values) == 1 && normalizedScalar(constraint.Values[0]) == "*" {
+		if isWildcardOptionConstraint(constraint) {
 			return true
 		}
-		if matchOptionConstraint(constraint, value) {
+		if matchOptionConstraint(name, constraint, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func isWildcardOptionConstraint(constraint OptionConstraint) bool {
+	for _, value := range constraint.Values {
+		if normalizedScalar(value) == "*" {
 			return true
 		}
 	}

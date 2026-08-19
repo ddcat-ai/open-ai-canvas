@@ -241,7 +241,7 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 			reasons = append(reasons, "不支持参数 "+capabilityOptionLabel(name))
 			continue
 		}
-		if !matchOptionConstraint(constraint, value) {
+		if !matchOptionConstraint(name, constraint, value) {
 			reasons = append(reasons, "参数 "+capabilityOptionLabel(name)+"超出支持范围")
 		}
 	}
@@ -294,13 +294,13 @@ func capabilityOptionLabel(name string) string {
 	}
 }
 
-func matchOptionConstraint(constraint OptionConstraint, value any) bool {
+func matchOptionConstraint(name string, constraint OptionConstraint, value any) bool {
 	if len(constraint.Values) > 0 {
 		for _, candidate := range constraint.Values {
 			if normalizedScalar(candidate) == "*" {
 				return true
 			}
-			if normalizedScalar(candidate) == normalizedScalar(value) {
+			if capabilityOptionValuesEqual(name, candidate, value) {
 				return true
 			}
 		}
@@ -321,6 +321,16 @@ func matchOptionConstraint(constraint OptionConstraint, value any) bool {
 		return math.Abs(steps-math.Round(steps)) < 1e-9
 	}
 	return true
+}
+
+func capabilityOptionValuesEqual(name string, candidate any, value any) bool {
+	left := normalizedScalar(candidate)
+	right := normalizedScalar(value)
+	if canonicalCapabilityOptionName(name) == "vquality" {
+		left = strings.TrimSuffix(left, "p")
+		right = strings.TrimSuffix(right, "p")
+	}
+	return left == right
 }
 
 func normalizedScalar(value any) string {
@@ -519,11 +529,6 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			log.Printf("logical model omitted from route catalog id=%s: invalid product capability: %v", item.ID, decodeErr)
 			continue
 		}
-		defaults, defaultsErr := decodeLogicalDefaults(graph.Revision.DefaultOptionsJSON, productSpec)
-		if defaultsErr != nil {
-			log.Printf("logical model omitted from route catalog id=%s: invalid defaults: %v", item.ID, defaultsErr)
-			continue
-		}
 		variantByID := make(map[string]model.PhysicalCapabilityVariant, len(graph.Variants))
 		for _, variant := range graph.Variants {
 			variantByID[variant.ID] = variant
@@ -532,7 +537,7 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 		for _, channelModel := range graph.ChannelModels {
 			channelModelByID[channelModel.ID] = channelModel
 		}
-		cached := cachedLogicalModel{Model: item, Revision: *graph.Revision, ProductSpec: productSpec, Defaults: defaults}
+		cached := cachedLogicalModel{Model: item, Revision: *graph.Revision, ProductSpec: productSpec, Defaults: map[string]any{}}
 		for _, route := range graph.Routes {
 			variant, ok := variantByID[route.PhysicalVariantID]
 			if !ok || !variant.Enabled {
@@ -552,6 +557,18 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			}
 			cached.Routes = append(cached.Routes, cachedLogicalRoute{Route: route, Variant: variant, VariantSpec: variantSpec, ChannelModel: channelModel})
 		}
+		routeSpecs := make([]CapabilitySpec, 0, len(cached.Routes))
+		for _, route := range cached.Routes {
+			routeSpecs = append(routeSpecs, route.VariantSpec)
+		}
+		productSpec = capabilitySpecWithRoutePresets(productSpec, routeSpecs)
+		defaults, defaultsErr := decodeLogicalDefaults(graph.Revision.DefaultOptionsJSON, productSpec)
+		if defaultsErr != nil {
+			log.Printf("logical model omitted from route catalog id=%s: invalid defaults: %v", item.ID, defaultsErr)
+			continue
+		}
+		cached.ProductSpec = productSpec
+		cached.Defaults = defaults
 		snapshot.Models[item.ID] = cached
 		snapshot.Ordered = append(snapshot.Ordered, item.ID)
 	}

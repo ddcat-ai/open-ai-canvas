@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import type { CapabilitySpec, OptionConstraint } from "@/services/api/logical-models";
 import type { ChannelModel } from "@/services/api/wallet";
+import { STANDARD_IMAGE_SIZE_VALUES } from "@/lib/model-capabilities";
 
 export type CapabilityKind = CapabilitySpec["capability"];
 export type Scalar = string | number | boolean;
@@ -64,6 +65,13 @@ export function emptyCapabilitySpec(capability: CapabilityKind): CapabilitySpec 
     return { version: 1, capability, operations: [], inputs: {}, options: {} };
 }
 
+function imageSizeOptionValues(values: string[], allowCustom: boolean) {
+    const concreteValues = Array.from(new Set(values.map((value) => value.trim()).filter((value) => value && value !== "*")));
+    const result = concreteValues.length || !allowCustom ? concreteValues : [...STANDARD_IMAGE_SIZE_VALUES];
+    if (allowCustom) result.push("*");
+    return result;
+}
+
 export function capabilitySpecFromChannelModel(item?: ChannelModel): CapabilitySpec | null {
     if (!item?.capability) return null;
     const capability = item.capability;
@@ -91,12 +99,7 @@ export function capabilitySpecFromChannelModel(item?: ChannelModel): CapabilityS
                 mask: { min: 0, max: image.references.maskSupported ? 1 : 0 },
             }),
             options: compactOptions({
-                size:
-                    image.size.parameter === "none"
-                        ? undefined
-                        : image.size.allowCustom
-                          ? { values: ["*"] }
-                          : { values: image.size.values },
+                size: image.size.parameter === "none" ? undefined : { values: imageSizeOptionValues(image.size.values, image.size.allowCustom) },
                 quality: image.quality.supported ? { values: image.quality.values } : undefined,
                 transparentBackground: { values: image.transparentBackground.supported ? [false, true] : [false] },
                 count: { min: 1, max: image.maxOutputs, step: 1 },
@@ -106,9 +109,7 @@ export function capabilitySpecFromChannelModel(item?: ChannelModel): CapabilityS
     if (capability === "video") {
         const video = item.capabilityConfig?.video;
         if (!video) return null;
-        const duration: OptionConstraint = video.duration.selection === "enum"
-            ? { values: video.duration.values || [] }
-            : { min: video.duration.min, max: video.duration.max, step: video.duration.step };
+        const duration: OptionConstraint = video.duration.selection === "enum" ? { values: video.duration.values || [] } : { min: video.duration.min, max: video.duration.max, step: video.duration.step };
         return {
             version: 1,
             capability,
@@ -146,11 +147,13 @@ export function mergeCapabilitySpecs(capability: CapabilityKind, specs: Capabili
         const constraints = matching.map((item) => item.options?.[definition.name]).filter(Boolean) as OptionConstraint[];
         if (constraints.length === 0) continue;
         if (constraints.some(isWildcardConstraint)) {
-            result.options![definition.name] = { values: ["*"] };
+            const values = uniqueScalars(constraints.flatMap((item) => item.values || []));
+            result.options![definition.name] = { values: definition.name === "size" ? imageSizeOptionValues(values.map(String), true) : values };
             continue;
         }
         if (constraints.every((item) => item.values)) {
-            result.options![definition.name] = { values: uniqueScalars(constraints.flatMap((item) => item.values || [])) };
+            const values = uniqueScalars(constraints.flatMap((item) => item.values || []));
+            result.options![definition.name] = { values: definition.name === "size" ? imageSizeOptionValues(values.map(String), values.includes("*")) : values };
             continue;
         }
         const minimums = constraints.map((item) => item.min).filter((value): value is number => typeof value === "number");
@@ -173,6 +176,22 @@ export function mergeCapabilitySpecs(capability: CapabilityKind, specs: Capabili
     return result;
 }
 
+/**
+ * 旧版本把“允许自定义”保存成只有 `*` 的能力范围。
+ * 管理端编辑时用当前供应线路的标准值补回展示范围，保存后即可完成数据修复。
+ */
+export function normalizeCapabilitySpecForSources(value: CapabilitySpec | undefined, sourceSpecs: CapabilitySpec[]) {
+    if (!value) return value;
+    const source = mergeCapabilitySpecs(value.capability, sourceSpecs);
+    const options = { ...(value.options || {}) };
+    for (const [name, constraint] of Object.entries(options)) {
+        const sourceConstraint = source.options?.[name];
+        if (!sourceConstraint || !isWildcardConstraint(constraint) || !sourceConstraint.values) continue;
+        options[name] = { values: uniqueScalars([...(sourceConstraint.values || []), ...(constraint.values || [])]) };
+    }
+    return { ...value, options };
+}
+
 export function capabilitySourceError(capability: CapabilityKind, sourceSpecs: CapabilitySpec[], value?: CapabilitySpec) {
     const matching = sourceSpecs.filter((item) => item.capability === capability);
     const current = value?.capability === capability ? value : emptyCapabilitySpec(capability);
@@ -193,9 +212,9 @@ export function capabilitySourceError(capability: CapabilityKind, sourceSpecs: C
     return undefined;
 }
 
-export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange, mode }: CapabilityScopeEditorProps) {
+export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange }: CapabilityScopeEditorProps) {
     const source = mergeCapabilitySpecs(capability, sourceSpecs);
-    const current = value?.capability === capability ? value : emptyCapabilitySpec(capability);
+    const current = value?.capability === capability ? normalizeCapabilitySpecForSources(value, sourceSpecs)! : emptyCapabilitySpec(capability);
     const hasSource = sourceSpecs.some((item) => item.capability === capability);
     const sourceInputs = inputDefinitions[capability].filter((item) => source.inputs?.[item.name]);
     const sourceOptions = optionDefinitions[capability].filter((item) => source.options?.[item.name]);
@@ -204,14 +223,14 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
     const update = (patch: Partial<CapabilitySpec>) => onChange?.({ ...current, ...patch, version: 1, capability });
     const reset = () => onChange?.(source);
 
-    if (!hasSource) {
-        return <Alert type="warning" showIcon message="没有可用的能力来源" description={mode === "route" ? "请先到渠道模型补充能力配置。" : "请先选择至少一条已配置的供应线路。"} />;
-    }
+    if (!hasSource) return null;
 
     return (
         <div className="space-y-5">
             <div className="flex justify-end">
-                <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} onClick={reset}>恢复全部可用范围</Button>
+                <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} onClick={reset}>
+                    恢复全部可用范围
+                </Button>
             </div>
 
             {sourceError ? <Alert type="warning" showIcon message="当前选择需要调整" description={`${sourceError}。可重新选择，或采用全部可用范围。`} /> : null}
@@ -237,10 +256,37 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                             const selected = current.inputs?.[definition.name];
                             return (
                                 <div key={definition.name} className="grid grid-cols-12 items-center gap-2 py-3 first:pt-0 last:pb-0">
-                                    <div className="col-span-12 sm:col-span-5"><div className="text-sm font-medium">{definition.label}</div><div className="text-xs text-foreground/45">线路支持 {limit.min}-{limit.max} {definition.unit}</div></div>
-                                    <div className="col-span-12 sm:col-span-1"><Switch size="small" checked={Boolean(selected)} onChange={(enabled) => updateInput(current, definition.name, enabled ? limit : undefined, update)} /></div>
-                                    <div className="col-span-6 sm:col-span-3"><NumberInput label="最少" unit={definition.unit} value={selected?.min} min={limit.min} max={selected?.max ?? limit.max} disabled={!selected} onChange={(next) => updateInput(current, definition.name, { min: next ?? limit.min, max: selected?.max ?? limit.max }, update)} /></div>
-                                    <div className="col-span-6 sm:col-span-3"><NumberInput label="最多" unit={definition.unit} value={selected?.max} min={selected?.min ?? limit.min} max={limit.max} disabled={!selected} onChange={(next) => updateInput(current, definition.name, { min: selected?.min ?? limit.min, max: next ?? limit.max }, update)} /></div>
+                                    <div className="col-span-12 sm:col-span-5">
+                                        <div className="text-sm font-medium">{definition.label}</div>
+                                        <div className="text-xs text-foreground/45">
+                                            线路支持 {limit.min}-{limit.max} {definition.unit}
+                                        </div>
+                                    </div>
+                                    <div className="col-span-12 sm:col-span-1">
+                                        <Switch size="small" checked={Boolean(selected)} onChange={(enabled) => updateInput(current, definition.name, enabled ? limit : undefined, update)} />
+                                    </div>
+                                    <div className="col-span-6 sm:col-span-3">
+                                        <NumberInput
+                                            label="最少"
+                                            unit={definition.unit}
+                                            value={selected?.min}
+                                            min={limit.min}
+                                            max={selected?.max ?? limit.max}
+                                            disabled={!selected}
+                                            onChange={(next) => updateInput(current, definition.name, { min: next ?? limit.min, max: selected?.max ?? limit.max }, update)}
+                                        />
+                                    </div>
+                                    <div className="col-span-6 sm:col-span-3">
+                                        <NumberInput
+                                            label="最多"
+                                            unit={definition.unit}
+                                            value={selected?.max}
+                                            min={selected?.min ?? limit.min}
+                                            max={limit.max}
+                                            disabled={!selected}
+                                            onChange={(next) => updateInput(current, definition.name, { min: selected?.min ?? limit.min, max: next ?? limit.max }, update)}
+                                        />
+                                    </div>
                                 </div>
                             );
                         })}
@@ -252,7 +298,13 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                 <CapabilityBlock title="生成参数">
                     <div className="divide-y divide-border">
                         {sourceOptions.map((definition) => (
-                            <OptionRuleEditor key={definition.name} definition={definition} source={source.options![definition.name]} value={current.options?.[definition.name]} onChange={(constraint) => updateOption(current, definition.name, constraint, update)} />
+                            <OptionRuleEditor
+                                key={definition.name}
+                                definition={definition}
+                                source={source.options![definition.name]}
+                                value={current.options?.[definition.name]}
+                                onChange={(constraint) => updateOption(current, definition.name, constraint, update)}
+                            />
                         ))}
                     </div>
                 </CapabilityBlock>
@@ -273,13 +325,23 @@ export function DefaultOptionsEditor({ spec, value, onChange }: { spec?: Capabil
                 const selected = value?.[definition.name] as Scalar | undefined;
                 return (
                     <div key={definition.name} className="grid grid-cols-12 items-center gap-2 py-3 first:pt-0 last:pb-0">
-                        <div className="col-span-12 sm:col-span-5"><div className="text-sm font-medium">{definition.label}</div><div className="text-xs text-foreground/45">留空时由创作端或线路默认值决定</div></div>
-                        <div className="col-span-12 sm:col-span-7"><ConstraintValueInput constraint={constraint} value={selected} allowClear onChange={(next) => {
-                            const defaults = { ...(value || {}) } as Record<string, Scalar>;
-                            if (next === undefined) delete defaults[definition.name];
-                            else defaults[definition.name] = next;
-                            onChange?.(defaults);
-                        }} /></div>
+                        <div className="col-span-12 sm:col-span-5">
+                            <div className="text-sm font-medium">{definition.label}</div>
+                            <div className="text-xs text-foreground/45">留空时由创作端或线路默认值决定</div>
+                        </div>
+                        <div className="col-span-12 sm:col-span-7">
+                            <ConstraintValueInput
+                                constraint={constraint}
+                                value={selected}
+                                allowClear
+                                onChange={(next) => {
+                                    const defaults = { ...(value || {}) } as Record<string, Scalar>;
+                                    if (next === undefined) delete defaults[definition.name];
+                                    else defaults[definition.name] = next;
+                                    onChange?.(defaults);
+                                }}
+                            />
+                        </div>
                     </div>
                 );
             })}
@@ -287,7 +349,13 @@ export function DefaultOptionsEditor({ spec, value, onChange }: { spec?: Capabil
     );
 }
 
-export function CapabilityRequestEditor({ spec, inputs, options, onInputsChange, onOptionsChange }: {
+export function CapabilityRequestEditor({
+    spec,
+    inputs,
+    options,
+    onInputsChange,
+    onOptionsChange,
+}: {
     spec: CapabilitySpec;
     inputs: Record<string, number>;
     options: Record<string, unknown>;
@@ -325,7 +393,10 @@ export function CapabilityRequestEditor({ spec, inputs, options, onInputsChange,
                             const constraint = spec.options![definition.name];
                             return (
                                 <label key={definition.name} className="min-w-0">
-                                    <span className="mb-1 block text-xs text-foreground/45">{definition.label}{definition.unit ? ` (${definition.unit})` : ""}</span>
+                                    <span className="mb-1 block text-xs text-foreground/45">
+                                        {definition.label}
+                                        {definition.unit ? ` (${definition.unit})` : ""}
+                                    </span>
                                     <ConstraintValueInput
                                         constraint={constraint}
                                         value={options[definition.name] as Scalar | undefined}
@@ -365,23 +436,53 @@ export function CapabilitySummary({ spec }: { spec: CapabilitySpec }) {
     }
     if (spec.operations?.length) labels.unshift(spec.operations.map(operationLabel).join("/"));
     if (!labels.length) return <span className="text-xs text-foreground/45">基础能力</span>;
-    return <div className="flex max-w-lg flex-wrap gap-1">{labels.slice(0, 4).map((label) => <Tag key={label}>{label}</Tag>)}{labels.length > 4 ? <Tag>+{labels.length - 4}</Tag> : null}</div>;
+    return (
+        <div className="flex max-w-lg flex-wrap gap-1">
+            {labels.slice(0, 4).map((label) => (
+                <Tag key={label}>{label}</Tag>
+            ))}
+            {labels.length > 4 ? <Tag>+{labels.length - 4}</Tag> : null}
+        </div>
+    );
 }
 
 export function sanitizeDefaults(spec: CapabilitySpec, defaults: Record<string, unknown> | undefined) {
-    return Object.fromEntries(Object.entries(defaults || {}).filter(([name, value]) => spec.options?.[name] && constraintIncludes(spec.options[name], value)));
+    const result: Record<string, Scalar> = {};
+    for (const [name, rawValue] of Object.entries(defaults || {})) {
+        const constraint = spec.options?.[name];
+        if (!constraint || !constraintIncludes(constraint, rawValue)) continue;
+        // `*` 是能力匹配用的通配符，不是可发送给模型的默认参数。
+        if (scalarKey(rawValue) === "*") {
+            const concrete = constraint.values?.find((item) => scalarKey(item) !== "*");
+            if (concrete !== undefined) result[name] = normalizeScalar(concrete) as Scalar;
+            continue;
+        }
+        result[name] = normalizeScalar(rawValue) as Scalar;
+    }
+    return result;
 }
 
 function CapabilityBlock({ title, children }: { title: string; children: ReactNode }) {
-    return <section className="space-y-2"><div className="text-xs font-semibold text-foreground/65">{title}</div>{children}</section>;
+    return (
+        <section className="space-y-2">
+            <div className="text-xs font-semibold text-foreground/65">{title}</div>
+            {children}
+        </section>
+    );
 }
 
 function OptionRuleEditor({ definition, source, value, onChange }: { definition: { name: string; label: string; unit?: string }; source: OptionConstraint; value?: OptionConstraint; onChange: (value?: OptionConstraint) => void }) {
     return (
         <div className="grid grid-cols-12 items-center gap-2 py-3 first:pt-0 last:pb-0">
-            <div className="col-span-12 sm:col-span-5"><div className="text-sm font-medium">{definition.label}</div><div className="text-xs text-foreground/45">{constraintSummary(source, definition.unit)}</div></div>
-            <div className="col-span-12 sm:col-span-1"><Switch size="small" checked={Boolean(value)} onChange={(enabled) => onChange(enabled ? source : undefined)} /></div>
-            <div className="col-span-12 sm:col-span-6">{source.values ? (
+            <div className="col-span-12 sm:col-span-5">
+                <div className="text-sm font-medium">{definition.label}</div>
+                <div className="text-xs text-foreground/45">{constraintSummary(source, definition.unit)}</div>
+            </div>
+            <div className="col-span-12 sm:col-span-1">
+                <Switch size="small" checked={Boolean(value)} onChange={(enabled) => onChange(enabled ? source : undefined)} />
+            </div>
+            <div className="col-span-12 sm:col-span-6">
+                {source.values ? (
                     <Select
                         className="w-full"
                         mode="multiple"
@@ -392,24 +493,70 @@ function OptionRuleEditor({ definition, source, value, onChange }: { definition:
                     />
                 ) : (
                     <div className="grid grid-cols-3 gap-2">
-                        <label><span className="mb-1 block text-xs text-foreground/45">最小值</span><InputNumber className="w-full" disabled={!value} min={source.min} max={value?.max ?? source.max} value={value?.min} onChange={(next) => onChange({ ...value, min: next ?? source.min, max: value?.max ?? source.max, step: value?.step ?? source.step })} /></label>
-                        <label><span className="mb-1 block text-xs text-foreground/45">最大值</span><InputNumber className="w-full" disabled={!value} min={value?.min ?? source.min} max={source.max} value={value?.max} onChange={(next) => onChange({ ...value, min: value?.min ?? source.min, max: next ?? source.max, step: value?.step ?? source.step })} /></label>
-                        <label><span className="mb-1 block text-xs text-foreground/45">调整步长</span><InputNumber className="w-full" disabled={!value} min={source.step || 0.000001} max={source.max} value={value?.step} onChange={(next) => onChange({ ...value, min: value?.min ?? source.min, max: value?.max ?? source.max, step: next ?? source.step })} /></label>
+                        <label>
+                            <span className="mb-1 block text-xs text-foreground/45">最小值</span>
+                            <InputNumber
+                                className="w-full"
+                                disabled={!value}
+                                min={source.min}
+                                max={value?.max ?? source.max}
+                                value={value?.min}
+                                onChange={(next) => onChange({ ...value, min: next ?? source.min, max: value?.max ?? source.max, step: value?.step ?? source.step })}
+                            />
+                        </label>
+                        <label>
+                            <span className="mb-1 block text-xs text-foreground/45">最大值</span>
+                            <InputNumber
+                                className="w-full"
+                                disabled={!value}
+                                min={value?.min ?? source.min}
+                                max={source.max}
+                                value={value?.max}
+                                onChange={(next) => onChange({ ...value, min: value?.min ?? source.min, max: next ?? source.max, step: value?.step ?? source.step })}
+                            />
+                        </label>
+                        <label>
+                            <span className="mb-1 block text-xs text-foreground/45">调整步长</span>
+                            <InputNumber
+                                className="w-full"
+                                disabled={!value}
+                                min={source.step || 0.000001}
+                                max={source.max}
+                                value={value?.step}
+                                onChange={(next) => onChange({ ...value, min: value?.min ?? source.min, max: value?.max ?? source.max, step: next ?? source.step })}
+                            />
+                        </label>
                     </div>
-                )}</div>
+                )}
+            </div>
         </div>
     );
 }
 
 function ConstraintValueInput({ constraint, value, allowClear, onChange }: { constraint: OptionConstraint; value?: Scalar; allowClear?: boolean; onChange: (value?: Scalar) => void }) {
     if (constraint.values) {
-        return <Select className="w-full" allowClear={allowClear} value={value === undefined ? undefined : scalarKey(value)} options={constraint.values.map((item) => ({ value: scalarKey(item), label: scalarLabel(item) }))} onChange={(key) => onChange(key === undefined ? undefined : normalizeScalar(constraint.values!.find((item) => scalarKey(item) === key)) as Scalar)} />;
+        return (
+            <Select
+                className="w-full"
+                allowClear={allowClear}
+                value={value === undefined ? undefined : scalarKey(value)}
+                options={constraint.values.map((item) => ({ value: scalarKey(item), label: scalarLabel(item) }))}
+                onChange={(key) => onChange(key === undefined ? undefined : (normalizeScalar(constraint.values!.find((item) => scalarKey(item) === key)) as Scalar))}
+            />
+        );
     }
     return <InputNumber className="w-full" min={constraint.min} max={constraint.max} step={constraint.step} value={typeof value === "number" ? value : undefined} onChange={(next) => onChange(next ?? undefined)} />;
 }
 
 function NumberInput({ label, unit, value, min, max, disabled, onChange }: { label: string; unit: string; value?: number; min?: number; max?: number; disabled?: boolean; onChange: (value: number | null) => void }) {
-    return <label className="min-w-0"><span className="mb-1 block text-xs text-foreground/45">{label} ({unit})</span><InputNumber className="w-full" precision={0} disabled={disabled} value={value} min={min} max={max} onChange={onChange} /></label>;
+    return (
+        <label className="min-w-0">
+            <span className="mb-1 block text-xs text-foreground/45">
+                {label} ({unit})
+            </span>
+            <InputNumber className="w-full" precision={0} disabled={disabled} value={value} min={min} max={max} onChange={onChange} />
+        </label>
+    );
 }
 
 function updateInput(current: CapabilitySpec, name: string, constraint: { min: number; max: number } | undefined, update: (patch: Partial<CapabilitySpec>) => void) {
@@ -450,12 +597,12 @@ function widestCoveredInputRange(constraints: Array<{ min: number; max: number }
     return merged.reduce((best, current) => {
         const bestSize = best.max - best.min;
         const currentSize = current.max - current.min;
-        return currentSize > bestSize || currentSize === bestSize && current.min < best.min ? current : best;
+        return currentSize > bestSize || (currentSize === bestSize && current.min < best.min) ? current : best;
     });
 }
 
 function preferredSourceConstraint(constraints: OptionConstraint[]) {
-    return constraints.reduce((best, current) => constraintBreadth(current) > constraintBreadth(best) ? current : best);
+    return constraints.reduce((best, current) => (constraintBreadth(current) > constraintBreadth(best) ? current : best));
 }
 
 function constraintBreadth(constraint: OptionConstraint) {
@@ -474,6 +621,7 @@ function scalarLabel(value: unknown) {
     const normalized = normalizeScalar(value);
     if (normalized === true) return "支持";
     if (normalized === false) return "不启用";
+    if (normalized === "*") return "自定义";
     return String(normalized);
 }
 
@@ -483,16 +631,18 @@ function normalizeScalar(value: unknown) {
 }
 
 export function operationLabel(value: string) {
-    return {
-        text_to_video: "文生视频",
-        image_to_video: "图生视频",
-        extend: "视频续写",
-        inpaint: "局部修改",
-        replace_element: "元素替换",
-        camera_motion: "运镜调整",
-        style_transfer: "风格迁移",
-        audio_to_video: "音频生视频",
-    }[value] || value;
+    return (
+        {
+            text_to_video: "文生视频",
+            image_to_video: "图生视频",
+            extend: "视频续写",
+            inpaint: "局部修改",
+            replace_element: "元素替换",
+            camera_motion: "运镜调整",
+            style_transfer: "风格迁移",
+            audio_to_video: "音频生视频",
+        }[value] || value
+    );
 }
 
 function inputLabel(capability: CapabilityKind, name: string) {
@@ -509,7 +659,7 @@ function constraintSummary(constraint: OptionConstraint, unit = "") {
 }
 
 function constraintIncludes(constraint: OptionConstraint, value: unknown) {
-    if (constraint.values?.length === 1 && constraint.values[0] === "*") return true;
+    if (isWildcardConstraint(constraint)) return true;
     if (constraint.values) return constraint.values.some((item) => scalarKey(item) === scalarKey(value));
     if (typeof value !== "number") return false;
     if ((constraint.min !== undefined && value < constraint.min - 1e-9) || (constraint.max !== undefined && value > constraint.max + 1e-9)) return false;
@@ -585,7 +735,7 @@ function continuousOptionRangeCovered(minimum: number, maximum: number, constrai
 }
 
 function isWildcardConstraint(constraint: OptionConstraint) {
-    return constraint.values?.length === 1 && constraint.values[0] === "*";
+    return constraint.values?.some((value) => normalizeScalar(value) === "*") || false;
 }
 
 function approximatelyInteger(value: number) {

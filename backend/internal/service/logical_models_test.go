@@ -40,6 +40,31 @@ func TestMatchCapabilityAcceptsWildcardOptionValues(t *testing.T) {
 	}
 }
 
+func TestMatchCapabilityAcceptsWildcardAlongsidePresetOptionValues(t *testing.T) {
+	intent := ModelRequestIntent{Capability: "image", Options: map[string]any{"size": "2:1"}}
+	spec := CapabilitySpec{
+		Version:    1,
+		Capability: "image",
+		Options:    map[string]OptionConstraint{"size": {Values: []any{"1:1", "9:16", "*"}}},
+	}
+	match := MatchCapability(spec, intent)
+	if !match.Matched {
+		t.Fatalf("wildcard alongside presets did not match custom value: %#v", match)
+	}
+}
+
+func TestMatchCapabilityTreatsVideoResolutionSuffixAsEquivalent(t *testing.T) {
+	spec := CapabilitySpec{
+		Version:    1,
+		Capability: "video",
+		Options:    map[string]OptionConstraint{"vquality": {Values: []any{"720p"}}},
+	}
+	intent := ModelRequestIntent{Capability: "video", Options: map[string]any{"vquality": "720"}}
+	if match := MatchCapability(spec, intent); !match.Matched {
+		t.Fatalf("720 and 720p should match the same video resolution: %#v", match)
+	}
+}
+
 func TestValidateProductSpecWithinRoutesRejectsUnsupportedCapabilityValue(t *testing.T) {
 	routes := []CapabilitySpec{
 		{

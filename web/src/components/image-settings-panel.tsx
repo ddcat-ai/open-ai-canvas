@@ -59,11 +59,14 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
     const activeSize = normalized.size;
     const pixelSizeValues = profile.size.values.filter((value) => value.trim().toLowerCase() !== "auto");
-    const usesResolutionPicker = supportsImageResolutionPresets(profile.size);
-    const resolutionOptions = usesResolutionPicker ? buildImageResolutionOptions(pixelSizeValues) : [];
+    const hasResolutionPresets = supportsImageResolutionPresets(profile.size);
+    const resolutionOptions = hasResolutionPresets ? buildImageResolutionOptions(pixelSizeValues) : [];
     const activeResolution = activeSize === "auto" ? undefined : imageResolutionOption(resolutionOptions, activeSize);
     const activeRatio = activeResolution?.ratio || imageRatioForSize(activeSize);
-    const resolutionChoices = usesResolutionPicker ? imageResolutionChoices(profile.size.values) : [];
+    const resolutionChoices = hasResolutionPresets ? imageResolutionChoices(profile.size.values) : [];
+    // 只有一个分辨率层级时，分辨率切换器没有实际选择意义；更重要的是不能因此把比例列表裁剪成当前层级的 3 个像素尺寸。
+    // 例如历史 `*` 配置恢复为标准值后，虽然包含 1024x1024/1536x1024/1024x1536，实际仍应展示完整的比例和尺寸选项。
+    const usesResolutionPicker = resolutionChoices.length > 1;
     const availableAspects: AspectOption[] = usesResolutionPicker && activeSize === "auto"
         ? []
         : usesResolutionPicker && activeResolution
@@ -158,7 +161,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </div> : null}
                 {availableAspects.length ? <div className="space-y-2">
-                    <SettingTitle color={theme.node.muted}>宽高比</SettingTitle>
+                    <SettingTitle color={theme.node.muted}>尺寸或比例</SettingTitle>
                     <div className="grid grid-cols-4 gap-1.5 min-[380px]:grid-cols-5">
                         {availableAspects.map((item) => (
                             <button

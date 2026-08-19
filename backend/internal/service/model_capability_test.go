@@ -83,6 +83,36 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 	}
 }
 
+func TestCapabilitySpecFromModelCapabilityConfigRestoresLegacyWildcardImageSizes(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			Size: ImageSizeConfig{Parameter: "size", Values: []string{"*"}, AllowCustom: true},
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	constraint, ok := spec.Options["size"]
+	if !ok {
+		t.Fatal("size constraint is missing")
+	}
+	values := make(map[string]int)
+	for _, value := range constraint.Values {
+		values[fmt.Sprint(value)]++
+	}
+	for _, value := range legacyImageSizeValues() {
+		if values[value] != 1 {
+			t.Fatalf("size constraint missing %q: %v", value, constraint.Values)
+		}
+	}
+	if values["*"] != 1 {
+		t.Fatalf("size constraint wildcard count = %d, values = %v", values["*"], constraint.Values)
+	}
+}
+
 func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
 	tests := map[string]string{
 		"1440":  "1440p",
@@ -145,8 +175,8 @@ func TestCapabilitySpecFromModelCapabilityConfigProjectsImageSizeOnce(t *testing
 	if err != nil {
 		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
 	}
-	if got := spec.Options["size"].Values; len(got) != 1 || got[0] != "*" {
-		t.Fatalf("size projection = %#v, want wildcard", got)
+	if got := spec.Options["size"].Values; len(got) != 3 || got[0] != "1:1" || got[1] != "16:9" || got[2] != "*" {
+		t.Fatalf("size projection = %#v, want configured values plus wildcard", got)
 	}
 	if got := spec.Inputs["image"].Max; got != 3 {
 		t.Fatalf("image input max = %d, want 3", got)
@@ -169,8 +199,8 @@ func TestCapabilitySpecFromModelCapabilityConfigProjectsCustomImageSizeAsWildcar
 	if err != nil {
 		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
 	}
-	if got := spec.Options["size"].Values; len(got) != 1 || got[0] != "*" {
-		t.Fatalf("custom size projection = %#v, want wildcard", got)
+	if got := spec.Options["size"].Values; len(got) != 2 || got[0] != "1:1" || got[1] != "*" {
+		t.Fatalf("custom size projection = %#v, want configured value plus wildcard", got)
 	}
 }
 

@@ -6,7 +6,7 @@ import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import { CONFIG_STORE_KEY, PUBLIC_MODEL_CATALOG_ID, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelChannel } from "@/stores/use-config-store";
-import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
 import { installRemoteUserDataAutoSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "@/services/user-data-sync";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
@@ -109,9 +109,14 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
         projected.image.size = { parameter: "none", values: [], default: "auto", allowCustom: false };
         projected.image.quality = { supported: false, values: [], default: "auto" };
         projected.image.transparentBackground = { supported: false, default: false };
-        applyStringOption(spec.options?.size || spec.options?.aspectRatio, defaults.size, (values, initial) => {
-            projected.image!.size = { parameter: "size", values, default: initial, allowCustom: false };
-        });
+        const sizeOption = spec.options?.size || spec.options?.aspectRatio;
+        const sizeValues = stringValues(sizeOption);
+        const sizeAllowsCustom = sizeValues.includes("*");
+        const concreteSizeValues = sizeValues.filter((value) => value !== "*");
+        const sizePresets = concreteSizeValues.length ? concreteSizeValues : sizeAllowsCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
+        if (sizePresets.length || sizeAllowsCustom) {
+            projected.image!.size = { parameter: "size", values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+        }
         applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {
             projected.image!.quality = { supported: true, values, default: initial };
         });
@@ -129,7 +134,7 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
         if (duration?.values?.length) projected.video.duration = { selection: "enum", values: duration.values.map(Number).filter(Number.isFinite), default: Number(defaults.videoSeconds ?? duration.values[0]) };
         else if (duration?.min !== undefined && duration.max !== undefined) projected.video.duration = { selection: "range", min: duration.min, max: duration.max, step: duration.step || 1, default: Number(defaults.videoSeconds ?? duration.min) };
         projected.video.ratios = stringValues(spec.options?.size || spec.options?.aspectRatio);
-        projected.video.defaultRatio = String(defaults.size ?? projected.video.ratios[0] ?? "");
+        projected.video.defaultRatio = concreteDefault(defaults.size, projected.video.ratios, "");
         projected.video.resolutions = stringValues(spec.options?.vquality || spec.options?.resolution);
         projected.video.defaultResolution = String(defaults.vquality ?? projected.video.resolutions[0] ?? "");
         projected.video.generateAudio = booleanOption(spec.options?.videoGenerateAudio, defaults.videoGenerateAudio);
@@ -140,11 +145,19 @@ function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<string,
 
 function applyStringOption(option: OptionConstraint | undefined, fallback: unknown, apply: (values: string[], initial: string) => void) {
     const values = stringValues(option);
-    if (values.length) apply(values, String(fallback ?? values[0]));
+    if (values.length) apply(values, concreteDefault(fallback, values, values[0]));
 }
 
 function stringValues(option?: OptionConstraint) {
-    return (option?.values || []).map(String);
+    return (option?.values || [])
+        .map(String)
+        .map((value) => value.trim())
+        .filter(Boolean);
+}
+
+function concreteDefault(value: unknown, values: string[], fallback: string) {
+    const candidate = String(value ?? "").trim();
+    return candidate && candidate !== "*" && values.includes(candidate) ? candidate : values.find((item) => item !== "*") || fallback;
 }
 
 function maxNumericOption(option: OptionConstraint | undefined, fallback: number) {

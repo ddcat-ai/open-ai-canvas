@@ -174,6 +174,15 @@ func defaultImageSizeValues() []string {
 	}
 }
 
+// legacyImageSizeValues 用于修复旧数据中仅保存了 "*" 的图片尺寸能力。
+// 这组值是前后台共同展示的基础预设，不能让历史通配符配置继续污染用户生成参数。
+func legacyImageSizeValues() []string {
+	return []string{
+		"1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16",
+		"1024x1024", "1536x1024", "1024x1536",
+	}
+}
+
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	text := &TextCapabilityConfig{References: TextReferenceConfig{PromptMaxChars: 32000}}
@@ -297,11 +306,7 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 			addInputConstraint(spec.Inputs, "mask", 0, 1)
 		}
 		if image.Size.Parameter != "none" {
-			if image.Size.AllowCustom {
-				spec.Options["size"] = OptionConstraint{Values: []any{"*"}}
-			} else {
-				spec.Options["size"] = anyValues(image.Size.Values)
-			}
+			spec.Options["size"] = imageSizeOptionConstraint(image.Size)
 		}
 		if image.Quality.Supported {
 			spec.Options["quality"] = anyValues(image.Quality.Values)
@@ -348,6 +353,34 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		return spec, BadAuthRequest("未知模型能力类型")
 	}
 	return spec, nil
+}
+
+// imageSizeOptionConstraint 保留可见的标准尺寸/比例，同时用 * 表示允许自定义。
+// * 不能替代标准值，否则管理端只能看到一个没有业务含义的通配符。
+func imageSizeOptionConstraint(size ImageSizeConfig) OptionConstraint {
+	values := make([]string, 0, len(size.Values)+1)
+	seen := make(map[string]struct{}, len(size.Values)+1)
+	for _, value := range size.Values {
+		value = strings.TrimSpace(value)
+		if value == "" || value == "*" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	if size.AllowCustom {
+		if len(values) == 0 {
+			for _, value := range legacyImageSizeValues() {
+				seen[value] = struct{}{}
+				values = append(values, value)
+			}
+		}
+		values = append(values, "*")
+	}
+	return anyValues(values)
 }
 
 func addInputConstraint(inputs map[string]InputConstraint, name string, min int, max int) {
