@@ -49,7 +49,7 @@
         "localforage": "^1.10.0",
         "lucide-react": "^1.25.0",
         "mammoth": "^1.12.0",
-        "motion": "^12.42.2",
+        "motion": "^13.1.0",
         "nanoid": "^6.0.0",
         "react": "19.2.7",
         "react-dom": "19.2.7",
