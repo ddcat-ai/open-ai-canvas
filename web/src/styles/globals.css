@@ -941,15 +941,44 @@
         pointer-events: none;
     }
 
-    /* 分组标题：小号大写标签，弱化但可读 */
+    /* 分组标题：小号大写标签，弱化但可读；有标题的分组支持折叠，padding/间距由折叠按钮接管 */
     .app-workspace-nav-group-label {
         display: block;
-        padding: 0 10px 6px;
         font-size: var(--fs-label);
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: color-mix(in srgb, var(--foreground) 36%, transparent);
+        transition: color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 8px;
+        border-radius: var(--r-sm);
+        text-align: left;
+        color: inherit;
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle:hover,
+    .app-workspace-nav-group-toggle:focus-visible {
+        background: var(--surface-hover);
+    }
+
+    .app-workspace-nav-group-toggle:hover .app-workspace-nav-group-label,
+    .app-workspace-nav-group-toggle:focus-visible .app-workspace-nav-group-label {
+        color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    }
+
+    .app-workspace-nav-group-toggle:hover svg,
+    .app-workspace-nav-group-toggle:focus-visible svg {
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
     }
 
     /* 工作区切换器下拉浮层 */
