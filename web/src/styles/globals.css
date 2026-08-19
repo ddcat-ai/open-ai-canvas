@@ -1369,13 +1369,21 @@
         position: relative;
         z-index: var(--z-toolbar);
         height: var(--page-topbar-h);
-        border: 0;
-        border-bottom: 1px solid var(--workspace-border);
-        border-radius: 0;
+        margin: 10px 12px;
+        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        border-radius: var(--r-lg);
         background: var(--workspace-surface-strong);
-        box-shadow: none;
+        box-shadow:
+            0 8px 24px color-mix(in srgb, var(--foreground) 8%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
+    }
+
+    .dark .app-workspace-topbar {
+        box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
     }
 
     .app-workspace-topbar-icon-button {
