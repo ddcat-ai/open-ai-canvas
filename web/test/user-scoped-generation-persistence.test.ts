@@ -8,13 +8,54 @@ import { switchUserStorageScope } from "../src/lib/user-session";
 import { canvasCinematicContinuationEntryAdapters } from "../src/components/canvas/canvas-assistant-panel";
 import { activeGenerationConsumerController, beginGenerationConsumer, runGenerationConsumer } from "../src/services/generation-consumer-lifecycle";
 import { createCanvasGenerationLiveProjectAdapter, persistCanvasCinematicSessionContinuationEffect, persistCanvasGenerationEffect, registerCanvasGenerationLiveProject } from "../src/services/canvas-generation-consumer";
-import { CREATION_CONVERSATIONS_KEY, loadCreationConversations, pendingCreationTaskIds, saveCreationConversations } from "../src/services/creation-conversation-store";
+import { CREATION_CONVERSATIONS_KEY, loadCreationConversations, pendingCreationTaskIds, pendingCreationTaskKey, saveCreationConversations } from "../src/services/creation-conversation-store";
+import { recoverCreationTextTask } from "../src/services/creation-text-task-recovery";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, type Asset, type NewAsset } from "../src/stores/use-asset-store";
 import { withGenerationAssetStorageLock } from "../src/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceLock, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 import { deleteAssetWithRemoteSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
+
+test("creation recovery observes streaming text tasks after reload", () => {
+    const conversations = [{
+        id: "conversation-text-recovery",
+        messages: [
+            { id: "text-streaming", role: "assistant" as const, mode: "text", status: "streaming", taskIds: ["task-text"] },
+            { id: "text-done", role: "assistant" as const, mode: "text", status: "done", taskIds: ["task-text-done"] },
+            { id: "image-pending", role: "assistant" as const, mode: "image", status: "pending", taskIds: ["task-image"] },
+        ],
+    }];
+
+    expect(pendingCreationTaskIds(conversations)).toEqual(["task-text", "task-image"]);
+    expect(pendingCreationTaskKey(conversations)).toContain("conversation-text-recovery:text-streaming:task-text");
+});
+
+test("creation recovery restores completed text and terminal status", () => {
+    const message = { mode: "text", status: "streaming", content: "", taskIds: ["task-text"] };
+    const baseTask = {
+        id: "task-text",
+        type: "canvas_text",
+        prompt: "写一篇小说",
+        attempts: 1,
+        createdAt: "2026-08-19T22:47:51.000Z",
+        updatedAt: "2026-08-19T22:48:39.000Z",
+    };
+
+    expect(recoverCreationTextTask(message, [{ ...baseTask, status: "running" }])).toBeNull();
+    expect(recoverCreationTextTask(message, [{ ...baseTask, status: "succeeded", resultJson: JSON.stringify({ mode: "text", text: "恢复后的正文" }) }])).toEqual({
+        status: "done",
+        content: "恢复后的正文",
+        error: undefined,
+        taskIds: ["task-text"],
+    });
+    expect(recoverCreationTextTask(message, [{ ...baseTask, status: "failed", error: "渠道请求失败" }])).toEqual({
+        status: "error",
+        content: "生成失败",
+        error: "渠道请求失败",
+        taskIds: ["task-text"],
+    });
+});
 
 function generatedAsset(title: string): NewAsset {
     return {

@@ -28,16 +28,21 @@ export function removeCreationConversationSnapshot<T extends { id: string }>(con
     return next;
 }
 
-export function pendingCreationMediaKey(conversations: StoredCreationConversation[]) {
+function isRecoverableCreationMessage(message: PendingCreationMessage) {
+    if (message.role !== "assistant" || !message.taskIds?.length) return false;
+    return message.mode === "text" ? message.status === "streaming" || message.status === "pending" : message.status === "pending";
+}
+
+export function pendingCreationTaskKey(conversations: StoredCreationConversation[]) {
     return conversations
-        .flatMap((conversation) => conversation.messages.flatMap((message) => (message.role === "assistant" && message.status === "pending" && message.mode !== "text" ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))
+        .flatMap((conversation) => conversation.messages.flatMap((message) => (isRecoverableCreationMessage(message) ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))
         .join("|");
 }
 
 export function pendingCreationTaskIds(conversations: StoredCreationConversation[]) {
     const taskIds = conversations.flatMap((conversation) =>
         conversation.messages.flatMap((message) => {
-            if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return [];
+            if (!isRecoverableCreationMessage(message)) return [];
             return message.taskIds || [];
         }),
     );
