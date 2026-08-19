@@ -172,6 +172,26 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, task)
 	})
+	r.POST("/tasks/:id/text-replay-complete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Text string `json:"text"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		task, err := svc.CompleteTextReplayTask(user.ID, c.Param("id"), req.Text)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		ok(c, task)
+	})
 	r.GET("/tasks/:id/logs", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

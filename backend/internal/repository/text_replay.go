@@ -124,6 +124,20 @@ func (r *Repository) CleanupTaskTextDeltas(now time.Time) (int64, error) {
 	return deleted, err
 }
 
+// CompleteTextReplayTask 把前端自管的 text_replay 任务原子收尾：写入最终正文并置为 succeeded。
+// 条件更新保证只有仍处于 text_replay 状态的任务能被收尾，避免重复完成。
+func (r *Repository) CompleteTextReplayTask(userID string, taskID string, resultJSON string, now time.Time) (bool, error) {
+	result := r.db.Model(&model.Task{}).
+		Where("id = ? AND user_id = ? AND status = ?", taskID, userID, model.TaskStatusTextReplay).
+		Updates(map[string]any{
+			"status": model.TaskStatusSucceeded, "stage": "已完成", "progress": 100,
+			"result_json": resultJSON, "text_draft": "",
+			"error": "", "completed_at": &now,
+			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
 func (r *Repository) DeleteUserTaskTextDeltas(userID string) error {
 	return r.db.Delete(&model.TaskTextDelta{}, "user_id = ?", userID).Error
 }
