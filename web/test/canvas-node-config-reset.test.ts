@@ -46,6 +46,21 @@ describe("applyNodeConfigPatch 模型切换清理生成参数", () => {
         expect(next.metadata?.watermark).toBeUndefined();
     });
 
+    test("音频参数随模型切换一并清理", () => {
+        const node = imageNode({
+            model: "default::tts-1",
+            audioVoice: "alloy",
+            audioFormat: "mp3",
+            audioSpeed: "1.25",
+            audioInstructions: "温暖、自然",
+        });
+        const next = applyNodeConfigPatch(node, { model: "default::gpt-4o-mini-tts" });
+        expect(next.metadata?.audioVoice).toBeUndefined();
+        expect(next.metadata?.audioFormat).toBeUndefined();
+        expect(next.metadata?.audioSpeed).toBeUndefined();
+        expect(next.metadata?.audioInstructions).toBeUndefined();
+    });
+
     test("同一模型标识的参数调整不受影响", () => {
         const node = imageNode({ model: "default::gpt-image-2", size: "1:1", quality: "high" });
         const next = applyNodeConfigPatch(node, { model: "default::gpt-image-2", quality: "medium" });

@@ -137,6 +137,10 @@ const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
     "vquality",
     "generateAudio",
     "watermark",
+    "audioVoice",
+    "audioFormat",
+    "audioSpeed",
+    "audioInstructions",
 ];
 
 export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>) {
