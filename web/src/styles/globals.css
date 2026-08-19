@@ -406,6 +406,8 @@
     --workspace-sidebar-width: 260px;        /* 侧栏展开宽度（组件 token）*/
     --workspace-sidebar-nav-width: 260px;    /* 侧栏导航内容宽度，不受折叠状态影响 */
 
+    --workspace-shell-gutter: 10px;       /* 工作区外壳画布留白（组件 token）*/
+
     /* --- Semantic 层（引用 Primitive，随主题切换）--- */
     /* 通用语义色（引用 Primitive neutral 色板）*/
     --bg: var(--color-neutral-0);
@@ -922,6 +924,10 @@
         padding: 0;
     }
 
+    .app-workspace-shell.is-spatial .app-workspace-main-row {
+        gap: 0;
+    }
+
     .app-workspace-sidebar-scrim {
         position: absolute;
         z-index: 30;
@@ -1082,7 +1088,9 @@
 
 
     .app-workspace-shell.is-spatial .app-workspace-stage {
+        border: 0;
         border-radius: 0;
+        box-shadow: none;
         background: var(--workspace-content);
     }
 
@@ -1196,7 +1204,7 @@
 
         .app-workspace-shell .app-workspace-sidebar {
             width: 0 !important;
-            border-right: 0 !important;
+            border: 0 !important;
             transition: width var(--motion-state) var(--ease-aceternity);
         }
 
@@ -1206,7 +1214,7 @@
             inset: 6px auto 6px 6px;
             width: min(264px, calc(100vw - 58px)) !important;
             border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-            border-radius: 12px;
+            border-radius: var(--r-xl);
             box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
         }
     }
@@ -1217,13 +1225,31 @@
 
     .app-workspace-shell {
         position: relative;
+        padding: var(--workspace-shell-gutter);
         background: var(--workspace-page);
     }
 
     .app-workspace-sidebar {
-        border: 0;
+        width: var(--workspace-sidebar-width, 260px);
+        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        border-radius: var(--r-xl);
         background: var(--workspace-sidebar);
-        transition: width var(--motion-state) var(--ease-aceternity);
+        box-shadow:
+            0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+        transition: width var(--motion-state) var(--ease-aceternity), border-color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
+    }
+
+    .dark .app-workspace-sidebar {
+        box-shadow:
+            0 14px 44px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    }
+
+    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
+        width: 0 !important;
+        border: 0;
+        box-shadow: none;
     }
 
     .app-workspace-shell.is-spatial .app-workspace-sidebar {
@@ -1247,6 +1273,21 @@
     .app-user-content,
     .app-workspace-grid {
         background: var(--workspace-content);
+    }
+
+    .app-workspace-stage {
+        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        border-radius: var(--r-xl);
+        box-shadow:
+            0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+
+
+    .dark .app-workspace-stage {
+        box-shadow:
+            0 14px 44px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    }
     }
 
     .app-workspace-page {
@@ -1317,6 +1358,7 @@
 
     .app-workspace-main-row {
         display: flex;
+        gap: var(--workspace-shell-gutter);
         min-height: 0;
         min-width: 0;
         flex: 1 1 auto;
