@@ -952,7 +952,7 @@
 
     /* 工作区切换器下拉浮层 */
     .app-workspace-nav-popover {
-        box-shadow: 0 18px 48px color-mix(in srgb, var(--foreground) 12%, transparent), 0 2px 10px color-mix(in srgb, var(--foreground) 6%, transparent);
+        box-shadow: none;
     }
 
     body.app-spatial-overlays {
@@ -1001,6 +1001,11 @@
 
     body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
         border-radius: 8px !important;
+    }
+
+    /* 展开菜单（下拉/弹出）取消阴影：层级由边框 + 背景对比表达 */
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+        box-shadow: none !important;
     }
 
     body.app-spatial-overlays :where(

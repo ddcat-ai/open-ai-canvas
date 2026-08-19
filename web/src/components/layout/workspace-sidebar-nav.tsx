@@ -111,7 +111,7 @@ function WorkspaceSwitcher({ onNavigate }: { onNavigate: () => void }) {
             {isOpen ? (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-                    <div className="app-workspace-nav-popover absolute left-3 right-3 top-full z-50 mt-1 overflow-hidden rounded-lg border border-[var(--workspace-border)] bg-[var(--workspace-surface-strong)] py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                    <div className="app-workspace-nav-popover absolute left-3 right-3 top-full z-50 mt-1 overflow-hidden rounded-lg border border-[var(--workspace-border)] bg-[var(--workspace-surface-strong)] py-1 animate-in fade-in zoom-in-95 duration-100">
                         <div className="px-3 py-2.5">
                             <div className="truncate text-[var(--fs-body)] font-semibold">影策</div>
                             <div className="mt-0.5 truncate text-[var(--fs-label)] text-foreground/45">创作工作台</div>
