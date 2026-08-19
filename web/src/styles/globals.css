@@ -1183,7 +1183,7 @@
             z-index: 40;
             inset: 6px auto 6px 6px;
             width: min(264px, calc(100vw - 58px)) !important;
-            border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+            border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
             border-radius: var(--r-xl);
             box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
         }
@@ -1210,21 +1210,27 @@
         box-shadow: none;
     }
 
-    .app-workspace-sidebar {
-        width: var(--workspace-sidebar-width, 260px);
-        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    /* 工作区卡片（侧栏 / 主区）共享外观：边框、圆角、阴影（深浅主题对称） */
+    .app-workspace-sidebar,
+    .app-workspace-stage {
+        border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
         border-radius: var(--r-xl);
-        background: var(--workspace-sidebar);
         box-shadow:
             0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-        transition: width var(--motion-state) var(--ease-aceternity), border-color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
     }
 
-    .dark .app-workspace-sidebar {
+    .dark .app-workspace-sidebar,
+    .dark .app-workspace-stage {
         box-shadow:
             0 14px 44px rgba(0, 0, 0, 0.45),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    }
+
+    .app-workspace-sidebar {
+        width: var(--workspace-sidebar-width, 260px);
+        background: var(--workspace-sidebar);
+        transition: width var(--motion-state) var(--ease-aceternity), border-color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
     }
 
     .app-workspace-shell .app-workspace-sidebar.is-collapsed {
@@ -1261,19 +1267,6 @@
         background: var(--workspace-content);
     }
 
-    .app-workspace-stage {
-        border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-        border-radius: var(--r-xl);
-        box-shadow:
-            0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-    }
-
-    .dark .app-workspace-stage {
-        box-shadow:
-            0 14px 44px rgba(0, 0, 0, 0.45),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-    }
 
     .app-workspace-page {
         background: var(--workspace-content);
