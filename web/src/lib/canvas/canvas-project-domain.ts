@@ -126,12 +126,39 @@ export function storyboardRowsFromTask(task: GenerationTask) {
 }
 
 
+// 模型切换时必须清理的节点级生成参数：这些参数属于旧模型的能力档位（分辨率/宽高比/质量等），
+// 新模型不支持时若残留，会在 buildNodeConfig 的「节点优先、全局兜底」合并中反复叠加（issue #254）。
+const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
+    "size",
+    "quality",
+    "transparentBackground",
+    "count",
+    "seconds",
+    "vquality",
+    "generateAudio",
+    "watermark",
+];
+
 export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>) {
     const safePatch = patch || {};
-    const next = { ...node, metadata: { ...node.metadata, ...safePatch } };
+    const nextPatch = resetGenerationParamsOnModelSwitch(node, safePatch);
+    const next = { ...node, metadata: { ...node.metadata, ...nextPatch } };
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     const size = typeof safePatch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
+}
+
+// 切换模型（不同模型标识）时，节点级生成参数必须随旧模型一起失效，回落全局配置；
+// 显式传入的同批 patch（如用户同时调整了参数）仍然优先。
+function resetGenerationParamsOnModelSwitch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>): Partial<CanvasNodeMetadata> {
+    if (typeof patch.model !== "string" || patch.model === node.metadata?.model) {
+        return patch;
+    }
+    const reset: Partial<CanvasNodeMetadata> = {};
+    for (const key of NODE_MODEL_GENERATION_PARAMS) {
+        reset[key] = undefined;
+    }
+    return { ...reset, ...patch };
 }
 
 export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0, anchorRatio?: number) {
