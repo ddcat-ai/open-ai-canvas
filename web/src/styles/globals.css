@@ -406,7 +406,7 @@
     --workspace-sidebar-width: 260px;        /* 侧栏展开宽度（组件 token）*/
     --workspace-sidebar-nav-width: 260px;    /* 侧栏导航内容宽度，不受折叠状态影响 */
 
-    --workspace-shell-gutter: 10px;       /* 工作区外壳画布留白（组件 token）*/
+    --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
 
     /* --- Semantic 层（引用 Primitive，随主题切换）--- */
     /* 通用语义色（引用 Primitive neutral 色板）*/
@@ -1334,8 +1334,8 @@
     .app-workspace-topbar {
         position: relative;
         z-index: var(--z-toolbar);
-        height: 48px;
-        margin: 10px 12px;
+        height: 44px;
+        margin: 8px 10px;
         border: 1px solid color-mix(in srgb, var(--foreground) 5%, transparent);
         border-radius: var(--r-lg);
         background: var(--workspace-surface-strong);
