@@ -3,6 +3,7 @@ out/
 node_modules/
 docs/*
 !docs/design/
+!docs/index.md
 .env*
 !.env.example
 data/
