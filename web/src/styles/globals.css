@@ -1381,6 +1381,11 @@
         stroke-width: 1.8;
     }
 
+    /* 账户触发按钮为身份标识，占位图标默认不弱化（与其他工具图标区分） */
+    .app-workspace-account-trigger > span > svg {
+        color: var(--foreground);
+    }
+
     .app-workspace-topbar-icon-button:hover {
         background: var(--surface-hover);
         color: var(--foreground);
