@@ -44,6 +44,10 @@ const (
 	TaskStatusSucceeded TaskStatus = "succeeded"
 	TaskStatusFailed    TaskStatus = "failed"
 	TaskStatusCancelled TaskStatus = "cancelled"
+	// text_replay 任务是前端自管、不经过 worker 队列的文本生成存档容器：
+	// 前端直连模型流式生成，把增量 POST 到 /tasks/:id/text-deltas 存档，
+	// 完成后调用 /tasks/:id/text-replay-complete 归并为最终正文。
+	TaskStatusTextReplay TaskStatus = "text_replay"
 
 	SessionStatusActive    SessionStatus = "active"
 	SessionStatusCompleted SessionStatus = "completed"

@@ -24,6 +24,7 @@ import { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerati
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { cancelGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { createTextReplayPublisher } from "@/lib/creation-text-replay";
 import { isLocalDreaminaTaskId, isLocalDreaminaWaitStopped, localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
@@ -490,10 +491,18 @@ export default function CreatePage() {
                         ? await buildTextMessageContent(item)
                         : item.content,
                 })));
-                await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), {
+                const replayPublisher = createTextReplayPublisher(requestConfig, text);
+                void replayPublisher.start();
+                let finalText = "";
+                await requestImageQuestion(requestConfig, history, (full) => {
+                    finalText = full;
+                    updateOriginAssistant((item) => ({ ...item, content: full }));
+                    replayPublisher.publish(full);
+                }, {
                     signal: requestLifecycle.signal,
                     onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
                 });
+                replayPublisher.finish(finalText);
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
                 const settled = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTaskBatch({

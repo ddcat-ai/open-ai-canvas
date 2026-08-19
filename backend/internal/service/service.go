@@ -327,6 +327,10 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+	// 前端自管的文本持久化任务：直连模型生成、增量上报 text-deltas，不排入 worker 队列生成。
+	if isTextReplayTaskRequest(normalizedInput) {
+		return s.createTextReplayTask(userID, req, normalizedInput)
+	}
 	if err := s.requireCustomChannelsForTaskInput(normalizedInput); err != nil {
 		return nil, err
 	}
@@ -399,6 +403,41 @@ func normalizeTaskInput(input map[string]any) (map[string]any, error) {
 		normalized["canvasSnapshot"] = compactPersistedValue(snapshot)
 	}
 	return normalized, nil
+}
+
+// createTextReplayTask 创建前端自管的文本持久化任务：状态为 text_replay，
+// 不排队执行、不计 active 队列、不产生计费，仅作为正文增量（text-deltas）的存储容器。
+func (s *Service) createTextReplayTask(userID string, req CreateTaskRequest, normalizedInput map[string]any) (*model.Task, error) {
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		prompt = strings.TrimSpace(fmt.Sprint(normalizedInput["prompt"]))
+	}
+	if prompt == "" {
+		return nil, errors.New("prompt is required")
+	}
+	taskType := strings.TrimSpace(req.Type)
+	if taskType == "" {
+		taskType = "text"
+	}
+	task := model.Task{
+		ID: newID(), UserID: userID, SessionID: req.SessionID, ProjectID: req.ProjectID,
+		Type: taskType, Status: model.TaskStatusTextReplay, Stage: "文本持久化（前端自管）", Progress: 5,
+		Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: strings.TrimSpace(req.Model),
+	}
+	if err := s.protectTaskSecrets(normalizedInput); err != nil {
+		return nil, err
+	}
+	inputJSON, _ := json.Marshal(normalizedInput)
+	task.InputJSON = string(inputJSON)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
+		return nil, err
+	}
+	_ = s.log(userID, task.ID, "info", "文本持久化任务已创建（前端自管）", "")
+	return taskForOutput(task), nil
 }
 
 func (s *Service) requireCustomChannelsForTaskInput(input map[string]any) error {
