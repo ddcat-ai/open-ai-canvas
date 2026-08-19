@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Bot, Check, ChevronDown, Clapperboard, Coins, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
+import { Bot, Check, ChevronDown, Clapperboard, CloudDownload, Coins, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Modal, Tooltip } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -28,6 +28,7 @@ type CanvasTopBarProps = {
     onCreateProject: () => void;
     onDeleteProject: () => void;
     onImportImage: () => void;
+    onImportTapNow: () => void;
     onUndo: () => void;
     onRedo: () => void;
     onShare: () => void;
@@ -58,6 +59,7 @@ export function CanvasTopBar({
     onCreateProject,
     onDeleteProject,
     onImportImage,
+    onImportTapNow,
     onUndo,
     onRedo,
     onShare,
@@ -191,6 +193,9 @@ export function CanvasTopBar({
 
                 <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5">
                     <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
+                    <Button type="text" className="canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} onClick={onImportTapNow} aria-label="导入 TapNow 画布" title="导入 TapNow 画布">
+                        <span className="hidden xl:inline">导入 TapNow</span>
+                    </Button>
                     <Dropdown
                         trigger={["click"]}
                         menu={{
