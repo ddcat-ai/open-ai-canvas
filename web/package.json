@@ -44,7 +44,7 @@
         "fflate": "^0.8.3",
         "file-saver": "^2.0.5",
         "idb": "8.0.3",
-        "json-canonicalize": "2.0.0",
+        "json-canonicalize": "2.0.1",
         "leafer-ui": "^2.2.7",
         "localforage": "^1.10.0",
         "lucide-react": "^1.25.0",
