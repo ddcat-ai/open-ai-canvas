@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v1.1.3
+## v1.1.4
 
 - 修复 `/canvas` 路由与静态模型目录同名导致的容器端口跳转，确保域名访问保持原有 HTTPS 地址。
 - 修复系统文本模型中转先读取完整响应才返回的问题，恢复 OpenAI Responses、Chat Completions 与 Gemini 的 SSE 增量输出，并补齐多层 Nginx 的禁缓冲信号传递。
