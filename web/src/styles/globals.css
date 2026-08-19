@@ -1252,13 +1252,12 @@
         box-shadow:
             0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-
+    }
 
     .dark .app-workspace-stage {
         box-shadow:
             0 14px 44px rgba(0, 0, 0, 0.45),
             inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-    }
     }
 
     .app-workspace-page {
