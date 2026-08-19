@@ -162,6 +162,7 @@ export default function RuntimePolicySettingsPage() {
         <AdminPageFrame
             title="资源与策略"
             description="账号配额、任务调度与请求安全策略"
+            scroll
             actions={<div className="flex items-center gap-2"><Button icon={<RotateCcw className="size-4" />} disabled={loading || saving} onClick={reset}>重置</Button><Button icon={<InfinityIcon className="size-4" />} disabled={loading || saving} onClick={() => void useSelfMode()}>自用模式</Button></div>}
         >
             <Form form={form} layout="vertical" requiredMark={false} disabled={loading} onValuesChange={() => setDirty(true)}>

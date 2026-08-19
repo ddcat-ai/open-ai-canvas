@@ -136,10 +136,10 @@ export function AdminShell() {
     );
 }
 
-export function AdminPageFrame({ title, actions, back, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; children: ReactNode }) {
+export function AdminPageFrame({ title, actions, back, scroll = false, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; scroll?: boolean; children: ReactNode }) {
     return (
-        <WorkspacePage scroll={false} fluid className="admin-page-root">
-            <div className="admin-page-frame">
+        <WorkspacePage scroll={scroll} fluid className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
+            <div className={cn("admin-page-frame", scroll && "admin-page-frame-scrollable")}>
                 <header className="admin-page-header flex min-h-12 shrink-0 flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                         {back ? (

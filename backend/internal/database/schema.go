@@ -23,7 +23,6 @@ func Models() []any {
 		&model.IDSequence{},
 		&model.LogicalModel{},
 		&model.LogicalModelRevision{},
-		&model.PhysicalCapabilityVariant{},
 		&model.LogicalModelRoute{},
 		&model.RouteAttempt{},
 		&model.ApiCallLog{},
@@ -84,7 +83,13 @@ func MigrateSchema(db *gorm.DB) error {
 	if err := widenPostgresAssetIDColumns(db); err != nil {
 		return err
 	}
+	if err := migrateLogicalRoutesToChannelModels(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(Models()...); err != nil {
+		return err
+	}
+	if err := dropLegacyPhysicalVariants(db); err != nil {
 		return err
 	}
 	// 为升级前已存在的逻辑模型回填版本序列，避免首次保存时从 0 重新分配。
@@ -102,6 +107,197 @@ func MigrateSchema(db *gorm.DB) error {
 		return err
 	}
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nonempty ON users(lower(email)) WHERE email <> ''").Error
+}
+
+// migrateLogicalRoutesToChannelModels 在模型结构切换前把历史 variant 外键转换为渠道模型外键。
+// 写路径不能接受无法映射的历史引用，否则任务恢复和计费会失去明确执行目标。
+func migrateLogicalRoutesToChannelModels(db *gorm.DB) error {
+	legacyTargets := []any{
+		&model.LogicalModelRoute{},
+		&model.Task{},
+		&model.RouteAttempt{},
+	}
+	legacyReferenceFound := false
+	for _, target := range legacyTargets {
+		if db.Migrator().HasTable(target) && db.Migrator().HasColumn(target, "physical_variant_id") {
+			legacyReferenceFound = true
+			break
+		}
+	}
+	if !db.Migrator().HasTable("physical_capability_variants") {
+		if legacyReferenceFound {
+			return fmt.Errorf("发现历史可用配置引用，但 physical_capability_variants 表不存在，拒绝继续迁移")
+		}
+		return nil
+	}
+	for _, target := range []struct {
+		table any
+		field string
+	}{
+		{table: &model.LogicalModelRoute{}, field: "ChannelModelID"},
+		{table: &model.RouteAttempt{}, field: "ChannelModelID"},
+		{table: &model.Task{}, field: "ChannelModelID"},
+	} {
+		if db.Migrator().HasTable(target.table) && !db.Migrator().HasColumn(target.table, target.field) {
+			if err := db.Migrator().AddColumn(target.table, target.field); err != nil {
+				return fmt.Errorf("新增渠道模型迁移列 %T.%s：%w", target.table, target.field, err)
+			}
+		}
+	}
+
+	if db.Migrator().HasTable(&model.LogicalModelRoute{}) && db.Migrator().HasColumn(&model.LogicalModelRoute{}, "physical_variant_id") {
+		if err := db.Exec(`UPDATE logical_model_routes
+			SET channel_model_id = (SELECT channel_model_id FROM physical_capability_variants WHERE id = logical_model_routes.physical_variant_id)
+			WHERE COALESCE(channel_model_id, '') = '' AND COALESCE(physical_variant_id, '') <> ''`).Error; err != nil {
+			return fmt.Errorf("回填供应线路渠道模型：%w", err)
+		}
+		if err := ensureLegacyReferencesMapped(db, "logical_model_routes", "physical_variant_id", "channel_model_id"); err != nil {
+			return err
+		}
+	}
+
+	if db.Migrator().HasTable(&model.Task{}) && db.Migrator().HasColumn(&model.Task{}, "physical_variant_id") {
+		if err := db.Exec(`UPDATE tasks
+			SET channel_model_id = (SELECT channel_model_id FROM physical_capability_variants WHERE id = tasks.physical_variant_id)
+			WHERE COALESCE(channel_model_id, '') = '' AND COALESCE(physical_variant_id, '') <> ''`).Error; err != nil {
+			return fmt.Errorf("回填任务渠道模型：%w", err)
+		}
+		if err := ensureLegacyReferencesMapped(db, "tasks", "physical_variant_id", "channel_model_id"); err != nil {
+			return err
+		}
+	}
+
+	if db.Migrator().HasTable(&model.RouteAttempt{}) && db.Migrator().HasColumn(&model.RouteAttempt{}, "physical_variant_id") {
+		if err := db.Exec(`UPDATE route_attempts
+			SET channel_model_id = (SELECT channel_model_id FROM physical_capability_variants WHERE id = route_attempts.physical_variant_id)
+			WHERE COALESCE(channel_model_id, '') = '' AND COALESCE(physical_variant_id, '') <> ''`).Error; err != nil {
+			return fmt.Errorf("回填路由尝试渠道模型：%w", err)
+		}
+		if err := ensureLegacyReferencesMapped(db, "route_attempts", "physical_variant_id", "channel_model_id"); err != nil {
+			return err
+		}
+	}
+	for _, target := range []struct {
+		table  any
+		name   string
+		column string
+	}{
+		{table: &model.LogicalModelRoute{}, name: "logical_model_routes", column: "channel_model_id"},
+		{table: &model.Task{}, name: "tasks", column: "channel_model_id"},
+		{table: &model.RouteAttempt{}, name: "route_attempts", column: "channel_model_id"},
+	} {
+		if db.Migrator().HasTable(target.table) && db.Migrator().HasColumn(target.table, target.column) {
+			if err := ensureChannelModelReferencesExist(db, target.name, target.column); err != nil {
+				return err
+			}
+		}
+	}
+	if db.Migrator().HasTable(&model.LogicalModelRoute{}) && db.Migrator().HasColumn(&model.LogicalModelRoute{}, "channel_model_id") {
+		if err := ensureLogicalRouteMembersUnique(db); err != nil {
+			return err
+		}
+	}
+	if db.Migrator().HasTable(&model.LogicalModelRoute{}) && db.Migrator().HasColumn(&model.LogicalModelRoute{}, "physical_variant_id") {
+		if err := db.Exec("DROP INDEX IF EXISTS idx_logical_route_member").Error; err != nil {
+			return fmt.Errorf("删除旧供应线路唯一索引：%w", err)
+		}
+	}
+	return nil
+}
+
+func ensureLegacyReferencesMapped(db *gorm.DB, table string, legacyColumn string, targetColumn string) error {
+	var count int64
+	query := fmt.Sprintf(
+		`SELECT COUNT(*) FROM %s WHERE COALESCE(%s, '') <> '' AND COALESCE(%s, '') = ''`,
+		table,
+		legacyColumn,
+		targetColumn,
+	)
+	if err := db.Raw(query).Scan(&count).Error; err != nil {
+		return fmt.Errorf("检查 %s 历史渠道模型映射：%w", table, err)
+	}
+	if count > 0 {
+		return fmt.Errorf("%s 存在 %d 条无法映射到渠道模型的历史引用", table, count)
+	}
+	query = fmt.Sprintf(
+		`SELECT COUNT(*) FROM %s AS source
+		LEFT JOIN physical_capability_variants AS legacy ON legacy.id = source.%s
+		WHERE COALESCE(source.%s, '') <> '' AND (legacy.id IS NULL OR source.%s <> legacy.channel_model_id)`,
+		table,
+		legacyColumn,
+		legacyColumn,
+		targetColumn,
+	)
+	if err := db.Raw(query).Scan(&count).Error; err != nil {
+		return fmt.Errorf("核对 %s 历史渠道模型映射：%w", table, err)
+	}
+	if count > 0 {
+		return fmt.Errorf("%s 存在与历史可用配置不一致的渠道模型引用", table)
+	}
+	return nil
+}
+
+func ensureChannelModelReferencesExist(db *gorm.DB, table string, targetColumn string) error {
+	var count int64
+	query := fmt.Sprintf(
+		`SELECT COUNT(*) FROM %s AS source
+		LEFT JOIN channel_models AS channel_model ON channel_model.id = source.%s
+		WHERE COALESCE(source.%s, '') <> '' AND channel_model.id IS NULL`,
+		table,
+		targetColumn,
+		targetColumn,
+	)
+	if err := db.Raw(query).Scan(&count).Error; err != nil {
+		return fmt.Errorf("检查 %s 渠道模型引用：%w", table, err)
+	}
+	if count > 0 {
+		return fmt.Errorf("%s 存在 %d 条指向不存在渠道模型的历史引用", table, count)
+	}
+	return nil
+}
+
+func ensureLogicalRouteMembersUnique(db *gorm.DB) error {
+	var count int64
+	if err := db.Raw(`SELECT COUNT(*) FROM (
+		SELECT logical_model_revision_id, channel_model_id
+		FROM logical_model_routes
+		WHERE COALESCE(channel_model_id, '') <> ''
+		GROUP BY logical_model_revision_id, channel_model_id
+		HAVING COUNT(*) > 1
+	) AS duplicate_routes`).Scan(&count).Error; err != nil {
+		return fmt.Errorf("检查供应线路重复渠道模型：%w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("历史供应线路存在 %d 组同一版本重复引用同一渠道模型的数据，请先清理后再迁移", count)
+	}
+	return nil
+}
+
+func dropLegacyPhysicalVariants(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&model.LogicalModelRoute{}, "physical_variant_id") {
+		if err := db.Exec("DROP INDEX IF EXISTS idx_logical_route_member").Error; err != nil {
+			return fmt.Errorf("删除供应线路迁移索引：%w", err)
+		}
+		if err := db.Migrator().DropColumn(&model.LogicalModelRoute{}, "physical_variant_id"); err != nil {
+			return fmt.Errorf("删除供应线路可用配置列：%w", err)
+		}
+	}
+	if db.Migrator().HasColumn(&model.Task{}, "physical_variant_id") {
+		if err := db.Migrator().DropColumn(&model.Task{}, "physical_variant_id"); err != nil {
+			return fmt.Errorf("删除任务可用配置列：%w", err)
+		}
+	}
+	if db.Migrator().HasColumn(&model.RouteAttempt{}, "physical_variant_id") {
+		if err := db.Migrator().DropColumn(&model.RouteAttempt{}, "physical_variant_id"); err != nil {
+			return fmt.Errorf("删除路由尝试可用配置列：%w", err)
+		}
+	}
+	if db.Migrator().HasTable("physical_capability_variants") {
+		if err := db.Migrator().DropTable("physical_capability_variants"); err != nil {
+			return fmt.Errorf("删除可用配置表：%w", err)
+		}
+	}
+	return db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_logical_route_member ON logical_model_routes(logical_model_revision_id, channel_model_id)`).Error
 }
 
 type varcharColumnMigration struct {

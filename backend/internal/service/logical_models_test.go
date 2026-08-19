@@ -150,23 +150,11 @@ func TestLogicalModelAvailabilityErrorRequiresSettlementReadyCoverage(t *testing
 	}
 }
 
-func TestOptionConstraintWithinRejectsFinerStepThanRealModel(t *testing.T) {
-	physical := numericRange(6, 18, 6)
-	tooBroad := numericRange(6, 18, 3)
-	if optionConstraintWithin(tooBroad, physical) {
-		t.Fatal("a route step finer than the channel model step was accepted")
-	}
-	if !optionConstraintWithin(numericRange(6, 18, 6), physical) {
-		t.Fatal("the channel model step was rejected")
-	}
-}
-
-func TestValidateVariantWithinChannelModelRequiresExplicitImageCapability(t *testing.T) {
+func TestChannelModelCapabilitySpecRequiresExplicitImageCapability(t *testing.T) {
 	channelModel := model.ChannelModel{Capability: "image", CapabilityConfigJSON: ""}
-	spec := CapabilitySpec{Version: 1, Capability: "image"}
 
-	err := validateVariantWithinChannelModel(channelModel, spec)
+	_, err := channelModelCapabilitySpec(channelModel)
 	if err == nil || !strings.Contains(err.Error(), "渠道图片模型尚未配置能力参数") {
-		t.Fatalf("validateVariantWithinChannelModel() error = %v", err)
+		t.Fatalf("channelModelCapabilitySpec() error = %v", err)
 	}
 }

@@ -54,7 +54,7 @@ export default function DrawingEngineSettingsPage() {
 
     const dirty = engine !== current.defaultEngine || tldrawLicenseKey !== (current.tldrawLicenseKey || "");
     return (
-        <AdminPageFrame title="绘图工具" description="设置新建绘图节点使用的默认编辑器">
+        <AdminPageFrame title="绘图工具" description="设置新建绘图节点使用的默认编辑器" scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     icon={<Brush className="size-4" />}

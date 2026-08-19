@@ -39,12 +39,10 @@ export type PublicLogicalModel = {
 
 export type AdminLogicalRoute = {
     id: string;
-    physicalVariantId: string;
-    physicalVariantName: string;
     channelModelId: string;
     channelId: string;
-    physicalModelKey: string;
-    physicalModelName: string;
+    channelModelKey: string;
+    channelModelName: string;
     enabled: boolean;
     priority: number;
     weight: number;
@@ -59,29 +57,6 @@ export type AdminLogicalModel = PublicLogicalModel & {
     configurationError?: string;
     availabilityError?: string;
     routes: AdminLogicalRoute[];
-};
-
-export type AdminPhysicalVariant = {
-    id: string;
-    channelModelId: string;
-    channelId: string;
-    modelKey: string;
-    modelName: string;
-    name: string;
-    capability: CapabilitySpec["capability"];
-    protocol: string;
-    enabled: boolean;
-    modelEnabled: boolean;
-    usageCount: number;
-    capabilitySpec: CapabilitySpec;
-};
-
-export type PhysicalVariantMutation = {
-    channelModelId: string;
-    name: string;
-    enabled: boolean;
-    /** 能力范围由渠道模型能力参数自动生成；保留可选字段兼容旧调用方。 */
-    capabilitySpec?: CapabilitySpec;
 };
 
 export type LogicalModelMutation = {
@@ -100,12 +75,12 @@ export type LogicalModelMutation = {
     cachedPriceMicrocredits: number;
     capabilitySpec: CapabilitySpec;
     defaultOptions: Record<string, unknown>;
-    routes: Array<{ physicalVariantId: string; enabled: boolean; priority: number; weight: number }>;
+    routes: Array<{ channelModelId: string; enabled: boolean; priority: number; weight: number }>;
 };
 
 export type RouteSimulationResult = {
     productMatch: { matched: boolean; reasons?: string[] };
-    candidates: Array<{ routeId: string; variantId: string; channelModelId: string; priority: number; weight: number; enabled: boolean; matched: boolean; blocked: boolean; inPool: boolean; reasons?: string[] }>;
+    candidates: Array<{ routeId: string; channelModelId: string; channelModelKey: string; channelModelName: string; priority: number; weight: number; enabled: boolean; matched: boolean; blocked: boolean; inPool: boolean; reasons?: string[] }>;
 };
 
 export function listLogicalModels() {
@@ -126,18 +101,6 @@ export function createAdminLogicalModel(input: LogicalModelMutation) {
 
 export function updateAdminLogicalModel(id: string, input: LogicalModelMutation) {
     return request<{ model: AdminLogicalModel }>(apiClient.patch(`/admin/logical-models/${encodeURIComponent(id)}`, input));
-}
-
-export function listAdminPhysicalVariants(channelModelId?: string) {
-    return request<{ variants: AdminPhysicalVariant[] }>(apiClient.get("/admin/logical-models/physical-variants", { params: channelModelId ? { channelModelId } : undefined }));
-}
-
-export function createAdminPhysicalVariant(input: PhysicalVariantMutation) {
-    return request<{ variant: AdminPhysicalVariant }>(apiClient.post("/admin/logical-models/physical-variants", input));
-}
-
-export function updateAdminPhysicalVariant(id: string, input: PhysicalVariantMutation) {
-    return request<{ variant: AdminPhysicalVariant }>(apiClient.patch(`/admin/logical-models/physical-variants/${encodeURIComponent(id)}`, input));
 }
 
 export function simulateAdminLogicalModel(id: string, intent: ModelRequestIntent) {

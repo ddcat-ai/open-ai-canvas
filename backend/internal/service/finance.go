@@ -460,13 +460,13 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	if err != nil || !logicalModel.Enabled || logicalModel.ActiveRevisionID != task.LogicalModelRevisionID {
 		return nil, BadAuthRequest("所选模型计费配置已失效，请重新选择")
 	}
-	variant, err := s.repo.PhysicalVariant(task.PhysicalVariantID)
-	if err != nil {
-		return nil, BadAuthRequest("所选模型配置已更新，请重新选择")
+	route, err := s.repo.LogicalModelRoute(task.RouteID)
+	if err != nil || route.LogicalModelRevisionID != task.LogicalModelRevisionID || route.ChannelModelID != task.ChannelModelID {
+		return nil, BadAuthRequest("所选模型供应线路已更新，请重新选择")
 	}
-	channelModel, err := s.repo.ChannelModel(variant.ChannelModelID)
+	channelModel, err := s.repo.ChannelModel(task.ChannelModelID)
 	if err != nil {
-		return nil, BadAuthRequest("所选模型配置已更新，请重新选择")
+		return nil, BadAuthRequest("所选模型供应线路已更新，请重新选择")
 	}
 	config, _ := input["config"].(map[string]any)
 	capability := normalizeCapability(fmt.Sprint(input["mode"]))

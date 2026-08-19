@@ -18,7 +18,7 @@ type Task struct {
 	LogicalModelID         string     `json:"logicalModelId,omitempty" gorm:"size:36;index"`
 	LogicalModelRevisionID string     `json:"logicalModelRevisionId,omitempty" gorm:"size:36;index"`
 	RouteID                string     `json:"routeId,omitempty" gorm:"size:36;index"`
-	PhysicalVariantID      string     `json:"physicalVariantId,omitempty" gorm:"size:36;index"`
+	ChannelModelID         string     `json:"channelModelId,omitempty" gorm:"size:36;index"`
 	// RouteRun 只在用户主动重试时递增；worker 租约恢复不应创建新的路由选择世代。
 	RouteRun                  int                  `json:"-" gorm:"index"`
 	BillingOrderID            string               `json:"billingOrderId,omitempty" gorm:"index;size:36"`

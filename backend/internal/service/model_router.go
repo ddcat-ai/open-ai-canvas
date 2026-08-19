@@ -97,10 +97,9 @@ type cachedLogicalModel struct {
 }
 
 type cachedLogicalRoute struct {
-	Route        model.LogicalModelRoute
-	Variant      model.PhysicalCapabilityVariant
-	VariantSpec  CapabilitySpec
-	ChannelModel model.ChannelModel
+	Route          model.LogicalModelRoute
+	CapabilitySpec CapabilitySpec
+	ChannelModel   model.ChannelModel
 }
 
 type routeCatalogSnapshot struct {
@@ -114,7 +113,6 @@ type RoutedModel struct {
 	LogicalModel model.LogicalModel
 	Revision     model.LogicalModelRevision
 	Route        model.LogicalModelRoute
-	Variant      model.PhysicalCapabilityVariant
 	ChannelModel model.ChannelModel
 	Defaults     map[string]any
 }
@@ -529,37 +527,29 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			log.Printf("logical model omitted from route catalog id=%s: invalid product capability: %v", item.ID, decodeErr)
 			continue
 		}
-		variantByID := make(map[string]model.PhysicalCapabilityVariant, len(graph.Variants))
-		for _, variant := range graph.Variants {
-			variantByID[variant.ID] = variant
-		}
 		channelModelByID := make(map[string]model.ChannelModel, len(graph.ChannelModels))
 		for _, channelModel := range graph.ChannelModels {
 			channelModelByID[channelModel.ID] = channelModel
 		}
 		cached := cachedLogicalModel{Model: item, Revision: *graph.Revision, ProductSpec: productSpec, Defaults: map[string]any{}}
 		for _, route := range graph.Routes {
-			variant, ok := variantByID[route.PhysicalVariantID]
-			if !ok || !variant.Enabled {
-				continue
-			}
-			channelModel, ok := channelModelByID[variant.ChannelModelID]
+			channelModel, ok := channelModelByID[route.ChannelModelID]
 			if !ok || !channelModel.Enabled || !enabledSystemChannels[channelModel.ChannelID] {
 				continue
 			}
 			if item.PricePolicy == "channel" && !channelModel.PriceConfigured {
 				continue
 			}
-			variantSpec, specErr := effectivePhysicalVariantSpec(variant, channelModel)
+			capabilitySpec, specErr := channelModelCapabilitySpec(channelModel)
 			if specErr != nil {
-				log.Printf("logical route omitted from catalog route_id=%s variant_id=%s: invalid capability: %v", route.ID, variant.ID, specErr)
+				log.Printf("logical route omitted from catalog route_id=%s channel_model_id=%s: invalid capability: %v", route.ID, channelModel.ID, specErr)
 				continue
 			}
-			cached.Routes = append(cached.Routes, cachedLogicalRoute{Route: route, Variant: variant, VariantSpec: variantSpec, ChannelModel: channelModel})
+			cached.Routes = append(cached.Routes, cachedLogicalRoute{Route: route, CapabilitySpec: capabilitySpec, ChannelModel: channelModel})
 		}
 		routeSpecs := make([]CapabilitySpec, 0, len(cached.Routes))
 		for _, route := range cached.Routes {
-			routeSpecs = append(routeSpecs, route.VariantSpec)
+			routeSpecs = append(routeSpecs, route.CapabilitySpec)
 		}
 		productSpec = capabilitySpecWithRoutePresets(productSpec, routeSpecs)
 		defaults, defaultsErr := decodeLogicalDefaults(graph.Revision.DefaultOptionsJSON, productSpec)
@@ -593,7 +583,7 @@ func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequest
 		return nil, BadAuthRequest("当前模型暂时无法满足这组输入和参数")
 	}
 	selected := weightedRoute(eligible)
-	return &RoutedModel{LogicalModel: cached.Model, Revision: cached.Revision, Route: selected.Route, Variant: selected.Variant, ChannelModel: selected.ChannelModel, Defaults: cached.Defaults}, nil
+	return &RoutedModel{LogicalModel: cached.Model, Revision: cached.Revision, Route: selected.Route, ChannelModel: selected.ChannelModel, Defaults: cached.Defaults}, nil
 }
 
 func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent ModelRequestIntent, tried map[string]bool) []cachedLogicalRoute {
@@ -603,7 +593,7 @@ func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent Mode
 		if !route.Route.Enabled || route.Route.Weight <= 0 || tried[route.Route.ID] || s.logicalRouteBlocked(route) {
 			continue
 		}
-		if match := MatchCapability(route.VariantSpec, intent); !match.Matched {
+		if match := MatchCapability(route.CapabilitySpec, intent); !match.Matched {
 			continue
 		}
 		if route.Route.Priority > maxPriority {
@@ -619,7 +609,7 @@ func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent Mode
 
 func (s *Service) logicalRouteBlocked(route cachedLogicalRoute) bool {
 	now := time.Now()
-	keys := []string{"channel:" + route.ChannelModel.ChannelID, "variant:" + route.Variant.ID, "route:" + route.Route.ID}
+	keys := []string{"channel:" + route.ChannelModel.ChannelID, "channel-model:" + route.ChannelModel.ID, "route:" + route.Route.ID}
 	// 这里会删除过期项，必须使用写锁；不要改成 RLock。
 	s.routeHealthMu.Lock()
 	for _, key := range keys {
@@ -704,12 +694,12 @@ func (s *Service) sortedRouteDiagnostics(routes []cachedLogicalRoute, intent Mod
 	result := make([]RouteSimulationCandidate, 0, len(routes))
 	poolPriority := math.MinInt
 	for _, route := range routes {
-		match := MatchCapability(route.VariantSpec, intent)
+		match := MatchCapability(route.CapabilitySpec, intent)
 		blocked := s.logicalRouteBlocked(route)
 		if route.Route.Enabled && route.Route.Weight > 0 && match.Matched && !blocked && route.Route.Priority > poolPriority {
 			poolPriority = route.Route.Priority
 		}
-		result = append(result, RouteSimulationCandidate{RouteID: route.Route.ID, VariantID: route.Variant.ID, ChannelModelID: route.ChannelModel.ID, Priority: route.Route.Priority, Weight: route.Route.Weight, Enabled: route.Route.Enabled, Matched: match.Matched, Blocked: blocked, Reasons: match.Reasons})
+		result = append(result, RouteSimulationCandidate{RouteID: route.Route.ID, ChannelModelID: route.ChannelModel.ID, ChannelModelKey: route.ChannelModel.ModelKey, ChannelModelName: route.ChannelModel.DisplayName, Priority: route.Route.Priority, Weight: route.Route.Weight, Enabled: route.Route.Enabled, Matched: match.Matched, Blocked: blocked, Reasons: match.Reasons})
 	}
 	for index := range result {
 		result[index].InPool = result[index].Enabled && result[index].Weight > 0 && result[index].Matched && !result[index].Blocked && result[index].Priority == poolPriority
@@ -727,7 +717,7 @@ func (s *Service) createRouteAttempt(task *model.Task, routed *RoutedModel, atte
 	if err != nil {
 		return nil, err
 	}
-	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: attemptNumber, LogicalModelID: routed.LogicalModel.ID, LogicalModelRevisionID: routed.Revision.ID, RouteID: routed.Route.ID, PhysicalVariantID: routed.Variant.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
+	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: attemptNumber, LogicalModelID: routed.LogicalModel.ID, LogicalModelRevisionID: routed.Revision.ID, RouteID: routed.Route.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
 	if err := s.repo.CreateRouteAttempt(attempt); err != nil {
 		return nil, err
 	}
@@ -811,14 +801,10 @@ func (s *Service) routedModelForTaskSelection(task *model.Task) (*RoutedModel, e
 	if !route.Enabled || route.Weight <= 0 || route.LogicalModelRevisionID != task.LogicalModelRevisionID {
 		return nil, errors.New("任务使用的模型服务配置已失效")
 	}
-	variant, err := s.repo.PhysicalVariant(task.PhysicalVariantID)
-	if err != nil {
-		return nil, err
-	}
-	if !variant.Enabled || route.PhysicalVariantID != variant.ID {
+	if route.ChannelModelID != task.ChannelModelID {
 		return nil, errors.New("任务使用的模型服务配置已失效")
 	}
-	channelModel, err := s.repo.ChannelModel(variant.ChannelModelID)
+	channelModel, err := s.repo.ChannelModel(task.ChannelModelID)
 	if err != nil {
 		return nil, err
 	}
@@ -847,11 +833,14 @@ func (s *Service) routedModelForTaskSelection(task *model.Task) (*RoutedModel, e
 	if err != nil {
 		return nil, err
 	}
-	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, Variant: *variant, ChannelModel: *channelModel, Defaults: defaults}
-	spec, err := effectivePhysicalVariantSpec(*variant, *channelModel)
-	if err != nil || s.logicalRouteBlocked(cachedLogicalRoute{Route: *route, Variant: *variant, VariantSpec: spec, ChannelModel: *channelModel}) {
+	capabilitySpec, err := channelModelCapabilitySpec(*channelModel)
+	if err != nil || s.logicalRouteBlocked(cachedLogicalRoute{Route: *route, CapabilitySpec: capabilitySpec, ChannelModel: *channelModel}) {
 		return nil, errors.New("当前模型服务暂不可用")
 	}
+	if logicalModel.PricePolicy == "channel" && !channelModel.PriceConfigured {
+		return nil, errors.New("任务使用的模型服务价格配置已失效")
+	}
+	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, ChannelModel: *channelModel, Defaults: defaults}
 	return routed, nil
 }
 
@@ -889,41 +878,43 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	if err != nil {
 		return nil, err
 	}
-	variants, err := s.repo.PhysicalVariantsForRoutes(routes, false)
-	if err != nil {
-		return nil, err
-	}
-	variantByID := make(map[string]model.PhysicalCapabilityVariant, len(variants))
-	channelModelIDs := make([]string, 0, len(variants))
-	for _, variant := range variants {
-		variantByID[variant.ID] = variant
-		channelModelIDs = append(channelModelIDs, variant.ChannelModelID)
+	channelModelIDs := make([]string, 0, len(routes))
+	for _, route := range routes {
+		channelModelIDs = append(channelModelIDs, route.ChannelModelID)
 	}
 	channelModels, err := s.repo.ChannelModelsByIDs(channelModelIDs)
 	if err != nil {
 		return nil, err
 	}
+	channelIDs := make([]string, 0, len(channelModels))
+	for _, channelModel := range channelModels {
+		channelIDs = append(channelIDs, channelModel.ChannelID)
+	}
+	systemChannels, err := s.repo.SystemChannelsByIDs(channelIDs, false)
+	if err != nil {
+		return nil, err
+	}
+	enabledSystemChannels := make(map[string]bool, len(systemChannels))
+	for _, channel := range systemChannels {
+		enabledSystemChannels[channel.ID] = true
+	}
 	channelModelByID := make(map[string]model.ChannelModel, len(channelModels))
 	for _, channelModel := range channelModels {
-		if !channelModel.Enabled {
-			continue
-		}
-		if _, channelErr := s.repo.SystemChannel(channelModel.ChannelID); channelErr == nil {
+		if channelModel.Enabled && enabledSystemChannels[channelModel.ChannelID] && (logicalModel.PricePolicy != "channel" || channelModel.PriceConfigured) {
 			channelModelByID[channelModel.ID] = channelModel
 		}
 	}
 	candidates := make([]cachedLogicalRoute, 0, len(routes))
 	for _, route := range routes {
-		variant, variantOK := variantByID[route.PhysicalVariantID]
-		channelModel, channelOK := channelModelByID[variant.ChannelModelID]
-		if !variantOK || !channelOK {
+		channelModel, channelOK := channelModelByID[route.ChannelModelID]
+		if !channelOK {
 			continue
 		}
-		variantSpec, specErr := effectivePhysicalVariantSpec(variant, channelModel)
+		capabilitySpec, specErr := channelModelCapabilitySpec(channelModel)
 		if specErr != nil {
 			continue
 		}
-		candidates = append(candidates, cachedLogicalRoute{Route: route, Variant: variant, VariantSpec: variantSpec, ChannelModel: channelModel})
+		candidates = append(candidates, cachedLogicalRoute{Route: route, CapabilitySpec: capabilitySpec, ChannelModel: channelModel})
 	}
 	tried := make(map[string]bool, len(attempts))
 	for _, attempt := range attempts {
@@ -934,7 +925,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		return nil, BadAuthRequest("当前模型暂时无法满足这组输入和参数")
 	}
 	selected := weightedRoute(eligible)
-	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: selected.Route, Variant: selected.Variant, ChannelModel: selected.ChannelModel, Defaults: defaults}
+	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: selected.Route, ChannelModel: selected.ChannelModel, Defaults: defaults}
 	nextInput := applyRoutedProviderSelection(input, routed)
 	if err := s.ValidateTaskCapability(nextInput); err != nil {
 		return nil, err
@@ -960,14 +951,14 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		replacement.Model = logicalModel.Code
 	}
 	previousRouteID := task.RouteID
-	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, selected.Variant.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement); err != nil {
+	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {
 			return nil, BadAuthRequest("模型服务价格发生变化，当前积分余额不足")
 		}
 		return nil, err
 	}
 	task.RouteID = selected.Route.ID
-	task.PhysicalVariantID = selected.Variant.ID
+	task.ChannelModelID = selected.ChannelModel.ID
 	task.InputJSON = string(encoded)
 	task.ProviderRequestID = ""
 	return s.createRouteAttempt(task, routed, len(attempts)+1)
@@ -997,7 +988,7 @@ func (s *Service) blockLogicalRouteForFailure(attempt *model.RouteAttempt, taskE
 	if attempt.FailureCode == "upstream_401" || attempt.FailureCode == "upstream_403" {
 		key, duration = "channel:"+attempt.ChannelID, 10*time.Minute
 	} else if attempt.FailureCode == "upstream_404" {
-		key, duration = "variant:"+attempt.PhysicalVariantID, 10*time.Minute
+		key, duration = "channel-model:"+attempt.ChannelModelID, 10*time.Minute
 	} else if attempt.FailureCode == "upstream_429" {
 		key, duration = "channel:"+attempt.ChannelID, 30*time.Second
 		var upstream providerHTTPError
@@ -1044,7 +1035,7 @@ func (s *Service) prepareLogicalTaskRetry(task *model.Task, input map[string]any
 	}
 	task.LogicalModelRevisionID = routed.Revision.ID
 	task.RouteID = routed.Route.ID
-	task.PhysicalVariantID = routed.Variant.ID
+	task.ChannelModelID = routed.ChannelModel.ID
 	task.Model = routed.LogicalModel.Code
 	task.Provider = "managed"
 	task.InputJSON = string(encoded)

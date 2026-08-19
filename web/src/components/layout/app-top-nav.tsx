@@ -65,11 +65,12 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                 onPointerDown={() => preloadWorkspaceRoute(tool.slug)}
                 onPointerEnter={() => preloadWorkspaceRoute(tool.slug)}
                 className={cn(
-                    "app-workspace-nav-link app-workspace-rail-tile grid size-10 place-items-center rounded-md text-[var(--fs-tiny)] transition-colors",
+                    "app-workspace-nav-link app-workspace-rail-tile flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[var(--fs-tiny)] leading-none transition-colors",
                     active ? "is-active font-medium" : "",
                 )}
             >
                 <Icon className="app-workspace-nav-icon shrink-0" strokeWidth={1.8} />
+                <span className="truncate">{tool.label.slice(0, 2)}</span>
             </Link>
         );
     };
@@ -121,8 +122,9 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                         {/* 桌面：64px 电影胶片条式轨道 */}
                         <div className="app-workspace-rail hidden min-h-0 flex-col overflow-y-auto lg:flex">
                             <div className="app-workspace-rail-header flex h-16 shrink-0 items-center justify-center">
-                                <Link to="/home" className="grid size-10 shrink-0 place-items-center rounded-md text-foreground/55 transition-colors hover:bg-surface-hover hover:text-foreground" title="工作台首页">
+                                <Link to="/home" className="app-workspace-rail-tile flex min-h-12 w-10 shrink-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[var(--fs-tiny)] leading-none text-foreground/55 transition-colors hover:bg-surface-hover hover:text-foreground" title="工作台首页">
                                     <Home className="app-workspace-nav-icon" strokeWidth={1.8} />
+                                    <span>首页</span>
                                 </Link>
                             </div>
                             <div className="app-workspace-rail-middle flex min-h-0 w-full flex-1 flex-col items-center justify-start overflow-y-auto px-3 pt-3">

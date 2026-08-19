@@ -43,21 +43,10 @@ type LogicalModelRevision struct {
 	CreatedAt          time.Time `json:"createdAt"`
 }
 
-// PhysicalCapabilityVariant 描述一个真实模型可同时满足的一组能力。variant 内为 AND，多个 variant 之间为 OR。
-type PhysicalCapabilityVariant struct {
-	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
-	ChannelModelID     string    `json:"channelModelId" gorm:"size:36;index"`
-	Name               string    `json:"name" gorm:"size:120"`
-	Enabled            bool      `json:"enabled" gorm:"index"`
-	CapabilitySpecJSON string    `json:"-" gorm:"type:text"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
-}
-
 type LogicalModelRoute struct {
 	ID                     string    `json:"id" gorm:"primaryKey;size:36"`
 	LogicalModelRevisionID string    `json:"logicalModelRevisionId" gorm:"size:36;index;uniqueIndex:idx_logical_route_member,priority:1"`
-	PhysicalVariantID      string    `json:"physicalVariantId" gorm:"size:36;index;uniqueIndex:idx_logical_route_member,priority:2"`
+	ChannelModelID         string    `json:"channelModelId" gorm:"size:36;index;uniqueIndex:idx_logical_route_member,priority:2"`
 	Enabled                bool      `json:"enabled" gorm:"index"`
 	Priority               int       `json:"priority" gorm:"index"`
 	Weight                 int       `json:"weight"`
@@ -73,7 +62,6 @@ type RouteAttempt struct {
 	LogicalModelID         string     `json:"logicalModelId" gorm:"size:36;index"`
 	LogicalModelRevisionID string     `json:"logicalModelRevisionId" gorm:"size:36;index"`
 	RouteID                string     `json:"routeId" gorm:"size:36;index"`
-	PhysicalVariantID      string     `json:"physicalVariantId" gorm:"size:36;index"`
 	ChannelModelID         string     `json:"channelModelId" gorm:"size:36;index"`
 	ChannelID              string     `json:"channelId" gorm:"size:36;index"`
 	Status                 string     `json:"status" gorm:"size:32;index"`

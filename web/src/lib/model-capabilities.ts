@@ -89,6 +89,47 @@ export const STANDARD_IMAGE_SIZE_VALUES = [
     "1024x1536",
 ] as const;
 
+export function normalizeCapabilityString(value: string) {
+    const normalized = value.trim();
+    return normalized.startsWith("string:") ? normalized.slice("string:".length) : normalized;
+}
+
+function normalizeCapabilityStrings(values: string[]) {
+    return Array.from(new Set(values.map(normalizeCapabilityString)));
+}
+
+export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): ModelCapabilityConfig {
+    return {
+        ...config,
+        image: config.image
+            ? {
+                  ...config.image,
+                  size: {
+                      ...config.image.size,
+                      values: normalizeCapabilityStrings(config.image.size.values),
+                      default: normalizeCapabilityString(config.image.size.default),
+                  },
+                  quality: {
+                      ...config.image.quality,
+                      values: normalizeCapabilityStrings(config.image.quality.values),
+                      default: normalizeCapabilityString(config.image.quality.default),
+                  },
+              }
+            : undefined,
+        video: config.video
+            ? {
+                  ...config.video,
+                  ratios: normalizeCapabilityStrings(config.video.ratios),
+                  defaultRatio: normalizeCapabilityString(config.video.defaultRatio),
+                  resolutions: normalizeCapabilityStrings(config.video.resolutions),
+                  defaultResolution: normalizeCapabilityString(config.video.defaultResolution),
+                  operations: normalizeCapabilityStrings(config.video.operations),
+                  defaultOperation: normalizeCapabilityString(config.video.defaultOperation),
+              }
+            : undefined,
+    };
+}
+
 // Keep explicit pixel presets for each resolution tier so the settings panel can
 // switch between 1K, 2K and 4K without silently converting the requested ratio.
 const defaultImageSizes = [
@@ -271,17 +312,18 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
     if (!cost?.capabilityConfig) return fallback;
-    const text = cost.capabilityConfig.text ? { ...fallback.text!, ...cost.capabilityConfig.text, references: { ...fallback.text!.references, ...cost.capabilityConfig.text.references } } : fallback.text;
-    const video = cost.capabilityConfig.video ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } } : fallback.video;
-    const configuredImage = cost.capabilityConfig.image;
+    const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
+    const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;
+    const video = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video;
+    const configuredImage = capabilityConfig.image;
     const image = configuredImage
         ? (() => {
               const configuredSize = configuredImage.size;
-              const configuredValues = configuredSize?.values;
+              const configuredValues = configuredSize?.values?.map(normalizeCapabilityString);
               const allowCustom = Boolean(configuredSize?.allowCustom || configuredValues?.includes("*"));
               const concreteValues = configuredValues?.filter((value) => value !== "*") || [];
               const values = !configuredValues ? fallback.image!.size.values : concreteValues.length || !allowCustom ? concreteValues : [...STANDARD_IMAGE_SIZE_VALUES];
-              const configuredDefault = configuredSize?.default?.trim();
+              const configuredDefault = configuredSize?.default ? normalizeCapabilityString(configuredSize.default) : undefined;
               const defaultValue = configuredDefault && configuredDefault !== "*" && values.includes(configuredDefault) ? configuredDefault : values.find((value) => value !== "*") || fallback.image!.size.default;
               return {
                   ...fallback.image!,
@@ -296,7 +338,7 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
               };
           })()
         : fallback.image;
-    return { ...fallback, ...cost.capabilityConfig, text, image, video };
+    return { ...fallback, ...capabilityConfig, text, image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -228,8 +229,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
-	// 可用配置不再保存独立能力范围；路由能力会在读取时从当前渠道模型能力实时投影。
-	// 因此修改尺寸、比例或数量时无需拿旧快照做冲突校验，也不会留下第二个事实来源。
+	// 供应线路直接引用渠道模型，修改能力参数后会从这一唯一事实来源实时生成线路能力。
 	if err := s.repo.SaveChannelModel(item); err != nil {
 		return nil, err
 	}
@@ -423,6 +423,9 @@ func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, i
 	}
 	// 删除模型与渠道的兼容模型清单必须同事务提交，避免接口报错但列表已部分变化。
 	err = s.repo.DeleteChannelModel(channelID, id, string(encoded), time.Now())
+	if errors.Is(err, repository.ErrChannelModelInUse) {
+		return BadAuthRequest("渠道模型仍被前台模型供应线路或进行中任务使用，请先移除线路并等待任务结束")
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return BadAuthRequest("渠道模型不存在或已删除")
 	}

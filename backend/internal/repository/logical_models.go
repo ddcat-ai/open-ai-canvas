@@ -13,7 +13,6 @@ type LogicalModelGraph struct {
 	Model         model.LogicalModel
 	Revision      *model.LogicalModelRevision
 	Routes        []model.LogicalModelRoute
-	Variants      []model.PhysicalCapabilityVariant
 	ChannelModels []model.ChannelModel
 }
 
@@ -64,58 +63,6 @@ func (r *Repository) LogicalModelRoute(id string) (*model.LogicalModelRoute, err
 	return &item, nil
 }
 
-func (r *Repository) PhysicalVariants(channelModelIDs []string, includeDisabled bool) ([]model.PhysicalCapabilityVariant, error) {
-	var items []model.PhysicalCapabilityVariant
-	if len(channelModelIDs) == 0 {
-		return items, nil
-	}
-	query := r.db.Where("channel_model_id IN ?", channelModelIDs).Order("created_at asc")
-	if !includeDisabled {
-		query = query.Where("enabled = ?", true)
-	}
-	return items, query.Find(&items).Error
-}
-
-func (r *Repository) PhysicalVariant(id string) (*model.PhysicalCapabilityVariant, error) {
-	var item model.PhysicalCapabilityVariant
-	if err := r.db.First(&item, "id = ?", id).Error; err != nil {
-		return nil, err
-	}
-	return &item, nil
-}
-
-func (r *Repository) AllPhysicalVariants(includeDisabled bool) ([]model.PhysicalCapabilityVariant, error) {
-	var items []model.PhysicalCapabilityVariant
-	query := r.db.Order("created_at asc")
-	if !includeDisabled {
-		query = query.Where("enabled = ?", true)
-	}
-	return items, query.Find(&items).Error
-}
-
-func (r *Repository) PhysicalVariantRouteCounts(ids []string) (map[string]int64, error) {
-	counts := make(map[string]int64, len(ids))
-	if len(ids) == 0 {
-		return counts, nil
-	}
-	type row struct {
-		PhysicalVariantID string `gorm:"column:physical_variant_id"`
-		Count             int64  `gorm:"column:count"`
-	}
-	var rows []row
-	if err := r.db.Model(&model.LogicalModelRoute{}).
-		Select("physical_variant_id, COUNT(*) AS count").
-		Where("physical_variant_id IN ?", uniqueStrings(ids)).
-		Group("physical_variant_id").
-		Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-	for _, item := range rows {
-		counts[item.PhysicalVariantID] = item.Count
-	}
-	return counts, nil
-}
-
 func (r *Repository) ChannelModelsByIDs(ids []string) ([]model.ChannelModel, error) {
 	var items []model.ChannelModel
 	if len(ids) == 0 {
@@ -159,7 +106,7 @@ func (r *Repository) LogicalModelGraph(id string, includeDisabled bool) (*Logica
 	return graphs[item.ID], nil
 }
 
-// LogicalModelGraphs 批量加载前台模型的当前 revision、供应线路、可用配置和渠道模型。
+// LogicalModelGraphs 批量加载前台模型的当前 revision、供应线路和渠道模型。
 // 管理列表与路由目录都需要同一张关系图，集中按 IN 查询避免逐模型 N+1。
 func (r *Repository) LogicalModelGraphs(items []model.LogicalModel, includeDisabled bool) (map[string]*LogicalModelGraph, error) {
 	graphs := make(map[string]*LogicalModelGraph, len(items))
@@ -210,22 +157,12 @@ func (r *Repository) LogicalModelGraphs(items []model.LogicalModel, includeDisab
 		}
 	}
 	routesByRevision := make(map[string][]model.LogicalModelRoute, len(routeRevisionIDs))
-	variantIDs := make([]string, 0, len(routes))
+	channelModelIDs := make([]string, 0, len(routes))
 	for _, route := range routes {
 		routesByRevision[route.LogicalModelRevisionID] = append(routesByRevision[route.LogicalModelRevisionID], route)
-		variantIDs = append(variantIDs, route.PhysicalVariantID)
+		channelModelIDs = append(channelModelIDs, route.ChannelModelID)
 	}
 
-	variants, err := r.PhysicalVariantsByIDs(uniqueStrings(variantIDs), includeDisabled)
-	if err != nil {
-		return nil, err
-	}
-	variantByID := make(map[string]model.PhysicalCapabilityVariant, len(variants))
-	channelModelIDs := make([]string, 0, len(variants))
-	for _, variant := range variants {
-		variantByID[variant.ID] = variant
-		channelModelIDs = append(channelModelIDs, variant.ChannelModelID)
-	}
 	channelModels, err := r.ChannelModelsByIDs(uniqueStrings(channelModelIDs))
 	if err != nil {
 		return nil, err
@@ -241,38 +178,16 @@ func (r *Repository) LogicalModelGraphs(items []model.LogicalModel, includeDisab
 			continue
 		}
 		graph.Routes = routesByRevision[graph.Revision.ID]
-		graph.Variants = make([]model.PhysicalCapabilityVariant, 0, len(graph.Routes))
 		graph.ChannelModels = make([]model.ChannelModel, 0, len(graph.Routes))
-		seenVariants := make(map[string]bool, len(graph.Routes))
 		seenChannelModels := make(map[string]bool, len(graph.Routes))
 		for _, route := range graph.Routes {
-			variant, variantOK := variantByID[route.PhysicalVariantID]
-			if !variantOK {
-				continue
-			}
-			if !seenVariants[variant.ID] {
-				seenVariants[variant.ID] = true
-				graph.Variants = append(graph.Variants, variant)
-			}
-			if channelModel, channelOK := channelModelByID[variant.ChannelModelID]; channelOK && !seenChannelModels[channelModel.ID] {
+			if channelModel, channelOK := channelModelByID[route.ChannelModelID]; channelOK && !seenChannelModels[channelModel.ID] {
 				seenChannelModels[channelModel.ID] = true
 				graph.ChannelModels = append(graph.ChannelModels, channelModel)
 			}
 		}
 	}
 	return graphs, nil
-}
-
-func (r *Repository) PhysicalVariantsByIDs(ids []string, includeDisabled bool) ([]model.PhysicalCapabilityVariant, error) {
-	var items []model.PhysicalCapabilityVariant
-	if len(ids) == 0 {
-		return items, nil
-	}
-	query := r.db.Where("id IN ?", ids).Order("created_at asc")
-	if !includeDisabled {
-		query = query.Where("enabled = ?", true)
-	}
-	return items, query.Find(&items).Error
 }
 
 func uniqueStrings(values []string) []string {
@@ -288,22 +203,6 @@ func uniqueStrings(values []string) []string {
 	return result
 }
 
-func (r *Repository) PhysicalVariantsForRoutes(routes []model.LogicalModelRoute, includeDisabled bool) ([]model.PhysicalCapabilityVariant, error) {
-	ids := make([]string, 0, len(routes))
-	for _, route := range routes {
-		ids = append(ids, route.PhysicalVariantID)
-	}
-	var items []model.PhysicalCapabilityVariant
-	if len(ids) == 0 {
-		return items, nil
-	}
-	query := r.db.Where("id IN ?", ids)
-	if !includeDisabled {
-		query = query.Where("enabled = ?", true)
-	}
-	return items, query.Find(&items).Error
-}
-
 func (r *Repository) SaveLogicalModel(item *model.LogicalModel) error { return r.db.Save(item).Error }
 func (r *Repository) CreateLogicalModel(item *model.LogicalModel) error {
 	return r.db.Create(item).Error
@@ -312,12 +211,6 @@ func (r *Repository) CreateLogicalModelRevision(item *model.LogicalModelRevision
 	return r.db.Create(item).Error
 }
 func (r *Repository) SaveLogicalModelRevision(item *model.LogicalModelRevision) error {
-	return r.db.Save(item).Error
-}
-func (r *Repository) CreatePhysicalVariant(item *model.PhysicalCapabilityVariant) error {
-	return r.db.Create(item).Error
-}
-func (r *Repository) SavePhysicalVariant(item *model.PhysicalCapabilityVariant) error {
 	return r.db.Save(item).Error
 }
 func (r *Repository) CreateLogicalModelRoute(item *model.LogicalModelRoute) error {
@@ -339,12 +232,6 @@ func (r *Repository) LatestRouteAttempt(taskID string) (*model.RouteAttempt, err
 	return &item, nil
 }
 
-func (r *Repository) PhysicalVariantRouteCount(id string) (int64, error) {
-	var count int64
-	err := r.db.Model(&model.LogicalModelRoute{}).Where("physical_variant_id = ?", id).Count(&count).Error
-	return count, err
-}
-
 func (r *Repository) RouteAttempts(taskID string, routeRun int) ([]model.RouteAttempt, error) {
 	var items []model.RouteAttempt
 	query := r.db.Where("task_id = ? AND route_run = ?", taskID, routeRun)
@@ -353,11 +240,11 @@ func (r *Repository) RouteAttempts(taskID string, routeRun int) ([]model.RouteAt
 
 // SwitchTaskLogicalRoute 同时更新任务执行目标和账单。跟随供应价格时会原子调整预留积分，
 // 保证明确未创建上游任务后的故障切线不会沿用上一条线路的价格快照。
-func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, variantID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder) error {
+func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updated := tx.Model(&model.Task{}).
 			Where("id = ? AND status = ? AND route_id = ?", taskID, model.TaskStatusRunning, expectedRouteID).
-			Updates(map[string]any{"route_id": routeID, "physical_variant_id": variantID, "input_json": inputJSON, "updated_at": time.Now()})
+			Updates(map[string]any{"route_id": routeID, "channel_model_id": channelModelID, "input_json": inputJSON, "updated_at": time.Now()})
 		if updated.Error != nil {
 			return updated.Error
 		}

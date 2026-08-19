@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { FlaskConical, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
@@ -7,12 +7,10 @@ import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIcon } from "@/components/model-picker";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } from "@/components/model-protocol-picker";
-import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { MODEL_PROTOCOLS, modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
-import { createAdminPhysicalVariant, listAdminPhysicalVariants, updateAdminPhysicalVariant, type AdminPhysicalVariant } from "@/services/api/logical-models";
 import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
-import { CapabilitySummary, capabilitySpecFromChannelModel } from "../logical-models/model-routing-capabilities";
 import { AdminPageFrame } from "./admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
 
@@ -32,11 +30,6 @@ type FormValues = {
     capabilityConfig?: ModelCapabilityConfig;
 };
 
-type ConfigFormValues = {
-    name: string;
-    enabled: boolean;
-};
-
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
     const { message } = App.useApp();
     const [items, setItems] = useState<ChannelModel[]>([]);
@@ -46,24 +39,16 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
-    const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
-    const [config, setConfig] = useState<AdminPhysicalVariant | null>(null);
-    const [configLoading, setConfigLoading] = useState(false);
-    const [configSaving, setConfigSaving] = useState(false);
     const [keyword, setKeyword] = useState("");
     const [capability, setCapability] = useState<ChannelModel["capability"] | "all">("all");
     const [status, setStatus] = useState<"all" | "enabled" | "disabled">("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [form] = Form.useForm<FormValues>();
-    const [configForm] = Form.useForm<ConfigFormValues>();
-    const configRequestRef = useRef(0);
     const billingMode = Form.useWatch("billingMode", form) || "fixed_request";
     const modelCapability = Form.useWatch("capability", form);
     const modelProtocol = Form.useWatch("protocol", form);
     const modelKey = Form.useWatch("modelKey", form) || "";
-    const editingCapabilitySpec = capabilitySpecFromChannelModel(editing || undefined);
-    const currentConfig = editing && config?.channelModelId === editing.id ? config : null;
 
     const reload = async () => {
         if (!channel) return;
@@ -77,69 +62,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         }
     };
 
-    const reloadConfig = async (channelModelID: string, defaultName = "") => {
-        const requestID = ++configRequestRef.current;
-        setConfigLoading(true);
-        try {
-            const variants = (await listAdminPhysicalVariants(channelModelID)).variants;
-            if (requestID !== configRequestRef.current) return;
-            const nextConfig = variants.find((item) => item.channelModelId === channelModelID) || null;
-            setConfig(nextConfig);
-            if (nextConfig) {
-                configForm.setFieldsValue({ name: nextConfig.name, enabled: nextConfig.enabled });
-            } else {
-                configForm.setFieldsValue({ name: defaultName, enabled: true });
-            }
-        } catch (error) {
-            if (requestID === configRequestRef.current) message.error(error instanceof Error ? error.message : "读取可用配置失败");
-        } finally {
-            if (requestID === configRequestRef.current) setConfigLoading(false);
-        }
-    };
-
-    const saveConfig = async () => {
-        if (!editing) {
-            message.info("请先保存渠道模型，再配置唯一可用配置");
-            return;
-        }
-        const values = await configForm.validateFields();
-        if (values.enabled && editing.capability !== "audio" && !editingCapabilitySpec) {
-            message.error("请先完成渠道模型的供应能力配置");
-            return;
-        }
-        if (values.enabled && !editing.enabled) {
-            message.error("渠道模型已停用，不能启用可用配置");
-            return;
-        }
-        if (config && !currentConfig) {
-            message.error("可用配置与当前渠道模型不匹配，请重新打开后再试");
-            return;
-        }
-        setConfigSaving(true);
-        try {
-            // 能力范围只维护在渠道模型能力参数中；可用配置只是路由开关和显示名称。
-            // 后端会从渠道模型能力生成 variant 快照，避免同一尺寸/比例被填写两次。
-            const payload = { channelModelId: editing.id, name: values.name.trim(), enabled: values.enabled };
-            if (currentConfig) await updateAdminPhysicalVariant(currentConfig.id, payload);
-            else await createAdminPhysicalVariant(payload);
-            await reloadConfig(editing.id, editing.displayName || editing.modelKey);
-            await onChanged();
-            message.success(currentConfig ? "可用配置已更新" : "已创建唯一可用配置");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存可用配置失败");
-        } finally {
-            setConfigSaving(false);
-        }
-    };
-
     useEffect(() => {
-        configRequestRef.current += 1;
         void reload();
         setEditing(null);
-        setConfig(null);
-        setConfigLoading(false);
-        setConfigDrawerOpen(false);
-        configForm.resetFields();
         setEditorOpen(false);
         setKeyword("");
         setCapability("all");
@@ -165,12 +90,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     };
 
     const startCreate = () => {
-        configRequestRef.current += 1;
         setEditing(null);
-        setConfig(null);
-        setConfigLoading(false);
-        setConfigDrawerOpen(false);
-        configForm.resetFields();
         form.setFieldsValue({
             modelKey: "",
             displayName: "",
@@ -189,10 +109,6 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
-        setConfig(null);
-        setConfigDrawerOpen(false);
-        configForm.setFieldsValue({ name: item.displayName || item.modelKey, enabled: true });
-        void reloadConfig(item.id, item.displayName || item.modelKey);
         form.setFieldsValue({
             modelKey: item.modelKey,
             displayName: item.displayName,
@@ -204,7 +120,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             outputTokenPrice: item.outputTokenPriceMicrocredits / 1_000_000,
             cachedTokenPrice: item.cachedTokenPriceMicrocredits / 1_000_000,
             enabled: item.enabled,
-            capabilityConfig: item.capability === "text" || item.capability === "image" || item.capability === "video" ? item.capabilityConfig || defaultModelCapabilityConfig(item.protocol, item.modelKey) : undefined,
+            capabilityConfig: item.capability === "text" || item.capability === "image" || item.capability === "video" ? normalizeModelCapabilityConfig(item.capabilityConfig || defaultModelCapabilityConfig(item.protocol, item.modelKey)) : undefined,
         });
         setEditorOpen(true);
     };
@@ -225,7 +141,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 cachedTokenPriceMicrocredits: Math.round((values.cachedTokenPrice || 0) * 1_000_000),
                 priceConfigured: true,
                 enabled: values.enabled !== false,
-                capabilityConfig: values.capability === "text" || values.capability === "image" || values.capability === "video" ? values.capabilityConfig : undefined,
+                capabilityConfig: values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig!) : undefined,
             };
             if (editing) await updateAdminChannelModel(channel.id, editing.id, payload);
             else await createAdminChannelModel(channel.id, payload);
@@ -249,7 +165,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 modelKey: values.modelKey.trim(),
                 capability: values.capability,
                 protocol: values.protocol,
-                capabilityConfig: values.capabilityConfig,
+                capabilityConfig: values.capabilityConfig ? normalizeModelCapabilityConfig(values.capabilityConfig) : undefined,
             });
             message.success(`模型测试通过，耗时 ${(result.durationMs / 1000).toFixed(2)} 秒`);
         } catch (error) {
@@ -330,7 +246,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                     <Button size="small" onClick={() => startEdit(item)}>
                         编辑
                     </Button>
-                    <Popconfirm title="删除模型" description="删除后模型不再显示，历史账单仍会保留。该操作不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
+                    <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
                         <Button size="small" danger title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
                 </Space>
@@ -421,7 +337,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 title={editing ? `编辑模型 / ${editing.displayName || editing.modelKey}` : "新增模型"}
                 open={editorOpen}
                 size="min(1080px, 100vw)"
-                onClose={() => !configSaving && setEditorOpen(false)}
+                onClose={() => !saving && setEditorOpen(false)}
                 rootClassName="admin-drawer"
                 footer={
                     <div className="flex items-center justify-between gap-3">
@@ -483,34 +399,6 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
                     <section className="admin-form-section">
                         <div className="mb-4">
-                            <h2 className="text-sm font-semibold">可用配置</h2>
-                        </div>
-                        {!editing ? (
-                            <div className="rounded-md bg-muted/20 px-4 py-4 text-sm text-foreground/60">请先保存模型基础信息，保存后即可配置唯一的路由入口。</div>
-                        ) : (
-                            <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/15 p-4">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium">{currentConfig?.name || "尚未创建路由配置"}</span>
-                                        {currentConfig ? <AdminStatusBadge label={currentConfig.enabled ? "启用" : "停用"} tone={currentConfig.enabled ? "success" : "neutral"} /> : null}
-                                    </div>
-                                    <div className="mt-1 text-xs text-foreground/45">{currentConfig?.usageCount ? `已被 ${currentConfig.usageCount} 条前台供应配置引用` : "尚未被前台供应配置引用"}</div>
-                                </div>
-                                <Button
-                                    loading={configLoading}
-                                    onClick={() => {
-                                        setConfigDrawerOpen(true);
-                                        void reloadConfig(editing.id, editing.displayName || editing.modelKey);
-                                    }}
-                                >
-                                    编辑配置
-                                </Button>
-                            </div>
-                        )}
-                    </section>
-
-                    <section className="admin-form-section">
-                        <div className="mb-4">
                             <h2 className="text-sm font-semibold">计费</h2>
                         </div>
                         <Form.Item name="billingMode" label="计费方式" rules={[{ required: true }]}>
@@ -556,32 +444,6 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                             <Switch />
                         </Form.Item>
                     </section>
-                </Form>
-            </Drawer>
-            <Drawer
-                title="可用配置"
-                open={configDrawerOpen}
-                size="min(560px, 100vw)"
-                onClose={() => !configSaving && setConfigDrawerOpen(false)}
-                rootClassName="admin-secondary-drawer"
-                footer={<div className="flex justify-end gap-2"><Button onClick={() => setConfigDrawerOpen(false)}>取消</Button><Button type="primary" loading={configSaving} onClick={() => void saveConfig()}>保存路由配置</Button></div>}
-            >
-                <Form form={configForm} layout="vertical" requiredMark={false}>
-                    <div className="mb-5 rounded-lg bg-muted/15 p-4">
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">唯一可用配置</span>
-                                <AdminStatusBadge label={currentConfig ? (currentConfig.enabled ? "启用" : "停用") : "未创建"} tone={currentConfig?.enabled ? "success" : "neutral"} />
-                            </div>
-                            <span className="text-xs text-foreground/45">{currentConfig?.usageCount ? `引用 ${currentConfig.usageCount}` : "未引用"}</span>
-                        </div>
-                    </div>
-                    <Form.Item name="name" label="配置名称" rules={[{ required: true, message: "请填写配置名称" }]}><Input placeholder="例如：标准能力、高清能力、多参考图" /></Form.Item>
-                    <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
-                    <div className="rounded-lg bg-muted/10 px-4 py-4">
-                        <div className="mb-2 text-xs font-semibold text-foreground/65">继承的模型能力</div>
-                        {editingCapabilitySpec ? <CapabilitySummary spec={editingCapabilitySpec} /> : <span className="text-xs text-foreground/45">请先在“能力与协议”中完成模型能力参数。</span>}
-                    </div>
                 </Form>
             </Drawer>
         </AdminPageFrame>

@@ -83,7 +83,7 @@ export default function StorageSettingsPage() {
     };
 
     return (
-        <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置">
+        <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
             <div className="space-y-4 pt-4">
                 <SettingsSectionCard
                     layout="stacked"

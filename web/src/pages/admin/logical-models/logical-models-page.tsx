@@ -6,18 +6,18 @@ import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "
 
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
+import { CapabilityCardPicker } from "@/components/model-protocol-picker";
 import { formatCredits } from "@/constant/credits";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
+import { listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
 import {
     createAdminLogicalModel,
     listAdminLogicalModels,
-    listAdminPhysicalVariants,
     simulateAdminLogicalModel,
     updateAdminLogicalModel,
     type AdminLogicalModel,
-    type AdminPhysicalVariant,
     type CapabilitySpec,
     type LogicalModelMutation,
     type ModelRequestIntent,
@@ -29,6 +29,7 @@ import {
     CapabilitySummary,
     DefaultOptionsEditor,
     capabilityLabel,
+    capabilitySpecFromChannelModel,
     capabilitySourceError,
     emptyCapabilitySpec,
     mergeCapabilitySpecs,
@@ -38,7 +39,7 @@ import {
     type CapabilityKind,
 } from "./model-routing-capabilities";
 
-type RouteRuleRow = { physicalVariantId: string; enabled: boolean; priority: number; weight: number };
+type RouteRuleRow = { channelModelId: string; enabled: boolean; priority: number; weight: number };
 type LogicalModelFormValues = {
     code: string;
     name: string;
@@ -57,13 +58,6 @@ type LogicalModelFormValues = {
     defaultOptions: Record<string, unknown>;
     routes: RouteRuleRow[];
 };
-const capabilityOptions = [
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-];
-
 export default function LogicalModelsPage() {
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
@@ -72,7 +66,7 @@ export default function LogicalModelsPage() {
     const deferredKeyword = useDeferredValue(keyword.trim().toLowerCase());
     const [loading, setLoading] = useState(true);
     const [models, setModels] = useState<AdminLogicalModel[]>([]);
-    const [variants, setVariants] = useState<AdminPhysicalVariant[]>([]);
+    const [channelModels, setChannelModels] = useState<ChannelModel[]>([]);
     const [channelNames, setChannelNames] = useState<Record<string, string>>({});
     const [channelEnabled, setChannelEnabled] = useState<Record<string, boolean>>({});
     const [editingModel, setEditingModel] = useState<AdminLogicalModel | null | undefined>();
@@ -89,11 +83,16 @@ export default function LogicalModelsPage() {
     const reload = async () => {
         setLoading(true);
         try {
-            const [modelResult, variantResult, channelResult] = await Promise.all([listAdminLogicalModels(), listAdminPhysicalVariants(), listAdminChannels({ page: 1, limit: 100 })]);
+            const [modelResult, firstChannelPage] = await Promise.all([listAdminLogicalModels(), listAdminChannels({ page: 1, limit: 100 })]);
+            const remainingChannelPages = await Promise.all(
+                Array.from({ length: Math.max(0, Math.ceil(firstChannelPage.total / firstChannelPage.limit) - 1) }, (_, index) => listAdminChannels({ page: index + 2, limit: firstChannelPage.limit })),
+            );
+            const channels = [firstChannelPage, ...remainingChannelPages].flatMap((result) => result.channels);
+            const channelModelResults = await Promise.all(channels.map((channel) => listAdminChannelModels(channel.id)));
             setModels(modelResult.models);
-            setVariants(variantResult.variants);
-            setChannelNames(Object.fromEntries(channelResult.channels.map((channel) => [channel.id, channel.name])));
-            setChannelEnabled(Object.fromEntries(channelResult.channels.map((channel) => [channel.id, channel.enabled !== false])));
+            setChannelModels(channelModelResults.flatMap((result) => result.models));
+            setChannelNames(Object.fromEntries(channels.map((channel) => [channel.id, channel.name])));
+            setChannelEnabled(Object.fromEntries(channels.map((channel) => [channel.id, channel.enabled !== false])));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取前台模型配置失败");
         } finally {
@@ -107,14 +106,15 @@ export default function LogicalModelsPage() {
 
     const filteredModels = useMemo(() => models.filter((item) => !deferredKeyword || [item.name, item.code, item.capability].some((value) => value.toLowerCase().includes(deferredKeyword))), [models, deferredKeyword]);
     const paginatedModels = useMemo(() => filteredModels.slice((page - 1) * pageSize, page * pageSize), [filteredModels, page, pageSize]);
-    const modelVariants = useMemo(() => variants.filter((item) => item.capability === modelCapability), [variants, modelCapability]);
+    const modelChannelModels = useMemo(() => channelModels.filter((item) => item.capability === modelCapability), [channelModels, modelCapability]);
     const modelSourceSpecs = useMemo(
         () =>
             modelRoutes
                 .filter((route) => route.enabled && route.weight > 0)
-                .map((route) => variants.find((item) => item.id === route.physicalVariantId && item.enabled && item.modelEnabled && channelEnabled[item.channelId] !== false)?.capabilitySpec)
+                .map((route) => channelModels.find((item) => item.id === route.channelModelId && item.enabled && channelEnabled[item.channelId] !== false))
+                .map((item) => (item ? capabilitySpecFromChannelModel(item) : undefined))
                 .filter((item): item is CapabilitySpec => Boolean(item)),
-        [channelEnabled, modelRoutes, variants],
+        [channelEnabled, channelModels, modelRoutes],
     );
 
     const openModel = (item?: AdminLogicalModel) => {
@@ -148,7 +148,7 @@ export default function LogicalModelsPage() {
     const saveModel = async () => {
         const values = await modelForm.validateFields();
         if (values.enabled && !values.routes.length) {
-            message.error("请至少添加一条供应配置");
+            message.error("请至少添加一条供应线路");
             return;
         }
         const sourceError = capabilitySourceError(values.capability, modelSourceSpecs, values.capabilitySpec);
@@ -218,9 +218,9 @@ export default function LogicalModelsPage() {
             ),
         },
         { title: "类型", dataIndex: "capability", width: 90, render: (value: CapabilityKind) => capabilityLabel(value) },
-        { title: "创作端能力", render: (_, item) => <CapabilitySummary spec={item.capabilitySpec} /> },
+        { title: "创作端能力", width: 360, render: (_, item) => <CapabilitySummary spec={item.capabilitySpec} /> },
         {
-            title: "供应配置",
+            title: "供应线路",
             width: 110,
             render: (_, item) => (
                 <div className="text-xs">
@@ -239,7 +239,7 @@ export default function LogicalModelsPage() {
                 <AdminRowActions
                     primary={{ label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openModel(item) }}
                     actions={[
-                        { key: "simulate", label: "模拟供应配置匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
+                        { key: "simulate", label: "模拟供应线路匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
                         { key: "toggle", label: item.enabled ? "停用" : "启用", onClick: () => void toggleModel(item) },
                     ]}
                 />
@@ -276,13 +276,28 @@ export default function LogicalModelsPage() {
                 rootClassName="admin-drawer"
                 footer={<div className="flex justify-end gap-2"><Button disabled={saving} onClick={() => setEditingModel(undefined)}>取消</Button><Button type="primary" loading={saving} onClick={() => void saveModel()}>保存</Button></div>}
             >
-                <Form form={modelForm} layout="vertical" requiredMark={false} className="space-y-3">
+                <Form
+                    form={modelForm}
+                    layout="vertical"
+                    requiredMark={false}
+                    className="space-y-3"
+                    onValuesChange={(changedValues: Partial<LogicalModelFormValues>) => {
+                        const capability = changedValues.capability;
+                        if (!capability) return;
+                        modelForm.setFieldsValue({
+                            routes: [],
+                            capabilitySpec: emptyCapabilitySpec(capability),
+                            defaultOptions: {},
+                            billingMode: capability === "text" ? "token" : capability === "video" ? "per_second" : "fixed_request",
+                        });
+                    }}
+                >
                     {editingModel?.configurationError || editingModel?.availabilityError ? (
                         <Alert
                             className="mb-4"
                             type="warning"
                             showIcon
-                            message={editingModel.configurationError ? "当前供应配置无法覆盖全部创作端能力" : "当前供应配置暂不可结算"}
+                            message={editingModel.configurationError ? "当前供应线路无法覆盖全部创作端能力" : "当前供应线路暂不可结算"}
                             description={editingModel.configurationError || editingModel.availabilityError}
                         />
                     ) : null}
@@ -301,15 +316,10 @@ export default function LogicalModelsPage() {
                         <Form.Item name="description" label="简短说明">
                             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="说明适合的创作场景，不描述供应渠道。" />
                         </Form.Item>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <Form.Item name="capability" label="类型">
-                                <Select
-                                    options={capabilityOptions}
-                                    onChange={(capability: CapabilityKind) =>
-                                        modelForm.setFieldsValue({ routes: [], capabilitySpec: emptyCapabilitySpec(capability), defaultOptions: {}, billingMode: capability === "text" ? "token" : capability === "video" ? "per_second" : "fixed_request" })
-                                    }
-                                />
-                            </Form.Item>
+                        <Form.Item name="capability" label="类型">
+                            <CapabilityCardPicker density="compact" />
+                        </Form.Item>
+                        <div className="grid gap-3 sm:grid-cols-2">
                             <Form.Item name="sortOrder" label="前台排序">
                                 <InputNumber className="w-full" precision={0} />
                             </Form.Item>
@@ -318,8 +328,8 @@ export default function LogicalModelsPage() {
                             </Form.Item>
                         </div>
                     </DrawerSection>
-                    <DrawerSection icon={<GitBranch className="size-4" />} title="供应配置">
-                        <RouteFields variants={modelVariants} channelNames={channelNames} channelEnabled={channelEnabled} form={modelForm} capability={modelCapability} />
+                    <DrawerSection icon={<GitBranch className="size-4" />} title="供应线路">
+                        <RouteFields channelModels={modelChannelModels} channelNames={channelNames} channelEnabled={channelEnabled} form={modelForm} capability={modelCapability} />
                     </DrawerSection>
                     <DrawerSection title="创作端可选能力">
                         <Form.Item name="capabilitySpec" noStyle>
@@ -338,7 +348,7 @@ export default function LogicalModelsPage() {
             </Drawer>
 
             <Modal
-                title={simulatingModel ? `供应配置匹配模拟 - ${simulatingModel.name}` : "供应配置匹配模拟"}
+                title={simulatingModel ? `供应线路匹配模拟 - ${simulatingModel.name}` : "供应线路匹配模拟"}
                 open={Boolean(simulatingModel)}
                 className="workspace-modal workspace-modal-wide admin-simulation-modal"
                 rootClassName="admin-modal-root"
@@ -382,7 +392,7 @@ export default function LogicalModelsPage() {
                                     </Tag>
                                 </div>
                                 {simulationResult.productMatch.reasons?.length ? <p className="mb-4 text-sm text-error">{simulationResult.productMatch.reasons.join("；")}</p> : null}
-                                <Table size="small" pagination={false} rowKey="routeId" dataSource={simulationResult.candidates} columns={simulationColumns(simulatingModel)} />
+                                <Table size="small" pagination={false} rowKey="routeId" dataSource={simulationResult.candidates} columns={simulationColumns()} />
                             </section>
                         ) : null}
                     </div>
@@ -408,74 +418,75 @@ function DrawerSection({ icon, title, description, children }: { icon?: ReactNod
 }
 
 function RouteFields({
-    variants,
+    channelModels,
     channelNames,
     channelEnabled,
     form,
     capability,
 }: {
-    variants: AdminPhysicalVariant[];
+    channelModels: ChannelModel[];
     channelNames: Record<string, string>;
     channelEnabled: Record<string, boolean>;
     form: FormInstance<LogicalModelFormValues>;
     capability: CapabilityKind;
 }) {
-    const selectOptions = variants.map((item) => {
-        const unavailableReason = channelEnabled[item.channelId] === false ? "渠道已停用" : !item.modelEnabled ? "渠道模型已停用" : !item.enabled ? "规格已停用" : "";
+    const selectOptions = channelModels.map((item) => {
+        const unavailableReason = channelEnabled[item.channelId] === false ? "渠道已停用" : !item.enabled ? "渠道模型已停用" : "";
         return {
             value: item.id,
-            label: `${item.name} · ${channelNames[item.channelId] || item.channelId} / ${item.modelName || item.modelKey}${unavailableReason ? `（${unavailableReason}）` : ""}`,
+            label: `${channelNames[item.channelId]} / ${item.displayName || item.modelKey}${unavailableReason ? `（${unavailableReason}）` : ""}`,
             disabled: Boolean(unavailableReason),
         };
     });
-    const availableVariantCount = selectOptions.filter((item) => !item.disabled).length;
+    const availableChannelModelCount = selectOptions.filter((item) => !item.disabled).length;
     return (
         <Form.List name="routes">
             {(fields, { add, remove }) => {
                 const currentRoutes = (form.getFieldValue("routes") || []) as RouteRuleRow[];
-                const selectedVariantCount = new Set(currentRoutes.map((route) => route?.physicalVariantId).filter(Boolean)).size;
-                const canAdd = selectedVariantCount < availableVariantCount;
+                const selectedChannelModelCount = new Set(currentRoutes.map((route) => route?.channelModelId).filter(Boolean)).size;
+                const canAdd = selectedChannelModelCount < availableChannelModelCount;
                 return (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-foreground/50">共 {fields.length} 条供应配置</span>
-                            <Button size="small" icon={<Plus className="size-3.5" />} disabled={!canAdd} onClick={() => add({ physicalVariantId: "", enabled: true, priority: 100, weight: 100 })}>
-                                添加供应配置
+                            <span className="text-xs text-foreground/50">共 {fields.length} 条供应线路</span>
+                            <Button size="small" icon={<Plus className="size-3.5" />} disabled={!canAdd} onClick={() => add({ channelModelId: "", enabled: true, priority: 100, weight: 100 })}>
+                                添加供应线路
                             </Button>
                         </div>
                         {fields.length ? (
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {fields.map((field) => {
                                     const routes = (form.getFieldValue("routes") || []) as RouteRuleRow[];
-                                    const selectedByOthers = new Set(routes.map((route, index) => (index === field.name ? "" : route?.physicalVariantId)).filter(Boolean));
+                                    const selectedByOthers = new Set(routes.map((route, index) => (index === field.name ? "" : route?.channelModelId)).filter(Boolean));
                                     const options = selectOptions.map((option) => ({ ...option, disabled: option.disabled || selectedByOthers.has(option.value) }));
-                                    const selected = variants.find((item) => item.id === routes[field.name]?.physicalVariantId);
+                                    const selected = channelModels.find((item) => item.id === routes[field.name]?.channelModelId);
                                     return (
                                         <div key={field.key} className="rounded-lg border border-border bg-muted/5 p-4">
                                             <div className="mb-2 flex items-center justify-between gap-2">
                                                 <div className="min-w-0">
-                                                    <div className="text-xs font-semibold">供应配置 {fields.indexOf(field) + 1}</div>
+                                                    <div className="text-xs font-semibold">供应线路 {fields.indexOf(field) + 1}</div>
                                                     <div className="mt-0.5 truncate text-xs text-foreground/50">
-                                                        {selected ? `${selected.name} · ${channelNames[selected.channelId] || selected.channelId} / ${selected.modelName || selected.modelKey}` : "选择一个可承接请求的配置"}
+                                                        {selected ? `${channelNames[selected.channelId]} / ${selected.displayName || selected.modelKey}` : "选择一个可承接请求的渠道模型"}
                                                     </div>
                                                 </div>
                                                 <Button type="text" size="small" danger onClick={() => remove(field.name)}>
                                                     移除
                                                 </Button>
                                             </div>
-                                            <Form.Item name={[field.name, "physicalVariantId"]} rules={[{ required: true, message: "请选择供应配置" }]} className="mb-3">
+                                            <Form.Item name={[field.name, "channelModelId"]} rules={[{ required: true, message: "请选择渠道模型" }]} className="mb-3">
                                                 <Select
-                                                    aria-label={`供应配置 ${fields.indexOf(field) + 1}`}
+                                                    aria-label={`供应线路 ${fields.indexOf(field) + 1}`}
                                                     showSearch
                                                     optionFilterProp="label"
-                                                    placeholder="选择供应配置"
+                                                    placeholder="选择渠道模型"
                                                     options={options}
-                                                    onChange={(physicalVariantId) => {
+                                                    onChange={(channelModelId) => {
                                                         const nextRoutes = [...(form.getFieldValue("routes") || [])];
-                                                        nextRoutes[field.name] = { ...nextRoutes[field.name], physicalVariantId };
+                                                        nextRoutes[field.name] = { ...nextRoutes[field.name], channelModelId };
                                                         const specs = nextRoutes
                                                             .filter((route) => route.enabled && route.weight > 0)
-                                                            .map((route) => variants.find((item) => item.id === route.physicalVariantId && item.enabled && item.modelEnabled && channelEnabled[item.channelId] !== false)?.capabilitySpec)
+                                                            .map((route) => channelModels.find((item) => item.id === route.channelModelId && item.enabled && channelEnabled[item.channelId] !== false))
+                                                            .map((item) => (item ? capabilitySpecFromChannelModel(item) : undefined))
                                                             .filter((item): item is CapabilitySpec => Boolean(item));
                                                         form.setFieldValue("routes", nextRoutes);
                                                         if (!hasCapabilityRules(form.getFieldValue("capabilitySpec"))) form.setFieldValue("capabilitySpec", mergeCapabilitySpecs(capability, specs));
@@ -498,7 +509,7 @@ function RouteFields({
                                 })}
                             </div>
                         ) : null}
-                        {!fields.length ? <div className="rounded-md bg-muted/20 px-3 py-4 text-center text-xs text-foreground/50">尚未添加供应配置</div> : null}
+                        {!fields.length ? <div className="rounded-md bg-muted/20 px-3 py-4 text-center text-xs text-foreground/50">尚未添加供应线路</div> : null}
                     </div>
                 );
             }}
@@ -569,7 +580,7 @@ function PricingFields() {
                     ) : null}
                 </>
             ) : (
-                <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">用户费用按实际命中的供应配置价格计算。故障切换到更高价格配置时会重新校验余额。</div>
+                <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">用户费用按实际命中的供应线路价格计算。故障切换到更高价格线路时会重新校验余额。</div>
             )}
         </>
     );
@@ -613,7 +624,7 @@ function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
         cachedPriceMicrocredits: item.cachedPriceMicrocredits,
         capabilitySpec: item.capabilitySpec,
         defaultOptions: item.defaultOptions,
-        routes: item.routes.map((route) => ({ physicalVariantId: route.physicalVariantId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
+        routes: item.routes.map((route) => ({ channelModelId: route.channelModelId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
     };
 }
 
@@ -643,9 +654,12 @@ function hasCapabilityRules(spec?: CapabilitySpec) {
     return Boolean(spec && ((spec.operations?.length || 0) > 0 || Object.keys(spec.inputs || {}).length > 0 || Object.keys(spec.options || {}).length > 0));
 }
 
-function simulationColumns(model: AdminLogicalModel): ColumnsType<RouteSimulationResult["candidates"][number]> {
+function simulationColumns(): ColumnsType<RouteSimulationResult["candidates"][number]> {
     return [
-        { title: "供应配置", render: (_, candidate) => model.routes.find((route) => route.id === candidate.routeId)?.physicalVariantName || "未知配置" },
+        {
+            title: "供应线路",
+            render: (_, candidate) => `${candidate.channelModelName}（${candidate.channelModelKey}）`,
+        },
         { title: "优先级", dataIndex: "priority", width: 80 },
         { title: "权重", dataIndex: "weight", width: 70 },
         {

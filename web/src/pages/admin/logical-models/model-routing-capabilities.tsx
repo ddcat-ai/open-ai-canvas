@@ -66,7 +66,7 @@ export function emptyCapabilitySpec(capability: CapabilityKind): CapabilitySpec 
 }
 
 function imageSizeOptionValues(values: string[], allowCustom: boolean) {
-    const concreteValues = Array.from(new Set(values.map((value) => value.trim()).filter((value) => value && value !== "*")));
+    const concreteValues = Array.from(new Set(values.map((value) => String(normalizeScalar(value)).trim()).filter((value) => value && value !== "*")));
     const result = concreteValues.length || !allowCustom ? concreteValues : [...STANDARD_IMAGE_SIZE_VALUES];
     if (allowCustom) result.push("*");
     return result;
@@ -437,11 +437,13 @@ export function CapabilitySummary({ spec }: { spec: CapabilitySpec }) {
     if (spec.operations?.length) labels.unshift(spec.operations.map(operationLabel).join("/"));
     if (!labels.length) return <span className="text-xs text-foreground/45">基础能力</span>;
     return (
-        <div className="flex max-w-lg flex-wrap gap-1">
+        <div className="flex min-w-0 max-w-full flex-wrap gap-1">
             {labels.slice(0, 4).map((label) => (
-                <Tag key={label}>{label}</Tag>
+                <Tag key={label} className="max-w-full whitespace-normal break-all text-left leading-5">
+                    {label}
+                </Tag>
             ))}
-            {labels.length > 4 ? <Tag>+{labels.length - 4}</Tag> : null}
+            {labels.length > 4 ? <Tag className="shrink-0">+{labels.length - 4}</Tag> : null}
         </div>
     );
 }

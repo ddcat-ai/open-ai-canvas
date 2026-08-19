@@ -83,7 +83,7 @@ export default function LibTVSettingsPage() {
     };
 
     return (
-        <AdminPageFrame title="第三方参数配置" description="集中维护外部平台的服务端凭证和连接状态，后续平台可在此继续扩展。">
+        <AdminPageFrame title="第三方参数配置" description="集中维护外部平台的服务端凭证和连接状态，后续平台可在此继续扩展。" scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     icon={<KeyRound className="size-4" />}

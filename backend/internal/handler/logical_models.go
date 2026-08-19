@@ -58,25 +58,6 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.PATCH("/admin/logical-models/:id", func(c *gin.Context) {
 		saveAdminLogicalModel(c, svc, c.Param("id"))
 	})
-	r.GET("/admin/logical-models/physical-variants", func(c *gin.Context) {
-		actor, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		items, err := svc.AdminPhysicalVariantsForChannelModel(actor, c.Query("channelModelId"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, gin.H{"variants": items})
-	})
-	r.POST("/admin/logical-models/physical-variants", func(c *gin.Context) {
-		saveAdminPhysicalVariant(c, svc, "")
-	})
-	r.PATCH("/admin/logical-models/physical-variants/:id", func(c *gin.Context) {
-		saveAdminPhysicalVariant(c, svc, c.Param("id"))
-	})
 	r.POST("/admin/logical-models/:id/simulate", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
@@ -114,23 +95,4 @@ func saveAdminLogicalModel(c *gin.Context, svc *service.Service, id string) {
 		return
 	}
 	ok(c, gin.H{"model": item})
-}
-
-func saveAdminPhysicalVariant(c *gin.Context, svc *service.Service, id string) {
-	actor, err := currentUser(c, svc)
-	if err != nil {
-		failService(c, err)
-		return
-	}
-	var req service.PhysicalVariantRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		fail(c, http.StatusBadRequest, errors.New("可用配置参数格式错误"))
-		return
-	}
-	item, err := svc.SaveAdminPhysicalVariant(actor, id, req)
-	if err != nil {
-		failService(c, err)
-		return
-	}
-	ok(c, gin.H{"variant": item})
 }

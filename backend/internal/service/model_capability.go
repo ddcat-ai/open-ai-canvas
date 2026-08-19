@@ -277,9 +277,8 @@ func NormalizeModelCapabilityConfig(capability string, _ string, input *ModelCap
 	return value, nil
 }
 
-// CapabilitySpecFromModelCapabilityConfig 将渠道模型的真实供应能力投影为路由能力快照。
-// 这是唯一的转换入口：渠道模型能力参数负责定义事实，variant 只保存兼容路由表的投影，
-// 不再允许管理员在 variant 上重复维护尺寸、比例、数量等字段。
+// CapabilitySpecFromModelCapabilityConfig 将渠道模型的真实供应能力投影为路由能力规格。
+// 渠道模型能力参数是唯一事实来源，前台模型供应线路直接引用该规格。
 func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capability string) (CapabilitySpec, error) {
 	spec := CapabilitySpec{Version: 1, Capability: capability, Inputs: map[string]InputConstraint{}, Options: map[string]OptionConstraint{}}
 	// 音频模型当前没有可编辑的渠道能力 JSON，使用空能力规格表示“无额外路由约束”。

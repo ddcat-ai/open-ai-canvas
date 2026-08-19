@@ -59,7 +59,7 @@ export default function ResponseInterceptionSettingsPage() {
     };
 
     return (
-        <AdminPageFrame title="模型响应拦截">
+        <AdminPageFrame title="模型响应拦截" scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     layout="stacked"
