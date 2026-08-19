@@ -887,7 +887,7 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(255, 255, 255, 0.74);
-        --workspace-surface-strong: rgba(255, 255, 255, 0.94);
+        --workspace-surface-strong: rgba(255, 255, 255, 1);
         --workspace-border: rgba(17, 17, 17, 0.1);
         --workspace-border-strong: rgba(17, 17, 17, 0.2);
         --workspace-grid-line: rgba(17, 17, 17, 0.035);
@@ -908,7 +908,7 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(18, 18, 18, 0.76);
-        --workspace-surface-strong: rgba(22, 22, 22, 0.94);
+        --workspace-surface-strong: rgba(22, 22, 22, 1);
         --workspace-border: rgba(255, 255, 255, 0.09);
         --workspace-border-strong: rgba(255, 255, 255, 0.18);
         --workspace-grid-line: rgba(255, 255, 255, 0.026);
