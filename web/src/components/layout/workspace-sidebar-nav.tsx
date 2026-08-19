@@ -266,6 +266,62 @@ function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0 }
     );
 }
 
+function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout }: {
+    group: WorkspaceNavGroup;
+    activeId: string;
+    onNavigate: () => void;
+    onOpenSearch: () => void;
+    onLogout: () => void;
+}) {
+    const [isOpen, setIsOpen] = useState(true);
+    const hasActive = group.items.some((item) => item.id === activeId || (item.id === "settings" && activeId.startsWith("settings:")));
+
+    // 激活项所在分组自动展开，保证当前位置可见。
+    useEffect(() => {
+        if (hasActive) setIsOpen(true);
+    }, [hasActive]);
+
+    const content = (
+        <div className="flex flex-col gap-0.5">
+            {group.items.map((item) => (
+                <NavItem
+                    key={item.id}
+                    item={item}
+                    activeId={activeId}
+                    onSelect={onNavigate}
+                    onOpenSearch={onOpenSearch}
+                    onLogout={onLogout}
+                />
+            ))}
+        </div>
+    );
+
+    // 无标题分组（核心导航入口）常驻展示，不做折叠。
+    if (!group.heading) {
+        return <div className="flex shrink-0 flex-col">{content}</div>;
+    }
+
+    return (
+        <div className="flex shrink-0 flex-col">
+            <button
+                type="button"
+                onClick={() => setIsOpen((open) => !open)}
+                aria-expanded={isOpen}
+                className="app-workspace-nav-group-toggle select-none"
+            >
+                <span className="app-workspace-nav-group-label">{group.heading}</span>
+                <ChevronRight
+                    className={cn("size-3.5 shrink-0 text-foreground/35 transition-transform duration-200", isOpen && "rotate-90")}
+                    strokeWidth={2}
+                />
+            </button>
+            <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-in-out", isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+                <div className="min-h-0 overflow-hidden pt-0.5">{content}</div>
+            </div>
+        </div>
+    );
+}
+
 export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: () => void; onOpenSearch: () => void }) {
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
@@ -325,21 +381,14 @@ export function WorkspaceSidebarNav({ onNavigate, onOpenSearch }: { onNavigate: 
                 )}
             >
                 {groups.map((group, index) => (
-                    <div key={index} className="flex shrink-0 flex-col">
-                        {group.heading ? <span className="app-workspace-nav-group-label">{group.heading}</span> : null}
-                        <div className="flex flex-col gap-0.5">
-                            {group.items.map((item) => (
-                                <NavItem
-                                    key={item.id}
-                                    item={item}
-                                    activeId={activeId}
-                                    onSelect={onNavigate}
-                                    onOpenSearch={onOpenSearch}
-                                    onLogout={() => void handleLogout()}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    <NavGroup
+                        key={index}
+                        group={group}
+                        activeId={activeId}
+                        onNavigate={onNavigate}
+                        onOpenSearch={onOpenSearch}
+                        onLogout={() => void handleLogout()}
+                    />
                 ))}
             </div>
 
