@@ -3930,6 +3930,115 @@
         transform: translateY(-1px);
     }
     .library-primary-action { border: 0 !important; border-radius: var(--r-md) !important; background: var(--btn-solid-bg) !important; color: var(--btn-solid-fg) !important; box-shadow: none !important; font-weight: 620; }
+
+    /* 画布库页头操作：沿用现有配色，只统一几何比例与触感反馈。 */
+    .canvas-library-header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--space-2);
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn {
+        height: var(--space-10);
+        border-radius: var(--r-md) !important;
+        padding-inline: var(--space-3-half);
+        column-gap: var(--space-2);
+        box-shadow: none !important;
+        transform: translateY(0) scale(1);
+        transform-origin: center;
+        transition: transform var(--motion-state) var(--motion-ease-out) !important;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-primary.ant-btn {
+        min-width: 116px;
+        justify-content: center;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.ant-btn {
+        width: var(--space-10);
+        padding-inline: 0;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):hover {
+        box-shadow: none !important;
+        transform: translateY(-1px);
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):active {
+        transform: translateY(0) scale(0.97);
+        transition-duration: var(--motion-instant) !important;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.is-open.ant-btn {
+        transform: translateY(0) scale(0.97);
+    }
+
+    .canvas-library-header-action.ant-btn .ant-btn-icon {
+        display: inline-flex;
+        transition: transform var(--motion-state) var(--motion-ease-out);
+    }
+
+    .canvas-library-header-action.ant-btn:not(:disabled):hover .ant-btn-icon {
+        transform: translateY(-1px) scale(1.04);
+    }
+
+    .canvas-library-header-action.is-icon.ant-btn:not(:disabled):hover .ant-btn-icon {
+        transform: scale(1.08);
+    }
+
+    .canvas-library-header-action.is-icon.is-open.ant-btn .ant-btn-icon {
+        transform: scale(1.08);
+    }
+
+    .canvas-library-header-action.ant-btn:not(:disabled):active .ant-btn-icon {
+        transform: scale(0.94);
+    }
+
+    .canvas-library-actions-menu.ant-dropdown-menu {
+        min-width: 176px;
+        padding: var(--space-1-half) !important;
+        border-radius: var(--r-lg) !important;
+    }
+
+    .canvas-library-actions-menu-item.ant-dropdown-menu-item {
+        min-height: 38px;
+        gap: var(--space-2);
+        border-radius: var(--r-md) !important;
+        padding-inline: var(--space-3) !important;
+        transition: transform var(--motion-instant) var(--motion-ease-out);
+    }
+
+    .canvas-library-actions-menu-item.ant-dropdown-menu-item:active {
+        transform: scale(0.985);
+    }
+
+    @media (max-width: 639px) {
+        .canvas-library-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn,
+        .canvas-library-header-action.ant-btn .ant-btn-icon,
+        .canvas-library-actions-menu-item.ant-dropdown-menu-item {
+            transition: none !important;
+        }
+
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):hover,
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):active,
+        html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.is-open.ant-btn,
+        .canvas-library-header-action.ant-btn:not(:disabled):hover .ant-btn-icon,
+        .canvas-library-header-action.ant-btn:not(:disabled):active .ant-btn-icon,
+        .canvas-library-header-action.is-icon.is-open.ant-btn .ant-btn-icon,
+        .canvas-library-actions-menu-item.ant-dropdown-menu-item:active {
+            transform: none;
+        }
+    }
+
     .library-toolbar { min-height: 50px; margin-top: 8px; border-bottom: 0; padding: 7px 0 10px; }
     .library-toolbar .ant-input-affix-wrapper,
     .library-toolbar .ant-select-selector,

@@ -179,19 +179,27 @@ export default function CanvasPage() {
                     description="把镜头、素材和想法留在同一张画布里。"
                     meta={<span className="app-projects-header-meta">{projects.length} 个</span>}
                     actions={
-                        <>
-                            <Button className="library-primary-action !h-9 !px-3.5" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>
+                        <div className="canvas-library-header-actions">
+                            <Button className="canvas-library-header-action is-primary library-primary-action" type="primary" disabled={!hydrated} icon={<Plus className="size-3.5" />} onClick={createAndEnter}>
                                 新建画布
                             </Button>
                             {projects.length ? (
-                                <Dropdown menu={{ items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }] }} trigger={["click"]}>
-                                    <Button className="!h-9 !w-9 !p-0" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
+                                <Dropdown
+                                    menu={{
+                                        classNames: { root: "canvas-library-actions-menu", item: "canvas-library-actions-menu-item" },
+                                        items: [{ key: "delete-all", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除全部画布", onClick: () => setDeleteIds(projects.map((project) => project.id)) }],
+                                    }}
+                                    openClassName="is-open"
+                                    placement="bottomRight"
+                                    trigger={["click"]}
+                                >
+                                    <Button className="canvas-library-header-action is-icon" aria-label="更多画布操作" title="更多操作" icon={<MoreHorizontal className="size-4" />} />
                                 </Dropdown>
                             ) : null}
-                            <Button className="!h-9 !px-3.5" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>
+                            <Button className="canvas-library-header-action" disabled={!hydrated} icon={<FileUp className="size-3.5" />} onClick={() => inputRef.current?.click()}>
                                 导入
                             </Button>
-                        </>
+                        </div>
                     }
                 />
 

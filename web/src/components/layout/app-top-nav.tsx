@@ -126,10 +126,10 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                 </Link>
                             </div>
                             <div className="app-workspace-rail-middle flex min-h-0 w-full flex-1 flex-col items-center justify-start overflow-y-auto px-3 pt-3">
-                                <nav className="flex w-full flex-col items-center gap-2">
+                                <nav className="flex w-full flex-col items-center gap-4">
                                     {topRailNavTools.map((tool) => renderSidebarLink(tool))}
                                 </nav>
-                                <nav className="mt-4 flex w-full flex-col items-center gap-2 pb-3">
+                                <nav className="mt-4 flex w-full flex-col items-center gap-4 pb-3">
                                     {bottomRailNavTools.map((tool) => renderSidebarLink(tool))}
                                 </nav>
                             </div>
