@@ -7,8 +7,8 @@ import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
-import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
-import { modelRequestOptions, resolveCompatibleModel, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -399,22 +399,46 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
 		? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } }
 		: { capability: mode, options: liveOptions };
     const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel;
-    const imageProfile = mode === "image" ? modelCapabilityConfigFor(config, model).image! : undefined;
-    const normalizedImage = imageProfile
-        ? normalizeImageValue(imageProfile, {
-              quality: requestedConfig.quality,
-              size: requestedConfig.size,
-              transparentBackground: requestedConfig.transparentBackground,
-              count: requestedConfig.count,
-          })
-        : undefined;
+    const generationDefaults = resolveModelGenerationDefaults(
+        config,
+        model,
+        mode === "image" ? "image" : mode === "video" ? "video" : undefined,
+        mode === "image"
+            ? {
+                  size: node?.metadata?.size,
+                  quality: node?.metadata?.quality,
+                  transparentBackground: node?.metadata?.transparentBackground,
+                  count: requestedConfig.count,
+              }
+            : {
+                  size: node?.metadata?.size,
+                  videoSeconds: node?.metadata?.seconds,
+                  vquality: node?.metadata?.vquality,
+                  videoGenerateAudio: node?.metadata?.generateAudio,
+                  videoWatermark: node?.metadata?.watermark,
+              },
+        {
+            size: requestedConfig.size,
+            quality: requestedConfig.quality,
+            transparentBackground: requestedConfig.transparentBackground,
+            count: requestedConfig.count,
+            videoSeconds: requestedConfig.videoSeconds,
+            vquality: requestedConfig.vquality,
+            videoGenerateAudio: requestedConfig.videoGenerateAudio,
+            videoWatermark: requestedConfig.videoWatermark,
+        },
+    );
     return {
         ...requestedConfig,
         model,
-        quality: normalizedImage?.quality || requestedConfig.quality,
-        size: normalizedImage?.size || requestedConfig.size,
-        transparentBackground: normalizedImage?.transparentBackground || (requestedConfig.transparentBackground === "true" ? "true" : "false"),
-        count: normalizedImage?.count || requestedConfig.count,
+        quality: generationDefaults.quality || requestedConfig.quality,
+        size: generationDefaults.size || requestedConfig.size,
+        transparentBackground: generationDefaults.transparentBackground || (requestedConfig.transparentBackground === "true" ? "true" : "false"),
+        videoSeconds: generationDefaults.videoSeconds || requestedConfig.videoSeconds,
+        vquality: generationDefaults.vquality || requestedConfig.vquality,
+        videoGenerateAudio: generationDefaults.videoGenerateAudio || requestedConfig.videoGenerateAudio,
+        videoWatermark: generationDefaults.videoWatermark || requestedConfig.videoWatermark,
+        count: generationDefaults.count || requestedConfig.count,
     };
 }
 

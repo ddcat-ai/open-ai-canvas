@@ -175,7 +175,7 @@ export default function CreatePage() {
             audioCount: attachments.filter((attachment) => creationAttachmentKind(attachment) === "audio").length,
             characterCount: 0,
         },
-        videoSeconds: seconds,
+        videoSeconds: mode === "video" ? seconds : undefined,
         imageSize: mode === "image" ? ratio : undefined,
 		options: mode === "image"
 			? { size: ratio, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
@@ -497,7 +497,20 @@ export default function CreatePage() {
         const controller = new AbortController();
         const requestLifecycle = beginGenerationConsumer(controller.signal);
         abortRef.current = controller;
-        const requestConfig = { ...config, model: selectedModel, imageModel: selectedModel, videoModel: selectedModel, textModel: selectedModel, size: ratio, videoSeconds: seconds, quality, vquality: videoQuality, count };
+        const normalizedImage = mode === "image" ? normalizeImageValue(imageProfile, { size: ratio, quality, count }) : undefined;
+        const normalizedVideo = mode === "video" ? normalizeVideoValue(videoProfile, { seconds, ratio, resolution: videoQuality }) : undefined;
+        const requestConfig = {
+            ...config,
+            model: selectedModel,
+            imageModel: selectedModel,
+            videoModel: selectedModel,
+            textModel: selectedModel,
+            ...(mode === "image"
+                ? { size: normalizedImage?.size || ratio, quality: normalizedImage?.quality || quality, count: normalizedImage?.count || count, videoSeconds: config.videoSeconds }
+                : mode === "video"
+                  ? { size: normalizedVideo?.ratio || ratio, videoSeconds: normalizedVideo?.seconds || seconds, vquality: (normalizedVideo?.resolution || videoQuality).replace(/p$/i, "") }
+                  : {}),
+        };
         try {
             if (mode === "text") {
 				if (logicalModelIDForConfig(requestConfig)) {

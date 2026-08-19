@@ -1,4 +1,4 @@
-import { defaultImageCapabilityConfig, modelCapabilityConfigFor, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
@@ -129,7 +129,13 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
     }
     const operation = requirements.capability === "video" && input ? resolveVideoOperation(input, requirements.videoOperation) : requirements.videoOperation;
     if (operation && spec.operations?.length && !spec.operations.includes(operation)) return "不支持当前生成模式";
-    const options = { ...requirements.options, ...(requirements.videoSeconds ? { videoSeconds: requirements.videoSeconds } : {}), ...(requirements.imageSize ? { size: requirements.imageSize } : {}) };
+    // 图片创作状态也会携带全局默认视频时长；这个字段只对视频模型有意义，
+    // 不能把它拼进图片逻辑模型的能力匹配，否则图片模型会被误判为“不支持当前时长”。
+    const options = {
+        ...requirements.options,
+        ...(requirements.capability === "video" && requirements.videoSeconds ? { videoSeconds: requirements.videoSeconds } : {}),
+        ...(requirements.capability === "image" && requirements.imageSize ? { size: requirements.imageSize } : {}),
+    };
     for (const [name, value] of Object.entries(options)) {
         if (value === undefined || value === null || value === "") continue;
         const constraint = spec.options?.[name];
@@ -221,6 +227,51 @@ export function defaultImageParamsForModel(config: AiConfig, model: string): Pic
         quality: image.quality.default || "auto",
         transparentBackground: String(image.transparentBackground.default ?? false),
     };
+}
+
+
+export type ModelGenerationDefaults = Pick<AiConfig, "size" | "quality" | "transparentBackground" | "count" | "videoSeconds" | "vquality" | "videoGenerateAudio" | "videoWatermark">;
+
+export function resolveModelGenerationDefaults(
+    config: AiConfig,
+    model: string,
+    capability: "image" | "video" | undefined,
+    explicit: Partial<ModelGenerationDefaults> = {},
+    fallback: Partial<ModelGenerationDefaults> = {},
+): Partial<ModelGenerationDefaults> {
+    if (!capability) return {};
+    const channel = resolveModelChannel(config, model);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    const isManagedModel = Boolean(cost?.logicalModelId || cost?.logicalCapabilitySpec);
+    const source = (key: keyof ModelGenerationDefaults) => explicit[key] ?? (isManagedModel ? undefined : fallback[key]);
+    const profile = modelCapabilityConfigFor(config, model);
+
+    if (capability === "image" && profile.image) {
+        const normalized = normalizeImageValue(profile.image, {
+            size: source("size"),
+            quality: source("quality"),
+            count: source("count"),
+            transparentBackground: source("transparentBackground"),
+        });
+        return normalized;
+    }
+
+    if (capability === "video" && profile.video) {
+        const normalized = normalizeVideoValue(profile.video, {
+            seconds: source("videoSeconds"),
+            ratio: source("size"),
+            resolution: source("vquality"),
+        });
+        return {
+            videoSeconds: normalized.seconds,
+            size: normalized.ratio,
+            vquality: normalized.resolution.replace(/p$/i, ""),
+            videoGenerateAudio: source("videoGenerateAudio") ?? String(profile.video.generateAudio.default),
+            videoWatermark: source("videoWatermark") ?? String(profile.video.watermark.default),
+        };
+    }
+
+    return {};
 }
 
 export function maxModelInputCapacity(config: AiConfig, capability: "image" | "video", kind: "image" | "video" | "audio") {
