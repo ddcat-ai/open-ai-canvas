@@ -982,7 +982,7 @@
     body.app-spatial-overlays :where(
         .ant-dropdown-menu,
         .ant-select-dropdown,
-        .ant-popover-inner,
+        .ant-popover-container,
         .ant-picker-dropdown .ant-picker-panel-container,
         .ant-cascader-menus,
         .ant-mentions-dropdown,
@@ -1001,12 +1001,12 @@
         background: var(--workspace-overlay-bg-strong) !important;
     }
 
-    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
         border-radius: 8px !important;
     }
 
     /* 展开菜单（下拉/弹出）取消阴影：层级由边框 + 背景对比表达 */
-    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
         box-shadow: none !important;
     }
 
@@ -1042,8 +1042,8 @@
 
     body.app-spatial-overlays :where(
         .ant-dropdown-menu-item-divider,
-        .ant-popover-inner-content > .border-b,
-        .ant-popover-inner-content > .border-y,
+        .ant-popover-content > .border-b,
+        .ant-popover-content > .border-y,
         .ant-modal-header,
         .ant-modal-footer,
         .ant-drawer-header
