@@ -83,6 +83,16 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 	}
 }
 
+func TestDefaultMiniMaxVideoCapabilitySupportsReferenceGeneration(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("minimax-video", "MiniMax-H3")
+	if profile == nil || profile.Video == nil {
+		t.Fatal("MiniMax video profile = nil")
+	}
+	if !containsCapabilityString(profile.Video.Operations, "reference_to_video") {
+		t.Fatalf("operations = %v, want reference_to_video", profile.Video.Operations)
+	}
+}
+
 func TestCapabilitySpecFromModelCapabilityConfigRestoresLegacyWildcardImageSizes(t *testing.T) {
 	config := &ModelCapabilityConfig{
 		Version: 1,

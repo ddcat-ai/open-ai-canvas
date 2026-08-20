@@ -229,6 +229,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Resolutions = []string{"1080p"}
 		video.DefaultResolution = "1080p"
 	case model.ChannelInterfaceMiniMaxVideo:
+		video.Operations = append(video.Operations, "reference_to_video")
 		video.References.MaxImages = 9
 		video.References.MaxImageBytes = 30 * 1024 * 1024
 		video.References.MaxVideos = 3

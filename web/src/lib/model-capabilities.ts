@@ -315,6 +315,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.resolutions = ["768P", "2K"];
         video.defaultResolution = "768P";
         video.watermark = { supported: true, default: false };
+        video.operations.push("reference_to_video");
     }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }

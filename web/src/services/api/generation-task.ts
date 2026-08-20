@@ -6,6 +6,7 @@ import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, r
 import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
+import { resolveVideoOperation } from "@/lib/model-selection";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import type { ReferenceImage } from "@/types/image";
@@ -268,10 +269,13 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
 
 function generationOperation(options: BackendGenerationTaskOptions) {
     if (options.mode !== "video") return options.mode;
-    const imageCount = options.referenceImages?.length ?? 0;
-    if ((options.referenceVideos?.length ?? 0) > 0 || (options.referenceAudios?.length ?? 0) > 0 || imageCount > 2) return "reference_to_video";
-    if (imageCount > 0) return "image_to_video";
-    return "text_to_video";
+    return resolveVideoOperation({
+        textCount: 0,
+        imageCount: options.referenceImages?.length ?? 0,
+        videoCount: options.referenceVideos?.length ?? 0,
+        audioCount: options.referenceAudios?.length ?? 0,
+        characterCount: 0,
+    }, options.metadata?.videoEditOperation as string | undefined);
 }
 
 export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {
