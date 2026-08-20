@@ -7891,6 +7891,21 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     border-inline-start: 0;
 }
 
+.admin-shell .admin-logical-model-table .ant-table-tbody > tr > td {
+    height: auto;
+    vertical-align: top;
+}
+
+.admin-shell .admin-logical-model-table .admin-capability-summary-tag {
+    max-width: 100%;
+    margin-inline-end: 0;
+    overflow-wrap: anywhere;
+    border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent) !important;
+    background: color-mix(in srgb, var(--foreground) 6%, var(--admin-layer-1)) !important;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+    white-space: normal;
+}
+
 .admin-shell .admin-table-clickable-row {
     cursor: pointer;
 }
