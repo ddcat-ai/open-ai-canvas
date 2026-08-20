@@ -28,6 +28,8 @@ import (
 
 	"infinite-canvas/backend/internal/model"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	awsv4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	qiniuAuth "github.com/qiniu/go-sdk/v7/auth"
 	qiniuStorage "github.com/qiniu/go-sdk/v7/storage"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
@@ -128,7 +130,7 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		if err != nil {
 			return nil, err
 		}
-		if setting.Provider == qiniuKodoProvider {
+		if setting.Provider == qiniuKodoProvider && setting.CDNBaseURL != "" {
 			// 七牛私有空间即使配置了绑定域名，也不能匿名访问；必须使用
 			// Kodo 私有下载签名，否则浏览器会收到 NotSupportAnonymous。
 			redirectURL, err := signedOSSObjectURL(setting, resource.ObjectKey, time.Now().Add(directResourceURLTTL))
@@ -1091,9 +1093,6 @@ func signedQiniuObjectURL(setting ossSettingValue, objectKey string, expiresAt t
 	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return "", errors.New("七牛云 Kodo 访问密钥不可用")
 	}
-	if setting.CDNBaseURL == "" {
-		return "", errors.New("七牛云 Kodo 绑定域名为空")
-	}
 	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
 	if objectKey == "" {
 		return "", errors.New("七牛云 Kodo 对象路径为空")
@@ -1102,8 +1101,62 @@ func signedQiniuObjectURL(setting ossSettingValue, objectKey string, expiresAt t
 	if deadline <= time.Now().Unix() {
 		return "", errors.New("七牛云 Kodo 签名有效期必须晚于当前时间")
 	}
+	if setting.CDNBaseURL == "" {
+		return signedQiniuS3ObjectURL(setting, objectKey, expiresAt)
+	}
 	mac := qiniuAuth.New(setting.AccessKeyID, setting.AccessKeySecret)
 	return qiniuStorage.MakePrivateURLv2(mac, strings.TrimRight(setting.CDNBaseURL, "/"), objectKey, deadline), nil
+}
+
+// signedQiniuS3ObjectURL 用七牛兼容 S3 的 AWS Signature V4 访问私有空间。
+// 没有绑定域名时，浏览器不直接访问该地址，而是由后端代理读取并返回文件。
+func signedQiniuS3ObjectURL(setting ossSettingValue, objectKey string, expiresAt time.Time) (string, error) {
+	region := qiniuS3Region(setting)
+	if region == "" {
+		return "", errors.New("七牛云 Kodo S3 Region 不可用")
+	}
+	baseURL := &url.URL{Scheme: "https", Host: setting.Bucket + ".s3." + region + ".qiniucs.com"}
+	// 保留对象键的原始路径，让 url.URL 和 AWS signer 只做一次 RFC 3986 转义。
+	baseURL.Path = "/" + objectKey
+	req, err := http.NewRequest(http.MethodGet, baseURL.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	credentialsValue := credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, "")
+	signer := awsv4.NewSigner(credentialsValue)
+	if _, err := signer.Presign(req, nil, "s3", region, time.Until(expiresAt), time.Now().UTC()); err != nil {
+		return "", fmt.Errorf("七牛云 Kodo S3 签名失败：%w", err)
+	}
+	return req.URL.String(), nil
+}
+
+func qiniuS3Region(setting ossSettingValue) string {
+	region := strings.ToLower(strings.TrimSpace(setting.Region))
+	if region == "" {
+		endpoint := strings.ToLower(setting.Endpoint)
+		for _, candidate := range []string{"z0", "z1", "z2", "na0", "as0", "cn-east-1", "cn-north-1", "cn-south-1", "us-north-1", "ap-southeast-1", "cn-east-2"} {
+			if strings.Contains(endpoint, candidate) {
+				region = candidate
+				break
+			}
+		}
+	}
+	switch region {
+	case "", "z0", "cn-east-1":
+		return "cn-east-1"
+	case "z1", "cn-north-1":
+		return "cn-north-1"
+	case "z2", "cn-south-1":
+		return "cn-south-1"
+	case "na0", "us-north-1":
+		return "us-north-1"
+	case "as0", "ap-southeast-1":
+		return "ap-southeast-1"
+	case "cn-east-2", "zhejiang2":
+		return "cn-east-2"
+	default:
+		return ""
+	}
 }
 
 func qiniuRegion(region string) *qiniuStorage.Region {

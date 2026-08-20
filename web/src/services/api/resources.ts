@@ -137,7 +137,7 @@ function resourceCacheKey(id: string) {
 
 export function resourceFileUrl(id: string) {
     const base = String(apiBaseURL).replace(/\/+$/, "");
-    return `${base}/resources/${encodeURIComponent(id)}/file?direct=1`;
+    return `${base}/resources/${encodeURIComponent(id)}/file`;
 }
 
 function resourceProxyFileUrl(id: string) {

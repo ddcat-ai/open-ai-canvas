@@ -56,7 +56,6 @@ export default function StorageSettingsPage() {
         if (values.mode === "aliyun" && !values.endpoint?.trim()) return message.error("请填写阿里云 OSS Endpoint");
         if (values.mode === "tencent" && !values.endpoint?.trim() && !values.region?.trim()) return message.error("请填写腾讯云 COS Region 或 Endpoint");
         if (values.mode === "qiniu" && !values.endpoint?.trim()) return message.error("请填写七牛云 Kodo 上传 Endpoint");
-        if (values.mode === "qiniu" && !values.cdnBaseUrl?.trim()) return message.error("请填写七牛云 Kodo 绑定域名");
 
         setSaving(true);
         try {
@@ -140,7 +139,12 @@ export default function StorageSettingsPage() {
                                     <Form.Item className="xl:col-span-2" name="endpoint" label={isQiniuKodo ? "上传 Endpoint" : "Endpoint"}>
                                         <Input autoComplete="off" inputMode="url" placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : isQiniuKodo ? "https://up-z0.qiniup.com" : "https://oss-cn-hangzhou.aliyuncs.com"} />
                                     </Form.Item>
-                                    <Form.Item name="cdnBaseUrl" label={isQiniuKodo ? "绑定域名" : "CDN 加速域名"} rules={[{ type: "url", message: "请填写完整的 http/https 地址" }]}>
+                                    <Form.Item
+                                        name="cdnBaseUrl"
+                                        label={isQiniuKodo ? "绑定域名（可选）" : "CDN 加速域名"}
+                                        extra={isQiniuKodo ? "可选。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。" : undefined}
+                                        rules={[{ type: "url", message: "请填写完整的 http/https 地址" }]}
+                                    >
                                         <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
                                     </Form.Item>
                                 </div>

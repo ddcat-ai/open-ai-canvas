@@ -490,9 +490,6 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 				return next, err
 			}
 		}
-		if next.Provider == qiniuKodoProvider && next.CDNBaseURL == "" {
-			return next, BadAuthRequest("请填写七牛云 Kodo 绑定域名")
-		}
 		if next.AccessKeyID == "" {
 			return next, BadAuthRequest("请填写访问密钥 AccessKey")
 		}

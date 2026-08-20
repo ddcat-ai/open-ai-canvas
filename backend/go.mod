@@ -3,6 +3,7 @@ module infinite-canvas/backend
 go 1.25.0
 
 require (
+	github.com/aws/aws-sdk-go v1.40.45
 	github.com/gin-gonic/gin v1.12.0
 	github.com/qiniu/go-sdk/v7 v7.27.0
 	github.com/redis/go-redis/v9 v9.22.0

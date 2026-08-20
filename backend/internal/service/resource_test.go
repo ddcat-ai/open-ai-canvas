@@ -286,6 +286,40 @@ func TestAliyunOSSSettingKeepsCDNBaseURL(t *testing.T) {
 	}
 }
 
+func TestQiniuKodoSettingAllowsMissingCDNBaseURL(t *testing.T) {
+	next, err := ossSettingFromRequest(OSSSettingRequest{
+		Enabled: true, Provider: qiniuKodoProvider, Region: "z0", Endpoint: "https://up-z0.qiniup.com",
+		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}, ossSettingValue{})
+	if err != nil {
+		t.Fatalf("ossSettingFromRequest() error = %v", err)
+	}
+	if next.CDNBaseURL != "" {
+		t.Fatalf("CDNBaseURL = %q, want empty", next.CDNBaseURL)
+	}
+}
+
+func TestSignedQiniuS3ObjectURL(t *testing.T) {
+	value, err := signedQiniuObjectURL(ossSettingValue{
+		Provider: qiniuKodoProvider, Endpoint: "https://up-z0.qiniup.com", Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	}, "users/u-1/image/test image.png", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("signedQiniuObjectURL() error = %v", err)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	if parsed.Host != "private-bucket.s3.cn-east-1.qiniucs.com" || parsed.Path != "/users/u-1/image/test image.png" || query.Get("X-Amz-Algorithm") != "AWS4-HMAC-SHA256" || query.Get("X-Amz-Credential") == "" || query.Get("X-Amz-Signature") == "" || query.Get("X-Amz-Expires") == "" {
+		t.Fatalf("signed Qiniu S3 URL = %q", value)
+	}
+	if strings.Contains(value, "secret-value") {
+		t.Fatalf("signed URL leaked access key secret: %q", value)
+	}
+}
+
 func TestOSSCDNBaseURLRejectsNonDomainParts(t *testing.T) {
 	for _, value := range []string{"ftp://media.example.com", "https://media.example.com/assets", "https://media.example.com?token=value", "https://user@media.example.com"} {
 		if _, err := ossCDNBaseURL(value); err == nil {
@@ -433,6 +467,32 @@ func TestPrepareResourceDeliverySignsPrivateQiniuCDNURL(t *testing.T) {
 	}
 	if delivery.RedirectURL == "" || !strings.HasPrefix(delivery.RedirectURL, "https://media.example.com/ai/users/user-1/image/private.png?") || !strings.Contains(delivery.RedirectURL, "e=") || !strings.Contains(delivery.RedirectURL, "token=") {
 		t.Fatalf("PrepareResourceDelivery() = %q, want a signed Qiniu URL", delivery.RedirectURL)
+	}
+}
+
+func TestPrepareResourceDeliveryProxiesQiniuWithoutCDNBaseURL(t *testing.T) {
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: qiniuKodoProvider, Region: "z0", Endpoint: "https://up-z0.qiniup.com",
+		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-qiniu-proxy", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: qiniuKodoProvider, Endpoint: "https://up-z0.qiniup.com", Bucket: "private-bucket",
+		ObjectKey: "users/user-1/image/private.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.Resource == nil || delivery.RedirectURL != "" {
+		t.Fatalf("PrepareResourceDelivery() = %#v, want backend proxy delivery", delivery)
 	}
 }
 
