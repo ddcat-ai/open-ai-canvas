@@ -11,7 +11,7 @@ test("managed canvas agent task keeps tool definitions and tool results", () => 
         [
             { role: "user", content: "读取画布" },
             { type: "function_call", call_id: "call-1", name: "canvas_get_state", arguments: "{}" },
-            { role: "tool", tool_call_id: "call-1", content: "{\"nodes\":[]}" },
+            { role: "tool", tool_call_id: "call-1", content: '{"nodes":[]}' },
         ],
         [{ type: "function", function: { name: "canvas_get_state", parameters: { type: "object" } } }],
         "required",
@@ -21,12 +21,12 @@ test("managed canvas agent task keeps tool definitions and tool results", () => 
     assert.deepEqual(requests.responses.input, [
         { role: "user", content: "读取画布" },
         { type: "function_call", call_id: "call-1", name: "canvas_get_state", arguments: "{}" },
-        { type: "function_call_output", call_id: "call-1", output: "{\"nodes\":[]}" },
+        { type: "function_call_output", call_id: "call-1", output: '{"nodes":[]}' },
     ]);
     assert.deepEqual(requests.chatCompletion.messages, [
         { role: "user", content: "读取画布" },
         { role: "assistant", content: null, tool_calls: [{ id: "call-1", type: "function", function: { name: "canvas_get_state", arguments: "{}" } }] },
-        { role: "tool", tool_call_id: "call-1", content: "{\"nodes\":[]}" },
+        { role: "tool", tool_call_id: "call-1", content: '{"nodes":[]}' },
     ]);
 });
 

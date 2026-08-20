@@ -285,10 +285,38 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 	body := cloneStringAnyMap(request)
 	body["model"] = input.Config.Model
 	var payload map[string]interface{}
-	if err := postJSON(ctx, input.Config, path, body, &payload); err != nil {
+	err := postJSON(ctx, input.Config, path, body, &payload)
+	if protocol == "chat-completion" && isAgentToolChoiceCompatibilityError(err) {
+		if !isAutoAgentToolChoice(body["tool_choice"]) {
+			autoBody := cloneStringAnyMap(body)
+			autoBody["tool_choice"] = "auto"
+			payload = nil
+			err = postJSON(ctx, input.Config, path, autoBody, &payload)
+		}
+		if isAgentToolChoiceCompatibilityError(err) {
+			withoutToolChoice := cloneStringAnyMap(body)
+			delete(withoutToolChoice, "tool_choice")
+			payload = nil
+			err = postJSON(ctx, input.Config, path, withoutToolChoice, &payload)
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
 	return parseAgentToolPayload(payload, protocol)
+}
+
+func isAgentToolChoiceCompatibilityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "tool_choice") || strings.Contains(message, "tool choice") || strings.Contains(message, "tool-choice") || strings.Contains(message, "thinking mode")
+}
+
+func isAutoAgentToolChoice(value interface{}) bool {
+	choice, ok := value.(string)
+	return ok && strings.EqualFold(strings.TrimSpace(choice), "auto")
 }
 
 func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map[string]interface{}, error) {
@@ -298,6 +326,9 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 	result := map[string]interface{}{"mode": "text", "text": "", "toolCalls": []interface{}{}}
 	if protocol == "responses" {
 		result["text"] = firstNonEmptyString(stringField(payload, "output_text"), extractResponseText(payload))
+		if reasoning := extractResponseReasoning(payload); reasoning != "" {
+			result["reasoning"] = reasoning
+		}
 		calls := make([]interface{}, 0)
 		for _, value := range interfaceSlice(payload["output"]) {
 			item, _ := value.(map[string]interface{})
@@ -327,6 +358,25 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 	}
 	result["toolCalls"] = calls
 	return result, nil
+}
+
+func extractResponseReasoning(payload map[string]interface{}) string {
+	var chunks []string
+	for _, value := range interfaceSlice(payload["output"]) {
+		item, _ := value.(map[string]interface{})
+		if stringField(item, "type") != "reasoning" {
+			continue
+		}
+		for _, key := range []string{"summary", "content"} {
+			for _, part := range interfaceSlice(item[key]) {
+				record, _ := part.(map[string]interface{})
+				if text := strings.TrimSpace(stringField(record, "text")); text != "" {
+					chunks = append(chunks, text)
+				}
+			}
+		}
+	}
+	return strings.Join(chunks, "\n")
 }
 
 func interfaceSlice(value interface{}) []interface{} {

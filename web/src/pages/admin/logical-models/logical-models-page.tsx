@@ -1,7 +1,7 @@
 import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag } from "antd";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { FlaskConical, GitBranch, Layers3, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
@@ -86,9 +86,7 @@ export default function LogicalModelsPage() {
         setLoading(true);
         try {
             const [modelResult, firstChannelPage] = await Promise.all([listAdminLogicalModels(), listAdminChannels({ page: 1, limit: 100 })]);
-            const remainingChannelPages = await Promise.all(
-                Array.from({ length: Math.max(0, Math.ceil(firstChannelPage.total / firstChannelPage.limit) - 1) }, (_, index) => listAdminChannels({ page: index + 2, limit: firstChannelPage.limit })),
-            );
+            const remainingChannelPages = await Promise.all(Array.from({ length: Math.max(0, Math.ceil(firstChannelPage.total / firstChannelPage.limit) - 1) }, (_, index) => listAdminChannels({ page: index + 2, limit: firstChannelPage.limit })));
             const channels = [firstChannelPage, ...remainingChannelPages].flatMap((result) => result.channels);
             const channelModelResults = await Promise.all(channels.map((channel) => listAdminChannelModels(channel.id)));
             setModels(modelResult.models);
@@ -188,9 +186,9 @@ export default function LogicalModelsPage() {
             await deleteAdminLogicalModel(item.id);
             setModels((current) => current.filter((model) => model.id !== item.id));
             if (paginatedModels.length === 1 && page > 1) setPage(page - 1);
-            message.success("前台模型已删除");
+            message.success("前台模型已归档");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "删除前台模型失败");
+            message.error(error instanceof Error ? error.message : "归档前台模型失败");
             throw error;
         } finally {
             setDeletingModelId(undefined);
@@ -260,15 +258,15 @@ export default function LogicalModelsPage() {
                         { key: "simulate", label: "模拟供应线路匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
                         { key: "toggle", label: item.enabled ? "停用" : "启用", onClick: () => void toggleModel(item) },
                         {
-                            key: "delete",
-                            label: "删除模型",
-                            icon: <Trash2 className="size-3.5" />,
+                            key: "archive",
+                            label: "归档模型",
+                            icon: <Archive className="size-3.5" />,
                             danger: true,
                             disabled: deletingModelId === item.id,
                             confirm: {
-                                title: `删除前台模型“${item.name}”？`,
-                                description: "删除后模型将从目录中移除，不能在页面恢复；历史任务和版本记录会保留。排队中或进行中的任务仍在使用时无法删除。",
-                                okText: "确认删除",
+                                title: `归档前台模型“${item.name}”？`,
+                                description: "归档后模型将从公开目录中移除，不能在页面恢复；历史任务和版本记录会保留。排队中或进行中的任务仍在使用时无法归档。",
+                                okText: "确认归档",
                             },
                             onClick: () => removeModel(item),
                         },
@@ -288,13 +286,49 @@ export default function LogicalModelsPage() {
             }
         >
             <AdminDataTable
-                toolbar={<Input prefix={<Search className="size-4 text-foreground/40" />} allowClear value={keyword} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} placeholder="搜索模型名称、代码或能力" className="app-list-search" />}
-                toolbarActiveFilters={keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}
+                toolbar={
+                    <Input
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        allowClear
+                        value={keyword}
+                        onChange={(event) => {
+                            setKeyword(event.target.value);
+                            setPage(1);
+                        }}
+                        placeholder="搜索模型名称、代码或能力"
+                        className="app-list-search"
+                    />
+                }
+                toolbarActiveFilters={
+                    keyword ? (
+                        <AdminFilterChip
+                            label={`搜索：${keyword}`}
+                            onRemove={() => {
+                                setKeyword("");
+                                setPage(1);
+                            }}
+                        />
+                    ) : null
+                }
                 toolbarActive={Boolean(keyword)}
-                onReset={() => { setKeyword(""); setPage(1); }}
+                onReset={() => {
+                    setKeyword("");
+                    setPage(1);
+                }}
                 table={{ className: "admin-logical-model-table", rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 980 } }}
                 empty={<AdminTableEmpty filtered={Boolean(deferredKeyword)} title="暂无模型" />}
-                footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={filteredModels.length} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
+                footer={
+                    <PaginationBar
+                        alwaysShow
+                        current={page}
+                        pageSize={pageSize}
+                        total={filteredModels.length}
+                        onChange={(nextPage, nextPageSize) => {
+                            setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                            setPageSize(nextPageSize);
+                        }}
+                    />
+                }
             />
 
             <Drawer
@@ -305,7 +339,16 @@ export default function LogicalModelsPage() {
                 maskClosable={!saving}
                 onClose={() => !saving && setEditingModel(undefined)}
                 rootClassName="admin-drawer"
-                footer={<div className="flex justify-end gap-2"><Button disabled={saving} onClick={() => setEditingModel(undefined)}>取消</Button><Button type="primary" loading={saving} onClick={() => void saveModel()}>保存</Button></div>}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button disabled={saving} onClick={() => setEditingModel(undefined)}>
+                            取消
+                        </Button>
+                        <Button type="primary" loading={saving} onClick={() => void saveModel()}>
+                            保存
+                        </Button>
+                    </div>
+                }
             >
                 <Form
                     form={modelForm}
@@ -388,7 +431,9 @@ export default function LogicalModelsPage() {
                 onCancel={() => setSimulatingModel(undefined)}
                 styles={{ body: { maxHeight: "min(72vh, 720px)", overflowY: "auto" } }}
                 footer={[
-                    <Button key="cancel" onClick={() => setSimulatingModel(undefined)}>关闭</Button>,
+                    <Button key="cancel" onClick={() => setSimulatingModel(undefined)}>
+                        关闭
+                    </Button>,
                     <Button key="submit" type="primary" icon={<FlaskConical className="size-4" />} loading={simulating} onClick={() => void runSimulation()}>
                         模拟匹配
                     </Button>,
@@ -496,9 +541,7 @@ function RouteFields({
                                             <div className="mb-2 flex items-center justify-between gap-2">
                                                 <div className="min-w-0">
                                                     <div className="text-xs font-semibold">供应线路 {fields.indexOf(field) + 1}</div>
-                                                    <div className="mt-0.5 truncate text-xs text-foreground/50">
-                                                        {selected ? `${channelNames[selected.channelId]} / ${selected.displayName || selected.modelKey}` : "选择一个可承接请求的渠道模型"}
-                                                    </div>
+                                                    <div className="mt-0.5 truncate text-xs text-foreground/50">{selected ? `${channelNames[selected.channelId]} / ${selected.displayName || selected.modelKey}` : "选择一个可承接请求的渠道模型"}</div>
                                                 </div>
                                                 <Button type="text" size="small" danger onClick={() => remove(field.name)}>
                                                     移除

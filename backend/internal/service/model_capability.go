@@ -286,7 +286,16 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		return spec, nil
 	}
 	if config == nil {
-		return spec, BadAuthRequest("渠道模型尚未配置能力参数")
+		switch capability {
+		case "text":
+			return spec, BadAuthRequest("渠道文本模型尚未配置能力参数")
+		case "image":
+			return spec, BadAuthRequest("渠道图片模型尚未配置能力参数")
+		case "video":
+			return spec, BadAuthRequest("渠道视频模型尚未配置能力参数")
+		default:
+			return spec, BadAuthRequest("渠道模型尚未配置能力参数")
+		}
 	}
 	switch capability {
 	case "text":

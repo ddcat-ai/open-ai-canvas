@@ -50,7 +50,7 @@ func TestSaveLogicalModelBundleAllocatesMonotonicRevisionSequence(t *testing.T) 
 	}
 }
 
-func TestDeleteLogicalModelPreservesPublishedHistory(t *testing.T) {
+func TestArchiveLogicalModelPreservesPublishedHistory(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:logical-model-delete-history?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -67,11 +67,22 @@ func TestDeleteLogicalModelPreservesPublishedHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := repo.DeleteLogicalModel(item.ID, time.Now()); err != nil {
+	if err := repo.ArchiveLogicalModel(item.ID, nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.First(&model.LogicalModel{}, "id = ?", item.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("logical model lookup error = %v, want record not found", err)
+	var archived model.LogicalModel
+	if err := db.First(&archived, "id = ?", item.ID).Error; err != nil {
+		t.Fatalf("logical model lookup error = %v", err)
+	}
+	if archived.ArchivedAt == nil || archived.Enabled {
+		t.Fatalf("archived logical model = %#v", archived)
+	}
+	items, err := repo.LogicalModels(true)
+	if err != nil {
+		t.Fatalf("LogicalModels() error = %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("LogicalModels() = %#v, want archived model hidden", items)
 	}
 	for label, target := range map[string]any{"revision": &model.LogicalModelRevision{}, "route": &model.LogicalModelRoute{}} {
 		if err := db.First(target).Error; err != nil {
@@ -80,7 +91,7 @@ func TestDeleteLogicalModelPreservesPublishedHistory(t *testing.T) {
 	}
 }
 
-func TestDeleteLogicalModelRejectsActiveTask(t *testing.T) {
+func TestArchiveLogicalModelRejectsActiveTask(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:logical-model-delete-active-task?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -97,8 +108,8 @@ func TestDeleteLogicalModelRejectsActiveTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := repo.DeleteLogicalModel(item.ID, time.Now()); !errors.Is(err, ErrLogicalModelInUse) {
-		t.Fatalf("DeleteLogicalModel() error = %v, want ErrLogicalModelInUse", err)
+	if err := repo.ArchiveLogicalModel(item.ID, nil, time.Now()); !errors.Is(err, ErrLogicalModelInUse) {
+		t.Fatalf("ArchiveLogicalModel() error = %v, want ErrLogicalModelInUse", err)
 	}
 	var preserved model.LogicalModel
 	if err := db.First(&preserved, "id = ?", item.ID).Error; err != nil {
@@ -106,5 +117,27 @@ func TestDeleteLogicalModelRejectsActiveTask(t *testing.T) {
 	}
 	if !preserved.Enabled {
 		t.Fatal("active logical model disable was not rolled back")
+	}
+}
+
+func TestCreateTaskRejectsArchivedLogicalModel(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:logical-model-archived-task?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.LogicalModel{}, &model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	item := model.LogicalModel{ID: "LMODEL_ARCHIVED_TASK", Code: "archived-task", Name: "Archived Task", Enabled: true, ActiveRevisionID: "REVISION_ARCHIVED_TASK", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ArchiveLogicalModel(item.ID, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	task := &model.Task{ID: "TASK_ARCHIVED_MODEL", UserID: "USER_1", LogicalModelID: item.ID, LogicalModelRevisionID: item.ActiveRevisionID, Status: model.TaskStatusQueued, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := repo.CreateTaskWithActiveLimit(task, 5); !errors.Is(err, ErrLogicalModelUnavailable) {
+		t.Fatalf("CreateTaskWithActiveLimit() error = %v, want ErrLogicalModelUnavailable", err)
 	}
 }

@@ -407,6 +407,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}
+	if errors.Is(err, repository.ErrLogicalModelUnavailable) {
+		return nil, BadAuthRequest("所选模型已停用、归档或配置已更新，请重新选择")
+	}
 	if err != nil {
 		return nil, err
 	}
