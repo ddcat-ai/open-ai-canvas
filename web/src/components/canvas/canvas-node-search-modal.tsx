@@ -3,6 +3,7 @@ import { Input, Modal } from "antd";
 import { BookOpenText, FileText, Image, Pencil, Search, Video } from "lucide-react";
 
 import { WorkspaceState } from "@/components/layout/workspace-state";
+import { getNodeListLabel } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open: boolean; nodes: CanvasNodeData[]; onClose: () => void; onFocus: (nodeId: string) => void }) {
@@ -10,7 +11,7 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
     const results = useMemo(() => {
         const keyword = query.trim().toLocaleLowerCase();
         if (!keyword) return nodes.slice(0, 40);
-        return nodes.filter((node) => [node.title, node.type, nodeTypeLabel(node.type), node.metadata?.prompt, node.metadata?.composerContent, node.metadata?.model, node.metadata?.chapterTitle, node.metadata?.workflowTitle, node.metadata?.workflowDescription, typeof node.metadata?.shotIndex === "number" ? `镜头 ${node.metadata.shotIndex + 1}` : "", ...(node.metadata?.assetTags || [])]
+        return nodes.filter((node) => [node.title, node.type, getNodeListLabel(node.type), node.metadata?.prompt, node.metadata?.composerContent, node.metadata?.model, node.metadata?.chapterTitle, node.metadata?.workflowTitle, node.metadata?.workflowDescription, typeof node.metadata?.shotIndex === "number" ? `镜头 ${node.metadata.shotIndex + 1}` : "", ...(node.metadata?.assetTags || [])]
             .some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(keyword))).slice(0, 80);
     }, [nodes, query]);
 
@@ -44,19 +45,5 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
 
 function nodeContextLabel(node: CanvasNodeData) {
     const location = [node.metadata?.chapterTitle, typeof node.metadata?.shotIndex === "number" ? `镜头 ${node.metadata.shotIndex + 1}` : ""].filter(Boolean).join(" · ");
-    return location || node.metadata?.prompt || node.metadata?.composerContent || node.metadata?.workflowDescription || nodeTypeLabel(node.type);
-}
-
-function nodeTypeLabel(type: CanvasNodeType) {
-    return ({
-        [CanvasNodeType.Image]: "图片节点",
-        [CanvasNodeType.Text]: "文本节点",
-        [CanvasNodeType.Drawing]: "绘图节点",
-        [CanvasNodeType.Script]: "分镜脚本节点",
-        [CanvasNodeType.Skill]: "技能节点",
-        [CanvasNodeType.Config]: "生成配置节点",
-        [CanvasNodeType.Video]: "视频节点",
-        [CanvasNodeType.Audio]: "音频节点",
-        [CanvasNodeType.Frame]: "背板",
-    } as Record<CanvasNodeType, string>)[type] || "未知节点";
+    return location || node.metadata?.prompt || node.metadata?.composerContent || node.metadata?.workflowDescription || getNodeListLabel(node.type);
 }
