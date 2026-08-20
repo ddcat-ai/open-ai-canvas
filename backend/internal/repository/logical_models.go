@@ -16,6 +16,8 @@ type LogicalModelGraph struct {
 	ChannelModels []model.ChannelModel
 }
 
+var ErrLogicalModelInUse = errors.New("logical model is in use")
+
 func (r *Repository) LogicalModels(includeDisabled bool) ([]model.LogicalModel, error) {
 	var items []model.LogicalModel
 	query := r.db.Order("sort_order asc, created_at asc")
@@ -397,6 +399,41 @@ func (r *Repository) SaveLogicalModelBundle(item *model.LogicalModel, revision *
 		}
 		item.ActiveRevisionID = revision.ID
 		item.RevisionSequence = revision.Version
+		return nil
+	})
+}
+
+func (r *Repository) DeleteLogicalModel(id string, now time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 先停用并锁定目录主体，避免删除期间仍被新的数据库查询选中。
+		result := tx.Model(&model.LogicalModel{}).
+			Where("id = ?", id).
+			Updates(map[string]any{"enabled": false, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+
+		var activeTasks int64
+		if err := tx.Model(&model.Task{}).
+			Where("logical_model_id = ? AND status IN ?", id, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).
+			Count(&activeTasks).Error; err != nil {
+			return err
+		}
+		if activeTasks > 0 {
+			return ErrLogicalModelInUse
+		}
+
+		// revision 与 route 是不可变的任务快照；删除目录主体时保留它们供历史记录追溯。
+		deleted := tx.Where("id = ?", id).Delete(&model.LogicalModel{})
+		if deleted.Error != nil {
+			return deleted.Error
+		}
+		if deleted.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
 		return nil
 	})
 }

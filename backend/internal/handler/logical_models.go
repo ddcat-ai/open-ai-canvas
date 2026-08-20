@@ -58,6 +58,18 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.PATCH("/admin/logical-models/:id", func(c *gin.Context) {
 		saveAdminLogicalModel(c, svc, c.Param("id"))
 	})
+	r.DELETE("/admin/logical-models/:id", func(c *gin.Context) {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteAdminLogicalModel(actor, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 	r.POST("/admin/logical-models/:id/simulate", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {

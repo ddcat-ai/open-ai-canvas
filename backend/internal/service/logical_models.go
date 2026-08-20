@@ -408,6 +408,31 @@ func (s *Service) SaveAdminLogicalModel(actor *model.User, id string, req Logica
 	return s.buildAdminLogicalModel(*item, graph, systemChannelByID)
 }
 
+func (s *Service) DeleteAdminLogicalModel(actor *model.User, id string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	item, err := s.repo.LogicalModel(strings.TrimSpace(id))
+	if logicalModelNotFound(err) {
+		return BadAuthRequest("前台模型不存在或已删除")
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.repo.DeleteLogicalModel(item.ID, time.Now()); err != nil {
+		if errors.Is(err, repository.ErrLogicalModelInUse) {
+			return BadAuthRequest("前台模型仍被排队中或进行中任务使用，请等待任务结束后再删除")
+		}
+		if logicalModelNotFound(err) {
+			return BadAuthRequest("前台模型不存在或已删除")
+		}
+		return err
+	}
+	s.invalidateRouteCatalog()
+	_ = s.appendAdminAudit(actor, "logical_model.delete", "logical_model", item.ID, "删除前台模型目录主体", map[string]any{"code": item.Code, "name": item.Name})
+	return nil
+}
+
 func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalModelRequest) (*model.LogicalModel, *model.LogicalModelRevision, []model.LogicalModelRoute, bool, error) {
 	code := strings.ToLower(strings.TrimSpace(req.Code))
 	name := strings.TrimSpace(req.Name)
