@@ -142,7 +142,26 @@ export type CanvasSkillSnapshot = {
 };
 
 export type CanvasNodeMetadata = {
+    importSource?:
+        | {
+              provider: "libtv";
+              projectUuid: string;
+              nodeKey: string;
+              batchId: string;
+              sourceType?: string;
+              styleAssetUuid?: string;
+              styleVersionUuid?: string;
+              styleName?: string;
+          }
+        | {
+              provider: "tapnow";
+              shareId: string;
+              nodeId: string;
+              batchId: string;
+              sourceType?: string;
+          };
     content?: string;
+    previewContent?: string;
     richText?: Record<string, unknown>;
     composerContent?: string;
     prompt?: string;

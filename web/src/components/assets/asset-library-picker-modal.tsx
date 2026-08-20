@@ -3,6 +3,7 @@ import { Check, FileText, FolderOpen, Image as ImageIcon, LoaderCircle, Music2, 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AssetMediaPreview } from "@/components/asset-media-preview";
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { cn } from "@/lib/utils";
 import type { Asset } from "@/stores/use-asset-store";
 
@@ -13,6 +14,7 @@ export type AssetLibraryPickerItem = {
     kindLabel: string;
     asset?: Asset;
     imageUrl?: string;
+    imageStorageKey?: string;
     imageFit?: "cover" | "contain";
     description?: string;
     searchText?: string;
@@ -210,7 +212,7 @@ function PickerCard({ item, selected, onToggle }: { item: AssetLibraryPickerItem
     return (
         <button type="button" className={cn("asset-picker-card", selected && "is-selected", disabled && "is-disabled")} onClick={onToggle} disabled={disabled} aria-pressed={selected} title={item.disabledReason || item.title}>
             <div className="asset-picker-card-media">
-                {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className={item.imageFit === "contain" ? "is-contain" : undefined} /> : <AssetMediaPreview asset={item.asset} alt={item.title} fallback={<div className="asset-picker-card-fallback">{kindIcon(item.kindLabel)}</div>} />}
+                {item.imageUrl || item.imageStorageKey ? <CachedResourceImage storageKey={item.imageStorageKey} src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className={item.imageFit === "contain" ? "is-contain" : undefined} fallback={<div className="asset-picker-card-fallback">{kindIcon(item.kindLabel)}</div>} /> : <AssetMediaPreview asset={item.asset} alt={item.title} fallback={<div className="asset-picker-card-fallback">{kindIcon(item.kindLabel)}</div>} />}
                 <span className="asset-picker-card-check"><Check /></span>
                 <span className="asset-picker-card-kind">{item.kindLabel}</span>
                 {item.disabledReason ? <span className="asset-picker-card-lock">{item.disabledReason}</span> : null}

@@ -2,8 +2,19 @@ import type { ModelProtocol } from "@/lib/model-protocols";
 
 export type ModelCapabilityConfig = {
     version: number;
+    text?: TextCapabilityConfig;
     image?: ImageCapabilityConfig;
     video?: VideoCapabilityConfig;
+};
+
+export type TextCapabilityConfig = {
+    references: {
+        promptMaxChars: number;
+        maxImages: number;
+        maxImageBytes: number;
+        maxVideos: number;
+        maxVideoBytes: number;
+    };
 };
 
 export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
@@ -63,13 +74,104 @@ export type VideoCapabilityConfig = {
     defaultOperation: string;
 };
 
+// 旧版本的“允许自定义”可能只保存了 `*`，前台需要用这组标准值恢复可选项。
+export const STANDARD_IMAGE_SIZE_VALUES = [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "21:9",
+    "9:16",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+] as const;
+
+export function normalizeCapabilityString(value: string) {
+    const normalized = value.trim();
+    return normalized.startsWith("string:") ? normalized.slice("string:".length) : normalized;
+}
+
+function normalizeCapabilityStrings(values: string[]) {
+    return Array.from(new Set(values.map(normalizeCapabilityString)));
+}
+
+export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): ModelCapabilityConfig {
+    return {
+        ...config,
+        image: config.image
+            ? {
+                  ...config.image,
+                  size: {
+                      ...config.image.size,
+                      values: normalizeCapabilityStrings(config.image.size.values),
+                      default: normalizeCapabilityString(config.image.size.default),
+                  },
+                  quality: {
+                      ...config.image.quality,
+                      values: normalizeCapabilityStrings(config.image.quality.values),
+                      default: normalizeCapabilityString(config.image.quality.default),
+                  },
+              }
+            : undefined,
+        video: config.video
+            ? {
+                  ...config.video,
+                  ratios: normalizeCapabilityStrings(config.video.ratios),
+                  defaultRatio: normalizeCapabilityString(config.video.defaultRatio),
+                  resolutions: normalizeCapabilityStrings(config.video.resolutions),
+                  defaultResolution: normalizeCapabilityString(config.video.defaultResolution),
+                  operations: normalizeCapabilityStrings(config.video.operations),
+                  defaultOperation: normalizeCapabilityString(config.video.defaultOperation),
+              }
+            : undefined,
+    };
+}
+
 // Keep explicit pixel presets for each resolution tier so the settings panel can
 // switch between 1K, 2K and 4K without silently converting the requested ratio.
 const defaultImageSizes = [
-    "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "21:9", "9:16",
-    "1024x1024", "1360x1024", "1024x1360", "1536x1024", "1024x1536", "1024x1280", "1280x1024", "2048x878", "1824x1024", "1024x1824",
-    "2048x2048", "2304x1728", "1728x2304", "2496x1664", "1664x2496", "1792x2240", "2240x1792", "3136x1344", "2752x1536", "1536x2752",
-    "2880x2880", "3264x2448", "2448x3264", "3504x2336", "2336x3504", "2560x3200", "3200x2560", "3808x1632", "3840x2160", "2160x3840",
+    "auto",
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "21:9",
+    "9:16",
+    "1024x1024",
+    "1360x1024",
+    "1024x1360",
+    "1536x1024",
+    "1024x1536",
+    "1024x1280",
+    "1280x1024",
+    "2048x878",
+    "1824x1024",
+    "1024x1824",
+    "2048x2048",
+    "2304x1728",
+    "1728x2304",
+    "2496x1664",
+    "1664x2496",
+    "1792x2240",
+    "2240x1792",
+    "3136x1344",
+    "2752x1536",
+    "1536x2752",
+    "2880x2880",
+    "3264x2448",
+    "2448x3264",
+    "3504x2336",
+    "2336x3504",
+    "2560x3200",
+    "3200x2560",
+    "3808x1632",
+    "3840x2160",
+    "2160x3840",
 ];
 
 export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
@@ -112,6 +214,20 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.responseFormat.supported = false;
         image.outputFormat.supported = false;
     }
+    if (protocol === "gemini-image") {
+        image.references.maskSupported = false;
+        // Gemini Images uses imageConfig.aspectRatio, not the OpenAI-style pixel size field.
+        image.size = {
+            parameter: "aspect_ratio",
+            values: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"],
+            default: "1:1",
+            allowCustom: false,
+        };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: false };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 4;
+    }
     if (protocol !== "grok-image" && model.trim().toLowerCase().startsWith("grok-imagine-image")) {
         image.references.maxImages = 0;
         image.references.maskSupported = false;
@@ -131,6 +247,10 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 }
 
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
+    const text: TextCapabilityConfig = {
+        // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。
+        references: { promptMaxChars: 32000, maxImages: 0, maxImageBytes: 0, maxVideos: 0, maxVideoBytes: 0 },
+    };
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: 1000,
@@ -181,7 +301,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.resolutions = ["1080p"];
         video.defaultResolution = "1080p";
     }
-    return { version: 1, image: defaultImageCapabilityConfig(protocol, model), video };
+    return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }
 
 export function modelCapabilityConfigFor(config: { channels: Array<{ id: string; models: string[]; modelCosts?: Array<{ model: string; capabilityConfig?: ModelCapabilityConfig; protocol?: ModelProtocol }> }> }, model: string) {
@@ -192,17 +312,38 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
     if (!cost?.capabilityConfig) return fallback;
-    const video = cost.capabilityConfig.video
-        ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } }
-        : fallback.video;
-    return { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video };
+    const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
+    const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;
+    const video = capabilityConfig.video ? { ...fallback.video!, ...capabilityConfig.video, references: { ...fallback.video!.references, ...capabilityConfig.video.references } } : fallback.video;
+    const configuredImage = capabilityConfig.image;
+    const image = configuredImage
+        ? (() => {
+              const configuredSize = configuredImage.size;
+              const configuredValues = configuredSize?.values?.map(normalizeCapabilityString);
+              const allowCustom = Boolean(configuredSize?.allowCustom || configuredValues?.includes("*"));
+              const concreteValues = configuredValues?.filter((value) => value !== "*") || [];
+              const values = !configuredValues ? fallback.image!.size.values : concreteValues.length || !allowCustom ? concreteValues : [...STANDARD_IMAGE_SIZE_VALUES];
+              const configuredDefault = configuredSize?.default ? normalizeCapabilityString(configuredSize.default) : undefined;
+              const defaultValue = configuredDefault && configuredDefault !== "*" && values.includes(configuredDefault) ? configuredDefault : values.find((value) => value !== "*") || fallback.image!.size.default;
+              return {
+                  ...fallback.image!,
+                  ...configuredImage,
+                  size: {
+                      ...fallback.image!.size,
+                      ...configuredSize,
+                      values,
+                      default: defaultValue,
+                      allowCustom,
+                  },
+              };
+          })()
+        : fallback.image;
+    return { ...fallback, ...capabilityConfig, text, image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
     const size = normalizeImageSizeSetting(profile, value.size);
-    const quality = profile.quality.supported
-        ? (value.quality && profile.quality.values.includes(value.quality) ? value.quality : profile.quality.default || "auto")
-        : profile.quality.default || "auto";
+    const quality = profile.quality.supported ? (value.quality && profile.quality.values.includes(value.quality) ? value.quality : profile.quality.default || "auto") : profile.quality.default || "auto";
     const count = String(Math.max(1, Math.min(profile.maxOutputs, Math.floor(Math.abs(Number(value.count)) || 1))));
     const transparentBackground = profile.transparentBackground.supported && value.transparentBackground === "true" ? "true" : "false";
     return { size, quality, count, transparentBackground };
@@ -224,16 +365,17 @@ export function imageSizeRequest(profile: ImageCapabilityConfig, value?: string)
 }
 
 export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { seconds?: string; ratio?: string; resolution?: string }) {
-    const duration = profile.duration.selection === "enum"
-        ? (profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default
-        : normalizeRangeDuration(profile, Number(value.seconds));
+    const duration = profile.duration.selection === "enum" ? ((profile.duration.values || []).includes(Number(value.seconds)) ? Number(value.seconds) : profile.duration.default) : normalizeRangeDuration(profile, Number(value.seconds));
     const ratio = profile.ratios.includes(value.ratio || "") ? value.ratio! : profile.defaultRatio;
-    const resolution = profile.resolutions.includes(value.resolution || "") ? value.resolution! : profile.defaultResolution;
+    // 前端状态历史上保存过 `720`，而能力配置和供应商通常使用 `720p`；统一按能力中的原始值返回，避免被误判为不支持。
+    const resolution = videoResolutionRequest(profile, value.resolution) || profile.defaultResolution || profile.resolutions[0] || "";
     return { seconds: String(duration), ratio, resolution };
 }
 
 export function videoResolutionRequest(profile: VideoCapabilityConfig, value: string | undefined) {
-    const requested = String(value || "").trim().toLowerCase();
+    const requested = String(value || "")
+        .trim()
+        .toLowerCase();
     if (!requested || requested === "auto" || requested === "default" || requested === "medium" || requested === "high") return undefined;
     const candidates = [requested];
     if (/^\d+$/.test(requested)) candidates.push(`${requested}p`);

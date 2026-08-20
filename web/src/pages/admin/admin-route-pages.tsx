@@ -29,13 +29,13 @@ export function CreditOperationsPage() {
 }
 
 export function AccessSettingsPage() {
-    return <AdminPageFrame title="登录与注册" description="注册策略与 Linux.do"><Suspense fallback={<PageFallback label="登录与注册配置" />}><AccessSettingsPanel /></Suspense></AdminPageFrame>;
+    return <AdminPageFrame title="登录与注册" description="注册策略与 Linux.do" scroll><Suspense fallback={<PageFallback label="登录与注册配置" />}><AccessSettingsPanel /></Suspense></AdminPageFrame>;
 }
 
 export function EmailSettingsPage() {
-    return <AdminPageFrame title="邮件服务" description="注册验证码 SMTP"><div className="pt-4"><Suspense fallback={<PageFallback label="邮件配置" />}><EmailSettingsPanel /></Suspense></div></AdminPageFrame>;
+    return <AdminPageFrame title="邮件服务" description="注册验证码 SMTP" scroll><div className="pt-4"><Suspense fallback={<PageFallback label="邮件配置" />}><EmailSettingsPanel /></Suspense></div></AdminPageFrame>;
 }
 
 export function FeatureAvailabilityPage() {
-    return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道与计费模式"><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
+    return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道与计费模式" scroll><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
 }

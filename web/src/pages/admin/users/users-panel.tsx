@@ -1,12 +1,12 @@
-import { App, Button, Checkbox, Dropdown, Input, Table, Tag } from "antd";
+import { App, Button, Checkbox, Dropdown, Input } from "antd";
 import { Ban, ChevronDown, Search, Settings2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ListToolbar, PaginationBar, TableSurface } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
-import { AdminBatchBar, AdminTableEmpty, AdminTableSkeleton } from "../components/admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
@@ -40,6 +40,9 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     });
     const requestSequence = useRef(0);
     const hasFilters = Boolean(state.filter || state.role !== "all" || state.status !== "all");
+    const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
+    const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
+    const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
 
     useEffect(() => {
         window.localStorage.setItem(columnStorageKey, JSON.stringify([...visibleColumns]));
@@ -133,101 +136,99 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
 
     return (
         <>
-            <ListToolbar
-                active={hasFilters}
-                onReset={resetFilters}
-                trailing={
-                        <div className="flex items-center gap-2">
-                            <Button icon={<UserPlus className="size-4" />} onClick={() => { setEditingUser(null); setCreateUserOpen(true); }}>{"\u6dfb\u52a0\u7528\u6237"}</Button>
-                    <Dropdown
-                        trigger={["click"]}
-                        dropdownRender={() => (
-                            <div className="w-48 rounded-md border border-border bg-popover p-2 shadow-lg">
-                                <div className="px-2 pb-2 text-xs font-medium text-foreground/55">显示列</div>
-                                <div className="space-y-0.5">
-                                    {userColumnOptions.map((option) => (
-                                        <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
-                                            <Checkbox
-                                                checked={visibleColumns.has(option.key)}
-                                                disabled={option.locked}
-                                                onChange={(event) => setVisibleColumns((current) => {
-                                                    const next = new Set(current);
-                                                    if (event.target.checked) next.add(option.key);
-                                                    else next.delete(option.key);
-                                                    return next;
-                                                })}
-                                            />
-                                            {option.label}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    >
-                        <Button icon={<Settings2 className="size-4" />}>列设置</Button>
-                    </Dropdown>
-                        </div>
-                }
-            >
-                <Input
-                    allowClear
-                    className="app-list-search"
-                    prefix={<Search className="size-4 text-foreground/40" />}
-                    value={state.filter}
-                    placeholder="搜索用户名、名称或邮箱"
-                    onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
-                />
-                <FilterMenu
-                    label="角色"
-                    value={state.role}
-                    options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
-                    onChange={(role) => update({ role, page: 1 })}
-                />
-                <FilterMenu
-                    label="状态"
-                    value={state.status}
-                    options={[{ value: "all", label: "全部状态" }, { value: "active", label: "已启用" }, { value: "disabled", label: "已停用" }]}
-                    onChange={(status) => update({ status, page: 1 })}
-                />
-                {state.role !== "all" ? <Tag closable onClose={(event) => { event.preventDefault(); update({ role: "all", page: 1 }); }}>角色：{state.role === "admin" ? "管理员" : "普通用户"}</Tag> : null}
-                {state.status !== "all" ? <Tag closable onClose={(event) => { event.preventDefault(); update({ status: "all", page: 1 }); }}>状态：{state.status === "active" ? "已启用" : "已停用"}</Tag> : null}
-            </ListToolbar>
-
-            <AdminBatchBar count={selectedUserIds.length} onClear={() => setSelectedUserIds([])}>
-                <Button danger size="small" icon={<Ban className="size-3.5" />} loading={bulkDisabling} onClick={bulkDisable}>批量停用</Button>
-            </AdminBatchBar>
-
-            <TableSurface>
-                {loading && users.length === 0 ? <AdminTableSkeleton rows={8} columns={Math.max(4, columns.length)} /> : (
+            <AdminDataTable
+                toolbar={
                     <>
-                        <Table
-                            className="app-data-table"
-                            size="middle"
-                            rowKey="id"
-                            loading={loading}
-                            rowSelection={{
-                                selectedRowKeys: selectedUserIds,
-                                preserveSelectedRowKeys: false,
-                                onChange: (keys) => setSelectedUserIds(keys.map(String)),
-                                getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.displayName || user.username }),
-                            }}
-                            columns={columns}
-                            dataSource={users}
-                            pagination={false}
-                            scroll={{ x: 860 }}
-                            locale={{ emptyText: <AdminTableEmpty filtered={hasFilters} /> }}
-                        />
-                        <PaginationBar
-                            current={state.page}
-                            pageSize={state.pageSize}
-                            total={total}
-                            onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })}
+                        <Input
+                            allowClear
+                            className="app-list-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={state.filter}
+                            placeholder="搜索用户名、名称或邮箱"
+                            onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
                         />
                     </>
+                }
+                toolbarActiveFilters={(
+                    <>
+                        {state.filter ? <AdminFilterChip label={`搜索：${state.filter}`} onRemove={() => update({ filter: "", page: 1 })} /> : null}
+                        {state.role !== "all" ? <AdminFilterChip label={`角色：${state.role === "admin" ? "管理员" : "普通用户"}`} onRemove={() => update({ role: "all", page: 1 })} /> : null}
+                        {state.status !== "all" ? <AdminFilterChip label={`状态：${state.status === "active" ? "已启用" : "已停用"}`} onRemove={() => update({ status: "all", page: 1 })} /> : null}
+                    </>
                 )}
-            </TableSurface>
+                toolbarActive={hasFilters}
+                onReset={resetFilters}
+                toolbarFilters={
+                    <>
+                        <FilterMenu
+                            label="角色"
+                            value={state.role}
+                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
+                            onChange={(role) => update({ role, page: 1 })}
+                        />
+                        <FilterMenu
+                            label="状态"
+                            value={state.status}
+                            options={[{ value: "all", label: "全部状态" }, { value: "active", label: "已启用" }, { value: "disabled", label: "已停用" }]}
+                            onChange={(status) => update({ status, page: 1 })}
+                        />
+                    </>
+                }
+                trailing={
+                    <div className="flex items-center gap-2">
+                        <Button icon={<UserPlus className="size-4" />} onClick={() => { setEditingUser(null); setCreateUserOpen(true); }}>{"\u6dfb\u52a0\u7528\u6237"}</Button>
+                        <Dropdown
+                            trigger={["click"]}
+                            dropdownRender={() => (
+                                <div className="w-48 rounded-md border border-border bg-popover p-2 shadow-lg">
+                                    <div className="px-2 pb-2 text-xs font-medium text-foreground/55">显示列</div>
+                                    <div className="space-y-0.5">
+                                        {userColumnOptions.map((option) => (
+                                            <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
+                                                <Checkbox
+                                                    checked={visibleColumns.has(option.key)}
+                                                    disabled={option.locked}
+                                                    onChange={(event) => setVisibleColumns((current) => {
+                                                        const next = new Set(current);
+                                                        if (event.target.checked) next.add(option.key);
+                                                        else next.delete(option.key);
+                                                        return next;
+                                                    })}
+                                                />
+                                                {option.label}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        >
+                            <Button icon={<Settings2 className="size-4" />}>列设置</Button>
+                        </Dropdown>
+                    </div>
+                }
+                batchActions={<AdminBatchBar count={selectedUserIds.length} onClear={() => setSelectedUserIds([])}><Button danger size="small" icon={<Ban className="size-3.5" />} loading={bulkDisabling} onClick={bulkDisable}>批量停用</Button></AdminBatchBar>}
+                skeletonColumns={Math.max(4, columns.length)}
+                table={{
+                    className: "app-data-table",
+                    size: "small",
+                    rowKey: "id",
+                    loading,
+                    rowSelection: {
+                        selectedRowKeys: selectedUserIds,
+                        preserveSelectedRowKeys: false,
+                        onChange: (keys) => setSelectedUserIds(keys.map(String)),
+                        getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.displayName || user.username }),
+                    },
+                    columns,
+                    dataSource: users,
+                    pagination: false,
+                    scroll: { x: 860 },
+                }}
+                empty={<AdminTableEmpty filtered={hasFilters} />}
+                footer={<PaginationBar alwaysShow current={state.page} pageSize={state.pageSize} total={total} onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })} />}
+            />
 
-            <AdminUserDetailDrawer userId={detailUserId} onClose={() => setDetailUserId(null)} />
+            <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
             <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
             <AdminUserEditDrawer user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
         </>

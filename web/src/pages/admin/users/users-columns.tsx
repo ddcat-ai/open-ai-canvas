@@ -1,10 +1,9 @@
-import { Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Eye, Pencil, Power } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
-import { AdminRowActions } from "../components/admin-ui";
+import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
 
 export type UserColumnKey = "user" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
@@ -39,7 +38,7 @@ export function createUserColumns({
             dataIndex: "username",
             render: (_, user) => (
                 <div>
-                    <div className="flex items-center gap-1.5"><span className="font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
+                    <div className="flex items-center gap-1.5"><button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>{user.displayName || user.username}</button><IdentityProviderBadge user={user} /></div>
                     <div className="text-xs text-foreground/45">@{user.username}</div>
                 </div>
             ),
@@ -53,14 +52,13 @@ export function createUserColumns({
             align: "right",
             render: (value, user) => <span className="tabular-nums" title={`冻结积分：${formatCredits(user.reservedMicrocredits)}`}>{formatCredits(value)}</span>,
         },
-        { key: "role", title: "角色", dataIndex: "role", width: 110, render: (role) => <Tag variant="filled" color={role === "admin" ? "blue" : "default"}>{role === "admin" ? "管理员" : "普通用户"}</Tag> },
-        { key: "status", title: "状态", dataIndex: "status", width: 110, render: (status) => <Tag variant="filled" color={status === "active" ? "success" : "default"}>{status === "active" ? "已启用" : "已停用"}</Tag> },
+        { key: "role", title: "角色", dataIndex: "role", width: 110, render: (role) => <AdminStatusBadge label={role === "admin" ? "管理员" : "普通用户"} tone={role === "admin" ? "info" : "neutral"} /> },
+        { key: "status", title: "状态", dataIndex: "status", width: 110, render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
         { key: "createdAt", title: "注册时间", dataIndex: "createdAt", width: 180, render: formatTime },
         {
             key: "actions",
             title: "操作",
-            width: 140,
-            fixed: "right",
+            width: 180,
             align: "right",
             render: (_, user) => (
                 <AdminRowActions

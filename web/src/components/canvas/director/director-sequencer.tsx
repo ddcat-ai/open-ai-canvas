@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, KeyRound, Magnet, Pause, Play, Plus, Rows3, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, KeyRound, Magnet, Pause, Play, Plus, Rows3, ZoomIn, ZoomOut } from "lucide-react";
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { directorBoneLabel } from "@/lib/canvas/director/director-scene";
@@ -15,10 +15,12 @@ type DirectorSequencerProps = {
     playing: boolean;
     autoKey: boolean;
     height: number;
+    visible: boolean;
     onPlayToggle: () => void;
     onPlayheadChange: (time: number) => void;
     onAutoKeyChange: (value: boolean) => void;
     onHeightChange: (height: number) => void;
+    onVisibilityChange: (visible: boolean) => void;
     onSelectObject: (id: string | null) => void;
     onSelectBone: (bone: string | null) => void;
     onRecordKeyframe: () => void;
@@ -28,7 +30,7 @@ type DirectorSequencerProps = {
 
 type TrackKey = { id: string; time: number; color?: string };
 
-export function DirectorSequencer({ scene, shot, camera, objects, selectedObjectId, selectedBone, playhead, playing, autoKey, height, onPlayToggle, onPlayheadChange, onAutoKeyChange, onHeightChange, onSelectObject, onSelectBone, onRecordKeyframe, onAddShot, onSelectShot }: DirectorSequencerProps) {
+export function DirectorSequencer({ scene, shot, camera, objects, selectedObjectId, selectedBone, playhead, playing, autoKey, height, visible, onPlayToggle, onPlayheadChange, onAutoKeyChange, onHeightChange, onVisibilityChange, onSelectObject, onSelectBone, onRecordKeyframe, onAddShot, onSelectShot }: DirectorSequencerProps) {
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [showDetails, setShowDetails] = useState(true);
@@ -60,6 +62,14 @@ export function DirectorSequencer({ scene, shot, camera, objects, selectedObject
 
     const cameraKeys = camera?.keyframes.map((key) => ({ id: key.id, time: key.time, color: "#78a9ff" })) || [];
 
+    if (!visible) {
+        return <section className="director-sequencer shrink-0 border-t" style={{ height: "var(--space-8)", minHeight: 0, background: "var(--director-sequencer-surface)", borderColor: "var(--director-sequencer-border)" }}>
+            <div className="flex h-full items-center justify-end px-3">
+                <button type="button" className="director-sequencer-tool" title="显示时间轴" aria-label="显示时间轴" onClick={() => onVisibilityChange(true)}><ChevronUp className="size-3.5" /><span>显示时间轴</span></button>
+            </div>
+        </section>;
+    }
+
     return (
         <section ref={rootRef} className="director-sequencer shrink-0 border-t" style={{ height, minHeight: "var(--director-sequencer-min-height)", background: "var(--director-sequencer-surface)", borderColor: "var(--director-sequencer-border)" }}>
             <div className="director-sequencer-resizer" onPointerDown={startResize} role="separator" aria-label="调整时间轴高度" />
@@ -79,6 +89,7 @@ export function DirectorSequencer({ scene, shot, camera, objects, selectedObject
                     <button type="button" className="director-sequencer-icon" title="放大时间轴" aria-label="放大时间轴" onClick={() => setTimelineScale((value) => Math.min(2.5, value + 0.25))}><ZoomIn className="size-3.5" /></button>
                     <button type="button" className={`director-sequencer-icon ${showDetails ? "is-active" : ""}`} title="显示子轨道" aria-label="显示子轨道" aria-pressed={showDetails} onClick={() => setShowDetails((value) => !value)}><Rows3 className="size-3.5" /></button>
                     <button type="button" className="director-sequencer-icon" title="新增镜头" aria-label="新增镜头" onClick={onAddShot}><Plus className="size-3.5" /></button>
+                    <button type="button" className="director-sequencer-icon" title="隐藏时间轴" aria-label="隐藏时间轴" onClick={() => onVisibilityChange(false)}><ChevronDown className="size-3.5" /></button>
                 </span>
             </header>
 

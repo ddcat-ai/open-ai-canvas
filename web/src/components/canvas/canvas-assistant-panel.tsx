@@ -4,10 +4,11 @@ import { Copy, Cpu, History, MessageSquareText, Plus, ScrollText, Settings2, Tra
 import { Button, Modal, Segmented, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
-import { modelDisplayName, modelOptionName, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
+import { logicalModelIDForConfig, runBackendToolGenerationTask } from "@/services/api/generation-task";
 import { imageToDataUrl } from "@/services/image-storage";
 import { isCanvasGenerationDurableAckError, persistCanvasCinematicSessionContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
@@ -22,6 +23,7 @@ import { cinematicAgentSessionOpsJson, createCinematicAgentSession, isAgentSessi
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentWorkingMessage, type CanvasAgentChatMessage, type CanvasAgentMode } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
+import { ModelLogo } from "@/components/model-logo";
 import { AgentChatEmptyState, AgentPanelChrome } from "./canvas-agent-panel-chrome";
 import { CanvasLocalAgentPanel } from "./canvas-local-agent-panel";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
@@ -375,6 +377,7 @@ export function CanvasAssistantPanel({
     const hasMessages = messages.length > 0;
     const agentBusy = isRunning || safeSessions.some((session) => session.pendingBackendSession?.status === "pending");
     const activeModel = effectiveConfig.textModel || effectiveConfig.model;
+    const activeModelName = activeModel ? modelDisplayName(effectiveConfig, activeModel) : "";
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
@@ -605,17 +608,10 @@ export function CanvasAssistantPanel({
             const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage);
             addOnlineLog(`Agent Tool Loop ${loop.step} 开始`, { toolChoice: "required" });
             let streamed = "";
-            const result = await requestToolResponse(
-                { ...requestConfig, systemPrompt: "" },
-                messages,
-                ONLINE_AGENT_TOOLS,
-                "required",
-                (text) => {
-                    streamed = text;
-                    if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-                },
-                { promptCacheKey: canvasAgentPromptCacheKey(sessionId) },
-            );
+            const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, messages, "required", userMessage.text, (text) => {
+                streamed = text;
+                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+            }, canvasAgentPromptCacheKey(sessionId));
             addOnlineLog("模型工具回复", result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
@@ -671,17 +667,10 @@ export function CanvasAssistantPanel({
         }
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         let streamed = "";
-        const next = await requestToolResponse(
-            { ...requestConfig, systemPrompt: "" },
-            nextMessages,
-            ONLINE_AGENT_TOOLS,
-            "auto",
-            (text) => {
-                streamed = text;
-                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            },
-            { promptCacheKey: canvasAgentPromptCacheKey(sessionId) },
-        );
+        const next = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, nextMessages, "auto", "继续处理画布工具结果", (text) => {
+            streamed = text;
+            if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+        }, canvasAgentPromptCacheKey(sessionId));
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
@@ -1018,7 +1007,7 @@ export function CanvasAssistantPanel({
             />
 
             {view === "setup" ? (
-                <OnlineAgentSetupView theme={theme} activeModel={activeModel} onOpenConfig={() => navigateToSettings({ continueCreation: true })} />
+                <OnlineAgentSetupView theme={theme} activeModel={activeModelName} onOpenConfig={() => navigateToSettings({ continueCreation: true })} />
             ) : (
                 <div ref={chatListRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
                     {view === "history" ? (
@@ -1035,7 +1024,7 @@ export function CanvasAssistantPanel({
                         <OnlineAgentLogView
                             logs={onlineLogs}
                             theme={theme}
-                            context={{ model: activeModel, running: agentBusy, confirmTools, messages: messages.length, nodes: snapshot.nodes.length, connections: snapshot.connections.length }}
+                            context={{ model: activeModelName, running: agentBusy, confirmTools, messages: messages.length, nodes: snapshot.nodes.length, connections: snapshot.connections.length }}
                             onClear={() => setOnlineLogs([])}
                         />
                     ) : messages.length ? (
@@ -1170,50 +1159,46 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
                 value={current || undefined}
                 className="agent-text-model-select w-full"
                 popupMatchSelectWidth={288}
-                options={options.map((model) => ({ value: model, label: `${modelDisplayName(config, model)} ${resolveModelChannel(config, model).name}` }))}
+                options={options.map((model) => ({ value: model, label: agentModelLabel(config, model) }))}
                 notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">暂无文本模型</span>}
                 optionRender={(option) => {
                     const model = String(option.value);
                     return (
                         <span className="flex min-w-0 items-center gap-2">
-                            <AgentModelIcon model={model} />
+                            <AgentModelIcon config={config} model={model} />
                             <span className="min-w-0 flex-1 truncate">{modelDisplayName(config, model)}</span>
-                            <span className="shrink-0 text-xs opacity-55">{resolveModelChannel(config, model).name}</span>
+                            {agentModelSource(config, model) ? <span className="shrink-0 text-xs opacity-55">{agentModelSource(config, model)}</span> : null}
                         </span>
                     );
                 }}
                 labelRender={() => (
                     <span className="flex min-w-0 items-center gap-1.5">
-                        <AgentModelIcon model={current} />
+                        <AgentModelIcon config={config} model={current} />
                         <span className="min-w-0 truncate">{current ? modelDisplayName(config, current) : "选择文本模型"}</span>
-                        {current ? <span className="shrink-0 opacity-55">{resolveModelChannel(config, current).name}</span> : null}
+                        {current && agentModelSource(config, current) ? <span className="shrink-0 opacity-55">{agentModelSource(config, current)}</span> : null}
                     </span>
                 )}
                 onChange={onChange}
                 aria-label="选择 Agent 文本模型"
-                title={current ? `${modelDisplayName(config, current)} · ${resolveModelChannel(config, current).name}` : "选择文本模型"}
+                title={current ? agentModelLabel(config, current) : "选择文本模型"}
             />
         </div>
     );
 }
 
-function AgentModelIcon({ model }: { model: string }) {
-    const icon = resolveModelIcon(modelOptionName(model));
-    return icon ? <img src={icon} alt="" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
+function agentModelSource(config: AiConfig, model: string) {
+    const channel = resolveModelChannel(config, model);
+    return channel.scope === "system" ? "" : channel.name;
 }
 
-function resolveModelIcon(model: string) {
-    // 与 model-picker 保持同一套厂商图标规则。
-    const name = model.toLowerCase();
-    if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
-    if (name.includes("gemini") || name.includes("google") || name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen") || name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) {
-        return "/icons/gemini.svg";
-    }
-    if (name.includes("gpt") || name.includes("openai") || name.includes("dall-e") || name.includes("dalle")) return "/icons/openai.svg";
-    if (name.includes("grok")) return "/icons/grok.svg";
-    if (name.includes("deepseek")) return "/icons/deepseek.svg";
-    if (name.includes("glm") || name.includes("chatglm")) return "/icons/glm.svg";
-    return "";
+function agentModelLabel(config: AiConfig, model: string) {
+    const source = agentModelSource(config, model);
+    return source ? `${modelDisplayName(config, model)} · ${source}` : modelDisplayName(config, model);
+}
+
+function AgentModelIcon({ config, model }: { config: AiConfig; model: string }) {
+    const icon = modelIcon(config, model);
+    return icon ? <span className="inline-flex size-4 shrink-0 items-center justify-center"><ModelLogo icon={icon} size={16} /></span> : <Cpu className="size-4 shrink-0 opacity-70" />;
 }
 
 function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessions: CanvasAssistantSession[]; activeSession: CanvasAssistantSession | null; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
@@ -1591,6 +1576,15 @@ function isResponseToolCall(value: unknown): value is ResponseToolCall {
 
 function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
     return { type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments, ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}) };
+}
+
+async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void, promptCacheKey?: string) {
+    if (logicalModelIDForConfig(config)) {
+        const result = await runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice });
+        if (result.content.trim()) onDelta(result.content);
+        return result;
+    }
+    return requestToolResponse(config, messages, ONLINE_AGENT_TOOLS, toolChoice, onDelta, { promptCacheKey });
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {

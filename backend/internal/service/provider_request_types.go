@@ -90,6 +90,37 @@ type geminiVeoParameters struct {
 	SampleCount     int    `json:"sampleCount"`
 }
 
+type geminiImageRequest struct {
+	Contents          []geminiImageContent        `json:"contents"`
+	SystemInstruction *geminiImageContent         `json:"systemInstruction,omitempty"`
+	GenerationConfig  geminiImageGenerationConfig `json:"generationConfig"`
+}
+
+type geminiImageContent struct {
+	Role  string                   `json:"role,omitempty"`
+	Parts []geminiImageContentPart `json:"parts"`
+}
+
+type geminiImageContentPart struct {
+	Text       string                 `json:"text,omitempty"`
+	InlineData *geminiImageInlineData `json:"inlineData,omitempty"`
+}
+
+type geminiImageInlineData struct {
+	MIMEType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
+type geminiImageGenerationConfig struct {
+	ResponseModalities []string           `json:"responseModalities"`
+	ImageConfig        *geminiImageConfig `json:"imageConfig,omitempty"`
+}
+
+type geminiImageConfig struct {
+	AspectRatio string `json:"aspectRatio,omitempty"`
+	ImageSize   string `json:"imageSize,omitempty"`
+}
+
 type seedanceAgentPlanRequest struct {
 	Model         string                   `json:"model"`
 	Content       []map[string]interface{} `json:"content"`

@@ -335,6 +335,140 @@ test("shared Create and Canvas task projection exposes queued, submitted, genera
     expect(distinctUpdates[4]?.resultJson).toContain('"mode":"video"');
 });
 
+test("the first local Dreamina submission waits for catalog readiness before invoking the paid Runtime path", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const readyGate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const pending = runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "first visit",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+        },
+        {
+            createTask: async () => {
+                throw new Error("must not create backend task");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait backend task");
+            },
+            ensureLocalDreaminaReady: async () => {
+                order.push("catalog-start");
+                await readyGate;
+                order.push("catalog-ready");
+            },
+            runLocal: async () => {
+                order.push("paid-runtime");
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-first-ready-0001",
+            now: () => "2026-08-18T00:00:00.000Z",
+        },
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual(["catalog-start"]);
+    release();
+    await pending;
+    expect(order).toEqual(["catalog-start", "catalog-ready", "paid-runtime"]);
+});
+
+test("the first local Dreamina batch shares one catalog readiness gate before any paid Runtime call", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const readyGate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const pending = runBackendGenerationTaskBatch(
+        {
+            mode: "image",
+            prompt: "first batch",
+            config: { ...defaultConfig, model: "local:dreamina-cli:5.0Pro", count: "1" },
+            count: 3,
+        },
+        {
+            createTask: async () => {
+                throw new Error("must not create backend task");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait backend task");
+            },
+            ensureLocalDreaminaReady: async () => {
+                order.push("catalog-start");
+                await readyGate;
+                order.push("catalog-ready");
+            },
+            runLocal: async () => {
+                order.push("paid-runtime");
+                return { mode: "image", images: [{ dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png", bytes: 3 }] };
+            },
+            createId: () => `dreamina-first-batch-${order.length}`,
+            now: () => "2026-08-18T00:00:00.000Z",
+        },
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual(["catalog-start"]);
+    release();
+    const settled = await pending;
+    expect(settled.every((entry) => entry.status === "fulfilled")).toBe(true);
+    expect(order).toEqual(["catalog-start", "catalog-ready", "paid-runtime", "paid-runtime", "paid-runtime"]);
+});
+
+test("local Dreamina terminal projection keeps the latest receipt, observation, and durable outputs", async () => {
+    const updates: GenerationTask[] = [];
+    const timestamp = "2026-08-18T00:00:00.000Z";
+    await runBackendGenerationTask(
+        {
+            mode: "video",
+            prompt: "late result",
+            config: { ...defaultConfig, model: "local:dreamina-cli:seedance2.0mini", videoSeconds: "4", vquality: "720" },
+            onTaskUpdate: (task) => updates.push(task),
+        },
+        {
+            createTask: async () => {
+                throw new Error("must not create backend task");
+            },
+            waitTask: async () => {
+                throw new Error("must not wait backend task");
+            },
+            runLocal: async (input, _signal, onTaskUpdate) => {
+                onTaskUpdate?.({
+                    id: input.idempotencyKey!,
+                    provider: "dreamina-cli",
+                    mode: "video",
+                    operation: "text2video",
+                    model: "seedance2.0mini",
+                    status: "succeeded",
+                    stage: "succeeded",
+                    progress: 100,
+                    receiptRecorded: true,
+                    officialStatus: "completed",
+                    providerObservation: { source: "query_result", status: "completed", observedAt: timestamp },
+                    outputs: [{ outputIndex: 0, mediaType: "video", materializedAssetId: "asset-late-0001" }],
+                    result: { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } },
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                });
+                return { mode: "video", video: { dataUrl: "data:video/mp4;base64,AAAA", mimeType: "video/mp4", bytes: 3 } };
+            },
+            createId: () => "dreamina-latest-context-0001",
+            now: () => timestamp,
+        },
+    );
+
+    expect(updates.at(-1)).toMatchObject({
+        status: "succeeded",
+        stage: "local_cli_succeeded",
+        receiptRecorded: true,
+        officialStatus: "completed",
+        outputs: [{ outputIndex: 0, mediaType: "video", materializedAssetId: "asset-late-0001" }],
+    });
+    expect(updates.at(-1)?.resultJson).toContain('"mode":"video"');
+});
+
 test("an explicitly cancelled Dreamina task stays cancelled instead of being projected as failed", async () => {
     const updates: Array<{ status: string; stage?: string }> = [];
     const timestamp = "2026-08-12T00:00:00.000Z";

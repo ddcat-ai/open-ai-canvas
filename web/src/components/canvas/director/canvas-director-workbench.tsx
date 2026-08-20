@@ -1,7 +1,9 @@
-import { App, Button, ColorPicker, Input, InputNumber, Select, Switch } from "antd";
+import { App, Button, ColorPicker, Dropdown, Input, InputNumber, Select, Slider, Switch } from "antd";
+import type { MenuProps } from "antd";
 import { Box, BoxSelect, Camera, Circle, Cuboid, FileUp, Focus, Image as ImageIcon, LampDesk, Lightbulb, Plus, Redo2, Save, Trash2, Undo2, UserRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { nanoid } from "nanoid";
+import { Euler, Quaternion } from "three";
 import type { AnimationClip } from "three";
 
 import { DirectorViewport, type DirectorViewportHandle } from "@/components/canvas/director/director-viewport";
@@ -17,7 +19,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { DirectorCamera, DirectorCameraMove, DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorPose, DirectorQuat, DirectorRig, DirectorScene, DirectorSceneOutput, DirectorShot, DirectorShotSize, DirectorTransform, DirectorVec3 } from "@/types/director";
 
-export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onChange, onApply }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void> }) {
+export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onChange, onApply, onDeleteImageNode }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void>; onDeleteImageNode: (nodeId: string) => void }) {
     const { message } = App.useApp();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const viewportRef = useRef<DirectorViewportHandle>(null);
@@ -36,6 +38,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     const selectedBone = useDirectorWorkbenchStore((state) => state.selectedBone);
     const autoKey = useDirectorWorkbenchStore((state) => state.autoKey);
     const sequencerHeight = useDirectorWorkbenchStore((state) => state.sequencerHeight);
+    const sequencerVisible = useDirectorWorkbenchStore((state) => state.sequencerVisible);
     const setSelectedObjectId = useDirectorWorkbenchStore((state) => state.setSelectedObjectId);
     const setSelectedLightId = useDirectorWorkbenchStore((state) => state.setSelectedLightId);
     const setTransformMode = useDirectorWorkbenchStore((state) => state.setTransformMode);
@@ -45,6 +48,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     const setSelectedBone = useDirectorWorkbenchStore((state) => state.setSelectedBone);
     const setAutoKey = useDirectorWorkbenchStore((state) => state.setAutoKey);
     const setSequencerHeight = useDirectorWorkbenchStore((state) => state.setSequencerHeight);
+    const setSequencerVisible = useDirectorWorkbenchStore((state) => state.setSequencerVisible);
     const resetWorkbench = useDirectorWorkbenchStore((state) => state.reset);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
@@ -110,6 +114,30 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
     const updateObject = (id: string, patch: Partial<DirectorObject>) => commit((current) => ({ ...current, objects: current.objects.map((item) => (item.id === id ? { ...item, ...patch } : item)) }));
     const updateLight = (id: string, patch: Partial<DirectorLight>) => commit((current) => ({ ...current, lights: current.lights.map((item) => (item.id === id ? { ...item, ...patch } : item)) }));
     const updateShot = (id: string, patch: Partial<DirectorShot>) => commit((current) => ({ ...current, shots: current.shots.map((item) => (item.id === id ? { ...item, ...patch } : item)) }));
+    const removeObject = (id: string) => {
+        commit((current) => ({ ...current, objects: current.objects.filter((item) => item.id !== id) }));
+        if (selectedObjectId === id) {
+            setSelectedObjectId(null);
+            setSelectedBone(null);
+        }
+    };
+    const removeLight = (id: string) => {
+        commit((current) => ({ ...current, lights: current.lights.filter((item) => item.id !== id) }));
+        if (selectedLightId === id) setSelectedLightId(null);
+    };
+    const removeCamera = (id: string) => {
+        if (!draft || draft.cameras.length <= 1) {
+            message.warning("至少保留一台摄影机");
+            return;
+        }
+        const fallback = draft.cameras.find((item) => item.id !== id);
+        if (!fallback) return;
+        commit((current) => ({
+            ...current,
+            cameras: current.cameras.filter((item) => item.id !== id),
+            shots: current.shots.map((shot) => shot.cameraId === id ? { ...shot, cameraId: fallback.id } : shot),
+        }));
+    };
 
     const addPrimitive = (primitive: DirectorObject["primitive"], name: string) => {
         const object = createDirectorObject(primitive, name);
@@ -152,11 +180,28 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
         if (activeShot) updateShot(activeShot.id, { cameraId: camera.id });
     };
 
-    const addLight = () => {
-        const light = createDirectorLight("point", `灯光 ${draft?.lights.length ? draft.lights.length + 1 : 1}`, [2, 3, 2], 1.5);
+    const addLight = (type: DirectorLight["type"] = "point", label = "灯光", position: DirectorVec3 = [2, 3, 2], intensity = 1.5) => {
+        const light = createDirectorLight(type, `${label} ${draft?.lights.length ? draft.lights.length + 1 : 1}`, position, intensity);
         commit((current) => ({ ...current, lights: [...current.lights, light] }));
         setSelectedLightId(light.id);
     };
+
+    const addCameraMenuItems: MenuProps["items"] = [
+        { key: "camera", icon: <Camera className="size-3.5" />, label: "添加摄影机", onClick: addCamera },
+    ];
+    const addLightMenuItems: MenuProps["items"] = [
+        { key: "directional", icon: <Lightbulb className="size-3.5" />, label: "方向光", onClick: () => addLight("directional", "方向光", [4, 6, 4], 2.4) },
+        { key: "point", icon: <Lightbulb className="size-3.5" />, label: "点光源", onClick: () => addLight("point", "点光源") },
+        { key: "spot", icon: <Lightbulb className="size-3.5" />, label: "聚光灯", onClick: () => addLight("spot", "聚光灯", [2, 4, 2], 2) },
+        { key: "ambient", icon: <LampDesk className="size-3.5" />, label: "环境光", onClick: () => addLight("ambient", "环境光", [0, 0, 0], 0.65) },
+    ];
+    const addObjectMenuItems: MenuProps["items"] = [
+        { key: "actor", icon: <UserRound className="size-3.5" />, label: "演员", onClick: addActor },
+        { key: "box", icon: <Box className="size-3.5" />, label: "立方体", onClick: () => addPrimitive("box", "立方体") },
+        { key: "sphere", icon: <Circle className="size-3.5" />, label: "球体", onClick: () => addPrimitive("sphere", "球体") },
+        { key: "cylinder", icon: <Cuboid className="size-3.5" />, label: "圆柱", onClick: () => addPrimitive("cylinder", "圆柱") },
+        { key: "model", icon: <FileUp className="size-3.5" />, label: "上传模型", onClick: () => modelInputRef.current?.click() },
+    ];
 
     const addShot = () => {
         if (!activeCamera) return;
@@ -291,14 +336,14 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
 
             <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_292px] max-lg:grid-cols-[180px_minmax(0,1fr)]">
                 <aside className="thin-scrollbar min-h-0 overflow-y-auto border-r" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
-                    <PanelTitle title="场景对象" action={<IconButton label="添加立方体" onClick={() => addPrimitive("box", "立方体")}><Plus className="size-3.5" /></IconButton>} />
+                    <PanelTitle title="场景对象" action={<AddMenuButton label="添加场景对象" items={addObjectMenuItems} />} />
                     <div className="px-2 pb-2">
-                        {draft.objects.map((object) => <SceneRow key={object.id} active={selectedObjectId === object.id} icon={object.kind === "actor" || object.primitive === "character" ? <UserRound /> : object.kind === "model" ? <BoxSelect /> : object.kind === "billboard" ? <ImageIcon /> : <Cuboid />} label={object.name} onClick={() => setSelectedObjectId(object.id)} />)}
+                        {draft.objects.map((object) => <SceneRow key={object.id} active={selectedObjectId === object.id} icon={object.kind === "actor" || object.primitive === "character" ? <UserRound /> : object.kind === "model" ? <BoxSelect /> : object.kind === "billboard" ? <ImageIcon /> : <Cuboid />} label={object.name} onClick={() => setSelectedObjectId(object.id)} onDelete={() => removeObject(object.id)} />)}
                     </div>
-                    <PanelTitle title="摄影机" action={<IconButton label="添加摄影机" onClick={addCamera}><Plus className="size-3.5" /></IconButton>} />
-                    <div className="px-2 pb-2">{draft.cameras.map((camera) => <SceneRow key={camera.id} active={activeShot.cameraId === camera.id && !selectedObjectId && !selectedLightId} icon={<Camera />} label={camera.name} onClick={() => { setSelectedObjectId(null); setSelectedLightId(null); updateShot(activeShot.id, { cameraId: camera.id }); }} />)}</div>
-                    <PanelTitle title="灯光" action={<IconButton label="添加灯光" onClick={addLight}><Plus className="size-3.5" /></IconButton>} />
-                    <div className="px-2 pb-2">{draft.lights.map((light) => <SceneRow key={light.id} active={selectedLightId === light.id} icon={<Lightbulb />} label={light.name} onClick={() => setSelectedLightId(light.id)} />)}</div>
+                    <PanelTitle title="摄影机" action={<AddMenuButton label="添加摄影机" items={addCameraMenuItems} />} />
+                    <div className="px-2 pb-2">{draft.cameras.map((camera) => <SceneRow key={camera.id} active={activeShot.cameraId === camera.id && !selectedObjectId && !selectedLightId} icon={<Camera />} label={camera.name} onClick={() => { setSelectedObjectId(null); setSelectedLightId(null); updateShot(activeShot.id, { cameraId: camera.id }); }} onDelete={() => removeCamera(camera.id)} />)}</div>
+                    <PanelTitle title="灯光" action={<AddMenuButton label="添加灯光" items={addLightMenuItems} />} />
+                    <div className="px-2 pb-2">{draft.lights.map((light) => <SceneRow key={light.id} active={selectedLightId === light.id} icon={<Lightbulb />} label={light.name} onClick={() => setSelectedLightId(light.id)} onDelete={() => removeLight(light.id)} />)}</div>
                     <PanelTitle title="快速添加" />
                     <div className="grid grid-cols-2 gap-1.5 px-2 pb-3">
                         <QuickAdd label="演员" icon={<UserRound />} onClick={addActor} />
@@ -309,7 +354,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
                         <QuickAdd label="添加灯光" icon={<LampDesk />} onClick={addLight} />
                     </div>
                     {modelAssets.length ? <><PanelTitle title="3D 素材" /><div className="px-2 pb-3">{modelAssets.map((asset) => <SceneRow key={asset.id} icon={<BoxSelect />} label={asset.title} onClick={() => addModelAsset(asset)} />)}</div></> : null}
-                    {imageNodes.length ? <><PanelTitle title="画布图片立牌" /><div className="px-2 pb-3">{imageNodes.slice(0, 20).map((node) => <SceneRow key={node.id} icon={<ImageIcon />} label={node.title} onClick={() => addBillboard(node)} />)}</div></> : null}
+                    {imageNodes.length ? <><PanelTitle title="画布图片立牌" /><div className="px-2 pb-3">{imageNodes.slice(0, 20).map((node) => <SceneRow key={node.id} icon={<ImageIcon />} label={node.title} onClick={() => addBillboard(node)} onDelete={() => onDeleteImageNode(node.id)} />)}</div></> : null}
                     <input ref={modelInputRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" className="hidden" onChange={(event) => { void uploadModel(event.target.files?.[0]); event.currentTarget.value = ""; }} />
                 </aside>
 
@@ -320,20 +365,28 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onClose, onCh
                 </main>
 
                 <aside className="thin-scrollbar min-h-0 overflow-y-auto border-l max-lg:hidden" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
-                    {selectedObject ? <ObjectInspector object={selectedObject} playhead={playhead} selectedBone={selectedBone} onSelectBone={setSelectedBone} onUpdate={(patch) => updateObject(selectedObject.id, patch)} onAddKeyframe={recordSelectedKeyframe} onDelete={() => { commit((current) => ({ ...current, objects: current.objects.filter((item) => item.id !== selectedObject.id) })); setSelectedObjectId(null); }} /> : selectedLight ? <LightInspector light={selectedLight} onUpdate={(patch) => updateLight(selectedLight.id, patch)} onDelete={() => { commit((current) => ({ ...current, lights: current.lights.filter((item) => item.id !== selectedLight.id) })); setSelectedLightId(null); }} /> : <ShotInspector shot={activeShot} camera={activeCamera} cameras={draft.cameras} onUpdateShot={(patch) => updateShot(activeShot.id, patch)} onUpdateCamera={(patch) => activeCamera && commit((current) => ({ ...current, cameras: current.cameras.map((item) => item.id === activeCamera.id ? { ...item, ...patch } : item) }))} onAddCameraKeyframe={addCameraKeyframe} onApplyCameraMove={applyCameraMove} onAlignCameraToView={alignCameraToView} onExportClay={exportClayVideo} recording={recording} />}
+                    {selectedObject ? <ObjectInspector object={selectedObject} playhead={playhead} selectedBone={selectedBone} autoKey={autoKey} onSelectBone={setSelectedBone} onUpdate={(patch) => updateObject(selectedObject.id, patch)} onAddKeyframe={recordSelectedKeyframe} onDelete={() => removeObject(selectedObject.id)} /> : selectedLight ? <LightInspector light={selectedLight} onUpdate={(patch) => updateLight(selectedLight.id, patch)} onDelete={() => removeLight(selectedLight.id)} /> : <ShotInspector shot={activeShot} camera={activeCamera} cameras={draft.cameras} onUpdateShot={(patch) => updateShot(activeShot.id, patch)} onUpdateCamera={(patch) => activeCamera && commit((current) => ({ ...current, cameras: current.cameras.map((item) => item.id === activeCamera.id ? { ...item, ...patch } : item) }))} onAddCameraKeyframe={addCameraKeyframe} onApplyCameraMove={applyCameraMove} onAlignCameraToView={alignCameraToView} onExportClay={exportClayVideo} recording={recording} />}
                 </aside>
             </div>
 
-            <DirectorSequencer scene={draft} shot={activeShot} camera={activeCamera} objects={draft.objects} selectedObjectId={selectedObjectId} selectedBone={selectedBone} playhead={playhead} playing={playing} autoKey={autoKey} height={sequencerHeight} onPlayToggle={() => setPlaying(!playing)} onPlayheadChange={setPlayhead} onAutoKeyChange={setAutoKey} onHeightChange={setSequencerHeight} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onRecordKeyframe={recordSelectedKeyframe} onAddShot={addShot} onSelectShot={(id) => { commit((current) => ({ ...current, activeShotId: id })); setPlayhead(0); }} />
+            <DirectorSequencer scene={draft} shot={activeShot} camera={activeCamera} objects={draft.objects} selectedObjectId={selectedObjectId} selectedBone={selectedBone} playhead={playhead} playing={playing} autoKey={autoKey} height={sequencerHeight} visible={sequencerVisible} onPlayToggle={() => setPlaying(!playing)} onPlayheadChange={setPlayhead} onAutoKeyChange={setAutoKey} onHeightChange={setSequencerHeight} onVisibilityChange={setSequencerVisible} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onRecordKeyframe={recordSelectedKeyframe} onAddShot={addShot} onSelectShot={(id) => { commit((current) => ({ ...current, activeShotId: id })); setPlayhead(0); }} />
         </div>
     );
 }
 
-function ObjectInspector({ object, playhead, selectedBone, onSelectBone, onUpdate, onAddKeyframe, onDelete }: { object: DirectorObject; playhead: number; selectedBone: string | null; onSelectBone: (bone: string | null) => void; onUpdate: (patch: Partial<DirectorObject>) => void; onAddKeyframe: () => void; onDelete: () => void }) {
+function ObjectInspector({ object, playhead, selectedBone, autoKey, onSelectBone, onUpdate, onAddKeyframe, onDelete }: { object: DirectorObject; playhead: number; selectedBone: string | null; autoKey: boolean; onSelectBone: (bone: string | null) => void; onUpdate: (patch: Partial<DirectorObject>) => void; onAddKeyframe: () => void; onDelete: () => void }) {
     const motionClips = object.motionClips || [];
     const activeMotionClip = motionClips.find((clip) => clip.id === object.activeMotionClipId);
     const mappedBones = Object.keys(object.rig?.boneMap || {}) as DirectorHumanoidBone[];
+    const selectedBoneId = selectedBone as DirectorHumanoidBone | null;
+    const selectedBoneRotation = selectedBoneId ? object.boneOverrides?.[selectedBoneId] || [0, 0, 0, 1] as DirectorQuat : null;
     const updateActiveMotion = (patch: Partial<NonNullable<DirectorObject["motionClips"]>[number]>) => activeMotionClip && onUpdate({ motionClips: motionClips.map((clip) => clip.id === activeMotionClip.id ? { ...clip, ...patch } : clip) });
+    const updateSelectedBoneRotation = (rotation: DirectorQuat) => {
+        if (!selectedBoneId) return;
+        const patch: Partial<DirectorObject> = { boneOverrides: { ...object.boneOverrides, [selectedBoneId]: rotation } };
+        if (autoKey) patch.boneTracks = upsertDirectorBoneKeyframe(object.boneTracks || [], selectedBoneId, playhead, rotation);
+        onUpdate(patch);
+    };
     const applyPose = (pose: DirectorPose) => onUpdate({ pose, activeMotionClipId: undefined, boneOverrides: {} });
     return <Inspector title={object.name} onTitleChange={(name) => onUpdate({ name })} onDelete={onDelete}>
         <TransformFields transform={object.transform} onChange={(transform) => onUpdate({ transform })} />
@@ -348,6 +401,7 @@ function ObjectInspector({ object, playhead, selectedBone, onSelectBone, onUpdat
             <div className="flex items-center justify-between border-y py-2 text-[var(--fs-label)]"><span>角色绑定</span><span className="opacity-55">{object.rig?.status === "ready" ? `${mappedBones.length} 根骨骼` : "等待模型"}</span></div>
             {motionClips.length ? <><Field label="动作片段"><Select className="w-full" value={object.activeMotionClipId || ""} options={[{ label: "静态姿势", value: "" }, ...motionClips.map((clip) => ({ label: clip.name, value: clip.id }))]} onChange={(activeMotionClipId) => onUpdate({ activeMotionClipId: activeMotionClipId || undefined })} /></Field>{activeMotionClip ? <div className="grid grid-cols-2 gap-2"><Field label="播放速度"><InputNumber className="w-full" min={0.1} max={4} step={0.1} value={activeMotionClip.playbackRate} onChange={(playbackRate) => updateActiveMotion({ playbackRate: playbackRate || 1 })} /></Field><Field label="循环"><Switch checked={activeMotionClip.loop} onChange={(loop) => updateActiveMotion({ loop })} /></Field></div> : null}</> : <div className="text-[var(--fs-tiny)] opacity-50">模型加载后会显示可用动作 Clip</div>}
             {mappedBones.length ? <Field label="骨骼控制"><Select className="w-full" allowClear value={selectedBone || undefined} options={mappedBones.map((bone) => ({ label: directorBoneLabel(bone), value: bone }))} onChange={(bone) => onSelectBone(bone || null)} /></Field> : null}
+            {selectedBoneId && selectedBoneRotation ? <BoneRotationFields rotation={selectedBoneRotation} onChange={updateSelectedBoneRotation} /> : null}
         </> : null}
         <Field label="可见"><Switch checked={object.visible} onChange={(visible) => onUpdate({ visible })} /></Field>
         <Field label="投射阴影"><Switch checked={object.castShadow} onChange={(castShadow) => onUpdate({ castShadow })} /></Field>
@@ -379,13 +433,61 @@ function TransformFields({ transform, onChange }: { transform: DirectorTransform
     return <><Vec3Field label="位置" value={transform.position} onChange={(position) => onChange({ ...transform, position })} /><Vec3Field label="旋转" value={transform.rotation} step={0.05} onChange={(rotation) => onChange({ ...transform, rotation })} /><Vec3Field label="缩放" value={transform.scale} step={0.1} onChange={(scale) => onChange({ ...transform, scale })} /></>;
 }
 
+function BoneRotationFields({ rotation, onChange }: { rotation: DirectorQuat; onChange: (rotation: DirectorQuat) => void }) {
+    const initialDegrees = useMemo(() => {
+        const euler = new Euler().setFromQuaternion(new Quaternion(...rotation), "XYZ");
+        return [euler.x, euler.y, euler.z].map((value) => Number(((value * 180) / Math.PI).toFixed(1))) as DirectorVec3;
+    }, [rotation]);
+    const [degrees, setDegrees] = useState<DirectorVec3>(initialDegrees);
+    const lastEmittedRotation = useRef<DirectorQuat | null>(null);
+    useEffect(() => {
+        if (lastEmittedRotation.current && sameDirectorQuaternion(rotation, lastEmittedRotation.current)) {
+            lastEmittedRotation.current = null;
+            return;
+        }
+        setDegrees(initialDegrees);
+    }, [initialDegrees, rotation]);
+    const updateAxis = (index: number, value: number) => {
+        const next = degrees.map((entry, entryIndex) => entryIndex === index ? value : entry) as DirectorVec3;
+        const radians = next.map((entry) => (entry * Math.PI) / 180) as DirectorVec3;
+        const nextRotation = new Quaternion().setFromEuler(new Euler(radians[0], radians[1], radians[2], "XYZ")).toArray() as DirectorQuat;
+        setDegrees(next);
+        lastEmittedRotation.current = nextRotation;
+        onChange(nextRotation);
+    };
+    return <Field label="骨骼旋转（局部角度 °）"><div className="space-y-1.5">
+        {degrees.map((value, index) => <div key={index} className="grid grid-cols-[18px_minmax(0,1fr)_48px] items-center gap-2">
+            <span className="text-[var(--fs-tiny)] font-medium opacity-65">{["X", "Y", "Z"][index]}</span>
+            <Slider className="m-0" min={-180} max={180} step={1} value={value} onChange={(next) => updateAxis(index, Array.isArray(next) ? next[0] ?? 0 : next)} />
+            <span className="text-right text-[var(--fs-tiny)] tabular-nums opacity-65">{value.toFixed(1)}°</span>
+        </div>)}
+    </div></Field>;
+}
+
+function sameDirectorQuaternion(left: DirectorQuat, right: DirectorQuat) {
+    const directDistance = left.reduce((sum, value, index) => sum + Math.abs(value - right[index]), 0);
+    const inverseDistance = left.reduce((sum, value, index) => sum + Math.abs(value + right[index]), 0);
+    return Math.min(directDistance, inverseDistance) < 0.0001;
+}
+
 function Vec3Field({ label, value, step = 0.1, onChange }: { label: string; value: DirectorVec3; step?: number; onChange: (value: DirectorVec3) => void }) {
     return <Field label={label}><div className="grid grid-cols-3 gap-1">{value.map((item, index) => <InputNumber key={index} className="w-full" size="small" step={step} value={Number(item.toFixed(2))} onChange={(next) => onChange(value.map((entry, itemIndex) => itemIndex === index ? next || 0 : entry) as DirectorVec3)} />)}</div></Field>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-1 block text-[var(--fs-label)] opacity-55">{label}</span>{children}</label>; }
 function PanelTitle({ title, action }: { title: string; action?: ReactNode }) { return <div className="flex h-9 items-center px-3 text-[var(--fs-tiny)] font-semibold uppercase opacity-55"><span className="flex-1">{title}</span>{action}</div>; }
-function SceneRow({ active, icon, label, onClick }: { active?: boolean; icon: ReactElement; label: string; onClick: () => void }) { return <button type="button" className={`flex h-8 w-full items-center gap-2 px-2 text-left text-xs transition ${active ? "bg-black/10 dark:bg-white/10" : "hover:bg-black/5 dark:hover:bg-white/5"}`} onClick={onClick}><span className="[&>svg]:size-3.5">{icon}</span><span className="truncate">{label}</span></button>; }
+function SceneRow({ active, icon, label, onClick, onDelete }: { active?: boolean; icon: ReactElement; label: string; onClick: () => void; onDelete?: () => void }) {
+    return <div className={`flex h-8 w-full items-center gap-1 px-1 text-left text-xs transition ${active ? "bg-black/10 dark:bg-white/10" : "hover:bg-black/5 dark:hover:bg-white/5"}`}>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 px-1 text-left" onClick={onClick}>
+            <span className="[&>svg]:size-3.5">{icon}</span>
+            <span className="truncate">{label}</span>
+        </button>
+        {onDelete ? <button type="button" aria-label={`删除${label}`} title={`删除${label}`} className="grid size-6 shrink-0 place-items-center rounded opacity-60 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10" onClick={(event) => { event.stopPropagation(); onDelete(); }}><Trash2 className="size-3.5" /></button> : null}
+    </div>;
+}
+function AddMenuButton({ label, items }: { label: string; items: MenuProps["items"] }) {
+    return <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items }}><button type="button" aria-label={label} title={label} className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10"><Plus className="size-3.5" /></button></Dropdown>;
+}
 function QuickAdd({ label, icon, onClick }: { label: string; icon: ReactElement; onClick: () => void }) { return <button type="button" className="flex h-8 items-center gap-1.5 border px-2 text-[var(--fs-tiny)] transition hover:bg-black/5 dark:hover:bg-white/5" onClick={onClick}><span className="[&>svg]:size-3.5">{icon}</span><span className="truncate">{label}</span></button>; }
 function IconButton({ label, disabled, children, onClick }: { label: string; disabled?: boolean; children: ReactNode; onClick: () => void }) { return <button type="button" aria-label={label} title={label} disabled={disabled} className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10" onClick={onClick}>{children}</button>; }
 const poseOptions: Array<{ label: string; value: DirectorPose }> = [

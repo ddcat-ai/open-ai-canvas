@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -46,6 +47,37 @@ func New(db *gorm.DB) *Repository {
 
 func (r *Repository) Dialect() string {
 	return r.db.Dialector.Name()
+}
+
+// NextPrefixedID 在数据库事务中递增序列，避免 UUID/父子字符串拼接导致的不可读和不可排序 ID。
+// prefix 只决定展示前缀，关联关系仍由独立外键维护。
+func (r *Repository) NextPrefixedID(prefix string) (string, error) {
+	return r.nextPrefixedID(r.db, prefix)
+}
+
+func (r *Repository) nextPrefixedID(db *gorm.DB, prefix string) (string, error) {
+	prefix = strings.ToUpper(strings.TrimSpace(prefix))
+	if prefix == "" || len(prefix) > 16 {
+		return "", errors.New("invalid id prefix")
+	}
+	sequence := "id:" + prefix
+	var item model.IDSequence
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.IDSequence{Name: sequence, UpdatedAt: time.Now()}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.IDSequence{}).Where("name = ?", sequence).Updates(map[string]any{
+			"value":      gorm.Expr("value + ?", 1),
+			"updated_at": time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+		return tx.First(&item, "name = ?", sequence).Error
+	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s_%06d", prefix, item.Value), nil
 }
 
 func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
@@ -294,7 +326,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 	now := time.Now()
 	leaseExpiresAt := now.Add(leaseDuration)
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		query := tx.Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", model.TaskStatusQueued, model.TaskStatusRunning, now).
+		query := tx.Where("(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_poll_at IS NULL OR next_poll_at <= ?)", model.TaskStatusQueued, model.TaskStatusRunning, now, now).
 			Order("created_at asc").Limit(1)
 		if r.Dialect() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"})
@@ -309,7 +341,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 		}
 		claim := tx.Model(&model.Task{}).Where("id = ?", task.ID)
 		if r.Dialect() != "postgres" {
-			claim = claim.Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", model.TaskStatusQueued, model.TaskStatusRunning, now)
+			claim = claim.Where("(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_poll_at IS NULL OR next_poll_at <= ?)", model.TaskStatusQueued, model.TaskStatusRunning, now, now)
 		}
 		updated := claim.
 			Updates(map[string]any{
@@ -320,6 +352,7 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 				"started_at":       gorm.Expr("COALESCE(started_at, ?)", now),
 				"lease_owner":      owner,
 				"lease_expires_at": leaseExpiresAt,
+				"next_poll_at":     nil,
 				"updated_at":       now,
 			})
 		if updated.Error != nil {
@@ -356,6 +389,23 @@ func (r *Repository) UpdateTaskProviderState(id string, providerRequestID string
 		updates["provider_request_id"] = strings.TrimSpace(providerRequestID)
 	}
 	return r.db.Model(&model.Task{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *Repository) DeferRunningTaskForProviderPoll(id string, owner string, stage string, delay time.Duration) error {
+	now := time.Now()
+	result := r.db.Model(&model.Task{}).
+		Where("id = ? AND status = ? AND lease_owner = ?", id, model.TaskStatusRunning, owner).
+		Updates(map[string]any{
+			"stage": stage, "error": "", "completed_at": nil, "next_poll_at": now.Add(delay),
+			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrTaskStateConflict
+	}
+	return nil
 }
 
 // 人工恢复仅锁定失败任务；旧 worker 的租约可覆盖，但未过期的人工恢复租约不能并发抢占。
@@ -729,6 +779,12 @@ func (r *Repository) LatestUserOSSSetting(userID string) (*model.UserOSSSetting,
 		return nil, err
 	}
 	return &setting, nil
+}
+
+func (r *Repository) UserOSSSettingsForUser(userID string) ([]model.UserOSSSetting, error) {
+	var settings []model.UserOSSSetting
+	err := r.db.Where("user_id = ?", userID).Order("created_at desc, id desc").Find(&settings).Error
+	return settings, err
 }
 
 func (r *Repository) UserOSSSettingForUser(userID string, id string) (*model.UserOSSSetting, error) {

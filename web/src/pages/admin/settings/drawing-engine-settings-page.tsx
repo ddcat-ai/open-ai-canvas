@@ -1,4 +1,4 @@
-import { App, Button, Input, Segmented, Tag } from "antd";
+import { App, Button, Input, Segmented } from "antd";
 import { Brush, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -6,7 +6,7 @@ import { drawingEngineLabel, isDrawingEngineAvailable, type CanvasDrawingEngine 
 import { getAdminDrawingEngineSetting, updateAdminDrawingEngineSetting } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminPageFrame } from "../components/admin-shell";
-import { SettingsSectionCard } from "../components/admin-ui";
+import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 
 export default function DrawingEngineSettingsPage() {
     const { message } = App.useApp();
@@ -54,13 +54,13 @@ export default function DrawingEngineSettingsPage() {
 
     const dirty = engine !== current.defaultEngine || tldrawLicenseKey !== (current.tldrawLicenseKey || "");
     return (
-        <AdminPageFrame title="绘图工具" description="设置新建绘图节点使用的默认编辑器">
+        <AdminPageFrame title="绘图工具" description="设置新建绘图节点使用的默认编辑器" scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     icon={<Brush className="size-4" />}
                     title="默认绘图引擎"
                     description="已有绘图保持原引擎，仅新建绘图使用这里的选择。"
-                    status={<Tag variant="filled" color="blue">{drawingEngineLabel(current.defaultEngine)}</Tag>}
+                    status={<AdminStatusBadge label={drawingEngineLabel(current.defaultEngine)} tone="info" />}
                     footer={(
                         <>
                             <span className={`text-xs ${tldrawAvailable ? "text-foreground/45" : "text-amber-600 dark:text-amber-400"}`}>

@@ -64,7 +64,7 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                         >
                                             <span className="flex min-w-0 items-start gap-2.5">
                                                 <span className="model-default-option-icon grid size-8 shrink-0 place-items-center rounded-md">
-                                                    <ModelIcon model={model} />
+                                                    <ModelIcon config={config} model={model} />
                                                 </span>
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate text-xs font-semibold">{modelDisplayName(config, model)}</span>

@@ -200,6 +200,9 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 	sort.Slice(catalog, func(left int, right int) bool {
 		return catalog[left].ID < catalog[right].ID
 	})
+	if s.isPluginEnabled() {
+		catalog = extendChannelModelCatalog(baseURL, apiFormat, headers, catalog)
+	}
 	return catalog, nil
 }
 

@@ -209,6 +209,53 @@ func (c *runtimeCoordinator) recordChannelResult(ctx context.Context, channelID 
 	}
 }
 
+const routeCatalogVersionKey = "canvas:logical-model-route-catalog:version"
+
+func (c *runtimeCoordinator) routeCatalogVersion(ctx context.Context) (int64, error) {
+	if c == nil || c.redis == nil {
+		return 0, nil
+	}
+	value, err := c.redis.Get(ctx, routeCatalogVersionKey).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return value, err
+}
+
+func (c *runtimeCoordinator) bumpRouteCatalogVersion(ctx context.Context) error {
+	if c == nil || c.redis == nil {
+		return nil
+	}
+	return c.redis.Incr(ctx, routeCatalogVersionKey).Err()
+}
+
+func routeHealthKey(key string) string { return "canvas:logical-route-health:" + key }
+
+func (c *runtimeCoordinator) routeBlockedUntil(ctx context.Context, key string) (time.Time, error) {
+	if c == nil || c.redis == nil {
+		return time.Time{}, nil
+	}
+	value, err := c.redis.Get(ctx, routeHealthKey(key)).Int64()
+	if err == redis.Nil {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.UnixMilli(value), nil
+}
+
+func (c *runtimeCoordinator) blockRoute(ctx context.Context, key string, until time.Time) error {
+	if c == nil || c.redis == nil {
+		return nil
+	}
+	ttl := time.Until(until)
+	if ttl <= 0 {
+		return c.redis.Del(ctx, routeHealthKey(key)).Err()
+	}
+	return c.redis.Set(ctx, routeHealthKey(key), until.UnixMilli(), ttl).Err()
+}
+
 func envInt(key string, fallback int) int {
 	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(key)))
 	if err != nil || value <= 0 {

@@ -403,6 +403,13 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
+    --workspace-sidebar-width: 208px;        /* 侧栏展开宽度：较原 260px 收窄 20% */
+    --workspace-sidebar-nav-width: 208px;    /* 展开态导航内容宽度 */
+    --workspace-sidebar-collapsed-width: 56px; /* 折叠态保留可发现的图标菜单轨 */
+
+    --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
+
+    --workspace-card-gap: 4px;       /* 侧边栏与主区卡片之间间隙（组件 token）*/
 
     /* --- Semantic 层（引用 Primitive，随主题切换）--- */
     /* 通用语义色（引用 Primitive neutral 色板）*/
@@ -690,8 +697,6 @@
     --page-topbar-surface: var(--bg-secondary);
     --page-topbar-border: var(--workspace-border);
     --canvas-topbar-surface: var(--workspace-glass-surface);
-    --rail-icon-size: 18px;
-
     /* Canvas 创建菜单：固定行高保证图标、徽标和单行标签互不挤占 */
     --canvas-create-node-height: var(--space-12);
     --canvas-create-resource-height: var(--space-8);
@@ -813,6 +818,7 @@
         position: fixed;
         inset: 0;
         isolation: isolate;
+        overflow: hidden;
     }
     textarea {
         resize: none;
@@ -885,12 +891,12 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(255, 255, 255, 0.74);
-        --workspace-surface-strong: rgba(255, 255, 255, 0.94);
+        --workspace-surface-strong: rgba(255, 255, 255, 1);
         --workspace-border: rgba(17, 17, 17, 0.1);
         --workspace-border-strong: rgba(17, 17, 17, 0.2);
         --workspace-grid-line: rgba(17, 17, 17, 0.035);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
         --workspace-accent: #171717;
         --workspace-accent-soft: rgba(17, 17, 17, 0.065);
         background-color: var(--workspace-canvas);
@@ -906,21 +912,16 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(18, 18, 18, 0.76);
-        --workspace-surface-strong: rgba(22, 22, 22, 0.94);
+        --workspace-surface-strong: rgba(22, 22, 22, 1);
         --workspace-border: rgba(255, 255, 255, 0.09);
         --workspace-border-strong: rgba(255, 255, 255, 0.18);
         --workspace-grid-line: rgba(255, 255, 255, 0.026);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
         --workspace-accent: #f5f5f5;
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
 
-    .app-workspace-shell.is-spatial {
-        position: relative;
-        gap: 0;
-        padding: 0;
-    }
 
     .app-workspace-sidebar-scrim {
         position: absolute;
@@ -931,22 +932,70 @@
         backdrop-filter: blur(2px);
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-sidebar {
-        border: 0;
-        border-radius: 0;
-        background: var(--workspace-sidebar);
-        box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
+
+    /* 侧栏导航子项展开引导线：替代每组子项自行维护的分割线 */
+    .app-workspace-nav-guide-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        border-left: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+        pointer-events: none;
     }
 
-    .dark .app-workspace-shell.is-spatial .app-workspace-sidebar {
+    /* 分组标题：小号大写标签，弱化但可读；有标题的分组支持折叠，padding/间距由折叠按钮接管 */
+    .app-workspace-nav-group-label {
+        display: block;
+        font-size: var(--fs-label);
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--foreground) 36%, transparent);
+        transition: color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 8px;
+        border-radius: var(--r-sm);
+        text-align: left;
+        color: inherit;
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle:hover,
+    .app-workspace-nav-group-toggle:focus-visible {
+        background: var(--surface-hover);
+    }
+
+    .app-workspace-nav-group-toggle:hover .app-workspace-nav-group-label,
+    .app-workspace-nav-group-toggle:focus-visible .app-workspace-nav-group-label {
+        color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    }
+
+    .app-workspace-nav-group-toggle:hover svg,
+    .app-workspace-nav-group-toggle:focus-visible svg {
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+    }
+
+    /* 工作区切换器下拉浮层 */
+    .app-workspace-nav-popover {
         box-shadow: none;
+    }
+
+    .workspace-account-popover .ant-popover-inner {
+        border-color: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
+        box-shadow: var(--elevation-overlay) !important;
     }
 
     body.app-spatial-overlays {
-        --workspace-overlay-bg: rgba(244, 244, 245, 0.78);
-        --workspace-overlay-bg-strong: rgba(250, 250, 250, 0.88);
+        --workspace-overlay-bg: rgba(244, 244, 245, 1);
+        --workspace-overlay-bg-strong: rgba(250, 250, 250, 1);
         --workspace-overlay-border: rgba(17, 17, 17, 0.22);
         --workspace-overlay-divider: rgba(17, 17, 17, 0.1);
         --workspace-overlay-highlight: rgba(255, 255, 255, 0.86);
@@ -956,8 +1005,8 @@
     }
 
     .dark body.app-spatial-overlays {
-        --workspace-overlay-bg: rgba(10, 10, 11, 0.78);
-        --workspace-overlay-bg-strong: rgba(15, 15, 16, 0.88);
+        --workspace-overlay-bg: rgba(10, 10, 11, 1);
+        --workspace-overlay-bg-strong: rgba(15, 15, 16, 1);
         --workspace-overlay-border: rgba(255, 255, 255, 0.22);
         --workspace-overlay-divider: rgba(255, 255, 255, 0.105);
         --workspace-overlay-highlight: rgba(255, 255, 255, 0.2);
@@ -969,7 +1018,7 @@
     body.app-spatial-overlays :where(
         .ant-dropdown-menu,
         .ant-select-dropdown,
-        .ant-popover-inner,
+        .ant-popover-container,
         .ant-picker-dropdown .ant-picker-panel-container,
         .ant-cascader-menus,
         .ant-mentions-dropdown,
@@ -980,25 +1029,21 @@
         .ant-notification-notice
     ) {
         border: 1px solid var(--workspace-overlay-border) !important;
-        background:
-            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 24%, transparent 76%, rgba(158, 178, 214, 0.055)),
-            var(--workspace-overlay-bg) !important;
-        box-shadow:
-            var(--workspace-overlay-shadow),
-            inset 0 1px 0 var(--workspace-overlay-highlight),
-            inset 1px 0 0 color-mix(in srgb, var(--workspace-overlay-highlight) 36%, transparent) !important;
-        backdrop-filter: blur(30px) saturate(138%) !important;
-        -webkit-backdrop-filter: blur(30px) saturate(138%) !important;
+        background: var(--workspace-overlay-bg-strong) !important;
+        box-shadow: var(--workspace-overlay-shadow) !important;
     }
 
     body.app-spatial-overlays :where(.ant-modal-content, .ant-drawer-content, .ant-notification-notice) {
-        background:
-            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 20%, transparent 82%, rgba(158, 178, 214, 0.05)),
-            var(--workspace-overlay-bg-strong) !important;
+        background: var(--workspace-overlay-bg-strong) !important;
     }
 
-    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
         border-radius: 8px !important;
+    }
+
+    /* 展开菜单（下拉/弹出）取消阴影：层级由边框 + 背景对比表达 */
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
+        box-shadow: none !important;
     }
 
     body.app-spatial-overlays :where(
@@ -1033,8 +1078,8 @@
 
     body.app-spatial-overlays :where(
         .ant-dropdown-menu-item-divider,
-        .ant-popover-inner-content > .border-b,
-        .ant-popover-inner-content > .border-y,
+        .ant-popover-content > .border-b,
+        .ant-popover-content > .border-y,
         .ant-modal-header,
         .ant-modal-footer,
         .ant-drawer-header
@@ -1053,25 +1098,6 @@
         -webkit-backdrop-filter: blur(7px);
     }
 
-    @media (prefers-reduced-transparency: reduce) {
-        body.app-spatial-overlays :where(
-            .ant-dropdown-menu,
-            .ant-select-dropdown,
-            .ant-popover-inner,
-            .ant-picker-dropdown .ant-picker-panel-container,
-            .ant-cascader-menus,
-            .ant-mentions-dropdown,
-            .ant-tooltip-inner,
-            .ant-modal-content,
-            .ant-drawer-content,
-            .ant-message-notice-content,
-            .ant-notification-notice
-        ) {
-            background: var(--workspace-overlay-bg-strong) !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-        }
-    }
 
     .app-workspace-shell.is-spatial .app-workspace-brand-mark {
         border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
@@ -1080,20 +1106,7 @@
         box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active {
-        background: var(--workspace-accent-soft);
-        color: var(--foreground);
-        box-shadow: none;
-    }
 
-    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before {
-        display: none;
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-stage {
-        border-radius: 0;
-        background: var(--workspace-content);
-    }
 
     /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */
     .app-spatial-workspace .app-workspace-scroll {
@@ -1183,16 +1196,11 @@
     }
 
     @media (max-width: 639px) {
-        .app-workspace-shell.is-spatial {
-            gap: 6px;
-            padding: 6px;
-        }
 
-        .app-workspace-shell.is-spatial .app-workspace-sidebar,
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 6px;
+        /* 窄屏下侧栏常驻，收缩到图标主轨，避免遮挡主内容 */
+        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
+            width: 0 !important;
         }
-
     }
 
     @media (max-width: 1023px) {
@@ -1200,14 +1208,21 @@
             left: 0;
         }
 
+        .app-workspace-shell .app-workspace-sidebar {
+            width: 0 !important;
+            border: 0 !important;
+            transition: width var(--motion-state) var(--ease-aceternity);
+        }
+
         .app-workspace-shell .app-workspace-sidebar.is-mobile-expanded {
             position: absolute;
             z-index: 40;
             inset: 6px auto 6px 6px;
-            width: min(196px, calc(100vw - 58px));
-            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            width: min(264px, calc(100vw - 58px)) !important;
+            border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+            border-radius: var(--r-xl);
+            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
         }
-
     }
 
     .app-user-workspace {
@@ -1215,13 +1230,110 @@
     }
 
     .app-workspace-shell {
+        position: relative;
+        padding: var(--workspace-shell-gutter);
         background: var(--workspace-page);
     }
 
-    .app-workspace-sidebar {
+    /* 画布编辑器与运营后台（hideChrome 契约）：保持全屏连体，不套圆角卡片 */
+    .app-workspace-shell:not(.is-spatial) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:not(.is-spatial) .app-workspace-stage {
         border: 0;
-        background: var(--workspace-sidebar);
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* 工作区外壳通过表面明度与间距分层，避免边框和内高光叠加造成线条感。 */
+    .app-workspace-sidebar,
+    .app-workspace-stage {
+        border: 0;
+        border-radius: var(--r-xl);
+        box-shadow: none;
+    }
+
+    .app-workspace-sidebar {
+        width: var(--workspace-sidebar-width, 208px);
+        background: color-mix(in srgb, var(--workspace-sidebar) 96%, var(--foreground) 4%);
         transition: width var(--motion-state) var(--ease-aceternity);
+    }
+
+    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width) !important;
+    }
+
+    .app-workspace-sidebar-nav {
+        width: var(--workspace-sidebar-nav-width);
+        transition: width var(--motion-state) var(--ease-aceternity);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width);
+    }
+
+    .app-workspace-sidebar-rail-header {
+        display: grid;
+        min-height: 56px;
+        padding: 10px;
+        place-items: center;
+    }
+
+    .app-workspace-sidebar-rail-button {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: var(--r-sm);
+        color: color-mix(in srgb, var(--foreground) 66%, transparent);
+        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-sidebar-rail-button:hover,
+    .app-workspace-sidebar-rail-button:focus-visible {
+        background: var(--surface-hover);
+        color: var(--foreground);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search {
+        padding: 0 10px 4px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search > button,
+    .app-workspace-nav-link.is-collapsed {
+        justify-content: center;
+        gap: 0;
+        padding-inline: 0;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-label,
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-shortcut,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-title,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta {
+        display: none;
+    }
+
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-main {
+        gap: 0;
+    }
+
+    .app-workspace-sidebar-scroll-area.is-collapsed {
+        gap: 6px;
+        padding: 4px 10px 8px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-footer {
+        padding: 8px 10px 10px;
+    }
+
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
+        scrollbar-width: none;
+    }
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
+        display: none;
     }
 
     .app-workspace-stage,
@@ -1229,6 +1341,7 @@
     .app-workspace-grid {
         background: var(--workspace-content);
     }
+
 
     .app-workspace-page {
         background: var(--workspace-content);
@@ -1298,6 +1411,7 @@
 
     .app-workspace-main-row {
         display: flex;
+        gap: var(--workspace-card-gap);
         min-height: 0;
         min-width: 0;
         flex: 1 1 auto;
@@ -1307,11 +1421,13 @@
     .app-workspace-topbar {
         position: relative;
         z-index: var(--z-toolbar);
-        height: var(--page-topbar-h);
-        background: var(--workspace-navigation);
+        height: 44px;
         border: 0;
+        border-radius: 0;
+        background: transparent;
         box-shadow: none;
-        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
     }
 
     .app-workspace-topbar-icon-button {
@@ -1327,11 +1443,15 @@
     }
 
     .app-workspace-topbar-icon-button > svg,
-    .app-workspace-topbar-icon-button > span > svg,
-    .app-workspace-nav-icon {
+    .app-workspace-topbar-icon-button > span > svg {
         width: 18px;
         height: 18px;
         stroke-width: 1.8;
+    }
+
+    /* 账户触发按钮为身份标识，占位图标默认不弱化（与其他工具图标区分） */
+    .app-workspace-account-trigger > span > svg {
+        color: var(--foreground);
     }
 
     .app-workspace-topbar-icon-button:hover {
@@ -1344,123 +1464,20 @@
         outline-offset: -2px;
     }
 
-    /* 品牌区：∞ 标 + 影策 字标，hover 加深强调 */
-    .app-workspace-brand-link {
-        border-radius: var(--r-md);
-    }
-
-    .app-workspace-brand-mark {
-        transition: box-shadow var(--motion-instant) ease-out;
-    }
-
+    /* 品牌字标：弱化但可读，hover 加深 */
     .app-workspace-brand-wordmark {
         color: color-mix(in srgb, var(--foreground) 78%, transparent);
         letter-spacing: 0.01em;
         transition: color var(--motion-instant) ease-out;
     }
-
-    .app-workspace-brand-link:hover .app-workspace-brand-wordmark,
-    .app-workspace-brand-link:focus-visible .app-workspace-brand-wordmark {
+    /* 侧栏激活项：主操作角色成对定义（浅色/深色主题同一 token） */
+    .app-workspace-nav-link.is-active {
+        background: var(--workspace-accent-soft);
         color: var(--foreground);
-    }
-
-    .app-workspace-brand-link:hover .app-workspace-brand-mark {
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 24%, transparent);
-    }
-
-    .app-workspace-brand-link:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 46%, transparent);
-        outline-offset: 3px;
-    }
-
-    .app-workspace-rail {
-        width: auto;
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-
-    .app-workspace-rail-header,
-    .app-workspace-rail-footer {
-        flex: 0 0 auto;
-    }
-
-    .app-workspace-rail-middle {
-        flex: 1 1 auto;
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-rail .app-workspace-rail-tile {
-        width: 40px !important;
-        height: 40px !important;
-        border-radius: var(--r-md);
-        margin-bottom: 0 !important;
-    }
-
-    .app-workspace-rail nav {
-        padding: 0 !important;
-    }
-
-    .app-workspace-rail nav + nav {
-        margin-top: var(--space-4) !important;
-    }
-
-    .app-workspace-rail [title*="积分"] {
-        border-radius: var(--r-md) !important;
-    }
-
-    .app-workspace-rail .app-workspace-rail-tile svg,
-    .app-workspace-rail .app-workspace-account-icon {
-        width: var(--rail-icon-size);
-        height: var(--rail-icon-size);
-    }
-
-    /* 侧栏轨道：默认 / 悬停 / 激活三态成对定义 */
-    .app-workspace-rail .app-workspace-nav-link {
-        color: color-mix(in srgb, var(--foreground) 55%, transparent);
-        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-rail .app-workspace-nav-link:hover:not(.is-active) {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-rail .app-workspace-nav-link.is-active {
-        background: var(--workspace-accent-soft) !important;
-        color: var(--foreground) !important;
-        box-shadow: none !important;
-    }
-
-    .app-workspace-rail .app-workspace-nav-link.is-active::before {
-        display: none !important;
-    }
-
-    /* 底部账号区：40px 触点 + 头像 hover 反馈增强 */
-    .app-workspace-rail-footer button:hover > span:first-child {
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 22%, transparent);
-    }
-
-    .app-workspace-rail-footer button:hover .app-workspace-account-icon {
-        color: var(--foreground);
-    }
-
-    .app-workspace-account-button:focus-visible {
-        outline: 2px solid var(--control-focus-ring);
-        outline-offset: 2px;
         box-shadow: none;
     }
 
-    .app-workspace-account-button :where(span, svg):focus {
-        outline: none;
-    }
 
-    .app-workspace-nav-link.is-active {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-nav-link.is-active::before {
-        display: none;
-    }
 
     .app-workspace-icon-button {
         display: inline-flex;
@@ -1539,12 +1556,12 @@
 
     .app-workspace-sidebar-scroll-area.has-top-fade::before {
         top: 0;
-        background: var(--workspace-navigation);
+        background: linear-gradient(to bottom, var(--workspace-sidebar), transparent);
     }
 
     .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
         bottom: 0;
-        background: var(--workspace-navigation);
+        background: linear-gradient(to top, var(--workspace-sidebar), transparent);
     }
 
     .workspace-signal-icon {
@@ -3289,60 +3306,6 @@
         .creation-user-message { max-width: 82%; }
     }
 
-    @media (min-width: 1024px) {
-        .app-workspace-shell.is-spatial {
-            gap: 0;
-            padding: 0;
-            background: var(--workspace-canvas);
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar {
-            width: var(--workspace-sidebar-width, 88px) !important;
-            border: 0;
-            border-radius: 0;
-            background: var(--workspace-canvas);
-            box-shadow: none;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-        }
-        .dark .app-workspace-shell.is-spatial .app-workspace-sidebar { box-shadow: none; }
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 0;
-            background: transparent;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:first-child {
-            height: 96px;
-            border-bottom: 0;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:first-child a > span:not(.app-workspace-brand-mark) { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar .app-workspace-brand-mark {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            background: transparent;
-            color: var(--foreground);
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar nav { padding: 18px 10px; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar nav > div { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link {
-            height: 62px !important;
-            flex-direction: column;
-            justify-content: center !important;
-            gap: 5px !important;
-            margin: 0 0 9px;
-            padding: 0 !important;
-            color: var(--foreground);
-            font-size: 10px;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link > svg { width: 20px; height: 20px; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link > span { display: block !important; font-size: 10px; line-height: 1.1; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active { background: transparent; color: var(--foreground); box-shadow: none; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:last-child { border-top: 0; padding: 12px 10px 18px; }
-        .app-workspace-shell.is-spatial[data-sidebar-collapsed="true"] .app-workspace-nav-link > span,
-        .app-workspace-shell.is-spatial[data-sidebar-collapsed="true"] .app-workspace-sidebar > div:first-child a > span:not(.app-workspace-brand-mark) {
-            display: none !important;
-        }
-    }
 
     @media (max-width: 800px) {
         .creation-new-button {
@@ -3620,8 +3583,8 @@
     .canvas-library-count { display: flex; align-items: baseline; gap: 6px; justify-self: end; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-micro); white-space: nowrap; }
     .canvas-library-count strong { color: var(--foreground); font-size: var(--fs-heading-lg); font-variant-numeric: tabular-nums; font-weight: 500; letter-spacing: .02em; }
 
-    /* 画布库保持固定列节奏，行列间距一致。 */
-    .canvas-library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: stretch; gap: var(--space-5) var(--space-4); }
+    /* 画布库使用稳定的最小列宽；卡片不靠负边距或溢出制造层叠。 */
+    .canvas-library-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: stretch; gap: var(--space-6) var(--space-5); }
     .canvas-library-page .app-pagination-bar { position: static; margin-top: var(--space-4); border: 0; background: transparent; padding: var(--space-1-half) var(--space-2); backdrop-filter: none; }
 
     /* === 画布卡片重构（对应 docs/ui-design-system.md）=== */
@@ -3696,6 +3659,166 @@
 
     .app-canvas-selection-toolbar { border-color: color-mix(in srgb, var(--workspace-accent) 25%, var(--workspace-border)); background: color-mix(in srgb, var(--workspace-accent) 7%, transparent); color: color-mix(in srgb, var(--workspace-accent) 48%, var(--foreground)); }
 
+    /* 画布文件夹：去掉旧的三层叠压，改为更干净的文件夹封面 + 预览图 + 信息带。 */
+    .canvas-folder-card {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: var(--r-xl);
+        background: var(--card-surface);
+        color: var(--foreground);
+        isolation: isolate;
+        content-visibility: auto;
+        contain-intrinsic-size: 0 320px;
+        box-shadow: none;
+        transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out, box-shadow var(--motion-state) ease-out;
+    }
+
+    .canvas-folder-card:hover, .canvas-folder-card:focus-within {
+        background: var(--card-surface-hover);
+        transform: translateY(-2px);
+    }
+
+    .canvas-folder-card:active { transform: translateY(-1px) scale(.995); transition-duration: var(--motion-instant); }
+    .canvas-folder-card.is-selected { box-shadow: 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 54%, transparent); }
+
+    .canvas-folder-open {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        flex-direction: column;
+        gap: 0;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        transition: transform var(--motion-state) var(--motion-ease-out);
+    }
+
+    .canvas-folder-open:focus:not(:focus-visible) { outline: none; }
+    .canvas-folder-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .canvas-folder-card:hover .canvas-folder-open, .canvas-folder-card:focus-within .canvas-folder-open { transform: translateY(-1px); }
+    .canvas-folder-card:active .canvas-folder-open { transform: none; }
+
+    .canvas-folder-preview {
+        position: relative;
+        display: block;
+        flex: 0 0 auto;
+        aspect-ratio: 16 / 10;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 0;
+        background: var(--canvas-cover-surface);
+        box-shadow: none;
+    }
+
+    .canvas-folder-preview > :where(.canvas-project-media, .canvas-project-video, .canvas-project-empty, .canvas-project-preview-canvas),
+    .canvas-folder-preview .cached-resource-image-shell { width: 100%; height: 100%; }
+    .canvas-folder-preview .canvas-project-media img, .canvas-folder-preview .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .canvas-folder-preview .canvas-project-media img { filter: saturate(.94) contrast(1.02); transition: transform 420ms var(--motion-ease-out), filter 240ms ease-out; }
+    .canvas-folder-card:hover .canvas-folder-preview .canvas-project-media img { filter: saturate(1) contrast(1.04); transform: scale(1.025); }
+    .canvas-folder-preview .canvas-project-preview-canvas { background: var(--canvas-cover-surface); }
+
+    .canvas-folder-body {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 6px;
+        padding: var(--space-2);
+    }
+
+    .canvas-folder-heading-row { display: flex; min-width: 0; align-items: center; }
+    .canvas-folder-title { overflow: hidden; color: var(--foreground); font-size: var(--fs-heading-lg); font-weight: 640; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .canvas-folder-title-input { width: 100%; min-width: 0; }
+    .canvas-folder-meta {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 10px;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        font-size: var(--fs-caption);
+        line-height: 1.45;
+    }
+    .canvas-folder-meta-item { min-width: 0; }
+    .canvas-folder-meta-separator { color: color-mix(in srgb, var(--foreground) 24%, transparent); }
+
+    .canvas-folder-select {
+        position: absolute;
+        z-index: 4;
+        top: 12px;
+        left: 12px;
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: var(--r-full);
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        background: color-mix(in srgb, var(--background) 72%, transparent);
+        opacity: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transform: translateY(-2px);
+        transition: opacity var(--motion-instant) ease-out, transform var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .canvas-folder-select.is-visible, .canvas-folder-card:hover .canvas-folder-select, .canvas-folder-card:focus-within .canvas-folder-select { opacity: 1; transform: translateY(0); }
+    .canvas-folder-select input { width: 14px; height: 14px; margin: 0; accent-color: var(--control-check-bg); }
+
+    .canvas-folder-actions {
+        position: absolute;
+        z-index: 4;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--background) 72%, transparent);
+        opacity: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transform: translateY(-2px);
+        transition: opacity var(--motion-instant) ease-out, transform var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .canvas-folder-card:hover .canvas-folder-actions, .canvas-folder-card:focus-within .canvas-folder-actions { opacity: 1; transform: translateY(0); }
+
+    .canvas-folder-rename, .canvas-folder-action {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        place-items: center;
+        border: 0;
+        border-radius: var(--r-full);
+        background: transparent;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    :where(.canvas-folder-rename, .canvas-folder-action):hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
+    :where(.canvas-folder-rename, .canvas-folder-action) svg { width: 16px; height: 16px; }
+
+    @media (max-width: 639px) {
+        .canvas-folder-open { gap: 0; padding: 0; }
+        .canvas-folder-title { font-size: var(--fs-heading); }
+        .canvas-folder-select, .canvas-folder-actions { opacity: 1; transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-folder-card, .canvas-folder-open, .canvas-folder-preview .canvas-project-media img, .canvas-folder-select, .canvas-folder-actions { transition: none; }
+        .canvas-folder-card:hover, .canvas-folder-card:focus-within, .canvas-folder-card:active { transform: none; }
+        .canvas-folder-card:hover .canvas-folder-open, .canvas-folder-card:focus-within .canvas-folder-open { transform: none; }
+        .canvas-folder-card:hover .canvas-folder-preview .canvas-project-media img { transform: none; }
+    }
+
     /* 作品库式页面：与画布列表共享浏览节奏，内容优先于边框和工具栏。 */
     .library-page .app-page-header { border-bottom: 0; }
     .library-page .app-page-header h1 { font-size: var(--fs-title); font-weight: 620; }
@@ -3734,6 +3857,40 @@
         border-bottom: 0;
         padding-inline: 0;
     }
+
+    /* 技能中心 hero：GalleryGridBlock 式标题区——徽章 + 大标题 + 描述居中，背景点阵 + 双光斑，底部淡出到页面背景。仅技能页。 */
+    .skills-hero { position: relative; overflow: hidden; margin-top: 4px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 2%, transparent); }
+    .skills-hero::before { position: absolute; inset: 0; background-image: radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 42%), radial-gradient(circle at 84% 8%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 40%), radial-gradient(circle at 50% 130%, color-mix(in srgb, var(--foreground) 10%, transparent), transparent 46%), radial-gradient(circle, color-mix(in srgb, var(--foreground) 4.5%, transparent) 1px, transparent 1.6px); background-size: 100% 100%, 100% 100%, 100% 100%, 22px 22px; content: ""; pointer-events: none; }
+    .skills-hero::after { position: absolute; right: 0; bottom: 0; left: 0; height: 40px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--workspace-content) 92%, transparent)); content: ""; pointer-events: none; }
+    .skills-hero-inner { position: relative; display: flex; min-height: 128px; flex-direction: column; align-items: center; justify-content: center; padding: 20px 24px 24px; text-align: center; }
+    .skills-hero-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 4px 12px; color: var(--primary); font-size: var(--fs-caption); font-weight: 560; line-height: 1.4; }
+    .skills-hero-badge svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .skills-hero-title { color: var(--foreground); font-size: var(--fs-display); font-weight: 720; letter-spacing: -0.02em; line-height: 1.15; }
+    .skills-hero-description { margin-top: 6px; max-width: 460px; color: color-mix(in srgb, var(--foreground) 56%, transparent); font-size: var(--fs-body); line-height: 1.6; }
+    .skills-hero-meta { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 4px 12px; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+    /* 移动端收窄 hero 高度，避免抢占首屏。 */
+    @media (max-width: 640px) { .skills-hero-inner { min-height: 112px; padding: 16px 18px 20px; } .skills-hero-title { font-size: var(--fs-title); } }
+
+    /* 技能页工具栏与 hero 圆角容器之间留出小间隙（共享 .library-toolbar 的 margin-top 8px 会被 Tailwind mt-7 覆盖，故用更高特异性局部类固定 20px）。 */
+    .library-toolbar.skills-toolbar { margin-top: 20px; }
+    /* 技能中心 scope 切换：shadcn TabsList 语言——底托 + 激活胶囊，图标 + 计数徽章；内容区切换淡入上移。 */
+    .skills-tabs { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; max-width: 100%; align-items: center; gap: 2px; overflow-x: auto; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 5%, transparent); padding: 4px; }
+    /* tab 按钮须为定位元素（DOM 顺序在指示器之后）以渲染在胶囊之上，否则 absolute 指示器会遮住文字与图标。 */
+    .skills-tab { position: relative; display: inline-flex; height: 32px; flex: 0 0 auto; align-items: center; gap: 5px; border: 0; border-radius: var(--r-lg); background: transparent; padding-inline: 10px; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-body); font-weight: 520; transition: color 160ms ease-out; }
+    .skills-tab:hover { color: color-mix(in srgb, var(--foreground) 76%, transparent); }
+    .skills-tab.is-active { color: var(--foreground); font-weight: 560; }
+    .skills-tabs-indicator { position: absolute; top: 4px; bottom: 4px; left: 0; border-radius: var(--r-lg); background: var(--workspace-content); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: left 300ms cubic-bezier(0.16, 1, 0.3, 1), width 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+    /* 深主题：激活胶囊须亮于底托（--workspace-content 在深色下与页面底色相同，会形成黑块），用白色叠加提亮，白字在亮灰胶囊上保持可读。 */
+    .dark .skills-tabs-indicator { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .skills-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+    .skills-tab svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .skills-tab-count { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 9%, transparent); padding-inline: 5px; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; line-height: 1; }
+    /* 激活徽章用实底 primary + primary-foreground：明暗主题均为一对已定义的前景/背景组合，避免深主题下浅底亮字对比不足。 */
+    .skills-tab.is-active .skills-tab-count { background: var(--primary); color: var(--primary-foreground); }
+    @keyframes skills-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .skills-scope-panel { animation: skills-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .skill-group-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+    .skill-group-icon svg { width: 13px; height: 13px; stroke-width: 1.8; }
 
     .canvas-library-page .studio-band .canvas-library-discovery {
         border: 0;
@@ -3888,6 +4045,7 @@
 
     .canvas-library-page .canvas-library-grid {
         flex: 1;
+        gap: var(--space-5);
     }
 
     .canvas-library-page .canvas-library-search {
@@ -3930,21 +4088,136 @@
         transform: translateY(-1px);
     }
     .library-primary-action { border: 0 !important; border-radius: var(--r-md) !important; background: var(--btn-solid-bg) !important; color: var(--btn-solid-fg) !important; box-shadow: none !important; font-weight: 620; }
+
+    /* 画布库页头操作：沿用现有配色，只统一几何比例与触感反馈。 */
+    .canvas-library-header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--space-2);
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn {
+        height: var(--space-10);
+        border-radius: var(--r-md) !important;
+        padding-inline: var(--space-3-half);
+        column-gap: var(--space-2);
+        box-shadow: none !important;
+        transform: translateY(0) scale(1);
+        transform-origin: center;
+        transition: transform var(--motion-state) var(--motion-ease-out) !important;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-primary.ant-btn {
+        min-width: 116px;
+        justify-content: center;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.ant-btn {
+        width: var(--space-10);
+        padding-inline: 0;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):hover {
+        box-shadow: none !important;
+        transform: translateY(-1px);
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):active {
+        transform: translateY(0) scale(0.97);
+        transition-duration: var(--motion-instant) !important;
+    }
+
+    html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.is-open.ant-btn {
+        transform: translateY(0) scale(0.97);
+    }
+
+    .canvas-library-header-action.ant-btn .ant-btn-icon {
+        display: inline-flex;
+        transition: transform var(--motion-state) var(--motion-ease-out);
+    }
+
+    .canvas-library-header-action.ant-btn:not(:disabled):hover .ant-btn-icon {
+        transform: translateY(-1px) scale(1.04);
+    }
+
+    .canvas-library-header-action.is-icon.ant-btn:not(:disabled):hover .ant-btn-icon {
+        transform: scale(1.08);
+    }
+
+    .canvas-library-header-action.is-icon.is-open.ant-btn .ant-btn-icon {
+        transform: scale(1.08);
+    }
+
+    .canvas-library-header-action.ant-btn:not(:disabled):active .ant-btn-icon {
+        transform: scale(0.94);
+    }
+
+    .canvas-library-actions-menu.ant-dropdown-menu {
+        min-width: 176px;
+        padding: var(--space-1-half) !important;
+        border-radius: var(--r-lg) !important;
+    }
+
+    .canvas-library-actions-menu-item.ant-dropdown-menu-item {
+        min-height: 38px;
+        gap: var(--space-2);
+        border-radius: var(--r-md) !important;
+        padding-inline: var(--space-3) !important;
+        transition: transform var(--motion-instant) var(--motion-ease-out);
+    }
+
+    .canvas-library-actions-menu-item.ant-dropdown-menu-item:active {
+        transform: scale(0.985);
+    }
+
+    @media (max-width: 639px) {
+        .canvas-library-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn,
+        .canvas-library-header-action.ant-btn .ant-btn-icon,
+        .canvas-library-actions-menu-item.ant-dropdown-menu-item {
+            transition: none !important;
+        }
+
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):hover,
+        html .canvas-library-page .app-page-header .canvas-library-header-action.ant-btn:not(:disabled):active,
+        html .canvas-library-page .app-page-header .canvas-library-header-action.is-icon.is-open.ant-btn,
+        .canvas-library-header-action.ant-btn:not(:disabled):hover .ant-btn-icon,
+        .canvas-library-header-action.ant-btn:not(:disabled):active .ant-btn-icon,
+        .canvas-library-header-action.is-icon.is-open.ant-btn .ant-btn-icon,
+        .canvas-library-actions-menu-item.ant-dropdown-menu-item:active {
+            transform: none;
+        }
+    }
+
     .library-toolbar { min-height: 50px; margin-top: 8px; border-bottom: 0; padding: 7px 0 10px; }
     .library-toolbar .ant-input-affix-wrapper,
+    .library-toolbar .ant-select,
+    .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
     .library-toolbar .ant-select-selector,
     .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar .ant-select-selector { border-radius: var(--r-md) !important; }
-    .library-toolbar .ant-segmented { border-radius: var(--r-md); }
+    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-xl) !important; height: 40px; padding: 4px 10px; }
+    /* 搜索框作为与 tab 容器同构的圆角容器：外壳 12px 圆角 + 浅底 + 内边距，内部输入区透明融入。 */
+    .library-toolbar .ant-input-affix-wrapper .ant-input { border: 0; background: transparent; box-shadow: none; }
+    /* AntD v6 单选 Select 的边框/圆角/背景/高度全部在 .ant-select 根元素上（.ant-select-selector 类已不存在），覆盖必须命中根元素并带 !important。 */
+    .library-toolbar .ant-select { border-radius: var(--r-xl) !important; display: flex; height: 40px !important; align-items: center !important; padding-inline: 10px !important; }
+    /* tab 切换后搜索框输入与下拉选中文字与 tab 激活态（--foreground）同色；占位符与图标维持各自 token 不变。 */
+    .library-toolbar .ant-input,
+    .library-toolbar .ant-select { color: var(--foreground) !important; }
+    .library-toolbar .ant-segmented { border-radius: var(--r-xl); }
     .library-toolbar .ant-btn { border: 0; background: transparent; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .library-toolbar .ant-btn:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
-    .library-toolbar-controls .ant-input-affix-wrapper,
-    .library-toolbar-controls .ant-select-selector { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar-controls .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar-controls .ant-select-selector { border-radius: var(--r-md) !important; }
     .library-grid { display: grid; align-items: start; gap: 26px 18px; }
     .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    /* 库页图标瓦片共享基础：grid 居中 + 浅底；尺寸/圆角/颜色由各用例类覆盖（skill-card-icon、wallet-balance-icon、suggest-icon 共用）。 */
+    .library-icon-tile { display: grid; flex: 0 0 auto; place-items: center; background: var(--library-icon-surface); }
     .library-card-surface { background: var(--library-surface); box-shadow: none; }
     .library-card-surface:hover, .library-card-surface:focus-within { background: var(--library-surface-hover); box-shadow: none; }
     .library-card-surface.is-selected { box-shadow: inset 0 0 0 1px var(--library-selected-stroke); }
@@ -3960,7 +4233,7 @@
     .library-create-title { margin-top: 15px; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.3; }
     .library-create-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
     /* 技能网格里的创建卡要和技能卡等高，不然首格会短一截。 */
-    .skill-library-grid .library-create-card { justify-content: center; min-height: 218px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
+    .skill-library-grid .library-create-card { justify-content: center; min-height: 260px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
     .skill-library-grid .library-create-cover { aspect-ratio: auto; min-height: 96px; flex: 1 1 auto; border-radius: var(--r-lg); }
     .skill-library-grid .library-create-title { margin-top: 13px; font-size: var(--fs-body-lg); }
 
@@ -4269,7 +4542,7 @@
     .assets-library-page .assets-library-grid > .asset-library-card > button:last-child { flex: 1 1 auto; }
     .assets-library-page .asset-library-card > .library-card-media, .assets-library-page .library-create-cover { aspect-ratio: 4 / 3; flex: 0 0 auto; }
     .assets-library-page .asset-library-card > .library-card-media > button:first-child { height: 100%; }
-    .assets-library-page .asset-library-card > .library-card-media > button:first-child > :where(img, video) { height: 100%; aspect-ratio: auto; }
+    .assets-library-page .asset-library-card > .library-card-media > button:first-child > :where(img, video, .cached-resource-image-shell) { height: 100%; aspect-ratio: auto; }
     .assets-library-page .library-create-card { padding-bottom: var(--space-4); }
     .project-assets-grid { align-items: start; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; }
     .project-assets-grid > .asset-library-card { min-height: 0; height: auto; }
@@ -4311,31 +4584,39 @@
     }
 
     /* 技能卡与其他作品库卡片共用无框表面，仅选中态显示状态描边。 */
-    .skill-library-card { display: flex; min-height: 218px; flex-direction: column; border-radius: var(--r-xl); padding: 16px 16px 14px; }
+    .skill-library-card { display: flex; min-height: 260px; flex-direction: column; padding: 16px 16px 14px; animation: skill-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+    /* 画廊入场：切换 scope/翻页时卡片依次淡入上浮（stagger 由内联 animation-delay 控制），入场后保持 transform 复位以免影响 hover。 */
+    @keyframes skill-card-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .skill-card-icon { width: 48px; height: 48px; margin-bottom: 12px; border-radius: var(--r-lg); color: color-mix(in srgb, var(--foreground) 64%, transparent); transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out, transform var(--motion-state) ease-out; transform: translateY(0); }
+    .skill-card-icon svg { width: 22px; height: 22px; stroke-width: 1.8; }
+    .skill-library-card:hover .skill-card-icon, .skill-library-card:focus-within .skill-card-icon { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); transform: translateY(-2px); }
     .skill-card-top { display: flex; min-height: 0; align-items: flex-start; gap: 8px; }
     .skill-card-title-button { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; padding: 0; color: inherit; text-align: left; }
     .skill-card-title-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-library-card h3 { display: -webkit-box; overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .skill-library-card h3 { overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-more { display: inline-flex; width: 28px; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; margin: -3px -5px 0 0; border: 0; border-radius: var(--r-sm); background: transparent; color: color-mix(in srgb, var(--foreground) 40%, transparent); opacity: 0; transition: opacity 180ms ease-out, background-color 160ms ease-out; }
     .skill-library-card:hover .skill-card-more, .skill-card-more:focus-visible, .skill-library-card:focus-within .skill-card-more { opacity: 1; }
     .skill-card-more:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
     .skill-card-description { min-height: 0; flex: 1 1 auto; margin-top: 8px; border: 0; background: transparent; padding: 0; text-align: left; }
     .skill-card-description:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
     .skill-card-footer { display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 12px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); }
     .skill-card-like { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: inherit; font-variant-numeric: tabular-nums; transition: color 160ms ease-out; }
     .skill-card-like:hover { color: var(--foreground); }
     .skill-card-like:disabled { cursor: wait; }
-    .skill-card-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-author { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-tag { flex: 0 0 auto; max-width: 76px; overflow: hidden; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 7%, transparent); padding: 2px 7px; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-flag { margin-left: auto; flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .skill-card-action { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
-    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 34%, transparent); border-radius: var(--r-md); background: transparent; padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: border-color 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out; }
+    /* 加入按钮：无边框浅底（与 tab/搜索容器同语言），is-added 态弱化表达已加入。 */
+    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: background-color 160ms ease-out, color 160ms ease-out; }
     .skill-card-join svg { color: currentColor; }
-    .skill-card-join:hover { border-color: color-mix(in srgb, var(--foreground) 58%, transparent); background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .skill-card-join:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); color: var(--foreground); }
     .skill-card-join:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
     .skill-card-join:disabled { cursor: wait; opacity: .6; }
-    .skill-card-join.is-added { border-color: color-mix(in srgb, var(--foreground) 18%, transparent); background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
-    .skill-card-join.is-added:hover { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
+    .skill-card-join.is-added { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
+    .skill-card-join.is-added:hover { background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
     .skill-card-added-count { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
     .skill-card-owner-flag { flex: 1 1 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); }
 
@@ -4351,7 +4632,7 @@
     .wallet-balance-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
     .wallet-balance-heading strong { font-size: var(--fs-caption); font-weight: 600; }
     .wallet-balance-heading div > span { overflow: hidden; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); text-overflow: ellipsis; white-space: nowrap; }
-    .wallet-balance-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: var(--library-icon-surface); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
+    .wallet-balance-icon { width: 36px; height: 36px; border-radius: var(--r-md); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
     .wallet-balance-icon svg { width: 17px; height: 17px; }
     .wallet-balance-number { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 28px; }
     .wallet-balance-number strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-display); font-variant-numeric: tabular-nums; font-weight: 620; line-height: 1; }
@@ -4431,20 +4712,8 @@
         .task-record-actions { opacity: 1; transform: none; }
     }
 
-    @media (max-width: 1600px) and (min-width: 1101px) {
-        .canvas-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
-    @media (max-width: 1100px) and (min-width: 900px) {
-        .canvas-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
-    @media (max-width: 899px) and (min-width: 640px) {
-        .canvas-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
     @media (max-width: 639px) {
-        .canvas-library-grid { grid-template-columns: 1fr; gap: var(--space-4); }
+        .canvas-library-grid { grid-template-columns: 1fr; gap: var(--space-5); }
         .canvas-library-discovery { padding-inline: 0; }
         .canvas-library-filters { min-width: 0; }
         .canvas-library-filter { max-width: 150px; padding-inline: 6px; }
@@ -4506,13 +4775,16 @@
         white-space: nowrap;
     }
 
-    .app-pagination-bar .ant-pagination {
-        display: flex;
-        min-width: 0;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: var(--space-1) 0;
-    }
+    /* 自研分页：页码胶囊 28px、r-md 圆角、无边框、hover 浅底、激活实底胶囊。选中用“普通选中”色角色（workspace-content 实底 + foreground 文字，与 skills-tabs 激活胶囊同语言），不占用 primary（主操作按钮专属）。 */
+    .app-pagination-total { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .app-pagination-size.ant-select { display: flex; height: 28px !important; align-items: center !important; border-radius: var(--r-md) !important; padding-inline: 8px !important; }
+    .app-pagination-pages { display: inline-flex; align-items: center; gap: 2px; }
+    .app-pagination-btn { display: inline-flex; height: 28px; min-width: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--r-md); background: transparent; padding-inline: 6px; color: color-mix(in srgb, var(--foreground) 62%, transparent); font-size: var(--fs-body); line-height: 1; font-variant-numeric: tabular-nums; transition: background-color 160ms ease-out, color 160ms ease-out; }
+    .app-pagination-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .app-pagination-btn.is-active, .app-pagination-btn.is-active:hover { background: var(--workspace-content); color: var(--foreground); }
+    .dark .app-pagination-btn.is-active, .dark .app-pagination-btn.is-active:hover { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .app-pagination-btn:disabled { color: color-mix(in srgb, var(--foreground) 30%, transparent); cursor: not-allowed; }
+    .app-pagination-ellipsis { display: inline-flex; height: 28px; min-width: 16px; align-items: center; justify-content: center; color: color-mix(in srgb, var(--foreground) 30%, transparent); font-size: var(--fs-body); }
 
     :where(.ant-modal-content, .ant-drawer-content) {
         border: 1px solid var(--border);
@@ -4656,6 +4928,7 @@
     .style-center-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        grid-auto-rows: max-content;
         gap: var(--space-3);
         overscroll-behavior: contain;
     }
@@ -4995,8 +5268,14 @@
         caret-color: #f5f5f5;
     }
 
-    :where(.ant-modal, .ant-drawer, .ant-select-dropdown, .ant-dropdown, .ant-popover) {
+:where(.ant-modal, .ant-drawer, .ant-select-dropdown, .ant-dropdown, .ant-popover) {
         overscroll-behavior: contain;
+    }
+
+    /* Logo 选择器只负责定位，不引入弹出/收起动画。 */
+    .model-logo-picker-popover {
+        animation: none !important;
+        transition: none !important;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -7486,6 +7765,642 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
     .creation-image-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */
+.admin-shell,
+.admin-drawer,
+.admin-secondary-drawer,
+.admin-modal-root,
+.admin-channel-modal-root {
+    --admin-layer-0: #f7f7f5;
+    --admin-layer-1: #ffffff;
+    --admin-layer-2: #f5f4f2;
+    --admin-sidebar: #f0efe9;
+    --admin-status-success: oklch(0.52 0.14 155);
+    --admin-status-warning: oklch(0.62 0.14 78);
+    --admin-status-error: var(--destructive);
+    --admin-status-info: oklch(0.54 0.13 250);
+    --admin-chart-primary: var(--workspace-accent);
+    --admin-chart-secondary: oklch(0.55 0.11 180);
+    --admin-chart-warning: oklch(0.64 0.14 78);
+}
+
+.dark .admin-shell,
+.dark .admin-drawer,
+.dark .admin-secondary-drawer,
+.dark .admin-modal-root,
+.dark .admin-channel-modal-root {
+    --admin-layer-0: #0d0d0d;
+    --admin-layer-1: #111111;
+    --admin-layer-2: #1a1a1a;
+    --admin-sidebar: #0a0a0a;
+    --admin-status-success: oklch(0.72 0.14 155);
+    --admin-status-warning: oklch(0.78 0.14 78);
+    --admin-status-info: oklch(0.76 0.13 250);
+    --admin-chart-secondary: oklch(0.72 0.11 180);
+    --admin-chart-warning: oklch(0.78 0.14 78);
+}
+
+.admin-shell .admin-nav-group-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-shell .admin-nav-group-label::before,
+.admin-shell .admin-nav-group-label::after {
+    height: 1px;
+    flex: 1 1 auto;
+    background: color-mix(in srgb, var(--foreground) 12%, transparent);
+    content: "";
+}
+
+.admin-shell .admin-nav-group-label span {
+    flex: 0 0 auto;
+}
+
+.admin-shell .app-workspace-nav-link {
+    position: relative;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+.admin-shell .app-workspace-brand-link {
+    color: var(--foreground);
+}
+
+.admin-shell .app-workspace-nav-link.is-active {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.admin-shell .app-workspace-nav-link.is-active::before {
+    display: none;
+}
+
+.admin-shell .app-workspace-nav-link:hover:not(.is-active) {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+
+.admin-shell .app-workspace-nav-link > svg {
+    width: 14px;
+    height: 14px;
+}
+
+.admin-shell .app-workspace-nav-link:focus-visible,
+.admin-shell .app-workspace-icon-button:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 58%, transparent);
+    outline-offset: -1px;
+    box-shadow: none;
+}
+
+.admin-shell .app-workspace-sidebar,
+.admin-shell .admin-sidebar {
+    background: var(--admin-sidebar);
+}
+
+.admin-shell .app-user-content,
+.admin-shell .app-workspace-page,
+.admin-shell .admin-page-root {
+    background: var(--admin-layer-0);
+}
+
+.admin-shell .app-table-surface,
+.admin-shell .admin-table-surface,
+.admin-shell .ant-table-wrapper,
+.admin-shell .ant-table,
+.admin-shell .ant-table-container {
+    background: var(--admin-layer-1);
+}
+
+.admin-shell .ant-input,
+.admin-shell .ant-input-affix-wrapper,
+.admin-shell .ant-select-selector,
+.admin-shell .ant-picker,
+.admin-shell .ant-input-number,
+.admin-shell .ant-input-number-input-wrap {
+    background: var(--admin-layer-2) !important;
+}
+
+.admin-page-root > div {
+    height: 100%;
+}
+
+.admin-page-root.admin-page-root-scrollable > div {
+    height: auto;
+    min-height: 100%;
+}
+
+.admin-page-frame {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    padding: 12px 16px 0;
+}
+
+.admin-page-frame-scrollable {
+    height: auto;
+    min-height: 100%;
+}
+
+.admin-page-header {
+    min-height: 44px;
+}
+
+.admin-data-table {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.admin-list-toolbar {
+    flex: 0 0 auto;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.admin-list-toolbar-main .app-list-search {
+    min-width: 180px;
+    width: auto !important;
+    flex: 1 1 280px;
+}
+
+.admin-filter-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.admin-list-toolbar-filters {
+    display: none;
+    flex: 0 0 auto;
+}
+
+.admin-list-toolbar-filters.is-open {
+    display: flex;
+}
+
+.admin-list-toolbar-chips {
+    display: inline-flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-filter-chip {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--foreground) 5%, var(--admin-layer-1));
+    padding: 0 8px 0 9px;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: 11px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease;
+}
+
+.admin-filter-chip:hover {
+    background: color-mix(in srgb, var(--foreground) 10%, var(--admin-layer-1));
+    color: var(--foreground);
+}
+
+.admin-filter-chip:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.admin-filter-chip:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-filter-active-dot {
+    width: 5px;
+    height: 5px;
+    margin-left: 2px;
+    border-radius: var(--r-full);
+    background: var(--foreground);
+}
+
+.admin-table-surface {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.admin-table-scroll {
+    height: 100%;
+    overflow: auto;
+    min-width: 100%;
+    min-height: 0;
+}
+
+.admin-table-pagination {
+    flex: 0 0 auto;
+    min-height: 44px;
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    background: color-mix(in srgb, var(--admin-layer-1) 92%, transparent);
+    backdrop-filter: blur(10px);
+}
+
+.admin-table-pagination .app-pagination-bar {
+    min-height: 44px;
+}
+
+.admin-shell .admin-table-surface .ant-table-wrapper {
+    min-width: 100%;
+}
+
+.admin-shell .admin-table-surface .ant-table-thead > tr > th,
+.admin-modal-root .admin-table-surface .ant-table-thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 38px;
+    padding: 8px 16px !important;
+    background: var(--admin-layer-1) !important;
+    color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td {
+    height: 48px;
+    padding: 10px 16px !important;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr:hover > td,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr:hover > td {
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1)) !important;
+}
+
+.admin-shell .admin-table-surface .ant-table-tbody > tr > td:first-child,
+.admin-modal-root .admin-table-surface .ant-table-tbody > tr > td:first-child {
+    border-inline-start: 0;
+}
+
+.admin-shell .admin-logical-model-table .ant-table-tbody > tr > td {
+    height: auto;
+    vertical-align: top;
+}
+
+.admin-shell .admin-logical-model-table .admin-capability-summary-tag {
+    max-width: 100%;
+    margin-inline-end: 0;
+    overflow-wrap: anywhere;
+    border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent) !important;
+    background: color-mix(in srgb, var(--foreground) 6%, var(--admin-layer-1)) !important;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+    white-space: normal;
+}
+
+.admin-shell .admin-table-clickable-row {
+    cursor: pointer;
+}
+
+.admin-shell .admin-table-pagination .ant-pagination-total-text {
+    margin-inline-end: auto;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-pagination-bar {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+}
+
+.admin-pagination-total {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.admin-pagination-bar .ant-pagination {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+}
+
+.admin-pagination-bar .ant-pagination-item,
+.admin-pagination-bar .ant-pagination-prev,
+.admin-pagination-bar .ant-pagination-next,
+.admin-pagination-bar .ant-pagination-jump-prev,
+.admin-pagination-bar .ant-pagination-jump-next {
+    min-width: 26px;
+    height: 26px;
+    margin: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    line-height: 26px;
+}
+
+.admin-pagination-bar .ant-pagination-item a,
+.admin-pagination-bar .ant-pagination-prev button,
+.admin-pagination-bar .ant-pagination-next button {
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+.admin-pagination-bar .ant-pagination-item-active {
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+    font-weight: 600;
+}
+
+.admin-pagination-bar .ant-pagination-item-active a {
+    color: var(--foreground);
+}
+
+.admin-pagination-bar .ant-pagination-item:hover,
+.admin-pagination-bar .ant-pagination-prev:hover,
+.admin-pagination-bar .ant-pagination-next:hover {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.admin-pagination-bar .ant-pagination-options {
+    margin-inline-start: 8px;
+}
+
+.admin-pagination-bar .ant-pagination-options .ant-select {
+    min-width: 88px;
+}
+
+.admin-pagination-bar .ant-pagination-options .ant-select-selector {
+    min-height: 28px !important;
+    border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent) !important;
+    border-radius: var(--r-sm) !important;
+    background: var(--admin-layer-2) !important;
+    box-shadow: none !important;
+    color: var(--foreground);
+}
+
+.admin-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.admin-row-action.ant-btn {
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    transition: none !important;
+}
+
+.admin-row-action.ant-btn:hover:not(:disabled),
+.admin-row-action.ant-btn:active:not(:disabled),
+.admin-row-action.ant-btn:focus:not(:disabled),
+.admin-row-action.ant-btn.ant-dropdown-open {
+    background: transparent !important;
+    color: var(--foreground);
+}
+
+.admin-row-action-primary.ant-btn {
+    color: color-mix(in srgb, var(--foreground) 88%, transparent);
+    font-weight: 600;
+}
+
+.admin-row-action-danger.ant-btn {
+    color: var(--destructive);
+}
+
+.admin-row-action-more.ant-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: color-mix(in srgb, var(--foreground) 54%, transparent);
+}
+
+.admin-row-action-chevron {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    stroke-width: 1.75;
+}
+
+.admin-modal-data-table-shell {
+    display: flex;
+    height: min(58vh, 540px);
+    min-height: 320px;
+}
+
+.admin-shell :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-drawer :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-secondary-drawer :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-modal-root :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible),
+.admin-channel-modal-root :where(button, .ant-btn, .ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none !important;
+}
+
+.admin-shell :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-drawer :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-secondary-drawer :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-modal-root :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible,
+.admin-channel-modal-root :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number):focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 62%, transparent);
+    outline-offset: 1px;
+    box-shadow: none !important;
+}
+
+.admin-shell :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-shell .ant-select-focused .ant-select-selector,
+.admin-drawer :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-drawer .ant-select-focused .ant-select-selector,
+.admin-secondary-drawer :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-secondary-drawer .ant-select-focused .ant-select-selector,
+.admin-modal-root :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-modal-root .ant-select-focused .ant-select-selector,
+.admin-channel-modal-root :where(.ant-input-affix-wrapper-focused, .ant-picker-focused, .ant-input-number-focused),
+.admin-channel-modal-root .ant-select-focused .ant-select-selector {
+    border-color: color-mix(in srgb, var(--ring) 58%, transparent) !important;
+    box-shadow: none !important;
+}
+
+.admin-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 20px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    padding: 2px 7px;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.admin-status-badge::before {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: var(--r-full);
+    background: currentColor;
+    content: "";
+}
+
+.admin-status-badge[data-tone="success"] { color: var(--admin-status-success); }
+.admin-status-badge[data-tone="warning"] { color: var(--admin-status-warning); }
+.admin-status-badge[data-tone="error"] { color: var(--admin-status-error); }
+.admin-status-badge[data-tone="info"] { color: var(--admin-status-info); }
+
+.admin-stat-tile {
+    min-width: 0;
+    padding: var(--space-3);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--foreground) 7%, var(--admin-layer-1)), var(--admin-layer-1) 72%);
+}
+
+.admin-stat-tile + .admin-stat-tile {
+    border-left: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+.admin-stat-tile-label {
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 11px;
+}
+
+.admin-stat-tile-value {
+    margin-top: var(--space-1);
+    color: var(--foreground);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.admin-stat-tile-detail {
+    margin-top: var(--space-1);
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: 11px;
+}
+
+.admin-settings-section {
+    margin-top: 12px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
+}
+
+.admin-settings-section > :last-child {
+    min-width: 0;
+}
+
+.admin-drawer .ant-drawer-body,
+.admin-secondary-drawer .ant-drawer-body {
+    background: var(--admin-layer-0);
+}
+
+.admin-drawer .ant-drawer-footer,
+.admin-secondary-drawer .ant-drawer-footer {
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: color-mix(in srgb, var(--admin-layer-0) 94%, transparent);
+    backdrop-filter: blur(10px);
+}
+
+.admin-form-section {
+    margin-top: 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--foreground) 4%, var(--admin-layer-1));
+    padding: 20px;
+}
+
+.admin-form-section:first-child {
+    margin-top: 0;
+}
+
+.admin-form-section h2,
+.admin-settings-section h2 {
+    font-size: 13px;
+}
+
+.admin-capability-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-capability-tags .ant-select-selector {
+    max-height: 96px;
+    overflow-y: auto;
+}
+
+.admin-channel-modal .ant-modal-body {
+    max-height: min(70vh, 620px);
+    overflow-y: auto;
+}
+
+.admin-shell .admin-monospace {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+}
+
+.admin-shell .admin-table-primary-link {
+    color: inherit;
+    text-align: left;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.admin-shell .admin-table-primary-link:hover {
+    color: var(--foreground);
+}
+
+@media (max-width: 639px) {
+    .admin-list-toolbar-filters {
+        width: 100%;
+        padding-top: 2px;
+    }
+
+    .admin-list-toolbar-chips {
+        width: 100%;
+    }
+
+    .admin-list-toolbar-filters.is-open {
+        display: flex;
+    }
+
+    .admin-list-toolbar-main .app-list-search {
+        min-width: 0;
+        flex-basis: 100%;
+    }
+
+    .admin-shell .app-workspace-nav-link.is-active::before { display: none; }
+    .admin-stat-tile + .admin-stat-tile { border-top: var(--stroke-1) solid var(--color-border); border-left: 0; }
+}
+
 /* 旧创作规则位于 utilities 层且使用 !important；必须在同层覆盖。 */
 @layer utilities {
     .creation-home .creation-chat-control,
@@ -8004,17 +8919,6 @@ html:not(.dark) .creation-history-drawer-root {
     min-width: 0;
 }
 
-body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-modal-content, .ant-drawer-content, .ant-message-notice-content, .ant-notification-notice) {
-    background: var(--popover) !important;
-    background-image: none !important;
-    box-shadow: var(--shadow-xl) !important;
-    backdrop-filter: none !important;
-}
-
-body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
-    background: color-mix(in srgb, var(--foreground) 48%, transparent) !important;
-    backdrop-filter: blur(3px) !important;
-}
 
 /* 鼠标点击不留下“选中框”；键盘导航仍通过 :focus-visible 保留可发现的焦点提示。 */
 :where(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"]), label[for], input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), .ant-btn:not(:disabled), .ant-switch:not(.ant-switch-disabled), .ant-select:not(.ant-select-disabled), .ant-dropdown-trigger, .ant-tabs-tab, .ant-segmented-item, .ant-pagination-item, .ant-pagination-prev, .ant-pagination-next, .ant-dropdown-menu-item, .ant-menu-item, .ant-select-item-option, .ant-checkbox-wrapper, .ant-radio-wrapper, .ant-upload, .ant-collapse-header, .ant-slider, .ant-rate-star, .ant-tag-checkable) {
@@ -8030,18 +8934,19 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     box-shadow: none !important;
 }
 
+/* Modal 关闭后会把焦点还给触发按钮；收窄该按钮的键盘焦点环，避免出现持续的粗灰边。 */
+.canvas-topbar-import-button:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
+}
+
 :where([class*="card"], [class*="Card"]):focus:not(:focus-visible),
 :where([class*="card"], [class*="Card"]):has(:focus:not(:focus-visible)) {
     outline: none !important;
     box-shadow: none !important;
 }
 
-.app-workspace-shell.is-spatial .app-workspace-sidebar {
-    background: var(--workspace-sidebar) !important;
-    background-image: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-}
 
 /* 显式兜底：Tailwind 生成的 hover 背景在部分层叠顺序下未生效，这里保持语义 token 一致。 */
 .hover\:bg-surface-hover:hover {
@@ -8125,8 +9030,9 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
 .asset-picker-card.is-selected { box-shadow: inset 0 0 0 1px var(--library-selected-stroke); }
 .asset-picker-card.is-disabled { cursor: not-allowed; opacity: .46; }
 .asset-picker-card-media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--library-cover-surface); }
-.asset-picker-card-media > img, .asset-picker-card-media > video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.asset-picker-card-media > img.is-contain { object-fit: contain; padding: 4px; }
+.cached-resource-image-shell { display: grid; width: 100%; height: 100%; place-items: center; }
+.asset-picker-card-media > img, .asset-picker-card-media > video, .asset-picker-card-media > .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.asset-picker-card-media > img.is-contain, .asset-picker-card-media > .cached-resource-image-shell > img.is-contain { object-fit: contain; padding: 4px; }
 .asset-picker-card-check { position: absolute; top: 9px; right: 9px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgba(255, 255, 255, .72); border-radius: var(--r-xs); background: rgba(0, 0, 0, .28); color: transparent; backdrop-filter: blur(5px); }
 .asset-picker-card-check svg { width: 13px; height: 13px; }
 .asset-picker-card.is-selected .asset-picker-card-check { border-color: var(--control-check-bg); background: var(--control-check-bg); color: var(--control-check-fg); }
@@ -9781,13 +10687,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .creation-empty-suggest .suggest-icon {
-    display: grid;
     width: 36px;
     height: 36px;
-    flex: 0 0 auto;
-    place-items: center;
     border-radius: var(--r-sm);
-    background: var(--library-icon-surface);
     color: color-mix(in srgb, var(--creation-text) 82%, transparent);
 }
 

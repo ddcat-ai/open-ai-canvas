@@ -8,6 +8,7 @@ import {
     buildGenerationConfig,
     generationTaskMetadata,
     resetGenerationTaskMetadata,
+	logicalModelIDForConfig,
 } from "@/lib/canvas/canvas-project-generation";
 import {
     cinematicStoryboardColumns,
@@ -138,6 +139,7 @@ export function useCanvasStoryboard({
                 operation: "storyboard_rows",
                 prompt: expandedPrompt,
                 model: generationConfig.model,
+				...(logicalModelIDForConfig(generationConfig) ? { logicalModelId: logicalModelIDForConfig(generationConfig) } : {}),
                 input: {
                     canvasSnapshot: { nodes: nodesRef.current, connections: connectionsRef.current },
                     requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。",

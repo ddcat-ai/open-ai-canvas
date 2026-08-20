@@ -167,6 +167,7 @@ export type CreateSessionInput = {
     projectStyle?: { presetId: string; title: string; prompt: string };
     characters?: Array<{ assetId: string; versionId: string; name: string; definition: Record<string, unknown> }>;
     config?: Record<string, unknown>;
+	logicalModelId?: string;
 };
 
 export type CreateTaskInput = {
@@ -177,6 +178,7 @@ export type CreateTaskInput = {
     prompt: string;
     provider?: string;
     model?: string;
+	logicalModelId?: string;
     input?: Record<string, unknown>;
 };
 
@@ -387,6 +389,10 @@ export function subscribeGenerationTasks(ids: readonly string[], listener: (task
 
 export function appendTaskTextDelta(id: string, content: string) {
     return request<TaskTextDelta>(api.post(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content }));
+}
+
+export function completeTextReplayTask(id: string, text: string) {
+    return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/text-replay-complete`, { text }));
 }
 
 export function queryTaskTextReplay(id: string, after = 0) {

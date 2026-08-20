@@ -4,6 +4,31 @@ import { test } from "node:test";
 import type { GenerationTask } from "../src/services/api/task-center";
 import { applyGenerationConsumerEffect } from "../src/services/generation-consumer-dedupe";
 import { createGenerationTaskMaterializer, type GenerationTaskEffectResult, type GenerationTaskEffectStore } from "../src/services/generation-task-materializer";
+import { buildBackendToolRequests } from "../src/services/api/image";
+
+test("managed canvas agent task keeps tool definitions and tool results", () => {
+    const requests = buildBackendToolRequests(
+        [
+            { role: "user", content: "读取画布" },
+            { type: "function_call", call_id: "call-1", name: "canvas_get_state", arguments: "{}" },
+            { role: "tool", tool_call_id: "call-1", content: '{"nodes":[]}' },
+        ],
+        [{ type: "function", function: { name: "canvas_get_state", parameters: { type: "object" } } }],
+        "required",
+    );
+
+    assert.equal(requests.responses.tool_choice, "required");
+    assert.deepEqual(requests.responses.input, [
+        { role: "user", content: "读取画布" },
+        { type: "function_call", call_id: "call-1", name: "canvas_get_state", arguments: "{}" },
+        { type: "function_call_output", call_id: "call-1", output: '{"nodes":[]}' },
+    ]);
+    assert.deepEqual(requests.chatCompletion.messages, [
+        { role: "user", content: "读取画布" },
+        { role: "assistant", content: null, tool_calls: [{ id: "call-1", type: "function", function: { name: "canvas_get_state", arguments: "{}" } }] },
+        { role: "tool", tool_call_id: "call-1", content: '{"nodes":[]}' },
+    ]);
+});
 
 test("node message and agent consumers receive stable effect keys across three replays", async () => {
     const completed = new Map<string, GenerationTaskEffectResult>();

@@ -9,6 +9,7 @@ import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveBackendApiUrl } from "@/stores/use-config-store";
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { cn } from "@/lib/utils";
 
 export function CanvasCreateCard({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
@@ -104,21 +105,24 @@ export function CanvasProjectCard({ project, projectName, variant = "library", r
     );
 }
 
-function ProjectPreview({ project }: { project: CanvasProject }) {
+export function ProjectPreview({ project, preferLatestImage = false }: { project: CanvasProject; preferLatestImage?: boolean }) {
     const mediaNodes = project.nodes
         .flatMap((node) => {
             if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return [];
             const url = getNodeMediaUrl(node);
-            return isPreviewUrl(url) ? [{ node, url }] : [];
+            return isPreviewUrl(url) ? [{ node, url, storageKey: node.metadata?.storageKey }] : [];
         });
-    const media = mediaNodes.find(({ node }) => node.type === CanvasNodeType.Image) || mediaNodes[0];
+    const imageNodes = mediaNodes.filter(({ node }) => node.type === CanvasNodeType.Image);
+    const media = preferLatestImage
+        ? imageNodes[imageNodes.length - 1] || mediaNodes[mediaNodes.length - 1]
+        : imageNodes[0] || mediaNodes[0];
     if (media) {
-        const { node, url } = media;
+        const { node, url, storageKey } = media;
         return (
             <div className="canvas-project-media size-full">
                 {node.type === CanvasNodeType.Video
                     ? <div className="canvas-project-video size-full"><Video className="size-8" aria-label={node.title || "项目视频"} /></div>
-                    : <img src={url} alt={node.title || "项目图片"} loading="lazy" decoding="async" className="size-full min-h-0 object-cover" />}
+                    : <CachedResourceImage storageKey={storageKey} src={url} alt={node.title || "项目图片"} loading="lazy" decoding="async" className="size-full min-h-0 object-cover" />}
             </div>
         );
     }
@@ -144,7 +148,7 @@ function ProjectPreview({ project }: { project: CanvasProject }) {
 function getNodeMediaUrl(node: CanvasNodeData) {
     const resourceId = resourceIdFromStorageKey(node.metadata?.storageKey);
     if (resourceId) return resourceFileUrl(resourceId);
-    return resolveBackendApiUrl(node.metadata?.content || "");
+    return resolveBackendApiUrl(node.metadata?.previewContent || node.metadata?.content || "");
 }
 
 function buildNodePreviewLayout(nodes: CanvasNodeData[]) {
@@ -190,7 +194,7 @@ function isPreviewUrl(value?: string) {
     return Boolean(value && (/^(https?:|blob:|data:image\/|data:video\/|\/api\/)/.test(value)));
 }
 
-function formatProjectTime(value: string) {
+export function formatProjectTime(value: string) {
     const timestamp = new Date(value).getTime();
     if (!Number.isFinite(timestamp)) return "刚刚修改";
     const elapsed = Math.max(0, Date.now() - timestamp);

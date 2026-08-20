@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { App, Descriptions, Drawer, Empty, Progress, Skeleton, Table, Tabs, Tag } from "antd";
+import { App, Button, Descriptions, Drawer, Empty, Progress, Skeleton, Tabs } from "antd";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { formatCredits } from "@/constant/credits";
+import { AdminDataTable, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
-export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | null; onClose: () => void }) {
+export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
@@ -85,7 +88,20 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
     }, [auditPage, message, userId]);
 
     return (
-        <Drawer title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"} open={Boolean(userId)} onClose={onClose} size="min(920px, 100vw)" destroyOnHidden>
+        <Drawer
+            title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}
+            open={Boolean(userId)}
+            onClose={onClose}
+            size="min(920px, 100vw)"
+            destroyOnHidden
+            rootClassName="admin-drawer"
+            extra={onNavigate ? (
+                <div className="flex items-center gap-1">
+                    <Button type="text" size="small" aria-label="上一条用户" disabled={!previousUserId} icon={<ChevronLeft className="size-4" />} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                    <Button type="text" size="small" aria-label="下一条用户" disabled={!nextUserId} icon={<ChevronRight className="size-4" />} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                </div>
+            ) : null}
+        >
             {loading && !detail ? (
                 <Skeleton active paragraph={{ rows: 10 }} />
             ) : detail ? (
@@ -104,7 +120,7 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
-                                            { key: "status", label: "状态", children: <Tag color={detail.user.status === "active" ? "success" : "default"}>{detail.user.status === "active" ? "启用" : "停用"}</Tag> },
+                                            { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },
                                             { key: "reserved", label: "冻结积分", children: formatCredits(detail.account.reservedMicrocredits) },
                                             { key: "created", label: "注册时间", children: formatTime(detail.user.createdAt) },
@@ -140,19 +156,22 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
                             key: "ledger",
                             label: `积分流水 ${detail.counts.ledgerEntries}`,
                             children: (
-                                <Table
-                                    rowKey="id"
-                                    size="small"
-                                    dataSource={ledger}
-                                    pagination={{ current: ledgerPage, pageSize: 20, total: ledgerTotal, showSizeChanger: false, onChange: setLedgerPage }}
-                                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无积分流水" /> }}
-                                    columns={[
+                                <AdminDataTable
+                                    table={{
+                                        rowKey: "id",
+                                        size: "small",
+                                        dataSource: ledger,
+                                        pagination: false,
+                                        columns: [
                                         { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
                                         { title: "类型", dataIndex: "type", width: 130 },
                                         { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
                                         { title: "说明", dataIndex: "note", ellipsis: true },
-                                    ]}
-                                    scroll={{ x: 720 }}
+                                        ],
+                                        scroll: { x: 720 },
+                                    }}
+                                    empty={<AdminTableEmpty />}
+                                    footer={<PaginationBar alwaysShow current={ledgerPage} pageSize={20} total={ledgerTotal} onChange={(page) => setLedgerPage(page)} pageSizeOptions={[20]} />}
                                 />
                             ),
                         },
@@ -160,20 +179,23 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
                             key: "tasks",
                             label: `生成任务 ${detail.counts.tasks}`,
                             children: (
-                                <Table
-                                    rowKey="id"
-                                    size="small"
-                                    dataSource={tasks}
-                                    pagination={{ current: taskPage, pageSize: 20, total: taskTotal, showSizeChanger: false, onChange: setTaskPage }}
-                                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无生成任务" /> }}
-                                    columns={[
+                                <AdminDataTable
+                                    table={{
+                                        rowKey: "id",
+                                        size: "small",
+                                        dataSource: tasks,
+                                        pagination: false,
+                                        columns: [
                                         { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
                                         { title: "类型", dataIndex: "type", width: 180 },
                                         { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
-                                        { title: "状态", dataIndex: "status", width: 100 },
+                                        { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
                                         { title: "阶段", dataIndex: "stage", ellipsis: true },
-                                    ]}
-                                    scroll={{ x: 820 }}
+                                        ],
+                                        scroll: { x: 820 },
+                                    }}
+                                    empty={<AdminTableEmpty />}
+                                    footer={<PaginationBar alwaysShow current={taskPage} pageSize={20} total={taskTotal} onChange={(page) => setTaskPage(page)} pageSizeOptions={[20]} />}
                                 />
                             ),
                         },
@@ -181,19 +203,22 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
                             key: "audit",
                             label: `管理操作 ${detail.counts.auditEvents}`,
                             children: (
-                                <Table
-                                    rowKey="id"
-                                    size="small"
-                                    dataSource={events}
-                                    pagination={{ current: auditPage, pageSize: 20, total: auditTotal, showSizeChanger: false, onChange: setAuditPage }}
-                                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无管理员操作" /> }}
-                                    columns={[
+                                <AdminDataTable
+                                    table={{
+                                        rowKey: "id",
+                                        size: "small",
+                                        dataSource: events,
+                                        pagination: false,
+                                        columns: [
                                         { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
                                         { title: "管理员", dataIndex: "actorUserId", width: 160, ellipsis: true },
                                         { title: "动作", dataIndex: "action", width: 160 },
                                         { title: "摘要", dataIndex: "summary", ellipsis: true },
-                                    ]}
-                                    scroll={{ x: 720 }}
+                                        ],
+                                        scroll: { x: 720 },
+                                    }}
+                                    empty={<AdminTableEmpty />}
+                                    footer={<PaginationBar alwaysShow current={auditPage} pageSize={20} total={auditTotal} onChange={(page) => setAuditPage(page)} pageSizeOptions={[20]} />}
                                 />
                             ),
                         },
@@ -208,6 +233,14 @@ export function AdminUserDetailDrawer({ userId, onClose }: { userId: string | nu
 
 function formatTime(value?: string) {
     return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
+}
+
+function taskStatusTone(value?: string): AdminStatusTone {
+    const normalized = String(value || "").toLowerCase();
+    if (["completed", "succeeded", "success", "done"].includes(normalized)) return "success";
+    if (["failed", "error", "cancelled", "canceled"].includes(normalized)) return "error";
+    if (["running", "processing", "pending", "queued"].includes(normalized)) return "warning";
+    return "neutral";
 }
 
 function quotaUsageItems(detail: AdminUserDetail) {

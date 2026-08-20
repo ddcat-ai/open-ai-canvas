@@ -9,7 +9,7 @@ import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
-import { modelCompatibilityError, modelGroupReferenceLimits, type ModelRequirements } from "@/lib/model-selection";
+import { modelCompatibilityError, modelGroupReferenceLimits, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -137,16 +137,16 @@ export function useCanvasGenerationExecutor({
             const promptOnly = mode === "video";
             try {
                 const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, assets, promptOnly);
-                const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig.videoSeconds, true);
+                const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
                 const compatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, requirements);
-                if (compatibilityError) throw new Error(`当前逻辑模型没有可用的细分模型：${compatibilityError}`);
+                if (compatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${compatibilityError}`);
                 const referenceLimits = modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
                 rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits);
-                const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig.videoSeconds);
+                const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements);
                 const hydratedCompatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
-                if (hydratedCompatibilityError) throw new Error(`当前逻辑模型没有可用的细分模型：${hydratedCompatibilityError}`);
+                if (hydratedCompatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${hydratedCompatibilityError}`);
             } catch (error) {
                 const errorDetails = generationErrorMessage(error);
                 if (isPreparingEmptyImage) {
@@ -330,7 +330,7 @@ function generationModelRequirements(
     mode: CanvasNodeGenerationMode,
     input: Pick<Awaited<ReturnType<typeof hydrateNodeGenerationContext>>, "textCount" | "imageCount" | "videoCount" | "audioCount" | "characterReferences">,
     sourceNode: CanvasNodeData | undefined,
-    videoSeconds: string,
+	config: ReturnType<typeof useEffectiveConfig>,
     includeCharacterMinimum = false,
 ): ModelRequirements {
     return {
@@ -343,6 +343,7 @@ function generationModelRequirements(
             characterCount: includeCharacterMinimum ? input.characterReferences.length : 0,
         },
         videoOperation: sourceNode?.metadata?.videoEditOperation,
-        videoSeconds,
+		videoSeconds: config.videoSeconds,
+		options: modelRequestOptions(config, mode),
     };
 }

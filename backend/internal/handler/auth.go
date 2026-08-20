@@ -116,7 +116,11 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		channels, _ := svc.PublicSystemChannels()
+		logicalModels, logicalModelsErr := svc.PublicLogicalModels(nil)
+		if logicalModelsErr != nil {
+			failService(c, logicalModelsErr)
+			return
+		}
 		limits, err := svc.PublicRuntimeLimits()
 		if err != nil {
 			failService(c, err)
@@ -132,10 +136,15 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "systemChannels": channels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
+		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(actor); err != nil {
 			failService(c, err)
 			return
 		}
@@ -796,7 +805,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	}
 	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
 	service.ApplyDefaultOutboundHeaders(upstreamReq)
-	if protocol == model.ChannelInterfaceGeminiVeo {
+	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
 		upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
 	} else {
 		upstreamReq.Header.Set("Authorization", "Bearer "+channel.APIKey)
@@ -820,13 +829,27 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		status = model.ApiCallStatusFailed
 	}
 	responseLimit := policy.Request.SystemRelayResponseMB << 20
-	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
+	streamed := isSystemProxyEventStream(resp)
+	var responseBody []byte
+	var readErr error
+	if streamed {
+		responseBody, readErr = streamSystemProxyResponse(c, resp, responseLimit)
+	} else {
+		responseBody, readErr = io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
+	}
 	if readErr != nil {
 		status = model.ApiCallStatusFailed
 		errorText = readErr.Error()
-		_ = svc.MarkBillingUncertain(billingOrderID, "系统渠道响应读取失败，费用状态待核对")
-		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
-		fail(c, http.StatusBadGateway, errors.New("系统渠道响应读取失败"))
+		billingNote := "系统渠道响应读取失败，费用状态待核对"
+		if errors.Is(readErr, errSystemProxyResponseTooLarge) {
+			billingNote = "上游已响应但流式响应体超过限制，费用状态待核对"
+		}
+		_ = svc.MarkBillingUncertain(billingOrderID, billingNote)
+		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
+		// SSE 响应头已经发送，流中断后只能关闭连接；非流式响应仍返回结构化错误。
+		if !streamed {
+			fail(c, http.StatusBadGateway, errors.New("系统渠道响应读取失败"))
+		}
 		return
 	}
 	if int64(len(responseBody)) > responseLimit {
@@ -846,19 +869,17 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	} else {
 		_ = svc.RefundBilling(billingOrderID, "上游明确返回失败")
 	}
-	for _, key := range []string{"Content-Type", "Cache-Control", "Content-Disposition"} {
-		if value := resp.Header.Get(key); value != "" {
-			c.Header(key, value)
-		}
+	if streamed {
+		return
 	}
-	c.Header("X-Content-Type-Options", "nosniff")
+	copySystemProxyResponseHeaders(c, resp)
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
 }
 
 func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID string, capability string, protocol model.ChannelInterfaceType, method string, path string, target string, body []byte, contentType string, status model.ApiCallStatus, statusCode int, duration time.Duration, errorText string, concurrencyLimit int) model.ApiCallLog {
 	requestKind := "create"
 	apiFormat := "openai"
-	if protocol == model.ChannelInterfaceGeminiVeo {
+	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
 		apiFormat = "gemini"
 	}
 	if method == http.MethodGet {

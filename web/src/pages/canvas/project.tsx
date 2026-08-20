@@ -72,6 +72,8 @@ import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import { CanvasTopBar } from "./canvas-project-top-bar";
+import { LibTVImportDialog } from "./components/libtv-import-dialog";
+import { TapNowImportDialog } from "./components/tapnow-import-dialog";
 import { CanvasFocusModeBar } from "@/components/canvas/canvas-focus-mode-bar";
 import { CanvasProjectContextMenu } from "./canvas-project-context-menu";
 import { CanvasProjectMediaDialogs } from "./canvas-project-media-dialogs";
@@ -190,6 +192,7 @@ function InfiniteCanvasPage() {
     const [workspaceMode, setWorkspaceMode] = useState<CanvasWorkspaceMode>(readCanvasWorkspaceMode);
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
@@ -210,6 +213,7 @@ function InfiniteCanvasPage() {
     const [scriptScrollTopById, setScriptScrollTopById] = useState<Record<string, number>>({});
     const [directorNodeId, setDirectorNodeId] = useState<string | null>(null);
     const [versionCompareRootId, setVersionCompareRootId] = useState<string | null>(null);
+    const [libTVImportOpen, setLibTVImportOpen] = useState(false);
     const codexAutoConnect = shouldAutoConnectCanvasRuntime(searchParams);
     const codexCompactAgent = codexAutoConnect && readLocalRuntimeBootstrapState().legacyDeepLinkRejected;
     const [titleEditing, setTitleEditing] = useState(false);
@@ -331,6 +335,49 @@ function InfiniteCanvasPage() {
         cleanupAssetImages,
         cleanupCanvasFiles,
     });
+
+    const applyLibTVImport = useCallback(
+        async (importedNodes: CanvasNodeData[], importedConnections: CanvasConnection[]) => {
+            const previousNodes = nodesRef.current;
+            const previousConnections = connectionsRef.current;
+            const nextNodes = [...nodesRef.current, ...importedNodes];
+            const nextConnections = [...connectionsRef.current, ...importedConnections];
+            nodesRef.current = nextNodes;
+            connectionsRef.current = nextConnections;
+            setNodes(nextNodes);
+            setConnections(nextConnections);
+            const saved = await saveCanvasProject();
+            if (!saved) {
+                nodesRef.current = previousNodes;
+                connectionsRef.current = previousConnections;
+                setNodes(previousNodes);
+                setConnections(previousConnections);
+                throw new Error("画布保存失败，已撤销本次 LibTV 导入");
+            }
+        },
+        [saveCanvasProject, setConnections, setNodes],
+    );
+    const applyTapNowImport = useCallback(
+        async (importedNodes: CanvasNodeData[], importedConnections: CanvasConnection[]) => {
+            const previousNodes = nodesRef.current;
+            const previousConnections = connectionsRef.current;
+            const nextNodes = [...nodesRef.current, ...importedNodes];
+            const nextConnections = [...connectionsRef.current, ...importedConnections];
+            nodesRef.current = nextNodes;
+            connectionsRef.current = nextConnections;
+            setNodes(nextNodes);
+            setConnections(nextConnections);
+            const saved = await saveCanvasProject();
+            if (!saved) {
+                nodesRef.current = previousNodes;
+                connectionsRef.current = previousConnections;
+                setNodes(previousNodes);
+                setConnections(previousConnections);
+                throw new Error("画布保存失败，已撤销本次 TapNow 导入");
+            }
+        },
+        [saveCanvasProject, setConnections, setNodes],
+    );
     const linkedProjectId = shortDramaEnabled ? currentProject?.projectId || "" : "";
     const linkedProjectQuery = useQuery({ queryKey: ["project", linkedProjectId], queryFn: () => getProject(linkedProjectId), enabled: Boolean(linkedProjectId) });
     const refetchLinkedProject = linkedProjectQuery.refetch;
@@ -513,6 +560,7 @@ function InfiniteCanvasPage() {
         setContextMenu,
         setDialogNodeId,
     });
+    const replaceCanvasNodeMedia = useCallback((node: CanvasNodeData) => handleUploadRequest(node.id), [handleUploadRequest]);
 
     useEffect(() => {
         if (!projectLoaded || !assetsHydrated || searchParams.get("mode") !== "handoff") return;
@@ -1639,6 +1687,8 @@ function InfiniteCanvasPage() {
                             onCreateProject={createAndOpenProject}
                             onDeleteProject={deleteCurrentProject}
                             onImportImage={() => handleUploadRequest()}
+                            onImportLibTV={() => setLibTVImportOpen(true)}
+                            onImportTapNow={() => setTapNowImportOpen(true)}
                             onUndo={undoCanvas}
                             onRedo={redoCanvas}
                             onShare={() => setShareModalOpen(true)}
@@ -1686,6 +1736,8 @@ function InfiniteCanvasPage() {
                     ) : null}
 
                     <CanvasShareModal projectId={projectId} open={shareModalOpen} onClose={() => setShareModalOpen(false)} beforeCreate={saveCanvasProject} />
+                    <LibTVImportDialog open={libTVImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setLibTVImportOpen(false)} onApply={applyLibTVImport} />
+                    <TapNowImportDialog open={tapNowImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setTapNowImportOpen(false)} onApply={applyTapNowImport} />
 
                     <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} applying={styleApplying} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
@@ -1789,7 +1841,7 @@ function InfiniteCanvasPage() {
                                     onOpenTaskDetails={openCanvasNodeTaskDetails}
                                     onOpenVersions={openCanvasNodeVersions}
                                     onViewImage={viewCanvasNodeImage}
-                                    onReplaceMedia={(node) => handleUploadRequest(node.id)}
+                                    onReplaceMedia={replaceCanvasNodeMedia}
                                     onOpenTextEditor={openTextNodeEditor}
                                     onOpenDirector={editCanvasDirector}
                                     onOpenDrawing={openDrawingNode}
@@ -2227,6 +2279,7 @@ function InfiniteCanvasPage() {
                                 onClose={() => setDirectorNodeId(null)}
                                 onChange={saveDirectorScene}
                                 onApply={applyDirectorOutput}
+                                onDeleteImageNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                             />
                         </Suspense>
                     ) : null}

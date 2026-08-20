@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
-import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
-import { AdminExportButton } from "./admin-ui";
+import { AdminDataTable, AdminExportButton, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
 type RedeemFormValues = { amount: number; count: number; note?: string; expiresAt?: string };
 
@@ -84,63 +84,29 @@ export default function RedemptionCodesPanel() {
                         {batch.redeemedCount ?? 0}/{batch.count}
                     </span>
                     <span className="text-xs text-foreground/45">已核销</span>
-                    {(batch.expiredCount ?? 0) > 0 ? (
-                        <Tag variant="filled" color="default">
-                            {batch.expiredCount} 已过期
-                        </Tag>
-                    ) : null}
+                    {(batch.expiredCount ?? 0) > 0 ? <AdminStatusBadge label={`${batch.expiredCount} 已过期`} tone="warning" /> : null}
                 </div>
             ),
         },
-        { title: "有效期", dataIndex: "expiresAt", width: 180, render: (value) => (value ? formatTime(value) : <Tag variant="filled">永久有效</Tag>) },
+        { title: "有效期", dataIndex: "expiresAt", width: 180, render: (value) => (value ? formatTime(value) : <AdminStatusBadge label="永久有效" tone="info" />) },
         { title: "批次备注", dataIndex: "note", render: (value) => value || <span className="text-foreground/35">未填写</span> },
         {
             title: "操作",
             width: 210,
-            fixed: "right",
-            render: (_, batch) => (
-                <Space size={6}>
-                    <Button size="small" icon={<Eye className="size-3.5" />} onClick={() => setSelectedBatch(batch)}>
-                        查看明细
-                    </Button>
-                    <Popconfirm
-                        title="禁用该批次的可用兑换码？"
-                        description="已核销和已过期记录不会变更。"
-                        okText="禁用"
-                        cancelText="取消"
-                        okButtonProps={{ danger: true }}
-                        onConfirm={async () => {
-                            try {
-                                const result = await disableAdminRedeemBatch(batch.id);
-                                message.success(`已禁用 ${result.disabledCount} 个兑换码`);
-                                await reload();
-                            } catch (error) {
-                                message.error(error instanceof Error ? error.message : "禁用批次失败");
-                            }
-                        }}
-                    >
-                        <Button size="small" danger icon={<Ban className="size-3.5" />} disabled={(batch.availableCount ?? 0) <= 0}>
-                            禁用
-                        </Button>
-                    </Popconfirm>
-                </Space>
-            ),
+            render: (_, batch) => <AdminRowActions primary={{ label: "查看明细", icon: <Eye className="size-3.5" />, onClick: () => setSelectedBatch(batch) }} actions={[{ key: "disable", label: "禁用批次", icon: <Ban className="size-3.5" />, danger: true, disabled: (batch.availableCount ?? 0) <= 0, confirm: { title: "禁用该批次的可用兑换码？", description: "已核销和已过期记录不会变更。", okText: "确认禁用" }, onClick: async () => { try { const result = await disableAdminRedeemBatch(batch.id); message.success(`已禁用 ${result.disabledCount} 个兑换码`); await reload(); } catch (error) { message.error(error instanceof Error ? error.message : "禁用批次失败"); } } }]} />,
         },
     ];
 
     return (
-        <div className="space-y-8">
-            <section className="overflow-hidden rounded-lg border border-border bg-background">
-                <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <section className="shrink-0 rounded-lg bg-background p-4">
+                <div className="flex items-center gap-3">
                     <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/40">
                         <KeyRound className="size-4" />
                     </span>
-                    <div>
-                        <h2 className="text-base font-semibold">生成兑换码批次</h2>
-                        <p className="mt-1 text-xs leading-5 text-foreground/55">兑换码为 32 位随机字符串，生成后加密保存，可在批次明细中再次查看。</p>
-                    </div>
+                    <h2 className="text-sm font-semibold">生成兑换码批次</h2>
                 </div>
-                <Form form={form} layout="vertical" requiredMark={false} className="grid gap-x-4 px-5 pt-5 md:grid-cols-12">
+                <Form form={form} layout="vertical" requiredMark={false} className="mt-3 grid gap-x-3 md:grid-cols-12">
                     <Form.Item name="amount" label="每个兑换码的积分" rules={[{ required: true, message: "请填写积分面额" }]} className="md:col-span-3">
                         <InputNumber style={{ width: "100%" }} min={0.000001} precision={6} />
                     </Form.Item>
@@ -153,8 +119,7 @@ export default function RedemptionCodesPanel() {
                     <Form.Item name="note" label="批次备注" className="md:col-span-4">
                         <Input maxLength={500} placeholder="例如：7 月活动赠送" />
                     </Form.Item>
-                    <div className="flex items-center justify-between gap-4 border-t border-border py-4 md:col-span-12">
-                        <span className="text-xs text-foreground/45">单批最多生成 5,000 个。生成成功后会立即显示结果，请及时下载留存。</span>
+                    <div className="flex items-center justify-end md:col-span-12">
                         <Button type="primary" loading={creating} icon={<TicketCheck className="size-4" />} onClick={() => void createBatch()}>
                             生成兑换码
                         </Button>
@@ -162,25 +127,9 @@ export default function RedemptionCodesPanel() {
                 </Form>
             </section>
 
-            <section>
-                <div className="mb-4 flex items-end justify-between gap-3">
-                    <div>
-                        <h2 className="text-base font-semibold">批次记录</h2>
-                        <p className="mt-1 text-xs text-foreground/55">查看每个兑换码的当前状态、核销用户、时间和来源 IP。</p>
-                    </div>
-                    <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
-                        刷新
-                    </Button>
-                </div>
-                <ListToolbar
-                    active={Boolean(keyword || validity !== "all")}
-                    onReset={() => {
-                        setKeyword("");
-                        setValidity("all");
-                        setPage(1);
-                    }}
-                >
-                    <Input
+            <section className="flex min-h-0 flex-1">
+                <AdminDataTable
+                    toolbar={<Input
                         allowClear
                         className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
@@ -190,44 +139,16 @@ export default function RedemptionCodesPanel() {
                             setKeyword(event.target.value);
                             setPage(1);
                         }}
-                    />
-                    <Select
-                        className="w-36"
-                        value={validity}
-                        onChange={(value) => {
-                            setValidity(value);
-                            setPage(1);
-                        }}
-                        options={[
-                            { label: "全部有效期", value: "all" },
-                            { label: "有效", value: "active" },
-                            { label: "已过期", value: "expired" },
-                        ]}
-                    />
-                </ListToolbar>
-                <TableSurface>
-                    <Table
-                        className="app-data-table"
-                        rowKey="id"
-                        size="middle"
-                        loading={loading}
-                        columns={columns}
-                        dataSource={batches}
-                        pagination={{
-                            current: page,
-                            pageSize,
-                            total,
-                            showSizeChanger: true,
-                            pageSizeOptions: [20, 50, 100],
-                            showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 个批次`,
-                            onChange: (nextPage, nextPageSize) => {
-                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
-                                setPageSize(nextPageSize);
-                            },
-                        }}
-                        scroll={{ x: 1080 }}
-                    />
-                </TableSurface>
+                    />}
+                    toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}{validity !== "all" ? <AdminFilterChip label={`有效期：${validity === "active" ? "有效" : "已过期"}`} onRemove={() => { setValidity("all"); setPage(1); }} /> : null}</>}
+                    toolbarActive={Boolean(keyword || validity !== "all")}
+                    toolbarFilters={<Select className="w-36" value={validity} onChange={(value) => { setValidity(value); setPage(1); }} options={[{ label: "全部有效期", value: "all" }, { label: "有效", value: "active" }, { label: "已过期", value: "expired" }]} />}
+                    onReset={() => { setKeyword(""); setValidity("all"); setPage(1); }}
+                    trailing={<Button type="text" size="small" icon={<RefreshCw className="size-3.5" />} loading={loading} onClick={() => void reload()}>刷新</Button>}
+                    table={{ className: "app-data-table", rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: batches, scroll: { x: 1080 } }}
+                    empty={<AdminTableEmpty filtered={Boolean(keyword || validity !== "all")} title="暂无兑换码批次" />}
+                    footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
+                />
             </section>
 
             <GeneratedCodesModal codes={generatedCodes} onClose={() => setGeneratedCodes([])} />
@@ -256,7 +177,7 @@ function GeneratedCodesModal({ codes, onClose }: { codes: string[]; onClose: () 
                     <AdminExportButton type="primary" exportFile={() => new Blob([content + "\n"], { type: "text/plain;charset=utf-8" })} fileName={() => `兑换码-${new Date().toISOString().slice(0, 10)}.txt`} label="下载 TXT" />
                 </Space>
             }
-            width={680}
+            width={760}
         >
             <div className="mb-3 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">兑换码已加密保存，可在批次明细中再次查看；仍建议立即下载一份用于发放。</div>
             <Input.TextArea value={content} readOnly autoSize={{ minRows: 10, maxRows: 18 }} className="font-mono text-xs" />
@@ -349,7 +270,6 @@ function RedeemBatchCodesModal({ batch, onClose }: { batch: RedeemBatch | null; 
         {
             title: "操作",
             width: 90,
-            fixed: "right",
             render: (_, item) =>
                 item.status === "unused" ? (
                     <Popconfirm title="禁用这个兑换码？" okText="禁用" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => void disableCode(item)}>
@@ -377,72 +297,39 @@ function RedeemBatchCodesModal({ batch, onClose }: { batch: RedeemBatch | null; 
                 </Space>
             }
             width={1080}
+            rootClassName="admin-modal-root"
         >
             {!plaintextAvailable ? <div className="mb-4 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                    <Tag variant="filled" color="green">
-                        可用 {batchSummary?.availableCount ?? 0}
-                    </Tag>
-                    <Tag variant="filled" color="blue">
-                        已核销 {batchSummary?.redeemedCount ?? 0}
-                    </Tag>
-                    <Tag variant="filled">已过期 {batchSummary?.expiredCount ?? 0}</Tag>
-                    <Tag variant="filled">已禁用 {batchSummary?.disabledCount ?? 0}</Tag>
-                </div>
-                <Select
-                    className="w-32"
-                    value={status}
-                    onChange={(value) => {
-                        setStatus(value);
-                        setPage(1);
-                    }}
-                    options={[
-                        { label: "全部状态", value: "all" },
-                        { label: "可用", value: "available" },
-                        { label: "已核销", value: "redeemed" },
-                        { label: "已过期", value: "expired" },
-                        { label: "已禁用", value: "disabled" },
-                    ]}
+            <div className="mb-3 flex flex-wrap gap-2">
+                <AdminStatusBadge label={`可用 ${batchSummary?.availableCount ?? 0}`} tone="success" />
+                <AdminStatusBadge label={`已核销 ${batchSummary?.redeemedCount ?? 0}`} tone="info" />
+                <AdminStatusBadge label={`已过期 ${batchSummary?.expiredCount ?? 0}`} tone="warning" />
+                <AdminStatusBadge label={`已禁用 ${batchSummary?.disabledCount ?? 0}`} tone="neutral" />
+            </div>
+            <div className="admin-modal-data-table-shell">
+                <AdminDataTable
+                    toolbar={<Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "可用", value: "available" }, { label: "已核销", value: "redeemed" }, { label: "已过期", value: "expired" }, { label: "已禁用", value: "disabled" }]} />}
+                    toolbarActiveFilters={status !== "all" ? <AdminFilterChip label={`状态：${status}`} onRemove={() => { setStatus("all"); setPage(1); }} /> : null}
+                    toolbarActive={status !== "all"}
+                    onReset={() => { setStatus("all"); setPage(1); }}
+                    table={{ className: "app-data-table", rowKey: "id", size: "small", loading, columns, dataSource: codes, pagination: false, scroll: { x: 960 } }}
+                    empty={<AdminTableEmpty filtered={status !== "all"} title="暂无兑换码" />}
+                    footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => { setPage(nextSize !== pageSize ? 1 : nextPage); setPageSize(nextSize); }} />}
                 />
             </div>
-            <Table
-                className="app-data-table"
-                rowKey="id"
-                size="small"
-                loading={loading}
-                columns={columns}
-                dataSource={codes}
-                pagination={{
-                    current: page,
-                    pageSize,
-                    total,
-                    showSizeChanger: true,
-                    pageSizeOptions: [20, 50, 100],
-                    showTotal: (value) => `共 ${value} 个兑换码`,
-                    onChange: (nextPage, nextSize) => {
-                        setPage(nextSize !== pageSize ? 1 : nextPage);
-                        setPageSize(nextSize);
-                    },
-                }}
-                scroll={{ x: 960, y: 460 }}
-            />
         </Modal>
     );
 }
 
 function renderCodeStatus(status: AdminRedeemCode["status"]) {
-    const config = {
-        unused: { label: "可用", color: "green" },
-        redeemed: { label: "已核销", color: "blue" },
-        disabled: { label: "已禁用", color: "default" },
-        expired: { label: "已过期", color: "default" },
-    }[status];
-    return (
-        <Tag variant="filled" color={config.color}>
-            {config.label}
-        </Tag>
-    );
+    const config: Record<AdminRedeemCode["status"], { label: string; tone: AdminStatusTone }> = {
+        unused: { label: "可用", tone: "success" },
+        redeemed: { label: "已核销", tone: "info" },
+        disabled: { label: "已禁用", tone: "neutral" },
+        expired: { label: "已过期", tone: "warning" },
+    };
+    const configForStatus = config[status];
+    return <AdminStatusBadge label={configForStatus.label} tone={configForStatus.tone} />;
 }
 
 function formatTime(value?: string) {

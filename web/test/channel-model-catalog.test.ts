@@ -271,6 +271,46 @@ describe("public channel model catalog", () => {
         expect(html).toContain("Omni Flash");
     });
 
+    test("builds the creation catalog only from public backend models and user channels", () => {
+        const platform = createModelChannel({
+            id: "public-logical-models",
+            name: "平台模型",
+            scope: "system",
+            apiKey: "system",
+            models: ["frontend-image"],
+            modelCosts: [{ model: "frontend-image", capability: "image", billingMode: "fixed_request", unitPriceMicrocredits: 0 }],
+        });
+        const custom = createModelChannel({
+            id: "custom-channel",
+            name: "我的渠道",
+            baseUrl: "https://custom.example.com",
+            apiKey: "synthetic-test-key",
+            models: ["custom-image-v1"],
+        });
+        const normalized = normalizeConfigSnapshot({
+            config: {
+                ...defaultConfig,
+                channels: [
+                    platform,
+                    custom,
+                    createModelChannel({ id: "default", name: "默认渠道", apiKey: "", models: ["gpt-image-2"] }),
+                ],
+                models: ["default::gpt-image-2", "ghost-image"],
+                imageModels: ["default::gpt-image-2", "ghost-image"],
+                imageModel: "default::gpt-image-2",
+            },
+        }).config;
+        const staleSnapshot = { ...normalized, models: [...normalized.models, "ghost-image"], imageModels: [...normalized.imageModels, "ghost-image"] };
+
+        expect(selectableModelsByCapability(staleSnapshot, "image")).toEqual([
+            "public-logical-models::frontend-image",
+            "custom-channel::custom-image-v1",
+        ]);
+        expect(staleSnapshot.channels.some((channel) => channel.id === "default")).toBe(false);
+        expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("default::gpt-image-2");
+        expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("ghost-image");
+    });
+
     test("omits resolution_name for Omni and for auto instead of inventing 720p", async () => {
         const bodies: Record<string, string>[] = [];
         axios.post = (async (_url: string, body: unknown) => {

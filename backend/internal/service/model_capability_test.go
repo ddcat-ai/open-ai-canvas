@@ -83,6 +83,36 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 	}
 }
 
+func TestCapabilitySpecFromModelCapabilityConfigRestoresLegacyWildcardImageSizes(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			Size: ImageSizeConfig{Parameter: "size", Values: []string{"*"}, AllowCustom: true},
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	constraint, ok := spec.Options["size"]
+	if !ok {
+		t.Fatal("size constraint is missing")
+	}
+	values := make(map[string]int)
+	for _, value := range constraint.Values {
+		values[fmt.Sprint(value)]++
+	}
+	for _, value := range legacyImageSizeValues() {
+		if values[value] != 1 {
+			t.Fatalf("size constraint missing %q: %v", value, constraint.Values)
+		}
+	}
+	if values["*"] != 1 {
+		t.Fatalf("size constraint wildcard count = %d, values = %v", values["*"], constraint.Values)
+	}
+}
+
 func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
 	tests := map[string]string{
 		"1440":  "1440p",
@@ -128,6 +158,59 @@ func TestNormalizeVideoCapabilityAllowsOmittedResolution(t *testing.T) {
 	}
 	if result.Video == nil || len(result.Video.Resolutions) != 0 || result.Video.DefaultResolution != "" {
 		t.Fatalf("normalized video resolution = %#v", result.Video)
+	}
+}
+
+func TestCapabilitySpecFromModelCapabilityConfigProjectsImageSizeOnce(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			References: ImageReferenceConfig{MaxImages: 3, MaskSupported: false},
+			Size:       ImageSizeConfig{Parameter: "size", Values: []string{"1:1", "16:9"}, AllowCustom: true},
+			MaxOutputs: 4,
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	if got := spec.Options["size"].Values; len(got) != 3 || got[0] != "1:1" || got[1] != "16:9" || got[2] != "*" {
+		t.Fatalf("size projection = %#v, want configured values plus wildcard", got)
+	}
+	if got := spec.Inputs["image"].Max; got != 3 {
+		t.Fatalf("image input max = %d, want 3", got)
+	}
+	if got := spec.Options["count"].Max; got == nil || *got != 4 {
+		t.Fatalf("count max = %v, want 4", got)
+	}
+}
+
+func TestCapabilitySpecFromModelCapabilityConfigProjectsCustomImageSizeAsWildcard(t *testing.T) {
+	config := &ModelCapabilityConfig{
+		Version: 1,
+		Image: &ImageCapabilityConfig{
+			Size:       ImageSizeConfig{Parameter: "size", Values: []string{"1:1"}, AllowCustom: true},
+			MaxOutputs: 1,
+		},
+	}
+
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatalf("CapabilitySpecFromModelCapabilityConfig() error = %v", err)
+	}
+	if got := spec.Options["size"].Values; len(got) != 2 || got[0] != "1:1" || got[1] != "*" {
+		t.Fatalf("custom size projection = %#v, want configured value plus wildcard", got)
+	}
+}
+
+func TestCapabilitySpecFromModelCapabilityConfigAllowsAudioWithoutConfig(t *testing.T) {
+	spec, err := CapabilitySpecFromModelCapabilityConfig(nil, "audio")
+	if err != nil {
+		t.Fatalf("audio projection error = %v", err)
+	}
+	if spec.Capability != "audio" || len(spec.Inputs) != 0 || len(spec.Options) != 0 {
+		t.Fatalf("audio projection = %#v", spec)
 	}
 }
 

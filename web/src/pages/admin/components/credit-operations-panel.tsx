@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { App, Button, Form, Input, InputNumber, Modal, Select, Space, Table, Tag } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Select, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { BadgeCheck, CircleAlert, Coins, RefreshCw, Search, Settings2, Undo2, UserRoundCog } from "lucide-react";
+import { BadgeCheck, Coins, RefreshCw, Search, Settings2, Undo2, UserRoundCog } from "lucide-react";
 
-import { ListToolbar, TableSurface } from "@/components/layout/workspace-page";
+import { PaginationBar } from "@/components/layout/workspace-page";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { listAdminUsers, type AdminReferenceData, type LocalUser } from "@/services/api/auth";
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
 
-import { AdminBatchBar } from "./admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 type AdjustmentFormValues = { userId: string; amount: number; note: string };
 type ResolutionFormValues = { note: string };
@@ -211,9 +211,10 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
             dataIndex: "status",
             width: 105,
             render: (value) => (
-                <Tag variant="filled" color={value === "settled" ? "success" : value === "refunded" ? "default" : "warning"}>
-                    {({ uncertain: "待核对", running: "运行中", reserved: "已冻结", settled: "已结算", refunded: "已退款" } as Record<string, string>)[value] || "未知状态"}
-                </Tag>
+                <AdminStatusBadge
+                    label={({ uncertain: "待核对", running: "运行中", reserved: "已冻结", settled: "已结算", refunded: "已退款" } as Record<string, string>)[value] || "未知状态"}
+                    tone={value === "settled" ? "success" : value === "refunded" ? "neutral" : "warning"}
+                />
             ),
         },
         { title: "上游请求", dataIndex: "providerRequestId", width: 180, ellipsis: true, render: (value) => value || "未获取" },
@@ -221,147 +222,73 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
         {
             title: "处理",
             width: 180,
-            fixed: "right",
             render: (_, order) =>
                 !canResolveBillingOrder(order) ? (
                     <span className="text-xs text-foreground/40">处理完成</span>
                 ) : (
-                    <Space size={6}>
-                        <Button
-                            size="small"
-                            onClick={() => openSingleResolution(order, "settle")}
-                        >
-                            确认扣费
-                        </Button>
-                        <Button
-                            size="small"
-                            danger
-                            onClick={() => openSingleResolution(order, "refund")}
-                        >
-                            退回积分
-                        </Button>
-                    </Space>
+                    <AdminRowActions
+                        primary={{ label: "确认扣费", onClick: () => openSingleResolution(order, "settle") }}
+                        actions={[{ key: "refund", label: "退回积分", danger: true, onClick: () => openSingleResolution(order, "refund") }]}
+                    />
                 ),
         },
     ];
 
     return (
-        <div className="space-y-8">
-            <section className="rounded-lg border border-border bg-background p-5">
-                <div className="flex items-start gap-3">
-                    <span className="grid size-8 place-items-center rounded-md bg-muted/40">
-                        <Settings2 className="size-4" />
-                    </span>
-                    <div>
-                        <h2 className="text-base font-semibold">积分策略</h2>
-                        <p className="mt-1 text-xs text-foreground/55">注册、签到与模型倍率统一在服务端结算。</p>
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <div className="grid shrink-0 gap-4 xl:grid-cols-2">
+                <section className="rounded-lg bg-background p-4">
+                    <div className="flex items-start gap-3">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/40">
+                            <Settings2 className="size-4" />
+                        </span>
+                        <h2 className="pt-1 text-sm font-semibold">积分策略</h2>
                     </div>
-                </div>
-                <Form form={policyForm} layout="vertical" requiredMark={false} className="mt-5">
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <Form.Item
-                            name="signupBonus"
-                            label="注册默认积分"
-                            rules={[
-                                { required: true, message: "请填写注册积分" },
-                                { type: "number", min: 0 },
-                            ]}
-                        >
-                            <InputNumber className="w-full" min={0} precision={6} />
+                    <Form form={policyForm} layout="vertical" requiredMark={false} className="mt-3">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Form.Item name="signupBonus" label="注册积分" rules={[{ required: true, message: "请填写注册积分" }, { type: "number", min: 0 }]}>
+                                <InputNumber className="w-full" min={0} precision={6} />
+                            </Form.Item>
+                            <Form.Item name="checkinBonus" label="签到积分" rules={[{ required: true, message: "请填写签到积分" }, { type: "number", min: 0 }]}>
+                                <InputNumber className="w-full" min={0} precision={6} />
+                            </Form.Item>
+                            <Form.Item name="defaultMultiplier" label="默认倍率" rules={[{ required: true, message: "请填写默认倍率" }, { type: "number", min: 0.0001, max: 100 }]}>
+                                <InputNumber className="w-full" min={0.0001} max={100} precision={4} />
+                            </Form.Item>
+                        </div>
+                        <Form.Item name="modelMultipliers" label="模型独立倍率" extra="每行使用 模型名=倍率">
+                            <Input.TextArea rows={2} placeholder={"gpt-image-1=1.5\nseedance-1.0-pro=2"} />
                         </Form.Item>
-                        <Form.Item
-                            name="checkinBonus"
-                            label="每日签到积分"
-                            rules={[
-                                { required: true, message: "请填写签到积分" },
-                                { type: "number", min: 0 },
-                            ]}
-                        >
-                            <InputNumber className="w-full" min={0} precision={6} />
-                        </Form.Item>
-                        <Form.Item
-                            name="defaultMultiplier"
-                            label="默认模型倍率"
-                            rules={[
-                                { required: true, message: "请填写默认倍率" },
-                                { type: "number", min: 0.0001, max: 100 },
-                            ]}
-                        >
-                            <InputNumber className="w-full" min={0.0001} max={100} precision={4} />
-                        </Form.Item>
-                    </div>
-                    <Form.Item name="modelMultipliers" label="模型独立倍率" extra="每行一项，格式为 模型名=倍率。例如 gpt-image-1=1.5">
-                        <Input.TextArea rows={4} placeholder={"gpt-image-1=1.5\nseedance-1.0-pro=2"} />
-                    </Form.Item>
-                    <Button type="primary" loading={savingPolicy} onClick={() => void savePolicy()}>
-                        保存积分策略
-                    </Button>
-                </Form>
-            </section>
-            <section className="grid overflow-hidden rounded-lg border border-border bg-background lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
-                <div className="border-b border-border p-5 lg:border-b-0 lg:border-r">
+                        <Button type="primary" loading={savingPolicy} onClick={() => void savePolicy()}>保存积分策略</Button>
+                    </Form>
+                </section>
+                <section className="rounded-lg bg-background p-4">
                     <div className="flex items-start gap-3">
                         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted/40">
                             <UserRoundCog className="size-4" />
                         </span>
-                        <div>
-                            <h2 className="text-base font-semibold">人工调整积分</h2>
-                            <p className="mt-1 text-xs text-foreground/55">所有变更都会写入不可修改的用户积分流水。</p>
-                        </div>
+                        <h2 className="pt-1 text-sm font-semibold">人工调整积分</h2>
                     </div>
-                    <Form form={adjustmentForm} layout="vertical" requiredMark={false} className="mt-5">
+                    <Form form={adjustmentForm} layout="vertical" requiredMark={false} className="mt-3">
                         <Form.Item name="userId" label="目标用户" rules={[{ required: true, message: "请选择用户" }]}>
                             <Select showSearch filterOption={false} loading={searchingUsers} placeholder="搜索用户名或显示名称" onSearch={(value) => void searchUsers(value)} options={adjustmentUsers.map((user) => ({ label: `${user.displayName || user.username} · @${user.username}`, value: user.id }))} />
                         </Form.Item>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="amount" label="积分变化" extra="正数增加，负数扣减。" rules={[{ required: true, message: "请填写积分变化" }]}>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Form.Item name="amount" label="积分变化" rules={[{ required: true, message: "请填写积分变化" }]}>
                                 <InputNumber className="w-full" precision={6} prefix={<Coins className="size-3.5 text-foreground/45" />} placeholder="例如 10 或 -2" />
                             </Form.Item>
                             <Form.Item name="note" label="调整原因" rules={[{ required: true, message: "请填写调整原因" }]}>
-                                <Input maxLength={500} placeholder="将显示在审计流水中" />
+                                <Input maxLength={500} placeholder="工单号或处理依据" />
                             </Form.Item>
                         </div>
-                        <Button type="primary" loading={adjusting} onClick={() => void adjust()}>
-                            确认调整
-                        </Button>
+                        <Button type="primary" loading={adjusting} onClick={() => void adjust()}>确认调整</Button>
                     </Form>
-                </div>
-                <div className="flex flex-col justify-between bg-muted/20 p-5">
-                    <div>
-                        <span className="grid size-8 place-items-center rounded-md border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300">
-                            <CircleAlert className="size-4" />
-                        </span>
-                        <h3 className="mt-4 text-sm font-semibold">写操作强校验</h3>
-                        <p className="mt-2 text-xs leading-6 text-foreground/60">余额不足时不允许负向调整。每次操作记录管理员、用户、金额、原因和变更后的余额。</p>
-                    </div>
-                    <div className="mt-6 border-t border-border pt-4 text-xs text-foreground/45">建议在备注中填写工单号或处理依据。</div>
-                </div>
-            </section>
+                </section>
+            </div>
 
-            <section>
-                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-base font-semibold">计费订单</h2>
-                            <Tag variant="filled" color={orderStatus === "review" && total ? "warning" : "default"}>
-                                {total} 条
-                            </Tag>
-                        </div>
-                        <p className="mt-1 text-xs leading-5 text-foreground/55">待核对订单可人工结算或退款，已结算与已退款历史保持只读。</p>
-                    </div>
-                    <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
-                        刷新
-                    </Button>
-                </div>
-                <ListToolbar
-                    active={Boolean(keyword || orderStatus !== "review")}
-                    onReset={() => {
-                        setKeyword("");
-                        setOrderStatus("review");
-                        setPage(1);
-                    }}
-                >
-                    <Input
+            <section className="flex min-h-0 flex-1">
+                <AdminDataTable
+                    toolbar={<Input
                         allowClear
                         className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
@@ -371,62 +298,22 @@ export default function CreditOperationsPanel({ users }: { users: AdminReference
                             setKeyword(event.target.value);
                             setPage(1);
                         }}
-                    />
-                    <Select
-                        className="w-36"
-                        value={orderStatus}
-                        onChange={(value) => {
-                            setOrderStatus(value);
-                            setPage(1);
-                        }}
-                        options={[
-                            { label: "待核对队列", value: "review" },
-                            { label: "全部历史", value: "all" },
-                            { label: "费用待核对", value: "uncertain" },
-                            { label: "运行中", value: "running" },
-                            { label: "已冻结", value: "reserved" },
-                            { label: "已结算", value: "settled" },
-                            { label: "已退款", value: "refunded" },
-                        ]}
-                    />
-                </ListToolbar>
-                <AdminBatchBar count={selectedOrderIds.length} onClear={() => setSelectedOrderIds([])}>
-                    <Button size="small" type="primary" icon={<BadgeCheck className="size-3.5" />} onClick={() => openBatchResolution("settle")}>
-                        批量确认扣费
-                    </Button>
-                    <Button size="small" danger icon={<Undo2 className="size-3.5" />} onClick={() => openBatchResolution("refund")}>
-                        批量退回积分
-                    </Button>
-                </AdminBatchBar>
-                <TableSurface>
-                    <Table
-                        className="app-data-table"
-                        rowKey="id"
-                        size="middle"
-                        loading={loading}
-                        columns={columns}
-                        dataSource={orders}
-                        rowSelection={{
+                    />}
+                    toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}{orderStatus !== "review" ? <AdminFilterChip label={`队列：${orderStatus === "all" ? "全部历史" : orderStatus}`} onRemove={() => { setOrderStatus("review"); setPage(1); }} /> : null}</>}
+                    toolbarActive={Boolean(keyword || orderStatus !== "review")}
+                    toolbarFilters={<Select className="w-36" value={orderStatus} onChange={(value) => { setOrderStatus(value); setPage(1); }} options={[{ label: "待核对队列", value: "review" }, { label: "全部历史", value: "all" }, { label: "费用待核对", value: "uncertain" }, { label: "运行中", value: "running" }, { label: "已冻结", value: "reserved" }, { label: "已结算", value: "settled" }, { label: "已退款", value: "refunded" }]} />}
+                    onReset={() => { setKeyword(""); setOrderStatus("review"); setPage(1); }}
+                    trailing={<Button type="text" size="small" icon={<RefreshCw className="size-3.5" />} loading={loading} onClick={() => void reload()}>刷新</Button>}
+                    batchActions={<AdminBatchBar count={selectedOrderIds.length} onClear={() => setSelectedOrderIds([])}><Button size="small" type="primary" icon={<BadgeCheck className="size-3.5" />} onClick={() => openBatchResolution("settle")}>批量确认扣费</Button><Button size="small" danger icon={<Undo2 className="size-3.5" />} onClick={() => openBatchResolution("refund")}>批量退回积分</Button></AdminBatchBar>}
+                    table={{ className: "app-data-table", rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: orders, rowSelection: {
                             selectedRowKeys: selectedOrderIds,
                             preserveSelectedRowKeys: false,
                             onChange: (keys) => setSelectedOrderIds(keys.map(String)),
                             getCheckboxProps: (order) => ({ disabled: !canResolveBillingOrder(order), name: `${order.model} ${order.scene || order.capability}` }),
-                        }}
-                        pagination={{
-                            current: page,
-                            pageSize,
-                            total,
-                            showSizeChanger: true,
-                            pageSizeOptions: [20, 50, 100],
-                            showTotal: (value, range) => `${range[0]}-${range[1]} / 共 ${value} 条`,
-                            onChange: (nextPage, nextPageSize) => {
-                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
-                                setPageSize(nextPageSize);
-                            },
-                        }}
-                        scroll={{ x: 1390 }}
-                    />
-                </TableSurface>
+                        }, scroll: { x: 1390 } }}
+                    empty={<AdminTableEmpty filtered={Boolean(keyword || orderStatus !== "review")} title="暂无计费订单" />}
+                    footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
+                />
             </section>
 
             <Modal

@@ -432,6 +432,9 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 	if !enabled {
 		return nil, nil
 	}
+	if task.LogicalModelID != "" {
+		return s.newLogicalModelBillingOrder(userID, task, input)
+	}
 	config, _ := input["config"].(map[string]any)
 	if config == nil {
 		return nil, nil
@@ -450,6 +453,76 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 	}
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
 	return s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(input, capability))
+}
+
+func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
+	logicalModel, err := s.repo.LogicalModel(task.LogicalModelID)
+	if err != nil || (!logicalModel.Enabled && logicalModel.ArchivedAt == nil) || logicalModel.ActiveRevisionID != task.LogicalModelRevisionID {
+		return nil, BadAuthRequest("所选模型计费配置已失效，请重新选择")
+	}
+	route, err := s.repo.LogicalModelRoute(task.RouteID)
+	if err != nil || route.LogicalModelRevisionID != task.LogicalModelRevisionID || route.ChannelModelID != task.ChannelModelID {
+		return nil, BadAuthRequest("所选模型供应线路已更新，请重新选择")
+	}
+	channelModel, err := s.repo.ChannelModel(task.ChannelModelID)
+	if err != nil {
+		return nil, BadAuthRequest("所选模型供应线路已更新，请重新选择")
+	}
+	config, _ := input["config"].(map[string]any)
+	capability := normalizeCapability(fmt.Sprint(input["mode"]))
+	if capability == "" {
+		capability = capabilityFromTaskType(task.Type)
+	}
+	if logicalModel.PricePolicy == "channel" {
+		order, priceErr := s.newBillingOrder(userID, task.ID, "task:"+task.ID+":"+newID(), channelModel.ChannelID, channelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(input, capability))
+		if priceErr != nil {
+			return nil, priceErr
+		}
+		// 用户账单只显示前台模型，供应线路仍保留在内部归属字段中。
+		order.Model = logicalModel.Code
+		return order, nil
+	}
+	if logicalModel.PricePolicy != "unified" {
+		return nil, BadAuthRequest("当前模型价格策略无效")
+	}
+	quantity := int64(1)
+	tokenEstimate := estimateTaskBillingTokens(input, capability)
+	amount := int64(0)
+	switch logicalModel.BillingMode {
+	case "fixed_request":
+		amount = logicalModel.UnitPriceMicrocredits
+	case "per_second":
+		quantity = billingQuantity(capability, config["videoSeconds"])
+		if capability != "video" || quantity <= 0 {
+			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")
+		}
+		amount, err = creditAmount(logicalModel.UnitPriceMicrocredits, quantity, 10_000)
+	case "token":
+		pricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
+		amount, err = tokenEstimateAmount(pricing, tokenEstimate, 10_000)
+		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
+	default:
+		return nil, BadAuthRequest("当前模型计费方式暂不支持")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if amount <= 0 {
+		return nil, BadAuthRequest("当前模型尚未配置有效的用户价格")
+	}
+	revision, err := s.repo.LogicalModelRevision(task.LogicalModelRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	return &model.BillingOrder{
+		ID: newID(), UserID: userID, IdempotencyKey: "task:" + task.ID + ":" + newID(), TaskID: task.ID,
+		ChannelID: channelModel.ChannelID, ChannelModelID: channelModel.ID, Model: logicalModel.Code, Capability: capability,
+		Scene: truncateRunes(firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), 80), BillingMode: logicalModel.BillingMode, PriceVersion: int64(revision.Version),
+		UnitPriceMicrocredits: logicalModel.UnitPriceMicrocredits, MultiplierBasisPoints: 10_000, Quantity: quantity, AmountMicrocredits: amount,
+		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits,
+		OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits,
+		Status: model.BillingStatusReserved,
+	}, nil
 }
 
 func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
@@ -483,16 +556,13 @@ func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, m
 func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate) (*model.BillingOrder, error) {
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, BadAuthRequest("当前系统渠道模型未配置或已停用")
+		return nil, BadAuthRequest("当前模型暂时不可用，请重新选择")
 	}
 	if err != nil {
 		return nil, err
 	}
 	if !item.PriceConfigured {
 		return nil, BadAuthRequest("当前模型尚未配置用户积分价格")
-	}
-	if item.Protocol == model.ChannelInterfaceVolcengineJiMengVideo && requestedQuantity != 5 && requestedQuantity != 10 {
-		return nil, BadAuthRequest("即梦视频仅支持 5 秒或 10 秒，请调整视频时长")
 	}
 	quantity := int64(1)
 	amount := int64(0)

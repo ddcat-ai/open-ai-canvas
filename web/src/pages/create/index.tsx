@@ -19,18 +19,20 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
-import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
-import { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
+import { resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
+import { isGenerationTaskCancelled, logicalModelIDForConfig, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { cancelGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { createTextReplayPublisher } from "@/lib/creation-text-replay";
 import { isLocalDreaminaTaskId, isLocalDreaminaWaitStopped, localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
 import { beginGenerationConsumer, runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
-import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { loadCreationConversations, pendingCreationTaskIds, pendingCreationTaskKey, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { recoverCreationTextTask } from "@/services/creation-text-task-recovery";
 import { modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -172,25 +174,36 @@ export default function CreatePage() {
             textCount: hasPrompt ? 1 : 0,
             imageCount: attachments.filter(isImageAttachment).length,
             videoCount: attachments.filter(isVideoAttachment).length,
-            audioCount: 0,
+            audioCount: attachments.filter((attachment) => creationAttachmentKind(attachment) === "audio").length,
             characterCount: 0,
         },
-        videoSeconds: seconds,
-    }), [attachments, hasPrompt, mode, seconds]);
+        videoSeconds: mode === "video" ? seconds : undefined,
+        imageSize: mode === "image" ? ratio : undefined,
+		options: mode === "image"
+			? { size: ratio, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
+			: mode === "video"
+				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
+				: {},
+	}), [attachments, config.transparentBackground, config.videoGenerateAudio, config.videoWatermark, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
     const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
-    const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
+    const pendingTaskKey = useMemo(() => pendingCreationTaskKey(conversations), [conversations]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
     const shots = useMemo(() => shotsFromMessages(activeConversation?.messages || []), [activeConversation]);
     const visibleShotIndex = shots.length ? selectedShotIndex >= 0 && selectedShotIndex < shots.length ? selectedShotIndex : shots.length - 1 : -1;
 
     useEffect(() => {
         if (mode !== "image") return;
-        const normalized = normalizeImageValue(imageProfile, { size: ratio, quality, count });
+        // 前台逻辑模型的默认参数优先于旧的全局创作参数；否则旧的合法值会一直覆盖后台刚配置的默认值。
+        const normalized = normalizeImageValue(imageProfile, {
+            size: imageProfile.size.default,
+            quality: imageProfile.quality.default,
+            count,
+        });
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setCount(normalized.count);
@@ -198,7 +211,12 @@ export default function CreatePage() {
 
     useEffect(() => {
         if (mode !== "video") return;
-        const normalized = normalizeVideoValue(videoProfile, { seconds, ratio, resolution: `${videoQuality}p` });
+        // 前台逻辑模型的默认参数必须直接落到创作端状态，提交任务时才不会被旧状态覆盖。
+        const normalized = normalizeVideoValue(videoProfile, {
+            seconds: String(videoProfile.duration.default),
+            ratio: videoProfile.defaultRatio,
+            resolution: videoProfile.defaultResolution,
+        });
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
@@ -239,7 +257,7 @@ export default function CreatePage() {
     }, [conversations, hydrated]);
 
     useEffect(() => {
-        if (!hydrated || !pendingMediaKey || !pendingTaskIds.length) return;
+        if (!hydrated || !pendingTaskKey || !pendingTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
         const applyTasks = async (tasks: GenerationTask[]) => {
@@ -275,7 +293,7 @@ export default function CreatePage() {
             observationController.abort();
             unsubscribe();
         };
-    }, [hydrated, pendingMediaKey, toast]);
+    }, [hydrated, pendingTaskKey, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -481,19 +499,58 @@ export default function CreatePage() {
         const controller = new AbortController();
         const requestLifecycle = beginGenerationConsumer(controller.signal);
         abortRef.current = controller;
-        const requestConfig = { ...config, model: selectedModel, imageModel: selectedModel, videoModel: selectedModel, textModel: selectedModel, size: ratio, videoSeconds: seconds, quality, vquality: videoQuality, count };
+        const normalizedImage = mode === "image" ? normalizeImageValue(imageProfile, { size: ratio, quality, count }) : undefined;
+        const normalizedVideo = mode === "video" ? normalizeVideoValue(videoProfile, { seconds, ratio, resolution: videoQuality }) : undefined;
+        const requestConfig = {
+            ...config,
+            model: selectedModel,
+            imageModel: selectedModel,
+            videoModel: selectedModel,
+            textModel: selectedModel,
+            ...(mode === "image"
+                ? { size: normalizedImage?.size || ratio, quality: normalizedImage?.quality || quality, count: normalizedImage?.count || count, videoSeconds: config.videoSeconds }
+                : mode === "video"
+                  ? { size: normalizedVideo?.ratio || ratio, videoSeconds: normalizedVideo?.seconds || seconds, vquality: (normalizedVideo?.resolution || videoQuality).replace(/p$/i, "") }
+                  : {}),
+        };
         try {
             if (mode === "text") {
-                const history = await Promise.all([...(activeConversation.messages || []), userMessage].map(async (item) => ({
-                    role: item.role,
-                    content: item.role === "user"
-                        ? await buildTextMessageContent(item)
-                        : item.content,
-                })));
-                await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), {
-                    signal: requestLifecycle.signal,
-                    onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
-                });
+				if (logicalModelIDForConfig(requestConfig)) {
+					const result = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTask({
+						mode: "text",
+						prompt: expandedPrompt,
+						config: requestConfig,
+						referenceImages,
+						referenceVideos,
+						referenceAudios,
+						textHistory: (activeConversation.messages || []).filter((item) => item.content.trim()).map((item) => ({ role: item.role, content: item.content })),
+						signal: requestLifecycle.signal,
+						metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, ...referenceMetadata },
+						onTaskUpdate: bindTask,
+						...retryContext,
+					}));
+					if (!result.text?.trim()) throw new Error("后端任务没有返回文本");
+					updateOriginAssistant((item) => ({ ...item, content: result.text || "" }));
+				} else {
+					const history = await Promise.all([...(activeConversation.messages || []), userMessage].map(async (item) => ({
+						role: item.role,
+						content: item.role === "user"
+							? await buildTextMessageContent(item)
+							: item.content,
+					})));
+					const replayPublisher = createTextReplayPublisher(requestConfig, text);
+					void replayPublisher.start();
+					let finalText = "";
+					await requestImageQuestion(requestConfig, history, (full) => {
+						finalText = full;
+						updateOriginAssistant((item) => ({ ...item, content: full }));
+						replayPublisher.publish(full);
+					}, {
+						signal: requestLifecycle.signal,
+						onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
+					});
+					replayPublisher.finish(finalText);
+				}
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
                 const settled = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTaskBatch({
@@ -1134,15 +1191,17 @@ function GenerationSettingsMenu(props: ComposerProps) {
     const [customRatioOpen, setCustomRatioOpen] = useState(!ratioOptions.some((option) => option.value === props.ratio));
     const activeQualityOptions = props.imageProfile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value.toUpperCase(), description: "模型支持的质量/分辨率" });
     const qualityLabel = activeQualityOptions.find((item) => item.value === props.quality)?.label || qualityOptions.find((item) => item.value === props.quality)?.label || props.quality || "自动";
-    const usesImageResolutionPicker = props.mode === "image" && supportsImageResolutionPresets(props.imageProfile.size);
-    const imageResolutionOptions = usesImageResolutionPicker ? buildImageResolutionOptions(props.imageProfile.size.values) : [];
+    // 尺寸/比例/分辨率选项取同显示名分组内全部模型的并集，路由模型只决定发送参数。
+    const mergedProfile = mergedImageCapabilityConfig(props.config, props.model || props.config.imageModel);
+    const usesImageResolutionPicker = props.mode === "image" && supportsImageResolutionPresets(mergedProfile.size);
+    const imageResolutionOptions = usesImageResolutionPicker ? buildImageResolutionOptions(mergedProfile.size.values) : [];
     const activeImageResolution = usesImageResolutionPicker ? imageResolutionOption(imageResolutionOptions, props.ratio) : undefined;
     const activeImageRatio = activeImageResolution?.ratio || imageRatioForSize(props.ratio) || (props.ratio.includes(":") ? props.ratio : "1:1");
     const activeImageResolutionChoice: ImageResolutionChoice = activeImageResolution?.tier || "auto";
-    const imageResolutionChoiceOptions = usesImageResolutionPicker ? imageResolutionChoices(props.imageProfile.size.values) : [];
+    const imageResolutionChoiceOptions = usesImageResolutionPicker ? imageResolutionChoices(mergedProfile.size.values) : [];
     const imageRatios = usesImageResolutionPicker
         ? Array.from(new Set(imageResolutionOptions.filter((item) => !activeImageResolution || item.tier === activeImageResolution.tier).map((item) => item.ratio)))
-        : props.imageProfile.size.values.length ? props.imageProfile.size.values : ratioOptions.map((item) => item.value);
+        : mergedProfile.size.values.length ? mergedProfile.size.values : ratioOptions.map((item) => item.value);
     const ratios = props.mode === "video" ? props.videoProfile.ratios : imageRatios;
     const resolutions = props.mode === "video" ? props.videoProfile.resolutions.map((value) => ({ value: value.replace(/p$/i, ""), label: videoResolutionLabel(value) })) : resolutionOptions;
     const selectImageRatio = (nextRatio: string) => {
@@ -1154,7 +1213,7 @@ function GenerationSettingsMenu(props: ComposerProps) {
     };
     const selectImageResolution = (choice: ImageResolutionChoice) => {
         if (choice === "auto") {
-            props.setRatio(props.imageProfile.size.values.includes("auto") ? "auto" : activeImageRatio);
+            props.setRatio(mergedProfile.size.values.includes("auto") ? "auto" : activeImageRatio);
             return;
         }
         const nextSize = imageSizeForResolution(imageResolutionOptions, choice, activeImageRatio) || imageResolutionOptions.find((item) => item.tier === choice)?.size;
@@ -1162,13 +1221,13 @@ function GenerationSettingsMenu(props: ComposerProps) {
     };
     const videoResolutionSupported = props.mode === "video" && resolutions.length > 0;
     const imageSummary = [
-        ...(props.imageProfile.size.parameter !== "none" ? [usesImageResolutionPicker ? formatImageResolutionSize(props.ratio, imageResolutionOptions) : props.ratio] : []),
+        ...(mergedProfile.size.parameter !== "none" ? [usesImageResolutionPicker ? formatImageResolutionSize(props.ratio, imageResolutionOptions) : props.ratio] : []),
         ...(props.imageProfile.quality.supported ? [qualityLabel] : []),
         ...(props.imageProfile.maxOutputs > 1 ? [props.count] : []),
     ].join(" · ");
     const summary = props.mode === "video" ? [props.ratio, ...(videoResolutionSupported ? [videoResolutionLabel(props.videoQuality)] : [])].join(" · ") : imageSummary;
     const panel = <div className="creation-parameter-menu">
-        {props.mode === "video" || props.imageProfile.size.parameter !== "none" ? <SettingSection title="画幅" value={props.mode === "image" && usesImageResolutionPicker ? activeImageRatio : props.ratio}><div className="creation-parameter-content"><div className="creation-choice-grid is-ratio">{ratios.map((value) => { const selected = props.mode === "image" && usesImageResolutionPicker ? value === activeImageRatio : value === props.ratio; return <button key={value} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => { if (props.mode === "image") selectImageRatio(value); else props.setRatio(value); setCustomRatioOpen(false); }}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>; })}</div>{props.mode !== "video" && props.imageProfile.size.allowCustom && (customRatioOpen ? <label className="creation-custom-value"><span>宽 x 高</span><input value={props.ratio} onFocus={(event) => event.currentTarget.select()} onChange={(event) => props.setRatio(event.target.value)} placeholder="1920x1080 或 2:1" aria-label="自定义图片尺寸或比例" /></label> : <button type="button" className="creation-custom-trigger" onClick={() => setCustomRatioOpen(true)}><Plus />输入自定义尺寸</button>)}</div></SettingSection> : null}
+        {props.mode === "video" || mergedProfile.size.parameter !== "none" ? <SettingSection title="画幅" value={props.mode === "image" && usesImageResolutionPicker ? activeImageRatio : props.ratio}><div className="creation-parameter-content"><div className="creation-choice-grid is-ratio">{ratios.map((value) => { const selected = props.mode === "image" && usesImageResolutionPicker ? value === activeImageRatio : value === props.ratio; return <button key={value} type="button" aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => { if (props.mode === "image") selectImageRatio(value); else props.setRatio(value); setCustomRatioOpen(false); }}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>; })}</div>{props.mode !== "video" && mergedProfile.size.allowCustom && (customRatioOpen ? <label className="creation-custom-value"><span>宽 x 高</span><input value={props.ratio} onFocus={(event) => event.currentTarget.select()} onChange={(event) => props.setRatio(event.target.value)} placeholder="1920x1080 或 2:1" aria-label="自定义图片尺寸或比例" /></label> : <button type="button" className="creation-custom-trigger" onClick={() => setCustomRatioOpen(true)}><Plus />输入自定义尺寸</button>)}</div></SettingSection> : null}
         {props.mode === "video" ? (videoResolutionSupported ? <SettingSection title="清晰度" value={videoResolutionLabel(props.videoQuality)}><div className="creation-choice-grid is-resolution">{resolutions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.videoQuality} className={option.value === props.videoQuality ? "is-selected" : ""} onClick={() => props.setVideoQuality(option.value)}>{option.label}</button>)}</div></SettingSection> : null) : <>
             {imageResolutionChoiceOptions.length ? <SettingSection title="分辨率" value={activeImageResolutionChoice === "auto" ? "自动" : activeImageResolutionChoice.toUpperCase()}><div className="creation-choice-grid is-resolution">{imageResolutionChoiceOptions.map((choice) => <button key={choice} type="button" aria-pressed={choice === activeImageResolutionChoice} className={choice === activeImageResolutionChoice ? "is-selected" : ""} onClick={() => selectImageResolution(choice)}>{choice === "auto" ? "自动" : choice.toUpperCase()}</button>)}</div></SettingSection> : null}
             {props.imageProfile.quality.supported ? <SettingSection title={activeQualityOptions.some((item) => item.value === "1k" || item.value === "2k") ? "分辨率" : "图片质量"} value={qualityLabel}><div className="creation-choice-grid is-quality">{activeQualityOptions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.quality} className={option.value === props.quality ? "is-selected" : ""} onClick={() => props.setQuality(option.value)}><span>{option.label}</span><small>{option.description}</small></button>)}</div></SettingSection> : null}
@@ -1230,7 +1289,7 @@ function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt:
         {creationEmptySuggestions.map((item) => {
             const Icon = item.icon;
             return <button key={item.title} type="button" className="suggest-card" onClick={() => { if (item.openLibrary) onOpenLibrary(); else onStartPrompt(item.mode, item.prompt); }}>
-                <span className={`suggest-icon is-${item.mode}`}><Icon size={15} strokeWidth={2} /></span>
+                <span className={`library-icon-tile suggest-icon is-${item.mode}`}><Icon size={15} strokeWidth={2} /></span>
                 <span className="suggest-copy"><strong>{item.title}</strong><span>{item.hint}</span></span>
             </button>;
         })}
@@ -1497,7 +1556,8 @@ function attachCreationTaskContexts(tasks: GenerationTask[], conversations: Crea
 
 async function materializeCreationTaskResults(tasks: GenerationTask[], signal?: AbortSignal): Promise<PersistedCreationTask[]> {
     return Promise.all(tasks.map(async (task): Promise<PersistedCreationTask> => {
-        if (task.status !== "succeeded" || !task.clientContext) return task;
+        // 文本正文保存在 resultJson，不进入媒体资源化链路。
+        if (task.status !== "succeeded" || !task.clientContext || task.type === "canvas_text") return task;
         try {
             const materialized = await runGenerationConsumer(signal, (managedSignal) => materializeGenerationTaskAssets(task, managedSignal));
             const creationResultUrls = generationTaskMaterializedUrls(materialized);
@@ -1514,11 +1574,19 @@ function reconcileCreationTaskMessages(conversations: CreationConversation[], ta
         let conversationChanged = false;
         let completedAt = conversation.updatedAt;
         const messages = conversation.messages.map((message) => {
-            if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return message;
             const taskIds = new Set(message.taskIds || []);
             const matches = tasks
                 .filter((task) => taskIds.has(task.id) || (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id))
                 .sort((left, right) => (left.clientContext?.batchIndex || 0) - (right.clientContext?.batchIndex || 0));
+            if (message.role === "assistant" && message.mode === "text") {
+                const recovery = recoverCreationTextTask(message, matches);
+                if (!recovery) return message;
+                completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
+                conversationChanged = true;
+                changed = true;
+                return { ...message, ...recovery };
+            }
+            if (message.role !== "assistant" || message.status !== "pending") return message;
             const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
             if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
 
