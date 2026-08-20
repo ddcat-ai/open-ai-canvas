@@ -7,7 +7,7 @@ import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
-import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
+import type { CanvasDisplayConnection, CanvasFolderStyle, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 type NodeBounds = { left: number; top: number; width: number; height: number; count: number } | null;
@@ -26,6 +26,7 @@ type CanvasProjectWorldLayersProps = {
     nodeById: Map<string, CanvasNodeData>;
     visibleNodes: CanvasNodeData[];
     frameChildrenById: Map<string, CanvasNodeData[]>;
+    linkedFolderPreviewNodesById: Map<string, CanvasNodeData[]>;
     dragPreview: DragPreview;
     selectedNodeIds: Set<string>;
     frameDropTargetId: string | null;
@@ -55,6 +56,7 @@ type CanvasProjectWorldLayersProps = {
     onConnectStart: (event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => void;
     onNodeResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onToggleFrame: (nodeId: string) => void;
+    onFolderStyleChange: (nodeId: string, style: CanvasFolderStyle) => void;
     onNodeTitleChange: (nodeId: string, title: string) => void;
     onNodeContextMenu: (event: ReactMouseEvent, nodeId: string) => void;
     onNodeContentChange: (nodeId: string, content: string) => void;
@@ -77,6 +79,13 @@ const EMPTY_CANVAS_NODES: CanvasNodeData[] = [];
 
 export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
     const { viewportScale } = props;
+    const framePreviewNodes = (node: CanvasNodeData) => {
+        const assetFolderId = node.metadata?.folder?.assetFolderId;
+        if (assetFolderId) return props.linkedFolderPreviewNodesById.get(assetFolderId) || EMPTY_CANVAS_NODES;
+        const localChildren = props.frameChildrenById.get(node.id) || EMPTY_CANVAS_NODES;
+        if (localChildren.length) return localChildren;
+        return EMPTY_CANVAS_NODES;
+    };
     return (
         <>
             <svg
@@ -106,13 +115,14 @@ export function CanvasProjectWorldLayers(props: CanvasProjectWorldLayersProps) {
                         key={node.id}
                         data={node}
                         dragOffset={props.dragPreview?.nodeIds.has(node.id) ? props.dragPreview : undefined}
-                        childNodes={props.frameChildrenById.get(node.id) || EMPTY_CANVAS_NODES}
+                        childNodes={framePreviewNodes(node)}
                         scale={viewportScale}
                         isSelected={props.selectedNodeIds.has(node.id)}
                         isDropTarget={props.frameDropTargetId === node.id}
                         onMouseDown={props.onNodeMouseDown}
                         onResize={props.onNodeResize}
                         onToggleCollapsed={props.onToggleFrame}
+                        onFolderStyleChange={props.onFolderStyleChange}
                         onTitleChange={props.onNodeTitleChange}
                         onContextMenu={props.onNodeContextMenu}
                     />

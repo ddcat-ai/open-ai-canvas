@@ -29,6 +29,7 @@ export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasMediaPerformanceMode = "auto" | "quality" | "performance";
 export type CanvasWorkspaceMode = "simple" | "professional";
 export type CanvasToolMode = "move" | "box-select";
+export type CanvasFolderStyle = "glass" | "stacked" | "midnight" | "paper" | "cinema" | "compact";
 export type StoryboardShotDuration = "auto" | "5" | "10" | "15" | "30";
 export type StoryboardShotCount = "auto" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type StoryboardVideoInputMode = "direct" | "keyframe";
@@ -282,6 +283,12 @@ export type CanvasNodeMetadata = {
         collapsed: boolean;
         expandedWidth: number;
         expandedHeight: number;
+    };
+    folder?: {
+        style: CanvasFolderStyle;
+        createdAt: string;
+        assetFolderId?: string;
+        projectId?: string;
     };
     drawingId?: string;
     drawingEngine?: "tldraw" | "excalidraw";

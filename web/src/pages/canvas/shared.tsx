@@ -14,7 +14,7 @@ import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader"
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
+import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, isCanvasFolderNode, isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { getPublicCanvasShare } from "@/services/api/canvas-share";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -209,8 +209,8 @@ export default function SharedCanvasPage() {
         const frame = node.metadata?.frame;
         return {
             ...node,
-            width: collapsed ? 240 : frame?.expandedWidth || node.width,
-            height: collapsed ? 144 : frame?.expandedHeight || node.height,
+            width: collapsed ? (isCanvasFolderNode(node) ? FOLDER_COLLAPSED_WIDTH : 240) : frame?.expandedWidth || node.width,
+            height: collapsed ? (isCanvasFolderNode(node) ? FOLDER_COLLAPSED_HEIGHT : 144) : frame?.expandedHeight || node.height,
             metadata: { ...node.metadata, frame: { collapsed, expandedWidth: collapsed ? node.width : frame?.expandedWidth || node.width, expandedHeight: collapsed ? node.height : frame?.expandedHeight || node.height } },
         };
     }));
@@ -244,7 +244,7 @@ export default function SharedCanvasPage() {
                     const dragged = [node, ...(frameChildrenById.get(nodeId) || [])];
                     dragRef.current = { primaryId: nodeId, nodeIds: dragged.map((item) => item.id), startX: event.clientX, startY: event.clientY, origins: new Map(dragged.map((item) => [item.id, item.position])), moved: false };
                     document.body.style.cursor = "grabbing";
-                }} onResize={() => undefined} onToggleCollapsed={toggleFrame} onTitleChange={unauthorized} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} /> : <CanvasNode key={node.id} data={node} dragOffset={dragRef.current?.nodeIds.includes(node.id) && dragOffset ? dragOffset : undefined} scale={viewport.k} isSelected={selectedNodeId === node.id} isRelated={false} isFocusRelated={false} isConnectionTarget={false} isConnecting={false} showImageInfo={false} readOnly renderNodeContent={renderSharedNode} onMouseDown={(event, nodeId) => {
+                }} onResize={() => undefined} onToggleCollapsed={toggleFrame} onFolderStyleChange={() => undefined} onTitleChange={unauthorized} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} /> : <CanvasNode key={node.id} data={node} dragOffset={dragRef.current?.nodeIds.includes(node.id) && dragOffset ? dragOffset : undefined} scale={viewport.k} isSelected={selectedNodeId === node.id} isRelated={false} isFocusRelated={false} isConnectionTarget={false} isConnecting={false} showImageInfo={false} readOnly renderNodeContent={renderSharedNode} onMouseDown={(event, nodeId) => {
                     event.stopPropagation();
                     if (event.button !== 0) return;
                     const target = nodes.find((item) => item.id === nodeId);

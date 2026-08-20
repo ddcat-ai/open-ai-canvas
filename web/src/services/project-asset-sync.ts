@@ -1,7 +1,7 @@
 import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset, type CanvasAssetSource } from "@/lib/canvas/canvas-node-asset";
 import { readImageMeta } from "@/lib/image-utils";
 import { parseBackendGenerationResult, type BackendGenerationResult } from "@/services/api/generation-task";
-import { linkProjectAsset, updateProjectAssetCategory } from "@/services/api/projects";
+import { linkProjectAsset, moveProjectAsset, updateProjectAssetCategory } from "@/services/api/projects";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
 import { getMediaBlob, resolveMediaUrl, setMediaBlob } from "@/services/file-storage";
 import { createGenerationTaskMaterializer, createIdempotentMaterializeOutput, type MaterializeGenerationTaskOutput } from "@/services/generation-task-materializer";
@@ -27,6 +27,7 @@ type EnsureCanvasNodeAssetOptions = {
     source: CanvasAssetSource;
     taskId?: string;
     category?: AssetCategory;
+    folderId?: string;
     signal?: AbortSignal;
 };
 
@@ -68,16 +69,19 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
         asset = useAssetStore.getState().assets.find((item) => item.id === asset?.id) || asset;
     }
     if (!options.domainProjectId) return { assetId: asset.id, created, linkedToProject: false };
-    await syncAssetToProject(asset.id, options.domainProjectId, declaredCategory, options.signal);
+    await syncAssetToProject(asset.id, options.domainProjectId, declaredCategory, options.folderId, options.signal);
     return { assetId: asset.id, created, linkedToProject: true };
 }
 
-async function syncAssetToProject(assetId: string, domainProjectId: string, category?: AssetCategory, signal?: AbortSignal) {
+async function syncAssetToProject(assetId: string, domainProjectId: string, category?: AssetCategory, folderId?: string, signal?: AbortSignal) {
     throwIfAborted(signal);
     const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === assetId);
     if (!asset) throw new Error("素材写入本地失败");
     const linkedProjectIds = Array.isArray(asset.metadata?.projectIds) ? asset.metadata.projectIds.filter((id): id is string => typeof id === "string") : [];
-    if (linkedProjectIds.includes(domainProjectId)) return;
+    if (linkedProjectIds.includes(domainProjectId)) {
+        if (folderId !== undefined) await moveProjectAsset(domainProjectId, asset.id, folderId, signal);
+        return;
+    }
 
     // 项目关联依赖后端 assets 记录，先强制完成素材同步，不能依赖延迟自动同步的时序。
     await saveRemoteUserDataNow();
@@ -87,11 +91,13 @@ async function syncAssetToProject(assetId: string, domainProjectId: string, cate
         {
             assetId: asset.id,
             category: category || asset.category || "other",
+            folderId,
         },
         signal,
     );
     throwIfAborted(signal);
-    const linked = category && linkedAsset.category !== category ? (await updateProjectAssetCategory(domainProjectId, asset.id, category, signal)).asset : linkedAsset;
+    let linked = category && linkedAsset.category !== category ? (await updateProjectAssetCategory(domainProjectId, asset.id, category, signal)).asset : linkedAsset;
+    if (folderId !== undefined && (linked.folderId || "") !== folderId) linked = (await moveProjectAsset(domainProjectId, asset.id, folderId, signal)).asset;
     throwIfAborted(signal);
     useAssetStore.getState().updateAsset(asset.id, {
         category: linked.category as AssetCategory,

@@ -4,12 +4,12 @@ import { App } from "antd";
 import { saveAs } from "file-saver";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { FRAME_COLLAPSED_HEIGHT, FRAME_COLLAPSED_WIDTH, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
+import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_COLLAPSED_HEIGHT, FRAME_COLLAPSED_WIDTH, getFrameChildIds, isCanvasFolderNode, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { applyBatchPrimaryImage, applyNodeConfigPatch } from "@/lib/canvas/canvas-project-domain";
 import { audioExtension, imageExtension, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFolderStyle, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 
 type UseCanvasNodeEditorOptions = {
     canvasId: string;
@@ -64,9 +64,10 @@ export function useCanvasNodeEditor({
             current.map((node) => {
                 if (node.id !== nodeId) return node;
                 const frameState = node.metadata?.frame;
+                const folder = isCanvasFolderNode(node);
                 return collapsed
                     ? { ...node, width: frameState?.expandedWidth || NODE_DEFAULT_SIZE[CanvasNodeType.Frame].width, height: frameState?.expandedHeight || NODE_DEFAULT_SIZE[CanvasNodeType.Frame].height, metadata: { ...node.metadata, frame: { collapsed: false, expandedWidth: frameState?.expandedWidth || NODE_DEFAULT_SIZE[CanvasNodeType.Frame].width, expandedHeight: frameState?.expandedHeight || NODE_DEFAULT_SIZE[CanvasNodeType.Frame].height } } }
-                    : { ...node, width: FRAME_COLLAPSED_WIDTH, height: FRAME_COLLAPSED_HEIGHT, metadata: { ...node.metadata, frame: { collapsed: true, expandedWidth: node.width, expandedHeight: node.height } } };
+                    : { ...node, width: folder ? FOLDER_COLLAPSED_WIDTH : FRAME_COLLAPSED_WIDTH, height: folder ? FOLDER_COLLAPSED_HEIGHT : FRAME_COLLAPSED_HEIGHT, metadata: { ...node.metadata, frame: { collapsed: true, expandedWidth: node.width, expandedHeight: node.height } } };
             }),
         );
         setSelectedNodeIds(new Set([nodeId]));
@@ -78,6 +79,14 @@ export function useCanvasNodeEditor({
 
     const handleNodeTitleChange = useCallback((nodeId: string, title: string) => {
         setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, title } : node)));
+    }, [setNodes]);
+
+    const handleFolderStyleChange = useCallback((nodeId: string, style: CanvasFolderStyle) => {
+        setNodes((current) => current.map((node) => {
+            if (node.id !== nodeId || !isCanvasFolderNode(node)) return node;
+            const folder = node.metadata!.folder!;
+            return { ...node, metadata: { ...node.metadata, folder: { ...folder, style, createdAt: folder.createdAt || new Date().toISOString() } } };
+        }));
     }, [setNodes]);
 
     const toggleNodeFreeResize = useCallback((nodeId: string) => {
@@ -180,6 +189,7 @@ export function useCanvasNodeEditor({
         collapsingBatchIds,
         downloadNodeImage,
         handleConfigNodeChange,
+        handleFolderStyleChange,
         handleFontSizeChange,
         handleNodeContentChange,
         handleNodePromptChange,

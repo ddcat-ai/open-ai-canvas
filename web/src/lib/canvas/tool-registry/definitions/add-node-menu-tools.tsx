@@ -1,4 +1,4 @@
-import { Clapperboard, FolderOpen, Image as ImageIcon, Layers3, Music2, Palette, PanelTop, Pencil, Type, UploadCloud, UserRound, Video } from "lucide-react";
+import { Clapperboard, Folder, FolderOpen, Image as ImageIcon, Layers3, Music2, Palette, PanelTop, Pencil, Type, UploadCloud, UserRound, Video } from "lucide-react";
 
 import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
 
@@ -10,6 +10,7 @@ export const addNodeMenuCommands: AddNodeMenuCommand[] = [
     { id: "drawing", label: "绘图", icon: <Pencil />, section: "node", defaultOrder: 20, run: (ctx) => ctx.handlers.onAddDrawing() },
     { id: "script", label: "分镜脚本", icon: <Clapperboard />, badge: "核心", section: "node", defaultOrder: 30, run: (ctx) => ctx.handlers.onAddScript() },
     { id: "frame", label: "背板", icon: <PanelTop />, section: "node", defaultOrder: 40, applicable: (ctx) => ctx.workspaceMode !== "simple", run: (ctx) => ctx.handlers.onAddFrame() },
+    { id: "folder", label: "文件夹", icon: <Folder />, badge: "6 款", section: "node", defaultOrder: 45, run: (ctx) => ctx.handlers.onAddFolder() },
     { id: "image", label: "图片", icon: <ImageIcon />, section: "node", defaultOrder: 50, run: (ctx) => ctx.handlers.onAddImage() },
     { id: "video", label: "视频", icon: <Video />, section: "node", defaultOrder: 60, run: (ctx) => ctx.handlers.onAddVideo() },
     { id: "director", label: "导演台", icon: <Layers3 />, badge: "3D", section: "node", defaultOrder: 70, applicable: (ctx) => ctx.workspaceMode !== "simple", run: (ctx) => ctx.handlers.onOpenDirector() },

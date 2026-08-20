@@ -193,6 +193,8 @@ export default function CreatePage() {
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
+        const maxReferences = videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0;
+        if (attachments.length > maxReferences) setAttachments((current) => current.slice(0, maxReferences));
     }, [mode, selectedModel, videoProfile]);
 
     useEffect(() => {
@@ -812,7 +814,7 @@ function CreationHistoryDrawer({ open, conversations, activeId, onClose, onSelec
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
     return <div className="creation-user-message-references" aria-label="本次引用">{references.map((reference) => {
         const Icon = reference.kind === "skill" ? Sparkles : reference.kind === "image" ? ImageIcon : reference.kind === "video" ? Film : reference.kind === "audio" ? Music2 : FileText;
-        return <span key={reference.id} className="creation-user-message-reference">{reference.previewUrl && (reference.kind === "image" || reference.kind === "video") ? <img src={reference.previewUrl} alt="" /> : <Icon />}<span>{reference.label}</span></span>;
+        return <span key={reference.id} className="creation-user-message-reference">{reference.previewUrl && reference.kind === "video" ? <video src={reference.previewUrl} muted playsInline preload="metadata" aria-label={reference.label} /> : reference.previewUrl && reference.kind === "image" ? <img src={reference.previewUrl} alt="" /> : <Icon />}<span>{reference.label}</span></span>;
     })}</div>;
 }
 
@@ -868,13 +870,19 @@ function CreationComposer(props: ComposerProps) {
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
     const imageSettingsSupported = props.imageProfile.size.parameter !== "none" || props.imageProfile.quality.supported || props.imageProfile.maxOutputs > 1;
+    const primaryAttachment = props.attachments[0];
+    const remainingAttachments = props.attachments.slice(1);
     return <section className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
             <input ref={props.fileInputRef} type="file" hidden accept={props.mode === "video" ? "image/*,video/*" : "image/*"} multiple onChange={props.onFileChange} />
-            <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>
+            {primaryAttachment ? <div className="creation-chat-reference-slot">
+                <button type="button" className="creation-chat-reference-preview" onClick={() => { const video = isVideoAttachment(primaryAttachment); setPreviewType(video ? "video" : "image"); setPreviewUrl(video ? primaryAttachment.url : primaryAttachment.previewUrl); }} aria-label={`放大预览 ${primaryAttachment.name}`}>{isVideoAttachment(primaryAttachment) ? <video src={primaryAttachment.url} poster={primaryAttachment.previewUrl !== primaryAttachment.url ? primaryAttachment.previewUrl : undefined} muted playsInline preload="metadata" aria-label={primaryAttachment.name} /> : <img src={primaryAttachment.previewUrl} alt={primaryAttachment.name} />}<span aria-hidden="true"><Maximize2 /></span></button>
+                <button type="button" className="creation-chat-reference-remove" onClick={() => props.onRemoveAttachment(primaryAttachment.id)} aria-label={`移除 ${primaryAttachment.name}`} disabled={props.busy}><X /></button>
+                <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "继续添加参考内容"}><button type="button" className="creation-chat-reference-add" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="继续添加参考内容"><Plus /></button></Tooltip>
+            </div> : <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>}
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
-                {props.attachments.length ? <div className="creation-chat-attachment-strip">{props.attachments.map((item) => {
+                {remainingAttachments.length ? <div className="creation-chat-attachment-strip">{remainingAttachments.map((item) => {
                     const isVideo = isVideoAttachment(item);
                     const url = isVideo ? item.url : item.previewUrl;
                     return <div key={item.id} className="creation-chat-attachment"><button type="button" className="creation-chat-attachment-preview" onClick={() => { setPreviewType(isVideo ? "video" : "image"); setPreviewUrl(url); }} aria-label={`放大预览 ${item.name}`} disabled={!url}>{isVideo ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : <img src={item.previewUrl} alt={item.name} />}<span aria-hidden="true"><Maximize2 /></span></button><button type="button" className="creation-chat-attachment-remove" onClick={() => props.onRemoveAttachment(item.id)} aria-label={`移除 ${item.name}`}><X /></button></div>;
