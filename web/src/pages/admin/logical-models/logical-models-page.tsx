@@ -1,7 +1,7 @@
 import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag } from "antd";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
+import { FlaskConical, GitBranch, Layers3, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
@@ -14,6 +14,7 @@ import { listAdminChannels } from "@/services/api/auth";
 import { listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
 import {
     createAdminLogicalModel,
+    deleteAdminLogicalModel,
     listAdminLogicalModels,
     simulateAdminLogicalModel,
     updateAdminLogicalModel,
@@ -71,6 +72,7 @@ export default function LogicalModelsPage() {
     const [channelEnabled, setChannelEnabled] = useState<Record<string, boolean>>({});
     const [editingModel, setEditingModel] = useState<AdminLogicalModel | null | undefined>();
     const [saving, setSaving] = useState(false);
+    const [deletingModelId, setDeletingModelId] = useState<string>();
     const [simulatingModel, setSimulatingModel] = useState<AdminLogicalModel>();
     const [simulationIntent, setSimulationIntent] = useState<ModelRequestIntent>();
     const [simulationResult, setSimulationResult] = useState<RouteSimulationResult>();
@@ -180,6 +182,21 @@ export default function LogicalModelsPage() {
         }
     };
 
+    const removeModel = async (item: AdminLogicalModel) => {
+        setDeletingModelId(item.id);
+        try {
+            await deleteAdminLogicalModel(item.id);
+            setModels((current) => current.filter((model) => model.id !== item.id));
+            if (paginatedModels.length === 1 && page > 1) setPage(page - 1);
+            message.success("前台模型已删除");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "删除前台模型失败");
+            throw error;
+        } finally {
+            setDeletingModelId(undefined);
+        }
+    };
+
     const openSimulation = (item: AdminLogicalModel) => {
         setSimulationIntent({
             capability: item.capability,
@@ -238,9 +255,23 @@ export default function LogicalModelsPage() {
             render: (_, item) => (
                 <AdminRowActions
                     primary={{ label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openModel(item) }}
+                    visibleActionCount={1}
                     actions={[
                         { key: "simulate", label: "模拟供应线路匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
                         { key: "toggle", label: item.enabled ? "停用" : "启用", onClick: () => void toggleModel(item) },
+                        {
+                            key: "delete",
+                            label: "删除模型",
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            disabled: deletingModelId === item.id,
+                            confirm: {
+                                title: `删除前台模型“${item.name}”？`,
+                                description: "删除后模型将从目录中移除，不能在页面恢复；历史任务和版本记录会保留。排队中或进行中的任务仍在使用时无法删除。",
+                                okText: "确认删除",
+                            },
+                            onClick: () => removeModel(item),
+                        },
                     ]}
                 />
             ),
