@@ -32,6 +32,7 @@
 | --- | --- | --- | --- | --- |
 | <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
 | <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 快乐机艺术小组，一支跨学科的艺术创作团队，持续探索数字+艺术的全新表达形式。 | 暂无 |
+| <img src="assets/metaso.png" alt="秘塔" width="160"> | 企业 | 秘塔 | **MiniMax H3 视频生成 API｜秘塔科技**<br><br>秘塔科技提供高性价比的 MiniMax H3 视频生成服务：**768P 仅 0.09 元/秒，2K 仅 0.15 元/秒**。支持原生 2K、音画同步，API 兼容 **OpenAI 协议**，同时支持 **ComfyUI**，无需自行部署 GPU。<br><br>🎁 通过[无限画布专属链接注册](https://metaso.cn/minimax-h3/?s=dd)，即可领取赠送额度及专属优惠。 | [metaso.cn](https://metaso.cn/minimax-h3/?s=dd) |
 
 ## 团队成员
 
