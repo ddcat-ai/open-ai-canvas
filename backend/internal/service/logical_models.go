@@ -408,6 +408,37 @@ func (s *Service) SaveAdminLogicalModel(actor *model.User, id string, req Logica
 	return s.buildAdminLogicalModel(*item, graph, systemChannelByID)
 }
 
+func (s *Service) DeleteAdminLogicalModel(actor *model.User, id string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	item, err := s.repo.LogicalModel(strings.TrimSpace(id))
+	if logicalModelNotFound(err) {
+		return BadAuthRequest("前台模型不存在或已删除")
+	}
+	if err != nil {
+		return err
+	}
+	if item.ArchivedAt != nil {
+		return BadAuthRequest("前台模型不存在或已删除")
+	}
+	audit, err := newAdminAuditEvent(actor, "logical_model.archive", "logical_model", item.ID, "归档前台模型", map[string]any{"code": item.Code, "name": item.Name})
+	if err != nil {
+		return err
+	}
+	if err := s.repo.ArchiveLogicalModel(item.ID, audit, time.Now()); err != nil {
+		if errors.Is(err, repository.ErrLogicalModelInUse) {
+			return BadAuthRequest("前台模型仍被排队中或进行中任务使用，请等待任务结束后再归档")
+		}
+		if logicalModelNotFound(err) {
+			return BadAuthRequest("前台模型不存在或已删除")
+		}
+		return err
+	}
+	s.invalidateRouteCatalog()
+	return nil
+}
+
 func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalModelRequest) (*model.LogicalModel, *model.LogicalModelRevision, []model.LogicalModelRoute, bool, error) {
 	code := strings.ToLower(strings.TrimSpace(req.Code))
 	name := strings.TrimSpace(req.Name)
@@ -463,6 +494,9 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 		item, err = s.repo.LogicalModel(id)
 		if err != nil {
 			return nil, nil, nil, false, err
+		}
+		if item.ArchivedAt != nil {
+			return nil, nil, nil, false, BadAuthRequest("前台模型不存在或已删除")
 		}
 	}
 	item.Code, item.Name, item.Icon, item.Description, item.Capability = code, name, strings.TrimSpace(req.Icon), strings.TrimSpace(req.Description), capability

@@ -1018,7 +1018,17 @@ func (s *Service) prepareLogicalTaskRetry(task *model.Task, input map[string]any
 		return nil
 	}
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
-	routed, err := s.ResolveLogicalModel(task.LogicalModelID, intent)
+	logicalModel, err := s.repo.LogicalModel(task.LogicalModelID)
+	if err != nil {
+		return err
+	}
+	var routed *RoutedModel
+	if logicalModel.ArchivedAt != nil {
+		// 归档只隐藏新任务的公开目录；历史任务重试必须使用任务快照，不能重新从公开目录选路。
+		routed, err = s.resolveArchivedTaskRoute(task, intent)
+	} else {
+		routed, err = s.ResolveLogicalModel(task.LogicalModelID, intent)
+	}
 	if err != nil {
 		return err
 	}
@@ -1040,6 +1050,56 @@ func (s *Service) prepareLogicalTaskRetry(task *model.Task, input map[string]any
 	task.Provider = "managed"
 	task.InputJSON = string(encoded)
 	return nil
+}
+
+// resolveArchivedTaskRoute 恢复归档模型任务保存的 revision、route 和 channel model 快照。
+// 归档模型不得重新进入公开路由目录；原供应线路失效时应明确拒绝重试，避免静默切换到未知配置。
+func (s *Service) resolveArchivedTaskRoute(task *model.Task, intent ModelRequestIntent) (*RoutedModel, error) {
+	if task == nil || task.LogicalModelID == "" || task.LogicalModelRevisionID == "" || task.RouteID == "" || task.ChannelModelID == "" {
+		return nil, BadAuthRequest("历史任务缺少完整的模型服务快照，无法重试")
+	}
+	logicalModel, err := s.repo.LogicalModel(task.LogicalModelID)
+	if err != nil {
+		return nil, err
+	}
+	if logicalModel.ArchivedAt == nil {
+		return nil, BadAuthRequest("任务模型已恢复为可用模型，请重新选择后重试")
+	}
+	revision, err := s.repo.LogicalModelRevision(task.LogicalModelRevisionID)
+	if err != nil || revision.LogicalModelID != logicalModel.ID {
+		return nil, BadAuthRequest("历史任务前台模型版本不存在或归属不一致")
+	}
+	route, err := s.repo.LogicalModelRoute(task.RouteID)
+	if err != nil || route.LogicalModelRevisionID != revision.ID || route.ChannelModelID != task.ChannelModelID || !route.Enabled || route.Weight <= 0 {
+		return nil, BadAuthRequest("历史任务原模型供应线路已失效，无法重试")
+	}
+	channelModel, err := s.repo.ChannelModel(task.ChannelModelID)
+	if err != nil || !channelModel.Enabled {
+		return nil, BadAuthRequest("历史任务原模型服务已失效，无法重试")
+	}
+	if _, err := s.repo.SystemChannel(channelModel.ChannelID); err != nil {
+		return nil, BadAuthRequest("历史任务原模型渠道已失效，无法重试")
+	}
+	productSpec, err := DecodeCapabilitySpec(revision.CapabilitySpecJSON)
+	if err != nil {
+		return nil, err
+	}
+	defaults, err := decodeLogicalDefaults(revision.DefaultOptionsJSON, productSpec)
+	if err != nil {
+		return nil, err
+	}
+	intent.Options = mergeIntentDefaults(intent.Options, defaults)
+	if match := MatchCapability(productSpec, intent); !match.Matched {
+		return nil, BadAuthRequest("历史任务不再符合前台模型能力：" + strings.Join(match.Reasons, "；"))
+	}
+	capabilitySpec, err := channelModelCapabilitySpec(*channelModel)
+	if err != nil || s.logicalRouteBlocked(cachedLogicalRoute{Route: *route, CapabilitySpec: capabilitySpec, ChannelModel: *channelModel}) {
+		return nil, BadAuthRequest("历史任务原模型供应线路暂不可用，无法重试")
+	}
+	if logicalModel.PricePolicy == "channel" && !channelModel.PriceConfigured {
+		return nil, BadAuthRequest("历史任务原模型价格配置已失效，无法重试")
+	}
+	return &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, ChannelModel: *channelModel, Defaults: defaults}, nil
 }
 
 func (s *Service) finishTaskRouteAttempt(attempt *model.RouteAttempt, task *model.Task, taskErr error) {

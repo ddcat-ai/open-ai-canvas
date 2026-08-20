@@ -457,7 +457,7 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 
 func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
 	logicalModel, err := s.repo.LogicalModel(task.LogicalModelID)
-	if err != nil || !logicalModel.Enabled || logicalModel.ActiveRevisionID != task.LogicalModelRevisionID {
+	if err != nil || (!logicalModel.Enabled && logicalModel.ArchivedAt == nil) || logicalModel.ActiveRevisionID != task.LogicalModelRevisionID {
 		return nil, BadAuthRequest("所选模型计费配置已失效，请重新选择")
 	}
 	route, err := s.repo.LogicalModelRoute(task.RouteID)

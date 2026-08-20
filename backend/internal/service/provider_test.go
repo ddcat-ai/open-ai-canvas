@@ -107,6 +107,102 @@ data: [DONE]
 	}
 }
 
+func TestParseAgentToolPayloadSupportsChatCompletions(t *testing.T) {
+	result, err := parseAgentToolPayload(map[string]interface{}{
+		"choices": []interface{}{map[string]interface{}{
+			"message": map[string]interface{}{
+				"content": "准备读取画布",
+				"tool_calls": []interface{}{map[string]interface{}{
+					"id":       "call-1",
+					"function": map[string]interface{}{"name": "canvas_get_state", "arguments": `{}`},
+				}},
+			},
+		}},
+	}, "chat-completion")
+	if err != nil {
+		t.Fatalf("parseAgentToolPayload() error = %v", err)
+	}
+	if result["text"] != "准备读取画布" {
+		t.Fatalf("text = %v", result["text"])
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	if len(calls) != 1 {
+		t.Fatalf("toolCalls = %#v", result["toolCalls"])
+	}
+	call, _ := calls[0].(map[string]interface{})
+	function, _ := call["function"].(map[string]interface{})
+	if call["id"] != "call-1" || function["name"] != "canvas_get_state" || function["arguments"] != `{}` {
+		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestParseAgentToolPayloadSupportsResponses(t *testing.T) {
+	result, err := parseAgentToolPayload(map[string]interface{}{
+		"output": []interface{}{
+			map[string]interface{}{"type": "reasoning", "summary": []interface{}{map[string]interface{}{"type": "summary_text", "text": "先读取画布，再决定操作"}}},
+			map[string]interface{}{"type": "message", "content": []interface{}{map[string]interface{}{"type": "output_text", "text": "开始操作"}}},
+			map[string]interface{}{"type": "function_call", "call_id": "call-2", "name": "canvas_apply_ops", "arguments": `{"ops":[]}`},
+		},
+	}, "responses")
+	if err != nil {
+		t.Fatalf("parseAgentToolPayload() error = %v", err)
+	}
+	if result["text"] != "开始操作" {
+		t.Fatalf("text = %v", result["text"])
+	}
+	if result["reasoning"] != "先读取画布，再决定操作" {
+		t.Fatalf("reasoning = %v", result["reasoning"])
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	if len(calls) != 1 {
+		t.Fatalf("toolCalls = %#v", result["toolCalls"])
+	}
+	call, _ := calls[0].(map[string]interface{})
+	function, _ := call["function"].(map[string]interface{})
+	if call["id"] != "call-2" || function["name"] != "canvas_apply_ops" || function["arguments"] != `{"ops":[]}` {
+		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestRunAgentToolTaskFallsBackToolChoice(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	var choices []interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		choice, exists := body["tool_choice"]
+		if exists {
+			choices = append(choices, choice)
+		} else {
+			choices = append(choices, nil)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if len(choices) < 3 {
+			_, _ = w.Write([]byte(`{"error":{"message":"tool_choice is incompatible with thinking mode"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"完成","tool_calls":[]}}]}`))
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", AllowLocalChannel: true}
+	result, err := runAgentToolTask(withProviderOutboundPolicy(context.Background(), config), canvasGenerationInput{
+		Config:        config,
+		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{"messages": []interface{}{}, "tool_choice": "required"}},
+	})
+	if err != nil {
+		t.Fatalf("runAgentToolTask() error = %v", err)
+	}
+	if result["text"] != "完成" {
+		t.Fatalf("text = %v", result["text"])
+	}
+	if len(choices) != 3 || choices[0] != "required" || choices[1] != "auto" || choices[2] != nil {
+		t.Fatalf("tool choices = %#v", choices)
+	}
+}
+
 func TestPostStreamingTextSetsStreamHeaders(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -20,16 +20,18 @@ type LogicalModel struct {
 	Enabled     bool   `json:"enabled" gorm:"index"`
 	SortOrder   int    `json:"sortOrder" gorm:"index"`
 	// RevisionSequence 记录已经分配的 revision 版本号，由数据库原子递增。
-	RevisionSequence        int       `json:"-" gorm:"not null;default:0"`
-	ActiveRevisionID        string    `json:"activeRevisionId" gorm:"size:36;index"`
-	PricePolicy             string    `json:"pricePolicy" gorm:"size:24;default:unified"`
-	BillingMode             string    `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits   int64     `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits  int64     `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits int64     `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits int64     `json:"cachedPriceMicrocredits"`
-	CreatedAt               time.Time `json:"createdAt"`
-	UpdatedAt               time.Time `json:"updatedAt"`
+	RevisionSequence        int    `json:"-" gorm:"not null;default:0"`
+	ActiveRevisionID        string `json:"activeRevisionId" gorm:"size:36;index"`
+	PricePolicy             string `json:"pricePolicy" gorm:"size:24;default:unified"`
+	BillingMode             string `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits   int64  `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	// ArchivedAt 仅从可选目录隐藏模型；历史任务、计费和审计仍需读取主体及不可变 revision。
+	ArchivedAt *time.Time `json:"-" gorm:"index"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 // LogicalModelRevision 固化一次可发布的前台能力合同。默认值属于前台模型，不能由供应商隐式决定。

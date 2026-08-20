@@ -103,6 +103,10 @@ export function updateAdminLogicalModel(id: string, input: LogicalModelMutation)
     return request<{ model: AdminLogicalModel }>(apiClient.patch(`/admin/logical-models/${encodeURIComponent(id)}`, input));
 }
 
+export function deleteAdminLogicalModel(id: string) {
+    return request<{ ok: boolean }>(apiClient.delete(`/admin/logical-models/${encodeURIComponent(id)}`));
+}
+
 export function simulateAdminLogicalModel(id: string, intent: ModelRequestIntent) {
     return request<RouteSimulationResult>(apiClient.post(`/admin/logical-models/${encodeURIComponent(id)}/simulate`, intent));
 }

@@ -34,21 +34,29 @@ type AdminAuditPage struct {
 }
 
 func (s *Service) appendAdminAudit(actor *model.User, action string, targetType string, targetID string, summary string, metadata any) error {
+	event, err := newAdminAuditEvent(actor, action, targetType, targetID, summary, metadata)
+	if err != nil {
+		return err
+	}
+	return s.repo.AppendAdminAudit(event)
+}
+
+func newAdminAuditEvent(actor *model.User, action string, targetType string, targetID string, summary string, metadata any) (*model.AdminAuditEvent, error) {
 	if actor == nil {
-		return Unauthorized("请先登录")
+		return nil, Unauthorized("请先登录")
 	}
 	encoded := ""
 	if metadata != nil {
 		data, err := json.Marshal(metadata)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		encoded = string(data)
 	}
-	return s.repo.AppendAdminAudit(&model.AdminAuditEvent{
+	return &model.AdminAuditEvent{
 		ID: newID(), ActorUserID: actor.ID, Action: strings.TrimSpace(action), TargetType: strings.TrimSpace(targetType),
 		TargetID: strings.TrimSpace(targetID), Summary: truncateRunes(strings.TrimSpace(summary), 500), MetadataJSON: encoded, CreatedAt: time.Now(),
-	})
+	}, nil
 }
 
 func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserDetail, error) {
