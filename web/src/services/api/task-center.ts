@@ -391,6 +391,10 @@ export function appendTaskTextDelta(id: string, content: string) {
     return request<TaskTextDelta>(api.post(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content }));
 }
 
+export function completeTextReplayTask(id: string, text: string) {
+    return request<GenerationTask>(api.post(`/tasks/${encodeURIComponent(id)}/text-replay-complete`, { text }));
+}
+
 export function queryTaskTextReplay(id: string, after = 0) {
     return request<TaskTextReplay>(api.get(`/tasks/${encodeURIComponent(id)}/text-deltas`, { params: { after } }));
 }

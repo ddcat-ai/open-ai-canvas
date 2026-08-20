@@ -24,13 +24,15 @@ import { isGenerationTaskCancelled, logicalModelIDForConfig, runBackendGeneratio
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { cancelGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { createTextReplayPublisher } from "@/lib/creation-text-replay";
 import { isLocalDreaminaTaskId, isLocalDreaminaWaitStopped, localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 import { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
 import { beginGenerationConsumer, runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
-import { loadCreationConversations, pendingCreationMediaKey, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { loadCreationConversations, pendingCreationTaskIds, pendingCreationTaskKey, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { recoverCreationTextTask } from "@/services/creation-text-task-recovery";
 import { modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -189,7 +191,7 @@ export default function CreatePage() {
     const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
-    const pendingMediaKey = useMemo(() => pendingCreationMediaKey(conversations), [conversations]);
+    const pendingTaskKey = useMemo(() => pendingCreationTaskKey(conversations), [conversations]);
     const pendingTaskIds = useMemo(() => pendingCreationTaskIds(conversations), [conversations]);
     const shots = useMemo(() => shotsFromMessages(activeConversation?.messages || []), [activeConversation]);
     const visibleShotIndex = shots.length ? selectedShotIndex >= 0 && selectedShotIndex < shots.length ? selectedShotIndex : shots.length - 1 : -1;
@@ -255,7 +257,7 @@ export default function CreatePage() {
     }, [conversations, hydrated]);
 
     useEffect(() => {
-        if (!hydrated || !pendingMediaKey || !pendingTaskIds.length) return;
+        if (!hydrated || !pendingTaskKey || !pendingTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
         const applyTasks = async (tasks: GenerationTask[]) => {
@@ -291,7 +293,7 @@ export default function CreatePage() {
             observationController.abort();
             unsubscribe();
         };
-    }, [hydrated, pendingMediaKey, toast]);
+    }, [hydrated, pendingTaskKey, toast]);
 
     useEffect(() => {
         let cancelled = false;
@@ -536,10 +538,18 @@ export default function CreatePage() {
 							? await buildTextMessageContent(item)
 							: item.content,
 					})));
-					await requestImageQuestion(requestConfig, history, (text) => updateOriginAssistant((item) => ({ ...item, content: text })), {
+					const replayPublisher = createTextReplayPublisher(requestConfig, text);
+					void replayPublisher.start();
+					let finalText = "";
+					await requestImageQuestion(requestConfig, history, (full) => {
+						finalText = full;
+						updateOriginAssistant((item) => ({ ...item, content: full }));
+						replayPublisher.publish(full);
+					}, {
 						signal: requestLifecycle.signal,
 						onReasoning: (reasoning) => updateOriginAssistant((item) => ({ ...item, reasoning })),
 					});
+					replayPublisher.finish(finalText);
 				}
             } else if (mode === "image") {
                 const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
@@ -1546,7 +1556,8 @@ function attachCreationTaskContexts(tasks: GenerationTask[], conversations: Crea
 
 async function materializeCreationTaskResults(tasks: GenerationTask[], signal?: AbortSignal): Promise<PersistedCreationTask[]> {
     return Promise.all(tasks.map(async (task): Promise<PersistedCreationTask> => {
-        if (task.status !== "succeeded" || !task.clientContext) return task;
+        // 文本正文保存在 resultJson，不进入媒体资源化链路。
+        if (task.status !== "succeeded" || !task.clientContext || task.type === "canvas_text") return task;
         try {
             const materialized = await runGenerationConsumer(signal, (managedSignal) => materializeGenerationTaskAssets(task, managedSignal));
             const creationResultUrls = generationTaskMaterializedUrls(materialized);
@@ -1563,11 +1574,19 @@ function reconcileCreationTaskMessages(conversations: CreationConversation[], ta
         let conversationChanged = false;
         let completedAt = conversation.updatedAt;
         const messages = conversation.messages.map((message) => {
-            if (message.role !== "assistant" || message.status !== "pending" || message.mode === "text") return message;
             const taskIds = new Set(message.taskIds || []);
             const matches = tasks
                 .filter((task) => taskIds.has(task.id) || (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id))
                 .sort((left, right) => (left.clientContext?.batchIndex || 0) - (right.clientContext?.batchIndex || 0));
+            if (message.role === "assistant" && message.mode === "text") {
+                const recovery = recoverCreationTextTask(message, matches);
+                if (!recovery) return message;
+                completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
+                conversationChanged = true;
+                changed = true;
+                return { ...message, ...recovery };
+            }
+            if (message.role !== "assistant" || message.status !== "pending") return message;
             const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
             if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
 
