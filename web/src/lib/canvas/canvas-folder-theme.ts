@@ -12,7 +12,7 @@ export const CANVAS_FOLDER_THEME_OPTIONS: ReadonlyArray<{
 ];
 
 export function resolveCanvasFolderTheme(value?: string): CanvasFolderTheme {
-    return CANVAS_FOLDER_THEME_OPTIONS.some((theme) => theme.key === value) ? value as CanvasFolderTheme : "aurora";
+    return CANVAS_FOLDER_THEME_OPTIONS.some((theme) => theme.key === value) ? (value as CanvasFolderTheme) : "aurora";
 }
 
 export function resolveCanvasFolderThemeCover(theme?: string, customCover?: string) {

@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-    applyFrameDrop,
-    canFolderContain,
-    canLinkedFolderArchive,
-    findFrameDropTarget,
-    isCanvasFolderNode,
-} from "@/lib/canvas/canvas-frame";
+import { applyFrameDrop, canFolderContain, canLinkedFolderArchive, findFrameDropTarget, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 

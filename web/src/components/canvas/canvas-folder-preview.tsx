@@ -125,12 +125,11 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
                                 if (!readOnly) setEditing(true);
                             }}
                         >
-                            <span>{data.title}</span>{!readOnly ? <Pencil aria-hidden /> : null}
+                            <span>{data.title}</span>
+                            {!readOnly ? <Pencil aria-hidden /> : null}
                         </button>
                     )}
-                    <span className="canvas-folder-meta">
-                        {style === "midnight" ? formatFolderDate(data.metadata?.folder?.createdAt) : `${childNodes.length} 项内容`}
-                    </span>
+                    <span className="canvas-folder-meta">{style === "midnight" ? formatFolderDate(data.metadata?.folder?.createdAt) : `${childNodes.length} 项内容`}</span>
                 </div>
 
                 {!readOnly ? (
@@ -149,10 +148,7 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
                             <Plus />
                         </button>
                     ) : (
-                        <Dropdown
-                            trigger={["click"]}
-                            menu={folderMenu}
-                        >
+                        <Dropdown trigger={["click"]} menu={folderMenu}>
                             <button
                                 type="button"
                                 className="canvas-folder-action canvas-folder-options"
@@ -168,18 +164,8 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
                 ) : null}
 
                 {!readOnly && showAdd ? (
-                    <Dropdown
-                        trigger={["click"]}
-                        menu={folderMenu}
-                    >
-                        <button
-                            type="button"
-                            className="canvas-folder-style-trigger"
-                            aria-label="切换文件夹样式与主题"
-                            title="切换文件夹样式与主题"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={(event) => event.stopPropagation()}
-                        >
+                    <Dropdown trigger={["click"]} menu={folderMenu}>
+                        <button type="button" className="canvas-folder-style-trigger" aria-label="切换文件夹样式与主题" title="切换文件夹样式与主题" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                             <MoreHorizontal />
                         </button>
                     </Dropdown>

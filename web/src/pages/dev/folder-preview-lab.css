@@ -22,14 +22,14 @@
     color: var(--muted-foreground);
     font-size: var(--fs-label);
     font-weight: 650;
-    letter-spacing: .12em;
+    letter-spacing: 0.12em;
 }
 
 .folder-preview-lab-header h1 {
     margin: var(--space-2) 0 0;
     font-size: var(--fs-display);
     font-weight: 620;
-    letter-spacing: -.04em;
+    letter-spacing: -0.04em;
 }
 
 .folder-preview-lab-header p {
@@ -151,7 +151,7 @@
     margin: 0;
     font-size: var(--fs-title);
     font-weight: 620;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
 }
 
 .folder-preview-lab-section-heading p {
@@ -215,7 +215,9 @@
     padding: var(--space-2) var(--space-4);
     color: var(--fg);
     font-size: var(--fs-body);
-    transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) var(--motion-ease-out);
+    transition:
+        transform var(--motion-state) var(--motion-ease-out),
+        background-color var(--motion-state) var(--motion-ease-out);
 }
 
 .folder-preview-lab-open {
@@ -282,7 +284,9 @@
     overflow: hidden;
     border-radius: var(--r-3xl);
     background: var(--library-surface);
-    transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) var(--motion-ease-out);
+    transition:
+        transform var(--motion-state) var(--motion-ease-out),
+        background-color var(--motion-state) var(--motion-ease-out);
 }
 
 .folder-preview-lab-asset:hover {
@@ -315,16 +319,37 @@
 }
 
 @media (max-width: 760px) {
-    .folder-preview-lab { padding: var(--space-6) var(--space-4) var(--space-12); }
+    .folder-preview-lab {
+        padding: var(--space-6) var(--space-4) var(--space-12);
+    }
     .folder-preview-lab-header,
     .folder-preview-lab-controls,
-    .folder-preview-lab-section-heading { align-items: flex-start; flex-direction: column; }
-    .folder-preview-lab-grid { grid-template-columns: minmax(0, 1fr); }
-    .folder-preview-lab-theme-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .folder-preview-lab-folder { transform: scale(.86); transform-origin: top center; margin-bottom: -40px; }
-    .folder-preview-lab-drawer { inset: var(--space-2); padding: var(--space-4); }
-    .folder-preview-lab-drawer-header { grid-template-columns: 1fr 1fr; }
-    .folder-preview-lab-drawer-header > div { grid-column: 1 / -1; grid-row: 1; }
+    .folder-preview-lab-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .folder-preview-lab-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .folder-preview-lab-theme-catalog {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .folder-preview-lab-folder {
+        transform: scale(0.86);
+        transform-origin: top center;
+        margin-bottom: -40px;
+    }
+    .folder-preview-lab-drawer {
+        inset: var(--space-2);
+        padding: var(--space-4);
+    }
+    .folder-preview-lab-drawer-header {
+        grid-template-columns: 1fr 1fr;
+    }
+    .folder-preview-lab-drawer-header > div {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -332,6 +357,6 @@
     .folder-preview-lab-open,
     .folder-preview-lab-asset,
     .folder-preview-lab-drawer-header button {
-        transition-duration: .01ms !important;
+        transition-duration: 0.01ms !important;
     }
 }

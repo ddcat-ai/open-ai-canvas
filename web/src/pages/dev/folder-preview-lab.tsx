@@ -35,13 +35,7 @@ const PRESET_GROUPS = [
 
 const THEME_SEQUENCE: CanvasFolderTheme[] = ["aurora", "pearl", "ember", "obsidian", "aurora", "pearl"];
 
-const SAMPLE_MEDIA = [
-    "/short-drama-styles/fantasy-3d.jpg",
-    "/short-drama-styles/suspense-noir.jpg",
-    "/short-drama-styles/cyberpunk-neon.jpg",
-    "/short-drama-styles/ink-narrative.jpg",
-    "/short-drama-styles/space-opera.jpg",
-];
+const SAMPLE_MEDIA = ["/short-drama-styles/fantasy-3d.jpg", "/short-drama-styles/suspense-noir.jpg", "/short-drama-styles/cyberpunk-neon.jpg", "/short-drama-styles/ink-narrative.jpg", "/short-drama-styles/space-opera.jpg"];
 
 function makeMediaNode(id: string, title: string, content: string, index: number): CanvasNodeData {
     return {
@@ -75,9 +69,7 @@ const INITIAL_FOLDERS = STYLE_PRESETS.map((preset, index) => makeFolderNode(pres
 const INITIAL_CHILDREN = Object.fromEntries(
     INITIAL_FOLDERS.map((folder, folderIndex) => [
         folder.id,
-        SAMPLE_MEDIA.slice(0, 3 + (folderIndex % 3)).map((source, childIndex) =>
-            makeMediaNode(`${folder.id}-asset-${childIndex}`, ["主视觉", "氛围参考", "场景草图", "色彩方案", "镜头灵感"][childIndex], source, childIndex),
-        ),
+        SAMPLE_MEDIA.slice(0, 3 + (folderIndex % 3)).map((source, childIndex) => makeMediaNode(`${folder.id}-asset-${childIndex}`, ["主视觉", "氛围参考", "场景草图", "色彩方案", "镜头灵感"][childIndex], source, childIndex)),
     ]),
 ) as Record<string, CanvasNodeData[]>;
 
@@ -100,12 +92,7 @@ export default function FolderPreviewLab() {
         setChildrenByFolder((current) => {
             const previous = current[openedId] || [];
             const index = previous.length;
-            const next = makeMediaNode(
-                `${openedId}-asset-${Date.now()}`,
-                `新素材 ${index + 1}`,
-                SAMPLE_MEDIA[index % SAMPLE_MEDIA.length],
-                index,
-            );
+            const next = makeMediaNode(`${openedId}-asset-${Date.now()}`, `新素材 ${index + 1}`, SAMPLE_MEDIA[index % SAMPLE_MEDIA.length], index);
             return { ...current, [openedId]: [...previous, next] };
         });
     };
