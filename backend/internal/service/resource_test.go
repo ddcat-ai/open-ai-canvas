@@ -410,6 +410,32 @@ func TestPrepareResourceDeliveryAllowsExplicitProxyWithCDN(t *testing.T) {
 	}
 }
 
+func TestPrepareResourceDeliverySignsPrivateQiniuCDNURL(t *testing.T) {
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: qiniuKodoProvider, Endpoint: "https://up-z0.qiniup.com", CDNBaseURL: "https://media.example.com",
+		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-qiniu-private-cdn", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: qiniuKodoProvider, Endpoint: "https://up-z0.qiniup.com", Bucket: "private-bucket",
+		ObjectKey: "ai/users/user-1/image/private.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceDeliveryOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.RedirectURL == "" || !strings.HasPrefix(delivery.RedirectURL, "https://media.example.com/ai/users/user-1/image/private.png?") || !strings.Contains(delivery.RedirectURL, "e=") || !strings.Contains(delivery.RedirectURL, "token=") {
+		t.Fatalf("PrepareResourceDelivery() = %q, want a signed Qiniu URL", delivery.RedirectURL)
+	}
+}
+
 func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
