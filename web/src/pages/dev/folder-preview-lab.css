@@ -1,7 +1,10 @@
 .folder-preview-lab {
     min-height: 100dvh;
     overflow: auto;
-    background: var(--workspace-canvas);
+    background-color: var(--workspace-canvas);
+    background-image: radial-gradient(circle, var(--border-semantic) 1.15px, transparent 1.35px);
+    background-position: center top;
+    background-size: 24px 24px;
     color: var(--fg);
     padding: var(--space-10) var(--space-12) var(--space-20);
 }
@@ -49,6 +52,43 @@
     font-size: var(--fs-caption);
 }
 
+.folder-preview-lab-controls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.folder-preview-lab-theme {
+    display: inline-flex;
+    border-radius: var(--r-full);
+    background: var(--library-surface);
+    padding: var(--space-1);
+}
+
+.folder-preview-lab-theme button {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    gap: var(--space-2);
+    border: 0;
+    border-radius: var(--r-full);
+    background: transparent;
+    padding: var(--space-2) var(--space-3);
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+}
+
+.folder-preview-lab-theme button[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.folder-preview-lab-theme svg {
+    width: var(--space-4);
+    height: var(--space-4);
+}
+
 .folder-preview-lab-guide svg,
 .folder-preview-lab-open svg,
 .folder-preview-lab-drawer-header button svg {
@@ -56,10 +96,38 @@
     height: var(--space-4);
 }
 
-.folder-preview-lab-grid {
-    display: grid;
+.folder-preview-lab-section {
     max-width: 1280px;
     margin: 0 auto;
+}
+
+.folder-preview-lab-section + .folder-preview-lab-section {
+    margin-top: var(--space-16);
+}
+
+.folder-preview-lab-section-heading {
+    display: flex;
+    margin-bottom: var(--space-6);
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--space-6);
+}
+
+.folder-preview-lab-section-heading h2 {
+    margin: 0;
+    font-size: var(--fs-title);
+    font-weight: 620;
+    letter-spacing: -.02em;
+}
+
+.folder-preview-lab-section-heading p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+}
+
+.folder-preview-lab-grid {
+    display: grid;
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     gap: var(--space-10) var(--space-8);
 }
@@ -214,7 +282,9 @@
 
 @media (max-width: 760px) {
     .folder-preview-lab { padding: var(--space-6) var(--space-4) var(--space-12); }
-    .folder-preview-lab-header { align-items: flex-start; flex-direction: column; }
+    .folder-preview-lab-header,
+    .folder-preview-lab-controls,
+    .folder-preview-lab-section-heading { align-items: flex-start; flex-direction: column; }
     .folder-preview-lab-grid { grid-template-columns: minmax(0, 1fr); }
     .folder-preview-lab-folder { transform: scale(.86); transform-origin: top center; margin-bottom: -40px; }
     .folder-preview-lab-drawer { inset: var(--space-2); padding: var(--space-4); }

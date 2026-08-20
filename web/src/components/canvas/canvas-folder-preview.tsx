@@ -39,7 +39,7 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(data.title);
     const previewNodes = useMemo(() => childNodes.filter(canPreviewFolderNode).slice(0, 3), [childNodes]);
-    const primaryNode = previewNodes[0];
+    const themeCover = data.metadata?.folder?.themeCover || DEFAULT_FOLDER_COVER;
     const showAdd = style === "glass" || childNodes.length === 0;
 
     useEffect(() => setTitle(data.title), [data.title]);
@@ -54,20 +54,22 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
     return (
         <div className={`canvas-folder-preview canvas-folder-preview-${style}${active ? " is-active" : ""}${isDropTarget ? " is-drop-target" : ""}`}>
             <div className="canvas-folder-back" aria-hidden>
-                <FolderNodeMedia node={primaryNode} fallback />
+                <FolderThemeMedia source={themeCover} />
             </div>
+
+            <div className="canvas-folder-paper-sheet" aria-hidden />
 
             <div className="canvas-folder-preview-stack" aria-hidden>
                 {(previewNodes.length ? previewNodes : [undefined, undefined]).map((node, index) => (
                     <div key={node?.id || `folder-placeholder-${index}`} className={`canvas-folder-preview-card canvas-folder-preview-card-${index + 1}`}>
-                        <FolderNodeMedia node={node} fallback={index === 0} />
+                        <FolderNodeMedia node={node} />
                     </div>
                 ))}
             </div>
 
             <div className="canvas-folder-front">
                 <div className="canvas-folder-front-media" aria-hidden>
-                    <FolderNodeMedia node={primaryNode} fallback />
+                    <FolderThemeMedia source={themeCover} />
                 </div>
                 <div className="canvas-folder-front-tint" aria-hidden />
 
@@ -180,7 +182,11 @@ function canPreviewFolderNode(node: CanvasNodeData) {
     return node.type !== CanvasNodeType.Frame;
 }
 
-function FolderNodeMedia({ node, fallback = false }: { node?: CanvasNodeData; fallback?: boolean }) {
+function FolderThemeMedia({ source }: { source: string }) {
+    return <img src={source} alt="" loading="eager" decoding="async" draggable={false} />;
+}
+
+function FolderNodeMedia({ node }: { node?: CanvasNodeData }) {
     if (node?.type === CanvasNodeType.Image && node.metadata?.content) {
         return <img src={node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
@@ -198,7 +204,7 @@ function FolderNodeMedia({ node, fallback = false }: { node?: CanvasNodeData; fa
         return <span className="canvas-folder-text-preview">{node.metadata?.content || node.title}</span>;
     }
     if (node) return <FileText className="canvas-folder-file-icon" />;
-    return fallback ? <img src={DEFAULT_FOLDER_COVER} alt="" loading="lazy" decoding="async" draggable={false} /> : <span className="canvas-folder-file-sheet" />;
+    return <span className="canvas-folder-file-sheet" />;
 }
 
 function formatFolderDate(value?: string) {

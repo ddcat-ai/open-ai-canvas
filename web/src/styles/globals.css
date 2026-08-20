@@ -6021,6 +6021,7 @@
     }
 
     .canvas-folder-preview {
+        --canvas-folder-front-shape: path("M 28 58 H 112 C 126 58 135 62 144 70 L 174 96 C 182 104 191 108 204 108 H 332 C 348 108 360 120 360 136 V 252 C 360 268 348 280 332 280 H 28 C 12 280 0 268 0 252 V 86 C 0 70 12 58 28 58 Z");
         position: relative;
         width: 100%;
         height: 100%;
@@ -6062,10 +6063,13 @@
 
     .canvas-folder-back,
     .canvas-folder-front,
-    .canvas-folder-preview-card {
+    .canvas-folder-preview-card,
+    .canvas-folder-paper-sheet {
         position: absolute;
         overflow: hidden;
     }
+
+    .canvas-folder-paper-sheet { display: none; }
 
     .canvas-folder-back {
         z-index: 1;
@@ -6125,7 +6129,7 @@
         inset: 0;
         border-radius: var(--r-5xl);
         box-shadow: inset 0 0 0 2px var(--canvas-folder-edge);
-        clip-path: path("M 28 58 H 112 C 126 58 135 62 144 70 L 174 96 C 182 104 191 108 204 108 H 332 C 348 108 360 120 360 136 V 252 C 360 268 348 280 332 280 H 28 C 12 280 0 268 0 252 V 86 C 0 70 12 58 28 58 Z");
+        clip-path: var(--canvas-folder-front-shape);
         backdrop-filter: blur(24px) saturate(118%);
         transition: transform var(--motion-state) var(--motion-ease-out);
     }
@@ -6232,7 +6236,7 @@
         box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--canvas-folder-action-fg) 22%, transparent), 0 12px 26px color-mix(in srgb, var(--cn-spatial-shadow) 52%, transparent);
     }
 
-    .canvas-folder-add > svg { width: 34px; height: 34px; stroke-width: 1.5; }
+    .canvas-folder-add > svg { width: 34px; height: 34px; color: var(--canvas-folder-action-fg); stroke: currentColor; stroke-width: 1.5; }
 
     .canvas-folder-options {
         width: 66px;
@@ -6292,30 +6296,158 @@
     .canvas-folder-file-icon { position: absolute; inset: 0; width: 36px; height: 36px; margin: auto; opacity: .42; }
     .canvas-folder-file-sheet { display: block; width: 100%; height: 100%; background: var(--canvas-folder-surface-strong); }
 
-    /* 三个参考态。stacked 露出内容卡；midnight 把标题压进深色封面标签。 */
+    /* 三个参考态严格保留各自材质：玻璃磨砂、白纸层叠、红黑夜间封面。 */
+    .canvas-folder-preview-glass {
+        --canvas-folder-front-shape: path("M 28 70 H 112 C 126 70 136 74 146 82 L 174 104 C 183 112 192 116 205 116 H 332 C 348 116 360 128 360 144 V 252 C 360 268 348 280 332 280 H 28 C 12 280 0 268 0 252 V 98 C 0 82 12 70 28 70 Z");
+        --canvas-folder-surface: rgba(248, 249, 251, .62);
+        --canvas-folder-surface-strong: rgba(251, 252, 253, .9);
+        --canvas-folder-edge: rgba(255, 255, 255, .78);
+        --canvas-folder-ink: #17181b;
+        --canvas-folder-muted: rgba(23, 24, 27, .54);
+        --canvas-folder-action-bg: rgba(8, 9, 11, .94);
+        --canvas-folder-action-fg: #fff;
+    }
+
+    .canvas-folder-preview-glass .canvas-folder-front-media { opacity: .66; }
+    .canvas-folder-preview-glass .canvas-folder-front-tint { background: rgba(249, 250, 252, .56); }
+    .canvas-folder-preview-glass .canvas-folder-front {
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .74), 0 18px 34px rgba(12, 18, 28, .12);
+        backdrop-filter: blur(28px) saturate(124%);
+    }
+
+    .dark .canvas-folder-preview-glass {
+        --canvas-folder-surface: rgba(10, 12, 16, .54);
+        --canvas-folder-surface-strong: rgba(13, 15, 20, .82);
+        --canvas-folder-edge: rgba(255, 255, 255, .2);
+        --canvas-folder-ink: rgba(255, 255, 255, .96);
+        --canvas-folder-muted: rgba(255, 255, 255, .58);
+        --canvas-folder-action-bg: rgba(246, 247, 249, .94);
+        --canvas-folder-action-fg: #111318;
+    }
+
+    .dark .canvas-folder-preview-glass .canvas-folder-front-media { opacity: .78; }
+    .dark .canvas-folder-preview-glass .canvas-folder-front-tint { background: rgba(7, 9, 13, .5); }
+    .dark .canvas-folder-preview-glass .canvas-folder-front {
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .18), 0 22px 42px rgba(0, 0, 0, .42);
+    }
+
     .canvas-folder-preview-glass .canvas-folder-preview-stack,
     .canvas-folder-preview-midnight .canvas-folder-preview-stack,
     .canvas-folder-preview-cinema .canvas-folder-preview-stack { opacity: 0; }
 
-    .canvas-folder-preview-stacked .canvas-folder-back,
+    .canvas-folder-preview-stacked {
+        --canvas-folder-front-shape: path("M 28 116 H 100 C 116 116 126 120 138 130 L 164 150 C 173 158 183 162 196 162 H 332 C 348 162 360 174 360 190 V 252 C 360 268 348 280 332 280 H 28 C 12 280 0 268 0 252 V 144 C 0 128 12 116 28 116 Z");
+        --canvas-folder-surface: rgba(248, 249, 250, .72);
+        --canvas-folder-surface-strong: rgba(255, 255, 255, .94);
+        --canvas-folder-edge: rgba(255, 255, 255, .84);
+        --canvas-folder-ink: #17181b;
+        --canvas-folder-muted: rgba(23, 24, 27, .5);
+        --canvas-folder-action-bg: rgba(235, 237, 240, .78);
+        --canvas-folder-action-fg: #16181b;
+    }
+
+    .canvas-folder-preview-stacked .canvas-folder-back { opacity: 0; }
+    .canvas-folder-preview-stacked .canvas-folder-paper-sheet {
+        z-index: 3;
+        top: 4px;
+        left: 80px;
+        display: block;
+        width: 238px;
+        height: 214px;
+        border-radius: var(--r-4xl);
+        background: rgba(255, 255, 255, .96);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .82), 0 18px 34px rgba(21, 24, 30, .12);
+    }
+
+    .canvas-folder-preview-stacked .canvas-folder-preview-card-1 {
+        top: 52px;
+        left: 16px;
+        width: 178px;
+        height: 154px;
+        transform: rotate(-5deg);
+    }
+
+    .canvas-folder-preview-stacked .canvas-folder-preview-card-2 {
+        top: 46px;
+        right: 8px;
+        width: 176px;
+        height: 154px;
+        transform: rotate(5deg);
+    }
+
+    .canvas-folder-preview-stacked .canvas-folder-preview-card-3 { opacity: 0; }
+    .canvas-folder-preview-stacked .canvas-folder-front-media { opacity: .18; }
+    .canvas-folder-preview-stacked .canvas-folder-front-tint { background: rgba(232, 234, 238, .72); }
+    .canvas-folder-preview-stacked .canvas-folder-front {
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .82), 0 20px 38px rgba(21, 24, 30, .14);
+        backdrop-filter: blur(30px) saturate(112%);
+    }
+
+    .dark .canvas-folder-preview-stacked {
+        --canvas-folder-surface: rgba(19, 21, 26, .7);
+        --canvas-folder-surface-strong: rgba(29, 32, 38, .94);
+        --canvas-folder-edge: rgba(255, 255, 255, .18);
+        --canvas-folder-ink: rgba(255, 255, 255, .96);
+        --canvas-folder-muted: rgba(255, 255, 255, .56);
+        --canvas-folder-action-bg: rgba(45, 48, 55, .82);
+        --canvas-folder-action-fg: rgba(255, 255, 255, .94);
+    }
+
+    .dark .canvas-folder-preview-stacked .canvas-folder-paper-sheet {
+        background: rgba(38, 41, 48, .98);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 20px 42px rgba(0, 0, 0, .42);
+    }
+
+    .dark .canvas-folder-preview-stacked .canvas-folder-front-tint { background: rgba(17, 19, 24, .72); }
+    .dark .canvas-folder-preview-stacked .canvas-folder-front {
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), 0 22px 42px rgba(0, 0, 0, .46);
+    }
+
     .canvas-folder-preview-paper .canvas-folder-back,
     .canvas-folder-preview-compact .canvas-folder-back { background: var(--canvas-folder-surface-strong); }
 
-    .canvas-folder-preview-stacked .canvas-folder-front-media,
     .canvas-folder-preview-paper .canvas-folder-front-media,
     .canvas-folder-preview-compact .canvas-folder-front-media { opacity: .24; }
 
-    .canvas-folder-preview-stacked .canvas-folder-copy,
+    .canvas-folder-preview-stacked .canvas-folder-copy { top: 142px; bottom: auto; }
     .canvas-folder-preview-paper .canvas-folder-copy { top: 132px; bottom: auto; }
 
     .canvas-folder-preview-midnight,
-    .canvas-folder-preview-cinema { --canvas-folder-ink: rgba(255, 255, 255, .96); --canvas-folder-muted: rgba(255, 255, 255, .58); --canvas-folder-edge: rgba(255, 255, 255, .19); --canvas-folder-surface: rgba(4, 5, 7, .78); --canvas-folder-surface-strong: rgba(8, 9, 12, .9); }
+    .canvas-folder-preview-cinema {
+        --canvas-folder-ink: rgba(255, 255, 255, .96);
+        --canvas-folder-muted: rgba(255, 255, 255, .58);
+        --canvas-folder-edge: rgba(255, 255, 255, .19);
+        --canvas-folder-surface: rgba(4, 5, 8, .7);
+        --canvas-folder-surface-strong: rgba(7, 8, 12, .9);
+        --canvas-folder-action-bg: rgba(5, 6, 9, .88);
+        --canvas-folder-action-fg: rgba(255, 255, 255, .96);
+    }
+    .canvas-folder-preview-midnight {
+        --canvas-folder-front-shape: path("M 28 116 H 118 C 134 116 145 121 157 132 L 180 151 C 189 159 198 162 211 162 H 332 C 348 162 360 174 360 190 V 252 C 360 268 348 280 332 280 H 28 C 12 280 0 268 0 252 V 144 C 0 128 12 116 28 116 Z");
+    }
+    .canvas-folder-preview-midnight .canvas-folder-back,
+    .canvas-folder-preview-cinema .canvas-folder-back {
+        inset: 0 0 34px;
+        border-radius: var(--r-5xl);
+        clip-path: none;
+    }
     .canvas-folder-preview-midnight .canvas-folder-copy,
     .canvas-folder-preview-cinema .canvas-folder-copy { top: 142px; right: 34px; bottom: auto; left: auto; max-width: 170px; }
     .canvas-folder-preview-midnight .canvas-folder-front-media,
-    .canvas-folder-preview-cinema .canvas-folder-front-media { opacity: .78; }
+    .canvas-folder-preview-cinema .canvas-folder-front-media { opacity: .72; }
     .canvas-folder-preview-midnight .canvas-folder-front-tint,
-    .canvas-folder-preview-cinema .canvas-folder-front-tint { background: color-mix(in srgb, var(--canvas-folder-surface) 88%, transparent); }
+    .canvas-folder-preview-cinema .canvas-folder-front-tint { background: rgba(4, 5, 8, .7); }
+    .canvas-folder-preview-midnight .canvas-folder-front,
+    .canvas-folder-preview-cinema .canvas-folder-front {
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .15), 0 24px 48px rgba(0, 0, 0, .44);
+        backdrop-filter: blur(30px) saturate(118%);
+    }
+
+    .dark .canvas-folder-preview-midnight .canvas-folder-front-tint { background: rgba(2, 3, 6, .78); }
+    .dark .canvas-folder-preview-midnight .canvas-folder-front-media { opacity: .82; }
+
+    .canvas-folder-preview-glass .canvas-folder-meta,
+    .canvas-folder-preview-stacked .canvas-folder-meta { display: none; }
 
     .canvas-folder-preview-paper { --canvas-folder-surface: color-mix(in srgb, var(--background) 88%, transparent); }
     .canvas-folder-preview-cinema { filter: drop-shadow(0 28px 32px color-mix(in srgb, var(--cn-spatial-shadow) 72%, transparent)); }

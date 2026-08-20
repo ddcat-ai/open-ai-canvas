@@ -287,6 +287,7 @@ export type CanvasNodeMetadata = {
     folder?: {
         style: CanvasFolderStyle;
         createdAt: string;
+        themeCover?: string;
         assetFolderId?: string;
         projectId?: string;
     };
