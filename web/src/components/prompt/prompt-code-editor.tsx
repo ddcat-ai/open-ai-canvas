@@ -1,5 +1,4 @@
-import { EditorView } from "@codemirror/view";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 
 import { cn } from "@/lib/utils";

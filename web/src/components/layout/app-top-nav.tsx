@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
@@ -84,9 +84,13 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                                 mobileSidebarExpanded && "is-mobile-expanded",
                                 desktopSidebarCollapsed && "is-collapsed",
                             )}
-                            style={desktopSidebarCollapsed ? ({ "--workspace-sidebar-width": "0px" } as CSSProperties) : undefined}
                         >
-                            <WorkspaceSidebarNav onNavigate={handleNavClick} onOpenSearch={() => setPaletteOpen(true)} />
+                            <WorkspaceSidebarNav
+                                collapsed={desktopSidebarCollapsed}
+                                onNavigate={handleNavClick}
+                                onOpenSearch={() => setPaletteOpen(true)}
+                                onExpand={() => setDesktopSidebarCollapsed(false)}
+                            />
                         </aside>
                     ) : null}
 

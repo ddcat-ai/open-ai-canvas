@@ -403,8 +403,9 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
-    --workspace-sidebar-width: 260px;        /* 侧栏展开宽度（组件 token）*/
-    --workspace-sidebar-nav-width: 260px;    /* 侧栏导航内容宽度，不受折叠状态影响 */
+    --workspace-sidebar-width: 208px;        /* 侧栏展开宽度：较原 260px 收窄 20% */
+    --workspace-sidebar-nav-width: 208px;    /* 展开态导航内容宽度 */
+    --workspace-sidebar-collapsed-width: 56px; /* 折叠态保留可发现的图标菜单轨 */
 
     --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
 
@@ -817,6 +818,7 @@
         position: fixed;
         inset: 0;
         isolation: isolate;
+        overflow: hidden;
     }
     textarea {
         resize: none;
@@ -984,6 +986,11 @@
     /* 工作区切换器下拉浮层 */
     .app-workspace-nav-popover {
         box-shadow: none;
+    }
+
+    .workspace-account-popover .ant-popover-inner {
+        border-color: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
+        box-shadow: var(--elevation-overlay) !important;
     }
 
     body.app-spatial-overlays {
@@ -1239,46 +1246,85 @@
         box-shadow: none;
     }
 
-    /* 工作区卡片（侧栏 / 主区）共享外观：边框、圆角、阴影（深浅主题对称） */
+    /* 工作区外壳通过表面明度与间距分层，避免边框和内高光叠加造成线条感。 */
     .app-workspace-sidebar,
     .app-workspace-stage {
-        border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-        border-radius: var(--r-xl);
-        box-shadow:
-            0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-    }
-
-    .dark .app-workspace-sidebar,
-    .dark .app-workspace-stage {
-        box-shadow:
-            0 14px 44px rgba(0, 0, 0, 0.45),
-            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
-    }
-
-    .app-workspace-sidebar {
-        width: var(--workspace-sidebar-width, 260px);
-        background: var(--workspace-sidebar);
-        transition: width var(--motion-state) var(--ease-aceternity), border-color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
-        width: 0 !important;
         border: 0;
+        border-radius: var(--r-xl);
         box-shadow: none;
     }
 
-    /* 侧栏折叠后主区四周贴齐视口：取消外壳留白、行间距与卡片圆角，四周无间隙 */
-    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) {
-        padding: 0;
+    .app-workspace-sidebar {
+        width: var(--workspace-sidebar-width, 208px);
+        background: color-mix(in srgb, var(--workspace-sidebar) 96%, var(--foreground) 4%);
+        transition: width var(--motion-state) var(--ease-aceternity);
     }
 
-    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-main-row {
+    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width) !important;
+    }
+
+    .app-workspace-sidebar-nav {
+        width: var(--workspace-sidebar-nav-width);
+        transition: width var(--motion-state) var(--ease-aceternity);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width);
+    }
+
+    .app-workspace-sidebar-rail-header {
+        display: grid;
+        min-height: 56px;
+        padding: 10px;
+        place-items: center;
+    }
+
+    .app-workspace-sidebar-rail-button {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: var(--r-sm);
+        color: color-mix(in srgb, var(--foreground) 66%, transparent);
+        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-sidebar-rail-button:hover,
+    .app-workspace-sidebar-rail-button:focus-visible {
+        background: var(--surface-hover);
+        color: var(--foreground);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search {
+        padding: 0 10px 4px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search > button,
+    .app-workspace-nav-link.is-collapsed {
+        justify-content: center;
+        gap: 0;
+        padding-inline: 0;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-label,
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-shortcut,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-title,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta {
+        display: none;
+    }
+
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-main {
         gap: 0;
     }
 
-    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-stage {
-        border-radius: 0;
+    .app-workspace-sidebar-scroll-area.is-collapsed {
+        gap: 6px;
+        padding: 4px 10px 8px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-footer {
+        padding: 8px 10px 10px;
     }
 
 
@@ -3537,8 +3583,8 @@
     .canvas-library-count { display: flex; align-items: baseline; gap: 6px; justify-self: end; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-micro); white-space: nowrap; }
     .canvas-library-count strong { color: var(--foreground); font-size: var(--fs-heading-lg); font-variant-numeric: tabular-nums; font-weight: 500; letter-spacing: .02em; }
 
-    /* 画布库保持固定列节奏，行列间距一致。 */
-    .canvas-library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: stretch; gap: var(--space-5) var(--space-4); }
+    /* 画布库使用稳定的最小列宽；卡片不靠负边距或溢出制造层叠。 */
+    .canvas-library-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: stretch; gap: var(--space-6) var(--space-5); }
     .canvas-library-page .app-pagination-bar { position: static; margin-top: var(--space-4); border: 0; background: transparent; padding: var(--space-1-half) var(--space-2); backdrop-filter: none; }
 
     /* === 画布卡片重构（对应 docs/ui-design-system.md）=== */
@@ -3612,6 +3658,166 @@
     .canvas-project-preview-node-label { min-width: 0; overflow: hidden; font-size: var(--fs-micro); font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
 
     .app-canvas-selection-toolbar { border-color: color-mix(in srgb, var(--workspace-accent) 25%, var(--workspace-border)); background: color-mix(in srgb, var(--workspace-accent) 7%, transparent); color: color-mix(in srgb, var(--workspace-accent) 48%, var(--foreground)); }
+
+    /* 画布文件夹：去掉旧的三层叠压，改为更干净的文件夹封面 + 预览图 + 信息带。 */
+    .canvas-folder-card {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: var(--r-xl);
+        background: var(--card-surface);
+        color: var(--foreground);
+        isolation: isolate;
+        content-visibility: auto;
+        contain-intrinsic-size: 0 320px;
+        box-shadow: none;
+        transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out, box-shadow var(--motion-state) ease-out;
+    }
+
+    .canvas-folder-card:hover, .canvas-folder-card:focus-within {
+        background: var(--card-surface-hover);
+        transform: translateY(-2px);
+    }
+
+    .canvas-folder-card:active { transform: translateY(-1px) scale(.995); transition-duration: var(--motion-instant); }
+    .canvas-folder-card.is-selected { box-shadow: 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 54%, transparent); }
+
+    .canvas-folder-open {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        flex-direction: column;
+        gap: 0;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        transition: transform var(--motion-state) var(--motion-ease-out);
+    }
+
+    .canvas-folder-open:focus:not(:focus-visible) { outline: none; }
+    .canvas-folder-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .canvas-folder-card:hover .canvas-folder-open, .canvas-folder-card:focus-within .canvas-folder-open { transform: translateY(-1px); }
+    .canvas-folder-card:active .canvas-folder-open { transform: none; }
+
+    .canvas-folder-preview {
+        position: relative;
+        display: block;
+        flex: 0 0 auto;
+        aspect-ratio: 16 / 10;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 0;
+        background: var(--canvas-cover-surface);
+        box-shadow: none;
+    }
+
+    .canvas-folder-preview > :where(.canvas-project-media, .canvas-project-video, .canvas-project-empty, .canvas-project-preview-canvas),
+    .canvas-folder-preview .cached-resource-image-shell { width: 100%; height: 100%; }
+    .canvas-folder-preview .canvas-project-media img, .canvas-folder-preview .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .canvas-folder-preview .canvas-project-media img { filter: saturate(.94) contrast(1.02); transition: transform 420ms var(--motion-ease-out), filter 240ms ease-out; }
+    .canvas-folder-card:hover .canvas-folder-preview .canvas-project-media img { filter: saturate(1) contrast(1.04); transform: scale(1.025); }
+    .canvas-folder-preview .canvas-project-preview-canvas { background: var(--canvas-cover-surface); }
+
+    .canvas-folder-body {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 6px;
+        padding: var(--space-2);
+    }
+
+    .canvas-folder-heading-row { display: flex; min-width: 0; align-items: center; }
+    .canvas-folder-title { overflow: hidden; color: var(--foreground); font-size: var(--fs-heading-lg); font-weight: 640; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .canvas-folder-title-input { width: 100%; min-width: 0; }
+    .canvas-folder-meta {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 10px;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        font-size: var(--fs-caption);
+        line-height: 1.45;
+    }
+    .canvas-folder-meta-item { min-width: 0; }
+    .canvas-folder-meta-separator { color: color-mix(in srgb, var(--foreground) 24%, transparent); }
+
+    .canvas-folder-select {
+        position: absolute;
+        z-index: 4;
+        top: 12px;
+        left: 12px;
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: var(--r-full);
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        background: color-mix(in srgb, var(--background) 72%, transparent);
+        opacity: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transform: translateY(-2px);
+        transition: opacity var(--motion-instant) ease-out, transform var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .canvas-folder-select.is-visible, .canvas-folder-card:hover .canvas-folder-select, .canvas-folder-card:focus-within .canvas-folder-select { opacity: 1; transform: translateY(0); }
+    .canvas-folder-select input { width: 14px; height: 14px; margin: 0; accent-color: var(--control-check-bg); }
+
+    .canvas-folder-actions {
+        position: absolute;
+        z-index: 4;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--background) 72%, transparent);
+        opacity: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transform: translateY(-2px);
+        transition: opacity var(--motion-instant) ease-out, transform var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .canvas-folder-card:hover .canvas-folder-actions, .canvas-folder-card:focus-within .canvas-folder-actions { opacity: 1; transform: translateY(0); }
+
+    .canvas-folder-rename, .canvas-folder-action {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        place-items: center;
+        border: 0;
+        border-radius: var(--r-full);
+        background: transparent;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    :where(.canvas-folder-rename, .canvas-folder-action):hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
+    :where(.canvas-folder-rename, .canvas-folder-action) svg { width: 16px; height: 16px; }
+
+    @media (max-width: 639px) {
+        .canvas-folder-open { gap: 0; padding: 0; }
+        .canvas-folder-title { font-size: var(--fs-heading); }
+        .canvas-folder-select, .canvas-folder-actions { opacity: 1; transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-folder-card, .canvas-folder-open, .canvas-folder-preview .canvas-project-media img, .canvas-folder-select, .canvas-folder-actions { transition: none; }
+        .canvas-folder-card:hover, .canvas-folder-card:focus-within, .canvas-folder-card:active { transform: none; }
+        .canvas-folder-card:hover .canvas-folder-open, .canvas-folder-card:focus-within .canvas-folder-open { transform: none; }
+        .canvas-folder-card:hover .canvas-folder-preview .canvas-project-media img { transform: none; }
+    }
 
     /* 作品库式页面：与画布列表共享浏览节奏，内容优先于边框和工具栏。 */
     .library-page .app-page-header { border-bottom: 0; }
@@ -3839,6 +4045,7 @@
 
     .canvas-library-page .canvas-library-grid {
         flex: 1;
+        gap: var(--space-5);
     }
 
     .canvas-library-page .canvas-library-search {
@@ -4505,20 +4712,8 @@
         .task-record-actions { opacity: 1; transform: none; }
     }
 
-    @media (max-width: 1600px) and (min-width: 1101px) {
-        .canvas-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
-    @media (max-width: 1100px) and (min-width: 900px) {
-        .canvas-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
-    @media (max-width: 899px) and (min-width: 640px) {
-        .canvas-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
-    }
-
     @media (max-width: 639px) {
-        .canvas-library-grid { grid-template-columns: 1fr; gap: var(--space-4); }
+        .canvas-library-grid { grid-template-columns: 1fr; gap: var(--space-5); }
         .canvas-library-discovery { padding-inline: 0; }
         .canvas-library-filters { min-width: 0; }
         .canvas-library-filter { max-width: 150px; padding-inline: 6px; }

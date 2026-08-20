@@ -10,7 +10,8 @@ import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/works
 import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
-import { CanvasCreateCard, CanvasProjectCard } from "@/components/canvas/canvas-project-card";
+import { CanvasCreateCard } from "@/components/canvas/canvas-project-card";
+import { CanvasFolderCard } from "@/components/canvas/canvas-folder-card";
 import type { CanvasExportFile } from "@/types/canvas-export";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
@@ -326,7 +327,12 @@ export default function CanvasPage() {
                     <CollectionGrid className="canvas-library-grid">
                         {showCreateCard ? <CanvasCreateCard disabled={!hydrated} onClick={createAndEnter} /> : null}
                         {visibleProjects.map((project) => (
-                            <CanvasProjectCard key={project.id} project={project} projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined} />
+                            <CanvasFolderCard
+                                key={project.id}
+                                project={project}
+                                projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined}
+                                onClick={() => enterProject(project.id)}
+                            />
                         ))}
                     </CollectionGrid>
                 ) : (
