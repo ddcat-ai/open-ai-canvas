@@ -6,7 +6,7 @@
     "name": "ddcat"
   },
   "repository": "https://github.com/ddcat-ai/open-ai-canvas",
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "keywords": ["infinite-canvas", "canvas", "mcp", "agent"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",

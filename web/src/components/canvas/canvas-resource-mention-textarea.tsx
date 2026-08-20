@@ -255,6 +255,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                        if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current)) return;
                         if (mention && candidates.length) {
                             if (event.key === "ArrowDown") {
                                 event.preventDefault();
@@ -339,7 +340,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     syncMention(next, event.target.selectionStart);
                     reportContentSize(event.currentTarget);
                 }}
+                onCompositionStart={(event) => {
+                    composingRef.current = true;
+                    props.onCompositionStart?.(event);
+                }}
+                onCompositionEnd={(event) => {
+                    composingRef.current = false;
+                    props.onCompositionEnd?.(event);
+                }}
                 onKeyDown={(event) => {
+                    if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current)) return;
                     if (mention && candidates.length) {
                         if (event.key === "ArrowDown") {
                             event.preventDefault();

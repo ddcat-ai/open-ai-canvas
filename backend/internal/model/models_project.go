@@ -2,6 +2,8 @@ package model
 
 import "time"
 
+const AssetIDMaxLength = 80
+
 type Resource struct {
 	ID       string         `json:"id" gorm:"primaryKey;size:36"`
 	UserID   string         `json:"userId" gorm:"index;size:36;index:idx_resources_user_created,priority:1"`
@@ -10,7 +12,7 @@ type Resource struct {
 	Provider string         `json:"provider" gorm:"size:24"`
 	Endpoint string         `json:"endpoint"`
 	Bucket   string         `json:"bucket" gorm:"size:160"`
-	// 用户 OSS 每次修改都会生成新版本，资源固定引用创建时的版本，避免历史资源因换密钥失效。
+	// 用户 OSS 每次修改都会生成新版本，资源固定引用创建时的存储与密钥；同一存储位置的 CDN 域名可跟随当前配置。
 	StorageSettingID string    `json:"-" gorm:"index;size:36"`
 	ObjectKey        string    `json:"objectKey" gorm:"index"`
 	PublicURL        string    `json:"publicUrl"`
@@ -26,7 +28,7 @@ type Resource struct {
 }
 
 type Asset struct {
-	ID               string             `json:"id" gorm:"primaryKey;size:36"`
+	ID               string             `json:"id" gorm:"primaryKey;size:80"`
 	UserID           string             `json:"userId" gorm:"index;size:36;index:idx_assets_user_updated,priority:1"`
 	Kind             string             `json:"kind" gorm:"index;size:24"`
 	Category         AssetCategory      `json:"category" gorm:"index;size:32"`
@@ -41,7 +43,7 @@ type Asset struct {
 type ProjectAssetLink struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
 	ProjectID string    `json:"projectId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:1"`
-	AssetID   string    `json:"assetId" gorm:"index;size:36;uniqueIndex:idx_project_asset_links_unique,priority:2"`
+	AssetID   string    `json:"assetId" gorm:"index;size:80;uniqueIndex:idx_project_asset_links_unique,priority:2"`
 	FolderID  string    `json:"folderId,omitempty" gorm:"index;size:36"`
 	Position  int       `json:"position" gorm:"index"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -55,6 +57,7 @@ type ProjectAssetFolder struct {
 	Name      string    `json:"name" gorm:"size:240"`
 	NameKey   string    `json:"-" gorm:"size:240;uniqueIndex:idx_project_asset_folders_sibling_name,priority:3"`
 	Style     string    `json:"style" gorm:"size:24"`
+	Theme     string    `json:"theme" gorm:"size:24"`
 	Position  int       `json:"position" gorm:"index"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -69,14 +72,14 @@ type ProjectAssetCandidate struct {
 	Category        AssetCategory `json:"category" gorm:"index;size:32"`
 	Status          string        `json:"status" gorm:"index;size:32"`
 	DetailsJSON     string        `json:"detailsJson" gorm:"type:text"`
-	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:36"`
+	ResolvedAssetID string        `json:"resolvedAssetId,omitempty" gorm:"index;size:80"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
 
 type AssetVersion struct {
 	ID             string             `json:"id" gorm:"primaryKey;size:36"`
-	AssetID        string             `json:"assetId" gorm:"index;size:36;uniqueIndex:idx_asset_versions_number,priority:1"`
+	AssetID        string             `json:"assetId" gorm:"index;size:80;uniqueIndex:idx_asset_versions_number,priority:1"`
 	Version        int                `json:"version" gorm:"uniqueIndex:idx_asset_versions_number,priority:2"`
 	Status         AssetVersionStatus `json:"status" gorm:"index;size:24"`
 	DefinitionJSON string             `json:"definitionJson" gorm:"type:text"`

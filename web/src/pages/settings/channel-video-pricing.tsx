@@ -64,14 +64,15 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                     const protocol = cost?.protocol || defaultProtocolForModel(channel, model);
                     const capability = cost?.capability || modelProtocolCapability(protocol) || "text";
                     const billingMode = cost?.billingMode || "fixed_request";
+                    const displayName = cost?.displayName?.trim() || model;
                     return (
                         <div key={model} className="flex min-w-0 items-center gap-3 rounded-md bg-surface-active px-3 py-2.5 transition-colors hover:bg-surface-hover">
                             <span className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground/[.045] text-foreground/65">
                                 <Settings2 className="size-4" />
                             </span>
                             <div className="min-w-0 flex-1">
-                                <div className="truncate text-xs font-medium" title={model}>
-                                    {model}
+                                <div className="truncate text-xs font-medium" title={displayName === model ? model : `${displayName} (${model})`}>
+                                    {displayName}
                                 </div>
                                 <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
                                     <Tag className="mr-0 text-[var(--fs-tiny)]" bordered={false}>

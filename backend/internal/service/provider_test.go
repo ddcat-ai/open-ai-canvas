@@ -116,6 +116,22 @@ func TestProviderHTTPErrorWarnsAboutUncertain524Billing(t *testing.T) {
 	}
 }
 
+func TestNormalizeNewAPIChannel2ResolutionPreservesDeclaredTiers(t *testing.T) {
+	tests := map[string]string{
+		"1440": "1440p",
+		"2k":   "1440p",
+		"4K":   "2160p",
+		"768p": "768p",
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			if got := normalizeNewAPIChannel2Resolution(input, "custom-video-model"); got != want {
+				t.Fatalf("normalizeNewAPIChannel2Resolution(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+}
+
 func TestVolcengineArkImageBodyUsesJSONReferencesAndDownscalesSize(t *testing.T) {
 	body, err := volcengineArkImageBody(canvasGenerationInput{
 		Prompt: "combine the references",
@@ -134,6 +150,9 @@ func TestVolcengineArkImageBodyUsesJSONReferencesAndDownscalesSize(t *testing.T)
 	}
 	if body["prompt"] != "keep the subject\n\ncombine the references" {
 		t.Fatalf("prompt = %q", body["prompt"])
+	}
+	if watermark, ok := body["watermark"].(bool); !ok || watermark {
+		t.Fatalf("watermark = %#v, want false", body["watermark"])
 	}
 	size, _ := body["size"].(string)
 	parts := strings.Split(size, "x")
@@ -165,6 +184,40 @@ func TestVolcengineArkImageBodyUpscalesPresetBelowMinimumPixels(t *testing.T) {
 	pixels := int64(width) * int64(height)
 	if width%2 != 0 || height%2 != 0 || pixels < volcengineArkImageMinPixels || pixels > volcengineArkImageMaxPixels {
 		t.Fatalf("normalized size = %q", size)
+	}
+}
+
+func TestVolcengineArkImageDataURLsDownloadsRemoteResult(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	imageBytes := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(imageBytes)
+	}))
+	defer server.Close()
+
+	images, err := volcengineArkImageDataURLs(context.Background(), providerConfig{}, imageResponse{
+		Data: []map[string]interface{}{{"url": server.URL + "/generated.png"}},
+	})
+	if err != nil {
+		t.Fatalf("volcengineArkImageDataURLs() error = %v", err)
+	}
+	if len(images) != 1 || !strings.HasPrefix(images[0]["dataUrl"], "data:image/png;base64,") {
+		t.Fatalf("images = %#v", images)
+	}
+
+	svc := newResourceTestService(t)
+	stored, err := svc.persistGeneratedMediaResult("user-1", map[string]interface{}{"mode": "image", "images": images})
+	if err != nil {
+		t.Fatalf("persistGeneratedMediaResult() error = %v", err)
+	}
+	storedImages, ok := stored["images"].([]interface{})
+	if !ok || len(storedImages) != 1 {
+		t.Fatalf("stored images = %#v", stored["images"])
+	}
+	storedImage, ok := storedImages[0].(map[string]interface{})
+	if !ok || !strings.HasPrefix(stringField(storedImage, "storageKey"), "resource:") || !strings.HasPrefix(stringField(storedImage, "dataUrl"), "/api/resources/") {
+		t.Fatalf("stored image = %#v", storedImages[0])
 	}
 }
 
@@ -621,6 +674,64 @@ func TestRunVideoTaskUsesNewAPIForAnyVideoModel(t *testing.T) {
 	want := "POST /v1/videos,GET /v1/videos/video-1,GET /v1/videos/video-1/content"
 	if got := strings.Join(paths, ","); got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunVideoTaskSendsOnlyDeclaredResolutionName(t *testing.T) {
+	tests := []struct {
+		name           string
+		resolutions    []string
+		quality        string
+		withoutProfile bool
+		want           string
+	}{
+		{name: "catalog omits resolution capability", quality: "720"},
+		{name: "auto never invents 720p", resolutions: []string{"720p", "1080p"}, quality: "auto"},
+		{name: "legacy auto never invents 720p", quality: "auto", withoutProfile: true},
+		{name: "missing profile explicit 720 never invents resolution", quality: "720", withoutProfile: true},
+		{name: "declared HD resolution", resolutions: []string{"1080p"}, quality: "1080", want: "1080p"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+			var got string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method + " " + r.URL.Path {
+				case "POST /v1/videos":
+					if err := r.ParseMultipartForm(1 << 20); err != nil {
+						t.Fatalf("ParseMultipartForm() error = %v", err)
+					}
+					got = r.FormValue("resolution_name")
+					_, _ = w.Write([]byte(`{"id":"video-resolution","status":"queued"}`))
+				case "GET /v1/videos/video-resolution":
+					_, _ = w.Write([]byte(`{"id":"video-resolution","status":"completed"}`))
+				case "GET /v1/videos/video-resolution/content":
+					w.Header().Set("Content-Type", "video/mp4")
+					_, _ = w.Write([]byte("video"))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			profile := DefaultModelCapabilityConfigForModel("newapi", "public-video").Video
+			profile.Resolutions = test.resolutions
+			profile.DefaultResolution = ""
+			if test.withoutProfile {
+				profile = nil
+			}
+			_, err := runVideoTask(context.Background(), canvasGenerationInput{
+				Prompt:          "synthetic prompt",
+				Config:          providerConfig{BaseURL: server.URL + "/v1", APIKey: "test-key", Model: "public-video", VideoSeconds: "8", Size: "16:9", VQuality: test.quality},
+				VideoCapability: profile,
+			})
+			if err != nil {
+				t.Fatalf("runVideoTask() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("resolution_name = %q; want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -1167,9 +1278,12 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 	}))
 	defer server.Close()
 
+	profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", "grok-image-video").Video
+	profile.Resolutions = []string{"720p"}
+	profile.DefaultResolution = "720p"
 	result, err := runVideoTask(context.Background(), canvasGenerationInput{
 		Prompt: "make it move",
-		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "grok-image-video", InterfaceType: "newapi-channel-2", VideoSeconds: "15", Size: "720x1280", VQuality: "high"},
+		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "grok-image-video", InterfaceType: "newapi-channel-2", VideoSeconds: "15", Size: "720x1280", VQuality: "720"},
 		ReferenceImages: []providerMedia{
 			{ID: "image-1", DataURL: testReferenceImageDataURL},
 			{ID: "image-2", DataURL: testReferenceImageDataURL},
@@ -1177,6 +1291,7 @@ func TestRunNewAPIChannel2VideoTaskDownloadsTemporaryResult(t *testing.T) {
 		ReferenceVideos: []providerMedia{{ID: "video-1", URL: server.URL + "/reference.mp4"}},
 		ReferenceAudios: []providerMedia{{ID: "audio-1", URL: server.URL + "/reference.mp3"}},
 		Metadata:        map[string]interface{}{"videoEditOperation": "image_to_video"},
+		VideoCapability: profile,
 	})
 	if err != nil {
 		t.Fatalf("runVideoTask() error = %v", err)
@@ -1240,6 +1355,50 @@ func TestNewAPIChannel2SingleImageModelsRequireOneReference(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "当前 0 张") {
 		t.Fatalf("newAPIChannel2VideoBody() error = %q", err)
+	}
+}
+
+func TestNewAPIChannel2SendsOnlyDeclaredResolution(t *testing.T) {
+	tests := []struct {
+		name        string
+		model       string
+		quality     string
+		resolutions []string
+		want        string
+	}{
+		{name: "catalog omits resolution", model: "endpoint-video", quality: "720"},
+		{name: "declared 2K alias", model: "declared-video", quality: "2K", resolutions: []string{"1440p"}, want: "1440p"},
+		{name: "fixed grok 1080p model", model: "grok-video-1.5-1080p", quality: "720", want: "1080p"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", test.model).Video
+			profile.Resolutions = test.resolutions
+			profile.DefaultResolution = ""
+			input := canvasGenerationInput{
+				Config:          providerConfig{Model: test.model, VideoSeconds: "6", Size: "16:9", VQuality: test.quality},
+				VideoCapability: profile,
+			}
+			if strings.HasPrefix(test.model, "grok-video-1.5") {
+				input.ReferenceImages = []providerMedia{{ID: "image-1", DataURL: testReferenceImageDataURL}}
+			}
+
+			body, err := newAPIChannel2VideoRequestBody(input)
+			if err != nil {
+				t.Fatalf("newAPIChannel2VideoRequestBody() error = %v", err)
+			}
+			if body.Resolution != test.want {
+				t.Fatalf("resolution = %q, want %q", body.Resolution, test.want)
+			}
+			mapped, err := requestAsMap(body)
+			if err != nil {
+				t.Fatalf("requestAsMap() error = %v", err)
+			}
+			_, hasResolution := mapped["resolution"]
+			if hasResolution != (test.want != "") {
+				t.Fatalf("resolution presence = %v, want %v; body = %#v", hasResolution, test.want != "", mapped)
+			}
+		})
 	}
 }
 

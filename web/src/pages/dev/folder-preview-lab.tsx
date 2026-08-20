@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, FolderOpen, ImagePlus, Moon, MousePointer2, Sun } from "lucide-react";
 
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
+import { CANVAS_FOLDER_THEME_OPTIONS } from "@/lib/canvas/canvas-folder-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasFolderStyle, CanvasNodeData } from "@/types/canvas";
+import type { CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData } from "@/types/canvas";
 import { CanvasNodeType } from "@/types/canvas";
 
 import "./folder-preview-lab.css";
@@ -27,12 +28,12 @@ const PRESET_GROUPS = [
     {
         key: "derived",
         title: "风格衍生",
-        description: "沿用同一主题皮肤与交互合同的工作流变体。",
+        description: "外形与主题正交组合，六种结构都可切换四套皮肤。",
         presets: STYLE_PRESETS.slice(3),
     },
 ];
 
-const FOLDER_THEME_COVER = "/images/canvas/folder-default-cover.png";
+const THEME_SEQUENCE: CanvasFolderTheme[] = ["aurora", "pearl", "ember", "obsidian", "aurora", "pearl"];
 
 const SAMPLE_MEDIA = [
     "/short-drama-styles/fantasy-3d.jpg",
@@ -63,7 +64,7 @@ function makeFolderNode(style: CanvasFolderStyle, index: number): CanvasNodeData
         width: 360,
         height: 280,
         metadata: {
-            folder: { style, createdAt: new Date(2026, 7, 19 + index).toISOString(), themeCover: FOLDER_THEME_COVER },
+            folder: { style, theme: THEME_SEQUENCE[index], createdAt: new Date(2026, 7, 19 + index).toISOString() },
             frame: { collapsed: true, expandedWidth: 760, expandedHeight: 520 },
         },
     };
@@ -115,7 +116,7 @@ export default function FolderPreviewLab() {
                 <div>
                     <span className="folder-preview-lab-kicker">DEV · INTERACTIVE FOLDER LAB</span>
                     <h1>通用素材文件夹</h1>
-                    <p>红蓝抽象图只作为文件夹主题皮肤；打开文件夹后，内部素材以独立内容卡片展示。悬停、单击和双击都有对应反馈。</p>
+                    <p>文件夹外形与主题皮肤独立：四套主题都不是内部素材。打开后，真实内容以独立卡片展示；悬停、单击、双击与菜单均可交互。</p>
                 </div>
                 <div className="folder-preview-lab-controls">
                     <div className="folder-preview-lab-theme" aria-label="预览主题">
@@ -128,7 +129,7 @@ export default function FolderPreviewLab() {
                     </div>
                     <div className="folder-preview-lab-guide">
                         <MousePointer2 aria-hidden />
-                        <span>试试 hover、双击与样式切换</span>
+                        <span>试试 hover、双击、样式与主题切换</span>
                     </div>
                 </div>
             </header>
@@ -180,6 +181,15 @@ export default function FolderPreviewLab() {
                                                     },
                                                 }))
                                             }
+                                            onThemeChange={(nodeId, nextTheme) =>
+                                                updateFolder(nodeId, (current) => ({
+                                                    ...current,
+                                                    metadata: {
+                                                        ...current.metadata,
+                                                        folder: { ...current.metadata!.folder!, theme: nextTheme, themeCover: undefined },
+                                                    },
+                                                }))
+                                            }
                                         />
                                     </div>
                                     <button type="button" className="folder-preview-lab-open" onClick={() => setOpenedId(folder.id)}>
@@ -191,6 +201,15 @@ export default function FolderPreviewLab() {
                     </div>
                 </section>
             ))}
+
+            <section className="folder-preview-lab-theme-catalog" aria-label="可用文件夹主题">
+                {CANVAS_FOLDER_THEME_OPTIONS.map((item) => (
+                    <div key={item.key}>
+                        <img src={item.cover} alt="" />
+                        <span>{item.label}</span>
+                    </div>
+                ))}
+            </section>
 
             {openedFolder ? (
                 <section className="folder-preview-lab-drawer" aria-label={`${openedFolder.title} 内容`}>

@@ -35,6 +35,7 @@ export type ImageCapabilityConfig = {
 export type VideoCapabilityConfig = {
     references: {
         promptMaxChars: number;
+        minImages: number;
         maxImages: number;
         maxImageBytes: number;
         maxVideos: number;
@@ -133,6 +134,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: 1000,
+            minImages: 0,
             maxImages: 9,
             maxImageBytes: 30 * 1024 * 1024,
             maxVideos: 0,
@@ -145,14 +147,17 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         duration: { selection: "range", min: 1, max: 15, step: 1, default: 6 },
         ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
         defaultRatio: "16:9",
-        resolutions: ["480p", "720p", "1080p", "2160p"],
+        resolutions: ["480p", "720p", "1080p", "1440p", "2160p"],
         defaultResolution: "720p",
         generateAudio: { supported: false, default: false },
         watermark: { supported: false, default: false },
         operations: ["text_to_video", "image_to_video"],
         defaultOperation: "text_to_video",
     };
-    if (protocol === "volcengine-jimeng-video") video.duration = { selection: "enum", values: [5, 10], default: 5 };
+    if (protocol === "volcengine-jimeng-video") {
+        video.duration = { selection: "enum", values: [5, 10], default: 5 };
+        video.resolutions = ["720p"];
+    }
     if (protocol === "gemini-veo") {
         video.duration = { selection: "enum", values: [4, 6, 8], default: 6 };
         video.resolutions = ["720p", "1080p"];
@@ -166,6 +171,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.references.maxAudioDurationSeconds = 15;
         video.generateAudio = { supported: true, default: true };
     }
+    if (protocol === "volcengine-ark-video" || protocol === "newapi-channel-1") video.resolutions = ["480p", "720p", "1080p"];
     if (protocol === "volcengine-ark-video") video.watermark = { supported: true, default: false };
     if (protocol === "novita-video") {
         video.references.maxImages = 1;
@@ -185,9 +191,11 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
-    return cost?.capabilityConfig
-        ? { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video: cost.capabilityConfig.video || fallback.video }
-        : fallback;
+    if (!cost?.capabilityConfig) return fallback;
+    const video = cost.capabilityConfig.video
+        ? { ...fallback.video!, ...cost.capabilityConfig.video, references: { ...fallback.video!.references, ...cost.capabilityConfig.video.references } }
+        : fallback.video;
+    return { ...fallback, ...cost.capabilityConfig, image: cost.capabilityConfig.image || fallback.image, video };
 }
 
 export function normalizeImageValue(profile: ImageCapabilityConfig, value: { size?: string; quality?: string; count?: string; transparentBackground?: string }) {
@@ -222,6 +230,24 @@ export function normalizeVideoValue(profile: VideoCapabilityConfig, value: { sec
     const ratio = profile.ratios.includes(value.ratio || "") ? value.ratio! : profile.defaultRatio;
     const resolution = profile.resolutions.includes(value.resolution || "") ? value.resolution! : profile.defaultResolution;
     return { seconds: String(duration), ratio, resolution };
+}
+
+export function videoResolutionRequest(profile: VideoCapabilityConfig, value: string | undefined) {
+    const requested = String(value || "").trim().toLowerCase();
+    if (!requested || requested === "auto" || requested === "default" || requested === "medium" || requested === "high") return undefined;
+    const candidates = [requested];
+    if (/^\d+$/.test(requested)) candidates.push(`${requested}p`);
+    if (requested === "low") candidates.push("480p");
+    if (requested === "2k") candidates.push("1440p");
+    if (requested === "1440" || requested === "1440p") candidates.push("2k");
+    if (requested === "4k") candidates.push("2160p");
+    if (requested === "2160" || requested === "2160p") candidates.push("4k");
+    const supported = new Map(profile.resolutions.map((resolution) => [resolution.trim().toLowerCase(), resolution.trim()]));
+    for (const candidate of candidates) {
+        const match = supported.get(candidate);
+        if (match) return match;
+    }
+    return undefined;
 }
 
 function normalizeRangeDuration(profile: VideoCapabilityConfig, value: number) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
 
@@ -102,17 +103,9 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 }
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
-	if _, err := s.repo.AssetForUser(userID, id); err != nil {
-		return err
-	}
-	references, err := s.repo.AssetReferenceCount(id)
-	if err != nil {
-		return err
-	}
-	if references > 0 {
-		return BadAuthRequest("素材仍被项目或镜头引用，请先解除引用")
-	}
-	return s.repo.DeleteAsset(userID, id)
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	return s.deleteUserAssetWithResources(userID, id)
 }
 
 func (s *Service) UserAssets(userID string) ([]json.RawMessage, error) {
@@ -295,6 +288,13 @@ func assetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 	if id == "" {
 		id = newID()
 	}
+	if utf8.RuneCountInString(id) > model.AssetIDMaxLength {
+		return model.Asset{}, BadAuthRequest("素材 ID 不能超过 80 个字符")
+	}
+	primaryVersionID := strings.TrimSpace(payload.PrimaryVersionID)
+	if utf8.RuneCountInString(primaryVersionID) > 36 {
+		return model.Asset{}, BadAuthRequest("素材主版本 ID 不能超过 36 个字符")
+	}
 	category := model.AssetCategory(strings.TrimSpace(payload.Category))
 	if category == "" {
 		category = model.AssetCategoryOther
@@ -309,7 +309,7 @@ func assetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 		Kind:             strings.TrimSpace(payload.Kind),
 		Category:         category,
 		Status:           status,
-		PrimaryVersionID: strings.TrimSpace(payload.PrimaryVersionID),
+		PrimaryVersionID: primaryVersionID,
 		Title:            strings.TrimSpace(payload.Title),
 		PayloadJSON:      string(raw),
 		CreatedAt:        createdAt,

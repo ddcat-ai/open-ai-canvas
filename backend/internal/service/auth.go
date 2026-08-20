@@ -70,6 +70,10 @@ func BadAuthRequest(message string) *AuthError {
 	return &AuthError{Status: 400, Message: message}
 }
 
+func NotFound(message string) *AuthError {
+	return &AuthError{Status: 404, Message: message}
+}
+
 func Unauthorized(message string) *AuthError {
 	return &AuthError{Status: 401, Message: message}
 }

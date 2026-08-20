@@ -78,11 +78,21 @@ func RegisterCanvasShareRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "public-canvas-resource:"+c.ClientIP(), 300, time.Minute) {
 			return
 		}
-		stream, err := svc.OpenSharedCanvasResourceRange(c.Param("token"), c.Param("resourceId"), c.GetHeader("Range"))
+		delivery, err := svc.PrepareSharedCanvasResourceDelivery(c.Param("token"), c.Param("resourceId"), c.GetHeader("Range"))
 		if err != nil {
 			fail(c, http.StatusNotFound, errors.New("分享资源不存在"))
 			return
 		}
+		if delivery.RedirectURL != "" {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Content-Security-Policy", "sandbox")
+			c.Header("Referrer-Policy", "no-referrer")
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Header("X-Robots-Tag", "noindex, nofollow")
+			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)
+			return
+		}
+		stream := delivery.Stream
 		defer stream.Body.Close()
 		resource := stream.Resource
 		mimeType := resource.MimeType

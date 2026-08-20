@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Dropdown } from "antd";
 import { FileAudio, FileText, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 
-import type { CanvasFolderStyle, CanvasNodeData } from "@/types/canvas";
+import { CANVAS_FOLDER_THEME_OPTIONS, resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
+import type { CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData } from "@/types/canvas";
 import { CanvasNodeType } from "@/types/canvas";
-
-const DEFAULT_FOLDER_COVER = "/images/canvas/folder-default-cover.png";
 
 const FOLDER_STYLE_OPTIONS: Array<{ key: CanvasFolderStyle; label: string }> = [
     { key: "glass", label: "流光玻璃" },
@@ -25,6 +24,7 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
     onToggleCollapsed,
     onTitleChange,
     onStyleChange,
+    onThemeChange,
 }: {
     data: CanvasNodeData;
     childNodes: CanvasNodeData[];
@@ -34,13 +34,34 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
     onToggleCollapsed: (nodeId: string) => void;
     onTitleChange: (nodeId: string, title: string) => void;
     onStyleChange: (nodeId: string, style: CanvasFolderStyle) => void;
+    onThemeChange: (nodeId: string, theme: CanvasFolderTheme) => void;
 }) {
     const style = data.metadata?.folder?.style || "glass";
+    const theme = resolveCanvasFolderTheme(data.metadata?.folder?.theme);
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(data.title);
     const previewNodes = useMemo(() => childNodes.filter(canPreviewFolderNode).slice(0, 3), [childNodes]);
-    const themeCover = data.metadata?.folder?.themeCover || DEFAULT_FOLDER_COVER;
+    const themeCover = resolveCanvasFolderThemeCover(theme, data.metadata?.folder?.themeCover);
     const showAdd = style === "glass" || childNodes.length === 0;
+    const folderMenu = {
+        selectedKeys: [`style:${style}`, `theme:${theme}`],
+        items: [
+            {
+                key: "styles",
+                label: "文件夹样式",
+                children: FOLDER_STYLE_OPTIONS.map((item) => ({ key: `style:${item.key}`, label: item.label })),
+            },
+            {
+                key: "themes",
+                label: "主题皮肤",
+                children: CANVAS_FOLDER_THEME_OPTIONS.map((item) => ({ key: `theme:${item.key}`, label: item.label })),
+            },
+        ],
+        onClick: ({ key }: { key: string }) => {
+            if (key.startsWith("style:")) onStyleChange(data.id, key.slice(6) as CanvasFolderStyle);
+            if (key.startsWith("theme:")) onThemeChange(data.id, key.slice(6) as CanvasFolderTheme);
+        },
+    };
 
     useEffect(() => setTitle(data.title), [data.title]);
 
@@ -130,17 +151,13 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
                     ) : (
                         <Dropdown
                             trigger={["click"]}
-                            menu={{
-                                selectedKeys: [style],
-                                items: FOLDER_STYLE_OPTIONS.map((item) => ({ key: item.key, label: item.label })),
-                                onClick: ({ key }) => onStyleChange(data.id, key as CanvasFolderStyle),
-                            }}
+                            menu={folderMenu}
                         >
                             <button
                                 type="button"
                                 className="canvas-folder-action canvas-folder-options"
                                 aria-label={`文件夹选项，当前 ${childNodes.length} 项`}
-                                title="切换文件夹样式"
+                                title="切换文件夹样式与主题"
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={(event) => event.stopPropagation()}
                             >
@@ -153,17 +170,13 @@ export const CanvasFolderPreview = React.memo(function CanvasFolderPreview({
                 {!readOnly && showAdd ? (
                     <Dropdown
                         trigger={["click"]}
-                        menu={{
-                            selectedKeys: [style],
-                            items: FOLDER_STYLE_OPTIONS.map((item) => ({ key: item.key, label: item.label })),
-                            onClick: ({ key }) => onStyleChange(data.id, key as CanvasFolderStyle),
-                        }}
+                        menu={folderMenu}
                     >
                         <button
                             type="button"
                             className="canvas-folder-style-trigger"
-                            aria-label="切换文件夹样式"
-                            title="切换文件夹样式"
+                            aria-label="切换文件夹样式与主题"
+                            title="切换文件夹样式与主题"
                             onMouseDown={(event) => event.stopPropagation()}
                             onClick={(event) => event.stopPropagation()}
                         >

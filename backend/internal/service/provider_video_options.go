@@ -160,10 +160,50 @@ func normalizeVideoResolution(value string) string {
 	if strings.EqualFold(value, "4k") {
 		return "2160p"
 	}
+	if strings.EqualFold(value, "2k") {
+		return "1440p"
+	}
 	if strings.HasSuffix(value, "p") {
 		return value
 	}
 	return value + "p"
+}
+
+func videoResolutionNameRequest(profile *VideoCapabilityConfig, value string) string {
+	requested := strings.ToLower(strings.TrimSpace(value))
+	if requested == "" || requested == "auto" || requested == "default" || requested == "medium" || requested == "high" {
+		return ""
+	}
+	if profile == nil {
+		return ""
+	}
+	if len(profile.Resolutions) == 0 {
+		return ""
+	}
+	candidates := []string{requested, strings.ToLower(normalizeVideoResolution(requested))}
+	if requested == "4k" {
+		candidates = append(candidates, "2160p")
+	}
+	if requested == "2160" || requested == "2160p" {
+		candidates = append(candidates, "4k")
+	}
+	for _, supported := range profile.Resolutions {
+		for _, candidate := range candidates {
+			if strings.EqualFold(strings.TrimSpace(supported), candidate) {
+				return strings.TrimSpace(supported)
+			}
+		}
+	}
+	return ""
+}
+
+func isAutomaticVideoResolution(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto", "default", "medium", "high":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeXAIVideoDuration(value string) int {
@@ -180,6 +220,8 @@ func normalizeXAIVideoResolution(value string) string {
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "1440", "1440p", "2k":
+		return "1440p"
 	case "2160", "2160p", "4k":
 		return "2160p"
 	default:

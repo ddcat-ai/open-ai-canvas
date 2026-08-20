@@ -15,12 +15,14 @@ type CreateProjectAssetFolderRequest struct {
 	Name     string `json:"name"`
 	ParentID string `json:"parentId"`
 	Style    string `json:"style"`
+	Theme    string `json:"theme"`
 }
 
 type UpdateProjectAssetFolderRequest struct {
 	Name     *string `json:"name"`
 	ParentID *string `json:"parentId"`
 	Style    *string `json:"style"`
+	Theme    *string `json:"theme"`
 }
 
 func (s *Service) ProjectAssetFolders(userID string, projectID string) ([]model.ProjectAssetFolder, error) {
@@ -55,7 +57,11 @@ func (s *Service) CreateProjectAssetFolder(userID string, projectID string, req 
 	if err != nil {
 		return model.ProjectAssetFolder{}, err
 	}
-	folder := model.ProjectAssetFolder{ID: newID(), ProjectID: projectID, ParentID: parentID, Name: name, NameKey: projectAssetFolderNameKey(name), Style: style, Position: position, CreatedAt: now, UpdatedAt: now}
+	theme, err := validateProjectAssetFolderTheme(req.Theme)
+	if err != nil {
+		return model.ProjectAssetFolder{}, err
+	}
+	folder := model.ProjectAssetFolder{ID: newID(), ProjectID: projectID, ParentID: parentID, Name: name, NameKey: projectAssetFolderNameKey(name), Style: style, Theme: theme, Position: position, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateProjectAssetFolder(&folder); err != nil {
 		if isProjectAssetFolderNameConflict(err) {
 			return model.ProjectAssetFolder{}, BadAuthRequest("同级目录下已存在同名文件夹")
@@ -102,6 +108,13 @@ func (s *Service) UpdateProjectAssetFolder(userID string, projectID string, fold
 		}
 		folder.Style = style
 	}
+	if req.Theme != nil {
+		theme, themeErr := validateProjectAssetFolderTheme(*req.Theme)
+		if themeErr != nil {
+			return model.ProjectAssetFolder{}, themeErr
+		}
+		folder.Theme = theme
+	}
 	if projectAssetFolderNameExists(folders, folder.ParentID, folder.Name, folder.ID) {
 		return model.ProjectAssetFolder{}, BadAuthRequest("同级目录下已存在同名文件夹")
 	}
@@ -147,6 +160,19 @@ func validateProjectAssetFolderStyle(value string) (string, error) {
 		return style, nil
 	default:
 		return "", BadAuthRequest("不支持的文件夹样式")
+	}
+}
+
+func validateProjectAssetFolderTheme(value string) (string, error) {
+	theme := strings.TrimSpace(value)
+	if theme == "" {
+		return "aurora", nil
+	}
+	switch theme {
+	case "aurora", "obsidian", "ember", "pearl":
+		return theme, nil
+	default:
+		return "", BadAuthRequest("不支持的文件夹主题")
 	}
 }
 

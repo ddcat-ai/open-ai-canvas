@@ -9,7 +9,7 @@ import { applyBatchPrimaryImage, applyNodeConfigPatch } from "@/lib/canvas/canva
 import { audioExtension, imageExtension, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { CanvasNodeType, type CanvasFolderStyle, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
 
 type UseCanvasNodeEditorOptions = {
     canvasId: string;
@@ -86,6 +86,14 @@ export function useCanvasNodeEditor({
             if (node.id !== nodeId || !isCanvasFolderNode(node)) return node;
             const folder = node.metadata!.folder!;
             return { ...node, metadata: { ...node.metadata, folder: { ...folder, style, createdAt: folder.createdAt || new Date().toISOString() } } };
+        }));
+    }, [setNodes]);
+
+    const handleFolderThemeChange = useCallback((nodeId: string, theme: CanvasFolderTheme) => {
+        setNodes((current) => current.map((node) => {
+            if (node.id !== nodeId || !isCanvasFolderNode(node)) return node;
+            const folder = node.metadata!.folder!;
+            return { ...node, metadata: { ...node.metadata, folder: { ...folder, theme, themeCover: undefined, createdAt: folder.createdAt || new Date().toISOString() } } };
         }));
     }, [setNodes]);
 
@@ -190,6 +198,7 @@ export function useCanvasNodeEditor({
         downloadNodeImage,
         handleConfigNodeChange,
         handleFolderStyleChange,
+        handleFolderThemeChange,
         handleFontSizeChange,
         handleNodeContentChange,
         handleNodePromptChange,

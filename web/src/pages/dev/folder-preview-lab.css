@@ -105,6 +105,40 @@
     margin-top: var(--space-16);
 }
 
+.folder-preview-lab-theme-catalog {
+    display: grid;
+    max-width: 1280px;
+    margin: var(--space-16) auto 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.folder-preview-lab-theme-catalog div {
+    position: relative;
+    overflow: hidden;
+    min-height: 88px;
+    border-radius: var(--r-2xl);
+    background: var(--library-surface);
+}
+
+.folder-preview-lab-theme-catalog img {
+    width: 100%;
+    height: 100%;
+    min-height: 88px;
+    object-fit: cover;
+}
+
+.folder-preview-lab-theme-catalog span {
+    position: absolute;
+    left: var(--space-3);
+    bottom: var(--space-3);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--color-neutral-950) 72%, transparent);
+    padding: var(--space-1) var(--space-2);
+    color: var(--color-neutral-0);
+    font-size: var(--fs-caption);
+}
+
 .folder-preview-lab-section-heading {
     display: flex;
     margin-bottom: var(--space-6);
@@ -286,6 +320,7 @@
     .folder-preview-lab-controls,
     .folder-preview-lab-section-heading { align-items: flex-start; flex-direction: column; }
     .folder-preview-lab-grid { grid-template-columns: minmax(0, 1fr); }
+    .folder-preview-lab-theme-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .folder-preview-lab-folder { transform: scale(.86); transform-origin: top center; margin-bottom: -40px; }
     .folder-preview-lab-drawer { inset: var(--space-2); padding: var(--space-4); }
     .folder-preview-lab-drawer-header { grid-template-columns: 1fr 1fr; }

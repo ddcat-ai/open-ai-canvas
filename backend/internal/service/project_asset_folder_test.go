@@ -48,3 +48,15 @@ func TestProjectAssetFolderNameIsUniqueWithinSiblingOnly(t *testing.T) {
 		t.Fatal("did not expect a duplicate across different parents")
 	}
 }
+
+func TestValidateProjectAssetFolderTheme(t *testing.T) {
+	if theme, err := validateProjectAssetFolderTheme(""); err != nil || theme != "aurora" {
+		t.Fatalf("expected empty theme to use aurora, got %q: %v", theme, err)
+	}
+	if theme, err := validateProjectAssetFolderTheme(" pearl "); err != nil || theme != "pearl" {
+		t.Fatalf("expected pearl theme, got %q: %v", theme, err)
+	}
+	if _, err := validateProjectAssetFolderTheme("content-image"); err == nil {
+		t.Fatal("expected arbitrary content image theme to fail")
+	}
+}

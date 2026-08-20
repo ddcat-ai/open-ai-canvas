@@ -62,3 +62,86 @@ func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T) {
+	tests := map[string][]string{
+		"newapi-channel-2":        {"480p", "720p", "1080p", "1440p", "2160p"},
+		"volcengine-ark-video":    {"480p", "720p", "1080p"},
+		"volcengine-jimeng-video": {"720p"},
+		"gemini-veo":              {"720p", "1080p"},
+	}
+	for protocol, want := range tests {
+		t.Run(protocol, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel(protocol, "")
+			if profile == nil || profile.Video == nil {
+				t.Fatalf("DefaultModelCapabilityConfigForModel(%q) video profile = nil", protocol)
+			}
+			if fmt.Sprint(profile.Video.Resolutions) != fmt.Sprint(want) {
+				t.Fatalf("resolutions = %v, want %v", profile.Video.Resolutions, want)
+			}
+		})
+	}
+}
+
+func TestNormalizeResolutionSupportsCommonAliases(t *testing.T) {
+	tests := map[string]string{
+		"1440":  "1440p",
+		"1440p": "1440p",
+		"2K":    "1440p",
+		"4K":    "2160p",
+		"768P":  "768p",
+	}
+	for input, want := range tests {
+		if got := normalizeResolution(input); got != want {
+			t.Fatalf("normalizeResolution(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestValidateVideoTaskIgnoresGlobalResolutionWhenCatalogDeclaresNone(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("newapi", "omni").Video
+	profile.Duration = VideoDurationConfig{Selection: "enum", Values: []int{8, 10}, Default: 10}
+	profile.Ratios = []string{"16:9", "9:16"}
+	profile.DefaultRatio = "16:9"
+	profile.Resolutions = nil
+	profile.DefaultResolution = ""
+	profile.References.MaxImages = 0
+	profile.Operations = []string{"text_to_video"}
+	profile.DefaultOperation = "text_to_video"
+
+	err := validateVideoTask(profile, canvasGenerationInput{
+		Config: providerConfig{Model: "omni", VideoSeconds: "10", Size: "16:9", VQuality: "720"},
+	})
+	if err != nil {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}
+
+func TestNormalizeVideoCapabilityAllowsOmittedResolution(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", "endpoint-video").Video
+	profile.Resolutions = nil
+	profile.DefaultResolution = ""
+
+	result, err := NormalizeModelCapabilityConfig("video", "newapi-channel-2", &ModelCapabilityConfig{Version: 1, Video: profile})
+	if err != nil {
+		t.Fatalf("NormalizeModelCapabilityConfig() error = %v", err)
+	}
+	if result.Video == nil || len(result.Video.Resolutions) != 0 || result.Video.DefaultResolution != "" {
+		t.Fatalf("normalized video resolution = %#v", result.Video)
+	}
+}
+
+func TestValidateVideoTaskRequiresDeclaredMinimumImages(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("newapi-channel-2", "image-required-video").Video
+	profile.References.MinImages = 1
+	profile.References.MaxImages = 2
+	profile.Operations = []string{"image_to_video"}
+	profile.DefaultOperation = "image_to_video"
+
+	err := validateVideoTask(profile, canvasGenerationInput{
+		Config: providerConfig{Model: "image-required-video", VideoSeconds: "6", Size: "16:9", VQuality: "720"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "至少需要 1 张参考图") {
+		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}

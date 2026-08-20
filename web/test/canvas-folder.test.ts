@@ -7,6 +7,7 @@ import {
     findFrameDropTarget,
     isCanvasFolderNode,
 } from "@/lib/canvas/canvas-frame";
+import { resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 function folder(id: string, linked = false): CanvasNodeData {
@@ -41,6 +42,13 @@ function image(id: string, content = "resource:image"): CanvasNodeData {
 }
 
 describe("canvas folders", () => {
+    test("文件夹样式与主题皮肤独立解析", () => {
+        expect(resolveCanvasFolderTheme("ember")).toBe("ember");
+        expect(resolveCanvasFolderTheme("unknown")).toBe("aurora");
+        expect(resolveCanvasFolderThemeCover("obsidian")).toContain("folder-theme-obsidian.png");
+        expect(resolveCanvasFolderThemeCover("pearl", "resource:custom-cover")).toBe("resource:custom-cover");
+    });
+
     test("识别文件夹并允许非容器节点进入本地文件夹", () => {
         const target = folder("folder");
         expect(isCanvasFolderNode(target)).toBe(true);

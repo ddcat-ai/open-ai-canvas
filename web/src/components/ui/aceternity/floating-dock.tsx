@@ -40,9 +40,11 @@ type DockMetrics = {
     distance: number;
 };
 
+// magnification 收敛：base 略增以适配圆角方块，magnified 幅度从 +14 降到 +8，
+// 避免 dock 整体跳动，同时保留 Aceternity 接近放大身份。
 const DOCK_METRICS: Record<NonNullable<FloatingDockProps["size"]>, DockMetrics> = {
-    default: { base: 29, magnified: 43, icon: 14, iconMagnified: 19, distance: 108 },
-    compact: { base: 25, magnified: 35, icon: 13, iconMagnified: 17, distance: 88 },
+    default: { base: 30, magnified: 38, icon: 15, iconMagnified: 18, distance: 100 },
+    compact: { base: 26, magnified: 32, icon: 13, iconMagnified: 16, distance: 84 },
 };
 
 const TOUCH_DOCK_METRICS: Record<NonNullable<FloatingDockProps["size"]>, DockMetrics> = {
@@ -228,7 +230,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 aria-expanded={command.expands ? command.active || undefined : undefined}
                 aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}
-                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-full border outline-none", command.quiet && "is-quiet", command.active && "is-active", command.danger && "is-danger")}
+                className={cn("aceternity-dock-command group relative grid size-full place-items-center rounded-[var(--dock-item-radius)] border outline-none", command.quiet && "is-quiet", command.active && "is-active", command.danger && "is-danger")}
                 whileTap={motionEnabled && !command.disabled ? { scale: 0.92 } : undefined}
                 transition={aceternityMotion.spring.dock}
                 onMouseEnter={() => setHovered(true)}

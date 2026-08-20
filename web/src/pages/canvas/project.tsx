@@ -110,6 +110,7 @@ import {
     type CanvasAssistantSession,
     type CanvasConnection,
     type CanvasFolderStyle,
+    type CanvasFolderTheme,
     type CanvasNodeData,
     type CanvasMediaPerformanceMode,
     type StoryboardColumn,
@@ -916,6 +917,7 @@ function InfiniteCanvasPage() {
         downloadNodeImage,
         handleConfigNodeChange,
         handleFolderStyleChange,
+        handleFolderThemeChange,
         handleFontSizeChange,
         handleNodeContentChange,
         handleNodePromptChange,
@@ -943,7 +945,8 @@ function InfiniteCanvasPage() {
         const folder = linkedProjectQuery.data?.assetFolders.find((item) => item.id === folderId);
         if (!folder || !linkedProjectId) throw new Error("素材文件夹已不存在，请刷新后重试");
         const style: CanvasFolderStyle = folder.style === "stacked" || folder.style === "midnight" || folder.style === "paper" || folder.style === "cinema" || folder.style === "compact" ? folder.style : "glass";
-        createFolder(projectAssetInsertPosition, { id: folder.id, projectId: linkedProjectId, title: folder.name, style, createdAt: folder.createdAt });
+        const theme: CanvasFolderTheme = folder.theme === "obsidian" || folder.theme === "ember" || folder.theme === "pearl" ? folder.theme : "aurora";
+        createFolder(projectAssetInsertPosition, { id: folder.id, projectId: linkedProjectId, title: folder.name, style, theme, createdAt: folder.createdAt });
     }, [createFolder, linkedProjectId, linkedProjectQuery.data?.assetFolders, projectAssetInsertPosition]);
 
     const handleFrameToggle = useCallback((nodeId: string) => {
@@ -985,9 +988,10 @@ function InfiniteCanvasPage() {
                 const folder = folderId ? byId.get(folderId) : undefined;
                 if (!folder) return node;
                 const style: CanvasFolderStyle = folder.style === "stacked" || folder.style === "midnight" || folder.style === "paper" || folder.style === "cinema" || folder.style === "compact" ? folder.style : "glass";
-                if (node.title === folder.name && node.metadata?.folder?.style === style) return node;
+                const theme: CanvasFolderTheme = folder.theme === "obsidian" || folder.theme === "ember" || folder.theme === "pearl" ? folder.theme : "aurora";
+                if (node.title === folder.name && node.metadata?.folder?.style === style && node.metadata?.folder?.theme === theme) return node;
                 changed = true;
-                return { ...node, title: folder.name, metadata: { ...node.metadata, folder: { ...node.metadata!.folder!, style } } };
+                return { ...node, title: folder.name, metadata: { ...node.metadata, folder: { ...node.metadata!.folder!, style, theme, themeCover: undefined } } };
             });
             return changed ? next : current;
         });
@@ -1860,6 +1864,7 @@ function InfiniteCanvasPage() {
                                     onNodeResize={handleNodeResize}
                                     onToggleFrame={handleFrameToggle}
                                     onFolderStyleChange={handleFolderStyleChange}
+                                    onFolderThemeChange={handleFolderThemeChange}
                                     onNodeTitleChange={handleNodeTitleChange}
                                     onNodeContextMenu={handleNodeContextMenu}
                                     onNodeContentChange={handleNodeContentChange}

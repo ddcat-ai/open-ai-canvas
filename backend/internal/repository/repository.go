@@ -854,19 +854,7 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 }
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", id)
-		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.CharacterVoiceBinding{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.AssetRepresentation{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("asset_id = ?", id).Delete(&model.AssetVersion{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&model.Asset{}, "id = ? AND user_id = ?", id, userID).Error
-	})
+	return r.DeleteAssetAndResources(userID, id, nil)
 }
 
 func (r *Repository) ReplaceAssets(userID string, assets []model.Asset) error {
@@ -1228,7 +1216,7 @@ func (r *Repository) UpdateProjectAssetFolder(folder *model.ProjectAssetFolder) 
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.ProjectAssetFolder{}).
 			Where("id = ? AND project_id = ?", folder.ID, folder.ProjectID).
-			Updates(map[string]any{"parent_id": folder.ParentID, "name": folder.Name, "name_key": folder.NameKey, "style": folder.Style, "position": folder.Position, "updated_at": folder.UpdatedAt})
+			Updates(map[string]any{"parent_id": folder.ParentID, "name": folder.Name, "name_key": folder.NameKey, "style": folder.Style, "theme": folder.Theme, "position": folder.Position, "updated_at": folder.UpdatedAt})
 		if result.Error != nil {
 			return result.Error
 		}

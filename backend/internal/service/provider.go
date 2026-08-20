@@ -113,6 +113,7 @@ type providerAnalyticsContext struct {
 	UserID            string
 	TaskID            string
 	BillingOrderID    string
+	BillingMode       string
 	Capability        string
 	Operation         string
 	ChannelID         string
@@ -125,6 +126,12 @@ type providerAnalyticsContext struct {
 
 func withProviderAnalytics(ctx context.Context, service *Service, task model.Task) context.Context {
 	metadata := providerAnalyticsContext{Service: service, UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, Capability: capabilityFromTaskType(task.Type), Operation: task.Operation, Model: task.Model, ProviderRequestID: task.ProviderRequestID}
+	// 账单模式随请求上下文传递，流式协议据此只为 Token 计费开启 usage 终态块。
+	if service != nil && task.BillingOrderID != "" {
+		if order, err := service.repo.BillingOrder(task.BillingOrderID); err == nil {
+			metadata.BillingMode = order.BillingMode
+		}
+	}
 	var input struct {
 		Mode   string         `json:"mode"`
 		Config providerConfig `json:"config"`
@@ -874,18 +881,49 @@ func runVolcengineArkImageTask(ctx context.Context, input canvasGenerationInput)
 	if err := postJSON(ctx, input.Config, "/images/generations", body, &payload); err != nil {
 		return nil, err
 	}
-	images, err := imageDataURLs(payload)
+	images, err := volcengineArkImageDataURLs(ctx, input.Config, payload)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
 }
 
+func volcengineArkImageDataURLs(ctx context.Context, config providerConfig, payload imageResponse) ([]map[string]string, error) {
+	images, err := imageDataURLs(payload)
+	if err != nil {
+		return nil, err
+	}
+	for _, image := range images {
+		value := strings.TrimSpace(image["dataUrl"])
+		if strings.HasPrefix(value, "data:image/") {
+			continue
+		}
+		if !isPublicMediaURL(value) {
+			return nil, errors.New("火山方舟图片接口没有返回可下载的图片")
+		}
+		// 方舟默认返回临时 CDN 地址。必须由后端下载成内联结果，后续资源持久化才能
+		// 原子地写入服务器或用户配置的对象存储，且不依赖浏览器跨域访问方舟 CDN。
+		data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+		if err != nil {
+			return nil, fmt.Errorf("火山方舟图片结果下载失败：%w", err)
+		}
+		detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
+		mimeType = strings.ToLower(normalizedMediaMimeType(mimeType, data))
+		if len(data) == 0 || strings.Contains(detected, "json") || strings.HasPrefix(detected, "text/") || !strings.HasPrefix(mimeType, "image/") {
+			return nil, fmt.Errorf("火山方舟图片结果无效：%s", defaultString(detected, mimeType))
+		}
+		image["dataUrl"] = dataURL(mimeType, data)
+		image["mimeType"] = mimeType
+	}
+	return images, nil
+}
+
 func volcengineArkImageBody(input canvasGenerationInput) (map[string]interface{}, error) {
 	body := map[string]interface{}{
-		"model":  input.Config.Model,
-		"prompt": withSystemPrompt(input.Config, input.Prompt),
-		"n":      1,
+		"model":     input.Config.Model,
+		"prompt":    withSystemPrompt(input.Config, input.Prompt),
+		"n":         1,
+		"watermark": false,
 	}
 	if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
 		if key == "size" {
@@ -1413,7 +1451,9 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if size := normalizeVideoSize(input.Config.Size); size != "" {
 			writeField(writer, "size", size)
 		}
-		writeField(writer, "resolution_name", normalizeVideoResolution(input.Config.VQuality))
+		if resolution := videoResolutionNameRequest(input.VideoCapability, input.Config.VQuality); resolution != "" {
+			writeField(writer, "resolution_name", resolution)
+		}
 		writeField(writer, "preset", "normal")
 		if shouldSendNewAPIVideoImages(input) {
 			for _, image := range input.ReferenceImages {
@@ -1933,7 +1973,10 @@ func newAPIChannel2VideoRequestBody(input canvasGenerationInput) (newAPIVideoReq
 		seconds = 6
 	}
 	ratio := normalizeNewAPIChannel2Ratio(input.Config.Size, modelName)
-	resolution := normalizeNewAPIChannel2Resolution(input.Config.VQuality, modelName)
+	resolution := videoResolutionNameRequest(input.VideoCapability, input.Config.VQuality)
+	if modelName == "grok-video-1.5-1080p" {
+		resolution = "1080p"
+	}
 	body := newAPIVideoRequest{
 		Model:       input.Config.Model,
 		Prompt:      strings.TrimSpace(input.Prompt),
@@ -2025,16 +2068,22 @@ func normalizeNewAPIChannel2Resolution(value string, modelName string) string {
 	if modelName == "grok-video-1.5-1080p" {
 		return "1080p"
 	}
-	switch strings.ToLower(strings.TrimSpace(value)) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
 	case "480", "480p", "low":
 		return "480p"
 	case "1080", "1080p":
 		return "1080p"
+	case "1440", "1440p", "2k":
+		return "1440p"
 	case "2160", "2160p", "4k":
 		return "2160p"
-	default:
-		return "720p"
 	}
+	numeric := strings.TrimSuffix(normalized, "p")
+	if resolution, err := strconv.Atoi(numeric); err == nil && resolution > 0 {
+		return strconv.Itoa(resolution) + "p"
+	}
+	return "720p"
 }
 
 func runNewAPIChannel1VideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -2411,6 +2460,12 @@ func runSeedanceAgentPlanVideoTask(ctx context.Context, input canvasGenerationIn
 
 func requestTextProvider(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, stream bool) (string, error) {
 	if stream {
+		metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+		if protocol == "chat-completion" && metadata.BillingMode == "token" {
+			if err := ensureChatCompletionStreamUsage(body); err != nil {
+				return "", err
+			}
+		}
 		return postStreamingText(ctx, config, path, body, protocol)
 	}
 	var payload map[string]interface{}

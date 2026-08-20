@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, resolveModelRequestConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { sanitizeChannelModelCatalogItem, type ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
@@ -14,8 +15,13 @@ import { imageSizeRequest, modelCapabilityConfigFor, normalizeImageValue, type I
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
-    content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+    content: string | AiTextContentPart[];
 };
+
+export type AiTextContentPart =
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string } }
+    | { type: "file_url"; file_url: { url: string; name: string; mimeType: string } };
 
 export type ResponseToolCall = {
     id: string;
@@ -39,11 +45,12 @@ export type ResponseFunctionTool = {
 export type ToolResponseResult = {
     content: string;
     toolCalls: ResponseToolCall[];
+    reasoning?: string;
 };
 
 type ToolChoice = "auto" | "required" | { type: "function"; name: string };
 type ResponseMessageContent = AiTextMessage["content"] | string;
-type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
+type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string } | { type: "input_file"; filename: string; file_data?: string; file_url?: string };
 type ResponseInputItem = { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: "function_call_output"; call_id: string; output: string };
 type ResponseApiToolDefinition = {
     type: "function";
@@ -61,16 +68,16 @@ type ResponseApiPayload = {
     code?: number;
     msg?: string;
 };
-type ResponseStreamState = { buffer: string; text: string; payload?: ResponseApiPayload; error?: string };
+type ResponseStreamState = { buffer: string; text: string; reasoning: string; payload?: ResponseApiPayload; error?: string };
 type ChatCompletionToolCall = { id?: string; type?: "function"; function?: { name?: string; arguments?: string } };
 type ChatCompletionPayload = {
-    choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatCompletionToolCall[] } }>;
+    choices?: Array<{ message?: { content?: string | null; reasoning_content?: string | null; tool_calls?: ChatCompletionToolCall[] } }>;
     error?: { message?: string };
     code?: number;
     msg?: string;
 };
 type ChatCompletionStreamToolCall = { id: string; name: string; arguments: string };
-type ChatCompletionStreamState = { buffer: string; text: string; toolCalls: Map<number, ChatCompletionStreamToolCall>; error?: string };
+type ChatCompletionStreamState = { buffer: string; text: string; reasoning: string; toolCalls: Map<number, ChatCompletionStreamToolCall>; error?: string };
 
 type ImageApiResponse = {
     data?: Array<Record<string, unknown>>;
@@ -80,6 +87,7 @@ type ImageApiResponse = {
 };
 type GeminiPart = {
     text?: string;
+    thought?: boolean;
     inlineData?: { mimeType?: string; data?: string };
     inline_data?: { mime_type?: string; mimeType?: string; data?: string };
     fileData?: { mimeType?: string; fileUri?: string };
@@ -95,8 +103,8 @@ type GeminiPayload = {
     error?: { message?: string };
     promptFeedback?: { blockReason?: string };
 };
-type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string };
+type GeminiStreamState = { buffer: string; text: string; reasoning: string; toolCalls: ResponseToolCall[]; error?: string };
+type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string; onReasoning?: (text: string) => void };
 
 const QUALITY_BASE: Record<string, number> = {
     low: 1024,
@@ -347,7 +355,13 @@ function toResponseInput(messages: ResponseInputMessage[]): ResponseInputItem[] 
 
 function toResponseContent(content: ResponseMessageContent): string | ResponseInputContent[] {
     if (!Array.isArray(content)) return String(content || "");
-    return content.map((item) => (item.type === "text" ? { type: "input_text" as const, text: item.text } : { type: "input_image" as const, image_url: item.image_url.url }));
+    return content.map((item) => {
+        if (item.type === "text") return { type: "input_text" as const, text: item.text };
+        if (item.type === "image_url") return { type: "input_image" as const, image_url: item.image_url.url };
+        return item.file_url.url.startsWith("data:")
+            ? { type: "input_file" as const, filename: item.file_url.name, file_data: item.file_url.url }
+            : { type: "input_file" as const, filename: item.file_url.name, file_url: item.file_url.url };
+    });
 }
 
 function toResponseTool(tool: ResponseFunctionTool): ResponseApiToolDefinition {
@@ -377,11 +391,22 @@ function toChatCompletionMessages(messages: ResponseInputMessage[]) {
         if (message.role === "tool") {
             result.push({ role: "tool", tool_call_id: message.tool_call_id, content: message.content });
         } else {
-            result.push({ role: message.role, content: message.content });
+            result.push({ role: message.role, content: toChatCompletionContent(message.content) });
         }
         index += 1;
     }
     return result;
+}
+
+function toChatCompletionContent(content: ResponseMessageContent) {
+    if (!Array.isArray(content)) return content;
+    return content.map((item) => {
+        if (item.type !== "file_url") return item;
+        const file = item.file_url.url.startsWith("data:")
+            ? { filename: item.file_url.name, file_data: item.file_url.url }
+            : { filename: item.file_url.name, file_url: item.file_url.url };
+        return { type: "file", file };
+    });
 }
 
 function toChatCompletionToolChoice(toolChoice: ToolChoice) {
@@ -404,7 +429,7 @@ function parseChatCompletionPayload(payload: ChatCompletionPayload): ToolRespons
             function: { name: call.function?.name || "", arguments: call.function?.arguments || "{}" },
         }))
         .filter((call) => call.id && call.function.name);
-    return { content: message?.content || "", toolCalls };
+    return { content: message?.content || "", toolCalls, ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}) };
 }
 
 function parseToolResponse(payload: ResponseApiPayload): ToolResponseResult {
@@ -472,7 +497,7 @@ async function readJsonPayload<T>(response: Response, fallback: string): Promise
     }
 }
 
-function consumeResponseStreamBlock(block: string, state: ResponseStreamState, onDelta?: (text: string) => void) {
+function consumeResponseStreamBlock(block: string, state: ResponseStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -492,6 +517,14 @@ function consumeResponseStreamBlock(block: string, state: ResponseStreamState, o
         state.text = event.text;
         onDelta?.(state.text);
     }
+    if (["response.reasoning.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta"].includes(type) && typeof event.delta === "string") {
+        state.reasoning += event.delta;
+        onReasoning?.(state.reasoning);
+    }
+    if (["response.reasoning.done", "response.reasoning_text.done", "response.reasoning_summary_text.done"].includes(type) && !state.reasoning && typeof event.text === "string") {
+        state.reasoning = event.text;
+        onReasoning?.(state.reasoning);
+    }
     if (type === "response.completed" && isRecord(event.response)) {
         state.payload = event.response as ResponseApiPayload;
     } else if (Array.isArray(event.output)) {
@@ -499,17 +532,17 @@ function consumeResponseStreamBlock(block: string, state: ResponseStreamState, o
     }
 }
 
-function consumeResponseStreamText(state: ResponseStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeResponseStreamText(state: ResponseStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeResponseStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeResponseStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeResponseStreamBlock(state.buffer, state, onDelta);
+        consumeResponseStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
@@ -532,22 +565,22 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: ResponseStreamState = { buffer: "", text: "" };
+    const state: ResponseStreamState = { buffer: "", text: "", reasoning: "" };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeResponseStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeResponseStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeResponseStreamText(state, decoder.decode(), onDelta, true);
+    consumeResponseStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
-    if (!state.payload) return { content: state.text, toolCalls: [] };
+    if (!state.payload) return { content: state.text, toolCalls: [], ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
     validateResponsePayload(state.payload);
     const result = parseToolResponse(state.payload);
-    return { ...result, content: state.text || result.content };
+    return { ...result, content: state.text || result.content, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
-function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionStreamState, onDelta?: (text: string) => void) {
+function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -566,6 +599,11 @@ function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionSt
         state.text += delta.content;
         onDelta?.(state.text);
     }
+    const reasoningDelta = stringValue(delta.reasoning_content) || stringValue(delta.reasoning) || stringValue(delta.reasoning_text);
+    if (reasoningDelta) {
+        state.reasoning += reasoningDelta;
+        onReasoning?.(state.reasoning);
+    }
     const chunks = Array.isArray(delta.tool_calls) ? delta.tool_calls : [];
     chunks.forEach((value, fallbackIndex) => {
         if (!isRecord(value)) return;
@@ -580,17 +618,17 @@ function consumeChatCompletionStreamBlock(block: string, state: ChatCompletionSt
     });
 }
 
-function consumeChatCompletionStreamText(state: ChatCompletionStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeChatCompletionStreamText(state: ChatCompletionStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeChatCompletionStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeChatCompletionStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeChatCompletionStreamBlock(state.buffer, state, onDelta);
+        consumeChatCompletionStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
@@ -606,24 +644,28 @@ async function requestStreamingChatCompletion(config: AiConfig, body: Record<str
     });
     if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
     const contentType = response.headers.get("content-type") || "";
-    if (!response.body || !contentType.includes("text/event-stream")) return parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, "请求失败"));
+    if (!response.body || !contentType.includes("text/event-stream")) {
+        const result = parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, "请求失败"));
+        if (result.reasoning) options?.onReasoning?.(result.reasoning);
+        return result;
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: ChatCompletionStreamState = { buffer: "", text: "", toolCalls: new Map() };
+    const state: ChatCompletionStreamState = { buffer: "", text: "", reasoning: "", toolCalls: new Map() };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeChatCompletionStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeChatCompletionStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeChatCompletionStreamText(state, decoder.decode(), onDelta, true);
+    consumeChatCompletionStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
     const toolCalls = Array.from(state.toolCalls.entries())
         .sort(([left], [right]) => left - right)
         .map(([, call]) => ({ id: call.id, type: "function" as const, function: { name: call.name, arguments: call.arguments || "{}" } }))
         .filter((call) => call.id && call.function.name);
-    return { content: state.text, toolCalls };
+    return { content: state.text, toolCalls, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
 function toGeminiBody(config: AiConfig, messages: ResponseInputMessage[], extra?: Record<string, unknown>) {
@@ -653,18 +695,22 @@ function toGeminiContents(messages: ResponseInputMessage[]): GeminiContent[] {
 
 function toGeminiParts(content: ResponseMessageContent): GeminiPart[] {
     if (!Array.isArray(content)) return [{ text: String(content || "") }];
-    return content.map((item) => (item.type === "text" ? { text: item.text } : toGeminiImagePart(item.image_url.url)));
+    return content.map((item) => {
+        if (item.type === "text") return { text: item.text };
+        if (item.type === "image_url") return toGeminiFilePart(item.image_url.url, "image/png");
+        return toGeminiFilePart(item.file_url.url, item.file_url.mimeType);
+    });
 }
 
-function toGeminiImagePart(url: string): GeminiPart {
+function toGeminiFilePart(url: string, mimeType: string): GeminiPart {
     const match = url.match(/^data:([^;,]+);base64,(.+)$/);
     if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
-    return { fileData: { fileUri: url, mimeType: "image/png" } };
+    return { fileData: { fileUri: url, mimeType } };
 }
 
 function geminiTextContent(content: ResponseMessageContent) {
     if (!Array.isArray(content)) return String(content || "");
-    return content.map((item) => (item.type === "text" ? item.text : item.image_url.url)).join("\n");
+    return content.map((item) => item.type === "text" ? item.text : item.type === "image_url" ? item.image_url.url : `${item.file_url.name}: ${item.file_url.url}`).join("\n");
 }
 
 function jsonObject(value: string): Record<string, unknown> {
@@ -706,39 +752,41 @@ async function requestGeminiStreamingResponse(config: AiConfig, body: Record<str
     if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
     if (!response.body) {
         const payload = (await response.json()) as GeminiPayload;
-        return parseGeminiToolResponse(payload);
+        const result = parseGeminiToolResponse(payload);
+        if (result.reasoning) options?.onReasoning?.(result.reasoning);
+        return result;
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const state: GeminiStreamState = { buffer: "", text: "", toolCalls: [] };
+    const state: GeminiStreamState = { buffer: "", text: "", reasoning: "", toolCalls: [] };
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        consumeGeminiStreamText(state, decoder.decode(value, { stream: true }), onDelta);
+        consumeGeminiStreamText(state, decoder.decode(value, { stream: true }), onDelta, options?.onReasoning);
         if (state.error) throw new Error(state.error);
     }
-    consumeGeminiStreamText(state, decoder.decode(), onDelta, true);
+    consumeGeminiStreamText(state, decoder.decode(), onDelta, options?.onReasoning, true);
     if (state.error) throw new Error(state.error);
-    return { content: state.text, toolCalls: state.toolCalls };
+    return { content: state.text, toolCalls: state.toolCalls, ...(state.reasoning ? { reasoning: state.reasoning } : {}) };
 }
 
-function consumeGeminiStreamText(state: GeminiStreamState, text: string, onDelta?: (text: string) => void, flush = false) {
+function consumeGeminiStreamText(state: GeminiStreamState, text: string, onDelta?: (text: string) => void, onReasoning?: (text: string) => void, flush = false) {
     state.buffer += text;
     for (;;) {
         const match = state.buffer.match(/\r?\n\r?\n/);
         if (!match) break;
         const index = match.index ?? 0;
-        consumeGeminiStreamBlock(state.buffer.slice(0, index), state, onDelta);
+        consumeGeminiStreamBlock(state.buffer.slice(0, index), state, onDelta, onReasoning);
         state.buffer = state.buffer.slice(index + match[0].length);
     }
     if (flush && state.buffer.trim()) {
-        consumeGeminiStreamBlock(state.buffer, state, onDelta);
+        consumeGeminiStreamBlock(state.buffer, state, onDelta, onReasoning);
         state.buffer = "";
     }
 }
 
-function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDelta?: (text: string) => void) {
+function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDelta?: (text: string) => void, onReasoning?: (text: string) => void) {
     const data = block
         .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
@@ -747,6 +795,10 @@ function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDel
         .trim();
     if (!data || data === "[DONE]") return;
     const result = parseGeminiToolResponse(JSON.parse(data) as GeminiPayload);
+    if (result.reasoning) {
+        state.reasoning += result.reasoning;
+        onReasoning?.(state.reasoning);
+    }
     if (result.content) {
         state.text += result.content;
         onDelta?.(state.text);
@@ -757,7 +809,8 @@ function consumeGeminiStreamBlock(block: string, state: GeminiStreamState, onDel
 function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
     validateGeminiPayload(payload);
     const parts = payload.candidates?.flatMap((candidate) => candidate.content?.parts || []) || [];
-    const content = parts.map((part) => part.text || "").join("");
+    const content = parts.filter((part) => !part.thought).map((part) => part.text || "").join("");
+    const reasoning = parts.filter((part) => part.thought).map((part) => part.text || "").join("");
     const toolCalls = parts
         .map((part) => part.functionCall)
         .filter((call): call is NonNullable<GeminiPart["functionCall"]> => Boolean(call?.name))
@@ -771,7 +824,7 @@ function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseResult {
                 ...(thoughtSignature ? { thoughtSignature } : {}),
             };
         });
-    return { content, toolCalls };
+    return { content, toolCalls, ...(reasoning ? { reasoning } : {}) };
 }
 
 async function requestGeminiImages(config: AiConfig, prompt: string, references: ReferenceImage[], count: number, options?: RequestOptions) {
@@ -782,7 +835,7 @@ async function requestGeminiImages(config: AiConfig, prompt: string, references:
 async function requestGeminiImagesOnce(config: AiConfig, prompt: string, references: ReferenceImage[], options?: RequestOptions) {
     const parts: GeminiPart[] = [{ text: prompt }];
     for (const image of references) {
-        parts.push(toGeminiImagePart(await imageToDataUrl(image)));
+        parts.push(toGeminiFilePart(await imageToDataUrl(image), image.type || "image/png"));
     }
     const request = channelRequest(config, geminiApiUrl(config, "generateContent"), geminiHeaders(config));
     const response = await axios.post<GeminiPayload>(
@@ -860,6 +913,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                   model: requestConfig.model,
                   prompt: withSystemPrompt(requestConfig, prompt),
                   n,
+                  watermark: false,
                   ...(normalizedRequestSize ? { [normalizedRequestSize.parameter]: normalizedRequestSize.value } : {}),
               }
             : {
@@ -954,6 +1008,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     n,
+                    watermark: false,
                     ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
                     ...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
                 },
@@ -1113,8 +1168,6 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
     }
 }
 
-export type ChannelModelCatalogItem = { id: string; supportedEndpointTypes?: string[] };
-
 export type ChannelModelFetchResult = { models: string[]; catalog: ChannelModelCatalogItem[] };
 
 export async function fetchChannelModels(channel: ModelChannel, viaBackend = false): Promise<ChannelModelFetchResult> {
@@ -1141,8 +1194,8 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
         }
         const catalog = new Map<string, ChannelModelCatalogItem>();
         for (const item of response.data.data?.models || []) {
-            const entry = typeof item === "string" ? { id: item.trim() } : { id: String(item.id || "").trim(), supportedEndpointTypes: Array.isArray(item.supportedEndpointTypes) ? item.supportedEndpointTypes : undefined };
-            if (!entry.id) continue;
+            const entry = typeof item === "string" ? sanitizeChannelModelCatalogItem({ id: item }) : sanitizeChannelModelCatalogItem(item);
+            if (!entry) continue;
             const existing = catalog.get(entry.id);
             catalog.set(entry.id, existing || entry);
         }

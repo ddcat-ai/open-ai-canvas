@@ -7,7 +7,7 @@ import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, type CanvasFolderStyle, type CanvasNodeData, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type Position } from "@/types/canvas";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -22,6 +22,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     onResize,
     onToggleCollapsed,
     onFolderStyleChange,
+    onFolderThemeChange = () => undefined,
     onTitleChange,
     onContextMenu,
     readOnly = false,
@@ -38,6 +39,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onToggleCollapsed: (nodeId: string) => void;
     onFolderStyleChange: (nodeId: string, style: CanvasFolderStyle) => void;
+    onFolderThemeChange?: (nodeId: string, theme: CanvasFolderTheme) => void;
     onTitleChange: (nodeId: string, title: string) => void;
     onContextMenu: (event: ReactMouseEvent, nodeId: string) => void;
     readOnly?: boolean;
@@ -194,6 +196,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                         onToggleCollapsed={onToggleCollapsed}
                         onTitleChange={onTitleChange}
                         onStyleChange={onFolderStyleChange}
+                        onThemeChange={onFolderThemeChange}
                     />
                 ) : (
                     <>

@@ -6,7 +6,7 @@ import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/fil
 import { getResourceOSSUrl } from "@/services/api/resources";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import { imageToDataUrl } from "@/services/image-storage";
-import { modelCapabilityConfigFor, videoDurationAllowed } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, videoDurationAllowed, videoResolutionRequest } from "@/lib/model-capabilities";
 import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { buildApiUrl, isSystemProxyBaseUrl, modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -85,6 +85,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
 
 function assertVideoCapability(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], seconds: string) {
     if (references.length > profile.references.maxImages || videoReferences.length > profile.references.maxVideos || audioReferences.length > profile.references.maxAudios) throw new Error("参考素材数量超过当前模型限制");
+    if (references.length < profile.references.minImages) throw new Error(`当前视频模型至少需要 ${profile.references.minImages} 张参考图`);
     if (!videoDurationAllowed(profile, Number(seconds))) throw new Error("视频时长不在当前模型支持范围内");
     if (profile.references.maxImageBytes > 0 && references.some((image) => (image.bytes || 0) > profile.references.maxImageBytes)) throw new Error("参考图片文件超过当前模型大小限制");
     for (const video of videoReferences) {
@@ -116,12 +117,13 @@ async function createVideoGenerationsTask(config: ResolvedAiConfig, model: strin
         Promise.all(audioReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
     ]);
     const profile = modelCapabilityConfigFor(config, model).video!;
+    const resolution = newAPIVideoResolutionRequest(profile, config.vquality, modelOptionName(model));
     const payload = {
         model: modelOptionName(model),
         prompt: prompt.trim(),
         seconds: normalizeVideoSeconds(config.videoSeconds),
         aspect_ratio: normalizeVideoSize(config.size) || "16:9",
-        resolution: normalizeVideoResolution(config.vquality),
+        ...(resolution ? { resolution } : {}),
         ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
         ...(imageUrls.length ? { image_urls: imageUrls } : {}),
         ...(videoUrls.length ? { video_urls: videoUrls } : {}),
@@ -135,6 +137,11 @@ async function createVideoGenerationsTask(config: ResolvedAiConfig, model: strin
     } catch (error) {
         throw new Error(readAxiosError(error, "NewAPI Video Generations 任务创建失败"));
     }
+}
+
+function newAPIVideoResolutionRequest(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, value: string, model: string) {
+    if (model.trim().toLowerCase() === "grok-video-1.5-1080p") return "1080p";
+    return videoResolutionRequest(profile, value);
 }
 
 async function pollVideoGenerationsTask(config: ResolvedAiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
@@ -356,7 +363,8 @@ async function createOpenAIVideoTask(config: ResolvedAiConfig, model: string, pr
     body.append("prompt", prompt);
     body.append("seconds", normalizeVideoSeconds(config.videoSeconds));
     if (normalizeVideoSize(config.size)) body.append("size", normalizeVideoSize(config.size)!);
-    body.append("resolution_name", normalizeVideoResolution(config.vquality));
+    const resolution = videoResolutionRequest(modelCapabilityConfigFor(config, model).video!, config.vquality);
+    if (resolution) body.append("resolution_name", resolution);
     body.append("preset", "normal");
     const files = await Promise.all(references.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => body.append("input_reference[]", file));
@@ -623,6 +631,7 @@ function normalizeVideoSize(value: string) {
 function normalizeVideoResolution(value: string) {
     if (value === "low") return "480p";
     if (value === "auto" || value === "high" || value === "medium") return "720p";
+    if (value.toLowerCase() === "2k") return "1440p";
     if (value.toLowerCase() === "4k") return "2160p";
     const resolution = value.replace(/p$/i, "") || "720";
     return `${resolution}p`;
