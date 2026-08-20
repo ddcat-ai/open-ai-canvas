@@ -6,14 +6,11 @@ import { WorkspaceCommandPalette } from "@/components/layout/workspace-command-p
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { cn } from "@/lib/utils";
-import { refreshFeatureAvailability } from "@/lib/user-session";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
-import { useUserStore } from "@/stores/use-user-store";
 
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
-    const user = useUserStore((state) => state.user);
     const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
     const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
@@ -59,17 +56,6 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
         window.addEventListener("workspace:navigate", handleWorkspaceNavigation);
         return () => window.removeEventListener("workspace:navigate", handleWorkspaceNavigation);
     }, [navigate]);
-
-    useEffect(() => {
-        if (!user) return;
-        const refresh = () => void refreshFeatureAvailability().catch((error) => console.warn("功能开放状态刷新失败", error));
-        const timer = window.setInterval(refresh, 30_000);
-        window.addEventListener("focus", refresh);
-        return () => {
-            window.clearInterval(timer);
-            window.removeEventListener("focus", refresh);
-        };
-    }, [user]);
 
     return (
         <>

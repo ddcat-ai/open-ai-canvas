@@ -6,6 +6,7 @@ import { parseAssetStorageDocument, rebaseAssetSnapshot, serializeAssetStorageDo
 import { parseCanvasStorageDocument } from "@/lib/canvas/canvas-storage-revision";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { cleanupUnusedImages, collectImageStorageKeys, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, collectMediaStorageKeys, resolveMediaUrl } from "@/services/file-storage";
 import { flushGenerationAssetStorageLocks, insertOrReturnGenerationAsset, withGenerationArtifactCommitLock, withGenerationAssetStorageLock } from "@/services/generation-asset-repository";
@@ -213,24 +214,9 @@ const assetStorage: PersistStorage<AssetStore> = {
             return null;
         }
         const document = parseAssetStorageDocument(value);
-        const assets = await Promise.all(
-            document.state.assets.map(async (asset) => {
-                // 视频和音频的数据结构不同，分别缩窄以保持 Asset 判别联合关系。
-                if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
-                if (asset.kind === "audio" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
-                if (asset.kind === "model" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
-                if (asset.kind !== "image") return asset;
-                if (asset.data.storageKey)
-                    return {
-                        ...asset,
-                        coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(asset.data.storageKey, asset.coverUrl) : asset.coverUrl,
-                        data: { ...asset.data, dataUrl: await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl) },
-                    };
-                if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
-                const image = await uploadImage(asset.data.dataUrl);
-                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
-            }),
-        );
+        // 持久化恢复只恢复结构化记录，不能为每个 resource: key 逐条读取资源元数据或 Blob。
+        // 远程资源直接使用受鉴权的 file URL；本地 legacy key 仍恢复为 Blob URL，避免兼容性回归。
+        const assets = await Promise.all(document.state.assets.map((asset) => normalizePersistedAsset(asset)));
         const hydratedDocument = { ...document, state: { assets } };
         assetMemoryStates.set(scope, { assets });
         recordAssetStorageDocument(scope, hydratedDocument);
@@ -242,6 +228,33 @@ const assetStorage: PersistStorage<AssetStore> = {
         return localForageStorageForScope(scope).removeItem(name);
     },
 };
+
+async function normalizePersistedAsset(asset: Asset): Promise<Asset> {
+    const storageKey = "data" in asset && asset.data && "storageKey" in asset.data ? asset.data.storageKey : undefined;
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    if (resourceId) {
+        const url = resourceFileUrl(resourceId);
+        if (asset.kind === "video" || asset.kind === "audio" || asset.kind === "model") return { ...asset, data: { ...asset.data, url } } as Asset;
+        if (asset.kind === "image") return { ...asset, coverUrl: asset.coverUrl.startsWith("blob:") ? url : asset.coverUrl, data: { ...asset.data, dataUrl: url } };
+    }
+
+    // 非 resource: key 是早期本地存储格式，必须继续从 localForage 恢复，
+    // 但只在确有本地 key 时读取，不让远程资源重新走逐条网络查询。
+    if (asset.kind === "video" && storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(storageKey, asset.data.url) } };
+    if (asset.kind === "audio" && storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(storageKey, asset.data.url) } };
+    if (asset.kind === "model" && storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(storageKey, asset.data.url) } };
+    if (asset.kind !== "image") return asset;
+    if (storageKey) {
+        return {
+            ...asset,
+            coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(storageKey, asset.coverUrl) : asset.coverUrl,
+            data: { ...asset.data, dataUrl: await resolveImageUrl(storageKey, asset.data.dataUrl) },
+        };
+    }
+    if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
+    const image = await uploadImage(asset.data.dataUrl);
+    return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
+}
 
 async function generationAssetId(effectKey: string) {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(effectKey));

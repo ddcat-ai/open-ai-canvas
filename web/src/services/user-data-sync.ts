@@ -1,6 +1,6 @@
 import { getMediaBlob } from "@/services/file-storage";
-import { getImageBlob, resolveImageUrl } from "@/services/image-storage";
-import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteAsset, getRemoteCanvasProject, listRemoteAssets, listRemoteCanvasProjects, upsertRemoteAsset, upsertRemoteCanvasProject, type RemoteUserDataSummary } from "@/services/api/user-data";
+import { getImageBlob } from "@/services/image-storage";
+import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteUserDataSnapshot, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import type { Asset } from "@/stores/use-asset-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -29,17 +29,16 @@ export async function syncRemoteUserData(userId?: string | null) {
         if (!activeRemoteUserId) return;
         applyingRemoteState = true;
         try {
-            const [remoteCanvas, remoteAssets] = await Promise.all([listRemoteCanvasProjects(), listRemoteAssets()]);
-            remoteProjectVersions = versionMap(remoteCanvas.projects);
-            remoteAssetVersions = versionMap(remoteAssets.assets);
+            // 登录只拉一次聚合快照。摘要列表再逐条请求详情会把 N 条数据放大成 2N+2 个请求，
+            // 并且会在登录阶段同时触发大量媒体解析，任何一项失败都会污染登录结果。
+            const snapshot = await getRemoteUserDataSnapshot();
+            remoteProjectVersions = versionMap(snapshot.projects);
+            remoteAssetVersions = versionMap(snapshot.assets);
             const localProjects = useCanvasStore.getState().projects;
             const localAssets = useAssetStore.getState().assets;
-            const [changedProjects, changedAssets] = await Promise.all([
-                fetchNewerRemoteItems(localProjects, remoteCanvas.projects, async (id) => (await getRemoteCanvasProject(id)).project),
-                fetchNewerRemoteItems(localAssets, remoteAssets.assets, async (id) => (await getRemoteAsset(id)).asset),
-            ]);
-            const mergedProjects = mergeById(localProjects, changedProjects);
-            const mergedAssets = mergeById(localAssets, await hydrateAssets(changedAssets));
+            const mergedProjects = mergeById(localProjects, snapshot.projects);
+            // 这里只合并结构化素材数据，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
+            const mergedAssets = mergeById(localAssets, snapshot.assets);
             useCanvasStore.getState().replaceProjects(mergedProjects);
             useAssetStore.getState().replaceAssets(mergedAssets);
         } finally {
@@ -242,30 +241,6 @@ async function saveRemoteUserDataBatch() {
     }
 }
 
-async function hydrateAssets(assets: Asset[]): Promise<Asset[]> {
-    return Promise.all(
-        assets.map(async (asset) => {
-            if (asset.kind === "image" && asset.data.storageKey) {
-                const dataUrl = await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl);
-                return { ...asset, coverUrl: shouldReplaceEphemeralUrl(asset.coverUrl) ? dataUrl : asset.coverUrl, data: { ...asset.data, dataUrl } };
-            }
-            if (asset.kind === "video" && asset.data.storageKey) {
-                const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);
-                return { ...asset, data: { ...asset.data, url } };
-            }
-            if (asset.kind === "audio" && asset.data.storageKey) {
-                const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);
-                return { ...asset, data: { ...asset.data, url } };
-            }
-            if (asset.kind === "model" && asset.data.storageKey) {
-                const url = await resolveResourceOrMediaUrl(asset.data.storageKey, asset.data.url);
-                return { ...asset, data: { ...asset.data, url } };
-            }
-            return asset;
-        }),
-    );
-}
-
 async function prepareRemoteAssets(assets: Asset[], uploaded: Map<string, string>) {
     const result: Asset[] = [];
     for (const asset of assets) result.push(await ensureRemoteResourceReferences(asset, uploaded));
@@ -358,15 +333,6 @@ function mergeById<T extends { id?: string; updatedAt?: string }>(local: T[], re
     return Array.from(items.values()).sort((a, b) => timeValue(b.updatedAt) - timeValue(a.updatedAt));
 }
 
-async function fetchNewerRemoteItems<T extends { id: string; updatedAt?: string }>(local: T[], remote: RemoteUserDataSummary[], fetchItem: (id: string) => Promise<T>) {
-    const localById = new Map(local.map((item) => [item.id, item]));
-    const pending = remote.filter((item) => {
-        const current = localById.get(item.id);
-        return !current || timeValue(item.updatedAt) > timeValue(current.updatedAt);
-    });
-    return Promise.all(pending.map((item) => fetchItem(item.id)));
-}
-
 function versionMap(items: Array<{ id: string; updatedAt?: string }>) {
     return new Map<string, string>(items.map((item) => [item.id, item.updatedAt || ""]));
 }
@@ -392,17 +358,6 @@ function sameVersion(remote?: string, local?: string) {
 
 function isLocalStorageKey(value: string) {
     return LOCAL_STORAGE_KEY_PATTERN.test(value) && !resourceIdFromStorageKey(value);
-}
-
-function shouldReplaceEphemeralUrl(value: string) {
-    return !value || value.startsWith("blob:") || value.startsWith("data:");
-}
-
-async function resolveResourceOrMediaUrl(storageKey: string, fallback: string) {
-    const resourceId = resourceIdFromStorageKey(storageKey);
-    if (resourceId) return resourceFileUrl(resourceId);
-    const { resolveMediaUrl } = await import("@/services/file-storage");
-    return resolveMediaUrl(storageKey, fallback);
 }
 
 function numberValue(value: unknown) {

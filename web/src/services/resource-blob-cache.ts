@@ -1,7 +1,7 @@
 import localforage from "localforage";
 
 import { getActiveUserScope } from "@/lib/user-scope";
-import { getResource, getResourceBlob, resourceIdFromStorageKey, type RemoteResource } from "@/services/api/resources";
+import { getResourceBlob, resourceIdFromStorageKey } from "@/services/api/resources";
 
 type ResourceCacheMeta = {
     key: string;
@@ -147,23 +147,20 @@ async function readCachedObjectUrl(target: ResourceCacheMeta) {
 async function cacheTarget(storageKey: string): Promise<ResourceCacheMeta | null> {
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (!resourceId) return null;
-    const resource = await getResource(resourceId);
     const userScope = getActiveUserScope();
-    if (userScope === "guest" || resource.userId !== userScope) throw new Error("当前用户不能读取该媒体缓存");
-    const version = resourceVersion(resource);
+    if (userScope === "guest") throw new Error("游客不能读取远程媒体缓存");
+    // resource ID 是不可变资源的稳定标识，文件接口本身负责鉴权。
+    // 缓存初始化不能先对每个资源读取一遍元数据，否则首屏会重新形成 N+1 请求。
+    const version = "file";
     return {
         key: `${userScope}:${resourceId}:${version}`,
         userScope,
         resourceId,
         version,
-        size: resource.size || 0,
-        mimeType: resource.mimeType || "application/octet-stream",
+        size: 0,
+        mimeType: "application/octet-stream",
         lastAccessedAt: Date.now(),
     };
-}
-
-function resourceVersion(resource: RemoteResource) {
-    return (resource.etag || `${resource.size}:${resource.updatedAt}`).replace(/[^a-zA-Z0-9:._-]/g, "_");
 }
 
 async function touchCacheMeta(target: ResourceCacheMeta) {

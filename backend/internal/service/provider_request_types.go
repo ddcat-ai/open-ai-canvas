@@ -130,3 +130,25 @@ type seedanceAgentPlanRequest struct {
 	GenerateAudio *bool                    `json:"generate_audio,omitempty"`
 	Watermark     *bool                    `json:"watermark,omitempty"`
 }
+
+type miniMaxVideoRequest struct {
+	Model         string                `json:"model"`
+	Content       []miniMaxVideoContent `json:"content"`
+	Resolution    string                `json:"resolution"`
+	Duration      int                   `json:"duration"`
+	Ratio         string                `json:"ratio,omitempty"`
+	AIGCWatermark *bool                 `json:"aigc_watermark,omitempty"`
+}
+
+type miniMaxVideoContent struct {
+	Type     string           `json:"type"`
+	Text     string           `json:"text,omitempty"`
+	ImageURL *miniMaxMediaURL `json:"image_url,omitempty"`
+	VideoURL *miniMaxMediaURL `json:"video_url,omitempty"`
+	AudioURL *miniMaxMediaURL `json:"audio_url,omitempty"`
+	Role     string           `json:"role,omitempty"`
+}
+
+type miniMaxMediaURL struct {
+	URL string `json:"url"`
+}

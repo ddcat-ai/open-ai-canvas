@@ -8,12 +8,13 @@ import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-mode
 import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
-    useLocalRuntimeBootstrap();
+    const config = useConfigStore((state) => state.config);
+    const localRuntimeConfigured = config.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false);
+    useLocalRuntimeBootstrap(localRuntimeConfigured);
     useLocalDreaminaModelBootstrap();
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
-    const config = useConfigStore((state) => state.config);
 
     useEffect(() => {
         const interactiveSelector = 'button, [role="button"], a, [class*="card"], [class*="Card"]';

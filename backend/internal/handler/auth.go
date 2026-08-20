@@ -726,14 +726,28 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 	capability := "text"
 	var channelModel *model.ChannelModel
 	if !(c.Request.Method == http.MethodGet && path == "/models") {
-		var modelErr error
-		channelModel, modelErr = svc.SystemChannelModel(channel.ID, modelName)
-		if modelErr != nil || channelModel.Protocol == "" {
-			fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权该模型或模型协议尚未配置"))
-			return
+		if c.Request.Method == http.MethodGet && systemMiniMaxTaskPath.MatchString(path) && modelName == "" {
+			supported, supportErr := svc.SystemChannelHasProtocol(channel.ID, model.ChannelInterfaceMiniMaxVideo)
+			if supportErr != nil {
+				failService(c, supportErr)
+				return
+			}
+			if !supported {
+				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权 MiniMax 视频协议"))
+				return
+			}
+			protocol = model.ChannelInterfaceMiniMaxVideo
+			capability = "video"
+		} else {
+			var modelErr error
+			channelModel, modelErr = svc.SystemChannelModel(channel.ID, modelName)
+			if modelErr != nil || channelModel.Protocol == "" {
+				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权该模型或模型协议尚未配置"))
+				return
+			}
+			protocol = channelModel.Protocol
+			capability = channelModel.Capability
 		}
-		protocol = channelModel.Protocol
-		capability = channelModel.Capability
 	}
 	if err := authorizeSystemProxy(channel, protocol, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
 		fail(c, http.StatusForbidden, err)

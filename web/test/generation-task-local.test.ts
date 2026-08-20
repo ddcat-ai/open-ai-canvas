@@ -36,6 +36,11 @@ test("Dreamina submit failure categories have bounded user-facing messages", () 
     }
 });
 
+test("resource storage 403 is not reported as generation channel authentication", () => {
+    const raw = "参考图片上传失败：OSS 上传失败：403 Forbidden <Code>UserDisable</Code><Message>UserDisable</Message>";
+    expect(generationErrorMessage(raw)).toBe("对象存储账号已停用，请检查或更换对象存储配置。");
+});
+
 test("durable Dreamina submit failures keep their stable user-facing category in task center", () => {
     const task = projectLocalDreaminaTask({
         id: "dreamina-submit-timeout-task-0001",

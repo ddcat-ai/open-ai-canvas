@@ -145,11 +145,11 @@ function resourceProxyFileUrl(id: string) {
     return `${base}/resources/${encodeURIComponent(id)}/file?proxy=1`;
 }
 
-export async function resolveResourceUrl(storageKey?: string, fallback = "") {
+export function resolveResourceUrl(storageKey?: string, fallback = "") {
     const id = resourceIdFromStorageKey(storageKey);
-    if (!id) return fallback;
-    const resource = await getResource(id).catch(() => null);
-    return resource ? resource.publicUrl || resourceFileUrl(id) : fallback;
+    // 资源引用本身已经包含稳定 ID；恢复/展示阶段不需要再查一遍元数据。
+    // 需要 publicUrl、mime 或尺寸时必须显式调用 getResource，避免隐式 N+1。
+    return id ? resourceFileUrl(id) : fallback;
 }
 
 export async function getResourceBlob(storageKey: string) {

@@ -54,8 +54,10 @@ export async function applyUserSession(payload: AuthSessionPayload) {
             useConfigStore.getState().mergeSystemChannels(managedModelChannels(payload.logicalModels || []));
         }
         installRemoteUserDataAutoSync();
-        if (payload.user?.id) await syncRemoteUserData(payload.user.id);
-        else resetRemoteUserDataSync();
+        if (payload.user?.id) {
+            // 认证状态先完成，云端数据在后台合并；远端同步失败不能伪装成登录失败。
+            void syncRemoteUserData(payload.user.id).catch((error) => console.warn("登录后云端数据同步失败，保留本地数据等待重试", error));
+        } else resetRemoteUserDataSync();
     } finally {
         useUserStore.getState().setHydrated(true);
     }

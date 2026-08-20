@@ -8,6 +8,13 @@ import type { PublicLogicalModel } from "@/services/api/logical-models";
 
 const api = apiClient;
 
+let authSessionRequest: Promise<AuthSessionPayload> | null = null;
+let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
+
+function invalidateAuthSessionCache() {
+    authSessionCache = null;
+}
+
 export type LocalUser = {
     id: string;
     username: string;
@@ -337,7 +344,18 @@ export function linuxDOLoginURL(next: string) {
 }
 
 export function getAuthSession() {
-    return request<AuthSessionPayload>(api.get("/auth/session"));
+    const now = Date.now();
+    if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
+    if (authSessionRequest) return authSessionRequest;
+    authSessionRequest = request<AuthSessionPayload>(api.get("/auth/session"))
+        .then((payload) => {
+            authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
+            return payload;
+        })
+        .finally(() => {
+            authSessionRequest = null;
+        });
+    return authSessionRequest;
 }
 
 export function getSystemChannels() {
@@ -356,8 +374,11 @@ export function updateAdminFeatureAvailability(features: Pick<FeatureAvailabilit
     return request<{ features: FeatureAvailability }>(api.patch("/admin/settings/features", features));
 }
 
-export function login(input: { username: string; password: string }) {
-    return request<{ user: LocalUser }>(api.post("/auth/login", input));
+export async function login(input: { username: string; password: string }) {
+    const result = await request<{ user: LocalUser }>(api.post("/auth/login", input));
+    // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
+    invalidateAuthSessionCache();
+    return result;
 }
 
 export function sendRegistrationEmailCode(email: string) {
@@ -368,8 +389,10 @@ export function register(input: { username: string; email?: string; emailCode?: 
     return request<{ user: LocalUser }>(api.post("/auth/register", input));
 }
 
-export function logout() {
-    return request<{ ok: boolean }>(api.post("/auth/logout"));
+export async function logout() {
+    const result = await request<{ ok: boolean }>(api.post("/auth/logout"));
+    invalidateAuthSessionCache();
+    return result;
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; limit?: number };

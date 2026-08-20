@@ -3978,6 +3978,7 @@ test("account scope transition drains an active remote deletion before entering 
     const localStorageValues = new Map<string, string>();
     const previousAdapter = apiClient.defaults.adapter;
     const previousAssets = useAssetStore.getState().assets;
+    const requestUrls: string[] = [];
     let releaseDelete!: () => void;
     const deleteReleased = new Promise<void>((resolve) => {
         releaseDelete = resolve;
@@ -3985,12 +3986,13 @@ test("account scope transition drains an active remote deletion before entering 
     let deleteStarted = false;
     apiClient.defaults.adapter = async (config) => {
         const url = String(config.url || "");
+        requestUrls.push(url);
         if (config.method === "delete") {
             deleteStarted = true;
             await deleteReleased;
             return { data: { code: 0, data: { id: "shared-asset" }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
         }
-        const data = url.includes("canvas-projects") ? { projects: [] } : { assets: [] };
+        const data = url.includes("user-data/snapshot") ? { projects: [], assets: [] } : url.includes("canvas-projects") ? { projects: [] } : { assets: [] };
         return { data: { code: 0, data, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
     };
     Object.defineProperty(globalThis, "window", {
@@ -4013,6 +4015,8 @@ test("account scope transition drains an active remote deletion before entering 
     try {
         useAssetStore.getState().replaceAssets([]);
         await syncRemoteUserData("account-A");
+        expect(requestUrls.filter((url) => url.includes("user-data/snapshot"))).toHaveLength(1);
+        expect(requestUrls.some((url) => /\/(assets|canvas-projects)\/[^/]+/.test(url))).toBe(false);
         useAssetStore.getState().replaceAssets([
             {
                 id: "shared-asset",

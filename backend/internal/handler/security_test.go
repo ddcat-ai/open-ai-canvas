@@ -125,6 +125,26 @@ func TestAuthorizeSystemProxyRestrictsModelProtocol(t *testing.T) {
 	}
 }
 
+func TestAuthorizeSystemProxyMiniMaxVideoCreateAndPoll(t *testing.T) {
+	channel := &model.ModelChannel{APIFormat: "openai", ModelsJSON: `["MiniMax-H3"]`}
+	createBody := []byte(`{"model":"MiniMax-H3","content":[{"type":"text","text":"test"}]}`)
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceMiniMaxVideo, http.MethodPost, "/v2/video_generation", "application/json", createBody); err != nil {
+		t.Fatalf("MiniMax create should be allowed: %v", err)
+	}
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceMiniMaxVideo, http.MethodGet, "/v2/query/video_generation/task-1", "", nil); err != nil {
+		t.Fatalf("MiniMax poll should be allowed: %v", err)
+	}
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceMiniMaxVideo, http.MethodGet, "/v2/account", "", nil); err == nil {
+		t.Fatal("arbitrary MiniMax GET should be rejected")
+	}
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceMiniMaxVideo, http.MethodPost, "/v2/video_generation", "text/plain", createBody); err == nil {
+		t.Fatal("MiniMax non-JSON create should be rejected")
+	}
+	if err := authorizeSystemProxy(channel, model.ChannelInterfaceMiniMaxVideo, http.MethodPost, "/v2/video_generation", "application/json", []byte(`{"model":"unapproved"}`)); err == nil {
+		t.Fatal("unapproved MiniMax model should be rejected")
+	}
+}
+
 func TestAuthorizeSystemProxyVolcengineArkImageOnlyAllowsGenerations(t *testing.T) {
 	body := []byte(`{"model":"doubao-seedream-test"}`)
 	channel := &model.ModelChannel{APIFormat: "openai", ModelsJSON: `["doubao-seedream-test"]`}

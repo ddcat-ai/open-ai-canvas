@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from "react";
 import { Input, Popover } from "antd";
 import { Cpu, Search, X } from "lucide-react";
 
@@ -8,22 +8,53 @@ import { cn } from "@/lib/utils";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
-// 只加载各图标的 Mono 组件；完整 icons barrel 会经由 Avatar/Combine 与 @lobehub/ui 形成循环依赖，Bun 测试环境会触发未初始化导出。
-const iconModules = typeof import.meta.glob === "function"
-    ? import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { eager: true, import: "default" })
-    : {};
-const iconRegistry = Object.fromEntries(
+// 只允许按需加载 Mono 组件。这里不能使用 eager glob：模型 Logo 目录有数百个 provider 模块，
+// eager 会让每次进入工作区都发起数百个开发模块请求，即使用户从未打开 Logo 选择器。
+const iconModules = import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { import: "default" });
+const iconLoaders = Object.fromEntries(
     Object.entries(iconModules)
-        .map(([path, icon]) => [path.match(/\/([^/]+)\/components\/Mono\.js$/)?.[1], icon])
-        .filter((entry): entry is [string, LobeIconComponent] => Boolean(entry[0] && entry[1])),
-) as Record<string, LobeIconComponent>;
+        .map(([path, loader]) => [path.match(/\/([^/]+)\/components\/Mono\.js$/)?.[1], loader])
+        .filter((entry): entry is [string, () => Promise<LobeIconComponent>] => Boolean(entry[0] && entry[1])),
+) as Record<string, () => Promise<LobeIconComponent>>;
+const iconRegistry = new Map<string, LobeIconComponent>();
+const iconLoadPromises = new Map<string, Promise<LobeIconComponent | undefined>>();
 const iconOptions = toc
     .filter((item) => item.group === "model" || item.group === "provider")
     .map((item) => ({ id: item.id, title: item.fullTitle || item.title }))
-    .filter((item) => Boolean(iconRegistry[item.id]));
+    .filter((item) => Boolean(iconLoaders[item.id]));
+
+function loadIcon(icon?: string) {
+    if (!icon) return Promise.resolve(undefined);
+    const cached = iconRegistry.get(icon);
+    if (cached) return Promise.resolve(cached);
+    const existing = iconLoadPromises.get(icon);
+    if (existing) return existing;
+    const loader = iconLoaders[icon];
+    if (!loader) return Promise.resolve(undefined);
+    const promise = loader()
+        .then((module) => {
+            const loaded = (module as unknown as { default?: LobeIconComponent }).default || module;
+            iconRegistry.set(icon, loaded);
+            return loaded;
+        })
+        .catch(() => undefined);
+    iconLoadPromises.set(icon, promise);
+    return promise;
+}
 
 export function ModelLogo({ icon, size = 18, className }: { icon?: string; size?: number; className?: string }) {
-    const Icon = icon ? iconRegistry[icon] : undefined;
+    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => icon ? iconRegistry.get(icon) : undefined);
+    useEffect(() => {
+        let cancelled = false;
+        setIcon(icon ? iconRegistry.get(icon) : undefined);
+        if (!icon || !iconLoaders[icon]) return () => { cancelled = true; };
+        void loadIcon(icon).then((loaded) => {
+            if (!cancelled) setIcon(loaded);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [icon]);
     if (!Icon) return <Cpu className={cn("shrink-0 text-foreground/45", className)} size={size} aria-hidden />;
     return <Icon size={size} className={cn("shrink-0", className)} aria-hidden />;
 }

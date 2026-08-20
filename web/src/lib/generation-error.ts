@@ -31,6 +31,8 @@ export function generationErrorMessage(error: unknown) {
     const providerMessage = extractStructuredProviderMessage(raw) || extractWrappedProviderMessage(raw);
     const displayMessage = providerMessage || raw;
     if (isContentModerationError(displayMessage)) return CONTENT_MODERATION_MESSAGE;
+    const resourceStorageMessage = resourceStorageFailureMessage(raw) || resourceStorageFailureMessage(displayMessage);
+    if (resourceStorageMessage) return resourceStorageMessage;
     if (isNetworkFailure(displayMessage)) return NETWORK_ERROR_MESSAGE;
     if (!providerMessage) {
         if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
@@ -132,4 +134,13 @@ function hasHttpStatus(value: string, ...statuses: number[]) {
 
 function containsInfrastructureDetails(value: string) {
     return /(?:接口请求失败|Request failed with status code|https?:\/\/|\b(?:GET|POST|PUT|PATCH|DELETE)\s+["']?|Bad Gateway|Service Unavailable|Gateway Timeout|upstream_error)/i.test(value);
+}
+
+function resourceStorageFailureMessage(value: string) {
+    if (!value) return "";
+    if (/\bUserDisable\b/i.test(value)) return "对象存储账号已停用，请检查或更换对象存储配置。";
+    if (/(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)/i.test(value)) {
+        return "参考素材上传到对象存储失败，请检查对象存储配置后重试。";
+    }
+    return "";
 }

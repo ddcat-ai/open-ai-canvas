@@ -155,9 +155,12 @@ export function startLocalRuntimeBootstrap(
     };
 }
 
-export function useLocalRuntimeBootstrap() {
+export function useLocalRuntimeBootstrap(enabled = true) {
     const connect = useLocalRuntimeStore((state) => state.connect);
-    useEffect(() => startLocalRuntimeBootstrap(connect), [connect]);
+    useEffect(() => {
+        if (!enabled) return;
+        return startLocalRuntimeBootstrap(connect);
+    }, [connect, enabled]);
 }
 
 function connectionFailure(error: unknown, timedOut: boolean) {

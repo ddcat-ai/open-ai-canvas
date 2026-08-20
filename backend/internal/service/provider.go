@@ -239,7 +239,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		}
 	}
 	if resumedProviderRequestID(ctx) == "" {
-		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo)
+		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) || input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo)
 		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
 			return nil, err
 		}
@@ -1689,6 +1689,9 @@ func audioFormatMimeType(format string) string {
 }
 
 func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo) {
+		return runMiniMaxVideoTask(ctx, input)
+	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineJiMengVideo) {
 		return runVolcengineJiMengVideoTask(ctx, input)
 	}
@@ -1816,6 +1819,159 @@ func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		}
 	}
 	return nil, errors.New("视频生成超时")
+}
+
+func runMiniMaxVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if strings.TrimSpace(input.Prompt) == "" {
+		return nil, errors.New("MiniMax 视频提示词不能为空")
+	}
+	if len(input.ReferenceImages) > 9 || len(input.ReferenceVideos) > 3 || len(input.ReferenceAudios) > 3 {
+		return nil, errors.New("MiniMax 视频最多支持 9 张参考图、3 个参考视频和 3 个参考音频")
+	}
+	content := []miniMaxVideoContent{{Type: "text", Text: strings.TrimSpace(input.Prompt)}}
+	for index, image := range input.ReferenceImages {
+		url, err := miniMaxMediaURLValue(image)
+		if err != nil {
+			return nil, fmt.Errorf("MiniMax 参考图无效：%w", err)
+		}
+		role := "reference_image"
+		if len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0 && len(input.ReferenceImages) <= 2 {
+			if index == 0 {
+				role = "first_frame"
+			} else if index == 1 {
+				role = "last_frame"
+			}
+		}
+		content = append(content, miniMaxVideoContent{Type: "image_url", ImageURL: &miniMaxMediaURL{URL: url}, Role: role})
+	}
+	for _, video := range input.ReferenceVideos {
+		url, err := miniMaxMediaURLValue(video)
+		if err != nil {
+			return nil, fmt.Errorf("MiniMax 参考视频无效：%w", err)
+		}
+		content = append(content, miniMaxVideoContent{Type: "video_url", VideoURL: &miniMaxMediaURL{URL: url}, Role: "reference_video"})
+	}
+	for _, audio := range input.ReferenceAudios {
+		url, err := miniMaxMediaURLValue(audio)
+		if err != nil {
+			return nil, fmt.Errorf("MiniMax 参考音频无效：%w", err)
+		}
+		content = append(content, miniMaxVideoContent{Type: "audio_url", AudioURL: &miniMaxMediaURL{URL: url}, Role: "reference_audio"})
+	}
+	watermark := parseBool(input.Config.VideoWatermark, false)
+	frameMode := len(input.ReferenceImages) > 0 && len(input.ReferenceImages) <= 2 && len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0
+	body := miniMaxVideoRequest{
+		Model:         input.Config.Model,
+		Content:       content,
+		Resolution:    normalizeMiniMaxResolution(input.Config.VQuality),
+		Duration:      normalizeMiniMaxDuration(input.Config.VideoSeconds),
+		Ratio:         normalizeMiniMaxRatio(input.Config.Size, frameMode),
+		AIGCWatermark: &watermark,
+	}
+	id := resumedProviderRequestID(ctx)
+	if id == "" {
+		var created map[string]interface{}
+		if err := postJSON(ctx, input.Config, "/v2/video_generation", body, &created); err != nil {
+			return nil, err
+		}
+		id = firstNonEmptyString(stringField(created, "task_id"), stringField(created, "id"))
+		if data, ok := created["data"].(map[string]interface{}); ok {
+			id = firstNonEmptyString(id, stringField(data, "task_id"), stringField(data, "id"))
+		}
+	}
+	if id == "" {
+		return nil, errors.New("MiniMax 视频接口没有返回任务 ID")
+	}
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+		var response map[string]interface{}
+		if err := getJSON(ctx, input.Config, "/v2/query/video_generation/"+url.PathEscape(id), &response); err != nil {
+			return nil, err
+		}
+		task, _ := response["task"].(map[string]interface{})
+		if task == nil {
+			task = response
+		}
+		status := strings.ToLower(stringField(task, "status"))
+		if status == "succeeded" || status == "completed" {
+			contentValue, _ := task["content"].(map[string]interface{})
+			videoURL := stringField(contentValue, "url")
+			if videoURL == "" {
+				return nil, fmt.Errorf("MiniMax 视频任务 %s 已完成但没有返回视频 URL", id)
+			}
+			data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+			if err != nil {
+				return nil, fmt.Errorf("MiniMax 视频结果下载失败（任务 %s）：%w", id, err)
+			}
+			mimeType = normalizedMediaMimeType(mimeType, data)
+			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
+		}
+		if status == "failed" || status == "cancelled" {
+			return nil, fmt.Errorf("MiniMax 视频生成失败（任务 %s）：%s", id, miniMaxTaskError(task))
+		}
+		if err := sleepContext(ctx, 2500*time.Millisecond); err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("MiniMax 视频生成超时（任务 %s）", id)
+}
+
+func miniMaxMediaURLValue(media providerMedia) (string, error) {
+	value := strings.TrimSpace(media.URL)
+	if !isPublicMediaURL(value) {
+		return "", errors.New("参考素材必须使用公网 HTTP(S) URL，请启用对象存储或提供公网素材地址")
+	}
+	if _, err := ValidateOutboundURL(value); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func normalizeMiniMaxResolution(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "2k" || normalized == "4k" || normalized == "high" || normalized == "1080" || normalized == "1080p" || normalized == "1440p" || normalized == "2160p" {
+		return "2K"
+	}
+	return "768P"
+}
+
+func normalizeMiniMaxDuration(value string) int {
+	duration, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		duration = 5
+	}
+	if duration < 4 {
+		return 4
+	}
+	if duration > 15 {
+		return 15
+	}
+	return duration
+}
+
+func normalizeMiniMaxRatio(value string, frameMode bool) string {
+	if frameMode {
+		return "adaptive"
+	}
+	allowed := map[string]bool{"adaptive": true, "21:9": true, "16:9": true, "4:3": true, "1:1": true, "3:4": true, "9:16": true}
+	value = strings.TrimSpace(value)
+	if allowed[value] {
+		return value
+	}
+	return "16:9"
+}
+
+func miniMaxTaskError(task map[string]interface{}) string {
+	if value, ok := task["error"].(map[string]interface{}); ok {
+		message := stringField(value, "message")
+		code := stringField(value, "code")
+		if message != "" && code != "" {
+			return code + "：" + message
+		}
+		if message != "" {
+			return message
+		}
+	}
+	return "上游返回失败"
 }
 
 func runGeminiVeoVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -2530,7 +2686,7 @@ func validateGenerationInterface(mode string, interfaceType string) error {
 	allowed := map[string]map[string]bool{
 		"text":  {"chat-completion": true, "openai-response": true},
 		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true, "gemini-image": true},
-		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true, "novita-video": true},
+		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true, "novita-video": true, "minimax-video": true},
 		"audio": {"openai-audio": true, "async-audio": true},
 	}
 	if allowed[mode] != nil && !allowed[mode][interfaceType] {
@@ -3269,7 +3425,13 @@ func providerRequestKind(method string, path string) string {
 
 func apiURL(baseURL string, path string) string {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if strings.HasSuffix(base, "/v1") || strings.HasSuffix(base, "/v1beta") || strings.HasSuffix(base, "/api/v3") || strings.HasSuffix(base, "/api/plan/v3") {
+	if strings.HasPrefix(path, "/v2/") {
+		if strings.HasSuffix(base, "/v2") {
+			return base + strings.TrimPrefix(path, "/v2")
+		}
+		return base + path
+	}
+	if strings.HasSuffix(base, "/v1") || strings.HasSuffix(base, "/v1beta") || strings.HasSuffix(base, "/v2") || strings.HasSuffix(base, "/api/v3") || strings.HasSuffix(base, "/api/plan/v3") {
 		return base + path
 	}
 	return base + "/v1" + path

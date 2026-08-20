@@ -1,7 +1,11 @@
 import { compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
 import { apiClient, request } from "@/services/api/request";
+import { getActiveUserScope } from "@/lib/user-scope";
 
 const api = apiClient;
+
+let addedSkillsRequest: { scope: string; promise: Promise<{ skills: Skill[] }> } | null = null;
+let addedSkillsCache: { scope: string; value: { skills: Skill[] }; expiresAt: number } | null = null;
 
 export type SkillSort = "popular" | "new" | "updated";
 export type SkillScope = "public" | "mine" | "created" | "favorites";
@@ -82,27 +86,44 @@ export function getSkill(id: string) {
 }
 
 export function listAddedSkills() {
-    return request<{ skills: Skill[] }>(api.get("/skills/added"));
+    const scope = getActiveUserScope();
+    const now = Date.now();
+    if (addedSkillsCache?.scope === scope && addedSkillsCache.expiresAt > now) return Promise.resolve(addedSkillsCache.value);
+    if (addedSkillsRequest?.scope === scope) return addedSkillsRequest.promise;
+    const promise = request<{ skills: Skill[] }>(api.get("/skills/added"))
+        .then((value) => {
+            addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
+            return value;
+        })
+        .finally(() => {
+            if (addedSkillsRequest?.promise === promise) addedSkillsRequest = null;
+        });
+    addedSkillsRequest = { scope, promise };
+    return promise;
+}
+
+function invalidateAddedSkillsCache() {
+    addedSkillsCache = null;
 }
 
 export function createSkill(input: SkillMutationInput) {
-    return request<{ skill: Skill }>(api.post("/skills", input));
+    return request<{ skill: Skill }>(api.post("/skills", input)).finally(invalidateAddedSkillsCache);
 }
 
 export function updateSkill(id: string, input: SkillMutationInput) {
-    return request<{ skill: Skill }>(api.put(`/skills/${encodeURIComponent(id)}`, input));
+    return request<{ skill: Skill }>(api.put(`/skills/${encodeURIComponent(id)}`, input)).finally(invalidateAddedSkillsCache);
 }
 
 export function deleteSkill(id: string) {
-    return request<{ deleted: boolean }>(api.delete(`/skills/${encodeURIComponent(id)}`));
+    return request<{ deleted: boolean }>(api.delete(`/skills/${encodeURIComponent(id)}`)).finally(invalidateAddedSkillsCache);
 }
 
 export function addSkill(id: string) {
-    return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/add`));
+    return request<{ skill: Skill }>(api.post(`/skills/${encodeURIComponent(id)}/add`)).finally(invalidateAddedSkillsCache);
 }
 
 export function removeSkill(id: string) {
-    return request<{ skill: Skill }>(api.delete(`/skills/${encodeURIComponent(id)}/add`));
+    return request<{ skill: Skill }>(api.delete(`/skills/${encodeURIComponent(id)}/add`)).finally(invalidateAddedSkillsCache);
 }
 
 export function likeSkill(id: string) {
