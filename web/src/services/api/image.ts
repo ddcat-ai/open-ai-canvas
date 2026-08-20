@@ -46,7 +46,11 @@ export type ToolResponseResult = {
     reasoning?: string;
 };
 
-type ToolChoice = "auto" | "required" | { type: "function"; name: string };
+export type ToolChoice = "auto" | "required" | { type: "function"; name: string };
+export type BackendToolRequests = {
+    responses: Record<string, unknown>;
+    chatCompletion: Record<string, unknown>;
+};
 type ResponseMessageContent = AiTextMessage["content"] | string;
 type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string } | { type: "input_file"; filename: string; file_data?: string; file_url?: string };
 type ResponseInputItem = { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: "function_call_output"; call_id: string; output: string };
@@ -405,6 +409,23 @@ function toChatCompletionContent(content: ResponseMessageContent) {
 
 function toChatCompletionToolChoice(toolChoice: ToolChoice) {
     return typeof toolChoice === "object" ? { type: "function", function: { name: toolChoice.name } } : toolChoice;
+}
+
+export function buildBackendToolRequests(messages: ResponseInputMessage[], tools: ResponseFunctionTool[], toolChoice: ToolChoice): BackendToolRequests {
+    return {
+        responses: {
+            input: toResponseInput(messages),
+            tools: tools.map(toResponseTool),
+            tool_choice: toolChoice,
+            parallel_tool_calls: false,
+        },
+        chatCompletion: {
+            messages: toChatCompletionMessages(messages),
+            tools,
+            tool_choice: toChatCompletionToolChoice(toolChoice),
+            parallel_tool_calls: false,
+        },
+    };
 }
 
 function isToolChoiceCompatibilityError(error: unknown) {

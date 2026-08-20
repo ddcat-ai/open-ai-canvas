@@ -35,9 +35,15 @@ type canvasGenerationInput struct {
 	TextHistory     []providerTextMessage  `json:"textHistory"`
 	Mask            *providerMedia         `json:"mask"`
 	Metadata        map[string]interface{} `json:"metadata"`
+	AgentRequests   *agentToolRequests     `json:"agentRequests"`
 	ImageCapability *ImageCapabilityConfig `json:"-"`
 	StreamText      bool                   `json:"-"` // 分镜请求使用上游 SSE 保活；最终结构仍在流结束后统一校验。
 	VideoCapability *VideoCapabilityConfig `json:"-"`
+}
+
+type agentToolRequests struct {
+	Responses      map[string]interface{} `json:"responses"`
+	ChatCompletion map[string]interface{} `json:"chatCompletion"`
 }
 
 type providerTextMessage struct {
@@ -247,6 +253,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	case "image":
 		return runImageTask(ctx, input)
 	case "text":
+		if input.AgentRequests != nil {
+			return runAgentToolTask(ctx, input)
+		}
 		result, taskErr := runTextTask(ctx, input)
 		if taskErr == nil && promptTemplateOperation != "" {
 			taskErr = validatePromptTemplateResult(promptTemplateOperation, result)
@@ -259,6 +268,78 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	default:
 		return nil, fmt.Errorf("不支持的生成模式：%s", input.Mode)
 	}
+}
+
+func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	request := input.AgentRequests.ChatCompletion
+	path := "/chat/completions"
+	protocol := "chat-completion"
+	if input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIResponse) {
+		request = input.AgentRequests.Responses
+		path = "/responses"
+		protocol = "responses"
+	}
+	if request == nil {
+		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
+	}
+	body := cloneStringAnyMap(request)
+	body["model"] = input.Config.Model
+	var payload map[string]interface{}
+	if err := postJSON(ctx, input.Config, path, body, &payload); err != nil {
+		return nil, err
+	}
+	return parseAgentToolPayload(payload, protocol)
+}
+
+func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map[string]interface{}, error) {
+	if err := validateTextPayload(payload); err != nil {
+		return nil, err
+	}
+	result := map[string]interface{}{"mode": "text", "text": "", "toolCalls": []interface{}{}}
+	if protocol == "responses" {
+		result["text"] = firstNonEmptyString(stringField(payload, "output_text"), extractResponseText(payload))
+		calls := make([]interface{}, 0)
+		for _, value := range interfaceSlice(payload["output"]) {
+			item, _ := value.(map[string]interface{})
+			if stringField(item, "type") != "function_call" {
+				continue
+			}
+			calls = append(calls, map[string]interface{}{"id": firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), "type": "function", "function": map[string]interface{}{"name": stringField(item, "name"), "arguments": stringField(item, "arguments")}})
+		}
+		result["toolCalls"] = calls
+		return result, nil
+	}
+	choices := interfaceSlice(payload["choices"])
+	if len(choices) == 0 {
+		return nil, errors.New("画布 Agent 接口没有返回 choices")
+	}
+	choice, _ := choices[0].(map[string]interface{})
+	message, _ := choice["message"].(map[string]interface{})
+	result["text"] = stringField(message, "content")
+	if reasoning := firstNonEmptyString(stringField(message, "reasoning_content"), stringField(message, "reasoning")); reasoning != "" {
+		result["reasoning"] = reasoning
+	}
+	calls := make([]interface{}, 0)
+	for _, value := range interfaceSlice(message["tool_calls"]) {
+		item, _ := value.(map[string]interface{})
+		function, _ := item["function"].(map[string]interface{})
+		calls = append(calls, map[string]interface{}{"id": stringField(item, "id"), "type": "function", "function": map[string]interface{}{"name": stringField(function, "name"), "arguments": stringField(function, "arguments")}})
+	}
+	result["toolCalls"] = calls
+	return result, nil
+}
+
+func interfaceSlice(value interface{}) []interface{} {
+	items, _ := value.([]interface{})
+	return items
+}
+
+func cloneStringAnyMap(value map[string]interface{}) map[string]interface{} {
+	cloned := make(map[string]interface{}, len(value)+1)
+	for key, item := range value {
+		cloned[key] = item
+	}
+	return cloned
 }
 
 type styleExecutionPlanDocument struct {
