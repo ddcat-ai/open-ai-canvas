@@ -72,3 +72,21 @@ export function getNodeMinSize(type: CanvasNodeType) {
 export function shouldKeepAspectRatio(node: CanvasNodeData) {
     return definitions.get(node.type)?.keepAspectRatio?.(node) ?? false;
 }
+
+/**
+ * 该节点作为 @ 引用素材时的类型，非素材返回 null。
+ * 只按类型判定——角色卡那类跨类型覆盖由调用方在此之前处理。
+ */
+export function getNodeResourceKind(node: CanvasNodeData) {
+    return definitions.get(node.type)?.resourceKind?.(node) ?? null;
+}
+
+/** 该节点作为生成节点时的生成模式，不产生生成行为返回 null */
+export function getNodeGenerationMode(node: CanvasNodeData) {
+    return definitions.get(node.type)?.generationMode?.(node) ?? null;
+}
+
+/** 该节点作为上游输入被计数时的类别，不参与计数返回 undefined */
+export function getNodeInputKind(type: CanvasNodeType) {
+    return definitions.get(type)?.inputKind;
+}

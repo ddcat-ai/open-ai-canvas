@@ -26,18 +26,27 @@ const BUILTIN_NODE_TRAITS = {
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: (node: CanvasNodeData) => !node.metadata?.freeResize,
         showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "image" : null),
+        generationMode: () => "image",
+        inputKind: "image",
     },
     [CanvasNodeType.Text]: {
         label: "文本",
         icon: <Type />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content || node.metadata?.prompt ? "text" : null),
+        generationMode: () => "text",
+        inputKind: "text",
     },
     [CanvasNodeType.Drawing]: {
         label: "绘图",
         icon: <Pencil />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
+        // 绘图产出的是图像，所以作为素材与输入都按图片计。
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.drawingId ? "image" : null),
+        inputKind: "image",
     },
     [CanvasNodeType.Script]: {
         label: "分镜脚本",
@@ -45,6 +54,8 @@ const BUILTIN_NODE_TRAITS = {
         // 分镜脚本的表格布局需要更宽的下限；高度仍由内容动态撑开（见 canvas-node.tsx）。
         minSize: { width: 800, height: DEFAULT_MIN_SIZE.height },
         showInCreateMenu: true,
+        generationMode: () => "text",
+        inputKind: "text",
     },
     [CanvasNodeType.Skill]: {
         label: "技能",
@@ -52,6 +63,9 @@ const BUILTIN_NODE_TRAITS = {
         minSize: DEFAULT_MIN_SIZE,
         // 技能节点由技能库插入，不占创建菜单格位。
         showInCreateMenu: false,
+        // 技能注入的是提示词文本，故按文本素材计。
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.skillSnapshot || node.metadata?.content ? "text" : null),
+        inputKind: "text",
     },
     [CanvasNodeType.Config]: {
         label: "生成配置",
@@ -59,6 +73,9 @@ const BUILTIN_NODE_TRAITS = {
         minSize: DEFAULT_MIN_SIZE,
         // 生成配置由连线时自动创建。
         showInCreateMenu: false,
+        // 生成模式由用户在配置节点上选择，缺省按图片。
+        generationMode: (node: CanvasNodeData) => node.metadata?.generationMode || "image",
+        // 不设 inputKind：配置节点本身不是参考素材，不参与容量计数。
     },
     [CanvasNodeType.Video]: {
         label: "视频",
@@ -66,12 +83,18 @@ const BUILTIN_NODE_TRAITS = {
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: () => true,
         showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "video" : null),
+        generationMode: () => "video",
+        inputKind: "video",
     },
     [CanvasNodeType.Audio]: {
         label: "音频",
         icon: <Music2 />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "audio" : null),
+        generationMode: () => "audio",
+        inputKind: "audio",
     },
     [CanvasNodeType.Frame]: {
         label: "背板",
@@ -80,6 +103,7 @@ const BUILTIN_NODE_TRAITS = {
         icon: <PanelTop />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
+        // 背板只是视觉容器，既不是素材也不参与计数。
     },
 } satisfies Record<CanvasNodeType, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
 

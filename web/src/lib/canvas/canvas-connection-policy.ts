@@ -1,6 +1,7 @@
 import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
+import { getNodeGenerationMode, getNodeInputKind } from "@/lib/canvas/node-registry";
 import type { AiConfig } from "@/stores/use-config-store";
-import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData } from "@/types/canvas";
+import { type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 type ConnectionCandidate = Pick<CanvasConnection, "fromNodeId" | "toNodeId">;
 type CanvasConnectionPolicyOptions = {
@@ -11,7 +12,7 @@ type CanvasConnectionPolicyOptions = {
 export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[], connections: CanvasConnection[], candidate: ConnectionCandidate, options: CanvasConnectionPolicyOptions = {}) {
     const target = nodes.find((node) => node.id === candidate.toNodeId);
     if (!target) return "找不到连线目标节点";
-    const mode = nodeGenerationMode(target);
+    const mode = getNodeGenerationMode(target);
     if (!mode) return "";
     const input = connectionInputSummary(target.id, nodes, connections, candidate);
     const visualInputCount = input.imageCount + input.characterCount;
@@ -35,23 +36,16 @@ export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeDa
     const input: ModelInputSummary = { textCount: 0, imageCount: 0, videoCount: 0, audioCount: 0, characterCount: 0 };
     sourceIds.forEach((sourceId) => {
         const source = nodes.find((node) => node.id === sourceId);
-        if (!source || source.type === CanvasNodeType.Config || source.type === CanvasNodeType.Frame) return;
+        if (!source) return;
+        // 生成配置与背板不是参考素材，不参与容量计数——这一步必须早于角色卡判定，
+        // 否则一个带角色元数据的配置/背板节点会被多算成角色。
+        const inputKind = getNodeInputKind(source.type);
+        if (!inputKind) return;
+        // 角色卡是跨类型覆盖：落在可计数类型上时改记为角色。
         if (source.metadata?.workflowKind === "character") input.characterCount += 1;
-        else if (source.type === CanvasNodeType.Image || source.type === CanvasNodeType.Drawing) input.imageCount += 1;
-        else if (source.type === CanvasNodeType.Video) input.videoCount += 1;
-        else if (source.type === CanvasNodeType.Audio) input.audioCount += 1;
-        else input.textCount += 1;
+        else input[`${inputKind}Count`] += 1;
     });
     return input;
-}
-
-function nodeGenerationMode(node: CanvasNodeData): CanvasGenerationMode | null {
-    if (node.type === CanvasNodeType.Config) return node.metadata?.generationMode || "image";
-    if (node.type === CanvasNodeType.Image) return "image";
-    if (node.type === CanvasNodeType.Video) return "video";
-    if (node.type === CanvasNodeType.Audio) return "audio";
-    if (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Script) return "text";
-    return null;
 }
 
 function capacityError(config: AiConfig, capability: "image" | "video", kind: "image" | "video" | "audio", count: number, label: string) {

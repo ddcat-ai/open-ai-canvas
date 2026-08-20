@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 
-import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "@/types/canvas";
+import type { CanvasResourceKind } from "@/lib/canvas/canvas-resource-references";
+import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "@/types/canvas";
+
+/** 作为上游输入被容量校验计数时归入的类别 */
+export type CanvasNodeInputKind = "image" | "video" | "audio" | "text";
 
 /**
  * 节点定义——注册表的基本单元。
@@ -26,4 +30,19 @@ export type CanvasNodeDefinition = {
     keepAspectRatio?: (node: CanvasNodeData) => boolean;
     /** 是否出现在添加节点菜单（技能、生成配置由其他入口创建） */
     showInCreateMenu: boolean;
+    /**
+     * 作为 @ 引用素材时归入的类型；不设或返回 null 表示该节点不是可引用素材。
+     * 判定依赖内容——空节点不构成素材。
+     *
+     * 注意：角色卡（workflowKind === "character"）是**跨类型覆盖**，不在这里表达，
+     * 由 canvas-resource-references 在查注册表之前先行判定。
+     */
+    resourceKind?: (node: CanvasNodeData) => CanvasResourceKind | null;
+    /** 作为生成节点时的生成模式；不设表示该类型不产生生成行为 */
+    generationMode?: (node: CanvasNodeData) => CanvasGenerationMode | null;
+    /**
+     * 作为上游输入被参考素材容量校验计数时的类别；
+     * 不设表示不参与计数（生成配置、背板）。与 resourceKind 不同，计数不看内容。
+     */
+    inputKind?: CanvasNodeInputKind;
 };
