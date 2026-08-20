@@ -8,6 +8,7 @@ import { modelDisplayName, modelIcon, normalizeModelOptionValue, resolveModelCha
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
+import { logicalModelIDForConfig, runBackendToolGenerationTask } from "@/services/api/generation-task";
 import { imageToDataUrl } from "@/services/image-storage";
 import { isCanvasGenerationDurableAckError, persistCanvasCinematicSessionContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
@@ -376,6 +377,7 @@ export function CanvasAssistantPanel({
     const hasMessages = messages.length > 0;
     const agentBusy = isRunning || safeSessions.some((session) => session.pendingBackendSession?.status === "pending");
     const activeModel = effectiveConfig.textModel || effectiveConfig.model;
+    const activeModelName = activeModel ? modelDisplayName(effectiveConfig, activeModel) : "";
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
@@ -606,17 +608,10 @@ export function CanvasAssistantPanel({
             const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage);
             addOnlineLog(`Agent Tool Loop ${loop.step} 开始`, { toolChoice: "required" });
             let streamed = "";
-            const result = await requestToolResponse(
-                { ...requestConfig, systemPrompt: "" },
-                messages,
-                ONLINE_AGENT_TOOLS,
-                "required",
-                (text) => {
-                    streamed = text;
-                    if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-                },
-                { promptCacheKey: canvasAgentPromptCacheKey(sessionId) },
-            );
+            const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, messages, "required", userMessage.text, (text) => {
+                streamed = text;
+                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+            }, canvasAgentPromptCacheKey(sessionId));
             addOnlineLog("模型工具回复", result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
@@ -672,17 +667,10 @@ export function CanvasAssistantPanel({
         }
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         let streamed = "";
-        const next = await requestToolResponse(
-            { ...requestConfig, systemPrompt: "" },
-            nextMessages,
-            ONLINE_AGENT_TOOLS,
-            "auto",
-            (text) => {
-                streamed = text;
-                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            },
-            { promptCacheKey: canvasAgentPromptCacheKey(sessionId) },
-        );
+        const next = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, nextMessages, "auto", "继续处理画布工具结果", (text) => {
+            streamed = text;
+            if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+        }, canvasAgentPromptCacheKey(sessionId));
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
@@ -1019,7 +1007,7 @@ export function CanvasAssistantPanel({
             />
 
             {view === "setup" ? (
-                <OnlineAgentSetupView theme={theme} activeModel={activeModel} onOpenConfig={() => navigateToSettings({ continueCreation: true })} />
+                <OnlineAgentSetupView theme={theme} activeModel={activeModelName} onOpenConfig={() => navigateToSettings({ continueCreation: true })} />
             ) : (
                 <div ref={chatListRef} className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
                     {view === "history" ? (
@@ -1036,7 +1024,7 @@ export function CanvasAssistantPanel({
                         <OnlineAgentLogView
                             logs={onlineLogs}
                             theme={theme}
-                            context={{ model: activeModel, running: agentBusy, confirmTools, messages: messages.length, nodes: snapshot.nodes.length, connections: snapshot.connections.length }}
+                            context={{ model: activeModelName, running: agentBusy, confirmTools, messages: messages.length, nodes: snapshot.nodes.length, connections: snapshot.connections.length }}
                             onClear={() => setOnlineLogs([])}
                         />
                     ) : messages.length ? (
@@ -1588,6 +1576,15 @@ function isResponseToolCall(value: unknown): value is ResponseToolCall {
 
 function toolCallToResponseInput(call: ResponseToolCall): ResponseInputMessage {
     return { type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments, ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}) };
+}
+
+async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInputMessage[], toolChoice: "auto" | "required", prompt: string, onDelta: (text: string) => void, promptCacheKey: string) {
+    if (logicalModelIDForConfig(config)) {
+        const result = await runBackendToolGenerationTask({ prompt, config, messages, tools: ONLINE_AGENT_TOOLS, toolChoice });
+        if (result.content.trim()) onDelta(result.content);
+        return result;
+    }
+    return requestToolResponse(config, messages, ONLINE_AGENT_TOOLS, toolChoice, onDelta, { promptCacheKey });
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {
