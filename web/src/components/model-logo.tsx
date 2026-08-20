@@ -2,14 +2,21 @@ import { useMemo, useState, type ComponentType, type SVGProps } from "react";
 import { Input, Popover } from "antd";
 import { Cpu, Search, X } from "lucide-react";
 
-import * as LobeIcons from "@lobehub/icons/es/icons";
 import { toc } from "@lobehub/icons/es/toc";
 
 import { cn } from "@/lib/utils";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
-const iconRegistry = LobeIcons as unknown as Record<string, LobeIconComponent>;
+// 只加载各图标的 Mono 组件；完整 icons barrel 会经由 Avatar/Combine 与 @lobehub/ui 形成循环依赖，Bun 测试环境会触发未初始化导出。
+const iconModules = typeof import.meta.glob === "function"
+    ? import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { eager: true, import: "default" })
+    : {};
+const iconRegistry = Object.fromEntries(
+    Object.entries(iconModules)
+        .map(([path, icon]) => [path.match(/\/([^/]+)\/components\/Mono\.js$/)?.[1], icon])
+        .filter((entry): entry is [string, LobeIconComponent] => Boolean(entry[0] && entry[1])),
+) as Record<string, LobeIconComponent>;
 const iconOptions = toc
     .filter((item) => item.group === "model" || item.group === "provider")
     .map((item) => ({ id: item.id, title: item.fullTitle || item.title }))
