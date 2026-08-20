@@ -10,6 +10,7 @@ import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type A
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
+import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice, type ToolResponseResult } from "@/services/api/image";
 
 export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 
@@ -19,6 +20,8 @@ export type BackendGenerationResult = {
     video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string };
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
     text?: string;
+    toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string }; thoughtSignature?: string }>;
+    reasoning?: string;
 };
 
 type BackendGenerationTaskOptions = {
@@ -103,6 +106,40 @@ export async function runBackendGenerationTask(
     const prepared = await prepareGenerationReferences({ referenceImages, referenceVideos, referenceAudios, mask });
     throwIfAborted(signal);
     return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate }, prepared, dependencies);
+}
+
+export async function runBackendToolGenerationTask(options: {
+    prompt: string;
+    config: AiConfig;
+    messages: ResponseInputMessage[];
+    tools: ResponseFunctionTool[];
+    toolChoice: ToolChoice;
+    signal?: AbortSignal;
+}): Promise<ToolResponseResult> {
+    throwIfAborted(options.signal);
+    const logicalModelId = logicalModelIDForConfig(options.config);
+    if (!logicalModelId) throw new Error("当前模型不是平台系统模型");
+    const task = await createGenerationTask({
+        type: "canvas_text",
+        operation: "text",
+        prompt: options.prompt,
+        model: options.config.model,
+        logicalModelId,
+        input: {
+            mode: "text",
+            prompt: options.prompt,
+            config: backendProviderConfig(options.config),
+            agentRequests: buildBackendToolRequests(options.messages, options.tools, options.toolChoice),
+            metadata: { source: "canvas-online-agent" },
+        },
+    });
+    const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task });
+    const result = parseBackendGenerationResult(completed);
+    return {
+        content: result.text || "",
+        toolCalls: result.toolCalls || [],
+        ...(result.reasoning ? { reasoning: result.reasoning } : {}),
+    };
 }
 
 export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
