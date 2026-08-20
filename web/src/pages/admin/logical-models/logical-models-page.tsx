@@ -261,7 +261,7 @@ export default function LogicalModelsPage() {
                 toolbarActiveFilters={keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}
                 toolbarActive={Boolean(keyword)}
                 onReset={() => { setKeyword(""); setPage(1); }}
-                table={{ rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 980 } }}
+                table={{ className: "admin-logical-model-table", rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 980 } }}
                 empty={<AdminTableEmpty filtered={Boolean(deferredKeyword)} title="暂无模型" />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={filteredModels.length} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
             />
