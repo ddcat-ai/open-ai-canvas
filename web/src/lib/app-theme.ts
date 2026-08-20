@@ -71,7 +71,8 @@ const controlTheme = {
 
 export function getAntThemeConfig(dark: boolean): ThemeConfig {
     const color = dark ? controlTheme.dark : controlTheme.light;
-    const elevatedBackground = dark ? "rgba(31, 31, 32, 0.96)" : "rgba(255, 255, 255, 0.96)";
+    // 浮层背景必须不透明（0.96 会透出下层内容）；与侧栏切换器等自定义浮层的实底背景保持一致
+    const elevatedBackground = dark ? "rgba(31, 31, 32, 1)" : "rgba(255, 255, 255, 1)";
     const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
     const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
     // 黑白主题使用边框表达焦点，避免输入控件周围出现蓝紫色光圈。

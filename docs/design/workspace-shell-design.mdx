@@ -1,0 +1,179 @@
+# 工作区外壳设计沉淀：侧栏 + 主区 + 顶部栏
+
+> 范围：用户工作台外壳（`UserLayout` → `AppWorkspaceShell`）的侧栏、主区卡片与主区顶部栏的设计决策与实现约束。
+> 参考：shadcn 风格工作台（侧栏导航 + 主内容区 + 顶栏图标按钮组），`SelectItem` 式紧凑交互（hover 浅背景反馈 + Chevron 指示）。
+> 硬约束：不改变任何既有功能入口；明暗主题由三层 token 驱动；不引入装饰性线条（竖杠 / hairline / 默认边框）。
+> 状态：`bunx tsc --noEmit` 通过；未运行构建与浏览器实测（真机回归项见文末）。
+
+## 1. 布局架构
+
+工作台外壳为「**侧栏卡片 + 主区卡片**」双卡片布局，顶部栏**位于主区卡片内部顶部**（不再占全宽，视觉上位于侧栏右侧）：
+
+```text
+┌────────────────────────────────────────────────────────┐
+│  .app-workspace-shell        padding: var(--workspace-shell-gutter)  │
+│  ┌──────────────┐  ┌───────────────────────────────────┐│
+│  │ 侧栏卡片      │  │ 主区卡片 .app-workspace-stage       ││
+│  │ 260px 可折叠  │  │ ┌───────────────────────────────┐ ││
+│  │              │  │ │ 顶部栏（面包屑…账户）             │ ││
+│  │ 切换器/搜索   │  │ ├───────────────────────────────┤ ││
+│  │ 分组导航      │  │ │ 页面内容                        │ ││
+│  │ footer        │  │ │                               │ ││
+│  └──────────────┘  │ └───────────────────────────────┘ ││
+│                    └───────────────────────────────────┘│
+└────────────────────────────────────────────────────────┘
+```
+
+- 两张卡片共享同一外观规则（**单一来源**）：1px 边框 + `--r-xl` 圆角 + 阴影栈，见 §5.1。
+- 例外（连体契约）：画布编辑器 `/canvas/:id` 与运营后台 `/admin`（`:not(.is-spatial)`）取消外壳留白与卡片圆角，保持全屏连体。
+- 侧栏折叠为 0 宽时（`:has(.is-collapsed)`）外壳留白/行间距/主区圆角同步归零，四周贴齐视口。
+
+## 2. 侧栏设计（`.app-workspace-sidebar`）
+
+### 2.1 尺寸与卡片
+
+| 项 | 值 | 说明 |
+| --- | --- | --- |
+| 展开宽度 | `--workspace-sidebar-width: 260px` | 组件 token；含 1px 卡片边框 |
+| 折叠态 | `width: 0 !important`，边框/阴影同步收起 | 内存态，不持久化（沿用 admin-shell 先例） |
+| 圆角 | `--r-xl`（14px） | 卡片合同 |
+| 背景 | `--workspace-sidebar`（= `--workspace-navigation`） | 与主区 `--workspace-content` 区分 |
+
+### 2.2 纵向结构（自上而下）
+
+1. **工作区切换器** `WorkspaceSwitcher`：品牌 mark（`size-8`、`--r-sm` 圆角、`InfinityIcon`）+「影策」wordmark + 副标题「创作工作台」（`--fs-label`、42% 灰）→ 点击展开切换浮层 `.app-workspace-nav-popover`（无阴影，1px 边框 + 实底背景）。
+2. **快速搜索**：`h-9`、`--r-lg` 圆角、`bg-foreground/5` 浅底；占位文字与 `Search` 图标均为 `text-muted-foreground`（语义占位色）；hover 加深至 `bg-foreground/[.07]` + 70%；右侧常驻 `⌘K` kbd 提示（复用导航项 kbd 合同）；点击打开命令面板。
+3. **分组导航区** `.app-workspace-sidebar-scroll-area`（`flex-1` 滚动，滚动条隐藏）：
+   - 无标题分组（首页/创作/画布…核心入口）**常驻展示，不折叠**。
+   - 有标题分组渲染为 `NavGroup`（见 §2.3）。
+4. **Footer**（设置分区 + 退出登录）：无分隔线（见 §2.5）。
+
+### 2.3 分组折叠 `NavGroup`
+
+- 触发：有标题的分组（如「工作台管理」）标题变为**按钮**（`.app-workspace-nav-group-toggle`），点击折叠/展开组内导航项。
+- 视觉：`min-height: 28px` 紧凑按钮，`--r-sm` 圆角；右侧 `ChevronRight` 指示——展开 `rotate-90`（向下）、折叠水平（向右），200ms 旋转过渡。
+- 交互：hover/focus-visible 浅背景 `--surface-hover`；标签文字 36% → 55%、图标 35% → 70%（成对递进，深浅主题一致）。
+- 动画：`grid-template-rows: 1fr ↔ 0fr` + opacity，300ms `ease-in-out`（与 NavItem 子项折叠同款，交互一致）。
+- 可用性：**激活项所在分组自动展开**（`useEffect` 监听 `hasActive`），保证当前位置可见。
+
+### 2.4 导航项 `NavItem` 状态设计
+
+| 状态 | 表现 |
+| --- | --- |
+| 默认 | 文字/图标 62% 中性灰（`text-foreground/62`），图标 60% |
+| hover | `--surface-hover` 浅底 + 文字 100%、图标 80% |
+| 激活 | `is-active` + `font-medium`，文字 100% |
+| 子项展开 | `ChevronRight` 旋转 + `grid-rows` 动画 + **引导线**（`(level+1)*12+12.5px`，居中于子项圆点） |
+
+- 行容器：`min-h-9`、`--r-sm` 圆角、`px-2.5`、图标 16px/1.6 描边。
+- 子项缩进：`padding-left: ${level * 12 + 10}px`；子项无图标时显示 `size-1.5` 圆点（`opacity-40`）。
+- 徽章（钱包余额）：`bg-primary/10` + `text-primary` 圆角胶囊，`tabular-nums`。
+- 快捷键：`kbd`（`h-5`、描边 `--workspace-border`、浅底、mono、55% 灰），hover 才显示。
+- 激活分支自动展开（设置分区子项同款逻辑）。
+- 点击既有 `to` 又有子项时：**同时折叠切换 + 导航**（接受的既定交互）。
+
+### 2.5 Footer：无分隔线
+
+- **禁止 `border-t` 分隔线**——层级改用淡背景表达：`bg-foreground/[.04]` + 自身 `rounded-b-[var(--r-xl)]`（侧栏根无 `overflow-hidden`，需自身圆角防背景溢出卡片底角）。
+- 内容：设置（6 个 `/settings?section=` 子项，自定义渠道按功能开关过滤）+ 退出登录（`LogOut`，走 `useWorkspaceLogout`）。
+
+## 3. 主区设计（`.app-workspace-stage`）
+
+- 卡片合同与侧栏**共享单一规则**（§5.1）；背景 `--workspace-content`。
+- 顶部栏在卡片内顶部全宽（见 §4）；页面内容容器（`.app-user-content` / `WorkspacePage` / `.app-workspace-grid`）继承卡片背景。
+- 空间工作台（`is-spatial`）：侧栏与主区**连体**——主区 `border: 0; border-radius: 0; box-shadow: none`，侧栏仅保留 `border-right`（7% 分隔线），无卡片间隙（`gap/padding` 归零）。
+- 侧栏折叠后：`:has(.is-collapsed)` → shell `padding: 0`、主区圆角归零、四周贴齐。
+
+## 4. 主区顶部栏设计（`.app-workspace-topbar`）
+
+### 4.1 位置与内容
+
+- 位于主区卡片内部顶部（侧栏右侧），`flex` 两端布局：
+  - 左：折叠按钮（`PanelLeftClose/Open`）+ 面包屑「影策 / 页面标题」（`--fs-caption`、50% 灰、当前页 100%）。
+  - 右：公告中心（登录用户）→ 主题切换（`AnimatedThemeToggler`）→ 账户菜单（`WorkspaceAccountMenu`）。
+
+### 4.2 图标按钮合同（`.app-workspace-topbar-icon-button`）
+
+顶栏所有图标按钮（折叠/公告/主题/账户）复用同一合同，保证视觉一致：
+
+| 项 | 值 |
+| --- | --- |
+| 容器 | 36px（`size-9`）、`--r-md` 圆角 |
+| 图标 | 18px、`stroke-width: 1.8`（`> span > svg` 规则匹配占位图标） |
+| 默认色 | `color-mix` 58% |
+| hover | `--surface-hover` 底 + 100% 前景 |
+
+账户按钮：真实头像 24px（`size-6`）；未登录/占位 `CircleUserRound` 撑满（`size-full` → 18px）；**无背景容器**（默认态纯图标，反馈由按钮 hover 提供）；触发按钮不含徽章（完整徽章在菜单头部）。
+
+### 4.3 展开浮层（账户菜单 / 公告中心）
+
+- **不透明**：AntD 主题 `colorBgElevated` 统一 `alpha 1`（浅色 `#fff` / 深色 `#1f1f20`），杜绝透出下层内容（曾因 0.96 透明度 + AntD 6 类名变更失效而暴露，见 §7 经验）。
+- **无阴影**：`.app-spatial-overlays` 下菜单类浮层（`.ant-dropdown-menu`、`.ant-select-dropdown`、`.ant-popover-container`、cascader、mentions）`box-shadow: none`——层级由 **1px 边框 + 背景对比**表达；Modal/Drawer 不受影响。
+- 背景/边框/圆角收敛到 `--workspace-overlay-bg-strong` / `--workspace-overlay-border` 等唯一源 token。
+
+## 5. 共享规则与 token
+
+### 5.1 卡片合同（单一来源）
+
+```css
+/* globals.css：.app-workspace-sidebar, .app-workspace-stage 共享 */
+border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent); /* 减线：9% → 7% */
+border-radius: var(--r-xl);
+box-shadow: 0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+/* .dark 覆盖：0 14px 44px rgba(0, 0, 0, 0.45) + inset 白 6%（阴影永远取真黑，禁止用 foreground 推导） */
+```
+
+深色阴影必须为 `rgba(0, 0, 0, 0.45)` 级真黑（`var(--foreground)` 在深色下是白 → 发光）。`.dark` 覆盖**必须放在折叠规则之前**（两者 specificity 相同 (0,2,0)，源顺序决定胜负）。
+
+### 5.2 关键 token 映射
+
+| Token | 值 | 用途 |
+| --- | --- | --- |
+| `--workspace-sidebar-width` | 260px | 侧栏展开宽度 |
+| `--workspace-shell-gutter` | 6px | 外壳留白与卡片间隙 |
+| `--workspace-sidebar` / `--workspace-content` | navigation / page | 侧栏 / 主区背景 |
+| `--surface-hover` | 5% / 7% (dark) | 行 hover 反馈 |
+| `--r-sm / --r-lg / --r-xl` | — / — / 14px | 行 / 搜索 / 卡片圆角 |
+| `--fs-label / --fs-caption / --fs-body` | 11 / 12 / 14px | 标签 / 说明 / 正文 |
+| `--motion-state` / `--ease-aceternity` | 180ms / ease-out | 状态过渡 |
+| `--workspace-overlay-*` | strong / border 等 | 浮层背景、边框、分隔 |
+
+## 6. 视觉与交互规范（沉淀约束）
+
+- **禁止装饰性线条**：卡片无左侧竖杠、无默认 border/hairline；层级用**明度、间距、淡背景**表达（footer 分隔即用 `bg-foreground/[.04]`）。导航引导线、markdown 引用线属于内容层级，不在此列。
+- **不重复声明**：相似组件样式合并共享选择器（侧栏/主区卡片已合并）；新增覆盖前先搜索同名规则，回到唯一源修改。
+- **色彩角色成对**：主操作 / 普通选中 / 勾选 / 开关各为其政；hover 递进必须成对定义（文字 62→100 与图标 60→80 同步）。
+- **状态一致**：持久切换用 `aria-pressed`；`type="primary"` 仅用于当前主命令。
+- **可访问性**：键盘导航保留 `:focus-visible`（点击态用 `:focus:not(:focus-visible)` 消除）；折叠/展开控件使用 `aria-expanded`。
+- **AntD 6 浮层类名**：Popover 背景容器为 `.ant-popover-container`（不再是 v5 的 `.ant-popover-inner`），覆盖选择器必须按实际 DOM 类名书写。
+
+## 7. 关键经验（踩坑记录）
+
+1. **AntD 6 类名迁移**：`.ant-popover-inner` → `.ant-popover-container`，旧选择器静默失配（无报错），导致背景/边框规则全部失效——覆盖第三方组件前必须核对 `node_modules` 内实际类名。
+2. **半透明浮层**：`colorBgElevated: 0.96` 在内容滚动时会透出下层 → 浮层一律实底。
+3. **深色阴影**：用 `color-mix` 从 `--foreground` 推导阴影在深色主题下变成白色光晕 → 显式 `rgba(0,0,0,.45)`。
+4. **specificity 平手靠顺序**：`.dark .x` (0,2,0) 与 `.shell .x.is-collapsed` (0,2,0) 相同时，源顺序决定——覆盖块必须置于折叠规则之前。
+5. **编辑防重复**：多 anchor 编辑后行号漂移导致重复内容（搜索占位文本曾出现两份），改后必须复查目标行区域。
+
+## 8. 实现文件清单
+
+| 文件 | 职责 |
+| --- | --- |
+| `web/src/components/layout/app-top-nav.tsx` | `AppWorkspaceShell` 外壳、侧栏/主区行布局、折叠态类 |
+| `web/src/components/layout/workspace-sidebar-nav.tsx` | 切换器、搜索、`NavGroup` 分组折叠、`NavItem`、footer |
+| `web/src/components/layout/workspace-top-bar.tsx` | 主区顶部栏：折叠按钮、面包屑、公告、主题、账户 |
+| `web/src/components/layout/workspace-account-menu.tsx` | 账户菜单与 `UserAvatar`（按钮图标合同） |
+| `web/src/components/layout/workspace-command-palette.tsx` | ⌘K 命令面板（feature-gated） |
+| `web/src/hooks/use-workspace-logout.ts` | 登出 hook |
+| `web/src/lib/app-theme.ts` | AntD 主题：`colorBgElevated` 不透明、控件色 |
+| `web/src/styles/globals.css` | 卡片合同、`NavGroup`/`NavItem` 状态、浮层唯一源规则 |
+| 已删除 `workspace-sidebar-footer.tsx` | 无引用，逻辑并入 nav footer |
+
+## 9. 真机回归清单（未运行，待确认后补测）
+
+- [ ] 明暗主题下侧栏/主区卡片边框、阴影、分组折叠展开动画
+- [ ] 侧栏折叠（0 宽贴齐）与移动端抽屉
+- [ ] 账户菜单、公告中心浮层：不透明、无阴影、边框层级
+- [ ] ⌘K 命令面板打开/过滤/快捷键提示
+- [ ] 设置分区子项展开 + 引导线对齐 + 激活自动展开

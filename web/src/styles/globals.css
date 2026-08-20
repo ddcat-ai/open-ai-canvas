@@ -403,6 +403,12 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
+    --workspace-sidebar-width: 260px;        /* 侧栏展开宽度（组件 token）*/
+    --workspace-sidebar-nav-width: 260px;    /* 侧栏导航内容宽度，不受折叠状态影响 */
+
+    --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
+
+    --workspace-card-gap: 4px;       /* 侧边栏与主区卡片之间间隙（组件 token）*/
 
     /* --- Semantic 层（引用 Primitive，随主题切换）--- */
     /* 通用语义色（引用 Primitive neutral 色板）*/
@@ -690,8 +696,6 @@
     --page-topbar-surface: var(--bg-secondary);
     --page-topbar-border: var(--workspace-border);
     --canvas-topbar-surface: var(--workspace-glass-surface);
-    --rail-icon-size: 18px;
-
     /* Canvas 创建菜单：固定行高保证图标、徽标和单行标签互不挤占 */
     --canvas-create-node-height: var(--space-12);
     --canvas-create-resource-height: var(--space-8);
@@ -885,12 +889,12 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(255, 255, 255, 0.74);
-        --workspace-surface-strong: rgba(255, 255, 255, 0.94);
+        --workspace-surface-strong: rgba(255, 255, 255, 1);
         --workspace-border: rgba(17, 17, 17, 0.1);
         --workspace-border-strong: rgba(17, 17, 17, 0.2);
         --workspace-grid-line: rgba(17, 17, 17, 0.035);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
         --workspace-accent: #171717;
         --workspace-accent-soft: rgba(17, 17, 17, 0.065);
         background-color: var(--workspace-canvas);
@@ -906,21 +910,16 @@
         --workspace-navigation: var(--workspace-page);
         --workspace-content: var(--workspace-page);
         --workspace-surface: rgba(18, 18, 18, 0.76);
-        --workspace-surface-strong: rgba(22, 22, 22, 0.94);
+        --workspace-surface-strong: rgba(22, 22, 22, 1);
         --workspace-border: rgba(255, 255, 255, 0.09);
         --workspace-border-strong: rgba(255, 255, 255, 0.18);
         --workspace-grid-line: rgba(255, 255, 255, 0.026);
         --workspace-nav: var(--workspace-navigation);
-        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-sidebar: color-mix(in srgb, var(--workspace-surface) 55%, var(--workspace-navigation));
         --workspace-accent: #f5f5f5;
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
 
-    .app-workspace-shell.is-spatial {
-        position: relative;
-        gap: 0;
-        padding: 0;
-    }
 
     .app-workspace-sidebar-scrim {
         position: absolute;
@@ -931,22 +930,65 @@
         backdrop-filter: blur(2px);
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-sidebar {
-        border: 0;
-        border-radius: 0;
-        background: var(--workspace-sidebar);
-        box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
+
+    /* 侧栏导航子项展开引导线：替代每组子项自行维护的分割线 */
+    .app-workspace-nav-guide-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        border-left: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+        pointer-events: none;
     }
 
-    .dark .app-workspace-shell.is-spatial .app-workspace-sidebar {
+    /* 分组标题：小号大写标签，弱化但可读；有标题的分组支持折叠，padding/间距由折叠按钮接管 */
+    .app-workspace-nav-group-label {
+        display: block;
+        font-size: var(--fs-label);
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--foreground) 36%, transparent);
+        transition: color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 8px;
+        border-radius: var(--r-sm);
+        text-align: left;
+        color: inherit;
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle:hover,
+    .app-workspace-nav-group-toggle:focus-visible {
+        background: var(--surface-hover);
+    }
+
+    .app-workspace-nav-group-toggle:hover .app-workspace-nav-group-label,
+    .app-workspace-nav-group-toggle:focus-visible .app-workspace-nav-group-label {
+        color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    }
+
+    .app-workspace-nav-group-toggle:hover svg,
+    .app-workspace-nav-group-toggle:focus-visible svg {
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+    }
+
+    /* 工作区切换器下拉浮层 */
+    .app-workspace-nav-popover {
         box-shadow: none;
     }
 
     body.app-spatial-overlays {
-        --workspace-overlay-bg: rgba(244, 244, 245, 0.78);
-        --workspace-overlay-bg-strong: rgba(250, 250, 250, 0.88);
+        --workspace-overlay-bg: rgba(244, 244, 245, 1);
+        --workspace-overlay-bg-strong: rgba(250, 250, 250, 1);
         --workspace-overlay-border: rgba(17, 17, 17, 0.22);
         --workspace-overlay-divider: rgba(17, 17, 17, 0.1);
         --workspace-overlay-highlight: rgba(255, 255, 255, 0.86);
@@ -956,8 +998,8 @@
     }
 
     .dark body.app-spatial-overlays {
-        --workspace-overlay-bg: rgba(10, 10, 11, 0.78);
-        --workspace-overlay-bg-strong: rgba(15, 15, 16, 0.88);
+        --workspace-overlay-bg: rgba(10, 10, 11, 1);
+        --workspace-overlay-bg-strong: rgba(15, 15, 16, 1);
         --workspace-overlay-border: rgba(255, 255, 255, 0.22);
         --workspace-overlay-divider: rgba(255, 255, 255, 0.105);
         --workspace-overlay-highlight: rgba(255, 255, 255, 0.2);
@@ -969,7 +1011,7 @@
     body.app-spatial-overlays :where(
         .ant-dropdown-menu,
         .ant-select-dropdown,
-        .ant-popover-inner,
+        .ant-popover-container,
         .ant-picker-dropdown .ant-picker-panel-container,
         .ant-cascader-menus,
         .ant-mentions-dropdown,
@@ -980,25 +1022,21 @@
         .ant-notification-notice
     ) {
         border: 1px solid var(--workspace-overlay-border) !important;
-        background:
-            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 24%, transparent 76%, rgba(158, 178, 214, 0.055)),
-            var(--workspace-overlay-bg) !important;
-        box-shadow:
-            var(--workspace-overlay-shadow),
-            inset 0 1px 0 var(--workspace-overlay-highlight),
-            inset 1px 0 0 color-mix(in srgb, var(--workspace-overlay-highlight) 36%, transparent) !important;
-        backdrop-filter: blur(30px) saturate(138%) !important;
-        -webkit-backdrop-filter: blur(30px) saturate(138%) !important;
+        background: var(--workspace-overlay-bg-strong) !important;
+        box-shadow: var(--workspace-overlay-shadow) !important;
     }
 
     body.app-spatial-overlays :where(.ant-modal-content, .ant-drawer-content, .ant-notification-notice) {
-        background:
-            linear-gradient(145deg, var(--workspace-overlay-highlight), transparent 20%, transparent 82%, rgba(158, 178, 214, 0.05)),
-            var(--workspace-overlay-bg-strong) !important;
+        background: var(--workspace-overlay-bg-strong) !important;
     }
 
-    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-cascader-menus, .ant-mentions-dropdown) {
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
         border-radius: 8px !important;
+    }
+
+    /* 展开菜单（下拉/弹出）取消阴影：层级由边框 + 背景对比表达 */
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
+        box-shadow: none !important;
     }
 
     body.app-spatial-overlays :where(
@@ -1033,8 +1071,8 @@
 
     body.app-spatial-overlays :where(
         .ant-dropdown-menu-item-divider,
-        .ant-popover-inner-content > .border-b,
-        .ant-popover-inner-content > .border-y,
+        .ant-popover-content > .border-b,
+        .ant-popover-content > .border-y,
         .ant-modal-header,
         .ant-modal-footer,
         .ant-drawer-header
@@ -1053,25 +1091,6 @@
         -webkit-backdrop-filter: blur(7px);
     }
 
-    @media (prefers-reduced-transparency: reduce) {
-        body.app-spatial-overlays :where(
-            .ant-dropdown-menu,
-            .ant-select-dropdown,
-            .ant-popover-inner,
-            .ant-picker-dropdown .ant-picker-panel-container,
-            .ant-cascader-menus,
-            .ant-mentions-dropdown,
-            .ant-tooltip-inner,
-            .ant-modal-content,
-            .ant-drawer-content,
-            .ant-message-notice-content,
-            .ant-notification-notice
-        ) {
-            background: var(--workspace-overlay-bg-strong) !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-        }
-    }
 
     .app-workspace-shell.is-spatial .app-workspace-brand-mark {
         border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
@@ -1080,20 +1099,7 @@
         box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
     }
 
-    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active {
-        background: var(--workspace-accent-soft);
-        color: var(--foreground);
-        box-shadow: none;
-    }
 
-    .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before {
-        display: none;
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-stage {
-        border-radius: 0;
-        background: var(--workspace-content);
-    }
 
     /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */
     .app-spatial-workspace .app-workspace-scroll {
@@ -1183,16 +1189,11 @@
     }
 
     @media (max-width: 639px) {
-        .app-workspace-shell.is-spatial {
-            gap: 6px;
-            padding: 6px;
-        }
 
-        .app-workspace-shell.is-spatial .app-workspace-sidebar,
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 6px;
+        /* 窄屏下侧栏常驻，收缩到图标主轨，避免遮挡主内容 */
+        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
+            width: 0 !important;
         }
-
     }
 
     @media (max-width: 1023px) {
@@ -1200,14 +1201,21 @@
             left: 0;
         }
 
+        .app-workspace-shell .app-workspace-sidebar {
+            width: 0 !important;
+            border: 0 !important;
+            transition: width var(--motion-state) var(--ease-aceternity);
+        }
+
         .app-workspace-shell .app-workspace-sidebar.is-mobile-expanded {
             position: absolute;
             z-index: 40;
             inset: 6px auto 6px 6px;
-            width: min(196px, calc(100vw - 58px));
-            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            width: min(264px, calc(100vw - 58px)) !important;
+            border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+            border-radius: var(--r-xl);
+            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
         }
-
     }
 
     .app-user-workspace {
@@ -1215,13 +1223,71 @@
     }
 
     .app-workspace-shell {
+        position: relative;
+        padding: var(--workspace-shell-gutter);
         background: var(--workspace-page);
     }
 
-    .app-workspace-sidebar {
+    /* 画布编辑器与运营后台（hideChrome 契约）：保持全屏连体，不套圆角卡片 */
+    .app-workspace-shell:not(.is-spatial) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:not(.is-spatial) .app-workspace-stage {
         border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* 工作区卡片（侧栏 / 主区）共享外观：边框、圆角、阴影（深浅主题对称） */
+    .app-workspace-sidebar,
+    .app-workspace-stage {
+        border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+        border-radius: var(--r-xl);
+        box-shadow:
+            0 14px 44px color-mix(in srgb, var(--foreground) 12%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    }
+
+    .dark .app-workspace-sidebar,
+    .dark .app-workspace-stage {
+        box-shadow:
+            0 14px 44px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    }
+
+    .app-workspace-sidebar {
+        width: var(--workspace-sidebar-width, 260px);
         background: var(--workspace-sidebar);
-        transition: width var(--motion-state) var(--ease-aceternity);
+        transition: width var(--motion-state) var(--ease-aceternity), border-color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
+        width: 0 !important;
+        border: 0;
+        box-shadow: none;
+    }
+
+    /* 侧栏折叠后主区四周贴齐视口：取消外壳留白、行间距与卡片圆角，四周无间隙 */
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-main-row {
+        gap: 0;
+    }
+
+    .app-workspace-shell:has(.app-workspace-sidebar.is-collapsed) .app-workspace-stage {
+        border-radius: 0;
+    }
+
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
+        scrollbar-width: none;
+    }
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
+        display: none;
     }
 
     .app-workspace-stage,
@@ -1229,6 +1295,7 @@
     .app-workspace-grid {
         background: var(--workspace-content);
     }
+
 
     .app-workspace-page {
         background: var(--workspace-content);
@@ -1298,6 +1365,7 @@
 
     .app-workspace-main-row {
         display: flex;
+        gap: var(--workspace-card-gap);
         min-height: 0;
         min-width: 0;
         flex: 1 1 auto;
@@ -1307,11 +1375,13 @@
     .app-workspace-topbar {
         position: relative;
         z-index: var(--z-toolbar);
-        height: var(--page-topbar-h);
-        background: var(--workspace-navigation);
+        height: 44px;
         border: 0;
+        border-radius: 0;
+        background: transparent;
         box-shadow: none;
-        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
     }
 
     .app-workspace-topbar-icon-button {
@@ -1327,11 +1397,15 @@
     }
 
     .app-workspace-topbar-icon-button > svg,
-    .app-workspace-topbar-icon-button > span > svg,
-    .app-workspace-nav-icon {
+    .app-workspace-topbar-icon-button > span > svg {
         width: 18px;
         height: 18px;
         stroke-width: 1.8;
+    }
+
+    /* 账户触发按钮为身份标识，占位图标默认不弱化（与其他工具图标区分） */
+    .app-workspace-account-trigger > span > svg {
+        color: var(--foreground);
     }
 
     .app-workspace-topbar-icon-button:hover {
@@ -1344,124 +1418,20 @@
         outline-offset: -2px;
     }
 
-    /* 品牌区：∞ 标 + 影策 字标，hover 加深强调 */
-    .app-workspace-brand-link {
-        border-radius: var(--r-md);
-    }
-
-    .app-workspace-brand-mark {
-        transition: box-shadow var(--motion-instant) ease-out;
-    }
-
+    /* 品牌字标：弱化但可读，hover 加深 */
     .app-workspace-brand-wordmark {
         color: color-mix(in srgb, var(--foreground) 78%, transparent);
         letter-spacing: 0.01em;
         transition: color var(--motion-instant) ease-out;
     }
-
-    .app-workspace-brand-link:hover .app-workspace-brand-wordmark,
-    .app-workspace-brand-link:focus-visible .app-workspace-brand-wordmark {
+    /* 侧栏激活项：主操作角色成对定义（浅色/深色主题同一 token） */
+    .app-workspace-nav-link.is-active {
+        background: var(--workspace-accent-soft);
         color: var(--foreground);
-    }
-
-    .app-workspace-brand-link:hover .app-workspace-brand-mark {
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 24%, transparent);
-    }
-
-    .app-workspace-brand-link:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 46%, transparent);
-        outline-offset: 3px;
-    }
-
-    .app-workspace-rail {
-        width: auto;
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-
-    .app-workspace-rail-header,
-    .app-workspace-rail-footer {
-        flex: 0 0 auto;
-    }
-
-    .app-workspace-rail-middle {
-        flex: 1 1 auto;
-    }
-
-    .app-workspace-shell.is-spatial .app-workspace-rail .app-workspace-rail-tile {
-        width: 40px !important;
-        height: auto !important;
-        min-height: 40px;
-        border-radius: var(--r-md);
-        margin-bottom: 0 !important;
-    }
-
-    .app-workspace-rail nav {
-        padding: 0 !important;
-    }
-
-    .app-workspace-rail nav + nav {
-        margin-top: var(--space-4) !important;
-    }
-
-    .app-workspace-rail [title*="积分"] {
-        border-radius: var(--r-md) !important;
-    }
-
-    .app-workspace-rail .app-workspace-rail-tile svg,
-    .app-workspace-rail .app-workspace-account-icon {
-        width: var(--rail-icon-size);
-        height: var(--rail-icon-size);
-    }
-
-    /* 侧栏轨道：默认 / 悬停 / 激活三态成对定义 */
-    .app-workspace-rail .app-workspace-nav-link {
-        color: color-mix(in srgb, var(--foreground) 55%, transparent);
-        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-rail .app-workspace-nav-link:hover:not(.is-active) {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-rail .app-workspace-nav-link.is-active {
-        background: var(--workspace-accent-soft) !important;
-        color: var(--foreground) !important;
-        box-shadow: none !important;
-    }
-
-    .app-workspace-rail .app-workspace-nav-link.is-active::before {
-        display: none !important;
-    }
-
-    /* 底部账号区：40px 触点 + 头像 hover 反馈增强 */
-    .app-workspace-rail-footer button:hover > span:first-child {
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 22%, transparent);
-    }
-
-    .app-workspace-rail-footer button:hover .app-workspace-account-icon {
-        color: var(--foreground);
-    }
-
-    .app-workspace-account-button:focus-visible {
-        outline: 2px solid var(--control-focus-ring);
-        outline-offset: 2px;
         box-shadow: none;
     }
 
-    .app-workspace-account-button :where(span, svg):focus {
-        outline: none;
-    }
 
-    .app-workspace-nav-link.is-active {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-nav-link.is-active::before {
-        display: none;
-    }
 
     .app-workspace-icon-button {
         display: inline-flex;
@@ -1540,12 +1510,12 @@
 
     .app-workspace-sidebar-scroll-area.has-top-fade::before {
         top: 0;
-        background: var(--workspace-navigation);
+        background: linear-gradient(to bottom, var(--workspace-sidebar), transparent);
     }
 
     .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
         bottom: 0;
-        background: var(--workspace-navigation);
+        background: linear-gradient(to top, var(--workspace-sidebar), transparent);
     }
 
     .workspace-signal-icon {
@@ -3290,60 +3260,6 @@
         .creation-user-message { max-width: 82%; }
     }
 
-    @media (min-width: 1024px) {
-        .app-workspace-shell.is-spatial {
-            gap: 0;
-            padding: 0;
-            background: var(--workspace-canvas);
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar {
-            width: var(--workspace-sidebar-width, 88px) !important;
-            border: 0;
-            border-radius: 0;
-            background: var(--workspace-canvas);
-            box-shadow: none;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-        }
-        .dark .app-workspace-shell.is-spatial .app-workspace-sidebar { box-shadow: none; }
-        .app-workspace-shell.is-spatial .app-workspace-stage {
-            border-radius: 0;
-            background: transparent;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:first-child {
-            height: 96px;
-            border-bottom: 0;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:first-child a > span:not(.app-workspace-brand-mark) { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar .app-workspace-brand-mark {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            background: transparent;
-            color: var(--foreground);
-        }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar nav { padding: 18px 10px; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar nav > div { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link {
-            height: 62px !important;
-            flex-direction: column;
-            justify-content: center !important;
-            gap: 5px !important;
-            margin: 0 0 9px;
-            padding: 0 !important;
-            color: var(--foreground);
-            font-size: 10px;
-        }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link > svg { width: 20px; height: 20px; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link > span { display: block !important; font-size: 10px; line-height: 1.1; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active { background: transparent; color: var(--foreground); box-shadow: none; }
-        .app-workspace-shell.is-spatial .app-workspace-nav-link.is-active::before { display: none; }
-        .app-workspace-shell.is-spatial .app-workspace-sidebar > div:last-child { border-top: 0; padding: 12px 10px 18px; }
-        .app-workspace-shell.is-spatial[data-sidebar-collapsed="true"] .app-workspace-nav-link > span,
-        .app-workspace-shell.is-spatial[data-sidebar-collapsed="true"] .app-workspace-sidebar > div:first-child a > span:not(.app-workspace-brand-mark) {
-            display: none !important;
-        }
-    }
 
     @media (max-width: 800px) {
         .creation-new-button {
@@ -3736,6 +3652,40 @@
         padding-inline: 0;
     }
 
+    /* 技能中心 hero：GalleryGridBlock 式标题区——徽章 + 大标题 + 描述居中，背景点阵 + 双光斑，底部淡出到页面背景。仅技能页。 */
+    .skills-hero { position: relative; overflow: hidden; margin-top: 4px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 2%, transparent); }
+    .skills-hero::before { position: absolute; inset: 0; background-image: radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 42%), radial-gradient(circle at 84% 8%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 40%), radial-gradient(circle at 50% 130%, color-mix(in srgb, var(--foreground) 10%, transparent), transparent 46%), radial-gradient(circle, color-mix(in srgb, var(--foreground) 4.5%, transparent) 1px, transparent 1.6px); background-size: 100% 100%, 100% 100%, 100% 100%, 22px 22px; content: ""; pointer-events: none; }
+    .skills-hero::after { position: absolute; right: 0; bottom: 0; left: 0; height: 40px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--workspace-content) 92%, transparent)); content: ""; pointer-events: none; }
+    .skills-hero-inner { position: relative; display: flex; min-height: 128px; flex-direction: column; align-items: center; justify-content: center; padding: 20px 24px 24px; text-align: center; }
+    .skills-hero-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 4px 12px; color: var(--primary); font-size: var(--fs-caption); font-weight: 560; line-height: 1.4; }
+    .skills-hero-badge svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .skills-hero-title { color: var(--foreground); font-size: var(--fs-display); font-weight: 720; letter-spacing: -0.02em; line-height: 1.15; }
+    .skills-hero-description { margin-top: 6px; max-width: 460px; color: color-mix(in srgb, var(--foreground) 56%, transparent); font-size: var(--fs-body); line-height: 1.6; }
+    .skills-hero-meta { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 4px 12px; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+    /* 移动端收窄 hero 高度，避免抢占首屏。 */
+    @media (max-width: 640px) { .skills-hero-inner { min-height: 112px; padding: 16px 18px 20px; } .skills-hero-title { font-size: var(--fs-title); } }
+
+    /* 技能页工具栏与 hero 圆角容器之间留出小间隙（共享 .library-toolbar 的 margin-top 8px 会被 Tailwind mt-7 覆盖，故用更高特异性局部类固定 20px）。 */
+    .library-toolbar.skills-toolbar { margin-top: 20px; }
+    /* 技能中心 scope 切换：shadcn TabsList 语言——底托 + 激活胶囊，图标 + 计数徽章；内容区切换淡入上移。 */
+    .skills-tabs { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; max-width: 100%; align-items: center; gap: 2px; overflow-x: auto; border-radius: var(--r-xl); background: color-mix(in srgb, var(--foreground) 5%, transparent); padding: 4px; }
+    /* tab 按钮须为定位元素（DOM 顺序在指示器之后）以渲染在胶囊之上，否则 absolute 指示器会遮住文字与图标。 */
+    .skills-tab { position: relative; display: inline-flex; height: 32px; flex: 0 0 auto; align-items: center; gap: 5px; border: 0; border-radius: var(--r-lg); background: transparent; padding-inline: 10px; color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-body); font-weight: 520; transition: color 160ms ease-out; }
+    .skills-tab:hover { color: color-mix(in srgb, var(--foreground) 76%, transparent); }
+    .skills-tab.is-active { color: var(--foreground); font-weight: 560; }
+    .skills-tabs-indicator { position: absolute; top: 4px; bottom: 4px; left: 0; border-radius: var(--r-lg); background: var(--workspace-content); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: left 300ms cubic-bezier(0.16, 1, 0.3, 1), width 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+    /* 深主题：激活胶囊须亮于底托（--workspace-content 在深色下与页面底色相同，会形成黑块），用白色叠加提亮，白字在亮灰胶囊上保持可读。 */
+    .dark .skills-tabs-indicator { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .skills-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+    .skills-tab svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .skills-tab-count { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 9%, transparent); padding-inline: 5px; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; line-height: 1; }
+    /* 激活徽章用实底 primary + primary-foreground：明暗主题均为一对已定义的前景/背景组合，避免深主题下浅底亮字对比不足。 */
+    .skills-tab.is-active .skills-tab-count { background: var(--primary); color: var(--primary-foreground); }
+    @keyframes skills-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .skills-scope-panel { animation: skills-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .skill-group-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+    .skill-group-icon svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
     .canvas-library-page .studio-band .canvas-library-discovery {
         border: 0;
         border-radius: 0;
@@ -4042,19 +3992,25 @@
 
     .library-toolbar { min-height: 50px; margin-top: 8px; border-bottom: 0; padding: 7px 0 10px; }
     .library-toolbar .ant-input-affix-wrapper,
+    .library-toolbar .ant-select,
+    .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
     .library-toolbar .ant-select-selector,
     .library-toolbar .ant-segmented { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar .ant-select-selector { border-radius: var(--r-md) !important; }
-    .library-toolbar .ant-segmented { border-radius: var(--r-md); }
+    .library-toolbar .ant-input-affix-wrapper { border-radius: var(--r-xl) !important; height: 40px; padding: 4px 10px; }
+    /* 搜索框作为与 tab 容器同构的圆角容器：外壳 12px 圆角 + 浅底 + 内边距，内部输入区透明融入。 */
+    .library-toolbar .ant-input-affix-wrapper .ant-input { border: 0; background: transparent; box-shadow: none; }
+    /* AntD v6 单选 Select 的边框/圆角/背景/高度全部在 .ant-select 根元素上（.ant-select-selector 类已不存在），覆盖必须命中根元素并带 !important。 */
+    .library-toolbar .ant-select { border-radius: var(--r-xl) !important; display: flex; height: 40px !important; align-items: center !important; padding-inline: 10px !important; }
+    /* tab 切换后搜索框输入与下拉选中文字与 tab 激活态（--foreground）同色；占位符与图标维持各自 token 不变。 */
+    .library-toolbar .ant-input,
+    .library-toolbar .ant-select { color: var(--foreground) !important; }
+    .library-toolbar .ant-segmented { border-radius: var(--r-xl); }
     .library-toolbar .ant-btn { border: 0; background: transparent; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .library-toolbar .ant-btn:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
-    .library-toolbar-controls .ant-input-affix-wrapper,
-    .library-toolbar-controls .ant-select-selector { border: 0 !important; background: color-mix(in srgb, var(--foreground) 5%, transparent) !important; box-shadow: none !important; }
-    .library-toolbar-controls .ant-input-affix-wrapper { border-radius: var(--r-lg); }
-    .library-toolbar-controls .ant-select-selector { border-radius: var(--r-md) !important; }
     .library-grid { display: grid; align-items: start; gap: 26px 18px; }
     .library-card { position: relative; min-width: 0; overflow: hidden; cursor: pointer; border: 0; border-radius: var(--r-2xl); background: transparent; color: var(--foreground); transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out; }
+    /* 库页图标瓦片共享基础：grid 居中 + 浅底；尺寸/圆角/颜色由各用例类覆盖（skill-card-icon、wallet-balance-icon、suggest-icon 共用）。 */
+    .library-icon-tile { display: grid; flex: 0 0 auto; place-items: center; background: var(--library-icon-surface); }
     .library-card-surface { background: var(--library-surface); box-shadow: none; }
     .library-card-surface:hover, .library-card-surface:focus-within { background: var(--library-surface-hover); box-shadow: none; }
     .library-card-surface.is-selected { box-shadow: inset 0 0 0 1px var(--library-selected-stroke); }
@@ -4070,7 +4026,7 @@
     .library-create-title { margin-top: 15px; font-size: var(--fs-heading-lg); font-weight: 620; line-height: 1.3; }
     .library-create-meta { margin-top: 6px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-caption); }
     /* 技能网格里的创建卡要和技能卡等高，不然首格会短一截。 */
-    .skill-library-grid .library-create-card { justify-content: center; min-height: 218px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
+    .skill-library-grid .library-create-card { justify-content: center; min-height: 260px; border-radius: var(--r-xl); background: var(--card-surface); padding: 16px; box-shadow: none; }
     .skill-library-grid .library-create-cover { aspect-ratio: auto; min-height: 96px; flex: 1 1 auto; border-radius: var(--r-lg); }
     .skill-library-grid .library-create-title { margin-top: 13px; font-size: var(--fs-body-lg); }
 
@@ -4421,31 +4377,39 @@
     }
 
     /* 技能卡与其他作品库卡片共用无框表面，仅选中态显示状态描边。 */
-    .skill-library-card { display: flex; min-height: 218px; flex-direction: column; border-radius: var(--r-xl); padding: 16px 16px 14px; }
+    .skill-library-card { display: flex; min-height: 260px; flex-direction: column; padding: 16px 16px 14px; animation: skill-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+    /* 画廊入场：切换 scope/翻页时卡片依次淡入上浮（stagger 由内联 animation-delay 控制），入场后保持 transform 复位以免影响 hover。 */
+    @keyframes skill-card-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .skill-card-icon { width: 48px; height: 48px; margin-bottom: 12px; border-radius: var(--r-lg); color: color-mix(in srgb, var(--foreground) 64%, transparent); transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out, transform var(--motion-state) ease-out; transform: translateY(0); }
+    .skill-card-icon svg { width: 22px; height: 22px; stroke-width: 1.8; }
+    .skill-library-card:hover .skill-card-icon, .skill-library-card:focus-within .skill-card-icon { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); transform: translateY(-2px); }
     .skill-card-top { display: flex; min-height: 0; align-items: flex-start; gap: 8px; }
     .skill-card-title-button { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; padding: 0; color: inherit; text-align: left; }
     .skill-card-title-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-library-card h3 { display: -webkit-box; overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .skill-library-card h3 { overflow: hidden; color: var(--foreground); font-size: var(--fs-body-lg); font-weight: 620; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-more { display: inline-flex; width: 28px; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; margin: -3px -5px 0 0; border: 0; border-radius: var(--r-sm); background: transparent; color: color-mix(in srgb, var(--foreground) 40%, transparent); opacity: 0; transition: opacity 180ms ease-out, background-color 160ms ease-out; }
     .skill-library-card:hover .skill-card-more, .skill-card-more:focus-visible, .skill-library-card:focus-within .skill-card-more { opacity: 1; }
     .skill-card-more:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
     .skill-card-description { min-height: 0; flex: 1 1 auto; margin-top: 8px; border: 0; background: transparent; padding: 0; text-align: left; }
     .skill-card-description:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: var(--r-xs); }
-    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+    .skill-card-description p { display: -webkit-box; overflow: hidden; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-caption); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
     .skill-card-footer { display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 12px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); }
     .skill-card-like { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: inherit; font-variant-numeric: tabular-nums; transition: color 160ms ease-out; }
     .skill-card-like:hover { color: var(--foreground); }
     .skill-card-like:disabled { cursor: wait; }
-    .skill-card-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-author { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skill-card-tag { flex: 0 0 auto; max-width: 76px; overflow: hidden; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 7%, transparent); padding: 2px 7px; color: color-mix(in srgb, var(--foreground) 50%, transparent); font-size: var(--fs-micro); text-overflow: ellipsis; white-space: nowrap; }
     .skill-card-flag { margin-left: auto; flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 52%, transparent); }
     .skill-card-action { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
-    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 34%, transparent); border-radius: var(--r-md); background: transparent; padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: border-color 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out; }
+    /* 加入按钮：无边框浅底（与 tab/搜索容器同语言），is-added 态弱化表达已加入。 */
+    .skill-card-join { display: inline-flex; min-width: 0; height: 32px; flex: 1 1 auto; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding-inline: 12px; color: var(--foreground); font-size: var(--fs-caption); font-weight: 560; white-space: nowrap; transition: background-color 160ms ease-out, color 160ms ease-out; }
     .skill-card-join svg { color: currentColor; }
-    .skill-card-join:hover { border-color: color-mix(in srgb, var(--foreground) 58%, transparent); background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .skill-card-join:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); color: var(--foreground); }
     .skill-card-join:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
     .skill-card-join:disabled { cursor: wait; opacity: .6; }
-    .skill-card-join.is-added { border-color: color-mix(in srgb, var(--foreground) 18%, transparent); background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
-    .skill-card-join.is-added:hover { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
+    .skill-card-join.is-added { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: color-mix(in srgb, var(--foreground) 66%, transparent); }
+    .skill-card-join.is-added:hover { background: color-mix(in srgb, var(--foreground) 12%, transparent); color: var(--foreground); }
     .skill-card-added-count { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 36%, transparent); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
     .skill-card-owner-flag { flex: 1 1 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); }
 
@@ -4461,7 +4425,7 @@
     .wallet-balance-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
     .wallet-balance-heading strong { font-size: var(--fs-caption); font-weight: 600; }
     .wallet-balance-heading div > span { overflow: hidden; color: color-mix(in srgb, var(--foreground) 44%, transparent); font-size: var(--fs-label); text-overflow: ellipsis; white-space: nowrap; }
-    .wallet-balance-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: var(--r-md); background: var(--library-icon-surface); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
+    .wallet-balance-icon { width: 36px; height: 36px; border-radius: var(--r-md); color: color-mix(in srgb, var(--foreground) 68%, transparent); }
     .wallet-balance-icon svg { width: 17px; height: 17px; }
     .wallet-balance-number { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 28px; }
     .wallet-balance-number strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-display); font-variant-numeric: tabular-nums; font-weight: 620; line-height: 1; }
@@ -4616,13 +4580,16 @@
         white-space: nowrap;
     }
 
-    .app-pagination-bar .ant-pagination {
-        display: flex;
-        min-width: 0;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: var(--space-1) 0;
-    }
+    /* 自研分页：页码胶囊 28px、r-md 圆角、无边框、hover 浅底、激活实底胶囊。选中用“普通选中”色角色（workspace-content 实底 + foreground 文字，与 skills-tabs 激活胶囊同语言），不占用 primary（主操作按钮专属）。 */
+    .app-pagination-total { flex: 0 0 auto; color: color-mix(in srgb, var(--foreground) 46%, transparent); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .app-pagination-size.ant-select { display: flex; height: 28px !important; align-items: center !important; border-radius: var(--r-md) !important; padding-inline: 8px !important; }
+    .app-pagination-pages { display: inline-flex; align-items: center; gap: 2px; }
+    .app-pagination-btn { display: inline-flex; height: 28px; min-width: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--r-md); background: transparent; padding-inline: 6px; color: color-mix(in srgb, var(--foreground) 62%, transparent); font-size: var(--fs-body); line-height: 1; font-variant-numeric: tabular-nums; transition: background-color 160ms ease-out, color 160ms ease-out; }
+    .app-pagination-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+    .app-pagination-btn.is-active, .app-pagination-btn.is-active:hover { background: var(--workspace-content); color: var(--foreground); }
+    .dark .app-pagination-btn.is-active, .dark .app-pagination-btn.is-active:hover { background: color-mix(in srgb, white 10%, var(--workspace-content)); }
+    .app-pagination-btn:disabled { color: color-mix(in srgb, var(--foreground) 30%, transparent); cursor: not-allowed; }
+    .app-pagination-ellipsis { display: inline-flex; height: 28px; min-width: 16px; align-items: center; justify-content: center; color: color-mix(in srgb, var(--foreground) 30%, transparent); font-size: var(--fs-body); }
 
     :where(.ant-modal-content, .ant-drawer-content) {
         border: 1px solid var(--border);
@@ -8742,17 +8709,6 @@ html:not(.dark) .creation-history-drawer-root {
     min-width: 0;
 }
 
-body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-inner, .ant-modal-content, .ant-drawer-content, .ant-message-notice-content, .ant-notification-notice) {
-    background: var(--popover) !important;
-    background-image: none !important;
-    box-shadow: var(--shadow-xl) !important;
-    backdrop-filter: none !important;
-}
-
-body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
-    background: color-mix(in srgb, var(--foreground) 48%, transparent) !important;
-    backdrop-filter: blur(3px) !important;
-}
 
 /* 鼠标点击不留下“选中框”；键盘导航仍通过 :focus-visible 保留可发现的焦点提示。 */
 :where(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"]), label[for], input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), .ant-btn:not(:disabled), .ant-switch:not(.ant-switch-disabled), .ant-select:not(.ant-select-disabled), .ant-dropdown-trigger, .ant-tabs-tab, .ant-segmented-item, .ant-pagination-item, .ant-pagination-prev, .ant-pagination-next, .ant-dropdown-menu-item, .ant-menu-item, .ant-select-item-option, .ant-checkbox-wrapper, .ant-radio-wrapper, .ant-upload, .ant-collapse-header, .ant-slider, .ant-rate-star, .ant-tag-checkable) {
@@ -8781,12 +8737,6 @@ body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
     box-shadow: none !important;
 }
 
-.app-workspace-shell.is-spatial .app-workspace-sidebar {
-    background: var(--workspace-sidebar) !important;
-    background-image: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-}
 
 /* 显式兜底：Tailwind 生成的 hover 背景在部分层叠顺序下未生效，这里保持语义 token 一致。 */
 .hover\:bg-surface-hover:hover {
@@ -10527,13 +10477,9 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 }
 
 .creation-home .creation-empty-suggest .suggest-icon {
-    display: grid;
     width: 36px;
     height: 36px;
-    flex: 0 0 auto;
-    place-items: center;
     border-radius: var(--r-sm);
-    background: var(--library-icon-surface);
     color: color-mix(in srgb, var(--creation-text) 82%, transparent);
 }
 

@@ -1289,7 +1289,7 @@ function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt:
         {creationEmptySuggestions.map((item) => {
             const Icon = item.icon;
             return <button key={item.title} type="button" className="suggest-card" onClick={() => { if (item.openLibrary) onOpenLibrary(); else onStartPrompt(item.mode, item.prompt); }}>
-                <span className={`suggest-icon is-${item.mode}`}><Icon size={15} strokeWidth={2} /></span>
+                <span className={`library-icon-tile suggest-icon is-${item.mode}`}><Icon size={15} strokeWidth={2} /></span>
                 <span className="suggest-copy"><strong>{item.title}</strong><span>{item.hint}</span></span>
             </button>;
         })}
