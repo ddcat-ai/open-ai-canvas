@@ -31,7 +31,8 @@ export async function executeTextGeneration({
 }: CanvasGenerationExecution) {
     const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
     const isDirectTextTarget = sourceNode?.type === CanvasNodeType.Text && !sourceNode.metadata?.content?.trim() && !editingTextNode;
-    const textCount = isConfigNode || (isDirectTextTarget && sourceNode?.metadata?.count) ? getGenerationCount(generationConfig.count) : 1;
+    // 独立文本份数（textCount），默认 1，不再复用餐图片数量 count（对齐上游 v0.16 语义）
+    const textCount = getGenerationCount(String(sourceNode?.metadata?.textCount ?? 1));
     const parentConfig = NODE_DEFAULT_SIZE[isConfigNode ? CanvasNodeType.Config : CanvasNodeType.Text];
     const textConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Text];
     const parentPosition = sourceNode?.position || { x: 0, y: 0 };
