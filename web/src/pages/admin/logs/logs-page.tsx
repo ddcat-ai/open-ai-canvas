@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
+import { MediaPreview } from "@/components/media-preview";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
 import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
@@ -83,7 +84,7 @@ export default function LogsPage() {
             />
             <ApiLogDetailDrawer logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => item.id === next.id ? next : item))} />
             <Modal title={mediaPreview?.title || "媒体预览"} open={Boolean(mediaPreview)} width={880} onCancel={() => setMediaPreview(null)} footer={mediaPreview ? <Button icon={<Download className="size-4" />} onClick={() => downloadMedia(mediaPreview.url, mediaPreview.kind)}>下载原文件</Button> : null} destroyOnHidden>
-                {mediaPreview?.kind === "video" ? <video src={mediaPreview.url} controls playsInline preload="metadata" className="max-h-[72vh] w-full bg-black object-contain" /> : mediaPreview ? <img src={mediaPreview.url} alt={mediaPreview.title} className="max-h-[72vh] w-full bg-black object-contain" /> : null}
+                {mediaPreview ? <MediaPreview src={mediaPreview.url} kind={mediaPreview.kind} alt={mediaPreview.title} controls={mediaPreview.kind === "video"} className="max-h-[72vh] w-full bg-black object-contain" fallbackClassName="min-h-[360px] rounded-lg bg-black/90 text-white/55" /> : null}
             </Modal>
         </AdminPageFrame>
     );
@@ -100,12 +101,14 @@ function formatCost(log: ApiCallLog) { return `${log.currency || "USD"} ${(log.e
 function MediaResult({ log, onPreview }: { log: ApiCallLog; onPreview: (url: string, kind: "image" | "video") => void }) {
     const url = log.mediaPreviewUrl;
     const kind = log.mediaPreviewKind;
+    const [unavailableUrl, setUnavailableUrl] = useState("");
     if (!url || (kind !== "image" && kind !== "video")) return <span className="text-foreground/30">--</span>;
+    const previewUnavailable = unavailableUrl === url;
     return <div className="flex w-[90px] items-center gap-1.5">
-        <button type="button" title={`预览${kind === "video" ? "视频" : "图片"}`} className="group relative h-11 w-16 shrink-0 overflow-hidden rounded border border-border/75 bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onPreview(url, kind)}>
-            {kind === "video" ? <video src={url} muted playsInline preload="metadata" className="size-full object-cover" /> : <img src={url} alt="生成结果" loading="lazy" decoding="async" className="size-full object-cover" />}
-            <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100 group-focus-visible:bg-black/35 group-focus-visible:opacity-100">{kind === "video" ? <Play className="size-4 fill-current" /> : <Eye className="size-4" />}</span>
-            {log.mediaCount > 1 ? <span className="absolute bottom-0.5 right-0.5 rounded-sm bg-black/65 px-1 text-[var(--fs-micro)] leading-4 text-white">{log.mediaCount}</span> : null}
+        <button type="button" title={previewUnavailable ? "预览不可用，素材可能已删除" : `预览${kind === "video" ? "视频" : "图片"}`} aria-label={previewUnavailable ? "预览不可用，素材可能已删除" : `预览${kind === "video" ? "视频" : "图片"}`} disabled={previewUnavailable} className="group relative h-11 w-16 shrink-0 overflow-hidden rounded border border-border/75 bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onPreview(url, kind)}>
+            <MediaPreview src={url} kind={kind} alt="生成结果" loading="lazy" className="size-full object-cover" fallbackClassName="text-white/55" fallbackLabel="预览不可用" onUnavailable={() => setUnavailableUrl(url)} />
+            {!previewUnavailable ? <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100 group-focus-visible:bg-black/35 group-focus-visible:opacity-100">{kind === "video" ? <Play className="size-4 fill-current" /> : <Eye className="size-4" />}</span> : null}
+            {!previewUnavailable && log.mediaCount > 1 ? <span className="absolute bottom-0.5 right-0.5 rounded-sm bg-black/65 px-1 text-[var(--fs-micro)] leading-4 text-white">{log.mediaCount}</span> : null}
         </button>
         <Button type="text" size="small" className="!size-7 !min-w-7 !p-0" icon={<Download className="size-3.5" />} onClick={() => downloadMedia(url, kind)} title="下载原文件" aria-label="下载原文件" />
     </div>;
