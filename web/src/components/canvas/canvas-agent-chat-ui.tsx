@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Button, Tooltip } from "antd";
-import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, UserRound, Wrench, X, XCircle } from "lucide-react";
+import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentOperationImpact } from "@/lib/canvas/canvas-agent-ops";
 import type { LocalUser } from "@/stores/use-user-store";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
+import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
+import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import type { Skill } from "@/services/api/skills";
 
 export type CanvasAgentChatAttachment = { id: string; name: string; url: string };
 export type CanvasAgentMode = "online" | "local";
@@ -179,6 +182,9 @@ export function AgentChatComposer({
     onAddFiles,
     onRemoveAttachment,
     left,
+    references = [],
+    slashSkills,
+    includeAssetLibrary,
 }: {
     prompt: string;
     attachments?: CanvasAgentChatAttachment[];
@@ -191,9 +197,78 @@ export function AgentChatComposer({
     onAddFiles?: (files: FileList | File[] | null) => void | Promise<void>;
     onRemoveAttachment?: (id: string) => void;
     left?: ReactNode;
+    /** 供「@」插入的画布节点/素材/技能引用候选（可选，默认空，缺省时退化为普通输入框） */
+    references?: CanvasResourceReference[];
+    /** 供「/」弹出的技能候选（可选） */
+    slashSkills?: Skill[];
+    /** 是否在「@」候选里包含素材库资源 */
+    includeAssetLibrary?: boolean;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
+    const [slashIndex, setSlashIndex] = useState(0);
+    const availableSlashSkills = slashSkills ?? [];
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
+    const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(availableSlashSkills.length - 1, 0));
+
+    // 在输入值末尾检测「/关键词」打开技能候选；选择后替换为 @[skill:xxx] 引用 token（保持在 prompt 文本里）。
+    const handlePromptChange = (value: string) => {
+        onPromptChange(value);
+        const match = /(^|\s)\/([^\s/]*)$/.exec(value);
+        if (match && availableSlashSkills.length) {
+            const next = { start: match.index + match[1].length, query: match[2] };
+            setSlash((current) => (current && current.start === next.start && current.query === next.query ? current : next));
+            setSlashIndex(0);
+        } else if (slash) {
+            setSlash(null);
+        }
+    };
+
+    const applySlashSkill = (skill: Skill) => {
+        const token = `@[skill:${skill.skill_id}] `;
+        const next = slash
+            ? `${prompt.slice(0, slash.start)}${token}${prompt.slice(slash.start + slash.query.length)}`
+            : prompt
+                ? `${prompt.replace(/\s+$/u, "")} ${token}`
+                : token;
+        setSlash(null);
+        setSlashIndex(0);
+        onPromptChange(next);
+    };
+
+    // slash 菜单的键盘控制在 capture 阶段拦截（contentEditable/textarea 内部先消费 Enter，外层冒泡拿不到）
+    const handleSlashKeyCapture = (event: ReactKeyboardEvent) => {
+        if (!slash || !availableSlashSkills.length) return;
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            event.stopPropagation();
+            setSlashIndex((index) => Math.min(index + 1, availableSlashSkills.length - 1));
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            event.stopPropagation();
+            setSlashIndex((index) => Math.max(index - 1, 0));
+        } else if (event.key === "Enter" || event.key === "Tab") {
+            event.preventDefault();
+            event.stopPropagation();
+            applySlashSkill(availableSlashSkills[activeSlashIndex]);
+        } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setSlash(null);
+        }
+    };
+
+    // 保留粘贴图片成附件（contentEditable 模式内部会把粘贴转纯文本，capture 阶段先拦截图片）
+    const handlePasteCapture = (event: ReactClipboardEvent) => {
+        if (!onAddFiles) return;
+        const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+        if (!images.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void onAddFiles(images);
+    };
+
     return (
         <div className="px-3 pb-3 pt-1" onWheelCapture={(event) => event.stopPropagation()}>
             <div className="rounded-lg border px-3 pb-2.5 pt-3 transition-[border-color,box-shadow] duration-150 focus-within:border-current" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.accent.primary, boxShadow: `0 10px 30px ${theme.spatial.shadow}` }}>
@@ -211,25 +286,47 @@ export function AgentChatComposer({
                         ))}
                     </div>
                 ) : null}
-                <textarea
-                    value={prompt}
-                    onChange={(event) => onPromptChange(event.target.value)}
-                    onPaste={(event) => {
-                        if (!onAddFiles) return;
-                        const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
-                        if (!images.length) return;
-                        event.preventDefault();
-                        void onAddFiles(images);
-                    }}
-                    onKeyDown={(event) => {
-                        if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey) return;
-                        event.preventDefault();
-                        void onSubmit();
-                    }}
-                    className="thin-scrollbar max-h-40 min-h-[60px] w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
-                    style={{ color: theme.node.text }}
-                    placeholder={placeholder}
-                />
+                <div className="relative" onKeyDownCapture={handleSlashKeyCapture} onPasteCapture={handlePasteCapture}>
+                    <div className="thin-scrollbar max-h-40 min-h-[60px] overflow-y-auto">
+                        <CanvasResourceMentionTextarea
+                            value={prompt}
+                            references={references}
+                            includeAssetLibrary={includeAssetLibrary}
+                            sendOnEnter
+                            disabled={disabled}
+                            onChange={handlePromptChange}
+                            onSubmit={onSubmit}
+                            className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
+                            containerClassName="min-h-[60px]"
+                            style={{ color: theme.node.text }}
+                            placeholder={placeholder}
+                            aria-label="Agent 输入"
+                        />
+                    </div>
+                    {slash && availableSlashSkills.length ? (
+                        <div
+                            data-agent-slash-menu
+                            className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-1.5 w-full max-w-xs overflow-hidden rounded-lg border p-1 shadow-lg"
+                            style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
+                            onMouseDown={(event) => event.preventDefault()}
+                        >
+                            {availableSlashSkills.map((skill, index) => (
+                                <button
+                                    key={skill.skill_id}
+                                    type="button"
+                                    className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+                                    style={{ background: index === activeSlashIndex ? theme.toolbar.itemHover : "transparent", color: theme.node.text }}
+                                    onMouseEnter={() => setSlashIndex(index)}
+                                    onClick={() => applySlashSkill(skill)}
+                                >
+                                    <Sparkles className="size-3.5 shrink-0 opacity-70" />
+                                    <span className="min-w-0 truncate font-medium">{skill.skill_name}</span>
+                                    {skill.description ? <span className="min-w-0 flex-1 truncate opacity-50">{skill.description}</span> : null}
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
+                </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-1">
                         {onAddFiles ? (

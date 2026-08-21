@@ -1,8 +1,11 @@
 import { App, Button, Drawer, Form, Input, Select, Switch } from "antd";
-import { Minus, Plus, Save } from "lucide-react";
+import { Minus, Plus, Save, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { fallbackSkillCategories } from "@/pages/skills/skill-catalog";
+import { generateSkillDraft } from "@/lib/canvas/skill-drafting";
+import { navigateToSettings } from "@/lib/settings-navigation";
+import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { createSkill, updateSkill, type Skill, type SkillMutationInput, type SkillShowcaseMedia } from "@/services/api/skills";
 
 type SkillFormValues = Omit<SkillMutationInput, "is_private"> & { is_public: boolean };
@@ -12,6 +15,9 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
     const [form] = Form.useForm<SkillFormValues>();
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [draftIdea, setDraftIdea] = useState("");
+    const [drafting, setDrafting] = useState(false);
+    const effectiveConfig = useEffectiveConfig();
 
     useEffect(() => {
         if (!open) return;
@@ -60,8 +66,57 @@ export function SkillEditorDrawer({ open, skill, onClose, onSaved }: { open: boo
         }
     };
 
+    const draftFromIdea = async () => {
+        const idea = draftIdea.trim();
+        if (!idea) {
+            message.warning("请先描述你想沉淀的技能");
+            return;
+        }
+        if (!useConfigStore.getState().isAiConfigReady(effectiveConfig, effectiveConfig.model)) {
+            message.info("尚未配置可用的文本模型，请先到设置页配置");
+            navigateToSettings({ section: "models", continueCreation: true });
+            return;
+        }
+        setDrafting(true);
+        try {
+            const draft = await generateSkillDraft(idea, effectiveConfig);
+            form.setFieldsValue({
+                skill_name: draft.skill_name || "",
+                description: draft.description || "",
+                instruction: draft.instruction || "",
+                ...(draft.tag ? { tag: draft.tag } : {}),
+            });
+            setDirty(true);
+            message.success("草稿已生成，请检查并调整后保存");
+        } catch (error) {
+            message.error(error instanceof Error ? `起草失败：${error.message}` : "起草失败");
+        } finally {
+            setDrafting(false);
+        }
+    };
+
     return (
         <Drawer className="library-drawer" open={open} size={720} destroyOnHidden maskClosable={!dirty} title={skill ? "编辑技能" : "创建技能"} onClose={requestClose} extra={<Button type="primary" loading={saving} icon={<Save className="size-4" />} onClick={() => form.submit()}>保存技能</Button>}>
+            <div className="mb-4 rounded-xl border bg-foreground/[.02] p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                    <Wand2 className="size-4" />
+                    AI 起草
+                    <span className="font-normal text-foreground/45">描述想法，一键生成名称、简介与指令草稿（可再编辑）</span>
+                </div>
+                <Input.TextArea
+                    value={draftIdea}
+                    onChange={(event) => setDraftIdea(event.target.value)}
+                    autoSize={{ minRows: 3, maxRows: 6 }}
+                    maxLength={2000}
+                    showCount
+                    disabled={drafting}
+                    placeholder="例如：我要一个竖屏短剧分镜技能——输入剧本段落，输出按景别排列的分镜表，每个镜头包含画面、台词、时长与转场…"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-foreground/45">将使用你的文本模型生成一次草稿</span>
+                    <Button type="primary" loading={drafting} disabled={!draftIdea.trim()} icon={<Wand2 className="size-4" />} onClick={() => void draftFromIdea()}>生成草稿</Button>
+                </div>
+            </div>
             <Form form={form} layout="vertical" requiredMark="optional" onFinish={submit} onValuesChange={() => setDirty(true)}>
                 <div className="grid gap-x-4 sm:grid-cols-2">
                     <Form.Item name="skill_name" label="技能名称" rules={[{ required: true, message: "请填写技能名称" }, { max: 80, message: "最多 80 个字符" }]}>
