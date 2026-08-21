@@ -36,6 +36,7 @@ export type ToolbarHandlers = {
     onAddAudio: () => void;
     onAddScript: () => void;
     onAddFrame: () => void;
+    onAddFolder: () => void;
     onAddDrawing: () => void;
     onChooseStyle: () => void;
     onOpenDirector: () => void;
@@ -131,6 +132,7 @@ export type AddNodeMenuContext = {
         | "onAddAudio"
         | "onAddScript"
         | "onAddFrame"
+        | "onAddFolder"
         | "onAddDrawing"
         | "onChooseStyle"
         | "onOpenDirector"

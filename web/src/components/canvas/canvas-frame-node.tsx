@@ -3,10 +3,11 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight, Video } from "lucide-react";
 
 import { CometCard } from "@/components/ui/aceternity/comet-card";
-import { FRAME_HEADER_HEIGHT, FRAME_PADDING } from "@/lib/canvas/canvas-frame";
+import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
+import { FRAME_HEADER_HEIGHT, FRAME_PADDING, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type Position } from "@/types/canvas";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -20,6 +21,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     onMouseDown,
     onResize,
     onToggleCollapsed,
+    onFolderStyleChange,
+    onFolderThemeChange = () => undefined,
     onTitleChange,
     onContextMenu,
     readOnly = false,
@@ -35,6 +38,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     onMouseDown: (event: ReactMouseEvent, nodeId: string) => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onToggleCollapsed: (nodeId: string) => void;
+    onFolderStyleChange: (nodeId: string, style: CanvasFolderStyle) => void;
+    onFolderThemeChange?: (nodeId: string, theme: CanvasFolderTheme) => void;
     onTitleChange: (nodeId: string, title: string) => void;
     onContextMenu: (event: ReactMouseEvent, nodeId: string) => void;
     readOnly?: boolean;
@@ -43,6 +48,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const collapsed = Boolean(data.metadata?.frame?.collapsed);
+    const folder = isCanvasFolderNode(data);
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(data.title);
     const resizeRef = useRef({
@@ -63,7 +69,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     useEffect(() => setTitle(data.title), [data.title]);
 
     const commitTitle = () => {
-        const next = title.trim() || "未命名背板";
+        const next = title.trim() || (folder ? "未命名文件夹" : "未命名背板");
         setTitle(next);
         setEditing(false);
         onTitleChange(data.id, next);
@@ -140,11 +146,15 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     };
 
     const active = isSelected || isDropTarget;
+    const linkedFolder = Boolean(data.metadata?.folder?.assetFolderId);
 
     return (
         <div
             data-node-id={data.id}
-            className={`absolute z-0 select-none ${dragOffset ? "cursor-grabbing" : "cursor-default"}`}
+            role={folder && collapsed ? "group" : undefined}
+            tabIndex={folder && collapsed ? 0 : undefined}
+            aria-label={folder && collapsed ? `${data.title}，文件夹，${childNodes.length} 项内容。按回车打开` : undefined}
+            className={`absolute z-0 select-none${folder && collapsed ? " canvas-folder-node" : ""} ${dragOffset ? "cursor-grabbing" : "cursor-default"}`}
             style={{ transform: `translate(${data.position.x + (dragOffset?.x || 0)}px, ${data.position.y + (dragOffset?.y || 0)}px)`, width: data.width, height: data.height, contain: "layout style" }}
             onMouseDown={(event) => onMouseDown(event, data.id)}
             onDoubleClick={(event) => {
@@ -153,22 +163,43 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                 onToggleCollapsed(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
+            onKeyDown={(event) => {
+                if (!folder || !collapsed || (event.target instanceof Element && event.target.closest("button,input"))) return;
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onToggleCollapsed(data.id);
+            }}
             onMouseEnter={() => onHoverStart?.(data.id)}
             onMouseLeave={() => onHoverEnd?.(data.id)}
         >
             {/* 帧节点同样禁用指针跟随 3D 位移，hover 使用 CSS 静态抬升 */}
             <CometCard
                 containerClassName="h-full w-full"
-                className="canvas-frame-shell overflow-hidden rounded-[var(--dock-radius)] border"
+                className={folder && collapsed ? "canvas-folder-shell overflow-visible" : `canvas-frame-shell overflow-hidden rounded-[var(--dock-radius)] border${folder ? " canvas-folder-expanded" : ""}`}
                 disabled
                 data-canvas-frame-hover-locked={!collapsed || editing || Boolean(dragOffset) || scale < 0.32 ? "true" : "false"}
                 style={{
-                    background: active ? theme.frame.activeFill : theme.frame.fill,
-                    borderColor: active ? theme.frame.activeStroke : theme.frame.stroke,
-                    borderWidth: 1 / Math.max(scale, 0.05),
-                    boxShadow: isSelected ? `0 0 0 ${1 / Math.max(scale, 0.05)}px ${theme.frame.activeStroke}33, 0 24px 72px ${theme.spatial.shadow}` : `0 18px 54px ${theme.spatial.shadow}`,
+                    background: folder && collapsed ? "transparent" : active ? theme.frame.activeFill : theme.frame.fill,
+                    borderColor: folder && collapsed ? "transparent" : active ? theme.frame.activeStroke : theme.frame.stroke,
+                    borderWidth: folder && collapsed ? 0 : 1 / Math.max(scale, 0.05),
+                    boxShadow: folder && collapsed ? "none" : isSelected ? `0 0 0 ${1 / Math.max(scale, 0.05)}px ${theme.frame.activeStroke}33, 0 24px 72px ${theme.spatial.shadow}` : `0 18px 54px ${theme.spatial.shadow}`,
                 }}
             >
+                {folder && collapsed ? (
+                    // 素材库目录是单一事实源；画布节点只负责浏览和调用，避免本地改名后被同步结果覆盖。
+                    <CanvasFolderPreview
+                        data={data}
+                        childNodes={childNodes}
+                        active={active}
+                        isDropTarget={isDropTarget}
+                        readOnly={readOnly || linkedFolder}
+                        onToggleCollapsed={onToggleCollapsed}
+                        onTitleChange={onTitleChange}
+                        onStyleChange={onFolderStyleChange}
+                        onThemeChange={onFolderThemeChange}
+                    />
+                ) : (
+                    <>
                 <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-center gap-1.5 px-1.5" style={{ height: FRAME_HEADER_HEIGHT, color: theme.node.text }}>
                     <button
                         type="button"
@@ -220,6 +251,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                 </div>
 
                 {collapsed ? <FramePreview nodes={childNodes} frame={data} theme={theme} /> : null}
+                    </>
+                )}
             </CometCard>
             {!readOnly && !collapsed && isSelected && !data.metadata?.locked ? (
                 <>

@@ -136,7 +136,15 @@ func (s *Service) CreateProjectCharacter(userID string, projectID string, req Cr
 	}
 	asset := model.Asset{ID: assetID, UserID: userID, Kind: "entity", Category: model.AssetCategoryCharacter, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: name, PayloadJSON: payload, CreatedAt: now, UpdatedAt: now}
 	version := model.AssetVersion{ID: versionID, AssetID: assetID, Version: 1, Status: model.AssetVersionStatusConfirmed, DefinitionJSON: string(definition), CreatedAt: now, UpdatedAt: now}
-	link := model.ProjectAssetLink{ID: newID(), ProjectID: projectID, AssetID: assetID, CreatedAt: now}
+	folderID, err := s.resolveProjectAssetFolderID(projectID, nil)
+	if err != nil {
+		return ProjectCharacterDetail{}, err
+	}
+	position, err := s.repo.NextProjectAssetPosition(projectID, folderID)
+	if err != nil {
+		return ProjectCharacterDetail{}, err
+	}
+	link := model.ProjectAssetLink{ID: newID(), ProjectID: projectID, AssetID: assetID, FolderID: folderID, Position: position, CreatedAt: now}
 	if err := s.repo.CreateProjectCharacter(projectID, &asset, &version, &link); err != nil {
 		return ProjectCharacterDetail{}, err
 	}
@@ -418,20 +426,14 @@ func (s *Service) prepareNextCharacterVersion(asset *model.Asset, name string, d
 }
 
 func (s *Service) projectCharacterDetail(userID string, projectID string, asset *model.Asset) (ProjectCharacterDetail, error) {
-	versions, err := s.repo.AssetVersions(asset.ID)
+	summary, err := s.projectAssetSummary(userID, projectID, asset)
 	if err != nil {
 		return ProjectCharacterDetail{}, err
 	}
-	usages, err := s.repo.ProjectAssetUsageRoles(projectID, asset.ID)
-	if err != nil {
-		return ProjectCharacterDetail{}, err
+	if summary.Character == nil {
+		return ProjectCharacterDetail{}, BadAuthRequest("角色素材缺少角色设定")
 	}
-	card, err := s.characterCard(userID, asset)
-	if err != nil {
-		return ProjectCharacterDetail{}, err
-	}
-	summary := ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: usages, UpdatedAt: asset.UpdatedAt, Character: &card}
-	return ProjectCharacterDetail{Asset: summary, Character: card}, nil
+	return ProjectCharacterDetail{Asset: summary, Character: *summary.Character}, nil
 }
 
 func (s *Service) characterCard(userID string, asset *model.Asset) (CharacterCardSummary, error) {

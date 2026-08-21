@@ -20,6 +20,7 @@ type UseCanvasSelectionControllerOptions = {
     onNodeInteractionStart: (selectionModifier: boolean) => void;
     onNodeClick: (node: CanvasNodeData) => void;
     onBatchConnectionTarget?: (event: ReactMouseEvent, nodeId: string) => boolean;
+    onLinkedFolderDrop?: (folder: CanvasNodeData, nodes: CanvasNodeData[]) => void;
     onDeselect: () => void;
     onSelectionBoxEnd?: () => void;
 };
@@ -59,6 +60,7 @@ export function useCanvasSelectionController({
     onNodeInteractionStart,
     onNodeClick,
     onBatchConnectionTarget,
+    onLinkedFolderDrop,
     onDeselect,
     onSelectionBoxEnd,
 }: UseCanvasSelectionControllerOptions) {
@@ -205,13 +207,16 @@ export function useCanvasSelectionController({
         setAlignmentGuides({});
         if (dragRef.current.hasMoved) {
             const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-            setNodes((currentNodes) => {
-                const positioned = clientX == null || clientY == null ? currentNodes : currentNodes.map((node) => {
-                    const initial = initialById.get(node.id);
-                    return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
-                });
-                return applyFrameDrop(positioned, draggedNodeIds, findFrameDropTarget(positioned, draggedNodeIds));
+            const positioned = clientX == null || clientY == null ? nodesRef.current : nodesRef.current.map((node) => {
+                const initial = initialById.get(node.id);
+                return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
             });
+            const targetId = findFrameDropTarget(positioned, draggedNodeIds);
+            const target = targetId ? positioned.find((node) => node.id === targetId) : undefined;
+            const linkedFolder = target?.metadata?.folder?.assetFolderId ? target : undefined;
+            // 素材库文件夹只建立归档关系，不把画布节点变成其本地子节点。
+            setNodes(linkedFolder ? positioned : applyFrameDrop(positioned, draggedNodeIds, targetId));
+            if (linkedFolder) onLinkedFolderDrop?.(linkedFolder, positioned.filter((node) => draggedNodeIds.has(node.id)));
         }
         setFrameDropTargetId(null);
         alignmentContextRef.current = null;
@@ -220,7 +225,7 @@ export function useCanvasSelectionController({
             const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
             if (clickedNode) onNodeClick(clickedNode);
         }
-    }, [historyPausedRef, nodesRef, onNodeClick, setNodes, viewportRef]);
+    }, [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, setNodes, viewportRef]);
 
     const handleMouseMove = useCallback((event: MouseEvent) => {
         if (!dragRef.current.isDraggingNode) return;
