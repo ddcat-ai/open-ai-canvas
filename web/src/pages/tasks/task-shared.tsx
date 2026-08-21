@@ -17,6 +17,10 @@ export function isTaskFailed(task: GenerationTask) {
     return task.status === "failed" || task.status === "cancelled";
 }
 
+export function isTaskCancellable(task: GenerationTask) {
+    return task.status === "queued";
+}
+
 export function taskAttentionReason(task: GenerationTask) {
     if (task.status === "cancelled") return providerCancelStatusLabel(task);
     if (task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)) return "内容审核未通过，请修改输入后新建任务";
