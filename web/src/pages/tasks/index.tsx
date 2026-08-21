@@ -20,7 +20,7 @@ import { listProjects, type ProjectSummary } from "@/services/api/projects";
 import { TaskGridCard } from "./task-grid-card";
 import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
-import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskCancellable, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
 
 type TaskKindFilter = "all" | "text" | "image" | "video";
@@ -292,6 +292,10 @@ export default function TasksPage() {
 
     const runAction = async (id: string, action: "retry" | "cancel") => {
         const currentTask = tasksRef.current.find((task) => task.id === id);
+        if (action === "cancel" && currentTask && !isTaskCancellable(currentTask)) {
+            message.warning("任务已开始生成，无法取消");
+            return;
+        }
         if (action === "retry" && currentTask && isGenerationTaskSubmissionUncertain(currentTask)) {
             message.warning("提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。");
             return;
@@ -551,7 +555,7 @@ export default function TasksPage() {
                                     更新官方状态
                                 </Button>
                             ) : null}
-                            {detailTask.provider === "dreamina-cli" && (detailTask.status === "queued" || detailTask.status === "running") ? (
+                            {detailTask.provider === "dreamina-cli" && isTaskCancellable(detailTask) ? (
                                 <Button danger loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id, "cancel")}>
                                     {localDreaminaCancellationCopy(detailTask)?.action || "取消任务"}
                                 </Button>
