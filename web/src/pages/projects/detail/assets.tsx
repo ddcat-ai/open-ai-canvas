@@ -8,6 +8,7 @@ import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
 import { CANVAS_FOLDER_THEME_OPTIONS, resolveCanvasFolderTheme } from "@/lib/canvas/canvas-folder-theme";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
@@ -59,6 +60,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const { message, modal } = App.useApp();
     const queryClient = useQueryClient();
     const personalAssets = useAssetStore((state) => state.assets);
+    const addAsset = useAssetStore((state) => state.addAsset);
     const updatePersonalAsset = useAssetStore((state) => state.updateAsset);
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -69,6 +71,7 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const [addOpen, setAddOpen] = useState(false);
     const [editorAsset, setEditorAsset] = useState<ProjectAsset | "new" | null>(null);
     const [imageAsset, setImageAsset] = useState<ProjectAsset | null>(null);
+    const externalAssetSources = useExternalAssetSources(addOpen || Boolean(imageAsset));
     const [voiceAsset, setVoiceAsset] = useState<ProjectAsset | null>(null);
     const [previewAsset, setPreviewAsset] = useState<ProjectAsset | null>(null);
     const [voiceProfileId, setVoiceProfileId] = useState("");
@@ -78,23 +81,29 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
     const projectAssetIds = new Set(detail.assets.map((asset) => asset.id));
     const availableAssets = personalAssets.filter((asset) => !projectAssetIds.has(asset.id));
     const imageAssets = personalAssets.filter((asset): asset is ImageAsset => asset.kind === "image");
-    const availablePickerItems = useMemo<AssetLibraryPickerItem[]>(() => availableAssets.map((asset) => ({
-        id: asset.id,
-        title: asset.title,
-        category: asset.kind === "entity" ? "character" : asset.category || "other",
-        kindLabel: mediaLabel(asset.kind),
-        asset,
-        description: asset.note,
-        searchText: asset.tags.join(" "),
-    })), [availableAssets]);
-    const imagePickerItems = useMemo<AssetLibraryPickerItem[]>(() => imageAssets.map((asset) => ({
-        id: asset.id,
-        title: asset.title,
-        category: asset.category || "other",
-        kindLabel: "图片",
-        asset,
-        searchText: asset.tags.join(" "),
-    })), [imageAssets]);
+    const availablePickerItems = useMemo<AssetLibraryPickerItem[]>(() => [
+        ...availableAssets.map((asset) => ({
+            id: asset.id,
+            title: asset.title,
+            category: asset.kind === "entity" ? "character" : asset.category || "other",
+            kindLabel: mediaLabel(asset.kind),
+            asset,
+            description: asset.note,
+            searchText: asset.tags.join(" "),
+        })),
+        ...externalAssetSources.items,
+    ], [availableAssets, externalAssetSources.items]);
+    const imagePickerItems = useMemo<AssetLibraryPickerItem[]>(() => [
+        ...imageAssets.map((asset) => ({
+            id: asset.id,
+            title: asset.title,
+            category: asset.category || "other",
+            kindLabel: "图片",
+            asset,
+            searchText: asset.tags.join(" "),
+        })),
+        ...externalAssetSources.items.filter((item) => item.external?.item.kind === "image"),
+    ], [externalAssetSources.items, imageAssets]);
     const pendingCandidates = detail.assetCandidates.filter((candidate) => candidate.category === "character" && candidate.status === "pending_confirmation");
     const characterAssets = detail.assets.filter((asset) => asset.category === "character" && asset.character);
     const mediaAssetCount = detail.assets.filter((asset) => asset.category !== "character").length;
@@ -202,7 +211,8 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             if (!imageAsset) throw new Error("未选择角色");
             await saveRemoteUserDataNow();
             const latest = useAssetStore.getState().assets;
-            const selected = latest.find((asset) => asset.id === selectedAssetId);
+            const pickerItem = imagePickerItems.find((item) => item.id === selectedAssetId);
+            const selected = latest.find((asset) => asset.id === selectedAssetId) || (pickerItem?.external ? await externalAssetSources.importExternalAsset(pickerItem.external) : undefined);
             if (selected?.kind !== "image") throw new Error("请选择一张包含正面、侧面和背面的三视图设定图");
             const resourceId = resourceIdFromStorageKey((selected as ImageAsset).data.storageKey);
             if (!resourceId) throw new Error("所选图片尚未同步到后端资源库");
@@ -324,15 +334,24 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             <AssetLibraryPickerModal
                 open={addOpen}
                 items={availablePickerItems}
-                categoryLabels={pickerCategoryLabels}
+                categoryLabels={{ ...pickerCategoryLabels, ...externalAssetSources.categoryLabels }}
+                folders={externalAssetSources.folders}
+                footerNote={externalAssetSources.error || undefined}
                 multiple={false}
-                title="个人素材"
+                title="素材库"
                 confirmLabel={() => "加入项目"}
-                emptyTitle="没有可引用的个人素材"
-                emptyDescription="个人素材已全部加入项目，或素材库仍为空。"
+                emptyTitle="没有可引用的素材"
+                emptyDescription="本地素材已全部加入项目，或切换到插件来源选择外部素材。"
                 onClose={() => setAddOpen(false)}
                 onConfirm={async (ids) => {
-                    const selected = personalAssets.find((asset) => asset.id === ids[0]);
+                    const selectedItem = availablePickerItems.find((item) => item.id === ids[0]);
+                    if (selectedItem?.external) {
+                        const imported = await externalAssetSources.importExternalAsset(selectedItem.external);
+                        const assetId = addAsset(imported);
+                        await addMutation.mutateAsync({ assetId, category: imported.kind === "entity" ? "character" : imported.category || "other", nextFolderId: folderId === ALL_FOLDERS ? undefined : folderId });
+                        return;
+                    }
+                    const selected = selectedItem?.asset || personalAssets.find((asset) => asset.id === ids[0]);
                     if (!selected) throw new Error("所选素材已不存在，请重新选择");
                     await addMutation.mutateAsync({ assetId: selected.id, category: selected.kind === "entity" ? "character" : selected.category || "other", nextFolderId: folderId === ALL_FOLDERS ? undefined : folderId });
                 }}
@@ -345,12 +364,14 @@ export default function ProjectAssetsView({ detail, refreshProject }: ProjectDet
             <AssetLibraryPickerModal
                 open={Boolean(imageAsset)}
                 items={imagePickerItems}
-                categoryLabels={pickerCategoryLabels}
+                categoryLabels={{ ...pickerCategoryLabels, ...externalAssetSources.categoryLabels }}
+                folders={externalAssetSources.folders}
+                footerNote={externalAssetSources.error || undefined}
                 multiple={false}
                 eyebrow="绑定图片"
                 title={imageAsset?.title || "角色三视图"}
                 confirmLabel={() => "绑定并生成新版本"}
-                emptyTitle="个人图片素材为空"
+                emptyTitle="没有可绑定的图片"
                 emptyDescription="需要一张包含正面、侧面、背面的角色设定图。"
                 onClose={() => setImageAsset(null)}
                 onConfirm={async (ids) => {

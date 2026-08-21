@@ -1,10 +1,12 @@
-import { App, Button, Input, Switch, Tag, Typography } from "antd";
-import { CheckCircle2, ChevronDown, ExternalLink, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import { App, Button, Input, Select, Switch, Tag, Typography } from "antd";
+import { CheckCircle2, ChevronDown, ExternalLink, FolderOpen, PlugZap, Settings2, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
+import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
 import { usePluginStore } from "@/stores/use-plugin-store";
 
 const categoryLabels: Record<string, string> = {
@@ -36,6 +38,7 @@ const permissionLabels: Record<string, string> = {
 
 export default function PluginsPage() {
     const { message } = App.useApp();
+    const navigate = useNavigate();
     const installations = usePluginStore((state) => state.installations);
     const ensurePlugin = usePluginStore((state) => state.ensurePlugin);
     const setEnabled = usePluginStore((state) => state.setEnabled);
@@ -43,6 +46,11 @@ export default function PluginsPage() {
     const registeredPlugins = useMemo(() => listRegisteredPlugins(), []);
     const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
     const [eagleBaseUrl, setEagleBaseUrl] = useState("http://localhost:41595");
+    const [eagleAutoUploadGenerated, setEagleAutoUploadGenerated] = useState(true);
+    const [eagleGeneratedFolderId, setEagleGeneratedFolderId] = useState("");
+    const [eagleFolders, setEagleFolders] = useState<EagleFolder[]>([]);
+    const [eagleFoldersLoading, setEagleFoldersLoading] = useState(false);
+    const [eagleFoldersError, setEagleFoldersError] = useState("");
 
     useEffect(() => {
         for (const plugin of registeredPlugins) ensurePlugin(plugin.manifest);
@@ -53,15 +61,32 @@ export default function PluginsPage() {
     useEffect(() => {
         const configured = eagle?.config.baseUrl;
         if (typeof configured === "string" && configured.trim()) setEagleBaseUrl(configured);
-    }, [eagle?.config.baseUrl]);
+        const autoUpload = eagle?.config.autoUploadGenerated;
+        setEagleAutoUploadGenerated(autoUpload !== false && autoUpload !== "false");
+        const folderId = eagle?.config.generatedFolderId;
+        setEagleGeneratedFolderId(typeof folderId === "string" ? folderId : "");
+    }, [eagle?.config.baseUrl, eagle?.config.autoUploadGenerated, eagle?.config.generatedFolderId]);
 
+    const loadEagleFolders = async (url = eagleBaseUrl) => {
+        setEagleFoldersLoading(true);
+        setEagleFoldersError("");
+        try {
+            const result = await getEagleLibrary(url.trim().replace(/\/$/, ""));
+            setEagleFolders(result.library.folders || []);
+        } catch (reason) {
+            setEagleFoldersError(reason instanceof Error ? reason.message : "读取 Eagle 文件夹失败");
+            setEagleFolders([]);
+        } finally {
+            setEagleFoldersLoading(false);
+        }
+    };
     const saveEagleConfig = () => {
         const baseUrl = eagleBaseUrl.trim().replace(/\/$/, "");
         if (!/^https?:\/\//i.test(baseUrl)) {
             message.error("Eagle 地址必须以 http:// 或 https:// 开头");
             return;
         }
-        updateConfig(EAGLE_PLUGIN_ID, { baseUrl });
+        updateConfig(EAGLE_PLUGIN_ID, { baseUrl, autoUploadGenerated: eagleAutoUploadGenerated, generatedFolderId: eagleGeneratedFolderId });
         message.success("Eagle 插件配置已保存");
     };
 
@@ -150,17 +175,46 @@ export default function PluginsPage() {
                                             </div>
 
                                             {plugin.manifest.id === EAGLE_PLUGIN_ID ? (
-                                                <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end">
-                                                    <div className="min-w-0 flex-1">
+                                                <>
+                                                    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                                                    <div className="min-w-0">
                                                         <label htmlFor="eagle-base-url" className="block text-xs font-medium text-foreground/58">Eagle 本地 API 地址</label>
                                                         <Input id="eagle-base-url" aria-label="Eagle 本地 API 地址" value={eagleBaseUrl} onChange={(event) => setEagleBaseUrl(event.target.value)} placeholder="http://localhost:41595" className="mt-2 w-full" />
-                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">Eagle 必须在本机运行；网页直连可能受跨域限制，后续搜索和导入将通过本地桥接适配器完成。</p>
+                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。</p>
                                                     </div>
-                                                    <div className="flex shrink-0 flex-wrap gap-2">
-                                                        <Button type="primary" className="min-h-9" icon={<CheckCircle2 className="size-4" />} onClick={saveEagleConfig}>保存配置</Button>
-                                                        <Button className="min-h-9" icon={<ExternalLink className="size-4" />} href="https://api.eagle.cool/" target="_blank">查看 API</Button>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <label htmlFor="eagle-auto-upload-generated" className="block text-xs font-medium text-foreground/58">自动归档生成结果</label>
+                                                            <Switch id="eagle-auto-upload-generated" checked={eagleAutoUploadGenerated} onChange={setEagleAutoUploadGenerated} aria-label="自动归档生成结果到 Eagle" />
+                                                        </div>
+                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。</p>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <label htmlFor="eagle-generated-folder" className="block text-xs font-medium text-foreground/58">生成结果写入文件夹</label>
+                                                            <Button type="link" size="small" loading={eagleFoldersLoading} onClick={() => void loadEagleFolders()}>读取文件夹</Button>
+                                                        </div>
+                                                        <Select
+                                                            id="eagle-generated-folder"
+                                                            aria-label="生成结果写入文件夹"
+                                                            className="mt-2 w-full"
+                                                            showSearch
+                                                            allowClear
+                                                            value={eagleGeneratedFolderId || undefined}
+                                                            placeholder="Eagle 根目录"
+                                                            optionFilterProp="label"
+                                                            options={[{ value: "__root__", label: "Eagle 根目录" }, ...eagleFolderOptions(eagleFolders)]}
+                                                            onChange={(value) => setEagleGeneratedFolderId(value === "__root__" || !value ? "" : value)}
+                                                        />
+                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">{eagleFoldersError || "默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。"}</p>
                                                     </div>
                                                 </div>
+                                                <div className="mt-4 flex shrink-0 flex-wrap gap-2">
+                                                    <Button type="primary" className="min-h-9" icon={<CheckCircle2 className="size-4" />} onClick={saveEagleConfig}>保存配置</Button>
+                                                    <Button className="min-h-9" icon={<FolderOpen className="size-4" />} disabled={!enabled} onClick={() => navigate("/plugins/eagle")}>打开 Eagle 素材库</Button>
+                                                    <Button className="min-h-9" icon={<ExternalLink className="size-4" />} href="https://api.eagle.cool/" target="_blank">查看 API</Button>
+                                                </div>
+                                                </>
                                             ) : (
                                                 <div className="rounded-[var(--r-lg)] bg-foreground/[.035] p-4 text-sm text-foreground/55">该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。</div>
                                             )}
@@ -181,4 +235,22 @@ export default function PluginsPage() {
             </div>
         </main>
     );
+}
+
+function eagleFolderOptions(folders: EagleFolder[]) {
+    const byId = new Map(folders.map((folder) => [folder.id, folder]));
+    const pathFor = (folder: EagleFolder) => {
+        const path: string[] = [];
+        const seen = new Set<string>();
+        let current: EagleFolder | undefined = folder;
+        while (current && !seen.has(current.id)) {
+            seen.add(current.id);
+            path.unshift(current.name);
+            current = current.parentId ? byId.get(current.parentId) : undefined;
+        }
+        return path.join(" / ");
+    };
+    return folders
+        .map((folder) => ({ value: folder.id, label: pathFor(folder) }))
+        .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
 }

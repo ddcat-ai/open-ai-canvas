@@ -6,6 +6,7 @@ import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-c
 import { getMediaBlob, resolveMediaUrl, setMediaBlob } from "@/services/file-storage";
 import { createGenerationTaskMaterializer, createIdempotentMaterializeOutput, type MaterializeGenerationTaskOutput } from "@/services/generation-task-materializer";
 import { withGenerationArtifactCommitLock } from "@/services/generation-asset-repository";
+import { uploadGeneratedAssetToConfiguredSources } from "@/services/external-asset-sources";
 import { getImageBlob, resolveImageUrl, setImageBlob } from "@/services/image-storage";
 import { generationArtifactStorageKey, loadOrStoreGenerationArtifact } from "@/services/generation-artifact-sink";
 import { createLocalDreaminaTaskEffectStore } from "@/services/local-dreamina-generation";
@@ -351,18 +352,30 @@ function generationTaskEffectStore() {
 const materializeGenerationOutput: MaterializeGenerationTaskOutput = createIdempotentMaterializeOutput({
     async insertOrReturnAsset(input) {
         const scope = getActiveUserScope();
-        return withGenerationArtifactCommitLock(
+        const assetId = await withGenerationArtifactCommitLock(
             scope,
             async () => {
                 throwIfAborted(input.signal);
                 const asset = await generationOutputAsset(input, scope);
                 throwIfAborted(input.signal);
-                const assetId = await useAssetStore.getState().addGenerationAsset(input.effectKey, asset, input.signal);
+                const createdAssetId = await useAssetStore.getState().addGenerationAsset(input.effectKey, asset, input.signal);
                 throwIfAborted(input.signal);
-                return assetId;
+                return createdAssetId;
             },
             { requireCrossRealmLock: true },
         );
+        const storedAsset = useAssetStore.getState().assets.find((candidate) => candidate.id === assetId);
+        if (storedAsset) {
+            const syncResult = await uploadGeneratedAssetToConfiguredSources(storedAsset, input.signal);
+            throwIfAborted(input.signal);
+            if (syncResult.records.length) {
+                const currentAsset = useAssetStore.getState().assets.find((candidate) => candidate.id === assetId) || storedAsset;
+                useAssetStore.getState().updateAsset(assetId, {
+                    metadata: { ...currentAsset.metadata, externalSync: syncResult.records },
+                });
+            }
+        }
+        return assetId;
     },
 });
 

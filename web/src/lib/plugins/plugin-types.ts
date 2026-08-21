@@ -38,6 +38,7 @@ export type PluginHostContext = {
     manifest: PluginManifest;
     permissions: ReadonlySet<PluginPermission>;
     storage: PluginStorage;
+    config: Readonly<PluginInstallation["config"]>;
 };
 
 export type AssetSourceQuery = {
@@ -48,6 +49,12 @@ export type AssetSourceQuery = {
     limit?: number;
     offset?: number;
     signal?: AbortSignal;
+};
+
+export type ExternalAssetFolder = {
+    id: string;
+    name: string;
+    parentId?: string;
 };
 
 export type ExternalAssetItem = {
@@ -62,14 +69,26 @@ export type ExternalAssetItem = {
     bytes?: number;
     tags?: string[];
     folderId?: string;
+    folderIds?: string[];
+    folderPath?: string[];
     description?: string;
     metadata?: Record<string, unknown>;
 };
 
+export type ExternalAssetPickerReference = {
+    sourceId: string;
+    sourceName: string;
+    item: ExternalAssetItem;
+};
+
 export type AssetSourceProvider = {
+    listFolders?: (signal?: AbortSignal) => Promise<ExternalAssetFolder[]>;
     list?: (query: AssetSourceQuery) => Promise<ExternalAssetItem[]>;
     importAsset?: (item: ExternalAssetItem, signal?: AbortSignal) => Promise<Asset>;
     uploadAsset?: (asset: Asset, signal?: AbortSignal) => Promise<ExternalAssetItem>;
+    uploadAssetToFolder?: (asset: Asset, folderId?: string, signal?: AbortSignal) => Promise<ExternalAssetItem>;
+    uploadFile?: (file: File, folderId?: string, signal?: AbortSignal) => Promise<ExternalAssetItem>;
+    createFolder?: (name: string, parentId?: string) => Promise<void>;
     openAsset?: (item: ExternalAssetItem) => Promise<void>;
 };
 

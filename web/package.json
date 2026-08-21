@@ -74,6 +74,7 @@
         "@types/node": "^20.19.43",
         "@types/react": "19.2.17",
         "@types/react-dom": "19.2.3",
+        "@types/three": "0.185.4",
         "@vitejs/plugin-react": "^6.0.3",
         "prettier": "^3.9.5",
         "typescript": "^7.0.2",

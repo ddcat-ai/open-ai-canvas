@@ -1,8 +1,11 @@
 import { localForageStorageForScope } from "@/lib/localforage-storage";
+import type { PluginStorage } from "./plugin-types";
 
-export function createPluginStorage(pluginId: string) {
+const PLUGIN_STORAGE_PREFIX = "infinite-canvas:plugin-storage:";
+
+export function pluginStorageFor(pluginId: string): PluginStorage {
     const storage = localForageStorageForScope();
-    const keyFor = (key: string) => `infinite-canvas:plugin:${pluginId}:${key}`;
+    const keyFor = (key: string) => PLUGIN_STORAGE_PREFIX + pluginId + ":" + key;
     return {
         get: async <T>(key: string) => {
             const value = await storage.getItem(keyFor(key));
@@ -10,11 +13,17 @@ export function createPluginStorage(pluginId: string) {
             try {
                 return JSON.parse(value) as T;
             } catch {
-                throw new Error(`插件 ${pluginId} 的配置数据损坏`);
+                return value as T;
             }
         },
-        set: async <T>(key: string, value: T) => storage.setItem(keyFor(key), JSON.stringify(value)),
-        remove: (key: string) => storage.removeItem(keyFor(key)),
+        set: async <T>(key: string, value: T) => {
+            const serialized = JSON.stringify(value);
+            if (serialized === undefined) {
+                await storage.removeItem(keyFor(key));
+                return;
+            }
+            await storage.setItem(keyFor(key), serialized);
+        },
+        remove: async (key) => { await storage.removeItem(keyFor(key)); },
     };
 }
-
