@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_UNAVAILABLE_LABEL = "预览不可用，素材可能已删除";
 
-export function TaskMediaPreview({
+export function MediaPreview({
     src,
     kind,
     alt = "",
@@ -40,7 +40,7 @@ export function TaskMediaPreview({
 
     if (unavailable) {
         return (
-            <span className={cn("task-media-unavailable", fallbackClassName)} role="img" aria-label={fallbackLabel} title={fallbackLabel}>
+            <span className={cn("media-unavailable", fallbackClassName)} role="img" aria-label={fallbackLabel} title={fallbackLabel}>
                 <ImageOff aria-hidden="true" />
                 <span>{fallbackLabel}</span>
             </span>

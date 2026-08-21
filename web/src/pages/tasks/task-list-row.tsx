@@ -2,11 +2,11 @@ import { Button, Tooltip } from "antd";
 import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video, X } from "lucide-react";
 import { useState } from "react";
 
+import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { formatTaskKind, statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
-import { TaskMediaPreview } from "./task-media-preview";
 import { formatModelName, getTaskCanvasContext, isTaskFailed, statusDotClassName, taskAttentionReason, TaskBilling, TaskDate } from "./task-shared";
 
 export function TaskListRow({
@@ -126,7 +126,7 @@ function TaskPreviewThumbnail({ task, onOpen }: { task: GenerationTask; onOpen: 
             aria-label={previewUnavailable ? "预览不可用，素材可能已删除" : isVideo ? "放大预览生成视频" : "放大预览生成图片"}
             title={previewUnavailable ? "预览不可用，素材可能已删除" : undefined}
         >
-            <TaskMediaPreview src={task.previewUrl} kind={isVideo ? "video" : "image"} width={68} height={48} loading="lazy" className="h-full w-full object-cover" fallbackLabel="预览不可用" onUnavailable={() => setUnavailableUrl(task.previewUrl || "")} />
+            <MediaPreview src={task.previewUrl} kind={isVideo ? "video" : "image"} width={68} height={48} loading="lazy" className="h-full w-full object-cover" fallbackLabel="预览不可用" onUnavailable={() => setUnavailableUrl(task.previewUrl || "")} />
             {!previewUnavailable ? (
                 <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-[background-color,opacity] duration-150 group-hover:bg-black/30 group-hover:opacity-100 group-focus-visible:bg-black/30 group-focus-visible:opacity-100">
                     {isVideo ? <Play className="size-4 fill-current" /> : <Eye className="size-4" />}

@@ -6,9 +6,9 @@ function source(path: string) {
     return readFileSync(resolve(import.meta.dir, path), "utf8");
 }
 
-describe("task media fallback", () => {
+describe("media fallback", () => {
     test("replaces failed image and video elements with an unavailable state", () => {
-        const preview = source("../src/pages/tasks/task-media-preview.tsx");
+        const preview = source("../src/components/media-preview.tsx");
 
         expect(preview).toContain("failedSrc === src");
         expect(preview).toContain("onError={handleUnavailable}");
@@ -21,9 +21,17 @@ describe("task media fallback", () => {
         const grid = source("../src/pages/tasks/task-grid-card.tsx");
         const page = source("../src/pages/tasks/index.tsx");
 
-        expect(list).toContain("<TaskMediaPreview");
+        expect(list).toContain("<MediaPreview");
         expect(list).toContain("disabled={previewUnavailable}");
-        expect(grid).toContain("<TaskMediaPreview");
-        expect(page.match(/<TaskMediaPreview/g)).toHaveLength(2);
+        expect(grid).toContain("<MediaPreview");
+        expect(page.match(/<MediaPreview/g)).toHaveLength(2);
+    });
+
+    test("uses the fallback in admin log thumbnails and enlarged previews", () => {
+        const page = source("../src/pages/admin/logs/logs-page.tsx");
+
+        expect(page.match(/<MediaPreview/g)).toHaveLength(2);
+        expect(page).toContain("disabled={previewUnavailable}");
+        expect(page).toContain("onUnavailable={() => setUnavailableUrl(url)}");
     });
 });

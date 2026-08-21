@@ -3,6 +3,7 @@ import { LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { MediaPreview } from "@/components/media-preview";
 import { ListToolbar, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
@@ -19,7 +20,6 @@ import { listProjects, type ProjectSummary } from "@/services/api/projects";
 import { TaskGridCard } from "./task-grid-card";
 import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
-import { TaskMediaPreview } from "./task-media-preview";
 import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
 
@@ -587,7 +587,7 @@ export default function TasksPage() {
                 className="library-modal task-media-preview-modal"
             >
                 {mediaPreview ? (
-                    <TaskMediaPreview
+                    <MediaPreview
                         src={mediaPreview.url}
                         kind={mediaPreview.kind}
                         alt={mediaPreview.title}
@@ -628,7 +628,7 @@ function TaskResultMedia({ value, taskType }: { value?: string; taskType: string
                 {urls.map((url, index) => {
                     const isVideo = isVideoResult(url, taskType);
                     return (
-                        <TaskMediaPreview
+                        <MediaPreview
                             key={`${url}-${index}`}
                             src={url}
                             kind={isVideo ? "video" : "image"}
