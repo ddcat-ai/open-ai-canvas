@@ -494,6 +494,11 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
+export function logicalModelIDForConfig(config: AiConfig) {
+    const channel = resolveModelChannel(config, config.model);
+    return channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalModelId || "";
+}
+
 export function channelConnectionSignature(channel: ModelChannel) {
     return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", channel.allowLocalChannel === true ? "local:1" : "local:0", JSON.stringify(channel.headers || [])].join("\n");
 }

@@ -1,5 +1,5 @@
 import { applyStyleExecutionPlan, createStyleProfileSnapshot, parseStyleProfile, resolveStyleExecutionPlan, serializeStyleProfile, type StyleExecutionPlan, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
-import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { logicalModelIDForConfig, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
 export type CanvasStyleExecutionRuntime = {
@@ -16,7 +16,8 @@ export function resolveCanvasStyleExecution(nodes: CanvasNodeData[], sourceNode:
     if (!profile) return null;
     const requestConfig = resolveModelRequestConfig(config, config.model);
     const plan = resolveStyleExecutionPlan(profile, { mode, model: requestConfig.model, interfaceType: requestConfig.interfaceType || requestConfig.apiFormat });
-    if (plan.status === "blocked") throw new Error(`项目画风与当前模型不兼容：${plan.warnings.join("；")}`);
+    // 平台模型的真实供应模型由后端入队时路由，前端只能预览，最终兼容性由后端重算。
+    if (plan.status === "blocked" && !logicalModelIDForConfig(config)) throw new Error(`当前模型无法完整执行项目画风：${plan.warnings.join("；")}。请切换模型，或在项目设置中停用对应画风资产`);
     return { profile, profileJson: serializeStyleProfile(profile), plan, prompt: applyStyleExecutionPlan(prompt, plan) };
 }
 

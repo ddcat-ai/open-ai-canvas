@@ -423,33 +423,47 @@ func (s *Service) applyGenerationStyleProfile(userID string, taskProjectID strin
 		if strings.TrimSpace(storedProfileJSON) == "" {
 			// 旧项目只有 preset ID，允许画布把该预设编译为结构化快照；仍需锁定同一预设，不能借降级路径换画风。
 			if strings.TrimSpace(storedPresetID) == "" || strings.TrimSpace(profile.PresetID) != strings.TrimSpace(storedPresetID) {
-				return errors.New("任务画风预设与项目当前设置不一致，请刷新画布后重试")
+				return errors.New("项目画风已发生变化，请返回项目列表后重新打开当前项目再生成")
 			}
 		} else {
 			matches, compareErr := equivalentStyleProfileJSON(styleProfileJSON, storedProfileJSON)
-			if compareErr != nil || !matches {
-				return errors.New("任务画风快照与项目当前设置不一致，请刷新画布后重试")
+			if compareErr != nil {
+				return errors.New("项目画风配置暂时无法读取，请在项目设置中重新保存画风后重试")
+			}
+			if !matches {
+				// 项目画风可能在另一个页面更新；保存路径以服务端快照为准，生成时自动采用最新版本。
+				validatedStoredProfileJSON, validateErr := validateStyleProfileJSON(storedProfileJSON)
+				if validateErr != nil || json.Unmarshal([]byte(validatedStoredProfileJSON), &profile) != nil {
+					return errors.New("项目画风配置暂时无法读取，请在项目设置中重新保存画风后重试")
+				}
 			}
 		}
 	}
-	plan, err := decodeStyleExecutionPlan(input.Metadata["styleExecutionPlan"])
-	if err != nil {
-		return err
-	}
+	// 执行计划是前端为即时预览生成的派生数据。平台模型入队后可能改选真实供应线路，
+	// 因此后端必须以最终模型重新编译，不能要求用户手动“刷新配置”来同步内部路由。
+	plan, _ := decodeStyleExecutionPlan(input.Metadata["styleExecutionPlan"])
 	stylePrompt, expectedStatus, warnings := resolveGenerationStyleExecution(profile, input.Config.Model, firstNonEmpty(input.Config.InterfaceType, input.Config.APIFormat))
-	if plan.SchemaVersion != 1 || plan.ProfilePresetID != profile.PresetID || plan.ProfileRevision != profile.Revision || plan.Mode != input.Mode || !strings.EqualFold(plan.Model, input.Config.Model) || plan.InterfaceType != firstNonEmpty(input.Config.InterfaceType, input.Config.APIFormat) {
-		return errors.New("项目画风执行计划与当前模型或快照不一致，请刷新配置后重试")
-	}
-	if plan.Status != expectedStatus || strings.TrimSpace(plan.Prompt) != stylePrompt {
-		return errors.New("项目画风执行计划已失效，请重新生成执行计划")
-	}
+	input.Prompt = reconcileGenerationStylePrompt(input.Prompt, plan.Prompt, stylePrompt)
 	if expectedStatus == "blocked" {
-		return fmt.Errorf("项目画风与当前生成模型不兼容：%s", strings.Join(warnings, "；"))
-	}
-	if stylePrompt != "" && !strings.Contains(input.Prompt, stylePrompt) {
-		input.Prompt = strings.TrimSpace(input.Prompt) + "\n\n【项目画风执行规范】\n" + stylePrompt
+		return fmt.Errorf("当前图片模型无法完整执行项目画风：%s。请切换图片模型，或在项目设置中停用对应画风资产", strings.Join(warnings, "；"))
 	}
 	return nil
+}
+
+func reconcileGenerationStylePrompt(prompt string, previousStylePrompt string, currentStylePrompt string) string {
+	content := strings.TrimSpace(prompt)
+	previous := strings.TrimSpace(previousStylePrompt)
+	if previous != "" {
+		previousBlock := "【项目画风执行规范】\n" + previous
+		if strings.HasSuffix(content, previousBlock) {
+			content = strings.TrimSpace(strings.TrimSuffix(content, previousBlock))
+		}
+	}
+	current := strings.TrimSpace(currentStylePrompt)
+	if current == "" || strings.HasSuffix(content, "【项目画风执行规范】\n"+current) {
+		return content
+	}
+	return strings.TrimSpace(content + "\n\n【项目画风执行规范】\n" + current)
 }
 
 func (s *Service) taskProjectStyleProfile(userID string, canvasOrProjectID string) (string, string, bool, error) {

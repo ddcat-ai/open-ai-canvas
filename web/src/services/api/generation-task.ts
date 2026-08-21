@@ -7,11 +7,13 @@ import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreamin
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveVideoOperation } from "@/lib/model-selection";
-import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice, type ToolResponseResult } from "@/services/api/image";
+
+export { logicalModelIDForConfig };
 
 export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 
@@ -498,11 +500,6 @@ export function backendProviderConfig(config: AiConfig) {
         capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
         systemPrompt: "",
     };
-}
-
-export function logicalModelIDForConfig(config: AiConfig) {
-    const channel = resolveModelChannel(config, config.model);
-    return channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalModelId || "";
 }
 
 function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode) {

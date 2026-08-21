@@ -1794,6 +1794,43 @@ func TestResolveGenerationStyleExecutionSkipsPromptAssetForOtherModel(t *testing
 	}
 }
 
+func TestApplyGenerationStyleProfileRebuildsStaleClientPlanForResolvedModel(t *testing.T) {
+	enabled := true
+	profile := styleProfileDocument{
+		SchemaVersion:   1,
+		PresetID:        "style-1",
+		Title:           "项目画风",
+		Prompt:          "base style",
+		ExecutionPolicy: "compatible-fallback",
+		Source:          "user",
+		Revision:        1,
+		Assets: []styleProfileAsset{{
+			ID: "template-1", Kind: "template", Title: "旧模型模板", Provider: "workflow", Enabled: &enabled, Status: "validated",
+			BaseModels: []string{"client-model"}, PromptFragment: "client-only fragment",
+		}},
+	}
+	clientPrompt, clientStatus, _ := resolveGenerationStyleExecution(profile, "client-model", "openai-image")
+	input := canvasGenerationInput{
+		Mode:   "image",
+		Prompt: "portrait\n\n【项目画风执行规范】\n" + clientPrompt,
+		Config: providerConfig{Model: "resolved-model", InterfaceType: "openai-image"},
+		Metadata: map[string]interface{}{
+			"styleProfileJson": mustStyleProfileJSON(profile),
+			"styleExecutionPlan": styleExecutionPlanDocument{
+				SchemaVersion: 1, ProfilePresetID: profile.PresetID, ProfileRevision: profile.Revision, Mode: "image",
+				Model: "client-model", InterfaceType: "openai-image", Status: clientStatus, Prompt: clientPrompt,
+			},
+		},
+	}
+
+	if err := (&Service{}).applyGenerationStyleProfile("user-1", "", &input); err != nil {
+		t.Fatalf("applyGenerationStyleProfile() error = %v", err)
+	}
+	if input.Prompt != "portrait\n\n【项目画风执行规范】\nbase style" {
+		t.Fatalf("applyGenerationStyleProfile() prompt = %q", input.Prompt)
+	}
+}
+
 func TestEquivalentStyleProfileJSONIgnoresObjectKeyOrder(t *testing.T) {
 	equal, err := equivalentStyleProfileJSON(`{"schemaVersion":1,"presetId":"style-1","assets":[]}`, `{"assets":[],"presetId":"style-1","schemaVersion":1}`)
 	if err != nil || !equal {
