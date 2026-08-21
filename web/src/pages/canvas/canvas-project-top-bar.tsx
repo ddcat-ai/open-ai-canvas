@@ -6,6 +6,7 @@ import { Button, Dropdown, Modal, Tooltip } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -15,8 +16,6 @@ import type { CanvasMediaPerformanceMode, CanvasWorkspaceMode } from "@/types/ca
 
 type CanvasTopBarProps = {
     title: string;
-    workspaceMode: CanvasWorkspaceMode;
-    onWorkspaceModeChange: (mode: CanvasWorkspaceMode) => void;
     titleDraft: string;
     isTitleEditing: boolean;
     onTitleDraftChange: (value: string) => void;
@@ -47,8 +46,6 @@ type CanvasTopBarProps = {
 
 export function CanvasTopBar({
     title,
-    workspaceMode,
-    onWorkspaceModeChange,
     titleDraft,
     isTitleEditing,
     onTitleDraftChange,
@@ -77,22 +74,14 @@ export function CanvasTopBar({
     shortDramaGuide,
 }: CanvasTopBarProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
-    const [workspaceModeOpen, setWorkspaceModeOpen] = useState(false);
-
-    const handleWorkspaceModeOpenChange = (next: boolean) => {
-        // 模式开关下拉向下展开，会覆盖展开中的短剧流程条，打开时先收起流程条避免重叠。
-        if (next && shortDramaGuide && !shortDramaGuide.collapsed) shortDramaGuide.onToggle();
-        setWorkspaceModeOpen(next);
-    };
 
     const handleShortDramaGuideToggle = () => {
-        // 展开流程条会与模式开关下拉在顶部中心重叠，展开前先关闭模式开关。
-        if (shortDramaGuide?.collapsed) setWorkspaceModeOpen(false);
         shortDramaGuide?.onToggle();
     };
 
@@ -112,7 +101,7 @@ export function CanvasTopBar({
     return (
         <>
             <div className="canvas-topbar pointer-events-none absolute left-0 right-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between px-4 sm:px-5">
-                <div className="canvas-topbar-cluster canvas-topbar-project-cluster pointer-events-auto flex min-w-0 items-center gap-2">
+                <div className="canvas-topbar-cluster canvas-topbar-project-cluster pointer-events-auto flex min-w-0 items-center gap-2" style={dockStyle}>
                     <Dropdown
                         trigger={["click"]}
                         menu={{
@@ -141,7 +130,7 @@ export function CanvasTopBar({
                             ],
                         }}
                     >
-                        <button type="button" className="grid size-9 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text }} aria-label="打开画布菜单">
+                        <button type="button" className="canvas-topbar-action grid size-9 place-items-center rounded-full" style={{ color: theme.node.text }} aria-label="打开画布菜单">
                             <Menu className="size-5" />
                         </button>
                     </Dropdown>
@@ -168,7 +157,7 @@ export function CanvasTopBar({
                                     {title}
                                 </button>
                                 <Tooltip title="重命名画布">
-                                    <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md opacity-60 transition hover:bg-black/5 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 dark:hover:bg-white/10" style={{ color: theme.node.text }} onClick={onStartTitleEditing} aria-label="重命名画布">
+                                    <button type="button" className="canvas-topbar-action grid size-7 shrink-0 place-items-center rounded-md opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2" style={{ color: theme.node.text }} onClick={onStartTitleEditing} aria-label="重命名画布">
                                         <Pencil className="size-3.5" />
                                     </button>
                                 </Tooltip>
@@ -191,10 +180,8 @@ export function CanvasTopBar({
                     </div>
                 </div>
 
-                <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={onWorkspaceModeChange} open={workspaceModeOpen} onOpenChange={handleWorkspaceModeOpenChange} />
-
-                <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5">
-                    <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
+                <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5" style={dockStyle}>
+                    <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
                     <Dropdown
                         trigger={["click"]}
                         placement="bottomRight"
@@ -205,7 +192,7 @@ export function CanvasTopBar({
                             ],
                         }}
                     >
-                        <Button type="text" className="canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布" title="导入第三方画布">
+                        <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布" title="导入第三方画布">
                             <span className="hidden lg:inline">导入第三方画布</span>
                         </Button>
                     </Dropdown>
@@ -222,13 +209,13 @@ export function CanvasTopBar({
                             ],
                         }}
                     >
-                        <Button type="text" className="!hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" title="媒体性能模式" />
+                        <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" title="媒体性能模式" />
                     </Dropdown>
                     {compactAgentStatus ? <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} /> : null}
                     {user && creditsEnabled ? (
                         <Link
                             to="/wallet"
-                            className="inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10"
+                            className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
                             style={{ color: theme.node.text }}
                             title="查看积分明细"
                         >
@@ -239,7 +226,7 @@ export function CanvasTopBar({
                     <Tooltip title="进入专注模式（⇧⌘F）">
                         <Button
                             type="text"
-                            className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0"
+                            className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
                             style={{ color: theme.node.text }}
                             icon={<Focus className="size-4" />}
                             onClick={onEnterFocusMode}
@@ -250,24 +237,26 @@ export function CanvasTopBar({
                         <Tooltip title={shortDramaGuide.collapsed ? "展开短剧流程" : "收起短剧流程"}>
                             <Button
                                 type="text"
-                                className="!h-10 !rounded-xl !px-2.5 !font-medium"
+                                className="canvas-topbar-action !h-10 !rounded-xl !px-2.5 !font-medium"
                                 style={{ color: theme.node.text, background: shortDramaGuide.collapsed ? undefined : theme.toolbar.activeBg }}
                                 icon={<Clapperboard className="size-4" />}
                                 onClick={handleShortDramaGuideToggle}
                                 aria-label="短剧流程"
+                                aria-pressed={!shortDramaGuide.collapsed}
                             >
                                 <span className="tabular-nums">{shortDramaGuide.progress.completedCount}/5</span>
                             </Button>
                         </Tooltip>
                     ) : null}
-                    <Button type="text" className="!h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
+                    <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
                     <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
                     <Button
                         type="text"
-                        className="!h-10 !rounded-xl !px-3 !font-medium"
+                        className="canvas-topbar-action !h-10 !rounded-xl !px-3 !font-medium"
                         style={{ background: agentOpen ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
                         icon={<Bot className="size-4" />}
                         onClick={onToggleAgent}
+                        aria-pressed={agentOpen}
                     >
                         Agent
                     </Button>
@@ -301,19 +290,20 @@ export function CanvasTopBar({
     );
 }
 
-function CanvasWorkspaceModeSwitch({ mode, onChange, open, onOpenChange }: { mode: CanvasWorkspaceMode; onChange: (mode: CanvasWorkspaceMode) => void; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWorkspaceMode; onChange: (mode: CanvasWorkspaceMode) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const simple = mode === "simple";
     const rootRef = useRef<HTMLDivElement>(null);
+    const [open, setOpen] = useState(false);
 
     useEffect(() => {
         if (!open) return;
         const closeOnOutsidePress = (event: PointerEvent) => {
-            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) onOpenChange(false);
+            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") onOpenChange(false);
+            if (event.key === "Escape") setOpen(false);
         };
         document.addEventListener("pointerdown", closeOnOutsidePress);
         document.addEventListener("keydown", closeOnEscape);
@@ -321,26 +311,26 @@ function CanvasWorkspaceModeSwitch({ mode, onChange, open, onOpenChange }: { mod
             document.removeEventListener("pointerdown", closeOnOutsidePress);
             document.removeEventListener("keydown", closeOnEscape);
         };
-    }, [open, onOpenChange]);
+    }, [open]);
 
     const selectMode = (nextMode: CanvasWorkspaceMode) => {
         if (nextMode !== mode) onChange(nextMode);
-        onOpenChange(false);
+        setOpen(false);
     };
 
     return (
-        <div ref={rootRef} className="aceternity-mode-switch pointer-events-auto absolute left-1/2 top-2 z-[var(--dock-z-popover)] -translate-x-1/2">
+        <div ref={rootRef} className="aceternity-mode-switch pointer-events-auto relative z-[var(--dock-z-popover)]">
             <motion.button
                 type="button"
                 whileHover={reducedMotion ? undefined : { y: -1 }}
                 whileTap={reducedMotion ? undefined : { scale: 0.97 }}
                 transition={aceternityMotion.spring.dock}
-                className="flex h-9 min-w-28 items-center gap-2 rounded-full px-2.5 text-left outline-none backdrop-blur-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ background: open ? theme.spatial.surface : theme.spatial.elevated, color: theme.node.text, boxShadow: "var(--workspace-overlay-shadow)", outlineColor: theme.accent.primary }}
+                className="canvas-mode-switch-trigger flex h-10 min-w-28 items-center gap-2 rounded-xl border px-2.5 text-left outline-none backdrop-blur-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ ...canvasDockStyle(theme, theme.node.text), background: open ? "var(--dock-command-active)" : "var(--dock-surface)", outlineColor: theme.accent.primary }}
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={`当前为${simple ? "简洁" : "专业"}模式，点击切换`}
-                onClick={() => onOpenChange(!open)}
+                onClick={() => setOpen((value) => !value)}
             >
                 <span className="grid size-6 shrink-0 place-items-center rounded-full" style={{ background: theme.toolbar.itemHover, color: theme.accent.primary }}>
                     {simple ? <Sparkles className="size-3" /> : <Settings2 className="size-3" />}
@@ -351,18 +341,18 @@ function CanvasWorkspaceModeSwitch({ mode, onChange, open, onOpenChange }: { mod
                 </motion.span>
             </motion.button>
 
-            <div className="absolute left-1/2 top-11 w-72 -translate-x-1/2" style={{ maxWidth: "calc(100vw - var(--space-8))" }}>
+            <div className="absolute bottom-11 right-0 w-72" style={{ maxWidth: "calc(100vw - var(--space-8))" }}>
                 <AnimatePresence>
                     {open ? (
                         <motion.div
                             role="listbox"
                             aria-label="选择画布工作模式"
-                            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.92 }}
+                            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.92 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.95 }}
+                            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.95 }}
                             transition={aceternityMotion.spring.panel}
-                            className="aceternity-floating-panel w-full overflow-hidden rounded-[var(--r-lg)] p-1.5 backdrop-blur-2xl"
-                            style={{ background: theme.spatial.elevated, color: theme.node.text, boxShadow: "var(--workspace-overlay-shadow)" }}
+                            className="canvas-mode-switch-menu aceternity-floating-panel w-full overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl"
+                            style={{ ...canvasDockStyle(theme, theme.node.text), background: "var(--dock-surface)" }}
                         >
                             <ModeOption active={simple} motionEnabled={!reducedMotion} icon={<Sparkles className="size-4" />} title="简洁模式" description="保留核心创作路径，降低参数密度" theme={theme} onClick={() => selectMode("simple")} />
                             <ModeOption active={!simple} motionEnabled={!reducedMotion} icon={<Settings2 className="size-4" />} title="专业模式" description="显示完整节点、导演台与生成控制" theme={theme} onClick={() => selectMode("professional")} />
@@ -384,7 +374,7 @@ function ModeOption({ active, motionEnabled, icon, title, description, theme, on
             aria-selected={active}
             whileTap={motionEnabled ? { scale: 0.98 } : undefined}
             transition={aceternityMotion.spring.dock}
-            className="group flex min-h-14 w-full items-center gap-3 rounded-[var(--r-md)] px-3 py-2 text-left outline-none transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 dark:hover:bg-white/8"
+            className="canvas-mode-switch-option group flex min-h-14 w-full items-center gap-3 rounded-[var(--r-md)] px-3 py-2 text-left outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0"
             style={{ background: active ? theme.accent.primarySoft : "transparent", color: theme.node.text, outlineColor: theme.accent.primary }}
             onClick={onClick}
         >
@@ -414,7 +404,7 @@ function CompactAgentStatus({ status, onClick }: { status: { connected: boolean;
     const label = status.connected ? "已连接到本地 Codex" : status.enabled ? status.activity || "连接中" : "正在连接本地 Codex";
     const dotColor = status.connected ? "#22c55e" : status.enabled ? "#f59e0b" : theme.node.muted;
     return (
-        <button type="button" className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium transition hover:opacity-85" style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }} onClick={onClick} title="打开本地 Codex 面板">
+        <button type="button" className="canvas-topbar-action flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium" style={{ background: "transparent", color: theme.node.text }} onClick={onClick} title="打开本地 Codex 面板">
             <span className="size-2 rounded-full" style={{ background: dotColor }} />
             <span className="max-w-[180px] truncate">{label}</span>
         </button>

@@ -1394,12 +1394,46 @@
 
     .canvas-topbar-cluster {
         min-height: var(--space-10);
-        border: 0;
+        border: 1px solid var(--dock-border);
         border-radius: var(--r-lg);
-        background: var(--canvas-topbar-surface);
+        background: var(--dock-surface);
         padding: var(--space-half) var(--space-2);
-        box-shadow: var(--workspace-overlay-shadow);
-        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        box-shadow: var(--elevation-overlay);
+        backdrop-filter: blur(var(--dock-blur)) saturate(var(--glass-saturate));
+    }
+
+    /* 顶部操作区复用底部 FloatingDock 的命令状态，保持两组浮层在不同主题下有同一套反馈。 */
+    .canvas-topbar-action {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+        transition:
+            background-color var(--motion-instant) ease-out,
+            color var(--motion-instant) ease-out,
+            opacity var(--motion-instant) ease-out;
+    }
+
+    .canvas-topbar-action:hover:not(:disabled) {
+        background: var(--dock-command-hover) !important;
+    }
+
+    .canvas-mode-switch-trigger {
+        border-color: var(--dock-border);
+        box-shadow: var(--elevation-overlay);
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    .canvas-mode-switch-trigger:hover:not(:disabled) {
+        background: var(--dock-command-hover) !important;
+    }
+
+    .canvas-mode-switch-menu {
+        border-color: var(--dock-border);
+        transform-origin: bottom right;
+    }
+
+    .canvas-mode-switch-option:hover:not([aria-selected="true"]) {
+        background: var(--dock-command-hover) !important;
     }
 
     .canvas-topbar-project-cluster {

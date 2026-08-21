@@ -73,7 +73,7 @@ import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
-import { CanvasTopBar } from "./canvas-project-top-bar";
+import { CanvasTopBar, CanvasWorkspaceModeSwitch } from "./canvas-project-top-bar";
 import { LibTVImportDialog } from "./components/libtv-import-dialog";
 import { TapNowImportDialog } from "./components/tapnow-import-dialog";
 import { CanvasFocusModeBar } from "@/components/canvas/canvas-focus-mode-bar";
@@ -1759,8 +1759,6 @@ function InfiniteCanvasPage() {
                     {!focusMode ? (
                         <CanvasTopBar
                             title={currentProject?.title || "未命名画布"}
-                            workspaceMode={workspaceMode}
-                            onWorkspaceModeChange={setWorkspaceMode}
                             titleDraft={titleDraft}
                             isTitleEditing={titleEditing}
                             onTitleDraftChange={setTitleDraft}
@@ -1796,6 +1794,18 @@ function InfiniteCanvasPage() {
                             onEnterFocusMode={enterFocusMode}
                             shortDramaGuide={shortDramaGuide}
                         />
+                    ) : null}
+
+                    {!focusMode ? (
+                        <div
+                            data-canvas-no-zoom
+                            className="pointer-events-none absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16))] right-[var(--canvas-inset-x)] z-[var(--z-toolbar)] lg:bottom-[var(--canvas-inset-y)]"
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onWheel={(event) => event.stopPropagation()}
+                        >
+                            <CanvasWorkspaceModeSwitch mode={workspaceMode} onChange={setWorkspaceMode} />
+                        </div>
                     ) : null}
 
                     <CanvasNodeSearchModal
@@ -2152,7 +2162,7 @@ function InfiniteCanvasPage() {
                     {!focusMode ? (
                         <div
                             data-canvas-no-zoom
-                            className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16))] left-4 z-[var(--z-panel)] flex items-end gap-2 lg:bottom-[var(--canvas-inset-y)]"
+                            className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16))] left-[var(--canvas-inset-x)] z-[var(--z-panel)] flex items-end gap-2 lg:bottom-[var(--canvas-inset-y)]"
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
                             onWheel={(event) => event.stopPropagation()}

@@ -65,24 +65,41 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             />
             {showVisual ? <path
                 d={pathD}
-                stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 1.4 : 1}
+                stroke={theme.node.muted}
+                strokeWidth={emphasized ? 5 : 3.5}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.42 : 0.16}
+                strokeOpacity={emphasized ? 0.18 : 0.16}
                 fill="none"
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
+            {showVisual ? <path
+                d={pathD}
+                stroke={emphasized ? theme.accent.primary : theme.node.muted}
+                strokeWidth={emphasized ? 2.2 : 1.5}
+                vectorEffect="non-scaling-stroke"
+                strokeOpacity={emphasized ? 0.9 : 0.72}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ pointerEvents: "none" }}
+            /> : null}
+            {showVisual ? <>
+                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+            </> : null}
             {showVisual && emphasized ? <path
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
-                strokeWidth="1.8"
+                strokeWidth="2.2"
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="0.72"
+                strokeOpacity="0.84"
                 strokeDasharray="18 26"
                 fill="none"
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
         </g>
