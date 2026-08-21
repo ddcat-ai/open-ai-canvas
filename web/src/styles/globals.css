@@ -4334,6 +4334,10 @@
     .task-record-thumb { position: relative; display: grid; width: 84px; height: 60px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 0; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 4%, transparent); padding: 0; color: color-mix(in srgb, var(--foreground) 28%, transparent); }
     /* 媒体脱离 Grid 固有尺寸计算，避免竖图按原始宽高比把固定缩略图撑出任务行。 */
     .task-record-thumb img, .task-record-thumb video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+    /* 资源已被删除或失效时，由组件接管原生破图，任务记录本身仍保持可读。 */
+    .task-media-unavailable { display: flex; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-tiny); line-height: 1.25; text-align: center; }
+    .task-media-unavailable > svg { width: 18px; height: 18px; flex: 0 0 auto; }
+    .task-record-thumb:disabled { cursor: default; }
     .task-record-meta { display: flex; min-width: 0; align-items: center; gap: 8px; margin-top: 7px; overflow: hidden; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); white-space: nowrap; }
     .task-record-meta-canvas { display: inline-flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; }
     .task-record-meta-canvas svg { flex: 0 0 auto; opacity: .7; }
@@ -4387,6 +4391,7 @@
     .task-grid-card.is-attention .task-grid-body { background: color-mix(in srgb, var(--palette-status-error) 5%, transparent); }
     .task-grid-thumb { position: relative; display: grid; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 30%, transparent); }
     .task-grid-thumb > svg { width: 26px; height: 26px; }
+    .task-grid-thumb .task-media-unavailable > svg { width: 26px; height: 26px; }
     .task-grid-thumb img, .task-grid-thumb video { width: 100%; height: 100%; object-fit: cover; }
     .task-grid-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; background: color-mix(in srgb, var(--background) 58%, transparent); opacity: 0; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); transition: opacity 200ms ease-out; }
     .task-grid-card:hover .task-grid-overlay, .task-grid-card:focus-within .task-grid-overlay { opacity: 1; }
@@ -4411,6 +4416,9 @@
     .task-detail-facts { gap: 2px; border-radius: var(--r-md); background: color-mix(in srgb, var(--foreground) 2.5%, transparent); padding: 4px; }
     .task-detail-fact { border-radius: var(--r-sm); }
     .task-detail-error { border-radius: var(--r-md); background: color-mix(in srgb, var(--palette-status-error) 8%, transparent); color: color-mix(in srgb, var(--palette-status-error) 78%, var(--foreground)); }
+    .task-result-media { aspect-ratio: 1; width: 100%; border-radius: var(--r-md); object-fit: contain; }
+    .task-result-media.is-video { aspect-ratio: 16 / 9; }
+    .task-media-preview-unavailable { aspect-ratio: 16 / 9; max-height: 76vh; background: color-mix(in srgb, var(--foreground) 4%, transparent); }
 
     /* 项目概览：原本是「有边框的浅色盒子 + 一堆等重小字」，层级读不出来。
        改成：主区留白撑开、标题字阶拉高、右栏用背景色而非边框分隔、流水线行给足行高。 */
