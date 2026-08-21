@@ -537,6 +537,9 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			if !ok || !channelModel.Enabled || !enabledSystemChannels[channelModel.ChannelID] {
 				continue
 			}
+			if item.PricePolicy == "unified" && item.BillingMode == "token" && !supportsTokenBilling(item.Capability, channelModel.Protocol) {
+				continue
+			}
 			if item.PricePolicy == "channel" && !channelModel.PriceConfigured {
 				continue
 			}
@@ -839,6 +842,9 @@ func (s *Service) routedModelForTaskSelection(task *model.Task) (*RoutedModel, e
 	}
 	if logicalModel.PricePolicy == "channel" && !channelModel.PriceConfigured {
 		return nil, errors.New("任务使用的模型服务价格配置已失效")
+	}
+	if logicalModel.PricePolicy == "unified" && logicalModel.BillingMode == "token" && !supportsTokenBilling(logicalModel.Capability, channelModel.Protocol) {
+		return nil, errors.New("任务使用的模型服务不再支持当前 Token 计费配置")
 	}
 	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, ChannelModel: *channelModel, Defaults: defaults}
 	return routed, nil

@@ -278,7 +278,8 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		}
 		_, channelOK = systemChannelByID[channelModel.ChannelID]
 		structurallyAvailable := route.Enabled && route.Weight > 0 && channelModel.Enabled && channelOK
-		available := structurallyAvailable && (item.PricePolicy != "channel" || channelModel.PriceConfigured)
+		billingAvailable := item.PricePolicy != "unified" || item.BillingMode != "token" || supportsTokenBilling(item.Capability, channelModel.Protocol)
+		available := structurallyAvailable && billingAvailable && (item.PricePolicy != "channel" || channelModel.PriceConfigured)
 		admin.Routes = append(admin.Routes, AdminLogicalRoute{ID: route.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, ChannelModelKey: channelModel.ModelKey, ChannelModelName: channelModel.DisplayName, Enabled: route.Enabled, Priority: route.Priority, Weight: route.Weight, Available: available, structurallyAvailable: structurallyAvailable, CapabilitySpec: capabilitySpec})
 	}
 	routeSpecs := make([]CapabilitySpec, 0, len(admin.Routes))
@@ -479,9 +480,6 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "unified" && billingMode == "per_second" && capability != "video" {
 		return nil, nil, nil, false, BadAuthRequest("只有视频前台模型可以按秒计费")
 	}
-	if pricePolicy == "unified" && billingMode == "token" && capability != "text" {
-		return nil, nil, nil, false, BadAuthRequest("当前仅文本前台模型支持 Token 计费")
-	}
 	creating := strings.TrimSpace(id) == ""
 	var item *model.LogicalModel
 	if creating {
@@ -514,6 +512,7 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	seenChannelModels := make(map[string]bool, len(req.Routes))
 	structuralRouteSpecs := make([]CapabilitySpec, 0, len(req.Routes))
 	settlementRouteSpecs := make([]CapabilitySpec, 0, len(req.Routes))
+	enabledRouteProtocols := make([]model.ChannelInterfaceType, 0, len(req.Routes))
 	for _, input := range req.Routes {
 		channelModelID := strings.TrimSpace(input.ChannelModelID)
 		if channelModelID == "" || seenChannelModels[channelModelID] {
@@ -530,6 +529,9 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 		}
 		if normalizeCapability(capabilitySpec.Capability) != capability {
 			return nil, nil, nil, false, BadAuthRequest("供应线路能力类型与前台模型不一致")
+		}
+		if input.Enabled {
+			enabledRouteProtocols = append(enabledRouteProtocols, channelModel.Protocol)
 		}
 		if req.Enabled && input.Enabled && input.Weight <= 0 {
 			return nil, nil, nil, false, BadAuthRequest("启用供应线路的同级权重必须大于 0")
@@ -552,6 +554,14 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 		}
 		routes = append(routes, model.LogicalModelRoute{ID: routeID, ChannelModelID: channelModel.ID, Enabled: input.Enabled, Priority: input.Priority, Weight: input.Weight, CreatedAt: time.Now(), UpdatedAt: time.Now()})
 	}
+	if pricePolicy == "unified" && billingMode == "token" {
+		if !supportsLogicalModelTokenBilling(capability, enabledRouteProtocols) {
+			return nil, nil, nil, false, BadAuthRequest("Token 计费仅支持文本前台模型，或全部启用供应线路均为火山方舟视频协议的视频前台模型")
+		}
+		if capability == "video" && req.OutputPriceMicrocredits <= 0 {
+			return nil, nil, nil, false, BadAuthRequest("火山方舟视频 Token 计费需要配置每百万视频 Token 价格")
+		}
+	}
 	// 停用必须始终可执行，便于管理员立即阻止失效线路继续对外服务；重新启用时再强校验结构能力和计费可用性。
 	if req.Enabled {
 		if len(structuralRouteSpecs) == 0 {
@@ -565,6 +575,21 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 		}
 	}
 	return item, revision, routes, creating, nil
+}
+
+func supportsLogicalModelTokenBilling(capability string, enabledRouteProtocols []model.ChannelInterfaceType) bool {
+	if capability == "text" {
+		return true
+	}
+	if capability != "video" || len(enabledRouteProtocols) == 0 {
+		return false
+	}
+	for _, protocol := range enabledRouteProtocols {
+		if !supportsTokenBilling(capability, protocol) {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeLogicalDefaults(spec CapabilitySpec, defaults map[string]any) (map[string]any, error) {

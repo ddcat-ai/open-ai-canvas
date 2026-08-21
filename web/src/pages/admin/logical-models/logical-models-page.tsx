@@ -8,6 +8,7 @@ import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
 import { CapabilityCardPicker } from "@/components/model-protocol-picker";
 import { formatCredits } from "@/constant/credits";
+import { modelProtocolSupportsTokenBilling } from "@/lib/model-protocols";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
@@ -416,7 +417,7 @@ export default function LogicalModelsPage() {
                         </Form.Item>
                     </DrawerSection>
                     <DrawerSection title="用户价格">
-                        <PricingFields />
+                        <PricingFields channelModels={channelModels} />
                     </DrawerSection>
                 </Form>
             </Drawer>
@@ -599,18 +600,38 @@ function logicalModelStatusTag(item: AdminLogicalModel) {
     return <AdminStatusBadge label="可用" tone="success" />;
 }
 
-function PricingFields() {
+function PricingFields({ channelModels }: { channelModels: ChannelModel[] }) {
     const form = Form.useFormInstance<LogicalModelFormValues>();
     const pricePolicy = Form.useWatch("pricePolicy") as LogicalModelMutation["pricePolicy"] | undefined;
     const billingMode = Form.useWatch("billingMode") as LogicalModelMutation["billingMode"] | undefined;
     const capability = Form.useWatch("capability") as CapabilityKind | undefined;
-    const modes = [{ label: "按次", value: "fixed_request" }];
-    if (capability === "video") modes.push({ label: "按秒", value: "per_second" });
+    const routes = (Form.useWatch("routes") || []) as RouteRuleRow[];
+    const enabledRoutes = routes.filter((route) => route.enabled);
+    const tokenBillingSupported =
+        capability === "text" ||
+        (capability === "video" &&
+            enabledRoutes.length > 0 &&
+            enabledRoutes.every((route) => {
+                const channelModel = channelModels.find((item) => item.id === route.channelModelId);
+                return modelProtocolSupportsTokenBilling(channelModel?.capability, channelModel?.protocol);
+            }));
+    const modes: Array<{ label: string; value: LogicalModelMutation["billingMode"]; disabled?: boolean }> = [{ label: "按次", value: "fixed_request" }];
+    if (capability === "video") {
+        modes.push({ label: "按秒", value: "per_second" });
+        modes.push({ label: "Token", value: "token", disabled: !tokenBillingSupported });
+    }
     if (capability === "text") modes.push({ label: "Token", value: "token" });
+
+    useEffect(() => {
+        if (pricePolicy === "unified" && billingMode === "token" && !tokenBillingSupported) {
+            form.setFieldValue("billingMode", capability === "video" ? "per_second" : "fixed_request");
+        }
+    }, [billingMode, capability, form, pricePolicy, tokenBillingSupported]);
+
     const changePolicy = (value: string | number) => {
         const nextPolicy = value as LogicalModelMutation["pricePolicy"];
         if (nextPolicy !== "unified") return;
-        const supportedModes = modes.map((item) => item.value);
+        const supportedModes = modes.filter((item) => !item.disabled).map((item) => item.value);
         if (!billingMode || !supportedModes.includes(billingMode)) {
             form.setFieldValue("billingMode", capability === "text" ? "token" : capability === "video" ? "per_second" : "fixed_request");
         }
@@ -639,18 +660,25 @@ function PricingFields() {
                             </Form.Item>
                         ) : null}
                     </div>
+                    {capability === "video" && !tokenBillingSupported ? <div className="mb-3 text-xs leading-5 text-foreground/50">Token 计费仅在所有启用供应线路都使用火山方舟视频协议时可用。</div> : null}
                     {billingMode === "token" ? (
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <Form.Item name="inputPriceMicrocredits" label="输入 / 百万 Token">
+                        capability === "video" ? (
+                            <Form.Item name="outputPriceMicrocredits" label="视频 / 百万 Token" rules={[{ type: "number", min: 1, message: "请输入视频 Token 价格" }]}>
                                 <CreditsInput />
                             </Form.Item>
-                            <Form.Item name="outputPriceMicrocredits" label="输出 / 百万 Token">
-                                <CreditsInput />
-                            </Form.Item>
-                            <Form.Item name="cachedPriceMicrocredits" label="缓存 / 百万 Token">
-                                <CreditsInput />
-                            </Form.Item>
-                        </div>
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-3">
+                                <Form.Item name="inputPriceMicrocredits" label="输入 / 百万 Token">
+                                    <CreditsInput />
+                                </Form.Item>
+                                <Form.Item name="outputPriceMicrocredits" label="输出 / 百万 Token">
+                                    <CreditsInput />
+                                </Form.Item>
+                                <Form.Item name="cachedPriceMicrocredits" label="缓存 / 百万 Token">
+                                    <CreditsInput />
+                                </Form.Item>
+                            </div>
+                        )
                     ) : null}
                 </>
             ) : (
@@ -666,6 +694,7 @@ function CreditsInput({ value = 0, onChange }: { value?: number; onChange?: (val
 
 function logicalPriceLabel(item: AdminLogicalModel) {
     if (item.pricePolicy === "channel") return <span className="text-xs">跟随供应价格</span>;
+    if (item.billingMode === "token" && item.capability === "video") return <span className="text-xs">视频 {formatCredits(item.outputPriceMicrocredits)} / 百万 Token</span>;
     if (item.billingMode === "token")
         return (
             <div className="text-xs">
