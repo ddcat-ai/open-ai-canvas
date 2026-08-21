@@ -498,6 +498,9 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		}
 		amount, err = creditAmount(logicalModel.UnitPriceMicrocredits, quantity, 10_000)
 	case "token":
+		if channelModel.Capability != capability || !supportsTokenBilling(capability, channelModel.Protocol) {
+			return nil, BadAuthRequest("当前供应线路不支持前台模型的 Token 计费方式")
+		}
 		pricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
 		amount, err = tokenEstimateAmount(pricing, tokenEstimate, 10_000)
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
