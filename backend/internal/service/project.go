@@ -3,10 +3,12 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -196,7 +198,9 @@ func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.
 		return model.Project{}, err
 	}
 	if _, err := s.createProjectWorkflow(project.ID, "", "project"); err != nil {
-		_ = s.repo.DeleteProject(userID, project.ID)
+		if deleteErr := s.repo.DeleteProject(userID, project.ID, nil); deleteErr != nil {
+			return model.Project{}, errors.Join(err, fmt.Errorf("项目初始化失败，回滚项目记录失败：%w", deleteErr))
+		}
 		return model.Project{}, err
 	}
 	project.Revision++
@@ -255,7 +259,38 @@ func (s *Service) DeleteProject(userID string, id string) error {
 	if _, err := s.repo.ProjectForUser(userID, id); err != nil {
 		return err
 	}
-	return s.repo.DeleteProject(userID, id)
+	canvases, err := s.repo.ProjectCanvasDocuments(userID, id)
+	if err != nil {
+		return err
+	}
+	projectScopeIDs := make([]string, 0, len(canvases)+1)
+	projectScopeIDs = append(projectScopeIDs, id)
+	canvasUpdates := make([]model.CanvasProject, 0, len(canvases))
+	deleteTime := time.Now()
+	for _, canvas := range canvases {
+		payloadJSON, payloadErr := canvasPayloadWithoutProject(canvas.PayloadJSON, deleteTime)
+		if payloadErr != nil {
+			return payloadErr
+		}
+		canvas.PayloadJSON = payloadJSON
+		canvas.UpdatedAt = deleteTime
+		canvasUpdates = append(canvasUpdates, canvas)
+		projectScopeIDs = append(projectScopeIDs, canvas.ID)
+	}
+	activeTaskCount, err := s.repo.ActiveTaskCountForProjectIDs(userID, projectScopeIDs)
+	if err != nil {
+		return err
+	}
+	if activeTaskCount > 0 {
+		return BadAuthRequest("项目仍有进行中的生成任务，请等待任务完成或取消后再删除")
+	}
+	if err := s.repo.DeleteProject(userID, id, canvasUpdates); err != nil {
+		if errors.Is(err, repository.ErrProjectHasActiveTasks) {
+			return BadAuthRequest("项目仍有进行中的生成任务，请等待任务完成或取消后再删除")
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) CreateProjectUnit(userID string, projectID string, req CreateProjectUnitRequest) (model.ProjectUnit, error) {

@@ -63,6 +63,7 @@ func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.Us
 }
 
 func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, claimUserID string) (*ProviderTaskQueryResult, error) {
+	billing := s.taskBilling()
 	if task == nil || task.ID == "" {
 		return nil, BadAuthRequest("任务不存在")
 	}
@@ -121,7 +122,11 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		return nil, err
 	}
 	task.LeaseOwner = owner
-	defer func() { _ = s.repo.ReleaseTaskProviderRecovery(task.ID, owner) }()
+	defer func() {
+		if releaseErr := s.repo.ReleaseTaskProviderRecovery(task.ID, owner); releaseErr != nil {
+			_ = s.log(task.UserID, task.ID, "error", "人工查询租约释放失败", releaseErr.Error())
+		}
+	}()
 
 	queryCtx := withProviderAnalytics(ctx, s, *task)
 	queryCtx = withProviderOutboundPolicy(queryCtx, input.Config)
@@ -148,18 +153,24 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	task.PollStage = strings.ToLower(providerStatus)
 	task.NextPollAt = nil
 	if err := s.saveTaskCompletionWithinStorageQuota(task, resultJSON, nil, false); err != nil {
-		_ = s.MarkBillingUncertain(task.BillingOrderID, "人工查询确认上游成功，但任务结果未保存："+err.Error())
+		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认上游成功，但任务结果未保存："+err.Error())
 		_ = s.log(task.UserID, task.ID, "error", "人工查询已取得视频，但任务恢复失败", err.Error())
+		if uncertainErr != nil {
+			return nil, errors.Join(err, fmt.Errorf("记录任务结果未保存的计费待核对状态失败：%w", uncertainErr))
+		}
 		return nil, err
 	}
 	if err := s.RegisterTaskOutputFromTask(*task); err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但项目产物登记失败", err.Error())
 	}
 	billingSettled := true
-	if err := s.SettleBilling(task.BillingOrderID, providerRequestID); err != nil {
+	if err := billing.SettleBilling(task.BillingOrderID, providerRequestID); err != nil {
 		billingSettled = false
-		_ = s.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+err.Error())
+		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+err.Error())
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但积分结算失败，已进入待核对", err.Error())
+		if uncertainErr != nil {
+			return nil, errors.Join(err, fmt.Errorf("记录任务恢复后的计费待核对状态失败：%w", uncertainErr))
+		}
 	} else {
 		_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复并完成结算", providerStatus)
 	}

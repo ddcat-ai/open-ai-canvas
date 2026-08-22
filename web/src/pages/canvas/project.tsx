@@ -413,8 +413,6 @@ function InfiniteCanvasPage() {
     const {
         applyGenerationTaskResult,
         bindGenerationTask,
-        cancelNodeTask,
-        confirmStopGeneration,
         finishGenerationRequest,
         openNodeTaskDetails,
         runningNodeId,
@@ -1417,7 +1415,7 @@ function InfiniteCanvasPage() {
         generateNodeRef.current = handleGenerateNode;
     }, [handleGenerateNode]);
 
-    const { cancelSubmittedBatchItem, enqueueGenerationBatch, retryFailedBatchItems, stopRemainingBatchItems } = useCanvasGenerationBatches({
+    const { enqueueGenerationBatch, retryFailedBatchItems, stopRemainingBatchItems } = useCanvasGenerationBatches({
         projectId,
         projectLoaded,
         nodes,
@@ -1532,7 +1530,6 @@ function InfiniteCanvasPage() {
                     onPromptChange={handleNodePromptChange}
                     onConfigChange={handleConfigNodeChange}
                     onGenerate={handleGenerateNode}
-                    onStop={confirmStopGeneration}
                     workspaceMode={workspaceMode}
                     onImageSettingsOpenChange={(open) => {
                         setNodeImageSettingsOpen(open);
@@ -1541,7 +1538,7 @@ function InfiniteCanvasPage() {
                 />
             );
         },
-        [configInputsById, confirmStopGeneration, handleConfigNodeChange, handleGenerateNode, handleNodePromptChange, mentionReferencesByNodeId, runningNodeId, skillMentionReferences, workspaceMode],
+        [configInputsById, handleConfigNodeChange, handleGenerateNode, handleNodePromptChange, mentionReferencesByNodeId, runningNodeId, skillMentionReferences, workspaceMode],
     );
 
     const renderCanvasNodeContent = useCallback(
@@ -1575,7 +1572,6 @@ function InfiniteCanvasPage() {
                         onRetryBatch={(batchId) => retryFailedBatchItems(contentNode.id, batchId)}
                         onRetryBatchItem={(batchId, itemId) => retryFailedBatchItems(contentNode.id, batchId, itemId)}
                         onStopBatch={(batchId) => stopRemainingBatchItems(contentNode.id, batchId)}
-                        onCancelBatchItem={(batchId, itemId) => cancelSubmittedBatchItem(contentNode.id, batchId, itemId)}
                         onAddRow={() => addScriptRow(contentNode.id)}
                         onRemoveRow={(rowId) => removeScriptRow(contentNode.id, rowId)}
                         onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
@@ -1614,7 +1610,6 @@ function InfiniteCanvasPage() {
                     inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
                     onConfigChange={handleConfigNodeChange}
                     onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
-                    onStop={confirmStopGeneration}
                     onGenerate={(nodeId) => {
                         const target = nodesRef.current.find((item) => item.id === nodeId);
                         void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
@@ -1625,9 +1620,7 @@ function InfiniteCanvasPage() {
         },
         [
             addScriptRow,
-            cancelSubmittedBatchItem,
             configInputsById,
-            confirmStopGeneration,
             createAndGenerateScriptVideos,
             createScriptActionBoards,
             createScriptImageNodes,
@@ -1926,7 +1919,6 @@ function InfiniteCanvasPage() {
                                     onToggleBatch={toggleBatchExpanded}
                                     onSetBatchPrimary={setBatchPrimary}
                                     onRetry={retryCanvasNode}
-                                    onCancelTask={cancelNodeTask}
                                     onOpenTaskDetails={openCanvasNodeTaskDetails}
                                     onOpenVersions={openCanvasNodeVersions}
                                     onViewImage={viewCanvasNodeImage}

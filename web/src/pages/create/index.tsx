@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Square, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -23,9 +23,9 @@ import { resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirem
 import { isGenerationTaskCancelled, logicalModelIDForConfig, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { cancelGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
 import { createTextReplayPublisher } from "@/lib/creation-text-replay";
-import { isLocalDreaminaTaskId, isLocalDreaminaWaitStopped, localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
+import { isLocalDreaminaWaitStopped, localDreaminaCancellationMessage } from "@/services/local-dreamina-task-projection";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
@@ -763,23 +763,6 @@ export default function CreatePage() {
         restoreMessageDraft(previous);
     };
 
-    const cancelPendingMessage = async (item: CreationMessage) => {
-        if (!item.taskIds?.length || !activeConversation) return;
-        const settled = await Promise.allSettled(item.taskIds.map((taskId) => cancelGenerationTask(taskId)));
-        const fulfilled = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
-        const background = fulfilled.map((task) => ({ task, outcome: localDreaminaDetachOutcome(task) })).find((entry) => entry.outcome?.kind === "background");
-        if (background?.outcome?.kind === "background") {
-            await updateConversationMessage(activeConversation.id, item.id, (message) => ({ ...message, status: background.outcome!.creationStatus, generationStage: background.task.stage, content: background.outcome!.message }));
-            toast.info(background.outcome.message);
-            return;
-        }
-        const cancelled = fulfilled.filter((task) => task.status === "cancelled");
-        if (cancelled.length === item.taskIds.length) {
-            const outcome = localDreaminaDetachOutcome(cancelled[0]!);
-            await updateConversationMessage(activeConversation.id, item.id, (message) => ({ ...message, status: outcome?.creationStatus ?? "cancelled", generationStage: "cancelled", content: outcome?.message ?? cancelled[0]!.error ?? "任务已取消" }));
-        }
-    };
-
     if (!hydrated || !activeConversation) return <div className="grid h-full place-items-center"><Spin /></div>;
 
     const handleThreadScroll = () => {
@@ -830,7 +813,6 @@ export default function CreatePage() {
         composerFocusRef,
         placeholderOverride: viewMode === "storyboard" && composingNextShot ? `SC.${String(nextShotNumber).padStart(2, "0")} · 写下这一镜的镜头、画面或故事` : undefined,
         onSubmit: () => void submit(),
-        onStop: () => abortRef.current?.abort(),
     };
 
     const visibleShot = shots[visibleShotIndex];
@@ -866,7 +848,6 @@ export default function CreatePage() {
                         modelName={item.model ? modelDisplayName(config, item.model) : ""}
                         onRetryFailure={() => retryFailedMessage(item, index)}
                         onCreateVariant={() => createVariant(item, index)}
-                        onCancel={() => void cancelPendingMessage(item)}
                     />)}</div></section>
                 </main>
                 <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
@@ -892,7 +873,6 @@ export default function CreatePage() {
                             busy={busy}
                             onRetryFailure={() => { if (visibleShotResultIndex >= 0 && visibleShot.result) retryFailedMessage(visibleShot.result, visibleShotResultIndex); }}
                             onCreateVariant={() => { if (visibleShotResultIndex >= 0 && visibleShot.result) createVariant(visibleShot.result, visibleShotResultIndex); }}
-                            onCancel={() => { if (visibleShot.result) void cancelPendingMessage(visibleShot.result); }}
                         /> : null}
                     </div>
                 </main>
@@ -979,14 +959,14 @@ function CreationWorkspaceToolbar({ viewMode, onViewModeChange, onNewConversatio
     </header>;
 }
 
-function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant, onCancel }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void }) {
+function CreationMessageView({ item, modelName, onRetryFailure, onCreateVariant }: { item: CreationMessage; modelName: string; onRetryFailure: () => void; onCreateVariant: () => void }) {
     if (item.role === "user") return <CreationUserMessage item={item} />;
     const mode = item.mode || "text";
     const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
     const heading = <><span className="creation-message-mark"><Sparkles /></span><strong>{mode === "image" ? "图像生成" : mode === "video" ? "视频生成" : "影策 AI"}</strong>{mode !== "text" ? <span className="creation-message-progress-copy">{item.status === "pending" ? `影策正在生成${mode === "video" ? "视频" : "图像"}……` : item.status === "done" ? `你的${mode === "video" ? "视频" : "图像"}已创建` : null}</span> : null}{modelName ? <span className="creation-message-model">{modelName}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}{stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}</>;
     const toolStatus: GenerationToolStatus = item.status === "pending" ? "running" : item.status === "error" ? "error" : item.status === "cancelled" ? "cancelled" : "completed";
     return <article className={`creation-assistant-message is-${mode}`}>
-        {mode === "text" ? <><div className="creation-message-heading">{heading}</div>{item.reasoning ? <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} /> : null}<div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div></> : <GenerationToolCard status={toolStatus} isBulk={(item.resultUrls?.length || Number(item.settings?.count) || 1) > 1} heading={heading}><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} /></GenerationToolCard>}
+        {mode === "text" ? <><div className="creation-message-heading">{heading}</div>{item.reasoning ? <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} /> : null}<div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span>正在生成…</span>}</div></> : <GenerationToolCard status={toolStatus} isBulk={(item.resultUrls?.length || Number(item.settings?.count) || 1) > 1} heading={heading}><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} /></GenerationToolCard>}
         {item.error && mode === "text" ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}
     </article>;
 }
@@ -1010,14 +990,14 @@ function CreationUserMessage({ item }: { item: CreationMessage }) {
     </article>;
 }
 
-function MediaResult({ item, onRetryFailure, onCreateVariant, onCancel }: { item: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void }) {
+function MediaResult({ item, onRetryFailure, onCreateVariant }: { item: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void }) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const assets = useAssetStore((state) => state.assets);
     const resultUrls = item.resultUrls || [];
     const resultAssetIds = resultUrls.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls }) : [];
     const canvasPath = creationCanvasHandoffPath(resultAssetIds) || "/canvas";
-    if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} onCancel={item.taskIds?.length ? onCancel : undefined} />;
+    if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} />;
     if ((item.status === "error" || item.status === "cancelled") && !resultUrls.length) return <div className="creation-media-error"><span>{item.status === "cancelled" ? item.content || "已停止" : generationErrorMessage(item.error || "生成失败")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
     if (!resultUrls.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
     const isVideo = item.mode === "video";
@@ -1028,8 +1008,8 @@ function MediaResult({ item, onRetryFailure, onCreateVariant, onCancel }: { item
     </div>;
 }
 
-function CreationMediaPending({ mode, ratio, onCancel }: { mode: CreationMode; ratio?: string; onCancel?: () => void }) {
-    return <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite"><span className="creation-media-pending-icon"><Sparkles /></span><span className="sr-only">影策正在生成{mode === "video" ? "视频" : "图像"}</span>{onCancel ? <button type="button" onClick={onCancel}>取消任务</button> : null}</div>;
+function CreationMediaPending({ mode, ratio }: { mode: CreationMode; ratio?: string }) {
+    return <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite"><span className="creation-media-pending-icon"><Sparkles /></span><span className="sr-only">影策正在生成{mode === "video" ? "视频" : "图像"}</span></div>;
 }
 
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
@@ -1097,7 +1077,6 @@ type ComposerProps = {
     composerFocusRef: RefObject<HTMLTextAreaElement | null>;
     placeholderOverride?: string;
     onSubmit: () => void;
-    onStop: () => void;
 };
 
 function CreationComposer(props: ComposerProps) {
@@ -1115,7 +1094,7 @@ function CreationComposer(props: ComposerProps) {
     });
     const showCost = creditsEnabled && credits !== null;
     const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const actionLabel = props.busy ? "停止生成" : showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送";
+    const actionLabel = props.busy ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送";
     const placeholder = props.mode === "text"
         ? "描述你的故事、角色或想继续讨论的创意"
         : props.mode === "image"
@@ -1156,19 +1135,18 @@ function CreationComposer(props: ComposerProps) {
             <Button
                 type="text"
                 className={`canvas-node-composer-submit ${showCost ? "has-cost" : ""}`}
-                danger={props.busy}
-                disabled={!props.busy && !canSubmit}
+                disabled={props.busy || !canSubmit}
                 style={{
                     color: !props.busy && !canSubmit ? "var(--creation-faint)" : "var(--creation-text)",
-                    "--canvas-composer-submit-action": !props.busy && !canSubmit ? "var(--creation-surface-hover)" : props.busy ? "var(--status-error)" : "var(--creation-text)",
+                    "--canvas-composer-submit-action": !props.busy && !canSubmit ? "var(--creation-surface-hover)" : "var(--creation-text)",
                     "--canvas-composer-submit-action-fg": !props.busy && !canSubmit ? "var(--creation-faint)" : "var(--creation-bg)",
                 } as CSSProperties}
-                onClick={props.busy ? props.onStop : props.onSubmit}
+                onClick={props.busy ? undefined : props.onSubmit}
                 aria-label={actionLabel}
                 title={actionLabel}
             >
                 {showCost ? <span className="canvas-node-composer-submit-cost"><CreditSymbol /><span>{formattedCredits}</span></span> : null}
-                <span className="canvas-node-composer-submit-action" aria-hidden>{props.busy ? <Square className="size-2.5 fill-current" /> : <ArrowUp className="size-3" />}</span>
+                <span className="canvas-node-composer-submit-action" aria-hidden>{props.busy ? <LoaderCircle className="size-3 animate-spin" /> : <ArrowUp className="size-3" />}</span>
             </Button>
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
@@ -1353,7 +1331,7 @@ function StoryboardToolbar({ shots, activeIndex, composing, onSelect, onBeginCom
     </header>;
 }
 
-function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure, onCreateVariant, onCancel }: { shot: CreationShot; shotNumber: number; modelName: string; busy: boolean; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void }) {
+function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure, onCreateVariant }: { shot: CreationShot; shotNumber: number; modelName: string; busy: boolean; onRetryFailure: () => void; onCreateVariant: () => void }) {
     const user = shot.user;
     const result = shot.result;
     const status = result?.status || "queued";
@@ -1399,7 +1377,7 @@ function StoryboardShotCard({ shot, shotNumber, modelName, busy, onRetryFailure,
                     <div className="storyboard-workbench-turn-copy">
                         <div className="storyboard-workbench-turn-meta"><span className="storyboard-workbench-turn-role is-ai"><Sparkles />影策 AI</span>{modelName ? <span className="storyboard-workbench-turn-model">{modelName}</span> : null}{result?.createdAt ? <time className="storyboard-workbench-turn-time" dateTime={result.createdAt}>{formatMessageTime(result.createdAt)}</time> : null}</div>
                         <div className="storyboard-workbench-turn-bubble">
-                            <StoryboardShotResult result={result} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onCancel={onCancel} canvasPath={canvasPath} canvasHandoffAvailable={Boolean(canvasHandoffPath)} />
+                            <StoryboardShotResult result={result} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} canvasPath={canvasPath} canvasHandoffAvailable={Boolean(canvasHandoffPath)} />
                         </div>
                     </div>
                 </div>
@@ -1441,7 +1419,7 @@ function StoryboardBriefAttachments({ attachments }: { attachments: CreationAtta
     })}</div><CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} /></>;
 }
 
-function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, onCancel, canvasPath, canvasHandoffAvailable }: { result?: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; onCancel: () => void; canvasPath: string; canvasHandoffAvailable: boolean }) {
+function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, canvasPath, canvasHandoffAvailable }: { result?: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; canvasPath: string; canvasHandoffAvailable: boolean }) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const openPreview = (url: string, type: "image" | "video") => { setPreviewType(type); setPreviewUrl(url); };
@@ -1451,13 +1429,9 @@ function StoryboardShotResult({ result, onRetryFailure, onCreateVariant, onCance
     const resultUrls = result.resultUrls || [];
     if (status === "pending" || status === "queued") {
         const thinking = thinkingFor(mode);
-        const cancellationCopy = result.taskIds?.map((taskId) => localDreaminaCancellationCopy({ id: taskId, status: "running", stage: result.generationStage, receiptRecorded: result.generationStage === "submitted" || result.generationStage === "generating" })).find(Boolean);
-        const hasLocalDreaminaTask = Boolean(result.taskIds?.some(isLocalDreaminaTaskId));
-        const showCancellationAction = !hasLocalDreaminaTask || Boolean(cancellationCopy);
         return <div className="storyboard-workbench-pending"><div className="storyboard-workbench-thinking">
             <span className="storyboard-workbench-thinking-copy"><strong>{thinking.title}</strong><span>{thinking.hint}</span></span>
             <span className="storyboard-workbench-pipeline" aria-hidden="true">{thinking.steps.map((step, index) => <em key={step} style={{ "--step": index } as CSSProperties}><i>{String(index + 1).padStart(2, "0")}</i>{step}</em>)}</span>
-            {result.taskIds?.length && showCancellationAction ? <button type="button" onClick={onCancel}>{cancellationCopy?.action || "取消任务"}</button> : null}
         </div></div>;
     }
     if (status === "error") return <div className="storyboard-workbench-error"><span>{generationErrorMessage(result.error || "")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;

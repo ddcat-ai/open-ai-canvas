@@ -49,7 +49,6 @@ type CanvasNodeProps = {
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
     onRetry?: (node: CanvasNodeData) => void;
-    onCancelTask?: (node: CanvasNodeData) => void;
     onOpenTaskDetails?: (node: CanvasNodeData) => void;
     onOpenVersions?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
@@ -93,7 +92,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     onToggleBatch,
     onSetBatchPrimary,
     onRetry,
-    onCancelTask,
     onOpenTaskDetails,
     onOpenVersions,
     onViewImage,
@@ -360,7 +358,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onContentChange={onContentChange}
                         onStopEditing={() => setIsEditingContent(false)}
                         onRetry={onRetry}
-                        onCancelTask={onCancelTask}
                         onOpenTaskDetails={onOpenTaskDetails}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         reduceMediaEffects={reduceMediaEffects}
@@ -515,7 +512,6 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.onToggleBatch === next.onToggleBatch &&
         previous.onSetBatchPrimary === next.onSetBatchPrimary &&
         previous.onRetry === next.onRetry &&
-        previous.onCancelTask === next.onCancelTask &&
         previous.onOpenTaskDetails === next.onOpenTaskDetails &&
         previous.onOpenVersions === next.onOpenVersions &&
         previous.onViewImage === next.onViewImage &&

@@ -1,15 +1,14 @@
 import { Button, Tooltip } from "antd";
-import { Eye, FileText, Image as ImageIcon, RotateCcw, Video, X } from "lucide-react";
+import { Eye, FileText, Image as ImageIcon, RotateCcw, Video } from "lucide-react";
 
 import { MediaPreview } from "@/components/media-preview";
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
-import { isTaskCancellable, isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
+import { isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
 
-export function TaskGridCard({ task, actingId, onOpen, onRetry, onCancel }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void; onCancel: () => void }) {
+export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void }) {
     const isActive = task.status === "queued" || task.status === "running";
-    const isCancellable = isTaskCancellable(task);
     const isFailed = isTaskFailed(task);
     const isVideo = task.previewKind === "video";
     const fallbackVideo = task.type.includes("video");
@@ -37,11 +36,6 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry, onCancel }: { ta
                                 disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)}
                                 onClick={onRetry}
                             />
-                        </Tooltip>
-                    ) : null}
-                    {isCancellable ? (
-                        <Tooltip title="取消任务">
-                            <Button type="text" size="small" danger icon={<X className="size-3.5" />} aria-label="取消任务" loading={actingId === task.id} onClick={onCancel} />
                         </Tooltip>
                     ) : null}
                 </div>

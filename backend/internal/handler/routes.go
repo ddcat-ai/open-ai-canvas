@@ -63,7 +63,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			ActiveOnly: c.Query("activeOnly") == "true",
 		})
 		if err != nil {
-			fail(c, http.StatusInternalServerError, err)
+			failService(c, err)
 			return
 		}
 		ok(c, tasks)
@@ -200,7 +200,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		logs, err := svc.TaskLogs(user.ID, c.Param("id"))
 		if err != nil {
-			fail(c, http.StatusInternalServerError, err)
+			failService(c, err)
 			return
 		}
 		ok(c, logs)
@@ -332,7 +332,7 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		item, err := svc.StoreUpload(user.ID, c.PostForm("sessionId"), file)
 		if err != nil {
-			fail(c, http.StatusInternalServerError, err)
+			failService(c, err)
 			return
 		}
 		ok(c, item)
@@ -354,17 +354,4 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/sessions/:id", querySession)
 	r.POST("/files", uploadFile)
 	r.GET("/sessions/:id/results", downloadResults)
-	// 兼容旧客户端的废弃路由；新调用统一使用上方 REST 风格路径。
-	r.POST("/create_session", createSession)
-	r.GET("/query_session/:id", querySession)
-	r.POST("/upload_file", uploadFile)
-	r.GET("/download_results/:id", downloadResults)
-}
-
-func ok(c *gin.Context, data any) {
-	c.JSON(http.StatusOK, gin.H{"code": 0, "data": data, "msg": "ok"})
-}
-
-func fail(c *gin.Context, status int, err error) {
-	c.JSON(status, gin.H{"code": status, "data": nil, "msg": err.Error()})
 }

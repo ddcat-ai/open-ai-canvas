@@ -148,7 +148,7 @@ func enforceRateLimit(c *gin.Context, key string, limit int, window time.Duratio
 func loadRuntimePolicy(c *gin.Context, svc *service.Service) (service.RuntimePolicySetting, bool) {
 	policy, err := svc.RuntimePolicy()
 	if err != nil {
-		fail(c, http.StatusServiceUnavailable, errors.New("读取运行时策略失败："+err.Error()))
+		failInternal(c, http.StatusServiceUnavailable, err)
 		return service.RuntimePolicySetting{}, false
 	}
 	return policy, true

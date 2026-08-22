@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"mime"
 	"mime/multipart"
@@ -106,6 +107,17 @@ type providerError struct {
 	Message string `json:"message"`
 }
 
+// providerPayloadError keeps the upstream reason available for protocol
+// fallback decisions while exposing only the categorized message to callers.
+// Provider bodies may contain secrets or internal diagnostics and must not be
+// copied into user-facing errors or logs.
+type providerPayloadError struct {
+	raw     string
+	message string
+}
+
+func (e providerPayloadError) Error() string { return e.message }
+
 type providerHTTPError struct {
 	StatusCode int
 	Status     string
@@ -123,6 +135,7 @@ type providerOutboundPolicyContext struct {
 
 type providerAnalyticsContext struct {
 	Service           *Service
+	Billing           taskBillingLifecycle
 	UserID            string
 	TaskID            string
 	BillingOrderID    string
@@ -139,6 +152,9 @@ type providerAnalyticsContext struct {
 
 func withProviderAnalytics(ctx context.Context, service *Service, task model.Task) context.Context {
 	metadata := providerAnalyticsContext{Service: service, UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, Capability: capabilityFromTaskType(task.Type), Operation: task.Operation, Model: task.Model, ProviderRequestID: task.ProviderRequestID}
+	if service != nil {
+		metadata.Billing = service.taskBilling()
+	}
 	// 账单模式随请求上下文传递，流式协议据此只为 Token 计费开启 usage 终态块。
 	if service != nil && task.BillingOrderID != "" {
 		if order, err := service.repo.BillingOrder(task.BillingOrderID); err == nil {
@@ -175,10 +191,61 @@ func withProviderRequestKind(ctx context.Context, requestKind string) context.Co
 }
 
 func (e providerHTTPError) Error() string {
-	if e.StatusCode == 524 {
+	switch e.StatusCode {
+	case 524:
 		return "上游网关超时（524）：模型请求可能仍在服务端执行并产生费用，请勿立即重试，请先到供应商后台核对任务或账单"
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return "模型服务拒绝了请求，请检查模型和参数"
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "模型服务鉴权失败，请检查 API Key 和模型权限"
+	case http.StatusNotFound:
+		return "模型或模型接口不存在，请检查渠道配置"
+	case http.StatusRequestTimeout, http.StatusGatewayTimeout:
+		return "模型服务响应超时，请稍后重试"
+	case http.StatusTooManyRequests:
+		return "模型服务请求过于频繁或额度不足，请稍后重试"
 	}
-	return fmt.Sprintf("接口请求失败：%s %s", e.Status, e.Body)
+	if e.StatusCode >= http.StatusInternalServerError {
+		return fmt.Sprintf("模型服务暂时不可用（HTTP %d）", e.StatusCode)
+	}
+	return fmt.Sprintf("模型服务请求失败（HTTP %d）", e.StatusCode)
+}
+
+func providerUserFacingErrorMessage(err error) string {
+	if err == nil {
+		return "模型服务请求失败"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "模型请求已取消"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "模型服务响应超时，请稍后重试"
+	}
+	var appErr *AppError
+	if errors.As(err, &appErr) && strings.TrimSpace(appErr.Message) != "" {
+		return appErr.Message
+	}
+	var httpErr providerHTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.Error()
+	}
+	return "连接模型服务失败，请检查渠道地址和网络"
+}
+
+func providerPayloadErrorMessage(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	switch {
+	case strings.Contains(normalized, "safety"), strings.Contains(normalized, "moderation"), strings.Contains(normalized, "content policy"), strings.Contains(normalized, "blocked"):
+		return "请求内容未通过模型服务安全审核，请调整后重试"
+	case strings.Contains(normalized, "quota"), strings.Contains(normalized, "insufficient"), strings.Contains(normalized, "balance"), strings.Contains(normalized, "billing"):
+		return "模型服务额度不足，请检查渠道余额或配额"
+	case strings.Contains(normalized, "model") && (strings.Contains(normalized, "not found") || strings.Contains(normalized, "permission") || strings.Contains(normalized, "access")):
+		return "模型不存在或当前渠道未获得模型权限"
+	case strings.Contains(normalized, "invalid"), strings.Contains(normalized, "parameter"), strings.Contains(normalized, "argument"):
+		return "模型服务拒绝了请求，请检查模型和参数"
+	default:
+		return "模型服务返回失败，请检查请求内容或渠道配置"
+	}
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
@@ -311,6 +378,10 @@ func isAgentToolChoiceCompatibilityError(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
+	var payloadErr providerPayloadError
+	if errors.As(err, &payloadErr) {
+		message += " " + strings.ToLower(payloadErr.raw)
+	}
 	return strings.Contains(message, "tool_choice") || strings.Contains(message, "tool choice") || strings.Contains(message, "tool-choice") || strings.Contains(message, "thinking mode")
 }
 
@@ -3192,18 +3263,20 @@ func doJSON(req *http.Request, target interface{}) error {
 	}
 	if payload, ok := target.(*imageResponse); ok {
 		if payload.Error != nil && payload.Error.Message != "" {
-			return errors.New(payload.Error.Message)
+			return errors.New(providerPayloadErrorMessage(payload.Error.Message))
 		}
 		if payload.Code != nil && *payload.Code != 0 {
-			return errors.New(defaultString(payload.Msg, "请求失败"))
+			return errors.New(providerPayloadErrorMessage(payload.Msg))
 		}
 	}
 	if payload, ok := target.(*map[string]interface{}); ok {
 		if code, ok := (*payload)["code"].(float64); ok && code != 0 {
-			return errors.New(defaultString(stringField(*payload, "msg"), "请求失败"))
+			rawMessage := stringField(*payload, "msg")
+			return providerPayloadError{raw: rawMessage, message: providerPayloadErrorMessage(rawMessage)}
 		}
 		if errValue, ok := (*payload)["error"].(map[string]interface{}); ok && stringField(errValue, "message") != "" {
-			return errors.New(stringField(errValue, "message"))
+			rawMessage := stringField(errValue, "message")
+			return providerPayloadError{raw: rawMessage, message: providerPayloadErrorMessage(rawMessage)}
 		}
 	}
 	return nil
@@ -3370,7 +3443,7 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	if req.Header.Get("x-goog-api-key") != "" {
 		apiFormat = "gemini"
 	}
-	log := model.ApiCallLog{
+	callLog := model.ApiCallLog{
 		UserID: metadata.UserID, ChannelID: metadata.ChannelID, TaskID: metadata.TaskID, BillingOrderID: metadata.BillingOrderID,
 		Source: "backend-task", Capability: metadata.Capability, Operation: metadata.Operation,
 		RequestKind: requestKind, Billable: req.Method == http.MethodPost && requestKind != "cancel",
@@ -3382,23 +3455,26 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	channelSlotFailure := false
 	if code, message := ChannelSlotFailureDetails(requestErr); code != "" {
 		channelSlotFailure = true
-		log.ErrorCode = code
-		log.Error = message
+		callLog.ErrorCode = code
+		callLog.Error = message
 	}
 	if requestKind == "create" && metadata.Capability == "video" {
-		log.VideoSeconds = metadata.VideoSeconds
-		if log.VideoSeconds <= 0 {
+		callLog.VideoSeconds = metadata.VideoSeconds
+		if callLog.VideoSeconds <= 0 {
 			if strings.Contains(strings.ToLower(metadata.Model), "seedance") || strings.Contains(req.URL.Path, "/contents/generations/tasks") {
-				log.VideoSeconds = 5
+				callLog.VideoSeconds = 5
 			} else {
-				log.VideoSeconds = 6
+				callLog.VideoSeconds = 6
 			}
 		}
 	}
-	metadata.Service.EnrichAPICallLog(&log, responseBody)
-	if err := metadata.Service.LogAPICall(log); err != nil {
-		if !channelSlotFailure {
-			_ = metadata.Service.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对")
+	metadata.Service.EnrichAPICallLog(&callLog, responseBody)
+	if err := metadata.Service.LogAPICall(callLog); err != nil {
+		if !channelSlotFailure && metadata.Billing != nil {
+			if uncertainErr := metadata.Billing.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对"); uncertainErr != nil {
+				// 这里无法把日志落库错误返回给已完成的 HTTP 请求，只能把计费边界失败写入进程日志，交给待核对审计继续处理。
+				log.Printf("provider billing uncertainty update failed: task_id=%s billing_order_id=%s error=%v", metadata.TaskID, metadata.BillingOrderID, uncertainErr)
+			}
 		}
 	}
 }

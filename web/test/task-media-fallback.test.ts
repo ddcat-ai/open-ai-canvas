@@ -37,20 +37,26 @@ describe("media fallback", () => {
 });
 
 describe("task cancellation policy", () => {
-    test("offers cancellation only while a task is queued", () => {
-        const shared = source("../src/pages/tasks/task-shared.tsx");
+    test("does not expose cancellation after a task is created", () => {
         const list = source("../src/pages/tasks/task-list-row.tsx");
         const grid = source("../src/pages/tasks/task-grid-card.tsx");
         const page = source("../src/pages/tasks/index.tsx");
 
-        expect(shared).toContain('return task.status === "queued";');
-        expect(list).toContain("const isCancellable = isTaskCancellable(task);");
-        expect(list).toContain("{isCancellable ? (");
-        expect(grid).toContain("const isCancellable = isTaskCancellable(task);");
-        expect(grid).toContain("{isCancellable ? (");
-        expect(page).toContain('if (action === "cancel" && currentTask && !isTaskCancellable(currentTask))');
-        expect(page).toContain('message.warning("任务已开始生成，无法取消")');
-        expect(page).toContain('detailTask.provider === "dreamina-cli" && isTaskCancellable(detailTask)');
-        expect(page).not.toContain('detailTask.status === "queued" || detailTask.status === "running"');
+        expect(list).not.toContain("isTaskCancellable");
+        expect(list).not.toContain("取消任务");
+        expect(grid).not.toContain("isTaskCancellable");
+        expect(grid).not.toContain("取消任务");
+        expect(page).not.toContain("cancelGenerationTask");
+        expect(page).not.toContain('runAction(detailTask.id, "cancel")');
+        expect(page).toContain('if (task.status === "queued" || task.status === "running")');
+        expect(page).toContain("任务正在执行，不能删除本机记录");
+    });
+
+    test("batch stop only applies to items still waiting locally", () => {
+        const batches = source("../src/pages/canvas/use-canvas-generation-batches.ts");
+
+        expect(batches).toContain('item.status === "waiting" && !nodeById.get(item.nodeId)?.metadata?.taskId');
+        expect(batches).toContain('item.status === "waiting" && stoppableItems.some((candidate) => candidate.id === item.id)');
+        expect(batches).not.toContain('item.status === "waiting" || item.status === "submitting"');
     });
 });

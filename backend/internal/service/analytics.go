@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -1106,5 +1107,7 @@ func firstInt64Value(values map[string]any, keys ...string) (int64, bool) {
 }
 
 func (s *Service) recordActivity(userID string, event string, count int) {
-	_ = s.repo.RecordUserActivity(userID, event, count, time.Now())
+	if err := s.repo.RecordUserActivity(userID, event, count, time.Now()); err != nil {
+		log.Printf("record user activity failed: event=%s count=%d error=%v", event, count, err)
+	}
 }

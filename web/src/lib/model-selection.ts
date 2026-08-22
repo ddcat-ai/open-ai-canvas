@@ -312,7 +312,10 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
 
 export function inferVideoOperation(input: ModelInputSummary) {
     const visualInputCount = input.imageCount + input.characterCount;
-    if (input.audioCount > 0 || input.videoCount > 0 || visualInputCount > 2) return "reference_to_video";
+    // 音频参考有独立的协议能力；不能先归类为 reference_to_video，
+    // 否则只声明 audio_to_video 的细分模型永远无法被兼容路由选中。
+    if (input.audioCount > 0) return "audio_to_video";
+    if (input.videoCount > 0 || visualInputCount > 2) return "reference_to_video";
     if (visualInputCount > 0) return "image_to_video";
     return "text_to_video";
 }

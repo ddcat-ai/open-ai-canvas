@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"mime"
 	"net"
@@ -168,10 +169,18 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 		return err
 	}
 	if err := sendSMTPMail(setting, email, "影策注册验证码", registrationEmailBody(code)); err != nil {
-		_ = s.repo.DeleteEmailVerificationCode(record.ID)
+		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
+		if cleanupErr != nil {
+			return errors.Join(
+				fmt.Errorf("发送注册邮件失败：%w", err),
+				fmt.Errorf("清理失效验证码失败：%w", cleanupErr),
+			)
+		}
 		return fmt.Errorf("发送注册邮件失败：%w", err)
 	}
-	_ = s.repo.DeleteExpiredEmailVerificationCodes(now.Add(-24 * time.Hour))
+	if cleanupErr := s.repo.DeleteExpiredEmailVerificationCodes(now.Add(-24 * time.Hour)); cleanupErr != nil {
+		log.Printf("expired registration code cleanup failed: error=%v", cleanupErr)
+	}
 	return nil
 }
 

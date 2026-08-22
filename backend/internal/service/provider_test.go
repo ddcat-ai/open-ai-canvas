@@ -238,6 +238,44 @@ func TestProviderHTTPErrorWarnsAboutUncertain524Billing(t *testing.T) {
 	}
 }
 
+func TestProviderHTTPErrorDoesNotExposeResponseBody(t *testing.T) {
+	message := (providerHTTPError{
+		StatusCode: http.StatusBadGateway,
+		Status:     "502 Bad Gateway",
+		Body:       `{"error":{"message":"api-key=secret"}}`,
+	}).Error()
+	if strings.Contains(message, "api-key") || strings.Contains(message, "secret") || strings.Contains(message, `{"error"`) {
+		t.Fatalf("providerHTTPError exposed upstream response body: %q", message)
+	}
+	if !strings.Contains(message, "HTTP 502") {
+		t.Fatalf("providerHTTPError.Error() = %q", message)
+	}
+}
+
+func TestProviderPayloadErrorMessageUsesSafeActionableCategories(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "moderation", raw: "request blocked by content policy: prompt=private", want: "安全审核"},
+		{name: "quota", raw: "insufficient quota for api-key=secret", want: "额度不足"},
+		{name: "model access", raw: "model not found for tenant secret-id", want: "模型不存在"},
+		{name: "unknown", raw: "trace_id=private internal stack", want: "模型服务返回失败"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := providerPayloadErrorMessage(tt.raw)
+			if !strings.Contains(message, tt.want) {
+				t.Fatalf("providerPayloadErrorMessage() = %q, want category %q", message, tt.want)
+			}
+			if strings.Contains(message, "secret") || strings.Contains(message, "private") {
+				t.Fatalf("provider payload detail leaked: %q", message)
+			}
+		})
+	}
+}
+
 func TestNormalizeNewAPIChannel2ResolutionPreservesDeclaredTiers(t *testing.T) {
 	tests := map[string]string{
 		"1440": "1440p",

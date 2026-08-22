@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	"net/mail"
 	"regexp"
 	"strings"
@@ -22,14 +23,8 @@ const sessionMaxAge = 30 * 24 * time.Hour
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 
-type AuthError struct {
-	Status  int
-	Message string
-}
-
-func (e *AuthError) Error() string {
-	return e.Message
-}
+// AuthError 保留为兼容别名；跨认证域的新代码应直接使用 AppError。
+type AuthError = AppError
 
 type RegisterRequest struct {
 	Username    string `json:"username"`
@@ -67,19 +62,19 @@ type AuthUser struct {
 }
 
 func BadAuthRequest(message string) *AuthError {
-	return &AuthError{Status: 400, Message: message}
+	return NewAppError(400, message)
 }
 
 func NotFound(message string) *AuthError {
-	return &AuthError{Status: 404, Message: message}
+	return NewAppError(404, message)
 }
 
 func Unauthorized(message string) *AuthError {
-	return &AuthError{Status: 401, Message: message}
+	return NewAppError(401, message)
 }
 
 func Forbidden(message string) *AuthError {
-	return &AuthError{Status: 403, Message: message}
+	return NewAppError(403, message)
 }
 
 func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
@@ -232,7 +227,9 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 		return nil, err
 	}
 	if time.Now().After(session.ExpiresAt) || session.TokenHash != hashToken(token) {
-		_ = s.repo.DeleteAuthSession(sessionID)
+		if cleanupErr := s.repo.DeleteAuthSession(sessionID); cleanupErr != nil {
+			log.Printf("expired auth session cleanup failed: session_id=%s error=%v", sessionID, cleanupErr)
+		}
 		return nil, Unauthorized("登录状态已失效")
 	}
 	user, err := s.repo.User(session.UserID)

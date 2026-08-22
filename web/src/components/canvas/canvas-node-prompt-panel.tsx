@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, SlidersHorizontal, Square, UserRound, Video } from "lucide-react";
+import { ArrowUp, AtSign, Boxes, ChevronDown, FileText, ImageIcon, ImagePlus, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video } from "lucide-react";
 import { Button, Image as AntImage, InputNumber, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -30,7 +30,6 @@ type CanvasNodePromptPanelProps = {
     onPromptChange: (nodeId: string, prompt: string) => void;
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
-    onStop: (nodeId: string) => void;
     mentionReferences?: CanvasResourceReference[];
     onImageSettingsOpenChange?: (open: boolean) => void;
     workspaceMode?: CanvasWorkspaceMode;
@@ -47,7 +46,7 @@ const PROMPT_EDITOR_VERTICAL_PADDING = 12;
 const PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING = 20;
 const PROMPT_EDITOR_MAX_LINES = 8;
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, mentionReferences = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const themeName = useThemeStore((state) => state.theme);
     const theme = canvasThemes[themeName];
@@ -204,13 +203,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const renderSubmitButton = (expanded: boolean) => {
         const showCost = creditsEnabled && credits !== null;
         const formattedCredits = credits?.toLocaleString();
-        const actionLabel = isRunning ? "停止生成" : showCost ? `预计消耗 ${formattedCredits} 积分，生成` : "生成";
+        const actionLabel = isRunning ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，生成` : "生成";
         return (
             <Button
                 type="text"
                 className={`canvas-node-composer-submit ${showCost ? "has-cost" : ""}`}
-                danger={isRunning}
-                disabled={isSubmitDisabled}
+                disabled={isRunning || isSubmitDisabled}
                 style={
                     {
                         color: isSubmitDisabled ? theme.node.faint : theme.node.text,
@@ -218,7 +216,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         "--canvas-composer-submit-action-fg": isSubmitDisabled ? theme.node.faint : theme.canvas.background,
                     } as CSSProperties
                 }
-                onClick={() => (isRunning ? onStop(node.id) : expanded ? submitExpandedPrompt() : submit())}
+                onClick={() => (expanded ? submitExpandedPrompt() : submit())}
                 aria-label={actionLabel}
                 title={actionLabel}
             >
@@ -229,7 +227,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     </span>
                 ) : null}
                 <span className="canvas-node-composer-submit-action" aria-hidden>
-                    {isRunning ? <Square className="size-2.5 fill-current" /> : <ArrowUp className="size-3" />}
+                    {isRunning ? <span className="size-2.5 animate-pulse" aria-hidden="true" /> : <ArrowUp className="size-3" />}
                 </span>
             </Button>
         );

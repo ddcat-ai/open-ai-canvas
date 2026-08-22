@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings2, Square, Video } from "lucide-react";
+import { Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings2, Video } from "lucide-react";
 import { Button, InputNumber, Segmented, Select } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -23,7 +23,6 @@ type CanvasConfigNodePanelProps = {
     inputSummary: { textCount: number; imageCount: number; videoCount: number; audioCount: number; characterCount: number };
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onGenerate: (nodeId: string) => void;
-    onStop: (nodeId: string) => void;
     onComposerToggle: () => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
@@ -40,7 +39,7 @@ const videoOperationOptions: Array<{ label: string; value: CanvasVideoEditOperat
     { label: "版本对比", value: "compare_versions" },
 ];
 
-export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onStop, onComposerToggle, workspaceMode = "professional" }: CanvasConfigNodePanelProps) {
+export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle, workspaceMode = "professional" }: CanvasConfigNodePanelProps) {
     const globalConfig = useEffectiveConfig();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
@@ -188,17 +187,15 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
-                danger={isRunning}
-                disabled={!isRunning && !canGenerate}
+                disabled={isRunning || !canGenerate}
                 onMouseDown={(event) => event.stopPropagation()}
-                onClick={() => (isRunning ? onStop(node.id) : onGenerate(node.id))}
+                onClick={() => onGenerate(node.id)}
             >
                 <span className="inline-flex items-center gap-1.5">
                     {isRunning ? (
                         <>
                             <LoaderCircle className="size-4 animate-spin" />
-                            <Square className="size-3.5 fill-current" />
-                            <span>停止</span>
+                            <span>生成中</span>
                         </>
                     ) : (
                         <>

@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "antd";
-import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video, X } from "lucide-react";
+import { Eye, FileText, FolderKanban, Image as ImageIcon, Play, RotateCcw, Video } from "lucide-react";
 import { useState } from "react";
 
 import { MediaPreview } from "@/components/media-preview";
@@ -7,7 +7,7 @@ import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerat
 import { formatTaskKind, statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
-import { formatModelName, getTaskCanvasContext, isTaskCancellable, isTaskFailed, statusDotClassName, taskAttentionReason, TaskBilling, TaskDate } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskFailed, statusDotClassName, taskAttentionReason, TaskBilling, TaskDate } from "./task-shared";
 
 export function TaskListRow({
     task,
@@ -18,7 +18,6 @@ export function TaskListRow({
     actingId,
     onOpen,
     onRetry,
-    onCancel,
     onPreview,
 }: {
     task: GenerationTask;
@@ -29,12 +28,10 @@ export function TaskListRow({
     actingId: string;
     onOpen: () => void;
     onRetry: () => void;
-    onCancel: () => void;
     onPreview: () => void;
 }) {
     const context = getTaskCanvasContext(task, canvasById, projectNameById);
     const isActive = task.status === "queued" || task.status === "running";
-    const isCancellable = isTaskCancellable(task);
     const isFailed = isTaskFailed(task);
     return (
         <article className={`task-record-row group${isFailed ? " is-attention" : ""}`}>
@@ -93,11 +90,6 @@ export function TaskListRow({
                             disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)}
                             onClick={onRetry}
                         />
-                    </Tooltip>
-                ) : null}
-                {isCancellable ? (
-                    <Tooltip title="取消任务">
-                        <Button type="text" size="small" danger icon={<X className="size-3.5" />} aria-label="取消任务" loading={actingId === task.id} onClick={onCancel} />
                     </Tooltip>
                 ) : null}
             </div>

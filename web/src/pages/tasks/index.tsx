@@ -10,8 +10,7 @@ import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerat
 import { formatTaskKind, isGenerationTaskSubmissionUncertain, operationOptions, statusLabel } from "@/lib/generation-task-display";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
-import { cancelGenerationTask, createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
-import { localDreaminaCancellationCopy, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
+import { createAgentSession, createGenerationTask, deleteGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -20,7 +19,7 @@ import { listProjects, type ProjectSummary } from "@/services/api/projects";
 import { TaskGridCard } from "./task-grid-card";
 import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
-import { formatModelName, getTaskCanvasContext, isTaskCancellable, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
 
 type TaskKindFilter = "all" | "text" | "image" | "video";
@@ -151,7 +150,7 @@ export default function TasksPage() {
         setRetryingGroup(key);
         try {
             for (const task of retryable) {
-                await runAction(task.id, "retry");
+                await runAction(task.id);
             }
         } finally {
             setRetryingGroup("");
@@ -168,8 +167,7 @@ export default function TasksPage() {
             creditsEnabled={creditsEnabled}
             actingId={actingId}
             onOpen={() => void openTaskDetail(task)}
-            onRetry={() => void runAction(task.id, "retry")}
-            onCancel={() => void runAction(task.id, "cancel")}
+            onRetry={() => void runAction(task.id)}
             onPreview={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: task.prompt || formatTaskKind(task) })}
         />
     );
@@ -180,8 +178,7 @@ export default function TasksPage() {
             task={task}
             actingId={actingId}
             onOpen={() => void openTaskDetail(task)}
-            onRetry={() => void runAction(task.id, "retry")}
-            onCancel={() => void runAction(task.id, "cancel")}
+            onRetry={() => void runAction(task.id)}
         />
     );
 
@@ -290,32 +287,20 @@ export default function TasksPage() {
         };
     }, [loadTasks]);
 
-    const runAction = async (id: string, action: "retry" | "cancel") => {
+    const runAction = async (id: string) => {
         const currentTask = tasksRef.current.find((task) => task.id === id);
-        if (action === "cancel" && currentTask && !isTaskCancellable(currentTask)) {
-            message.warning("任务已开始生成，无法取消");
-            return;
-        }
-        if (action === "retry" && currentTask && isGenerationTaskSubmissionUncertain(currentTask)) {
+        if (currentTask && isGenerationTaskSubmissionUncertain(currentTask)) {
             message.warning("提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。");
             return;
         }
         setActingId(id);
         try {
-            const next = action === "retry" ? await retryGenerationTask(id) : await cancelGenerationTask(id);
+            const next = await retryGenerationTask(id);
             setTasks((items) => items.map((item) => (item.id === id ? next : item)));
             setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
-            if (action === "retry") {
-                setStatusFilter("active");
-                setPage(1);
-            }
-            const localOutcome = localDreaminaDetachOutcome(next);
-            if (action === "retry") message.success("任务已重新入队");
-            else if (localOutcome?.kind === "background") message.info(localOutcome.message);
-            else if (next.providerCancelStatus === "requested") message.info("已请求上游取消，正在确认费用状态");
-            else if (next.providerCancelStatus === "confirmed") message.success("上游已确认取消，积分已退回");
-            else if (next.providerCancelStatus === "uncertain") message.warning("任务已取消，上游费用待核对");
-            else message.success("任务已取消，积分已退回");
+            setStatusFilter("active");
+            setPage(1);
+            message.success("任务已重新入队");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败");
         } finally {
@@ -324,14 +309,13 @@ export default function TasksPage() {
     };
 
     const deleteLocalTask = (task: GenerationTask) => {
+        if (task.status === "queued" || task.status === "running") {
+            message.warning("任务正在执行，不能删除本机记录；请等待任务完成");
+            return;
+        }
         Modal.confirm({
             title: "删除本机任务记录？",
-            content:
-                localDreaminaCancellationCopy(task)?.kind === "background"
-                    ? "任务已由官方接受；删除后仍会在后台同步官方状态。"
-                    : task.status === "queued"
-                      ? "任务尚未提交官方；删除会取消本机排队且不会触发官方请求。"
-                      : "这只会删除本机任务记录，不会删除已生成的素材。",
+            content: "这只会删除本机任务记录，不会删除已生成的素材。",
             okText: "删除本机记录",
             okButtonProps: { danger: true },
             cancelText: "保留",
@@ -553,11 +537,6 @@ export default function TasksPage() {
                             {detailTask.provider === "dreamina-cli" && detailTask.receiptRecorded && detailTask.status === "running" ? (
                                 <Button aria-label="更新官方状态" icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void refreshLocalTaskStatus(detailTask)}>
                                     更新官方状态
-                                </Button>
-                            ) : null}
-                            {detailTask.provider === "dreamina-cli" && isTaskCancellable(detailTask) ? (
-                                <Button danger loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id, "cancel")}>
-                                    {localDreaminaCancellationCopy(detailTask)?.action || "取消任务"}
                                 </Button>
                             ) : null}
                             {detailTask.provider === "dreamina-cli" ? (

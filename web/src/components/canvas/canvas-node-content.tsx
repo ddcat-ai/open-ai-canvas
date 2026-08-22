@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { AlertCircle, BookOpenCheck, Clock3, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, Play, RefreshCw, Square, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, Clock3, FileText, Image as ImageIcon, LoaderCircle, Music2, Pencil, Play, RefreshCw, Video } from "lucide-react";
 
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
@@ -34,7 +34,6 @@ type CanvasNodeContentProps = {
     onStopEditing: () => void;
     mentionReferences: CanvasResourceReference[];
     onRetry?: (node: CanvasNodeData) => void;
-    onCancelTask?: (node: CanvasNodeData) => void;
     onOpenTaskDetails?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     reduceMediaEffects?: boolean;
@@ -49,7 +48,7 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
         || (props.node.metadata?.workflowKind === "styleboard" && !props.node.metadata.content);
     if (hasCustomContent && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
-    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onCancelTask={props.onCancelTask} onOpenTaskDetails={props.onOpenTaskDetails} />;
+    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onOpenTaskDetails={props.onOpenTaskDetails} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
 
     const Renderer = nodeContentRenderers[props.node.type];
@@ -117,7 +116,7 @@ function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProp
     );
 }
 
-function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<CanvasNodeContentProps, "node" | "theme" | "onCancelTask" | "onOpenTaskDetails">) {
+function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNodeContentProps, "node" | "theme" | "onOpenTaskDetails">) {
     const taskId = node.metadata?.taskId;
     const displayTask = {
         provider: node.metadata?.taskProvider,
@@ -152,9 +151,6 @@ function LoadingContent({ node, theme, onCancelTask, onOpenTaskDetails }: Pick<C
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
                         <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors" style={{ background: theme.toolbar.itemHover, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpenTaskDetails?.(node); }}><FileText className="size-3" />详情</button>
-                        {!submissionUncertain ? (
-                            <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors" style={{ background: `${theme.accent.danger}16`, color: theme.accent.danger }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCancelTask?.(node); }}><Square className="size-2.5 fill-current" />取消</button>
-                        ) : null}
                     </div>
                 </div>
             ) : null}

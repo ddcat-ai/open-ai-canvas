@@ -786,7 +786,7 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 		log := apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), model.ApiCallStatusFailed, 0, time.Since(startedAt), err.Error(), concurrencyLimit)
 		log.ErrorCode, log.Error = service.ChannelSlotFailureDetails(err)
 		logSystemProxyCall(svc, log, nil)
-		fail(c, http.StatusServiceUnavailable, err)
+		failInternal(c, http.StatusServiceUnavailable, err)
 		return
 	}
 	defer releaseChannel()
@@ -975,13 +975,4 @@ func clearSessionCookie(c *gin.Context) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secure,
 	})
-}
-
-func failService(c *gin.Context, err error) {
-	var authErr *service.AuthError
-	if errors.As(err, &authErr) {
-		fail(c, authErr.Status, errors.New(authErr.Message))
-		return
-	}
-	fail(c, http.StatusInternalServerError, err)
 }

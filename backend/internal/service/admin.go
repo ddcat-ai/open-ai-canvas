@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -335,7 +336,9 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, err
 		}
 		user.PasswordHash = hash
-		_ = s.repo.DeleteUserAuthSessions(user.ID)
+		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
+			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
+		}
 	}
 	user.Role = nextRole
 	user.Status = nextStatus

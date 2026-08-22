@@ -29,6 +29,37 @@ func TestAllowedOriginUsesForwardedHost(t *testing.T) {
 	}
 }
 
+func TestParseCORSPolicyNormalizesConfiguredOrigins(t *testing.T) {
+	policy, err := parseCORSPolicy(" https://Canvas.example.com/ , http://localhost:3000 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := policy.origins["https://canvas.example.com"]; !ok {
+		t.Fatal("configured origin was not normalized")
+	}
+	if _, ok := policy.origins["http://localhost:3000"]; !ok {
+		t.Fatal("configured port was not preserved")
+	}
+}
+
+func TestParseCORSPolicyRejectsNonOriginValue(t *testing.T) {
+	if _, err := parseCORSPolicy("https://example.com/app"); err == nil {
+		t.Fatal("path-bearing CORS value should be rejected")
+	}
+	if _, err := parseCORSPolicy("ftp://example.com"); err == nil {
+		t.Fatal("non-HTTP CORS value should be rejected")
+	}
+}
+
+func TestAllowedOriginConfiguredListDoesNotFallbackToArbitraryLocalhost(t *testing.T) {
+	t.Setenv("CANVAS_CORS_ORIGINS", "https://app.example.com")
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest("GET", "http://backend/api/health", nil)
+	if allowedOrigin(context, "http://localhost:3000") {
+		t.Fatal("configured CORS list should disable the implicit localhost fallback")
+	}
+}
+
 func TestRedactCanvasSharePath(t *testing.T) {
 	got := redactCanvasSharePath("/api/public/canvas-shares/private-token/resources/resource-1/file")
 	if got != "/api/public/canvas-shares/:token/resources/resource-1/file" {

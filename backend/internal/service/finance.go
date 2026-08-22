@@ -793,59 +793,23 @@ func billingQuantity(capability string, value any) int64 {
 }
 
 func (s *Service) MarkBillingRunning(orderID string) error {
-	if orderID == "" {
-		return nil
-	}
-	return s.repo.MarkBillingRunning(orderID)
+	return s.taskBilling().MarkBillingRunning(orderID)
 }
 
 func (s *Service) SettleBilling(orderID string, providerRequestID string) error {
-	if orderID == "" {
-		return nil
-	}
-	return s.repo.SettleBillingOrder(orderID, providerRequestID)
+	return s.taskBilling().SettleBilling(orderID, providerRequestID)
 }
 
 func (s *Service) RefundBilling(orderID string, errorText string) error {
-	if orderID == "" {
-		return nil
-	}
-	return s.repo.RefundBillingOrder(orderID, truncateRunes(errorText, 1000))
+	return s.taskBilling().RefundBilling(orderID, errorText)
 }
 
 func (s *Service) MarkBillingUncertain(orderID string, errorText string) error {
-	if orderID == "" {
-		return nil
-	}
-	return s.repo.MarkBillingUncertain(orderID, truncateRunes(errorText, 1000))
+	return s.taskBilling().MarkBillingUncertain(orderID, errorText)
 }
 
 func (s *Service) BillingFailureRequiresReview(orderID string, taskID string, err error) bool {
-	if orderID == "" {
-		return false
-	}
-	if billingFailureUncertain(err) {
-		return true
-	}
-	order, orderErr := s.repo.BillingOrder(orderID)
-	if orderErr != nil || order.Status == model.BillingStatusUncertain {
-		return true
-	}
-	hasSuccessfulCall, logErr := s.repo.TaskHasSuccessfulBillableCall(taskID)
-	return logErr != nil || hasSuccessfulCall
-}
-
-func billingFailureUncertain(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	for _, marker := range []string{"524", "timeout", "超时", "deadline exceeded", "context canceled", "connection reset", "unexpected eof", "broken pipe"} {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
+	return s.taskBilling().BillingFailureRequiresReview(orderID, taskID, err)
 }
 
 func newRedeemCode() (string, error) {

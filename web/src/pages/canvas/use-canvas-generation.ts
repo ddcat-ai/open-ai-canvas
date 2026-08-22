@@ -5,13 +5,12 @@ import { App } from "antd";
 import { applyGenerationTaskResultToNodes, generationTaskNodeId } from "@/lib/canvas/canvas-generation-task-sync";
 import { applyCanvasGenerationTaskNodeEffect, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskNode, ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { cancelGenerationTask, listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { cinematicStoryboardColumns, storyboardRowsFromTask } from "@/lib/canvas/canvas-project-domain";
 import { generationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { generationFailureMetadata } from "@/lib/generation-error";
-import { localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { consumeCanvasAgentGenerationContinuation } from "./use-canvas-agent-operations";
 
@@ -31,7 +30,6 @@ type UseCanvasGenerationOptions = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
 };
 
-const NODE_STATUS_IDLE = "idle" as const;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
@@ -194,7 +192,7 @@ export async function recoverCanvasGenerationTaskNode(input: {
 }
 
 export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded, nodes, nodesRef, setNodes }: UseCanvasGenerationOptions) {
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const queryClient = useQueryClient();
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
     const recoveringTaskIdsRef = useRef(new Set<string>());
@@ -218,84 +216,6 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         const request = generationRequestsRef.current.get(targetNodeId);
         if (request?.controller === controller) generationRequestsRef.current.delete(targetNodeId);
     }, []);
-
-    const stopGenerationByRunningId = useCallback(
-        (runningId: string) => {
-            const affectedNodeIds = new Set<string>();
-            generationRequestsRef.current.forEach((request) => {
-                if (request.runningNodeId !== runningId) return;
-                request.controller.abort();
-                generationRequestsRef.current.delete(request.targetNodeId);
-                affectedNodeIds.add(request.targetNodeId);
-                affectedNodeIds.add(request.originNodeId);
-            });
-            setRunningNodeId((current) => (current === runningId ? null : current));
-            if (!affectedNodeIds.size) return;
-            setNodes((current) => current.map((node) => (affectedNodeIds.has(node.id) && node.metadata?.status === NODE_STATUS_LOADING ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, errorDetails: undefined } } : node)));
-        },
-        [setNodes],
-    );
-
-    const confirmStopGeneration = useCallback(
-        (nodeId: string) => {
-            modal.confirm({
-                title: "停止生成？",
-                content: "当前生成请求会被中断，已经生成完成的内容会保留。",
-                okText: "停止",
-                cancelText: "继续生成",
-                okButtonProps: { danger: true },
-                onOk: () => stopGenerationByRunningId(nodeId),
-            });
-        },
-        [modal, stopGenerationByRunningId],
-    );
-
-    const cancelNodeTask = useCallback(
-        (node: CanvasNodeData) => {
-            const taskId = node.metadata?.taskId;
-            if (!taskId) {
-                confirmStopGeneration(node.id);
-                return;
-            }
-            const cancellationCopy = localDreaminaCancellationCopy({
-                id: taskId,
-                status: node.metadata?.taskStatus === "queued" ? "queued" : "running",
-                stage: node.metadata?.taskStage,
-                receiptRecorded: node.metadata?.taskReceiptRecorded,
-            });
-            modal.confirm({
-                title: cancellationCopy?.kind === "background" ? "转入后台？" : "取消任务？",
-                content: cancellationCopy?.confirmation || "任务会在后端停止，已生成完成的内容仍会保留。",
-                okText: cancellationCopy?.action || "取消任务",
-                cancelText: "继续生成",
-                okButtonProps: { danger: true },
-                onOk: async () => {
-                    const task = await cancelGenerationTask(taskId);
-                    const outcome = localDreaminaDetachOutcome(task);
-                    const stopMessage = outcome?.message ?? localDreaminaCancellationMessage(task);
-                    if (outcome?.kind !== "background") generationRequestsRef.current.get(node.id)?.controller.abort();
-                    setNodes((current) =>
-                        current.map((item) =>
-                            item.id === node.id
-                                ? {
-                                      ...item,
-                                      metadata: {
-                                          ...item.metadata,
-                                          ...generationTaskMetadata(task),
-                                          status: outcome?.canvasNodeStatus ?? NODE_STATUS_ERROR,
-                                          errorDetails: outcome?.kind === "background" ? undefined : stopMessage,
-                                      },
-                                  }
-                                : item,
-                        ),
-                    );
-                    if (outcome?.kind === "background") message.info(stopMessage);
-                    else message.success(stopMessage);
-                },
-            });
-        },
-        [confirmStopGeneration, message, modal, setNodes],
-    );
 
     const openNodeTaskDetails = useCallback(
         async (node: CanvasNodeData) => {
@@ -584,8 +504,6 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
     return {
         applyGenerationTaskResult,
         bindGenerationTask,
-        cancelNodeTask,
-        confirmStopGeneration,
         finishGenerationRequest,
         openNodeTaskDetails,
         runningNodeId,

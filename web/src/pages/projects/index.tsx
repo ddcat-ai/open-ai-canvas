@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Form, Input, Modal, Select } from "antd";
 import { ArrowRight, BookOpenText, FileText, FolderKanban, Images, LayoutGrid, Palette, Plus, Search, Sparkles, Trash2 } from "lucide-react";
@@ -44,7 +44,6 @@ export default function ProjectsPage() {
     const [generating, setGenerating] = useState(false);
     const [generationStatus, setGenerationStatus] = useState("");
     const [generationPreview, setGenerationPreview] = useState("");
-    const generationAbortRef = useRef<AbortController | null>(null);
     const createOpen = searchParams.get("create") === "1";
     const setCreateOpen = (open: boolean) => {
         const next = new URLSearchParams(searchParams);
@@ -86,8 +85,6 @@ export default function ProjectsPage() {
         setGenerating(true);
         setGenerationStatus("正在创建项目…");
         setGenerationPreview("");
-        const controller = new AbortController();
-        generationAbortRef.current = controller;
         try {
             const project = await createUniqueProjectName(story, selectedStyle);
             setGenerationStatus("AI 正在生成故事大纲与章节…");
@@ -100,7 +97,6 @@ export default function ProjectsPage() {
                 (text) => {
                     setGenerationPreview(text);
                 },
-                { signal: controller.signal },
             );
             const parsed = parseGeneratedStory(answer);
             if (!parsed.chapters.length) throw new Error("AI 没有返回有效的章节内容，请重试");
@@ -109,13 +105,8 @@ export default function ProjectsPage() {
             await queryClient.invalidateQueries({ queryKey: ["projects"] });
             navigate(`/projects/${project.project.id}/overview`);
         } catch (error) {
-            if (controller.signal.aborted) {
-                message.info("已停止生成");
-            } else {
-                message.error(error instanceof Error ? error.message : "AI 生成失败，请重试");
-            }
+            message.error(error instanceof Error ? error.message : "AI 生成失败，请重试");
         } finally {
-            generationAbortRef.current = null;
             setGenerating(false);
             setGenerationStatus("");
             setGenerationPreview("");
@@ -142,7 +133,7 @@ export default function ProjectsPage() {
     const confirmDeleteProject = (projectId: string, name: string) => {
         modal.confirm({
             title: "删除项目",
-            content: `确定删除「${name}」吗？项目内的章节、画布与资产将一并删除，此操作不可撤销。`,
+            content: `确定删除「${name}」吗？项目章节、画布关联和素材归属将一并移除；独立画布与素材库原始素材会保留。此操作不可撤销。`,
             okText: "删除",
             okButtonProps: { danger: true, loading: deleteMutation.isPending },
             cancelText: "取消",
@@ -294,7 +285,6 @@ export default function ProjectsPage() {
                         <div className="app-story-generating-preview-head"><span>实时草稿</span><span className="app-story-generating-live" /><em>{generationPreview ? "正在输出" : "等待模型输出"}</em></div>
                         <pre>{generationPreview}</pre>
                     </div>
-                    <div className="app-story-generating-actions"><Button onClick={() => generationAbortRef.current?.abort()}>停止</Button></div>
                 </div>
             </Modal>
         </WorkspacePage>

@@ -403,13 +403,29 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	if err != nil {
 		resource.Status = model.ResourceStatusFailed
 		resource.Error = err.Error()
-		_ = s.repo.SaveResource(&resource)
+		if saveErr := s.repo.SaveResource(&resource); saveErr != nil {
+			return nil, errors.Join(err, fmt.Errorf("记录资源失败状态失败：%w", saveErr))
+		}
 		return nil, err
 	}
 	resource.Status = model.ResourceStatusReady
 	resource.ETag = etag
 	if err := s.repo.SaveResource(&resource); err != nil {
-		return nil, err
+		cleanupErr := s.deleteStoredResourceObject(userID, &resource)
+		if cleanupErr == nil {
+			if deleteErr := s.repo.DeleteResource(userID, resource.ID); deleteErr != nil {
+				return nil, errors.Join(err, fmt.Errorf("清理资源记录失败：%w", deleteErr))
+			}
+			return nil, fmt.Errorf("保存资源就绪状态失败：%w", err)
+		}
+
+		resource.Status = model.ResourceStatusFailed
+		resource.Error = fmt.Sprintf("保存资源就绪状态失败，物理对象清理失败：%v", cleanupErr)
+		statusErr := s.repo.SaveResource(&resource)
+		if statusErr != nil {
+			return nil, errors.Join(err, cleanupErr, fmt.Errorf("记录资源失败状态失败：%w", statusErr))
+		}
+		return nil, errors.Join(err, fmt.Errorf("清理已上传资源对象失败：%w", cleanupErr))
 	}
 	s.recordActivity(userID, "resource", 1)
 	return &resource, nil

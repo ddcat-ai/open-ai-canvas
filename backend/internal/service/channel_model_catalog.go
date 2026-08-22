@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -156,13 +155,13 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 	}
 	var payload channelModelsPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, &AuthError{Status: http.StatusBadGateway, Message: "模型服务返回的不是有效 JSON"}
+		return nil, WrapAppError(http.StatusBadGateway, "模型服务返回的不是有效 JSON", err)
 	}
 	if payload.Error != nil && strings.TrimSpace(payload.Error.Message) != "" {
-		return nil, &AuthError{Status: http.StatusBadGateway, Message: payload.Error.Message}
+		return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
 	}
 	if payload.Code != nil && *payload.Code != 0 {
-		return nil, &AuthError{Status: http.StatusBadGateway, Message: firstNonEmpty(strings.TrimSpace(payload.Msg), "模型服务返回失败")}
+		return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
 	}
 
 	items := payload.Data
@@ -251,16 +250,16 @@ func channelModelsUpstreamError(err error) error {
 	}
 	var httpErr providerHTTPError
 	if !errors.As(err, &httpErr) {
-		return &AuthError{Status: http.StatusBadGateway, Message: "连接模型服务失败：" + err.Error()}
+		return WrapAppError(http.StatusBadGateway, "连接模型服务失败，请检查渠道地址和网络", err)
 	}
 	switch httpErr.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &AuthError{Status: http.StatusBadGateway, Message: "模型服务鉴权失败，请检查 API Key"}
+		return NewAppError(http.StatusBadGateway, "模型服务鉴权失败，请检查 API Key")
 	case http.StatusNotFound:
-		return &AuthError{Status: http.StatusBadGateway, Message: "模型服务未提供 /models 接口"}
+		return NewAppError(http.StatusBadGateway, "模型服务未提供 /models 接口")
 	case http.StatusTooManyRequests:
-		return &AuthError{Status: http.StatusBadGateway, Message: "模型服务请求过于频繁或额度不足"}
+		return NewAppError(http.StatusBadGateway, "模型服务请求过于频繁或额度不足")
 	default:
-		return &AuthError{Status: http.StatusBadGateway, Message: fmt.Sprintf("模型服务请求失败：HTTP %d", httpErr.StatusCode)}
+		return WrapAppError(http.StatusBadGateway, httpErr.Error(), err)
 	}
 }

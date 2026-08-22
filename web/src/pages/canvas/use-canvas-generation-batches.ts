@@ -5,8 +5,7 @@ import { nanoid } from "nanoid";
 import { generationBatchStatus, isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { buildGenerationConfig, createGenerationRetryContext, generationTaskMetadata, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { unchangedModeratedPrompt } from "@/lib/generation-error";
-import { cancelGenerationTask, listGenerationTasks } from "@/services/api/task-center";
-import { localDreaminaCancellationCopy, localDreaminaCancellationMessage, localDreaminaDetachOutcome } from "@/services/local-dreamina-task-projection";
+import { listGenerationTasks } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchMode, CanvasNodeData } from "@/types/canvas";
@@ -305,7 +304,9 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
             const batch = findBatch(nodesRef.current, sourceNodeId, batchId);
             if (!batch) return;
             const nodeById = new Map(nodesRef.current.map((node) => [node.id, node]));
-            const stoppableItems = batch.items.filter((item) => (item.status === "waiting" || item.status === "submitting") && !nodeById.get(item.nodeId)?.metadata?.taskId);
+            // 只允许停止还在本地等待队列中的项目。进入 submitting 后请求可能已经被服务端接收，
+            // 即使前端尚未拿到 taskId 也不能再把它标成取消，避免隐藏已计费任务。
+            const stoppableItems = batch.items.filter((item) => item.status === "waiting" && !nodeById.get(item.nodeId)?.metadata?.taskId);
             if (!stoppableItems.length) return message.info("没有尚未提交的任务");
             modal.confirm({
                 title: "停止剩余任务？",
@@ -315,9 +316,11 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                 okButtonProps: { danger: true },
                 onOk: () => {
                     const latestNodeById = new Map(nodesRef.current.map((node) => [node.id, node]));
-                    const latestStoppableItems = stoppableItems.filter((item) => !latestNodeById.get(item.nodeId)?.metadata?.taskId);
+                    const latestBatch = findBatch(nodesRef.current, sourceNodeId, batchId);
+                    const latestStoppableItems = latestBatch
+                        ? latestBatch.items.filter((item) => item.status === "waiting" && stoppableItems.some((candidate) => candidate.id === item.id) && !latestNodeById.get(item.nodeId)?.metadata?.taskId)
+                        : [];
                     const stoppableIds = new Set(latestStoppableItems.map((item) => item.id));
-                    latestStoppableItems.forEach((item) => controllersRef.current.get(batchItemKey(batchId, item.id))?.abort());
                     updateBatch(sourceNodeId, batchId, (current) => {
                         const items = current.items.map((item) => (stoppableIds.has(item.id) ? { ...item, status: "cancelled" as const, errorDetails: undefined } : item));
                         const nextBatch = { ...current, items, updatedAt: new Date().toISOString() };
@@ -327,65 +330,6 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
             });
         },
         [message, modal, nodesRef, updateBatch],
-    );
-
-    const cancelSubmittedBatchItem = useCallback(
-        (sourceNodeId: string, batchId: string, itemId: string) => {
-            const batch = findBatch(nodesRef.current, sourceNodeId, batchId);
-            const item = batch?.items.find((candidate) => candidate.id === itemId);
-            const node = item ? nodesRef.current.find((candidate) => candidate.id === item.nodeId) : undefined;
-            const taskId = item?.taskId || node?.metadata?.taskId;
-            if (!item || !taskId) return;
-            const cancellationCopy = localDreaminaCancellationCopy({
-                id: taskId,
-                status: node?.metadata?.taskStatus === "queued" ? "queued" : "running",
-                stage: node?.metadata?.taskStage,
-                receiptRecorded: node?.metadata?.taskReceiptRecorded,
-            });
-            modal.confirm({
-                title: "取消这个后台任务？",
-                content: cancellationCopy?.confirmation || "任务会在后端停止，已经生成完成的其他镜头不会受影响。",
-                okText: cancellationCopy?.action || "取消任务",
-                cancelText: "继续生成",
-                okButtonProps: { danger: true },
-                onOk: async () => {
-                    try {
-                        const task = await cancelGenerationTask(taskId);
-                        const outcome = localDreaminaDetachOutcome(task);
-                        const stopMessage = outcome?.message ?? localDreaminaCancellationMessage(task);
-                        if (outcome?.kind !== "background") controllersRef.current.get(batchItemKey(batchId, item.id))?.abort();
-                        setNodes((current) =>
-                            current.map((currentNode) => {
-                                if (currentNode.id === item.nodeId)
-                                    return {
-                                        ...currentNode,
-                                        metadata: {
-                                            ...currentNode.metadata,
-                                            ...generationTaskMetadata(task),
-                                            status: outcome?.canvasNodeStatus ?? "error",
-                                            errorDetails: outcome?.kind === "background" ? undefined : stopMessage,
-                                        },
-                                    };
-                                if (currentNode.id !== sourceNodeId) return currentNode;
-                                const batches = (currentNode.metadata?.generationBatches || []).map((currentBatch) =>
-                                    currentBatch.id === batchId
-                                        ? withUpdatedItem(currentBatch, item.id, {
-                                              status: outcome?.batchItemStatus ?? "cancelled",
-                                              taskId,
-                                              errorDetails: outcome?.kind === "background" ? undefined : stopMessage,
-                                          })
-                                        : currentBatch,
-                                );
-                                return { ...currentNode, metadata: { ...currentNode.metadata, generationBatches: batches } };
-                            }),
-                        );
-                    } catch (error) {
-                        message.error(error instanceof Error ? error.message : "任务取消失败");
-                    }
-                },
-            });
-        },
-        [message, modal, nodesRef, setNodes],
     );
 
     useEffect(() => {
@@ -404,7 +348,6 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
     }, [projectLoaded, reconcileBatches, scheduleWaitingItems]);
 
     return {
-        cancelSubmittedBatchItem,
         enqueueGenerationBatch,
         retryFailedBatchItems,
         stopRemainingBatchItems,

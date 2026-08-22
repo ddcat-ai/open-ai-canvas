@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { Button, Checkbox, Dropdown, Input, InputNumber, Modal, Segmented, Select, Table, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
@@ -74,7 +74,6 @@ export function CanvasScriptNodeContent({
     onRetryBatch,
     onRetryBatchItem,
     onStopBatch,
-    onCancelBatchItem,
     onAddRow,
     onRemoveRow,
     onUpdateRow,
@@ -104,7 +103,6 @@ export function CanvasScriptNodeContent({
     onRetryBatch: (batchId: string) => void;
     onRetryBatchItem: (batchId: string, itemId: string) => void;
     onStopBatch: (batchId: string) => void;
-    onCancelBatchItem: (batchId: string, itemId: string) => void;
     onAddRow: () => void;
     onRemoveRow: (rowId: string) => void;
     onUpdateRow: (rowId: string, patch: Partial<StoryboardRow>) => void;
@@ -270,7 +268,7 @@ export function CanvasScriptNodeContent({
             </div>
             {batch ? (
                 <Modal title="批次详情" open={batchDetailsOpen} onCancel={() => setBatchDetailsOpen(false)} footer={null} width={560} centered destroyOnHidden>
-                    <GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} onCancelItem={(itemId) => onCancelBatchItem(batch.id, itemId)} />
+                    <GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} />
                 </Modal>
             ) : null}
             <StoryboardMiniPipeline pipeline={pipeline} theme={theme} rows={rows} />
@@ -525,7 +523,7 @@ function StoryboardMiniPipeline({ pipeline, theme, rows }: { pipeline: CanvasSto
     );
 }
 
-function GenerationBatchDetails({ batch, rows, onRetryItem, onCancelItem }: { batch: CanvasGenerationBatch; rows: StoryboardRow[]; onRetryItem: (itemId: string) => void; onCancelItem: (itemId: string) => void }) {
+function GenerationBatchDetails({ batch, rows, onRetryItem }: { batch: CanvasGenerationBatch; rows: StoryboardRow[]; onRetryItem: (itemId: string) => void }) {
     const shotByRowId = new Map(rows.map((row) => [row.id, row.shotNumber]));
     return (
         <div className="w-80" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
@@ -535,7 +533,6 @@ function GenerationBatchDetails({ batch, rows, onRetryItem, onCancelItem }: { ba
             </div>
             <div className="thin-scrollbar max-h-72 overflow-y-auto">
                 {batch.items.map((item) => {
-                    const cancellable = Boolean(item.taskId && (item.status === "queued" || item.status === "running"));
                     const requiresPromptChange = isContentModerationError(item.errorDetails);
                     return (
                         <div key={item.id} className="flex min-h-9 items-center gap-2 border-t border-foreground/10 py-1.5 first:border-t-0">
@@ -553,18 +550,6 @@ function GenerationBatchDetails({ batch, rows, onRetryItem, onCancelItem }: { ba
                                         aria-label={`重试镜头 ${shotByRowId.get(item.rowId) || ""}`}
                                     >
                                         <RefreshCw className="size-3.5" />
-                                    </button>
-                                </Tooltip>
-                            ) : null}
-                            {cancellable ? (
-                                <Tooltip title="取消这个后台任务">
-                                    <button
-                                        type="button"
-                                        className="grid size-7 shrink-0 place-items-center rounded outline-none transition hover:bg-red-500/10 focus-visible:ring-2"
-                                        onClick={() => onCancelItem(item.id)}
-                                        aria-label={`取消镜头 ${shotByRowId.get(item.rowId) || ""} 任务`}
-                                    >
-                                        <X className="size-3.5" />
                                     </button>
                                 </Tooltip>
                             ) : null}

@@ -343,7 +343,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	testCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	testCtx = context.WithValue(testCtx, providerAnalyticsKey{}, providerAnalyticsContext{
-		Service: s, UserID: actor.ID, ChannelID: channel.ID, Capability: capability,
+		Service: s, Billing: s.taskBilling(), UserID: actor.ID, ChannelID: channel.ID, Capability: capability,
 		Operation: "admin_model_test", Model: modelKey, VideoSeconds: videoSecondsValue,
 	})
 	testCtx = withProviderOutboundPolicy(testCtx, input.Config)
@@ -363,7 +363,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		if errors.Is(err, context.DeadlineExceeded) {
 			status = http.StatusGatewayTimeout
 		}
-		return nil, &AuthError{Status: status, Message: "模型测试失败：" + truncateRunes(err.Error(), 1000)}
+		return nil, WrapAppError(status, "模型测试失败："+providerUserFacingErrorMessage(err), err)
 	}
 	return &AdminChannelModelTestResult{DurationMs: time.Since(startedAt).Milliseconds()}, nil
 }

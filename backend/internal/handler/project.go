@@ -31,7 +31,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		projects, err := svc.ListProjects(user.ID)
 		if err != nil {
-			fail(c, http.StatusInternalServerError, err)
+			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"projects": projects})
@@ -67,7 +67,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 				fail(c, http.StatusNotFound, err)
 				return
 			}
-			fail(c, http.StatusInternalServerError, err)
+			failService(c, err)
 			return
 		}
 		ok(c, detail)
