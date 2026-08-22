@@ -270,6 +270,7 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, re
             onAddFrame: () => onAddNode(CanvasNodeType.Frame),
             onAddFolder,
             onAddDrawing: () => onAddNode(CanvasNodeType.Drawing),
+            onAddExtensionNode: onAddNode,
             onChooseStyle,
             onOpenDirector,
             onUpload,

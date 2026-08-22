@@ -38,6 +38,12 @@ export type ToolbarHandlers = {
     onAddFrame: () => void;
     onAddFolder: () => void;
     onAddDrawing: () => void;
+    /**
+     * 扩展节点（Markdown / SVG / HTML / 全景 / 对比 / 图表 / 调色）统一走这一个入口。
+     * 不给每种扩展节点单开一个 onAddXxx —— 那会让 ToolbarHandlers 随节点数线性膨胀，
+     * 而它们的创建逻辑完全一致（都只是 createNode(type)）。
+     */
+    onAddExtensionNode: (type: CanvasNodeType) => void;
     onChooseStyle: () => void;
     onOpenDirector: () => void;
     // 主工具栏——资源
@@ -134,6 +140,7 @@ export type AddNodeMenuContext = {
         | "onAddFrame"
         | "onAddFolder"
         | "onAddDrawing"
+        | "onAddExtensionNode"
         | "onChooseStyle"
         | "onOpenDirector"
         | "onUpload"
@@ -173,7 +180,8 @@ export type AddNodeMenuCommand = {
     label: string;
     icon: ReactNode;
     badge?: string;
-    section: "node" | "project" | "resource";
+    // extension：展示与加工类扩展节点。单独一区，避免挤散 node 区调好的四列网格。
+    section: "node" | "extension" | "project" | "resource";
     defaultOrder: number;
     applicable?: (ctx: AddNodeMenuContext) => boolean;
     run: (ctx: AddNodeMenuContext) => void;

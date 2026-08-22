@@ -17,6 +17,13 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
+import { MarkdownNodeContent } from "./nodes/markdown-node";
+import { ChartNodeContent } from "./nodes/chart-node";
+import { CompareNodeContent } from "./nodes/compare-node";
+import { ColorGradeNodeContent } from "./nodes/color-grade-node";
+import { HtmlNodeContent } from "./nodes/html-node";
+import { PanoramaNodeContent } from "./nodes/panorama-node";
+import { SvgNodeContent } from "./nodes/svg-node";
 
 type CanvasNodeContentProps = {
     node: CanvasNodeData;
@@ -65,6 +72,13 @@ const nodeContentRenderers = {
     [CanvasNodeType.Audio]: AudioNodeContent,
     [CanvasNodeType.Drawing]: DrawingContent,
     [CanvasNodeType.Frame]: UnknownNodeContent,
+    [CanvasNodeType.Markdown]: MarkdownNodeContent,
+    [CanvasNodeType.Svg]: SvgNodeContent,
+    [CanvasNodeType.Html]: HtmlNodeContent,
+    [CanvasNodeType.Panorama]: PanoramaNodeContent,
+    [CanvasNodeType.Compare]: CompareNodeContent,
+    [CanvasNodeType.Chart]: ChartNodeContent,
+    [CanvasNodeType.ColorGrade]: ColorGradeNodeContent,
 } satisfies Record<CanvasNodeType, (props: CanvasNodeContentProps) => ReactNode>;
 
 function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProps) {
@@ -418,6 +432,7 @@ function ImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, bat
     const nearViewport = useNearViewport(imageContainerRef);
     const { url, loading } = useNodeResourceUrl(node, nearViewport);
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
+
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
             <div ref={imageContainerRef} className="h-full w-full overflow-hidden rounded-[var(--node-radius)]">

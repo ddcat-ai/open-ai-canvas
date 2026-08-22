@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-import type { CanvasNodeData } from "@/types/canvas";
+import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 // 批次子图操作条（下载/创建副本/删除）与主图位下载需要调用画布级动作，
 // 但画布节点经 CanvasProjectWorldLayers 渲染、不便逐个透传 handler，
@@ -9,6 +9,8 @@ export type CanvasNodeActionContextValue = {
     download?: (node: CanvasNodeData) => void;
     duplicate?: (node: CanvasNodeData) => void;
     deleteNode?: (node: CanvasNodeData) => void;
+    /** 合并式更新节点 metadata；扩展节点（如调色）在自己的面板里改参数时用。 */
+    updateMetadata?: (nodeId: string, patch: CanvasNodeMetadata) => void;
 };
 
 export const CanvasNodeActionContext = createContext<CanvasNodeActionContextValue>({});
