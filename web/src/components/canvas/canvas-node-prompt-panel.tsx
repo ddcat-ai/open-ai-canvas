@@ -60,8 +60,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [presetOpen, setPresetOpen] = useState(false);
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
-    const [promptContentHeight, setPromptContentHeight] = useState(PROMPT_EDITOR_MIN_HEIGHT);
-    const [expandedPromptContentHeight, setExpandedPromptContentHeight] = useState(PROMPT_EDITOR_EXPANDED_MIN_HEIGHT);
+    const [promptContentHeight, setPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, false));
+    const [expandedPromptContentHeight, setExpandedPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, true));
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
     const [manualExpandedPromptHeight, setManualExpandedPromptHeight] = useState<number | null>(null);
     const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
@@ -103,6 +103,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     });
     const activeReferenceCount = activeReferences.length;
     const videoFrameOptions = mentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
+    const hasVideoPromptTools = mode === "video" && !simpleMode && videoFrameOptions.length > 0;
     const monochromeAccent = theme.node.activeStroke;
     const composerTokens = {
         "--canvas-composer-surface": theme.node.panel,
@@ -113,7 +114,6 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     } as CSSProperties;
     const composerSurfaceStyle = {
         ...composerTokens,
-        border: `1px solid color-mix(in srgb, ${theme.node.edge} 42%, transparent)`,
         background: theme.node.panel,
         color: theme.node.text,
         boxShadow: theme.node.shadow,
@@ -134,8 +134,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     useEffect(() => {
         setExpandedPromptOpen(false);
         setExpandedPresetOpen(false);
-        setPromptContentHeight(PROMPT_EDITOR_MIN_HEIGHT);
-        setExpandedPromptContentHeight(PROMPT_EDITOR_EXPANDED_MIN_HEIGHT);
+        setPromptContentHeight(estimatePromptContentHeight(savedPrompt, false));
+        setExpandedPromptContentHeight(estimatePromptContentHeight(savedPrompt, true));
         setManualPromptHeight(null);
         setManualExpandedPromptHeight(null);
     }, [node.id]);
@@ -357,7 +357,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             {renderPromptEditor(false)}
 
             {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
-            {mode === "video" && !simpleMode ? (
+            {hasVideoPromptTools ? (
                 <div className="canvas-node-composer-parameters overflow-hidden">
                     <button
                         type="button"
@@ -401,7 +401,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 <div className="flex min-h-0 flex-col gap-2.5 p-3" style={{ ...composerTokens, color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     {renderPromptEditor(true)}
-                    {mode === "video" && !simpleMode ? (
+                    {hasVideoPromptTools ? (
                         <div className="canvas-node-composer-parameters shrink-0">
                             <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                         </div>
@@ -570,6 +570,15 @@ function promptEditorBounds(expanded: boolean, hasReferences: boolean) {
     const min = (expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT) + shelfHeight;
     const max = (expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_LINE_HEIGHT * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_VERTICAL_PADDING) + shelfHeight;
     return { min, max };
+}
+
+function estimatePromptContentHeight(value: string, expanded: boolean) {
+    if (!value.trim()) return expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT;
+    const charsPerLine = expanded ? 34 : 38;
+    const lineCount = value.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)), 0);
+    const lineHeight = expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT : PROMPT_EDITOR_LINE_HEIGHT;
+    const verticalPadding = expanded ? PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_VERTICAL_PADDING;
+    return Math.max(expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT, lineCount * lineHeight + verticalPadding);
 }
 
 function clampPromptHeight(height: number, bounds: { min: number; max: number }) {

@@ -6909,8 +6909,8 @@
     }
 
     .canvas-node-composer-parameters {
-        margin-top: var(--space-1);
-        padding-top: var(--space-2);
+        margin-top: 0;
+        padding-top: var(--space-1);
     }
 
     .canvas-node-composer-footer {
@@ -6994,7 +6994,7 @@
     .canvas-node-composer-resize-handle {
         display: grid;
         width: 100%;
-        height: var(--space-4);
+        height: var(--space-2);
         place-items: center;
         border: 0;
         background: transparent;

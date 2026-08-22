@@ -120,7 +120,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         });
         observer.observe(container);
         return () => observer.disconnect();
-    }, [onContentSizeChange, reportContentSize, useRichEditor]);
+    }, [onContentSizeChange, reportContentSize, useRichEditor, value]);
 
     const focusEditor = (selectionStart?: number) => {
         requestAnimationFrame(() => {
