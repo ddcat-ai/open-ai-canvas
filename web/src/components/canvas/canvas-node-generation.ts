@@ -4,7 +4,9 @@ import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData } from "@/types/canvas";
-import { getGenerationResourceNodes } from "@/lib/canvas/canvas-resource-references";
+import { getGenerationResourceNodes, getContextResourceNodes } from "@/lib/canvas/canvas-resource-references";
+import { isNeutralColorGrade, resolveCanvasColorGradeReference } from "@/lib/canvas/canvas-color-grade";
+import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
 import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
@@ -227,8 +229,10 @@ export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[
     return resourceNodes.flatMap((node): NodeGenerationInput[] => {
         const character = readCharacterReference(node);
         if (character) return [{ nodeId: node.id, type: "character" as const, title: node.title, character }];
-        const image = readReferenceImage(node);
-        if (image) return [{ nodeId: node.id, type: "image" as const, sourceKind: image.source?.kind, title: node.title, image }];
+        const image = readReferenceImage(node, nodes, connections);
+        // sourceKind 只是「标签用绘图N而不是参考图N」的覆盖开关，不是来源全集。
+        // 调色节点在下游就是一张普通参考图，按 image 标签即正确。
+        if (image) return [{ nodeId: node.id, type: "image" as const, sourceKind: image.source?.kind === "drawing" ? "drawing" : undefined, title: node.title, image }];
         const video = readReferenceVideo(node);
         if (video) return [{ nodeId: node.id, type: "video" as const, title: node.title, video }];
         const audio = readReferenceAudio(node);
@@ -311,6 +315,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     let referenceImages = await Promise.all(
         context.referenceImages.map(async (image) => {
             if (image.source?.kind === "drawing") return resolveCanvasDrawingReference(projectId, image);
+            if (image.source?.kind === "colorgrade") return resolveCanvasColorGradeReference(image);
             return { ...image, dataUrl: await imageToDataUrl(image) };
         }),
     );
@@ -448,7 +453,7 @@ function generationLabel(type: NodeGenerationInput["type"] | "drawing", index: n
     return `文本${index + 1}`;
 }
 
-function readReferenceImage(node: CanvasNodeData): ReferenceImage | null {
+function readReferenceImage(node: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]): ReferenceImage | null {
     if (node.type === CanvasNodeType.Drawing && node.metadata?.drawingId) {
         return {
             id: node.id,
@@ -461,6 +466,29 @@ function readReferenceImage(node: CanvasNodeData): ReferenceImage | null {
                 revision: node.metadata.drawingRevision || 0,
                 shapeCount: node.metadata.drawingShapeCount || 0,
             },
+        };
+    }
+    if (node.type === CanvasNodeType.ColorGrade) {
+        // 调色节点自己不存图：源图在上游，参数在 metadata。没连线就跳过这条输入，
+        // 而不是抛错——画布上放一个还没连线的调色节点是很正常的中间状态。
+        // 判据与节点渲染保持一致（都要求上游是带 content 的图片），
+        // 否则会出现「预览里看到了、生成时却没用上」这类不报错的偏差。
+        const source = getContextResourceNodes(node.id, nodes, connections).find((item) => getNodeResourceKind(item) === "image" && item.metadata?.content);
+        const url = source?.metadata?.content;
+        if (!source || !url) return null;
+
+        const grade = node.metadata?.colorGrade;
+        // 未调色时直接透传源图，省掉一次渲染与上传（也就不占文件容量）。
+        if (!grade || isNeutralColorGrade(grade)) {
+            const passthrough = nodeReferenceImage(source);
+            return passthrough ? { ...passthrough, id: node.id, name: node.title || `调色-${node.id}` } : null;
+        }
+        return {
+            id: node.id,
+            name: node.title || `调色-${node.id}`,
+            type: "image/png",
+            dataUrl: "",
+            source: { kind: "colorgrade", url, grade },
         };
     }
     return nodeReferenceImage(node);

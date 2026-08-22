@@ -11,7 +11,7 @@ export type CanvasCreateCommand = {
     label: string;
     icon: ReactNode;
     badge?: string;
-    section: "node" | "project" | "resource";
+    section: "node" | "extension" | "project" | "resource";
     onClick: () => void;
 };
 
@@ -19,6 +19,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const projectCommands = commands.filter((command) => command.section === "project");
     const nodeCommands = commands.filter((command) => command.section === "node");
+    const extensionCommands = commands.filter((command) => command.section === "extension");
     const resourceCommands = commands.filter((command) => command.section === "resource");
 
     return (
@@ -43,6 +44,13 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
 
             <MenuSection title="创作节点" color={theme.node.muted} />
             <CanvasCreateCommandGrid commands={nodeCommands} variant="node" />
+
+            {extensionCommands.length ? (
+                <>
+                    <MenuSection title="展示与加工" color={theme.node.muted} spaced />
+                    <CanvasCreateCommandGrid commands={extensionCommands} variant="node" />
+                </>
+            ) : null}
 
             <MenuSection title="导入资源" color={theme.node.muted} spaced />
             <CanvasCreateCommandGrid commands={resourceCommands} variant="resource" />

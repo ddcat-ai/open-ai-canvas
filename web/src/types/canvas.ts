@@ -1,3 +1,4 @@
+import type { CanvasColorGrade } from "@/lib/canvas/canvas-color-grade";
 import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
 import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
@@ -23,6 +24,15 @@ export enum CanvasNodeType {
     Video = "video",
     Audio = "audio",
     Frame = "frame",
+    // 扩展节点：展示与加工。新增一个成员后，编译器会逐个点出还缺哪张表
+    // （NODE_DEFAULT_SIZE / NODE_SPECS / 节点注册表定义 / nodeContentRenderers）。
+    Markdown = "markdown",
+    Svg = "svg",
+    Html = "html",
+    Panorama = "panorama",
+    Compare = "compare",
+    Chart = "chart",
+    ColorGrade = "colorgrade",
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
@@ -294,6 +304,12 @@ export type CanvasNodeMetadata = {
     skillId?: string;
     skillVersion?: number;
     skillSnapshot?: CanvasSkillSnapshot;
+    /** 图表节点的图形类型，缺省柱状图。落盘字段——新增扩展节点的自有字段都要在这里声明。 */
+    chartKind?: "bar" | "line";
+    /** 调色节点的参数；缺省视为未调色。 */
+    colorGrade?: CanvasColorGrade;
+    /** 用户手动拉伸过尺寸；图片按真实比例自动适配时避让它。 */
+    manualSize?: boolean;
     storyboard?: StoryboardData;
     storyboardShotDuration?: StoryboardShotDuration;
     storyboardShotCount?: StoryboardShotCount;

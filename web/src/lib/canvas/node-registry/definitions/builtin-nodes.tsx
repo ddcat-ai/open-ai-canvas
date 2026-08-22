@@ -1,4 +1,4 @@
-import { Clapperboard, Image as ImageIcon, Music2, PanelTop, Pencil, Settings2, Sparkles, Type, Video } from "lucide-react";
+import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Sparkles, Type, Video } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
@@ -104,6 +104,67 @@ const BUILTIN_NODE_TRAITS = {
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
         // 背板只是视觉容器，既不是素材也不参与计数。
+    },
+    [CanvasNodeType.Markdown]: {
+        label: "Markdown",
+        icon: <FileText />,
+        minSize: DEFAULT_MIN_SIZE,
+        showInCreateMenu: true,
+        // 渲染的是 Markdown 源码，作为素材与输入都按文本计。
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
+        inputKind: "text",
+        // 不设 generationMode：它是展示节点，自身不发起生成。
+    },
+    [CanvasNodeType.Svg]: {
+        label: "SVG",
+        icon: <Shapes />,
+        minSize: DEFAULT_MIN_SIZE,
+        showInCreateMenu: true,
+        // 内容是 SVG 源码，按文本素材计；渲染成图但不产出图片资源。
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
+        inputKind: "text",
+    },
+    [CanvasNodeType.Html]: {
+        label: "HTML",
+        icon: <Code />,
+        minSize: DEFAULT_MIN_SIZE,
+        showInCreateMenu: true,
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
+        inputKind: "text",
+    },
+    [CanvasNodeType.Panorama]: {
+        label: "全景",
+        icon: <Globe />,
+        minSize: MEDIA_NODE_MIN_SIZE,
+        showInCreateMenu: true,
+        // 查看器：消费上游图片，自身不作为素材被引用，故不设 resourceKind。
+        inputKind: "image",
+    },
+    [CanvasNodeType.Compare]: {
+        label: "对比",
+        icon: <Columns2 />,
+        minSize: MEDIA_NODE_MIN_SIZE,
+        showInCreateMenu: true,
+        // 只看不产出：消费两张上游图片，自身不作为素材。
+        inputKind: "image",
+    },
+    [CanvasNodeType.Chart]: {
+        label: "图表",
+        icon: <ChartColumn />,
+        minSize: DEFAULT_MIN_SIZE,
+        showInCreateMenu: true,
+        inputKind: "text",
+    },
+    [CanvasNodeType.ColorGrade]: {
+        label: "调色",
+        icon: <Palette />,
+        minSize: MEDIA_NODE_MIN_SIZE,
+        showInCreateMenu: true,
+        // 无条件返回 image：它的图来自上游而不是自身 metadata，用「有没有 content」判断
+        // 会让它永远不被当成素材、从而进不了生成输入。没有上游时由
+        // readReferenceImage 返回 null 跳过，不需要在这里提前判空。
+        resourceKind: () => "image",
+        inputKind: "image",
     },
 } satisfies Record<CanvasNodeType, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
 

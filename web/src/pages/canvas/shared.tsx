@@ -34,7 +34,7 @@ export default function SharedCanvasPage() {
     const [title, setTitle] = useState("共享画布");
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<Awaited<ReturnType<typeof getPublicCanvasShare>>["project"]["connections"]>([]);
-    const [backgroundMode, setBackgroundMode] = useState<"lines" | "dots" | "blank">("dots");
+    const [backgroundMode, setBackgroundMode] = useState<"lines" | "dots" | "blank">("lines");
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export default function SharedCanvasPage() {
             setTitle(project.title || "共享画布");
             setNodes((project.nodes || []).map(ensureMediaNodeMinimumSize));
             setConnections(project.connections || []);
-            setBackgroundMode(project.backgroundMode || "dots");
+            setBackgroundMode(project.backgroundMode || "lines");
             const initial = project.viewport || { x: 0, y: 0, k: 1 };
             viewportRef.current = initial;
             setViewport(initial);

@@ -95,7 +95,11 @@ export function collectUpstreamVideoNodes(nodeId: string, nodes: CanvasNodeData[
     return result;
 }
 
-function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+/**
+ * 该节点的直接上游素材节点（按连线取 fromNodeId，只保留构成素材的）。
+ * 扩展节点经 CanvasNodeGraphContext 复用它，不要另写一份取上游的逻辑。
+ */
+export function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     return connections
         .filter((connection) => connection.toNodeId === nodeId)
         .map((connection) => nodes.find((node) => node.id === connection.fromNodeId))

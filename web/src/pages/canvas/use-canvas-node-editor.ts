@@ -47,9 +47,11 @@ export function useCanvasNodeEditor({
                 const nextPosition = position || node.position;
                 if (node.width === width && node.height === height && node.position.x === nextPosition.x && node.position.y === nextPosition.y) return node;
                 changed = true;
-                const resized = { ...node, width, height, position: nextPosition };
+                // 打上「用户手动定过尺寸」标记：图片按真实比例自动适配时要避让它，
+                // 否则每次图片重新加载都会把用户拉过的尺寸改回去。
+                const resized = { ...node, width, height, position: nextPosition, metadata: { ...node.metadata, manualSize: true } };
                 if (!isFrameNode(node) || node.metadata?.frame?.collapsed) return resized;
-                return { ...resized, metadata: { ...node.metadata, frame: { collapsed: false, expandedWidth: width, expandedHeight: height } } };
+                return { ...resized, metadata: { ...resized.metadata, frame: { collapsed: false, expandedWidth: width, expandedHeight: height } } };
             });
             return changed ? next : current;
         });
