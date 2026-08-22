@@ -271,6 +271,7 @@
 /* infinite 装饰动画在 reduced-motion / no-motion 下降级（对应 #99 三级降级）*/
 @media (prefers-reduced-motion: reduce) {
     .canvas-connection-flow,
+    .canvas-connection-comet,
     .canvas-connection-draft,
     .canvas-task-progress-shimmer,
     .ai-title-aurora,
@@ -282,6 +283,7 @@
     }
 }
 .no-motion .canvas-connection-flow,
+.no-motion .canvas-connection-comet,
 .no-motion .canvas-connection-draft,
 .no-motion .canvas-task-progress-shimmer,
 .no-motion .ai-title-aurora,
@@ -7161,7 +7163,7 @@
         will-change: transform;
     }
 
-    [data-canvas-viewport-interacting="true"] :where(.canvas-connection-flow, .canvas-connection-draft) {
+    [data-canvas-viewport-interacting="true"] :where(.canvas-connection-flow, .canvas-connection-comet, .canvas-connection-draft) {
         animation: none !important;
     }
 
@@ -7185,6 +7187,12 @@
         animation: canvas-connection-flow 1.25s var(--motion-ease-linear) infinite;
     }
 
+    /* 流光：一小段高亮沿连线跑。周期与上面的虚线流动刻意错开，两者同频会锁成
+       一条整体平移的虚线、看不出「有光在走」。只在悬停/选中态渲染（见 canvas-connections.tsx）。 */
+    .canvas-connection-comet {
+        animation: canvas-connection-comet 2.1s var(--motion-ease-linear) infinite;
+    }
+
     .canvas-connection-draft {
         animation: canvas-connection-flow 0.9s var(--motion-ease-linear) infinite;
     }
@@ -7204,6 +7212,13 @@
     @keyframes canvas-connection-flow {
         to {
             stroke-dashoffset: -44;
+        }
+    }
+
+    /* 位移量必须等于 dasharray 之和（16 + 118），否则循环处会跳一下 */
+    @keyframes canvas-connection-comet {
+        to {
+            stroke-dashoffset: -134;
         }
     }
 

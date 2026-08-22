@@ -337,7 +337,7 @@ export function useCanvasConnectionController({
                 const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
                 if (node.type === CanvasNodeType.Script && !targetHandleId) return;
                 const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop, targetAnchorRatio);
+                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
                 const dx = world.x - anchor.x;
                 const dy = world.y - anchor.y;
                 const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
@@ -383,7 +383,7 @@ export function useCanvasConnectionController({
                 const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
                 if (node.type === CanvasNodeType.Script && !targetHandleId) return;
                 const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop, targetAnchorRatio);
+                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
                 const dx = world.x - anchor.x;
                 const dy = world.y - anchor.y;
                 const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
