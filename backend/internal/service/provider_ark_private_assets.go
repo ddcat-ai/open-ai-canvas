@@ -107,6 +107,45 @@ func arkPrivateAssetResourceID(reference providerMedia) string {
 	return strings.TrimSpace(strings.TrimPrefix(reference.StorageKey, "resource:"))
 }
 
+type ArkPrivateAssetSyncResult struct {
+	ResourceID string `json:"resourceId"`
+	Status     string `json:"status"`
+}
+
+// SyncResourceToArkPrivateAsset is the explicit user action for preloading a
+// reference image. It keeps the same team-scoped ownership and review rules as
+// the task worker, so clients cannot submit arbitrary URLs to Ark.
+func (s *Service) SyncResourceToArkPrivateAsset(ctx context.Context, actor *model.User, resourceID string) (*ArkPrivateAssetSyncResult, error) {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return nil, BadAuthRequest("请选择要同步的图片素材")
+	}
+	resource, err := s.ResourceForUser(actor, resourceID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("图片素材不存在或无权访问")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if resource.Status != model.ResourceStatusReady {
+		return nil, BadAuthRequest("图片素材尚未上传完成")
+	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(resource.MimeType)), "image/") {
+		return nil, BadAuthRequest("方舟可信素材库当前只支持上传图片素材")
+	}
+	settingRecord, setting, err := s.readArkPrivateAssetSetting()
+	if err != nil {
+		return nil, err
+	}
+	if !setting.Enabled || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
+		return nil, BadAuthRequest("方舟可信素材库尚未配置，请由管理员在方舟素材库设置中填写启用的 IAM AK/SK")
+	}
+	if _, err := s.ensureArkPrivateAsset(ctx, actor.ID, resource, settingRecord, &setting); err != nil {
+		return nil, err
+	}
+	return &ArkPrivateAssetSyncResult{ResourceID: resource.ID, Status: arkPrivateAssetStatusLive}, nil
+}
+
 func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, resource *model.Resource, settingRecord *model.SystemSetting, setting *arkPrivateAssetSettingValue) (string, error) {
 	binding, err := s.repo.ArkPrivateAssetBinding(resource.ID, setting.ProjectName)
 	if err == nil {

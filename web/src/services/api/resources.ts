@@ -46,6 +46,11 @@ export type AccountFileStorageUsage = {
     totalBytes: number;
 };
 
+export type ArkPrivateAssetSync = {
+    resourceId: string;
+    status: "active" | string;
+};
+
 const api = apiClient;
 const resourceCache = new Map<string, RemoteResource>();
 const resourceRequests = new Map<string, Promise<RemoteResource>>();
@@ -66,6 +71,11 @@ export function updateUserOSSSetting(input: UserOSSSettingInput) {
 export async function getAccountFileStorageUsage() {
     const data = await request<{ usage: AccountFileStorageUsage }>(api.get("/resources/storage-usage"));
     return data.usage;
+}
+
+export async function syncResourceToArkPrivateAsset(id: string) {
+    const data = await request<{ sync: ArkPrivateAssetSync }>(api.post(`/resources/${encodeURIComponent(id)}/ark-private-asset`));
+    return data.sync;
 }
 
 export function resourceIdFromStorageKey(storageKey?: string) {
