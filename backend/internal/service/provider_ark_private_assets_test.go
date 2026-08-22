@@ -87,6 +87,15 @@ func TestCallArkPrivateAssetAPIUsesIDForGetAsset(t *testing.T) {
 	}
 }
 
+func TestArkPrivateAssetControlPlaneDisablesGenerationAnalytics(t *testing.T) {
+	ctx := context.WithValue(context.Background(), providerAnalyticsKey{}, providerAnalyticsContext{Service: &Service{}, Capability: "video"})
+	ctx = withoutProviderAnalytics(ctx)
+	metadata, ok := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+	if !ok || metadata.Service != nil || metadata.Capability != "" {
+		t.Fatalf("provider analytics = %#v, %v", metadata, ok)
+	}
+}
+
 func TestArkPrivateAssetSettingsEncryptSecret(t *testing.T) {
 	svc := &Service{dataDir: t.TempDir()}
 	value, err := arkPrivateAssetSettingFromRequest(ArkPrivateAssetSettingRequest{

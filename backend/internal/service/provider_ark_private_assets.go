@@ -43,6 +43,10 @@ func taskExecutionID(ctx context.Context) string {
 	return strings.TrimSpace(id)
 }
 
+func withoutProviderAnalytics(ctx context.Context) context.Context {
+	return context.WithValue(ctx, providerAnalyticsKey{}, providerAnalyticsContext{})
+}
+
 func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID string, input *canvasGenerationInput) error {
 	if input == nil || !isArkPrivateAssetVideoConfig(input.Config) || !parseBool(input.Config.ArkPrivateAssetUpload, true) {
 		return nil
@@ -333,6 +337,9 @@ func (s *Service) failArkPrivateAssetBinding(binding *model.ArkPrivateAssetBindi
 }
 
 func callArkPrivateAssetAPI(ctx context.Context, setting arkPrivateAssetSettingValue, action string, payload map[string]interface{}) (map[string]interface{}, error) {
+	// 素材库控制面调用不是模型生成；不能继承视频任务的请求审计或账单上下文，
+	// 否则创建素材组、上传素材和审核查询会被误记为可计费的视频调用。
+	ctx = withoutProviderAnalytics(ctx)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
