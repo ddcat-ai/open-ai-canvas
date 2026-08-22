@@ -708,7 +708,7 @@
     --dock-label-fs: var(--fs-label);     /* 11px */
     --dock-blur: 24px;
     --dock-surface: var(--cn-spatial-surface);
-    --dock-border: var(--cn-spatial-toolbar-border);
+    --dock-border: transparent;
     --dock-item-radius: var(--r-md);      /* 8px */
     --dock-item-radius-labeled: var(--r-lg); /* 12px */
     --dock-radius-tight: var(--r-tight);
@@ -1402,7 +1402,7 @@
 
     .canvas-topbar-cluster {
         min-height: var(--space-10);
-        border: 1px solid var(--dock-border);
+        border: 0;
         border-radius: var(--r-lg);
         background: var(--dock-surface);
         padding: var(--space-half) var(--space-2);
@@ -5480,7 +5480,7 @@
     }
 
     .aceternity-dock-danger-group {
-        background: color-mix(in srgb, var(--dock-command-danger) 8%, transparent);
+        background: transparent;
     }
 
     .aceternity-dock-command:focus-visible {
@@ -6252,6 +6252,7 @@
     }
 
     .canvas-floating-dock {
+        border: 0 !important;
         box-shadow:
             0 1px 2px rgba(15, 23, 42, 0.06),
             0 10px 26px rgba(15, 23, 42, 0.08);
@@ -6264,6 +6265,7 @@
     }
 
     .canvas-floating-panel {
+        border: 0 !important;
         box-shadow:
             0 1px 2px rgba(15, 23, 42, 0.06),
             0 14px 34px rgba(15, 23, 42, 0.1);
@@ -6279,6 +6281,11 @@
         box-shadow:
             0 1px 1px rgba(0, 0, 0, 0.28),
             0 14px 34px rgba(0, 0, 0, 0.34);
+    }
+
+    .canvas-mode-switch-trigger {
+        border-color: transparent !important;
+        box-shadow: var(--elevation-overlay);
     }
 
     .canvas-tool-button,

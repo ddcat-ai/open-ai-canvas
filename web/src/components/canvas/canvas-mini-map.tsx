@@ -125,7 +125,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     };
 
     return (
-        <div className="absolute bottom-24 left-6 z-[var(--z-panel)] overflow-hidden rounded-lg border shadow-2xl backdrop-blur-sm" style={{ width, height, background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
+        <div className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-10))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel }}>
             <div
                 ref={containerRef}
                 className="relative h-full w-full cursor-crosshair"
@@ -167,7 +167,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                         />
                     );
                 })}
-                <div ref={viewportRectRef} className="pointer-events-none absolute border" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, borderColor: theme.node.activeStroke, background: `${theme.node.activeStroke}18` }} />
+                <div ref={viewportRectRef} className="pointer-events-none absolute rounded-[var(--r-xs)]" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }} />
             </div>
         </div>
     );
