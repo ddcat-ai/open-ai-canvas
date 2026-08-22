@@ -11,6 +11,8 @@ export type CanvasNodeActionContextValue = {
     deleteNode?: (node: CanvasNodeData) => void;
     /** 合并式更新节点 metadata；扩展节点（如调色）在自己的面板里改参数时用。 */
     updateMetadata?: (nodeId: string, patch: CanvasNodeMetadata) => void;
+    /** 改节点宽高；图片首次量到真实尺寸后按比例校正节点用。 */
+    resizeNode?: (nodeId: string, size: { width: number; height: number }) => void;
 };
 
 export const CanvasNodeActionContext = createContext<CanvasNodeActionContextValue>({});

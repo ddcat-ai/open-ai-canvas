@@ -5,6 +5,7 @@ import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
+import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { buildLibTVImagePreviewUrl } from "@/lib/canvas/libtv-import";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -16,6 +17,7 @@ import { cacheResourceObjectUrl, getCachedResourceObjectUrl } from "@/services/r
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
+import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 import { MarkdownNodeContent } from "./nodes/markdown-node";
 import { ChartNodeContent } from "./nodes/chart-node";
@@ -432,11 +434,36 @@ function ImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, bat
     const nearViewport = useNearViewport(imageContainerRef);
     const { url, loading } = useNodeResourceUrl(node, nearViewport);
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
+    const { resizeNode, updateMetadata } = useCanvasNodeActions();
+
+    /**
+     * 让节点跟随图片真实比例。
+     *
+     * 上传接口的 width/height 是可选的（services/api/resources.ts），拿不到时节点会落到
+     * 默认的横向比例，竖图就被放进一个宽盒子、两侧留黑。这里在图片解码后量真实尺寸并校正。
+     *
+     * 判据是「用户有没有手动定过尺寸」，**不是**「有没有量过尺寸」——后者会让所有已经
+     * 存过 naturalWidth 的旧节点永远得不到修正（第一版就是这么写的，所以没生效）。
+     * 手动拉过（manualSize）或自由比例（freeResize）的节点只补记尺寸、不动宽高。
+     */
+    const fitToImage = (element: HTMLImageElement) => {
+        const naturalWidth = element.naturalWidth;
+        const naturalHeight = element.naturalHeight;
+        if (!naturalWidth || !naturalHeight) return;
+        if (node.metadata?.naturalWidth !== naturalWidth || node.metadata?.naturalHeight !== naturalHeight) {
+            updateMetadata?.(node.id, { naturalWidth, naturalHeight });
+        }
+        if (node.metadata?.freeResize || node.metadata?.manualSize) return;
+        const size = fitNodeSize(naturalWidth, naturalHeight);
+        // 差不到 1px 就别动，避免无意义的状态写入。
+        if (Math.abs(size.width - node.width) < 1 && Math.abs(size.height - node.height) < 1) return;
+        resizeNode?.(node.id, size);
+    };
 
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
             <div ref={imageContainerRef} className="h-full w-full overflow-hidden rounded-[var(--node-radius)]">
-                {url ? <img src={url} alt={node.title} loading={importedFromLibTV ? "eager" : "lazy"} decoding="async" draggable={false} onDragStart={(event) => event.preventDefault()} className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`} /> : <div className="grid size-full place-items-center" style={{ color: theme.node.muted }}>{loading ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}</div>}
+                {url ? <img src={url} alt={node.title} loading={importedFromLibTV ? "eager" : "lazy"} decoding="async" draggable={false} onDragStart={(event) => event.preventDefault()} onLoad={(event) => fitToImage(event.currentTarget)} className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`} /> : <div className="grid size-full place-items-center" style={{ color: theme.node.muted }}>{loading ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}</div>}
             </div>
         </BatchFrame>
     );

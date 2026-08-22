@@ -308,6 +308,8 @@ export type CanvasNodeMetadata = {
     chartKind?: "bar" | "line";
     /** 调色节点的参数；缺省视为未调色。 */
     colorGrade?: CanvasColorGrade;
+    /** 用户手动拉伸过尺寸；图片按真实比例自动适配时避让它。 */
+    manualSize?: boolean;
     storyboard?: StoryboardData;
     storyboardShotDuration?: StoryboardShotDuration;
     storyboardShotCount?: StoryboardShotCount;
