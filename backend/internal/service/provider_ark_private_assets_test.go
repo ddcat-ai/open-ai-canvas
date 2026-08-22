@@ -60,6 +60,33 @@ func TestCallArkPrivateAssetAPISignsAndUsesAssetContract(t *testing.T) {
 	}
 }
 
+func TestCallArkPrivateAssetAPIUsesIDForGetAsset(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if request.URL.Query().Get("Action") != "GetAsset" || body["Id"] != "asset-test" || body["AssetId"] != nil {
+			t.Errorf("GetAsset request = %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Result":{"Status":"Processing"}}`))
+	}))
+	defer server.Close()
+
+	previousBaseURL := arkPrivateAssetAPIBaseURL
+	arkPrivateAssetAPIBaseURL = server.URL
+	t.Cleanup(func() { arkPrivateAssetAPIBaseURL = previousBaseURL })
+
+	_, err := callArkPrivateAssetAPI(context.Background(), arkPrivateAssetSettingValue{
+		Region: "cn-beijing", AccessKeyID: "test-access-key", AccessKeySecret: "test-secret-key",
+	}, "GetAsset", map[string]interface{}{"Id": "asset-test", "ProjectName": "default"})
+	if err != nil {
+		t.Fatalf("callArkPrivateAssetAPI() error = %v", err)
+	}
+}
+
 func TestArkPrivateAssetSettingsEncryptSecret(t *testing.T) {
 	svc := &Service{dataDir: t.TempDir()}
 	value, err := arkPrivateAssetSettingFromRequest(ArkPrivateAssetSettingRequest{

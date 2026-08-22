@@ -152,6 +152,16 @@ func (s *Service) SyncResourceToArkPrivateAsset(ctx context.Context, actor *mode
 func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, resource *model.Resource, settingRecord *model.SystemSetting, setting *arkPrivateAssetSettingValue) (string, error) {
 	binding, err := s.repo.ArkPrivateAssetBinding(resource.ID, setting.ProjectName)
 	if err == nil {
+		if shouldResumeArkPrivateAssetPolling(binding) {
+			// 素材已创建成功，只是旧版 GetAsset 参数错误导致轮询失败；恢复轮询，
+			// 不重新上传素材，也不会创建重复的方舟资产。
+			binding.Status = arkPrivateAssetStatusWait
+			binding.Error = ""
+			if err := s.repo.SaveArkPrivateAssetBinding(binding); err != nil {
+				return "", err
+			}
+			return s.waitForArkPrivateAsset(ctx, binding, setting)
+		}
 		if !shouldRetryArkPrivateAssetBinding(binding) {
 			return s.waitForArkPrivateAsset(ctx, binding, setting)
 		}
@@ -253,6 +263,13 @@ func shouldRetryArkPrivateAssetBinding(binding *model.ArkPrivateAssetBinding) bo
 	return strings.Contains(binding.Error, "方舟素材库没有返回素材组 ID") || strings.Contains(binding.Error, "方舟素材库没有返回素材 ID")
 }
 
+func shouldResumeArkPrivateAssetPolling(binding *model.ArkPrivateAssetBinding) bool {
+	if binding == nil || strings.ToLower(strings.TrimSpace(binding.Status)) != arkPrivateAssetStatusFail || binding.AssetGroupID == "" || binding.ArkAssetID == "" {
+		return false
+	}
+	return strings.Contains(binding.Error, "MissingParameter.Id")
+}
+
 func (s *Service) waitForArkPrivateAsset(ctx context.Context, binding *model.ArkPrivateAssetBinding, setting *arkPrivateAssetSettingValue) (string, error) {
 	deadline := time.Now().Add(arkPrivateAssetPollLimit)
 	for time.Now().Before(deadline) {
@@ -267,7 +284,7 @@ func (s *Service) waitForArkPrivateAsset(ctx context.Context, binding *model.Ark
 		}
 		if binding.ArkAssetID != "" {
 			response, err := callArkPrivateAssetAPI(ctx, *setting, "GetAsset", map[string]interface{}{
-				"AssetId":     binding.ArkAssetID,
+				"Id":          binding.ArkAssetID,
 				"ProjectName": setting.ProjectName,
 			})
 			if err != nil {
