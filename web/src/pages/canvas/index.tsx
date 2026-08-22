@@ -39,7 +39,7 @@ export default function CanvasPage() {
     const updateProject = useCanvasStore((state) => state.updateProject);
     const [associationOpen, setAssociationOpen] = useState(false);
     const [associationProjectId, setAssociationProjectId] = useState("");
-    const projectQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+    const projectQuery = useQuery({ queryKey: ["projects"], queryFn: () => listProjects() });
 
     const mode = searchParams.get("mode");
     const agentMode = mode === "new" || mode === "recent" || mode === "choose";
