@@ -47,7 +47,7 @@ export const NODE_SPECS = {
             workflowKind: "script",
             storyboard: {
                 rows: [],
-                visibleColumns: ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                 referenceNodeIds: [],
             },
         },

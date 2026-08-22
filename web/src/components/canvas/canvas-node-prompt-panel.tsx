@@ -113,7 +113,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     } as CSSProperties;
     const composerSurfaceStyle = {
         ...composerTokens,
-        border: `1px solid ${theme.node.edge}`,
+        border: `1px solid color-mix(in srgb, ${theme.node.edge} 42%, transparent)`,
         background: theme.node.panel,
         color: theme.node.text,
         boxShadow: theme.node.shadow,

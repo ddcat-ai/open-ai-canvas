@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { Button, Checkbox, Dropdown, Input, InputNumber, Modal, Segmented, Select, Table, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, Minus, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { ModelPicker } from "@/components/model-picker";
@@ -33,8 +33,17 @@ import type { TaskStatus } from "@/services/api/task-center";
 
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;
-const SCRIPT_GRID_TEMPLATE = "72px 150px minmax(280px, 1.4fr) minmax(220px, 1fr) 58px";
+const SCRIPT_GRID_TEMPLATE = "72px minmax(220px, 1fr) minmax(300px, 1.4fr) minmax(220px, 1fr) 58px";
 const EMPTY_STORYBOARD_ROWS: StoryboardRow[] = [];
+const DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"];
+const LEGACY_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "plotDescription", "dialogue"];
+
+function resolveStoryboardVisibleColumns(columns?: StoryboardColumn[]) {
+    if (!columns?.length || (columns.length === LEGACY_STORYBOARD_COLUMNS.length && LEGACY_STORYBOARD_COLUMNS.every((column) => columns.includes(column)))) {
+        return DEFAULT_STORYBOARD_COLUMNS;
+    }
+    return columns;
+}
 
 const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "序号", value: "shotNumber" },
@@ -276,10 +285,8 @@ export function CanvasScriptNodeContent({
                 <HeaderCell borderColor={theme.node.stroke} align="center">
                     序号
                 </HeaderCell>
-                <HeaderCell borderColor={theme.node.stroke} align="center">
-                    时长
-                </HeaderCell>
-                <HeaderCell borderColor={theme.node.stroke}>画面描述</HeaderCell>
+                <HeaderCell borderColor={theme.node.stroke}>画面</HeaderCell>
+                <HeaderCell borderColor={theme.node.stroke}>视频提示词</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>台词/旁白</HeaderCell>
                 <span className="text-center">操作</span>
             </div>
@@ -308,16 +315,8 @@ export function CanvasScriptNodeContent({
                                     </span>
                                 ) : null}
                             </div>
-                            <div className="grid grid-cols-[32px_1fr_32px] items-center border-r px-2" style={{ borderColor: theme.node.stroke }}>
-                                <SmallButton title="减少 1 秒" onClick={() => onUpdateRow(row.id, { durationSeconds: Math.max(1, row.durationSeconds - 1) })}>
-                                    <Minus className="size-3" />
-                                </SmallButton>
-                                <span className="text-center text-sm font-medium tabular-nums">{row.durationSeconds}s</span>
-                                <SmallButton title="增加 1 秒" onClick={() => onUpdateRow(row.id, { durationSeconds: Math.min(60, row.durationSeconds + 1) })}>
-                                    <Plus className="size-3" />
-                                </SmallButton>
-                            </div>
                             <CompactInput value={row.plotDescription} placeholder="描述画面内容" onChange={(value) => onUpdateRow(row.id, { plotDescription: value })} borderColor={theme.node.stroke} />
+                            <CompactInput value={row.videoMotionPrompt} placeholder="描述视频运动、镜头和动作" onChange={(value) => onUpdateRow(row.id, { videoMotionPrompt: value })} borderColor={theme.node.stroke} />
                             <CompactInput value={row.dialogue} placeholder="台词或旁白" onChange={(value) => onUpdateRow(row.id, { dialogue: value })} borderColor={theme.node.stroke} />
                             <div className="grid h-full place-items-center">
                                 <button
@@ -609,7 +608,7 @@ export function CanvasScriptEditor({
     const [query, setQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
-    const visibleColumns = node?.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"];
+    const visibleColumns = resolveStoryboardVisibleColumns(node?.metadata?.storyboard?.visibleColumns);
     const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
     const filteredRows = useMemo(() => {
         const keyword = query.trim().toLowerCase();

@@ -80,7 +80,7 @@ export function useCanvasStoryboard({
                 ...node.metadata,
                 storyboard: {
                     rows: updater(node.metadata?.storyboard?.rows || []),
-                    visibleColumns: node.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                    visibleColumns: node.metadata?.storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                     referenceNodeIds: node.metadata?.storyboard?.referenceNodeIds || [],
                 },
             },
@@ -225,7 +225,7 @@ export function useCanvasStoryboard({
                 ...scriptNode.metadata,
                 storyboard: {
                     rows: (scriptNode.metadata?.storyboard?.rows || []).map((row) => ({ ...row, imageNodeId: imageNodeByRowId.get(row.id) || row.imageNodeId })),
-                    visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                    visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                     referenceNodeIds: scriptNode.metadata?.storyboard?.referenceNodeIds || [],
                 },
             },
@@ -313,7 +313,7 @@ export function useCanvasStoryboard({
                 ...scriptNode.metadata,
                 storyboard: {
                     rows: allRows.map((row) => ({ ...row, videoNodeId: videoNodeByRowId.get(row.id) || row.videoNodeId })),
-                    visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                    visibleColumns: scriptNode.metadata?.storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                     referenceNodeIds: scriptNode.metadata?.storyboard?.referenceNodeIds || [],
                 },
             },

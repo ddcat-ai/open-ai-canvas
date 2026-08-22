@@ -242,7 +242,7 @@ export function CanvasProjectSidebar({ projectId, detail, onAddChapter, onLocate
             </section>
 
             <section className="shrink-0 border-t border-border/70 p-2">
-                <button type="button" onClick={onOpenAssets} className="flex h-9 w-full items-center gap-2 rounded-md border border-border/80 px-2 text-xs text-foreground/65 hover:border-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)]">
+                <button type="button" onClick={onOpenAssets} className="flex h-9 w-full items-center gap-2 rounded-md border border-border/45 px-2 text-xs text-foreground/65 hover:border-[var(--workspace-accent)] hover:bg-[var(--workspace-accent-soft)]">
                     <Images className="size-3.5 text-foreground/42" />
                     <span className="flex-1 text-left">引用项目资产</span>
                     <span className="rounded bg-foreground/[.06] px-1.5 py-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/45">{mediaAssetCount.toLocaleString("zh-CN")}</span>

@@ -45,7 +45,7 @@ export function createCanvasNode(type: CanvasNodeType, position: Position, metad
         width: spec.width,
         height: spec.height,
         metadata: type === CanvasNodeType.Script
-            ? { ...spec.metadata, ...metadata, storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "durationSeconds", "plotDescription", "dialogue"], referenceNodeIds: [] } }
+            ? { ...spec.metadata, ...metadata, storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"], referenceNodeIds: [] } }
             : { ...spec.metadata, ...metadata, ...(type === CanvasNodeType.Drawing ? { drawingId: metadata?.drawingId || `${id}-document` } : {}) },
     };
 }
@@ -90,7 +90,7 @@ export function storyboardPromptTemplateMetadata(row: StoryboardRow, kind: "imag
 
 export function cinematicStoryboardColumns(columns?: StoryboardColumn[]): StoryboardColumn[] {
     return Array.from(new Set([
-        ...(columns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"]),
+        ...(columns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"]),
         "shotSize",
         "narrativeIntent",
         "viewerPOV",
@@ -240,7 +240,7 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
                     rows: (storyboard?.rows || []).map((item) => item.id !== rowId ? item : scriptNodeId === connection.fromNodeId
                         ? { ...item, imageNodeId: linkedNode.type === CanvasNodeType.Image ? linkedNode.id : item.imageNodeId, videoNodeId: linkedNode.type === CanvasNodeType.Video ? linkedNode.id : item.videoNodeId }
                         : { ...item, referenceNodeIds: Array.from(new Set([...(item.referenceNodeIds || []), linkedNode.id])) }),
-                    visibleColumns: storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+                    visibleColumns: storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                     referenceNodeIds: handleId === "storyboard:context" ? Array.from(new Set([...(storyboard?.referenceNodeIds || []), linkedNode.id])) : storyboard?.referenceNodeIds || [],
                 },
             },

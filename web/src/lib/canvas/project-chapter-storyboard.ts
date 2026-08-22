@@ -22,7 +22,7 @@ export function upsertProjectChapterStoryboard(
 
     const storyboard: StoryboardData = {
         rows,
-        visibleColumns: existing?.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+        visibleColumns: existing?.metadata?.storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
         referenceNodeIds: existing?.metadata?.storyboard?.referenceNodeIds || [],
     };
     const scriptNode: CanvasNodeData = existing
@@ -75,7 +75,7 @@ function createChapterStoryboardNode(nodes: CanvasNodeData[], unit: Pick<Project
         chapterTitle: unit.title,
         storyboard: {
             rows,
-            visibleColumns: ["shotNumber", "durationSeconds", "plotDescription", "dialogue"],
+            visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
             referenceNodeIds: [],
         },
     });

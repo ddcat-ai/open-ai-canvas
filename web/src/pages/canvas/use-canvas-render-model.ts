@@ -95,22 +95,15 @@ export function useCanvasRenderModel({
         return hidden;
     }, [collapsedBatchChildIds, collapsingBatchIds, nodeById, nodes]);
     const connectionLayerBounds = useMemo(() => {
-        if (!nodes.length) return { left: -1, top: -1, width: 2, height: 2 };
-        const padding = 320;
-        let left = Number.POSITIVE_INFINITY;
-        let top = Number.POSITIVE_INFINITY;
-        let right = Number.NEGATIVE_INFINITY;
-        let bottom = Number.NEGATIVE_INFINITY;
-        nodes.forEach((node) => {
-            left = Math.min(left, node.position.x - padding);
-            top = Math.min(top, node.position.y - padding);
-            right = Math.max(right, node.position.x + node.width + padding);
-            bottom = Math.max(bottom, node.position.y + node.height + padding);
-        });
-        return { left, top, width: Math.max(2, right - left), height: Math.max(2, bottom - top) };
-    }, [nodes]);
+        const padding = (reduceMediaEffects ? 96 : 144) / Math.max(viewport.k, 0.05);
+        const left = -viewport.x / viewport.k - padding;
+        const top = -viewport.y / viewport.k - padding;
+        const width = viewportSize.width / viewport.k + padding * 2;
+        const height = viewportSize.height / viewport.k + padding * 2;
+        return { left, top, width: Math.max(2, width), height: Math.max(2, height) };
+    }, [reduceMediaEffects, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
     const renderBounds = useMemo(() => {
-        const padding = (reduceMediaEffects ? 240 : 360) / viewport.k;
+        const padding = (reduceMediaEffects ? 128 : 192) / viewport.k;
         const viewLeft = -viewport.x / viewport.k - padding;
         const viewTop = -viewport.y / viewport.k - padding;
         const viewRight = viewLeft + viewportSize.width / viewport.k + padding * 2;

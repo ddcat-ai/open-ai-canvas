@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, Plus, RefreshCw, Replace, Settings2, Star, Trash2, Type, Upload, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, Plus, RefreshCw, Settings2, Star, Trash2, Type, Video } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
@@ -95,7 +95,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     onOpenTaskDetails,
     onOpenVersions,
     onViewImage,
-    onReplaceMedia,
     onOpenTextEditor,
     onOpenDirector,
     onOpenDrawing,
@@ -112,7 +111,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
     const isComposerNode = data.type === CanvasNodeType.Config;
     const hasMediaContent = hasImageContent || hasVideoContent || hasAudioContent;
-    const hasReplaceAction = !readOnly && (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video);
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const showStatusTrack = Boolean(resourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly));
@@ -367,25 +365,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                     />
                 </div>
 
-                {hasReplaceAction && (!hasMediaContent || isSelected || hovered) ? (
-                    <div
-                        className="absolute right-3 top-3 z-[var(--node-z-overlay)]"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                    >
-                        <button
-                            type="button"
-                            className="canvas-node-inline-action grid size-9 place-items-center p-0 backdrop-blur-xl transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                            style={{ outlineColor: theme.accent.primary }}
-                            onClick={(event) => { event.stopPropagation(); onReplaceMedia?.(data); }}
-                            aria-label={hasMediaContent ? "替换媒体" : data.type === CanvasNodeType.Image ? "上传图片" : "上传视频"}
-                            title={hasMediaContent ? "替换媒体" : data.type === CanvasNodeType.Image ? "上传图片" : "上传视频"}
-                        >
-                            {hasMediaContent ? <Replace className="size-3.5" /> : <Upload className="size-3.5" />}
-                        </button>
-                    </div>
-                ) : null}
-
                 {data.type === CanvasNodeType.Text && data.metadata?.workflowKind !== "character" && !readOnly ? (
                     <div
                         className={`absolute bottom-[10%] left-1/2 z-[var(--node-z-overlay)] -translate-x-1/2 motion-safe:transition motion-safe:duration-200 ${isSelected ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
@@ -424,7 +403,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </button>
                 ) : null}
                 {showStatusTrack ? (
-                    <div className={`absolute top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${hasReplaceAction ? "right-14" : "right-3"} ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
+                    <div className={`absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
                         {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
                         {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
@@ -638,7 +617,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
             style={{
                 maxWidth: maxHeaderWidth,
                 borderRadius: "var(--r-sm)",
-                background: theme.node.panel,
+                background: "transparent",
                 paddingInline: "var(--space-1-half)",
                 color: active ? theme.node.text : theme.node.label,
                 transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`,
@@ -653,7 +632,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                     autoFocus
                     value={draft}
                     className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
-                    style={{ background: theme.spatial.elevated, color: theme.node.text }}
+                    style={{ background: "transparent", color: theme.node.text }}
                     onChange={(event) => onDraftChange(event.target.value)}
                     onFocus={(event) => event.currentTarget.select()}
                     onBlur={onCommit}
