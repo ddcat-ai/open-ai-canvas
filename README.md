@@ -46,6 +46,8 @@
 | <img src="assets/user-kyori.jpg" alt="kyori" width="80"> | kyori | [1771634408@qq.com](mailto:1771634408@qq.com) | 励志成为未来最好用的画布仓库的贡献者 |
 | <img src="assets/user-bowen.jpg" alt="Bowen" width="80"> | Bowen | [admin@bowen.games](mailto:admin@bowen.games) | 剑走偏峰，雷厉风行。 |
 | <img src="assets/user-ken.jpg" alt="ken" width="80"> | ken | [2506802@qq.com](mailto:2506802@qq.com) | 走自己的路 |
+| <img src="assets/user-fish.png.jpg" alt="🐟" width="80"> | 🐟 | [cihai.sea@gmail.com](mailto:cihai.sea@gmail.com) | AI 界 热于助人的拖油瓶 |
+| <img src="assets/user-QAyong.jpg" alt="QAyong" width="80"> | QAyong<br><sub>ID：QAyong<br>B站：QAyong</sub> | [2110491559@qq.com](mailto:2110491559@qq.com) | AI短剧合规，资产确权 |
 
 ## 主要功能
 
