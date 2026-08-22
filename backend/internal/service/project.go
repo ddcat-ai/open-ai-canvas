@@ -69,6 +69,14 @@ type ProjectSummary struct {
 	CompletedUnitCount int           `json:"completedUnitCount"`
 }
 
+type ProjectListPage struct {
+	Projects []ProjectSummary `json:"projects"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"pageSize"`
+	Total    int64            `json:"total"`
+	HasMore  bool             `json:"hasMore"`
+}
+
 type ProjectDetail struct {
 	Project         model.Project                 `json:"project"`
 	Units           []model.ProjectUnit           `json:"units"`
@@ -87,6 +95,22 @@ func (s *Service) ListProjects(userID string) ([]ProjectSummary, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.summarizeProjects(userID, projects)
+}
+
+func (s *Service) ListProjectsPage(userID string, page int, pageSize int) (ProjectListPage, error) {
+	projects, total, err := s.repo.ProjectsPage(userID, page, pageSize)
+	if err != nil {
+		return ProjectListPage{}, err
+	}
+	result, err := s.summarizeProjects(userID, projects)
+	if err != nil {
+		return ProjectListPage{}, err
+	}
+	return ProjectListPage{Projects: result, Page: page, PageSize: pageSize, Total: total, HasMore: int64(page*pageSize) < total}, nil
+}
+
+func (s *Service) summarizeProjects(userID string, projects []model.Project) ([]ProjectSummary, error) {
 	result := make([]ProjectSummary, 0, len(projects))
 	for _, project := range projects {
 		units, unitsErr := s.repo.ProjectUnitSummaries(project.ID)

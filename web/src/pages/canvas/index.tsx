@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Modal, Select } from "antd";
 import { ArrowDownAZ, Clock3, Download, FileUp, ListFilter, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 
-import { CollectionGrid, PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceLoadingState, WorkspaceState } from "@/components/layout/workspace-state";
 
 import { readZip } from "@/lib/zip";
@@ -29,8 +29,8 @@ export default function CanvasPage() {
     const [keyword, setKeyword] = useState("");
     const [sort, setSort] = useState<"updated" | "name" | "nodes">("updated");
     const [projectFilter, setProjectFilter] = useState("all");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(24);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+    const [loadedProjectCount, setLoadedProjectCount] = useState(50);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const projects = useCanvasStore((state) => state.projects);
     const importProject = useCanvasStore((state) => state.importProject);
@@ -62,7 +62,7 @@ export default function CanvasPage() {
         return values;
     }, [keyword, projectFilter, projects, sort]);
     const projectNames = useMemo(() => new Map((projectQuery.data?.projects || []).map(({ project }) => [project.id, project.name])), [projectQuery.data]);
-    const visibleProjects = filteredProjects.slice((page - 1) * pageSize, page * pageSize);
+    const visibleProjects = filteredProjects.slice(0, loadedProjectCount);
     const showCreateCard = !keyword.trim() && projectFilter === "all";
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const projectFilterLabel = projectFilter === "all" ? "全部画布" : projectFilter === "independent" ? "自由画布" : projectNames.get(projectFilter) || "项目画布";
@@ -73,6 +73,21 @@ export default function CanvasPage() {
         { key: "name", label: "按名称", icon: <ArrowDownAZ className="size-3.5" /> },
         { key: "nodes", label: "按节点数量", icon: <ListFilter className="size-3.5" /> },
     ];
+    useEffect(() => {
+        setLoadedProjectCount(50);
+    }, [keyword, projectFilter, sort]);
+    useEffect(() => {
+        const node = loadMoreRef.current;
+        if (!node || visibleProjects.length >= filteredProjects.length) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry?.isIntersecting) setLoadedProjectCount((count) => Math.min(count + 50, filteredProjects.length));
+            },
+            { rootMargin: "600px" },
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [filteredProjects.length, visibleProjects.length]);
     const associateSelected = async (nextProjectId = associationProjectId) => {
         const projectId = nextProjectId || undefined;
         selectedIds.forEach((id) => updateProject(id, { projectId }));
@@ -213,7 +228,6 @@ export default function CanvasPage() {
                             aria-label="搜索画布"
                             onChange={(event) => {
                                 setKeyword(event.target.value);
-                                setPage(1);
                             }}
                         />
                         {keyword ? (
@@ -222,7 +236,6 @@ export default function CanvasPage() {
                                 aria-label="清除搜索"
                                 onClick={() => {
                                     setKeyword("");
-                                    setPage(1);
                                 }}
                             >
                                 <X />
@@ -238,7 +251,6 @@ export default function CanvasPage() {
                                 selectedKeys: [projectFilter],
                                 onClick: ({ key }) => {
                                     setProjectFilter(String(key));
-                                    setPage(1);
                                 },
                             }}
                         >
@@ -255,7 +267,6 @@ export default function CanvasPage() {
                                 selectedKeys: [sort],
                                 onClick: ({ key }) => {
                                     setSort(key as typeof sort);
-                                    setPage(1);
                                 },
                             }}
                         >
@@ -272,7 +283,6 @@ export default function CanvasPage() {
                                     setKeyword("");
                                     setProjectFilter("all");
                                     setSort("updated");
-                                    setPage(1);
                                 }}
                             >
                                 重置
@@ -338,17 +348,9 @@ export default function CanvasPage() {
                 ) : (
                     <WorkspaceState icon="canvas" title="没有匹配的画布" description="换一个画布名称或重置筛选条件。" />
                 )}
-
-                <PaginationBar
-                    current={page}
-                    pageSize={pageSize}
-                    total={filteredProjects.length}
-                    pageSizeOptions={[12, 24, 48]}
-                    onChange={(nextPage, nextPageSize) => {
-                        setPage(nextPageSize !== pageSize ? 1 : nextPage);
-                        setPageSize(nextPageSize);
-                    }}
-                />
+                {hydrated && visibleProjects.length ? <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
+                    {visibleProjects.length < filteredProjects.length ? `继续下滑加载更多（每页 50 条）` : `已加载全部 ${filteredProjects.length} 个画布`}
+                </div> : null}
             </div>
 
             <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />

@@ -982,6 +982,19 @@ func (r *Repository) Projects(userID string) ([]model.Project, error) {
 	return projects, err
 }
 
+func (r *Repository) ProjectsPage(userID string, page int, pageSize int) ([]model.Project, int64, error) {
+	var projects []model.Project
+	var total int64
+	query := r.db.Model(&model.Project{}).Where("user_id = ?", userID)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := query.Order("updated_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&projects).Error; err != nil {
+		return nil, 0, err
+	}
+	return projects, total, nil
+}
+
 func (r *Repository) ProjectForUser(userID string, id string) (*model.Project, error) {
 	var project model.Project
 	if err := r.db.First(&project, "id = ? AND user_id = ?", id, userID).Error; err != nil {

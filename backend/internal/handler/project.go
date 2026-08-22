@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"infinite-canvas/backend/internal/service"
 
@@ -29,12 +31,33 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		projects, err := svc.ListProjects(user.ID)
+		pageParam, hasPage := c.GetQuery("page")
+		pageSizeParam, hasPageSize := c.GetQuery("page_size")
+		if !hasPage && !hasPageSize {
+			projects, err := svc.ListProjects(user.ID)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			ok(c, gin.H{"projects": projects})
+			return
+		}
+		page, err := parsePositiveQueryInt(pageParam, 1)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		pageSize, err := parsePositiveQueryInt(pageSizeParam, 50)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		projects, err := svc.ListProjectsPage(user.ID, page, pageSize)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"projects": projects})
+		ok(c, projects)
 	})
 	r.POST("/projects", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -712,4 +735,15 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"asset": asset})
 	})
+}
+
+func parsePositiveQueryInt(value string, fallback int) (int, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 {
+		return 0, fmt.Errorf("query parameter must be a positive integer")
+	}
+	return parsed, nil
 }

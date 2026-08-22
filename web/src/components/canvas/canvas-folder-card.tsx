@@ -2,7 +2,7 @@ import { Dropdown, Input } from "antd";
 import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
-import { ProjectPreview, formatProjectTime } from "@/components/canvas/canvas-project-card";
+import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
@@ -67,17 +67,13 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
                         )}
                     </div>
                     <div className="canvas-folder-meta">
-                        <span className="canvas-folder-meta-item">{projectName || "自由画布"}</span>
-                        <span className="canvas-folder-meta-separator" aria-hidden="true">
-                            ·
-                        </span>
+                        <span className="canvas-folder-meta-item">{projectName ? `所属项目：${projectName}` : "自由画布"}</span>
+                        <span className="canvas-folder-meta-separator" aria-hidden="true">·</span>
                         <span className="canvas-folder-meta-item">{project.nodes.length} 节点</span>
-                        <span className="canvas-folder-meta-separator" aria-hidden="true">
-                            ·
-                        </span>
-                        <time className="canvas-folder-meta-item" dateTime={project.updatedAt}>
-                            {formatProjectTime(project.updatedAt).replace(/\s*修改$/, "")}
-                        </time>
+                    </div>
+                    <div className="canvas-folder-dates">
+                        <span><small>创建时间</small><time dateTime={project.createdAt}>{formatCanvasDate(project.createdAt)}</time></span>
+                        <span><small>最后更新</small><time dateTime={project.updatedAt}>{formatCanvasDate(project.updatedAt)}</time></span>
                     </div>
                 </div>
             </div>
@@ -119,11 +115,24 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
                         ],
                     }}
                 >
-                    <button type="button" className="canvas-folder-action" aria-label={`${project.title} 画布操作`} title="更多操作" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="canvas-folder-more" aria-label={`${project.title} 画布操作`} title="更多操作" onClick={(event) => event.stopPropagation()}>
                         <MoreHorizontal />
                     </button>
                 </Dropdown>
             </div>
         </article>
     );
+}
+
+function formatCanvasDate(value: string) {
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp)
+        ? new Date(timestamp).toLocaleString("zh-CN", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+          })
+        : "时间不可用";
 }

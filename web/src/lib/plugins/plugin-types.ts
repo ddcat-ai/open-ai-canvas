@@ -18,6 +18,8 @@ export type PluginManifest = {
     id: string;
     name: string;
     version: string;
+    publishedAt?: string;
+    updatedAt?: string;
     apiVersion: string;
     category: PluginCategory;
     description: string;

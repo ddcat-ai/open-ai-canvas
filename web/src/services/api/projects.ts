@@ -170,6 +170,14 @@ export type ProjectSummary = {
     completedUnitCount: number;
 };
 
+export type ProjectListPage = {
+    projects: ProjectSummary[];
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
+
 export type ProjectDetail = {
     project: Project;
     units: ProjectUnit[];
@@ -183,8 +191,10 @@ export type ProjectDetail = {
     assetCandidates: ProjectAssetCandidate[];
 };
 
-export function listProjects() {
-    return request<{ projects: ProjectSummary[] }>(api.get("/projects"));
+export function listProjects(): Promise<{ projects: ProjectSummary[] }>;
+export function listProjects(params: { page: number; pageSize: number }): Promise<ProjectListPage>;
+export function listProjects(params?: { page: number; pageSize: number }) {
+    return request<{ projects: ProjectSummary[] } | ProjectListPage>(api.get("/projects", params ? { params: { page: params.page, page_size: params.pageSize } } : undefined));
 }
 
 export function getProject(id: string) {

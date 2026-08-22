@@ -1,5 +1,5 @@
-import { App, Button, Input, Select, Switch, Tag, Typography } from "antd";
-import { CheckCircle2, ChevronDown, ExternalLink, FolderOpen, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
+import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FolderOpen, PlugZap, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -8,6 +8,8 @@ import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
 import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
 import { usePluginStore } from "@/stores/use-plugin-store";
+
+import "./plugins.css";
 
 const categoryLabels: Record<string, string> = {
     "asset-source": "素材来源",
@@ -36,6 +38,8 @@ const permissionLabels: Record<string, string> = {
     "external.open": "打开外部详情",
 };
 
+const pluginDateFormatter = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" });
+
 export default function PluginsPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
@@ -44,7 +48,11 @@ export default function PluginsPage() {
     const setEnabled = usePluginStore((state) => state.setEnabled);
     const updateConfig = usePluginStore((state) => state.updateConfig);
     const registeredPlugins = useMemo(() => listRegisteredPlugins(), []);
-    const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
+    const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
+    const [search, setSearch] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "disabled">("all");
+    const [trustFilter, setTrustFilter] = useState<"all" | "trusted">("all");
     const [eagleBaseUrl, setEagleBaseUrl] = useState("http://localhost:41595");
     const [eagleAutoUploadGenerated, setEagleAutoUploadGenerated] = useState(true);
     const [eagleGeneratedFolderId, setEagleGeneratedFolderId] = useState("");
@@ -67,6 +75,30 @@ export default function PluginsPage() {
         setEagleGeneratedFolderId(typeof folderId === "string" ? folderId : "");
     }, [eagle?.config.baseUrl, eagle?.config.autoUploadGenerated, eagle?.config.generatedFolderId]);
 
+    const categoryOptions = useMemo(() => [
+        { value: "all", label: "全部分类" },
+        ...Array.from(new Set(registeredPlugins.map((plugin) => plugin.manifest.category))).map((category) => ({ value: category, label: categoryLabels[category] ?? category })),
+    ], [registeredPlugins]);
+
+    const filteredPlugins = useMemo(() => {
+        const normalizedSearch = search.trim().toLocaleLowerCase();
+        return registeredPlugins.filter((plugin) => {
+            const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
+            const manifest = plugin.manifest;
+            const searchableText = [manifest.name, manifest.description, manifest.author, manifest.id, categoryLabels[manifest.category]].filter(Boolean).join(" ").toLocaleLowerCase();
+            if (normalizedSearch && !searchableText.includes(normalizedSearch)) return false;
+            if (categoryFilter !== "all" && manifest.category !== categoryFilter) return false;
+            if (trustFilter === "trusted" && !manifest.trusted) return false;
+            if (statusFilter === "enabled" && !installation?.enabled) return false;
+            if (statusFilter === "disabled" && installation?.enabled) return false;
+            return true;
+        });
+    }, [categoryFilter, installations, registeredPlugins, search, statusFilter, trustFilter]);
+
+    const settingsPlugin = settingsPluginId ? registeredPlugins.find((plugin) => plugin.manifest.id === settingsPluginId) : undefined;
+    const settingsInstallation = settingsPlugin ? installations.find((item) => item.manifest.id === settingsPlugin.manifest.id) : undefined;
+    const settingsEnabled = Boolean(settingsInstallation?.enabled);
+
     const loadEagleFolders = async (url = eagleBaseUrl) => {
         setEagleFoldersLoading(true);
         setEagleFoldersError("");
@@ -80,6 +112,7 @@ export default function PluginsPage() {
             setEagleFoldersLoading(false);
         }
     };
+
     const saveEagleConfig = () => {
         const baseUrl = eagleBaseUrl.trim().replace(/\/$/, "");
         if (!/^https?:\/\//i.test(baseUrl)) {
@@ -91,150 +124,185 @@ export default function PluginsPage() {
     };
 
     return (
-        <main className="app-workspace-page flex h-full min-h-0 flex-col text-foreground">
-            <header className="shrink-0 border-b border-[var(--workspace-border)] px-5 py-4 md:px-7">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <div className="mb-2 flex items-center gap-2 text-[var(--fs-label)] text-foreground/45">
-                            <PlugZap className="size-3.5" aria-hidden="true" />
-                            <span>工作台管理</span>
-                            <span>/</span>
-                            <span>插件中心</span>
-                        </div>
-                        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">插件中心</h1>
-                        <p className="mt-1 text-sm text-foreground/55">管理可连接到影策的素材来源、画布能力和创作工作流。</p>
+        <main className="app-workspace-page plugins-page flex h-full min-h-0 flex-col text-foreground">
+            <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto">
+                <div className="plugins-page-content">
+                    <div className="plugins-toolbar" aria-label="插件筛选">
+                        <Input
+                            className="plugins-search"
+                            prefix={<Search className="size-4 text-foreground/38" aria-hidden="true" />}
+                            value={search}
+                            allowClear
+                            placeholder="搜索插件名称、描述或作者"
+                            onChange={(event) => setSearch(event.target.value)}
+                        />
+                        <Select className="plugins-filter" value={categoryFilter} options={categoryOptions} onChange={setCategoryFilter} aria-label="按分类筛选" />
+                        <Select
+                            className="plugins-filter"
+                            value={statusFilter}
+                            options={[{ value: "all", label: "全部状态" }, { value: "enabled", label: "已启用" }, { value: "disabled", label: "未启用" }]}
+                            onChange={(value) => setStatusFilter(value as "all" | "enabled" | "disabled")}
+                            aria-label="按状态筛选"
+                        />
+                        <Select
+                            className="plugins-filter"
+                            value={trustFilter}
+                            options={[{ value: "all", label: "全部来源" }, { value: "trusted", label: "可信插件" }]}
+                            onChange={(value) => setTrustFilter(value as "all" | "trusted")}
+                            aria-label="按来源筛选"
+                        />
+                        <span className="plugins-filter-icon" aria-hidden="true"><SlidersHorizontal className="size-4" /></span>
                     </div>
-                    <Tag icon={<ShieldCheck className="size-3.5" />} color="gold">可信插件模式</Tag>
-                </div>
-            </header>
 
-            <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-7 md:py-6">
-                <div className="mx-auto w-full max-w-5xl">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h2 className="text-base font-semibold">已接入插件</h2>
-                            <p className="mt-1 text-xs text-foreground/48">插件状态和配置按当前账号隔离保存。</p>
-                        </div>
-                        <Tag className="m-0">{registeredPlugins.length} 个插件</Tag>
-                    </div>
+                    {filteredPlugins.length ? (
+                        <div className="plugins-grid">
+                            {filteredPlugins.map((plugin) => {
+                                const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
+                                const enabled = Boolean(installation?.enabled);
+                                const trusted = Boolean(plugin.manifest.trusted);
+                                return (
+                                    <section key={plugin.manifest.id} className={`plugin-card library-card-surface${trusted ? " is-trusted" : ""}`}>
+                                        <div className="plugin-card-main">
+                                            <div className="plugin-card-heading">
+                                                <span className={`plugin-icon-tile${trusted ? " is-trusted" : ""}`} aria-hidden="true">
+                                                    <PlugZap className="size-5" />
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="plugin-card-title-row">
+                                                        <h3>{plugin.manifest.name}</h3>
+                                                        <span className="plugin-version">v{plugin.manifest.version}</span>
+                                                    </div>
+                                                    <div className="plugin-card-labels">
+                                                        {trusted ? <span className="plugin-trust-label"><ShieldCheck className="size-3.5" />可信插件</span> : null}
+                                                        <span className="plugin-category-label">{categoryLabels[plugin.manifest.category] ?? plugin.manifest.category}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                    <div className="flex flex-col gap-3">
-                        {registeredPlugins.map((plugin) => {
-                            const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
-                            const enabled = Boolean(installation?.enabled);
-                            const expanded = expandedPluginId === plugin.manifest.id;
-                            const settingsId = `plugin-settings-${plugin.manifest.id}`;
-                            return (
-                                <section key={plugin.manifest.id} className="library-card-surface rounded-[var(--r-xl)] p-4 transition-colors duration-200 md:p-5">
-                                    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                        <div className="flex min-w-0 flex-1 items-start gap-3">
-                                            <span className="grid size-11 shrink-0 place-items-center rounded-[var(--r-lg)] bg-[var(--workspace-accent-soft)] text-[var(--workspace-accent)]">
-                                                <PlugZap className="size-5" aria-hidden="true" />
-                                            </span>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="min-w-0 truncate text-base font-semibold">{plugin.manifest.name}</h3>
-                                                    <span className="whitespace-nowrap text-[var(--fs-tiny)] text-foreground/42">v{plugin.manifest.version}</span>
-                                                    <span className="whitespace-nowrap rounded-full bg-foreground/[.06] px-2 py-1 text-[var(--fs-tiny)] text-foreground/58">{categoryLabels[plugin.manifest.category] ?? plugin.manifest.category}</span>
-                                                </div>
-                                                <p className="mt-1 max-w-3xl text-sm leading-6 text-foreground/55">{plugin.manifest.description}</p>
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                    {plugin.manifest.surfaces.map((surface) => <span key={surface} className="rounded-full bg-foreground/[.06] px-2.5 py-1 text-[var(--fs-tiny)] text-foreground/62">{surfaceLabels[surface] ?? surface}</span>)}
-                                                    <span className="rounded-full bg-[var(--library-icon-surface)] px-2.5 py-1 text-[var(--fs-tiny)] text-foreground/52">{plugin.manifest.permissions.length} 项能力</span>
-                                                </div>
+                                            <p className="plugin-card-description">{plugin.manifest.description}</p>
+
+                                            <div className="plugin-card-meta">
+                                                <span><CalendarDays className="size-3.5" />发布 {formatPluginDate(plugin.manifest.publishedAt)}</span>
+                                                <span><Clock3 className="size-3.5" />更新 {formatPluginDate(plugin.manifest.updatedAt)}</span>
+                                            </div>
+
+                                            <div className="plugin-card-tags">
+                                                {plugin.manifest.surfaces.map((surface) => <span key={surface}>{surfaceLabels[surface] ?? surface}</span>)}
+                                                <span>{plugin.manifest.permissions.length} 项能力</span>
                                             </div>
                                         </div>
 
-                                        <div className="flex shrink-0 flex-wrap items-center gap-3 lg:justify-end">
+                                        <div className="plugin-card-actions">
                                             <span role="status" className={`settings-channel-status ${enabled ? "is-ready" : ""}`}>
                                                 <i aria-hidden="true" />
                                                 {enabled ? "已启用" : "未启用"}
                                             </span>
                                             <Switch checked={enabled} aria-label={`${plugin.manifest.name}${enabled ? "停用" : "启用"}`} onChange={(checked) => setEnabled(plugin.manifest.id, checked)} />
                                             <Button
-                                                className="min-h-9"
+                                                className="plugin-settings-button"
                                                 icon={<Settings2 className="size-4" />}
-                                                aria-expanded={expanded}
-                                                aria-controls={settingsId}
-                                                onClick={() => setExpandedPluginId((current) => current === plugin.manifest.id ? null : plugin.manifest.id)}
+                                                aria-expanded={settingsPluginId === plugin.manifest.id}
+                                                aria-haspopup="dialog"
+                                                onClick={() => setSettingsPluginId(plugin.manifest.id)}
                                             >
-                                                {expanded ? "收起设置" : "设置"}
-                                                <ChevronDown className={`ml-1 size-3.5 transition-transform duration-200${expanded ? " rotate-180" : ""}`} aria-hidden="true" />
+                                                设置
                                             </Button>
                                         </div>
+
+                                        {installation?.lastError ? <Typography.Text type="danger" className="plugin-error" role="alert">{installation.lastError}</Typography.Text> : null}
+                                    </section>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="plugins-empty-state">
+                            <SlidersHorizontal className="size-7" aria-hidden="true" />
+                            <h3>没有匹配的插件</h3>
+                            <p>试试清空搜索词，或放宽筛选条件。</p>
+                            <Button onClick={() => { setSearch(""); setCategoryFilter("all"); setStatusFilter("all"); setTrustFilter("all"); }}>清除筛选</Button>
+                        </div>
+                    )}
+
+                    <Modal
+                        className="workspace-modal workspace-modal-wide plugin-settings-modal"
+                        title={settingsPlugin ? `${settingsPlugin.manifest.name} 设置` : null}
+                        open={Boolean(settingsPlugin)}
+                        centered
+                        footer={null}
+                        destroyOnHidden
+                        onCancel={() => setSettingsPluginId(null)}
+                        styles={{ body: { maxHeight: "min(72vh, 760px)", overflowY: "auto", overscrollBehavior: "contain" } }}
+                    >
+                        {settingsPlugin ? (
+                            <div className="plugin-settings-panel plugin-settings-modal-panel">
+                                <div className="plugin-settings-heading">
+                                    <div>
+                                        <p>只展示这个插件实际支持的配置项。</p>
                                     </div>
+                                    {settingsPlugin.manifest.trusted ? <span className="plugin-trust-label"><ShieldCheck className="size-3.5" />可信插件</span> : <span className="plugin-category-label">第三方插件</span>}
+                                </div>
 
-                                    {expanded ? (
-                                        <div id={settingsId} className="mt-4 border-t border-[var(--workspace-border)] pt-4">
-                                            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                                                <div>
-                                                    <h4 className="text-sm font-semibold">{plugin.manifest.name} 设置</h4>
-                                                    <p className="mt-1 text-xs leading-5 text-foreground/48">只展示这个插件实际支持的配置项。</p>
-                                                </div>
-                                                <span className="whitespace-nowrap rounded-full bg-foreground/[.06] px-2.5 py-1 text-[var(--fs-tiny)] text-foreground/52">{plugin.manifest.trusted ? "可信插件" : "第三方插件"}</span>
+                                {settingsPlugin.manifest.id === EAGLE_PLUGIN_ID ? (
+                                    <>
+                                        <div className="plugin-settings-fields">
+                                            <div className="min-w-0">
+                                                <label htmlFor="eagle-base-url">Eagle 本地 API 地址</label>
+                                                <Input id="eagle-base-url" aria-label="Eagle 本地 API 地址" value={eagleBaseUrl} onChange={(event) => setEagleBaseUrl(event.target.value)} placeholder="http://localhost:41595" />
+                                                <p>Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。</p>
                                             </div>
-
-                                            {plugin.manifest.id === EAGLE_PLUGIN_ID ? (
-                                                <>
-                                                    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-                                                    <div className="min-w-0">
-                                                        <label htmlFor="eagle-base-url" className="block text-xs font-medium text-foreground/58">Eagle 本地 API 地址</label>
-                                                        <Input id="eagle-base-url" aria-label="Eagle 本地 API 地址" value={eagleBaseUrl} onChange={(event) => setEagleBaseUrl(event.target.value)} placeholder="http://localhost:41595" className="mt-2 w-full" />
-                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。</p>
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <label htmlFor="eagle-auto-upload-generated" className="block text-xs font-medium text-foreground/58">自动归档生成结果</label>
-                                                            <Switch id="eagle-auto-upload-generated" checked={eagleAutoUploadGenerated} onChange={setEagleAutoUploadGenerated} aria-label="自动归档生成结果到 Eagle" />
-                                                        </div>
-                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。</p>
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <label htmlFor="eagle-generated-folder" className="block text-xs font-medium text-foreground/58">生成结果写入文件夹</label>
-                                                            <Button type="link" size="small" loading={eagleFoldersLoading} onClick={() => void loadEagleFolders()}>读取文件夹</Button>
-                                                        </div>
-                                                        <Select
-                                                            id="eagle-generated-folder"
-                                                            aria-label="生成结果写入文件夹"
-                                                            className="mt-2 w-full"
-                                                            showSearch
-                                                            allowClear
-                                                            value={eagleGeneratedFolderId || undefined}
-                                                            placeholder="Eagle 根目录"
-                                                            optionFilterProp="label"
-                                                            options={[{ value: "__root__", label: "Eagle 根目录" }, ...eagleFolderOptions(eagleFolders)]}
-                                                            onChange={(value) => setEagleGeneratedFolderId(value === "__root__" || !value ? "" : value)}
-                                                        />
-                                                        <p className="mt-2 text-xs leading-5 text-foreground/45">{eagleFoldersError || "默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。"}</p>
-                                                    </div>
+                                            <div className="min-w-0">
+                                                <div className="plugin-setting-label-row">
+                                                    <label htmlFor="eagle-auto-upload-generated">自动归档生成结果</label>
+                                                    <Switch id="eagle-auto-upload-generated" checked={eagleAutoUploadGenerated} onChange={setEagleAutoUploadGenerated} aria-label="自动归档生成结果到 Eagle" />
                                                 </div>
-                                                <div className="mt-4 flex shrink-0 flex-wrap gap-2">
-                                                    <Button type="primary" className="min-h-9" icon={<CheckCircle2 className="size-4" />} onClick={saveEagleConfig}>保存配置</Button>
-                                                    <Button className="min-h-9" icon={<FolderOpen className="size-4" />} disabled={!enabled} onClick={() => navigate("/plugins/eagle")}>打开 Eagle 素材库</Button>
-                                                    <Button className="min-h-9" icon={<ExternalLink className="size-4" />} href="https://api.eagle.cool/" target="_blank">查看 API</Button>
+                                                <p>图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。</p>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="plugin-setting-label-row">
+                                                    <label htmlFor="eagle-generated-folder">生成结果写入文件夹</label>
+                                                    <Button type="link" size="small" loading={eagleFoldersLoading} onClick={() => void loadEagleFolders()}>读取文件夹</Button>
                                                 </div>
-                                                </>
-                                            ) : (
-                                                <div className="rounded-[var(--r-lg)] bg-foreground/[.035] p-4 text-sm text-foreground/55">该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。</div>
-                                            )}
-
-                                            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3 text-xs text-foreground/52">
-                                                <div><span className="mr-2 text-foreground/38">接入位置</span>{plugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join("、")}</div>
-                                                <div><span className="mr-2 text-foreground/38">插件能力</span>{plugin.manifest.permissions.map((permission) => permissionLabels[permission] ?? permission).join("、")}</div>
+                                                <Select
+                                                    id="eagle-generated-folder"
+                                                    aria-label="生成结果写入文件夹"
+                                                    showSearch
+                                                    allowClear
+                                                    value={eagleGeneratedFolderId || undefined}
+                                                    placeholder="Eagle 根目录"
+                                                    optionFilterProp="label"
+                                                    options={[{ value: "__root__", label: "Eagle 根目录" }, ...eagleFolderOptions(eagleFolders)]}
+                                                    onChange={(value) => setEagleGeneratedFolderId(value === "__root__" || !value ? "" : value)}
+                                                />
+                                                <p>{eagleFoldersError || "默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。"}</p>
                                             </div>
                                         </div>
-                                    ) : null}
+                                        <div className="plugin-settings-actions">
+                                            <Button type="primary" icon={<CheckCircle2 className="size-4" />} onClick={saveEagleConfig}>保存配置</Button>
+                                            <Button icon={<FolderOpen className="size-4" />} disabled={!settingsEnabled} onClick={() => navigate("/plugins/eagle")}>打开 Eagle 素材库</Button>
+                                            <Button icon={<ExternalLink className="size-4" />} href="https://api.eagle.cool/" target="_blank">查看 API</Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="plugin-settings-empty">该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。</div>
+                                )}
 
-                                    {installation?.lastError ? <Typography.Text type="danger" className="mt-3 block text-xs" role="alert">{installation.lastError}</Typography.Text> : null}
-                                </section>
-                            );
-                        })}
-                    </div>
+                                <div className="plugin-permissions">
+                                    <div><span>接入位置</span>{settingsPlugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join("、")}</div>
+                                    <div><span>插件能力</span>{settingsPlugin.manifest.permissions.map((permission) => permissionLabels[permission] ?? permission).join("、")}</div>
+                                </div>
+                            </div>
+                        ) : null}
+                    </Modal>
                 </div>
             </div>
         </main>
     );
+}
+
+function formatPluginDate(value?: string) {
+    if (!value) return "未记录";
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? pluginDateFormatter.format(timestamp) : "未记录";
 }
 
 function eagleFolderOptions(folders: EagleFolder[]) {

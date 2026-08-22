@@ -92,7 +92,7 @@ export function AdminShell() {
     return (
         <ConfigProvider theme={getAdminAntThemeConfig(dark)}>
             <main className="admin-shell app-user-workspace flex h-full min-h-0 overflow-hidden text-foreground">
-                <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed ? "w-[60px]" : "w-[212px]")}>
+                <aside className={cn("app-workspace-sidebar admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                     <div className={cn("flex h-13 shrink-0 items-center", collapsed ? "justify-center" : "gap-2 px-3")}>
                         {!collapsed ? (
                             <Link to="/" className="app-workspace-brand-link flex min-w-0 flex-1 items-center gap-2" title="影策">

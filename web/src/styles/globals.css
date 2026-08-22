@@ -413,6 +413,9 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 12%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    --workspace-nav-active-indicator: color-mix(in srgb, var(--workspace-accent) 78%, transparent);
     --workspace-sidebar-width: 208px;        /* 侧栏展开宽度：较原 260px 收窄 20% */
     --workspace-sidebar-nav-width: 208px;    /* 展开态导航内容宽度 */
     --workspace-sidebar-collapsed-width: 56px; /* 折叠态保留可发现的图标菜单轨 */
@@ -550,6 +553,9 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #f5f5f5;
     --workspace-accent-soft: rgba(255, 255, 255, 0.09);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    --workspace-nav-active-indicator: color-mix(in srgb, var(--workspace-accent) 82%, transparent);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -1522,11 +1528,30 @@
         letter-spacing: 0.01em;
         transition: color var(--motion-instant) ease-out;
     }
-    /* 侧栏激活项：主操作角色成对定义（浅色/深色主题同一 token） */
+    .app-workspace-nav-link {
+        position: relative;
+    }
+
+    /* 侧栏激活项同时保留底色和左侧指示条，避免只靠轻微文字变色识别当前位置。 */
     .app-workspace-nav-link.is-active {
-        background: var(--workspace-accent-soft);
+        background: var(--workspace-nav-active-bg);
         color: var(--foreground);
         box-shadow: none;
+    }
+
+    .app-workspace-nav-link.is-active::before {
+        position: absolute;
+        top: 7px;
+        bottom: 7px;
+        left: 0;
+        width: 3px;
+        border-radius: var(--r-full);
+        background: var(--workspace-nav-active-indicator);
+        content: "";
+    }
+
+    .app-workspace-nav-link.is-active:hover {
+        background: var(--workspace-nav-active-hover-bg);
     }
 
 
@@ -3739,7 +3764,6 @@
         z-index: 1;
         display: flex;
         width: 100%;
-        height: 100%;
         cursor: pointer;
         flex-direction: column;
         gap: 0;
@@ -3768,7 +3792,12 @@
         box-shadow: none;
     }
 
-    .canvas-folder-preview > :where(.canvas-project-media, .canvas-project-video, .canvas-project-empty, .canvas-project-preview-canvas),
+    .canvas-folder-preview > :where(.canvas-project-media, .canvas-project-video, .canvas-project-empty, .canvas-project-preview-canvas) {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
     .canvas-folder-preview .cached-resource-image-shell { width: 100%; height: 100%; }
     .canvas-folder-preview .canvas-project-media img, .canvas-folder-preview .cached-resource-image-shell > img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .canvas-folder-preview .canvas-project-media img { filter: saturate(.94) contrast(1.02); transition: transform 420ms var(--motion-ease-out), filter 240ms ease-out; }
@@ -3798,6 +3827,10 @@
     }
     .canvas-folder-meta-item { min-width: 0; }
     .canvas-folder-meta-separator { color: color-mix(in srgb, var(--foreground) 24%, transparent); }
+    .canvas-folder-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 2px; color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+    .canvas-folder-dates > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+    .canvas-folder-dates small { color: color-mix(in srgb, var(--foreground) 34%, transparent); font-size: var(--fs-micro); }
+    .canvas-folder-dates time { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .canvas-folder-select {
         position: absolute;
@@ -3842,7 +3875,7 @@
 
     .canvas-folder-card:hover .canvas-folder-actions, .canvas-folder-card:focus-within .canvas-folder-actions { opacity: 1; transform: translateY(0); }
 
-    .canvas-folder-rename, .canvas-folder-action {
+    .canvas-folder-rename, .canvas-folder-more {
         display: grid;
         width: 28px;
         height: 28px;
@@ -3855,8 +3888,8 @@
         transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
     }
 
-    :where(.canvas-folder-rename, .canvas-folder-action):hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
-    :where(.canvas-folder-rename, .canvas-folder-action) svg { width: 16px; height: 16px; }
+    :where(.canvas-folder-rename, .canvas-folder-more):hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
+    :where(.canvas-folder-rename, .canvas-folder-more) svg { width: 16px; height: 16px; }
 
     @media (max-width: 639px) {
         .canvas-folder-open { gap: 0; padding: 0; }
@@ -4340,6 +4373,9 @@
     .project-library-progress i { display: block; height: 4px; margin-top: 7px; overflow: hidden; border-radius: var(--r-full); background: color-mix(in srgb, var(--foreground) 9%, transparent); }
     .project-library-progress b { display: block; height: 100%; border-radius: inherit; background: var(--workspace-accent); transition: width 420ms var(--motion-ease-out); }
     .project-library-stats { display: flex; align-items: center; gap: 14px; margin-top: 12px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-label); }
+    .library-load-more { display: flex; min-height: 44px; align-items: center; justify-content: center; padding: 14px 0 6px; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-caption); }
+    .library-load-more button { cursor: pointer; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+    .library-load-more button:focus:not(:focus-visible) { outline: none; }
 
     /* 任务列表：整屏几十条长 prompt 极易糊成一片，靠三件事拉开密度——
        行距（min-height + gap）、标题只给一行且宽度封顶、次要信息降到 42% 前景色。 */
@@ -8426,6 +8462,17 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 .admin-shell .app-workspace-sidebar,
 .admin-shell .admin-sidebar {
     background: var(--admin-sidebar);
+}
+
+/* 管理后台侧栏不复用通用 Tailwind 宽度：通用 sidebar 规则在后面会覆盖 w-*，导致视觉收缩但布局仍占展开宽度。 */
+.admin-shell .admin-sidebar {
+    width: 212px;
+    flex-basis: 212px;
+}
+
+.admin-shell .admin-sidebar.is-collapsed {
+    width: var(--workspace-sidebar-collapsed-width, 56px);
+    flex-basis: var(--workspace-sidebar-collapsed-width, 56px);
 }
 
 .admin-shell .app-user-content,

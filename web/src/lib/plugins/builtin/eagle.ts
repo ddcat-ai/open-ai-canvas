@@ -15,6 +15,8 @@ export const eagleAssetPlugin: RegisteredPlugin = {
         id: EAGLE_PLUGIN_ID,
         name: "Eagle 素材库",
         version: "0.3.0",
+        publishedAt: "2026-08-21",
+        updatedAt: "2026-08-22",
         apiVersion: "1",
         category: "asset-source",
         description: "把 Eagle 作为影策的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
