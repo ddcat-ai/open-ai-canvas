@@ -5,7 +5,7 @@ import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadRe
 import type { Asset } from "@/stores/use-asset-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 
 let activeRemoteUserId = "";
 let applyingRemoteState = false;
@@ -174,6 +174,22 @@ export async function deleteAssetWithRemoteSync(id: string) {
             remoteAssetVersions.delete(id);
         }
         useAssetStore.getState().removeAsset(id);
+    });
+}
+
+export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
+    const projectIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    if (!projectIds.length) return;
+    await withRemoteUserDataSyncPaused(async () => {
+        if (activeRemoteUserId) {
+            for (const id of projectIds) {
+                await deleteRemoteCanvasProject(id);
+                remoteProjectVersions.delete(id);
+            }
+        }
+        useCanvasStore.getState().deleteProjects(projectIds);
+        // 删除完成后再返回，确保刷新不会读到尚未写入 IndexedDB 的旧快照。
+        await flushCanvasStorePersistence();
     });
 }
 

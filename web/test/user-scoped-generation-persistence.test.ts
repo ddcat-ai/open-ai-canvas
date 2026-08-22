@@ -14,7 +14,7 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, type Asset,
 import { withGenerationAssetStorageLock } from "../src/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceLock, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
-import { deleteAssetWithRemoteSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "../src/services/user-data-sync";
+import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
 
 test("creation recovery observes streaming text tasks after reload", () => {
@@ -4050,6 +4050,56 @@ test("account scope transition drains an active remote deletion before entering 
         resetRemoteUserDataSync();
         useAssetStore.getState().replaceAssets(previousAssets);
         await flushAssetStorePersistence();
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("canvas deletion removes the remote project before updating local state", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const requestUrls: string[] = [];
+    const project = storedCanvasProject("canvas-delete", "待删除画布");
+    let remoteProjects = [project];
+
+    apiClient.defaults.adapter = async (config) => {
+        const url = String(config.url || "");
+        requestUrls.push(`${String(config.method || "get").toLowerCase()} ${url}`);
+        if (String(config.method || "").toLowerCase() === "delete") {
+            remoteProjects = remoteProjects.filter((item) => item.id !== project.id);
+            return { data: { code: 0, data: { id: project.id }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        const data = url.includes("user-data/snapshot") ? { projects: remoteProjects, assets: [] } : { projects: [] };
+        return { data: { code: 0, data, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+        },
+    });
+    localforage.getItem = (async () => null) as typeof localforage.getItem;
+    localforage.setItem = (async (_key: string, value: string) => value) as typeof localforage.setItem;
+    try {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: [project] });
+        await syncRemoteUserData("account-A");
+        await deleteCanvasProjectsWithRemoteSync([project.id]);
+        await syncRemoteUserData("account-A");
+
+        expect(requestUrls).toContain(`delete /canvas-projects/${project.id}`);
+        expect(useCanvasStore.getState().projects.some((item) => item.id === project.id)).toBe(false);
+    } finally {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: previousProjects });
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
         apiClient.defaults.adapter = previousAdapter;
