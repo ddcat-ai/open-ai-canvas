@@ -50,6 +50,7 @@ export type ChannelModel = {
     id: string;
     channelId: string;
     modelKey: string;
+    providerModelKey: string;
     displayName: string;
     capability: "text" | "image" | "video" | "audio" | "";
     protocol?: import("@/lib/model-protocols").ModelProtocol;
@@ -63,8 +64,47 @@ export type ChannelModel = {
     priceVersion: number;
     capabilityVersion?: number;
     capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
+	priceTiers: ChannelModelPriceTier[];
     createdAt: string;
     updatedAt: string;
+};
+
+export type ChannelModelPriceTier = {
+    id: string;
+    channelModelId: string;
+	selector: Record<string, string>;
+	selectorKey: string;
+    resolution: string;
+    videoSeconds: number;
+    providerModelKey: string;
+    billingMode: "fixed_request" | "per_second" | "token";
+    unitPriceMicrocredits: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
+    priceConfigured: boolean;
+    enabled: boolean;
+    priceVersion: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+// 系统渠道模型的写入合同。标量价格只用于兼容旧管理请求；新的后台界面只提交 priceTiers。
+export type ChannelModelMutation = {
+    modelKey: string;
+    providerModelKey?: string;
+    displayName?: string;
+    capability: ChannelModel["capability"];
+    protocol?: ChannelModel["protocol"];
+    enabled?: boolean;
+    capabilityConfig?: ChannelModel["capabilityConfig"];
+	priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
+    billingMode?: ChannelModel["billingMode"];
+    unitPriceMicrocredits?: number;
+    inputTokenPriceMicrocredits?: number;
+    outputTokenPriceMicrocredits?: number;
+    cachedTokenPriceMicrocredits?: number;
+    priceConfigured?: boolean;
 };
 
 export type LinuxDOSetting = {
@@ -230,15 +270,15 @@ export function fetchAdminChannelModels(channelId: string) {
     return request<{ models: string[]; added: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`));
 }
 
-export function testAdminChannelModel(channelId: string, input: Pick<ChannelModel, "modelKey" | "capability" | "protocol"> & { capabilityConfig?: ChannelModel["capabilityConfig"] }) {
+export function testAdminChannelModel(channelId: string, input: Pick<ChannelModel, "modelKey" | "providerModelKey" | "capability" | "protocol"> & { capabilityConfig?: ChannelModel["capabilityConfig"] }) {
     return request<{ durationMs: number }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models/test`, input, { timeout: 10 * 60 * 1000 }));
 }
 
-export function createAdminChannelModel(channelId: string, input: Omit<ChannelModel, "id" | "channelId" | "priceVersion" | "createdAt" | "updatedAt">) {
+export function createAdminChannelModel(channelId: string, input: ChannelModelMutation) {
     return request<{ model: ChannelModel }>(api.post(`/admin/channels/${encodeURIComponent(channelId)}/models`, input));
 }
 
-export function updateAdminChannelModel(channelId: string, id: string, input: Omit<ChannelModel, "id" | "channelId" | "priceVersion" | "createdAt" | "updatedAt">) {
+export function updateAdminChannelModel(channelId: string, id: string, input: ChannelModelMutation) {
     return request<{ model: ChannelModel }>(api.patch(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`, input));
 }
 

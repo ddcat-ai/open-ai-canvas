@@ -37,6 +37,22 @@ func (r *Repository) LogicalModel(id string) (*model.LogicalModel, error) {
 	return &item, nil
 }
 
+func (r *Repository) LogicalModelsBySourceChannelModelID(channelModelID string) ([]model.LogicalModel, error) {
+	var items []model.LogicalModel
+	return items, r.db.Where("source_channel_model_id = ? AND archived_at IS NULL", channelModelID).Order("sort_order asc, created_at asc").Find(&items).Error
+}
+
+func (r *Repository) LogicalModelsByOnlyActiveChannelModelID(channelModelID string) ([]model.LogicalModel, error) {
+	var items []model.LogicalModel
+	query := r.db.Model(&model.LogicalModel{}).
+		Joins("JOIN logical_model_routes AS route ON route.logical_model_revision_id = logical_models.active_revision_id").
+		Where("logical_models.archived_at IS NULL").
+		Group("logical_models.id").
+		Having("COUNT(route.id) = 1 AND MAX(route.channel_model_id) = ?", channelModelID).
+		Order("logical_models.sort_order asc, logical_models.created_at asc")
+	return items, query.Find(&items).Error
+}
+
 func (r *Repository) LogicalModelRevision(id string) (*model.LogicalModelRevision, error) {
 	var item model.LogicalModelRevision
 	if err := r.db.First(&item, "id = ?", id).Error; err != nil {
@@ -72,7 +88,10 @@ func (r *Repository) ChannelModelsByIDs(ids []string) ([]model.ChannelModel, err
 	if len(ids) == 0 {
 		return items, nil
 	}
-	return items, r.db.Where("id IN ?", ids).Find(&items).Error
+	if err := r.db.Where("id IN ?", ids).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, r.PopulateChannelModelPriceTiers(items)
 }
 
 func (r *Repository) SystemChannelsByIDs(ids []string, includeDisabled bool) ([]model.ModelChannel, error) {
@@ -90,6 +109,9 @@ func (r *Repository) SystemChannelsByIDs(ids []string, includeDisabled bool) ([]
 func (r *Repository) ChannelModel(id string) (*model.ChannelModel, error) {
 	var item model.ChannelModel
 	if err := r.db.First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	if err := r.PopulateChannelModelPriceTier(&item); err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -316,6 +338,8 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			}
 			updates["billing_mode"] = replacement.BillingMode
 			updates["price_version"] = replacement.PriceVersion
+			updates["price_tier_id"] = replacement.PriceTierID
+			updates["price_tier_version"] = replacement.PriceTierVersion
 			updates["unit_price_microcredits"] = replacement.UnitPriceMicrocredits
 			updates["multiplier_basis_points"] = replacement.MultiplierBasisPoints
 			updates["quantity"] = replacement.Quantity
@@ -353,12 +377,14 @@ func (r *Repository) SaveLogicalModelBundle(item *model.LogicalModel, revision *
 				"capability":                item.Capability,
 				"enabled":                   item.Enabled,
 				"sort_order":                item.SortOrder,
+				"source_channel_model_id":   item.SourceChannelModelID,
 				"price_policy":              item.PricePolicy,
 				"billing_mode":              item.BillingMode,
 				"unit_price_microcredits":   item.UnitPriceMicrocredits,
 				"input_price_microcredits":  item.InputPriceMicrocredits,
 				"output_price_microcredits": item.OutputPriceMicrocredits,
 				"cached_price_microcredits": item.CachedPriceMicrocredits,
+				"legacy_model_ids_json":     item.LegacyModelIDsJSON,
 				"updated_at":                item.UpdatedAt,
 			})
 			if result.Error != nil {

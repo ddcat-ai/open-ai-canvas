@@ -1,4 +1,4 @@
-import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag } from "antd";
+import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Select, Switch, Table, Tag } from "antd";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
@@ -7,8 +7,6 @@ import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
 import { CapabilityCardPicker } from "@/components/model-protocol-picker";
-import { formatCredits } from "@/constant/credits";
-import { modelProtocolSupportsTokenBilling } from "@/lib/model-protocols";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
@@ -132,7 +130,7 @@ export default function LogicalModelsPage() {
                       capability,
                       enabled: true,
                       sortOrder: models.length,
-                      pricePolicy: "unified",
+                      pricePolicy: "channel",
                       billingMode: "fixed_request",
                       unitPriceMicrocredits: 0,
                       inputPriceMicrocredits: 0,
@@ -279,12 +277,7 @@ export default function LogicalModelsPage() {
 
     return (
         <AdminPageFrame
-            title="模型目录"
-            actions={
-                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openModel()}>
-                    新增模型
-                </Button>
-            }
+            title="前台模型目录"
         >
             <AdminDataTable
                 toolbar={
@@ -363,7 +356,8 @@ export default function LogicalModelsPage() {
                             routes: [],
                             capabilitySpec: emptyCapabilitySpec(capability),
                             defaultOptions: {},
-                            billingMode: capability === "text" ? "token" : capability === "video" ? "per_second" : "fixed_request",
+                            pricePolicy: "channel",
+                            billingMode: "fixed_request",
                         });
                     }}
                 >
@@ -416,8 +410,8 @@ export default function LogicalModelsPage() {
                             <DefaultOptionsEditor spec={modelCapabilitySpec} />
                         </Form.Item>
                     </DrawerSection>
-                    <DrawerSection title="用户价格">
-                        <PricingFields channelModels={channelModels} />
+                    <DrawerSection title="系统规格价格">
+                        <PricingFields />
                     </DrawerSection>
                 </Form>
             </Drawer>
@@ -600,114 +594,24 @@ function logicalModelStatusTag(item: AdminLogicalModel) {
     return <AdminStatusBadge label="可用" tone="success" />;
 }
 
-function PricingFields({ channelModels }: { channelModels: ChannelModel[] }) {
+function PricingFields() {
     const form = Form.useFormInstance<LogicalModelFormValues>();
-    const pricePolicy = Form.useWatch("pricePolicy") as LogicalModelMutation["pricePolicy"] | undefined;
-    const billingMode = Form.useWatch("billingMode") as LogicalModelMutation["billingMode"] | undefined;
-    const capability = Form.useWatch("capability") as CapabilityKind | undefined;
-    const routes = (Form.useWatch("routes") || []) as RouteRuleRow[];
-    const enabledRoutes = routes.filter((route) => route.enabled);
-    const tokenBillingSupported =
-        capability === "text" ||
-        (capability === "video" &&
-            enabledRoutes.length > 0 &&
-            enabledRoutes.every((route) => {
-                const channelModel = channelModels.find((item) => item.id === route.channelModelId);
-                return modelProtocolSupportsTokenBilling(channelModel?.capability, channelModel?.protocol);
-            }));
-    const modes: Array<{ label: string; value: LogicalModelMutation["billingMode"]; disabled?: boolean }> = [{ label: "按次", value: "fixed_request" }];
-    if (capability === "video") {
-        modes.push({ label: "按秒", value: "per_second" });
-        modes.push({ label: "Token", value: "token", disabled: !tokenBillingSupported });
-    }
-    if (capability === "text") modes.push({ label: "Token", value: "token" });
-
     useEffect(() => {
-        if (pricePolicy === "unified" && billingMode === "token" && !tokenBillingSupported) {
-            form.setFieldValue("billingMode", capability === "video" ? "per_second" : "fixed_request");
-        }
-    }, [billingMode, capability, form, pricePolicy, tokenBillingSupported]);
-
-    const changePolicy = (value: string | number) => {
-        const nextPolicy = value as LogicalModelMutation["pricePolicy"];
-        if (nextPolicy !== "unified") return;
-        const supportedModes = modes.filter((item) => !item.disabled).map((item) => item.value);
-        if (!billingMode || !supportedModes.includes(billingMode)) {
-            form.setFieldValue("billingMode", capability === "text" ? "token" : capability === "video" ? "per_second" : "fixed_request");
-        }
-    };
-    return (
-        <>
-            <Form.Item name="pricePolicy" label="定价策略">
-                <Segmented
-                    block
-                    options={[
-                        { label: "跟随供应价格", value: "channel" },
-                        { label: "统一定价", value: "unified" },
-                    ]}
-                    onChange={changePolicy}
-                />
-            </Form.Item>
-            {pricePolicy === "unified" ? (
-                <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Form.Item name="billingMode" label="计费方式">
-                            <Segmented block options={modes} />
-                        </Form.Item>
-                        {billingMode !== "token" ? (
-                            <Form.Item name="unitPriceMicrocredits" label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"}>
-                                <CreditsInput />
-                            </Form.Item>
-                        ) : null}
-                    </div>
-                    {capability === "video" && !tokenBillingSupported ? <div className="mb-3 text-xs leading-5 text-foreground/50">Token 计费仅在所有启用供应线路都使用火山方舟视频协议时可用。</div> : null}
-                    {billingMode === "token" ? (
-                        capability === "video" ? (
-                            <Form.Item name="outputPriceMicrocredits" label="视频 / 百万 Token" rules={[{ type: "number", min: 1, message: "请输入视频 Token 价格" }]}>
-                                <CreditsInput />
-                            </Form.Item>
-                        ) : (
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <Form.Item name="inputPriceMicrocredits" label="输入 / 百万 Token">
-                                    <CreditsInput />
-                                </Form.Item>
-                                <Form.Item name="outputPriceMicrocredits" label="输出 / 百万 Token">
-                                    <CreditsInput />
-                                </Form.Item>
-                                <Form.Item name="cachedPriceMicrocredits" label="缓存 / 百万 Token">
-                                    <CreditsInput />
-                                </Form.Item>
-                            </div>
-                        )
-                    ) : null}
-                </>
-            ) : (
-                <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">用户费用按实际命中的供应线路价格计算。故障切换到更高价格线路时会重新校验余额。</div>
-            )}
-        </>
-    );
-}
-
-function CreditsInput({ value = 0, onChange }: { value?: number; onChange?: (value: number) => void }) {
-    return <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} value={value / 1_000_000} onChange={(next) => onChange?.(Math.round((next || 0) * 1_000_000))} />;
+        form.setFieldsValue({
+            pricePolicy: "channel",
+            billingMode: "fixed_request",
+            unitPriceMicrocredits: 0,
+            inputPriceMicrocredits: 0,
+            outputPriceMicrocredits: 0,
+            cachedPriceMicrocredits: 0,
+        });
+    }, [form]);
+    return <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">价格、上游 SKU 和可用规格只在“系统渠道 / 模型管理”配置。前台模型只负责展示、能力范围和故障切换，不再保存第二份价格。</div>;
 }
 
 function logicalPriceLabel(item: AdminLogicalModel) {
-    if (item.pricePolicy === "channel") return <span className="text-xs">跟随供应价格</span>;
-    if (item.billingMode === "token" && item.capability === "video") return <span className="text-xs">视频 {formatCredits(item.outputPriceMicrocredits)} / 百万 Token</span>;
-    if (item.billingMode === "token")
-        return (
-            <div className="text-xs">
-                <div>输入 {formatCredits(item.inputPriceMicrocredits)} / 百万</div>
-                <div>输出 {formatCredits(item.outputPriceMicrocredits)} / 百万</div>
-                <div className="text-foreground/45">缓存 {formatCredits(item.cachedPriceMicrocredits)} / 百万</div>
-            </div>
-        );
-    return (
-        <span className="text-xs">
-            {formatCredits(item.unitPriceMicrocredits)} / {item.billingMode === "per_second" ? "秒" : "次"}
-        </span>
-    );
+    if (!item.priceTiers.length) return <span className="text-xs text-foreground/45">待配置系统规格价格</span>;
+    return <span className="text-xs">{item.priceTiers.length} 个系统规格档</span>;
 }
 
 function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
@@ -719,12 +623,12 @@ function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
         capability: item.capability,
         enabled: item.enabled,
         sortOrder: item.sortOrder,
-        pricePolicy: item.pricePolicy,
-        billingMode: item.billingMode,
-        unitPriceMicrocredits: item.unitPriceMicrocredits,
-        inputPriceMicrocredits: item.inputPriceMicrocredits,
-        outputPriceMicrocredits: item.outputPriceMicrocredits,
-        cachedPriceMicrocredits: item.cachedPriceMicrocredits,
+        pricePolicy: "channel",
+        billingMode: "fixed_request",
+        unitPriceMicrocredits: 0,
+        inputPriceMicrocredits: 0,
+        outputPriceMicrocredits: 0,
+        cachedPriceMicrocredits: 0,
         capabilitySpec: item.capabilitySpec,
         defaultOptions: item.defaultOptions,
         routes: item.routes.map((route) => ({ channelModelId: route.channelModelId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
@@ -741,12 +645,12 @@ function logicalModelPayload(values: LogicalModelFormValues, sourceSpecs: Capabi
         capability: values.capability,
         enabled: values.enabled,
         sortOrder: values.sortOrder || 0,
-        pricePolicy: values.pricePolicy,
-        billingMode: values.billingMode,
-        unitPriceMicrocredits: values.unitPriceMicrocredits || 0,
-        inputPriceMicrocredits: values.inputPriceMicrocredits || 0,
-        outputPriceMicrocredits: values.outputPriceMicrocredits || 0,
-        cachedPriceMicrocredits: values.cachedPriceMicrocredits || 0,
+        pricePolicy: "channel",
+        billingMode: "fixed_request",
+        unitPriceMicrocredits: 0,
+        inputPriceMicrocredits: 0,
+        outputPriceMicrocredits: 0,
+        cachedPriceMicrocredits: 0,
         capabilitySpec,
         defaultOptions: sanitizeDefaults(capabilitySpec, values.defaultOptions),
         routes: values.routes.map((route) => ({ ...route, priority: route.priority || 0, weight: route.weight || 0 })),

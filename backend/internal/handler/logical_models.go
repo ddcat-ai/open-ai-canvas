@@ -39,6 +39,23 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"models": models})
 	})
+	r.POST("/models/:id/quote", func(c *gin.Context) {
+		if _, err := currentUser(c, svc); err != nil {
+			failService(c, err)
+			return
+		}
+		var intent service.ModelRequestIntent
+		if err := c.ShouldBindJSON(&intent); err != nil {
+			fail(c, http.StatusBadRequest, errors.New("模型报价请求格式错误"))
+			return
+		}
+		quote, err := svc.QuoteLogicalModel(c.Param("id"), intent)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"quote": quote})
+	})
 	r.GET("/admin/logical-models", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
