@@ -8,20 +8,33 @@ import (
 
 func TestNormalizeChannelModelContract(t *testing.T) {
 	channel := &model.ModelChannel{APIKey: "test-key"}
-	modelKey, capability, protocol, err := normalizeChannelModelContract(channel, ChannelModelRequest{
+	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContract(channel, ChannelModelRequest{
 		ModelKey: "models/gpt-test", Capability: "text", Protocol: string(model.ChannelInterfaceChatCompletion),
 	})
 	if err != nil {
 		t.Fatalf("normalizeChannelModelContract() error = %v", err)
 	}
-	if modelKey != "gpt-test" || capability != "text" || protocol != model.ChannelInterfaceChatCompletion {
-		t.Fatalf("contract = %q, %q, %q", modelKey, capability, protocol)
+	if modelKey != "gpt-test" || providerModelKey != "gpt-test" || capability != "text" || protocol != model.ChannelInterfaceChatCompletion {
+		t.Fatalf("contract = %q, %q, %q, %q", modelKey, providerModelKey, capability, protocol)
+	}
+}
+
+func TestNormalizeChannelModelContractPreservesProviderModelKey(t *testing.T) {
+	channel := &model.ModelChannel{APIKey: "test-key"}
+	modelKey, providerModelKey, _, _, err := normalizeChannelModelContract(channel, ChannelModelRequest{
+		ModelKey: "seedance-2-5-480p", ProviderModelKey: "models/doubao-seedance-2-5", Capability: "video", Protocol: string(model.ChannelInterfaceVolcengineArkVideo),
+	})
+	if err != nil {
+		t.Fatalf("normalizeChannelModelContract() error = %v", err)
+	}
+	if modelKey != "seedance-2-5-480p" || providerModelKey != "doubao-seedance-2-5" {
+		t.Fatalf("contract = %q, %q", modelKey, providerModelKey)
 	}
 }
 
 func TestNormalizeChannelModelContractRejectsCapabilityMismatch(t *testing.T) {
 	channel := &model.ModelChannel{APIKey: "test-key"}
-	_, _, _, err := normalizeChannelModelContract(channel, ChannelModelRequest{
+	_, _, _, _, err := normalizeChannelModelContract(channel, ChannelModelRequest{
 		ModelKey: "image-test", Capability: "text", Protocol: string(model.ChannelInterfaceOpenAIImage),
 	})
 	if err == nil {
@@ -31,7 +44,7 @@ func TestNormalizeChannelModelContractRejectsCapabilityMismatch(t *testing.T) {
 
 func TestNormalizeChannelModelContractRequiresJiMengSecret(t *testing.T) {
 	channel := &model.ModelChannel{APIKey: "access-key"}
-	_, _, _, err := normalizeChannelModelContract(channel, ChannelModelRequest{
+	_, _, _, _, err := normalizeChannelModelContract(channel, ChannelModelRequest{
 		ModelKey: "jimeng-test", Capability: "image", Protocol: string(model.ChannelInterfaceVolcengineJiMengImage),
 	})
 	if err == nil {

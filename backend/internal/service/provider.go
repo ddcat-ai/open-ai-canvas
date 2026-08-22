@@ -54,6 +54,9 @@ type providerTextMessage struct {
 
 type providerConfig struct {
 	ChannelID             string                 `json:"channelId"`
+	ChannelModelKey       string                 `json:"channelModelKey,omitempty"`
+	PriceTierID           string                 `json:"priceTierId,omitempty"`
+	ProviderModelKey      string                 `json:"providerModelKey,omitempty"`
 	APIFormat             string                 `json:"apiFormat"`
 	InterfaceType         string                 `json:"interfaceType"`
 	BaseURL               string                 `json:"baseUrl"`
@@ -167,7 +170,7 @@ func withProviderAnalytics(ctx context.Context, service *Service, task model.Tas
 	}
 	if json.Unmarshal([]byte(task.InputJSON), &input) == nil {
 		metadata.ChannelID = firstNonEmpty(input.Config.ChannelID, systemChannelIDFromBaseURL(input.Config.BaseURL))
-		metadata.Model = firstNonEmpty(input.Config.Model, metadata.Model)
+		metadata.Model = firstNonEmpty(input.Config.ChannelModelKey, input.Config.Model, metadata.Model)
 		metadata.VideoSeconds, _ = strconv.Atoi(input.Config.VideoSeconds)
 		if normalized := normalizeCapability(input.Mode); normalized != "" {
 			metadata.Capability = normalized
@@ -660,7 +663,7 @@ func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) 
 		input.VideoCapability = input.Config.CapabilityConfig.Video
 		return validateVideoTask(input.VideoCapability, *input)
 	}
-	item, err := s.repo.ChannelModelByKey(channelID, strings.TrimPrefix(strings.TrimSpace(input.Config.Model), "models/"))
+	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(input.Config))
 	if err != nil {
 		return errors.New("当前系统渠道模型未配置或已停用")
 	}
@@ -669,6 +672,7 @@ func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) 
 		return errors.New("当前视频模型尚未配置能力参数")
 	}
 	input.VideoCapability = profile.Video
+	applyFixedVideoResolution(input, profile.Video)
 	return validateVideoTask(profile.Video, *input)
 }
 
@@ -683,7 +687,7 @@ func (s *Service) validateResolvedImageCapability(input *canvasGenerationInput) 
 		}
 		return validateImageTask(input.ImageCapability, *input)
 	}
-	item, err := s.repo.ChannelModelByKey(channelID, strings.TrimPrefix(strings.TrimSpace(input.Config.Model), "models/"))
+	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(input.Config))
 	if err != nil {
 		return errors.New("当前系统渠道模型未配置或已停用")
 	}
@@ -815,15 +819,19 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if err != nil {
 		return providerConfig{}, errors.New("系统渠道不存在或已停用")
 	}
-	modelName := strings.TrimSpace(config.Model)
-	if modelName == "" {
+	modelKey := strings.TrimPrefix(strings.TrimSpace(config.ChannelModelKey), "models/")
+	requestedModel := strings.TrimPrefix(strings.TrimSpace(config.Model), "models/")
+	if modelKey == "" {
+		modelKey = requestedModel
+	}
+	if modelKey == "" {
 		models := channelModelNames(*channel)
 		if len(models) == 0 {
 			return providerConfig{}, errors.New("系统渠道未配置可用模型")
 		}
-		modelName = models[0]
+		modelKey = models[0]
 	}
-	if !stringInSlice(modelName, channelModelNames(*channel)) {
+	if !stringInSlice(modelKey, channelModelNames(*channel)) {
 		return providerConfig{}, errors.New("当前系统渠道未授权该模型")
 	}
 	if _, err := s.validateChannelOutboundURL(channel.BaseURL, channel.AllowLocalChannel, false); err != nil {
@@ -831,9 +839,30 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	}
 	config.ChannelID = channel.ID
 	config.APIFormat = channel.APIFormat
-	channelModel, modelErr := s.repo.ChannelModelByKey(channel.ID, modelName)
-	if modelErr != nil || channelModel.Protocol == "" {
+	channelModel, modelErr := s.repo.ChannelModelByKey(channel.ID, modelKey)
+	if modelErr != nil {
+		// ModelsJSON 只是旧渠道表上的目录缓存。SKU 合并后它不能代表可执行模型，
+		// 唯一授权来源必须是已启用的 channel_models 记录。
+		return providerConfig{}, errors.New("当前系统渠道未授权该模型")
+	}
+	if channelModel.Protocol == "" {
 		return providerConfig{}, errors.New("当前模型尚未配置请求协议")
+	}
+	providerModelKey := strings.TrimPrefix(strings.TrimSpace(config.ProviderModelKey), "models/")
+	if config.PriceTierID != "" {
+		matched := false
+		for _, tier := range channelModel.PriceTiers {
+			if tier.ID == config.PriceTierID && tier.Enabled && tier.PriceConfigured {
+				providerModelKey = firstNonEmpty(providerModelKey, tier.ProviderModelKey)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return providerConfig{}, errors.New("当前模型规格价格档已更新，请重新创建任务")
+		}
+	} else if modelKey != "" && requestedModel != "" && modelKey != requestedModel {
+		return providerConfig{}, errors.New("系统渠道模型标识不一致")
 	}
 	config.InterfaceType = string(channelModel.Protocol)
 	// 模型协议是实际请求契约；混合渠道中鉴权格式也必须随模型协议切换。
@@ -850,18 +879,14 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if err != nil {
 		return providerConfig{}, err
 	}
-	config.Model = modelName
+	config.ChannelModelKey = modelKey
+	config.ProviderModelKey = providerModelKey
+	config.Model = firstNonEmpty(providerModelKey, channelModel.ProviderModelKey, modelKey)
 	return config, nil
 }
 
-func stringInSlice(value string, values []string) bool {
-	value = strings.TrimPrefix(strings.TrimSpace(value), "models/")
-	for _, candidate := range values {
-		if strings.TrimPrefix(strings.TrimSpace(candidate), "models/") == value {
-			return true
-		}
-	}
-	return false
+func providerChannelModelKey(config providerConfig) string {
+	return strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(config.ChannelModelKey, config.Model)), "models/")
 }
 
 func systemChannelIDFromBaseURL(baseURL string) string {

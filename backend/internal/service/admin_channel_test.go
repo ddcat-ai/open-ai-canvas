@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -171,6 +172,69 @@ func TestSaveAdminChannelModelRejectsActiveDuplicateKey(t *testing.T) {
 	var authErr *AuthError
 	if !errors.As(err, &authErr) || authErr.Status != http.StatusBadRequest || authErr.Message != "该渠道已存在模型 model-b，请直接编辑已有模型" {
 		t.Fatalf("SaveAdminChannelModel() error = %#v", err)
+	}
+}
+
+func TestResolveProviderConfigMapsSKUToProviderModel(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	svc.dataDir = t.TempDir()
+	channel := model.ModelChannel{
+		ID: "channel-1", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Seedance",
+		BaseURL: "https://ark.cn-beijing.volces.com/api/v3", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["seedance-2-5-480p"]`,
+	}
+	if err := svc.encryptSystemChannelSecrets(&channel); err != nil {
+		t.Fatal(err)
+	}
+	item := model.ChannelModel{
+		ID: "model-1", ChannelID: channel.ID, ModelKey: "seedance-2-5-480p", ProviderModelKey: "doubao-seedance-2-5",
+		Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, Enabled: true,
+	}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := svc.resolveProviderConfig(providerConfig{ChannelID: channel.ID, Model: item.ModelKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ChannelModelKey != item.ModelKey || config.Model != item.ProviderModelKey {
+		t.Fatalf("resolved config = %#v", config)
+	}
+}
+
+func TestValidateTaskCapabilityFixesSingleResolutionSKU(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	video := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceVolcengineArkVideo), "doubao-seedance-2-5").Video
+	video.References.MaxVideos = 0
+	video.Resolutions = []string{"480p"}
+	video.DefaultResolution = "480p"
+	encoded, err := json.Marshal(&ModelCapabilityConfig{Version: 1, Video: video})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channelModel := model.ChannelModel{
+		ID: "model-480p", ChannelID: "channel-1", ModelKey: "doubao-seedance-2-5-480p", ProviderModelKey: "doubao-seedance-2-5",
+		Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, Enabled: true, CapabilityConfigJSON: string(encoded),
+	}
+	if err := db.Create(&channelModel).Error; err != nil {
+		t.Fatal(err)
+	}
+	input := map[string]any{
+		"mode": "video",
+		"config": map[string]any{
+			"channelId": "channel-1", "model": channelModel.ModelKey, "vquality": "auto", "videoSeconds": "6", "size": "16:9",
+			"videoGenerateAudio": "true", "videoWatermark": "false",
+		},
+	}
+	if err := svc.ValidateTaskCapability(input); err != nil {
+		t.Fatal(err)
+	}
+	config := input["config"].(map[string]any)
+	if got := config["vquality"]; got != "480p" {
+		t.Fatalf("vquality = %#v, want 480p", got)
 	}
 }
 

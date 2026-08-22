@@ -187,8 +187,8 @@ func TestRunAgentToolTaskFallsBackToolChoice(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", AllowLocalChannel: true}
-	result, err := runAgentToolTask(withProviderOutboundPolicy(context.Background(), config), canvasGenerationInput{
+	config := providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model"}
+	result, err := runAgentToolTask(context.Background(), canvasGenerationInput{
 		Config:        config,
 		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{"messages": []interface{}{}, "tool_choice": "required"}},
 	})

@@ -554,7 +554,7 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 		}
 		return validateVideoTask(taskInput.Config.CapabilityConfig.Video, taskInput)
 	}
-	item, err := s.repo.ChannelModelByKey(channelID, strings.TrimPrefix(strings.TrimSpace(taskInput.Config.Model), "models/"))
+	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
 	if err != nil {
 		return BadAuthRequest("当前系统渠道模型未配置或已停用")
 	}
@@ -563,16 +563,30 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 		if err != nil {
 			return BadAuthRequest("当前图片模型能力参数无效")
 		}
-		imageProfile := DefaultImageCapabilityConfig(string(item.Protocol), item.ModelKey)
+		imageProfile := DefaultImageCapabilityConfig(string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey))
 		if profile != nil && profile.Image != nil {
 			imageProfile = profile.Image
 		}
-		return validateImageTask(imageProfile, taskInput)
+		return validateImageTask(applyModelSpecificImageCapability(imageProfile, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), taskInput.Config.APIFormat), taskInput)
 	}
 	if err != nil || profile == nil || profile.Video == nil {
 		return BadAuthRequest("当前视频模型尚未配置能力参数")
 	}
+	applyFixedVideoResolution(&taskInput, profile.Video)
+	if config, ok := input["config"].(map[string]any); ok {
+		config["vquality"] = taskInput.Config.VQuality
+	}
 	return validateVideoTask(profile.Video, taskInput)
+}
+
+// applyFixedVideoResolution 让单档位 SKU 的预扣、恢复和上游请求保持同一分辨率。
+func applyFixedVideoResolution(input *canvasGenerationInput, profile *VideoCapabilityConfig) {
+	if input == nil || profile == nil || len(profile.Resolutions) != 1 {
+		return
+	}
+	if resolution := videoResolutionNameRequest(profile, profile.Resolutions[0]); resolution != "" {
+		input.Config.VQuality = resolution
+	}
 }
 
 func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInput) error {

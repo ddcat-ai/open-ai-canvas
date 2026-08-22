@@ -20,14 +20,20 @@ type LogicalModel struct {
 	Enabled     bool   `json:"enabled" gorm:"index"`
 	SortOrder   int    `json:"sortOrder" gorm:"index"`
 	// RevisionSequence 记录已经分配的 revision 版本号，由数据库原子递增。
-	RevisionSequence        int    `json:"-" gorm:"not null;default:0"`
-	ActiveRevisionID        string `json:"activeRevisionId" gorm:"size:36;index"`
+	RevisionSequence int    `json:"-" gorm:"not null;default:0"`
+	ActiveRevisionID string `json:"activeRevisionId" gorm:"size:36;index"`
+	// SourceChannelModelID 标识这个前台目录项由哪个系统渠道模型投影而来。
+	// 管理员不再重复维护能力和价格，渠道模型保存时会创建新的前台 revision。
+	SourceChannelModelID    string `json:"sourceChannelModelId,omitempty" gorm:"size:36;index"`
 	PricePolicy             string `json:"pricePolicy" gorm:"size:24;default:unified"`
 	BillingMode             string `json:"billingMode" gorm:"size:32"`
 	UnitPriceMicrocredits   int64  `json:"unitPriceMicrocredits"`
 	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
 	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
 	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	// LegacyModelIDsJSON 用于创作端把已保存的旧 SKU 选择无缝映射到新的模型家族。
+	// 这只是目录兼容信息，任务、路由尝试和账单仍固定引用其创建时的 ID 快照。
+	LegacyModelIDsJSON string `json:"-" gorm:"type:text"`
 	// ArchivedAt 仅从可选目录隐藏模型；历史任务、计费和审计仍需读取主体及不可变 revision。
 	ArchivedAt *time.Time `json:"-" gorm:"index"`
 	CreatedAt  time.Time  `json:"createdAt"`

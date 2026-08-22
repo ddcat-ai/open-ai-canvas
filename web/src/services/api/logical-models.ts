@@ -31,10 +31,23 @@ export type PublicLogicalModel = {
     inputPriceMicrocredits: number;
     outputPriceMicrocredits: number;
     cachedPriceMicrocredits: number;
+	priceTiers: PublicLogicalModelPriceTier[];
+    legacyModelIds: string[];
     capabilitySpec: CapabilitySpec;
     capabilityProfiles: CapabilitySpec[];
     defaultOptions: Record<string, unknown>;
     available: boolean;
+};
+
+export type PublicLogicalModelPriceTier = {
+	selector: Record<string, string>;
+	resolution: string;
+	videoSeconds: number;
+	billingMode: "fixed_request" | "per_second" | "token";
+	unitPriceMicrocredits: number;
+	inputTokenPriceMicrocredits: number;
+	outputTokenPriceMicrocredits: number;
+	cachedTokenPriceMicrocredits: number;
 };
 
 export type AdminLogicalRoute = {
@@ -73,6 +86,7 @@ export type LogicalModelMutation = {
     inputPriceMicrocredits: number;
     outputPriceMicrocredits: number;
     cachedPriceMicrocredits: number;
+    legacyModelIds?: string[];
     capabilitySpec: CapabilitySpec;
     defaultOptions: Record<string, unknown>;
     routes: Array<{ channelModelId: string; enabled: boolean; priority: number; weight: number }>;
@@ -83,12 +97,24 @@ export type RouteSimulationResult = {
     candidates: Array<{ routeId: string; channelModelId: string; channelModelKey: string; channelModelName: string; priority: number; weight: number; enabled: boolean; matched: boolean; blocked: boolean; inPool: boolean; reasons?: string[] }>;
 };
 
+export type LogicalModelQuote = {
+    logicalModelId: string;
+    billingMode: PublicLogicalModel["billingMode"];
+    quantity: number;
+    amountMicrocredits: number;
+    estimated: boolean;
+};
+
 export function listLogicalModels() {
     return request<{ models: PublicLogicalModel[] }>(apiClient.get("/models"));
 }
 
 export function listAvailableLogicalModels(intent: ModelRequestIntent) {
     return request<{ models: PublicLogicalModel[] }>(apiClient.post("/models/available", intent));
+}
+
+export function quoteLogicalModel(id: string, intent: ModelRequestIntent, signal?: AbortSignal) {
+    return request<{ quote: LogicalModelQuote }>(apiClient.post(`/models/${encodeURIComponent(id)}/quote`, intent, { signal }));
 }
 
 export function listAdminLogicalModels() {

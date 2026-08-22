@@ -145,7 +145,10 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
 }
 
 function logicalOptionMatches(name: string, constraint: { values?: unknown[]; min?: number; max?: number; step?: number }, value: unknown) {
-    if (constraint.values?.length) return constraint.values.some((candidate) => logicalOptionValueMatches(name, candidate, value));
+    if (constraint.values?.length) {
+        const requested = normalizeLogicalOptionValue(name, value);
+        return constraint.values.some((candidate) => normalizeLogicalOptionValue(name, candidate) === requested);
+    }
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return false;
     if (constraint.min !== undefined && numeric < constraint.min) return false;
@@ -154,11 +157,15 @@ function logicalOptionMatches(name: string, constraint: { values?: unknown[]; mi
     return true;
 }
 
-function logicalOptionValueMatches(name: string, candidate: unknown, value: unknown) {
-    const left = String(candidate).trim().toLowerCase();
-    const right = String(value).trim().toLowerCase();
-    if (name === "vquality" || name === "resolution") return left.replace(/p$/, "") === right.replace(/p$/, "");
-    return left === right;
+function normalizeLogicalOptionValue(name: string, value: unknown) {
+    const normalized = String(value).trim().toLowerCase();
+    if (name !== "vquality" && name !== "resolution") return normalized;
+    if (normalized === "low") return "480p";
+    if (["auto", "medium", "high"].includes(normalized)) return "720p";
+    if (normalized === "2k") return "1440p";
+    if (normalized === "4k") return "2160p";
+    const resolution = normalized.replace(/p$/i, "");
+    return resolution ? `${resolution}p` : "";
 }
 
 function logicalOptionError(name: string) {

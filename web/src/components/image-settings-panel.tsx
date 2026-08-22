@@ -3,9 +3,9 @@ import { ConfigProvider, Switch } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSize, imageResolutionChoices, imageResolutionOption, imageSizeForResolution, supportsImageResolutionPresets, type ImageResolutionChoice } from "@/lib/image-resolution-tiers";
-import { normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig } from "@/lib/model-selection";
-import { type AiConfig } from "@/stores/use-config-store";
+import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 
 const qualityOptions = [
     { value: "auto", label: "自动" },
@@ -74,7 +74,8 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
         : imageAspectOptions(profile);
     const selectedAspect = availableAspects.find((item) => imageOptionValue(profile, item) === activeSize || item.value === activeSize) || availableAspects.find((item) => item.label === activeRatio);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
-    const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
+	const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
+	const priceTiers = imageModelPriceTiers(config);
     const selectAspect = (value: string) => {
         const option = availableAspects.find((item) => item.value === value);
         onConfigChange("size", option ? imageOptionValue(profile, option) : "auto");
@@ -110,8 +111,8 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 {profile.quality.supported ? <div className="space-y-2">
                     <SettingTitle color={theme.node.muted}>{isGrokResolutionQuality(profile) ? "分辨率" : "质量"}</SettingTitle>
                     <div className={`grid gap-1.5 ${activeQualityOptions.length <= 2 ? "grid-cols-2" : "grid-cols-4"}`}>
-                        {activeQualityOptions.map((item) => (
-                            <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
+						{activeQualityOptions.map((item) => (
+							<OptionPill key={item.value} selected={quality === item.value} disabled={!hasPriceTierForImageSelection(priceTiers, item.value, activeSize)} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
                                 {item.label}
                             </OptionPill>
                         ))}
@@ -262,12 +263,27 @@ export function imageSizeLabel(size: string) {
     return resolutionLabel !== size ? resolutionLabel : aspectOptions.find((item) => (item.size || item.value) === size || item.value === size)?.label || size;
 }
 
-function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
+function imageModelPriceTiers(config: AiConfig) {
+	const channel = resolveModelChannel(config, config.model || config.imageModel);
+	const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model || config.imageModel));
+	return cost?.logicalPriceTiers || [];
+}
+
+function hasPriceTierForImageSelection(tiers: ReturnType<typeof imageModelPriceTiers>, quality: string, size: string) {
+	if (!tiers.length) return true;
+	return tiers.some((tier) => {
+		const selector = tier.selector || {};
+		return (!selector.quality || selector.quality === "*" || selector.quality === quality.toLowerCase()) && (!selector.size || selector.size === "*" || selector.size === size.toLowerCase());
+	});
+}
+
+function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
     return (
         <button
             type="button"
-            className="h-8 cursor-pointer rounded-full px-2 text-xs transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
-            style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+			className="h-8 cursor-pointer rounded-full px-2 text-xs transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+			style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+			disabled={disabled}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >

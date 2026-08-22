@@ -1152,7 +1152,7 @@ function CreationComposer(props: ComposerProps) {
                 <ModePicker mode={props.mode} onModeChange={props.onModeChange} />
                 <Tooltip title="从本机上传附件"><button type="button" className="creation-chat-control" onClick={() => props.fileInputRef.current?.click()} disabled={props.busy || !referencesSupported} aria-label="从本机上传附件"><Paperclip /><span>附件</span></button></Tooltip>
                 <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-control" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><FolderOpen /><span>素材库</span></button></Tooltip>
-                <ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice={false} variant="creation" />
+				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice variant="creation" />
                 {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                 {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
             </div>
