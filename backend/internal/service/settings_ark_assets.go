@@ -156,13 +156,7 @@ func arkPrivateAssetSettingFromRequest(req ArkPrivateAssetSettingRequest, curren
 
 func normalizeArkPrivateAssetSetting(value arkPrivateAssetSettingValue) arkPrivateAssetSettingValue {
 	value.Region = strings.TrimSpace(value.Region)
-	if value.Region == "" {
-		value.Region = "cn-beijing"
-	}
 	value.ProjectName = strings.TrimSpace(value.ProjectName)
-	if value.ProjectName == "" {
-		value.ProjectName = "default"
-	}
 	value.AccessKeyID = strings.TrimSpace(value.AccessKeyID)
 	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
 	value.DefaultGroupID = strings.TrimSpace(value.DefaultGroupID)
@@ -170,7 +164,7 @@ func normalizeArkPrivateAssetSetting(value arkPrivateAssetSettingValue) arkPriva
 }
 
 func defaultArkPrivateAssetSetting() arkPrivateAssetSettingValue {
-	return arkPrivateAssetSettingValue{Region: "cn-beijing", ProjectName: "default"}
+	return arkPrivateAssetSettingValue{}
 }
 
 func publicArkPrivateAssetSetting(setting *model.SystemSetting, value arkPrivateAssetSettingValue) PublicArkPrivateAssetSetting {

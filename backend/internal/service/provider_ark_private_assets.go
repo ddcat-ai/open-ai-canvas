@@ -27,10 +27,9 @@ const (
 	arkPrivateAssetPollLimit  = 3 * time.Minute
 )
 
-// 私域虚拟人像素材库是方舟北京区域的控制面 API，不能复用通用 OpenAPI 主机。
-const arkPrivateAssetDefaultBaseURL = "https://ark.cn-beijing.volcengineapi.com"
-
-var arkPrivateAssetAPIBaseURL = arkPrivateAssetDefaultBaseURL
+// Tests can inject a local control-plane server. Production derives the Ark
+// control-plane address from the administrator's explicit Region setting.
+var arkPrivateAssetAPIBaseURLOverride string
 
 type taskExecutionIDContextKey struct{}
 
@@ -214,7 +213,7 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 		"GroupId":     groupID,
 		"URL":         resourceURL,
 		"AssetType":   "Image",
-		"Name":        "story-creation-" + resource.ID,
+		"Name":        "ark-private-asset-" + resource.ID,
 		"ProjectName": setting.ProjectName,
 	})
 	if err != nil {
@@ -238,8 +237,8 @@ func (s *Service) ensureArkPrivateAssetGroup(ctx context.Context, settingRecord 
 		return setting.DefaultGroupID, nil
 	}
 	response, err := callArkPrivateAssetAPI(ctx, *setting, "CreateAssetGroup", map[string]interface{}{
-		"Name":        "story-creation-auto-assets",
-		"Description": "故事创作自动导入的方舟可信素材",
+		"Name":        "ark-private-assets",
+		"Description": "自动导入的方舟可信素材",
 		"GroupType":   arkPrivateAssetGroupType,
 		"ProjectName": setting.ProjectName,
 	})
@@ -344,7 +343,11 @@ func callArkPrivateAssetAPI(ctx context.Context, setting arkPrivateAssetSettingV
 	if err != nil {
 		return nil, err
 	}
-	endpoint, err := url.Parse(arkPrivateAssetAPIBaseURL)
+	baseURL, err := arkPrivateAssetControlPlaneURL(setting.Region)
+	if err != nil {
+		return nil, err
+	}
+	endpoint, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -376,6 +379,22 @@ func callArkPrivateAssetAPI(ctx context.Context, setting arkPrivateAssetSettingV
 		}
 	}
 	return response, nil
+}
+
+func arkPrivateAssetControlPlaneURL(region string) (string, error) {
+	if override := strings.TrimSpace(arkPrivateAssetAPIBaseURLOverride); override != "" {
+		return override, nil
+	}
+	region = strings.ToLower(strings.TrimSpace(region))
+	if region == "" {
+		return "", errors.New("方舟素材库未配置 Region")
+	}
+	for _, char := range region {
+		if !(char >= 'a' && char <= 'z') && !(char >= '0' && char <= '9') && char != '-' {
+			return "", errors.New("方舟素材库 Region 格式无效")
+		}
+	}
+	return "https://ark." + region + ".volcengineapi.com", nil
 }
 
 func arkPrivateAssetResponseField(response map[string]interface{}, keys ...string) string {

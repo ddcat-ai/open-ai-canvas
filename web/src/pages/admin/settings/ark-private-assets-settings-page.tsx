@@ -87,10 +87,10 @@ export default function ArkPrivateAssetsSettingsPage() {
                             <Switch checkedChildren="启用" unCheckedChildren="停用" />
                         </Form.Item>
                         <Form.Item name="region" label="Region" rules={[{ required: enabled, message: "请填写方舟 Region" }]}>
-                            <Input autoComplete="off" placeholder="cn-beijing" />
+                            <Input autoComplete="off" placeholder="部署方的方舟 Region" />
                         </Form.Item>
                         <Form.Item name="projectName" label="Ark ProjectName" rules={[{ required: enabled, message: "请填写 Ark ProjectName" }]}>
-                            <Input autoComplete="off" placeholder="default" />
+                            <Input autoComplete="off" placeholder="部署方的 Ark ProjectName" />
                         </Form.Item>
                         <Form.Item name="accessKeyId" label="IAM AccessKey" rules={[{ required: enabled, message: "请填写 IAM AccessKey" }]}>
                             <Input autoComplete="off" prefix={<KeyRound className="size-4 text-foreground/35" />} placeholder="仅保存在服务端" />
@@ -108,8 +108,8 @@ export default function ArkPrivateAssetsSettingsPage() {
 function toFormValues(setting: AdminArkPrivateAssetSetting): ArkPrivateAssetForm {
     return {
         enabled: setting.enabled,
-        region: setting.region || "cn-beijing",
-        projectName: setting.projectName || "default",
+        region: setting.region || "",
+        projectName: setting.projectName || "",
         accessKeyId: setting.accessKeyId || "",
         accessKeySecret: "",
     };
