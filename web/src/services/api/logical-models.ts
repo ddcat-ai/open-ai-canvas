@@ -72,6 +72,22 @@ export type AdminLogicalModel = PublicLogicalModel & {
     routes: AdminLogicalRoute[];
 };
 
+/**
+ * Keep admin model responses usable when a server is upgraded before its
+ * existing process or historical response shape has caught up with the
+ * current contract. Collection fields must always be arrays for the page.
+ */
+export function normalizeAdminLogicalModel(model: AdminLogicalModel): AdminLogicalModel {
+    return {
+        ...model,
+        priceTiers: Array.isArray(model.priceTiers) ? model.priceTiers : [],
+        legacyModelIds: Array.isArray(model.legacyModelIds) ? model.legacyModelIds : [],
+        capabilityProfiles: Array.isArray(model.capabilityProfiles) ? model.capabilityProfiles : [],
+        defaultOptions: model.defaultOptions && typeof model.defaultOptions === "object" ? model.defaultOptions : {},
+        routes: Array.isArray(model.routes) ? model.routes : [],
+    };
+}
+
 export type LogicalModelMutation = {
     code: string;
     name: string;
@@ -118,7 +134,9 @@ export function quoteLogicalModel(id: string, intent: ModelRequestIntent, signal
 }
 
 export function listAdminLogicalModels() {
-    return request<{ models: AdminLogicalModel[] }>(apiClient.get("/admin/logical-models"));
+    return request<{ models?: AdminLogicalModel[] }>(apiClient.get("/admin/logical-models")).then((result) => ({
+        models: Array.isArray(result?.models) ? result.models.filter(Boolean).map(normalizeAdminLogicalModel) : [],
+    }));
 }
 
 export function createAdminLogicalModel(input: LogicalModelMutation) {

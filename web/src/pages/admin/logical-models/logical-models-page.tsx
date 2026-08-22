@@ -238,8 +238,8 @@ export default function LogicalModelsPage() {
             width: 110,
             render: (_, item) => (
                 <div className="text-xs">
-                    <div>{item.routes.filter((route) => route.enabled && route.available).length} 条可用</div>
-                    <div className="text-foreground/45">共 {item.routes.length} 条</div>
+                    <div>{(item.routes || []).filter((route) => route.enabled && route.available).length} 条可用</div>
+                    <div className="text-foreground/45">共 {(item.routes || []).length} 条</div>
                 </div>
             ),
         },
@@ -610,8 +610,9 @@ function PricingFields() {
 }
 
 function logicalPriceLabel(item: AdminLogicalModel) {
-    if (!item.priceTiers.length) return <span className="text-xs text-foreground/45">待配置系统规格价格</span>;
-    return <span className="text-xs">{item.priceTiers.length} 个系统规格档</span>;
+    const priceTiers = item.priceTiers || [];
+    if (!priceTiers.length) return <span className="text-xs text-foreground/45">待配置系统规格价格</span>;
+    return <span className="text-xs">{priceTiers.length} 个系统规格档</span>;
 }
 
 function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
@@ -631,7 +632,7 @@ function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
         cachedPriceMicrocredits: 0,
         capabilitySpec: item.capabilitySpec,
         defaultOptions: item.defaultOptions,
-        routes: item.routes.map((route) => ({ channelModelId: route.channelModelId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
+        routes: (item.routes || []).map((route) => ({ channelModelId: route.channelModelId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
     };
 }
 
