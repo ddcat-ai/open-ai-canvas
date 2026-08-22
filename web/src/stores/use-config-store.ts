@@ -81,6 +81,7 @@ export type AiConfig = {
     vquality: string;
     videoGenerateAudio: string;
     videoWatermark: string;
+    videoArkPrivateAssetUpload: string;
     systemPrompt: string;
     models: string[];
     imageModels: string[];
@@ -121,6 +122,7 @@ export const defaultConfig: AiConfig = {
     vquality: "720",
     videoGenerateAudio: "true",
     videoWatermark: "false",
+    videoArkPrivateAssetUpload: "true",
     systemPrompt: "",
     models: [],
     imageModels: [],
@@ -338,6 +340,7 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             vquality: normalizeVideoResolution(config.vquality),
             videoGenerateAudio: config.videoGenerateAudio || "true",
             videoWatermark: config.videoWatermark || "false",
+            videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload || "true",
             transparentBackground: config.transparentBackground === "true" ? "true" : "false",
             canvasImageCount: config.canvasImageCount || defaultConfig.canvasImageCount,
             imageModels,
