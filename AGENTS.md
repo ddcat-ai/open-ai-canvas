@@ -1,213 +1,138 @@
 # AGENTS.md
 
-本文件约束本项目中的 AI、自动化工具和协作者。先遵循用户当前任务，再遵循本文件；项目规则优先于个人习惯和通用模板。
+本文件是影策仓库中 AI、自动化工具和协作者的工作约定。用户当前任务优先于本文件；本文件优先于个人习惯。所有结论应能回溯到代码、配置、测试、日志或文档，不用历史印象替代现状。
 
-## 0. 项目事实与边界
+## 1. 项目边界
 
-- 项目是“影策”AI 影视创作工作台，当前仍在快速开发，数据结构和外部接口可能直接调整；除非用户明确要求，不为旧字段和旧数据编写迁移兼容层。
-- 前端位于 `web/`，技术栈是 Vite、React 19、TypeScript、React Router、Ant Design 6、Tailwind CSS 4、Zustand、TanStack Query。
-- 后端位于 `backend/`，技术栈是 Go、Gin、GORM、SQLite；生产/部署也支持 PostgreSQL、Redis、Docker Compose。
-- `canvas-agent/` 和 `plugins/` 是相对独立的运行单元，修改其代码时先读取各自 README 和局部规则，不把主应用约定臆测套过去。
-- 本项目不是默认公网安全产品。生产环境必须使用 HTTPS、明确 CORS Origin、可信的数据库/OSS/密钥权限和受控的管理员初始化流程。
-- 用户配置的 AI API Key 保存在浏览器本地；任务创建时可能提交给自部署后端，只有可信部署和 HTTPS 才允许使用真实密钥。
+影策（`ddcat-ai/open-ai-canvas`）是面向 AI 影视与短剧创作的工作台，当前仍在快速开发。公开接口、数据结构和部署配置可能直接调整；除非任务明确要求，不为旧字段、旧 API 或旧数据增加兼容层。
 
-## 1. 工作方式
+仓库由几个边界清晰但可独立运行的单元组成：
 
-- 先读代码、配置、锁文件和相关文档，再判断和修改；每个重要结论都要能回溯到文件、命令输出、依赖源码或用户说明。
-- 需求不清时只问影响成败的问题；可以合理假设时声明假设并继续推进。
-- 默认推进到可交付状态，但只改任务相关文件，不回滚、覆盖或格式化用户已有的无关修改。
-- 修改前先形成目标结构：页面、组件、store、service、repository、handler 各自负责什么；不得通过增加透传 helper 掩盖职责混乱。
-- 发现同类错误反复出现时，先找结构性原因并补规则，再修单点；不能只在末尾继续叠加临时覆盖。
-- 页面视觉修改以现有主题和用户截图为事实依据。先检查实际 DOM、计算样式和依赖版本，再写选择器；不凭记忆套用第三方类名。
-- 使用 `rg` / `rg --files` 搜索，读取文件优先并行；手工编辑必须使用 `apply_patch`，不得用 shell 重定向、`cat >` 或 Python 写文件。
-- 默认 ASCII；只有文件已有明确字符集或业务文案确有需要时才引入非 ASCII 内容。
-- 核心入口、非直观算法、安全边界和降级策略写简短中文注释，说明“为什么”和关键约束；显而易见的赋值不写注释。
+| 单元 | 技术栈 | 入口 | 责任 |
+| --- | --- | --- | --- |
+| `web/` | Vite、React 19、TypeScript、React Router、Ant Design、Tailwind、Zustand、TanStack Query | `web/src/application.tsx`、`web/src/router.tsx` | 工作区 UI、画布交互、浏览器缓存、API 调用和模型协议适配 |
+| `backend/` | Go 1.25、Gin、GORM、SQLite/PostgreSQL、Redis 协调 | `backend/cmd/server/main.go` | 登录、权限、业务 API、任务队列、资源、模型中转和后台管理 |
+| `canvas-agent/` | Node.js 18+、TypeScript、Express、MCP SDK、Codex SDK | `canvas-agent/src/index.ts` | 本机 Agent、MCP、画布会话桥接和本地渠道 |
+| `plugins/infinite-canvas/` | Codex App 插件清单和 skills | `.codex-plugin/plugin.json` | 将 Canvas Agent MCP 接入 Codex App |
+| `docs/` | Next.js、Fumadocs、MDX | `docs/content/docs/` | 面向用户和开发者的专题文档；构建配置见 `docs/source.config.ts` |
 
-## 2. 变更收敛与代码质量
+根目录的 `Dockerfile` 构建前端静态镜像；`nginx.conf` 托管 SPA 并代理后端。`docker-compose.dev.yml` 是源码热更新开发编排，`docker-compose.local.yml` 是本地构建运行，`docker-compose.deploy.yml` 是 PostgreSQL + Redis 部署编排。
 
-- 变更保持最小充分范围；不顺手升级依赖、重命名大批文件、重排无关格式或重构无关模块。
-- 页面或服务只保留本层职责。纯算法、协议转换、缓存和可独立测试的业务规则放到对应 `lib` 或 service；UI 不直接拼装后端协议。
-- 不新增只改名、只透传 props、只包一层调用的组件或 helper；出现重复逻辑时先判断是否真的共享，再抽取有明确合同的能力。
-- 新文件建议控制在 500 行以内；文件超过 800 行时，新增功能前优先拆出明确职责。历史超长文件按功能逐步治理，不做无关的大爆炸重构。
-- CSS 不允许通过多段同名选择器不断追加“最后一条覆盖”。修改现有组件时优先回到唯一源规则；若必须兼容第三方，集中放在对应第三方覆盖区并删除被替代声明。
-- UI 组件不得新增裸 Tailwind 任意值，如 `text-[10px]`、`rounded-[12px]`、`z-[1500]`、`p-[Npx]`、`gap-[Npx]`；使用现有设计 token，缺 token 时按 Primitive → Semantic → Component 顺序补齐。
-- inline style 优先引用 `var(--token-name)`，不要散落字面颜色、圆角、阴影、层级和间距。
-- 错误不可静默吞掉。读展示路径允许有明确的降级和提示；保存、生成、激活、审批、权限、删除、上传和密钥处理必须强校验并明确失败。
-- 通用格式、解析、压缩、加密、日期、媒体处理使用成熟库；不手写已有库解决的底层协议。
+## 2. 开始工作前
 
-## 3. 目录职责
+1. 先读取任务涉及的入口、调用方、配置、锁文件和相邻测试；先理解现状，再决定是否抽象或重构。
+2. 使用 `rg` / `rg --files` 搜索，优先并行读取相关文件。不要为了“统一风格”改动无关模块、依赖、格式或用户已有修改。
+3. 先形成目标边界：页面负责什么、service 负责什么、handler/service/repository 如何分层、数据和错误如何流动。新增 helper 必须消除真实重复或隔离明确协议，不能只透传参数。
+4. 检查 `git status --short`。不覆盖、不回滚、不清理非本次产生的变更；不使用 `git reset --hard`、`git checkout --` 或宽范围删除。
+5. 手工编辑使用 `apply_patch`；默认使用 ASCII，业务中文或已有 Unicode 文件除外。注释只解释非直观算法、核心入口、安全边界和降级原因。
 
-### 前端目录
+## 3. 目录职责和依赖方向
 
-- `web/src/pages/`：路由页面和页面私有组件；页面私有 hook、类型和小组件放在页面目录内。
-- `web/src/layouts/`：路由级布局和全局浮层边界；不要在页面里重复设置全局 body 状态。
-- `web/src/components/`：跨页面复用组件；只有真实跨页面复用的能力才上移。
-- `web/src/services/api/`：后端业务 API、模型渠道协议和资源 API；不放 React 状态和 JSX。
-- `web/src/services/`：文件、媒体、同步和缓存等跨页面副作用；不直接承担页面布局。
-- `web/src/stores/`：跨页面状态和持久化；已有全局状态直接读取，不通过多层 props 透传。
-- `web/src/lib/`：纯函数、协议转换、画布算法、设计 token 读取和可独立复用的基础能力。
-- `web/src/styles/globals.css`：变量、重置、通用样式和必要的第三方覆盖；页面私有样式优先用 Tailwind 或页面目录样式。
-- `web/src/router.tsx`：路由配置；不要在页面内部偷偷新增不可发现的路由跳转。
+### 前端
 
-### 后端目录
+- `web/src/pages/`：路由页面及页面私有 hook/组件；页面协调流程，不直接拼装后端协议。
+- `web/src/layouts/`：路由级布局、全局浮层和页面壳；不要在页面重复设置全局 body 状态。
+- `web/src/components/`：真实跨页面复用的 UI 或交互能力；页面私有组件留在页面目录。
+- `web/src/services/api/`：业务 API、模型渠道协议、资源 API；不依赖 JSX、路由或 AntD 提示。
+- `web/src/services/`：文件、媒体、同步、缓存和生成任务等跨页面副作用。
+- `web/src/stores/`：跨页面状态和持久化配置；页面临时状态留在页面，媒体大对象不进 `localStorage`。
+- `web/src/lib/`：纯函数、画布算法、协议转换、设计 token 和可独立测试的基础能力。
+- `web/src/styles/globals.css`：变量、重置和必要的第三方覆盖；页面样式优先使用现有 token 或页面样式。
 
-- `backend/internal/handler/` 只处理 HTTP 入参、鉴权上下文传递、调用 service 和返回 `OK` / `Fail`。
-- `backend/internal/service/` 负责业务逻辑、校验、鉴权、默认值、时间、ID、配额、幂等和外部调用编排。
-- `backend/internal/repository/` 只负责数据库访问和 GORM 查询，不承载业务判断。
-- `backend/internal/model/` 只定义结构、枚举和简单模型方法，不调用外部服务。
-- `backend/cmd/` 只放可执行入口、迁移和启动配置；启动参数不得绕过数据目录约束。
+### 后端
 
-## 4. HTTP 客户端与 API 合同
+- `backend/internal/handler/`：HTTP 入参、鉴权上下文、调用 service、返回统一响应；不放业务判断和数据库查询。
+- `backend/internal/service/`：校验、权限、默认值、ID、时间、配额、幂等、任务编排和外部调用。
+- `backend/internal/repository/`：GORM 查询和持久化；不承载业务策略。
+- `backend/internal/model/`：结构、枚举和简单模型方法；不调用外部服务。
+- `backend/internal/provider/`：模型供应商能力和协议实现。
+- `backend/internal/database/`：数据库连接、迁移和连接池。
+- `backend/cmd/`：可执行入口、迁移和启动配置；启动参数不得绕过数据目录约束。
 
-### 4.1 后端业务 API：唯一复用客户端
+调用链应保持为：`HTTP -> handler -> service -> repository/model -> database/resource`；需要模型上游时由 service 进入 `provider/outbound`。跨层调用必须有明确理由并补测试。
 
-后端业务 JSON 请求的唯一公共入口是 [`web/src/services/api/request.ts`](web/src/services/api/request.ts)：
+### Agent、插件和文档
 
-- 项目当前没有另一个名为 `httpClient` 的公共实例；“httpClient 合同”实际指这里导出的 `apiClient` + `request<T>`。需要复用时直接使用它们，不要再创建 `httpClient`、`axios.create` 或平行的响应解包器。
-- 使用 `apiClient`，它由 `axios.create({ baseURL: VITE_CANVAS_BACKEND_URL || "/api", withCredentials: true })` 创建；必须保留登录 Cookie，不在 URL 中携带会话或 API Key。
-- API 模块统一从 `@/services/api/request` 导入 `apiClient`、`request`、`BackendEnvelope`、`ApiParams`；不要在业务 API 文件里重复 `axios.create`。
-- 后端成功响应合同是 `{ code: 0, data: T, msg: string }`。HTTP 200 不代表业务成功，`code !== 0` 必须失败。
-- 服务层通过 `request<T>(api.get/post/patch/delete(...))` 解包并返回 `data`；调用页面和 React Query 不再重复访问 `.data.data`，也不直接处理 envelope。
-- `request<T>` 会把 Axios 错误和后端 `msg` 转为 `Error`；业务模块应保留可读中文错误，不得 `catch { return defaultValue }` 掩盖写路径失败。
-- 查询参数使用 `compactApiParams` 清除空值，使用 `serializeApiParams` 处理数组；不要手写不同的数组编码规则。
-- 需要取消请求时把 `AbortSignal` 传到 Axios；取消应保留“请求已取消”语义，不提示成普通系统错误。
-- `FormData` 通过 `apiClient` 发送时不要手动设置 `Content-Type`，让 Axios 生成 boundary；服务层负责文件名、类型和大小校验。
-- API 返回类型在所属模块定义并导出；接口命名和字段沿用后端 JSON camelCase 合同，不在页面临时 `Record<string, unknown>` 传播。
-- API 模块不得依赖页面组件、AntD message 或路由；用户提示由调用层决定，协议错误由 service 明确抛出。
+- 修改 `canvas-agent/` 前先读 `canvas-agent/README.md`，它有独立的 Node 版本、构建、发布和 token 边界。
+- 修改 `plugins/infinite-canvas/` 前先读插件 README、manifest 和对应 skill；不要把主应用的页面约定套到插件运行时。
+- 修改 `docs/` 前确认内容属于专题文档，而不是把长篇说明重新复制到根 README。目录索引见 `docs/index.md`。
 
-### 4.2 模型渠道 API：必须经过渠道中转合同
+## 4. 前端 API 和状态合同
 
-- 文本、图片、视频、音频模型请求必须使用 [`web/src/services/api/custom-channel-relay.ts`](web/src/services/api/custom-channel-relay.ts) 的 `channelRequest`，再由 `channelPost` / `channelGet` 等小型协议函数发送。
-- `channelRequest` 的返回值是 `{ url, headers, credentials }`：系统代理可以直连；自定义渠道必须改为登录态后端 `/api/ai/custom` 中转，并传 `X-Canvas-Upstream-URL`、`X-Canvas-Upstream-Format` 和编码后的渠道 headers。
-- 自定义渠道的 `x-goog-api-key`、旧的 `X-Canvas-Upstream-Headers` 必须在重建 headers 时清除；不得绕过中转把第三方密钥暴露给浏览器或 URL。
-- 统一保留 `AbortSignal`、`withCredentials` / `credentials` 和必要的幂等头；写请求失败必须向上抛出，不用默认任务结果掩盖。
-- `buildApiUrl`、`resolveBackendApiUrl`、`isSystemProxyBaseUrl` 是现有 URL 解析合同；不要在各 provider 文件里重新拼接 `/v1`、`/v1beta` 或 `/api`。
-- Provider 特有的 payload、响应解包和状态机放在对应 `image.ts`、`video.ts`、`audio.ts`；不要把 provider 分支塞进通用 `request.ts`。
+### 后端业务 JSON
 
-### 4.3 fetch、媒体和流式请求例外
+业务 API 的唯一公共客户端是 `web/src/services/api/request.ts` 导出的 `apiClient` 和 `request<T>`：
 
-- 原始 `fetch` 只允许用于媒体 blob/data URL、资源文件、Worker/本地 Agent 通道或 SSE/流式响应等非标准 JSON 场景；必须检查 `response.ok`，并按资源类型设置 `credentials` 和 `signal`。
-- 后端 JSON 不得因为“方便”改用裸 `fetch`；若确需例外，必须在所属 service 写清响应合同、状态检查和错误转换。
-- 资源 URL 使用 `resource:<id>` storage key；资源文件下载和 OSS URL 解析统一通过 `services/api/resources.ts`，不要在组件里直接拼接 `/resources/...`。
-- 文本 SSE 合同是 `GET /api/tasks/:id/text-events`，事件包含 `delta` 和终态 `terminal`；游标是单调递增事件 `id`，断线恢复使用 `Last-Event-ID` 或 `?after=`，不能把任务 ID 当游标。
-- SSE 只对文本任务事件路径和系统模型的 `responses`、`chat/completions`、Gemini `:streamGenerateContent` 路径关闭代理缓冲、缓存和 gzip；自定义渠道仅透传后端按响应类型设置的 `X-Accel-Buffering`。不得把长超时和 `proxy_buffering off` 复制到所有 `/api/` 请求。
-- blob 下载、图片/视频生成结果和 OSS 私有资源不得把敏感 URL、Cookie、API Key 写入日志、localStorage 或错误上报。
+- 复用现有 `axios.create`；不要新增 `httpClient`、平行响应解包器或业务模块自己的 axios 实例。
+- `apiClient` 默认使用 `VITE_CANVAS_BACKEND_URL || "/api"` 和 `withCredentials: true`，登录 Cookie 不放进 URL。
+- 后端成功响应为 `{ code: 0, data: T, msg: string }`；HTTP 200 不等于业务成功，`code !== 0` 必须抛错。
+- API 模块定义并导出接口类型；页面和 React Query 直接接收解包后的 `data`，不重复访问 `.data.data`。
+- 查询参数使用 `compactApiParams` / `serializeApiParams`；取消请求传递 `AbortSignal` 并保留取消语义。
+- `FormData` 不手动设置 `Content-Type`，让 Axios 生成 boundary。写路径失败必须向上抛出，不能 `catch { return defaultValue }`。
 
-### 4.4 后端响应、权限和安全合同
+### 模型渠道和流式请求
 
-- Gin 接口统一返回 `{ code, data, msg }`；成功使用 `code: 0`，失败的 HTTP status 与 `code` 必须表达真实失败，不得始终返回 200。
-- 列表接口沿用 `model.Query`、`Normalize`、分页和标签筛选；新增列表字段要同步前端类型和文档。
-- 所有后端对象读取、更新、删除必须校验当前用户和资源归属；管理员能力必须在 service 层鉴权，不依赖前端隐藏按钮。
-- 生成、激活、权限、删除、上传、配额、账务和密钥相关操作属于强校验写路径；禁止用空 ID、默认用户、默认权限或默认额度兜底。
-- 新增或调整数据表时同步更新 `docs/content/docs/backend/backend-database.mdx`；不要只改 GORM model。
-- SSRF 防护默认拒绝本机、私网和链路本地上游；开发时只用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS` 精确放行可信主机，不设置“允许全部私网”。
+- 文本、图片、视频、音频模型请求统一经过 `web/src/services/api/custom-channel-relay.ts` 的 `channelRequest` 及其协议函数。
+- 自定义渠道必须由登录态后端 `/api/ai/custom` 中转；重建 headers 时清除 `x-goog-api-key` 和旧的 `X-Canvas-Upstream-Headers`，不得把第三方密钥放入浏览器 URL。
+- Provider 特有 payload、响应解包和状态机留在对应 `image.ts`、`video.ts`、`audio.ts`；不要塞进通用 `request.ts`。
+- 原始 `fetch` 仅用于媒体 blob/data URL、资源、Worker/本地 Agent 或 SSE；必须检查 `response.ok`，传递正确的 `credentials` 和 `signal`。
+- 文本任务 SSE 是 `GET /api/tasks/:id/text-events`，游标是递增事件 `id`；断线使用 `Last-Event-ID` 或 `?after=`，不能把任务 ID 当游标。
+- 代理只对文本任务和明确的系统模型事件流路径关闭缓冲/缓存/gzip；不要给所有 `/api/` 请求复制长超时和 `proxy_buffering off`。
 
-## 5. 数据、状态与缓存
+### 数据、缓存和写路径
 
-- 业务列表、生成记录、媒体和大 JSON 使用 `localforage`；`localStorage` 只保存极小配置、当前用户 scope 或明确的 UI 偏好。
-- 用户切换时必须清理/隔离 React Query cache、localforage 和资源缓存；storage key 必须带用户 scope，不能让账号之间串数据。
-- TanStack Query 使用稳定的业务 `queryKey`，写操作成功后主动 invalidate/refetch 相关 query；不要用页面级 `useEffect` 手工复制整个缓存。
-- Zustand store 只保存跨页面状态和持久化配置；页面临时状态留在页面，媒体大对象不要塞进 localStorage。
-- 生成任务、资源、画布、素材的本地缓存是后端不可用时的降级，不代表后端已保存；写路径必须区分“本地缓存成功”和“服务端持久化成功”。
-- 素材删除会先校验项目、画布、任务、其他素材和相关业务记录的资源引用；无占用时同步清理服务器本地文件或 OSS/COS 对象，物理删除失败必须保留素材记录并返回明确错误。画布节点等其他业务记录的单独删除仍不自动回收资源。
+- 画布、项目、任务、素材和大 JSON 使用带用户 scope 的 `localforage`；`localStorage` 只保存小型配置、当前 scope 或 UI 偏好。
+- 用户切换时隔离 React Query、localforage 和资源缓存；不能让账号之间串数据。
+- 后端不可用时的本地缓存是降级，不代表服务端已保存。UI 必须区分“本地缓存成功”和“服务端持久化成功”。
+- 生成、激活、审批、权限、删除、上传、配额、账务和密钥相关操作属于强校验写路径；不使用空 ID、默认用户、默认权限或默认额度兜底。
+- 素材删除必须先检查项目、画布、任务和其他业务引用；有引用则保留并返回来源，无引用才清理物理对象。物理删除失败不得删除素材记录。
 
-## 6. 前端 UI 与设计系统
+## 5. 后端响应、权限和安全
 
-### 6.1 组件和视觉
+- Gin 接口统一返回 `{ code, data, msg }`；失败时 HTTP status 和业务 `code` 都应表达真实失败，不把所有错误包装成 200。
+- 所有对象读取、更新、删除都在 service 校验当前用户和资源归属；管理员权限在 service 校验，不依赖前端隐藏按钮。
+- 默认拒绝本机、私网和链路本地上游。可信开发主机只能通过 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS` 精确放行；不要设置“允许全部私网”来绕过 SSRF 防护。
+- 用户 API Key 保存在浏览器本地，任务创建时可能提交给自部署后端；只在可信部署和 HTTPS 下使用真实密钥。日志、错误上报、URL、localStorage 和持久任务正文不得写入敏感 URL、Cookie 或 API Key。
+- 生产必须配置明确的 `CANVAS_CORS_ORIGINS`，保持 HTTPS，限制数据库、备份、数据目录和 `.settings-key` 权限；默认关闭公开注册。
+- 数据库字段或表变化时同步更新 `docs/content/docs/backend/backend-database.mdx`，不能只改 GORM model。
 
-- Ant Design 共性主题、按钮、下拉框、弹窗和反馈配置集中在 `web/src/lib/app-theme.ts` 或 `AppProviders`；页面不得重复创建全局 ConfigProvider。
-- 当前依赖版本以 `web/package.json` 和 lockfile 为准；涉及第三方组件必须先核对安装版本和实际 DOM/源码，再决定类名、语义 `styles` 或 `classNames`。
-- **AntD Modal 规则：当前版本使用 `.ant-modal-container` 作为实际内容外壳，默认内容 padding 在该元素上；不得凭旧版本经验只写 `.ant-modal-content`。** 优先使用 `styles={{ container: ... , body: ... }}` 和组件级 class；新增覆盖前必须检查实际渲染结构。
-- AntD 第三方覆盖必须限定到具体页面/组件 class，不得用全局 `.ant-modal-*` 改变所有页面；覆盖应集中且唯一，禁止多个末尾 override 互相打架。
-- UI 图标优先使用 `lucide-react` 或项目已有 Ant Design 图标；页面文案使用中文。页面身份图标统一使用 `WorkspaceSignalIcon`，导航和操作图标统一使用 `lucide-react`。
-- 页面级分类导航至少 44px 高，并提供”图标 + 明确文字”入口和一致选中态；重要设置不能只藏在无文字图标中。
-- 可编辑的工作区、画布和对象名称常显铅笔图标并支持单击编辑；双击和右键只能作为快捷方式，不能作为唯一发现路径。
-- 不把页面大段说明文字当作”如何使用”的常驻教程；通过明确控件、空态、反馈和可发现的图标+文字表达功能。
-- **卡片、列表、交互动效遵循 [UI 设计系统规范](docs/ui-design-system.md)**：统一卡片表面、状态描边和 hover（180ms/translateY -2px）；普通卡片默认无边框、无 hairline、无投影。改造前先读规范并核对现有 token。
+## 6. 画布、UI 和设计系统
 
-#### UI 修复防回归
+- 画布组件、状态、算法分别放在 `web/src/components/canvas/`、`web/src/stores/canvas/`、`web/src/lib/canvas/`。事件忽略选择器必须覆盖 modal、popover、dropdown 等浮层。
+- 画布拖拽、连接、缩放和快捷键要考虑 pointer capture、滚轮冒泡、焦点以及 `data-canvas-no-zoom` / `data-canvas-wheel-scroll` 边界。
+- 节点和对象名称要有可发现的铅笔入口并支持单击编辑；双击或右键不能是唯一入口。图片节点保持原始比例，面板不能长期遮挡主要画布空间。
+- Ant Design 共性主题和控件状态集中在 `web/src/lib/app-theme.ts` / `AppProviders`。Modal 当前内容外壳是 `.ant-modal-container`，优先使用 `styles.container`、`styles.body` 和组件 class。
+- 第三方覆盖限定在具体组件，不新增全局 `.ant-modal-*`、`.dark .ant-switch-*`、`.ant-checkbox-*` 或 Segmented 状态补丁。新增 CSS 前先搜索同名选择器，回到唯一源规则修改。
+- 遵循 `docs/ui-design-system.md` 及项目三层 token：Primitive → Semantic → Component。inline style 优先引用 `var(--token-name)`，不要散落颜色、圆角、阴影和层级字面值。
+- 主操作、普通选中、Checkbox/Radio、Switch 是不同颜色角色；持久切换使用 `aria-pressed`，`type="primary"` 只表示当前主要命令。尊重 `prefers-reduced-motion`，键盘导航保留 `:focus-visible`。
 
-- 主操作、普通选中、Checkbox/Radio 勾选和 Switch 是四种颜色角色；每种状态都必须为明暗主题成对定义背景与前景，禁止把 `primary` 实心色直接复用为普通选中态。
-- 持久切换按钮使用 `aria-pressed` 表达状态；`type="primary"` 只用于当前流程的主要命令，不用于表示“已选中”。
-- AntD Button、Switch、Checkbox、Radio、Segmented 的共性状态只在 `web/src/lib/app-theme.ts` 和全局兼容区维护；不得新增页面级 `.dark .ant-switch-*`、`.ant-checkbox-*` 或 Segmented 选中色补丁。组件级 CSS 只允许处理尺寸和布局。
-- 新增 CSS 前先搜索同名选择器和 token；回到唯一源规则修改，并删除被替代的末尾 override。新增 token 后必须确认定义真实存在且明暗主题均可解析，不能只在文档中声明。
-- 卡片层级通过 `--library-surface`、明度、间距和信息密度表达；禁止装饰性左侧竖条、默认 border、hairline、inset stroke、渐变光和卡片阴影。业务 selected、warning、error 等真实状态才可保留克制的语义描边或颜色。
-- 工作区 Modal 统一使用 `workspace-modal`，并按语义选择 `workspace-modal-compact`、默认 standard 或 `workspace-modal-wide`；素材选择统一复用 `AssetLibraryPickerModal`，页面不得复制按钮、弹窗宽度和素材网格样式。
+## 7. 本地开发、部署和数据目录
 
-### 6.2 空间、响应式和动效
+- 先阅读 `.env.example` 和对应 Compose 文件。宿主机后端开发必须使用 Git 忽略的 `.local/project-workbench-debug`，通过 `CANVAS_BACKEND_DATA_DIR` 显式指定；不要把 `backend/data` 当作开发账号数据库。
+- 本地缓存放 `.local/cache`；不要提交数据库、上传文件、`.env`、真实密钥、构建产物或编辑器配置。
+- 宿主机开发：`backend/` 运行 `CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server`，`web/` 使用 Bun 和 Vite。Docker 热更新使用 `docker-compose.dev.yml`；本地构建运行使用 `docker-compose.local.yml`。
+- 生产 Compose 使用 `docker-compose.deploy.yml`（PostgreSQL、Redis、backend、web），源码构建可叠加 `docker-compose.build.yml`。公网只暴露 web 的 `3000`，backend `8080` 留在 Compose 网络内。
+- 默认不启动 dev server；只有用户明确要求浏览器预览或联调时才启动，并先确认端口、数据目录和现有进程。
+- 健康检查只能证明入口可用，不能替代登录、SSE、任务生成和资源访问验证。
 
-- 弹窗、抽屉、输入框、卡片和网格要有明确的稳定宽高、滚动边界和响应式约束；避免默认 padding、margin、`min-height` 叠加造成四周大块空白。
-- 发现“空白太多/太宽/不对齐”时，先按 DOM 层级检查外层 wrapper、container、content、body 的 computed style，再调整唯一源规则；不要盲目再加一条 CSS。
-- 鼠标点击按钮或卡片不显示持久 focus 边框：统一用 `:focus:not(:focus-visible)` 清除 outline/box-shadow；键盘导航必须保留 `:focus-visible`，不要用全局 `:focus { outline: none }` 把可访问性一起删掉。
-- 若浏览器仍把指针点击误判为 `:focus-visible`，统一复用 `ClientRootInit` 的 pointer focus 收口；不要给页面按钮逐个添加 `blur` 或复制事件监听。
-- 不在卡片里套卡片，不用大面积装饰性留白掩盖信息层级；高频创作操作保持紧凑，主内容优先占据首屏。
-- 页面核心界面以 Aceternity UI 的空间层次和组件语言为基线，但必须改造成当前项目的命令、状态和主题契约；不得长期并行维护新旧两套视觉入口。
-- 遵循 `canvasThemes`、`useThemeStore`、AntD token 和 CSS 三层 token；不得硬编码导致明暗主题失配的颜色。
-- 图片节点保持原始比例；批量生成、多图和助手面板不能长期遮挡主要画布空间。
-- 动效服务状态变化和空间关系，尊重 `prefers-reduced-motion`；不要添加持续干扰创作的装饰动画。
+## 8. 验证纪律
 
-### 6.3 三层 Design Token
+项目当前默认不自动运行语法检查、类型检查、测试或构建。用户明确要求验证，或改动风险需要验证时，按范围选择最小充分命令，并在交付中如实记录：
 
-- Primitive：纯值，不随主题变；包含色彩、4px 间距栅格、字号、圆角、阴影、层级、动效、描边和不透明度。
-- Semantic：引用 Primitive 并随主题切换；包含 `--bg`、`--fg`、`--border-semantic`、Canvas、Aceternity spatial、节点类型和状态语义色。
-- Component：引用 Semantic，定义 Dock、Node、Modal、Panel、Prompt、进度条和缩放控件等组件专属 token。
-- 新增 token 必须按 Primitive → Semantic → Component 顺序添加；不要在组件里直接创造孤立字面值。
-- AntD ConfigProvider、shadcn、画布主题和动效读取同一套 CSS token；修改 token 后检查明暗主题和第三方控件同步关系。
+- 前端：`cd web && bun run build`；专项测试用 `bun test ...`。
+- 后端：`cd backend && go test ./...`；涉及 PostgreSQL、资源、任务或权限时补对应集成/冒烟路径。
+- Canvas Agent：`cd canvas-agent && npm test`，构建用 `npm run build`。
+- 文档站：`cd docs && bun run types:check` 或 `bun run build`。
+- UI 变更能浏览器验证时，检查关键路由、明暗主题、滚动、弹窗、空态和核心交互；不能验证时说明替代依据，不把静态阅读或 `git diff` 写成运行验证。
 
-## 7. 画布与 Agent
+同类失败连续三次时停止盲试，记录现象、已排除项和新假设，再切换路径或请求用户决策。
 
-- 画布组件、状态、工具分别放在 `components/canvas/`、`stores/canvas/`、`lib/canvas/`；Canvas 事件忽略选择器必须包含弹窗、popover、dropdown 等浮层。
-- 画布节点编辑、连接、拖拽、缩放和快捷键必须考虑 pointer capture、滚轮冒泡、焦点和 `data-canvas-no-zoom` / `data-canvas-wheel-scroll` 边界。
-- Canvas Agent 的本地 endpoint、token 和面板宽度是本机配置；不得把 token 写进 URL、日志、任务正文或服务端持久数据。
-- Agent 附件和生成资源必须走既有文件/资源存储合同，记录 mime、大小和失败原因；不要在组件中重复实现 data URL 转换。
+## 9. 文档与交付
 
-## 8. 本地开发、数据目录与部署
+- 根 `README.md` 只保留项目定位、能力概览、快速开始、部署、安全和文档入口；详细专题写入 `docs/content/docs/`。
+- 功能、代码地图、待办、待测试分别维护在 `docs/content/docs/overview/features.mdx`、`docs/content/docs/backend/code-map.mdx`、`docs/content/docs/progress/todo.mdx`、`docs/content/docs/progress/pending-test.mdx`。已实现但未由用户确认的变化先写入 `pending-test.mdx`。
+- API、数据表、SSE、资源存储、部署或安全边界变化时同步对应专题文档；不要只改代码和根 README。
+- 文档默认中文，不写过期日期，不公开密码、Token、Cookie、真实账号或机器敏感路径。命令、端口、环境变量必须以当前脚本和 Compose 为准。
+- Git 提交说明使用 `<type>(<scope>): <业务模块> - <变更摘要>`，`type` 为 `feat|fix|refactor|perf|docs|test|build|ci|chore|revert`。
 
-- 本地后端必须复用 `.local/project-workbench-debug`，通过 `CANVAS_BACKEND_DATA_DIR` 显式指定；启动前先检查已有数据库，禁止直接使用 `backend/data` 创建或切换本地账号数据。
-- 本地缓存统一放 `.local/cache`；不要把数据库、上传文件、`.env`、真实 API/OSS 密钥、构建产物或编辑器配置提交到 Git。
-- 宿主机开发可在 `backend/` 使用 `CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server`，在 `web/` 使用 Bun 和 Vite；Docker 开发沿用仓库现有 Compose 文件，不另起一套数据卷。
-- 默认不启动 dev server；只有用户明确要求浏览器预览或联调时才启动，并先确认端口和数据目录。
-- Docker 部署只对外暴露网页容器 `3000`；后端 `8080` 留在 Compose 网络内。健康检查只能证明入口可用，不能替代 SSE/登录/生成路径验证。
-- 生产必须设置明确的 `CANVAS_CORS_ORIGINS`，保持公开注册关闭，HTTPS 终止后保留 Host、X-Forwarded-*，并限制数据库、备份、数据目录和 `.settings-key` 权限。
-- Nginx/Caddy 只对文本任务和明确的系统模型事件流路径配置 flush、长超时、禁缓冲和禁缓存；自定义渠道依赖响应头动态关闭缓冲，不把这套配置复制给所有接口。
-
-## 9. 验证纪律
-
-- 本项目当前明确要求：写完代码默认不自动执行语法检查、类型检查、测试或构建；交付时必须明确说明未运行验证。
-- 用户明确要求验证时，按改动风险选择最小充分验证：前端至少 build 并验证关键路径；API/服务至少做最小冒烟；数据库/部署说明迁移、运行方式、回滚风险和版本约束。
-- UI 任务能实际验证时优先使用真实浏览器/截图检查关键视口、滚动、弹窗、空态和交互；不能验证时说明替代依据，不伪造“已验证”。
-- 同类失败连续 3 次时停止盲试，记录现象、已排除项和新假设，再换路径或请求用户决策。
-- 不把 `git diff`、静态阅读或“代码看起来正确”描述成运行验证。
-
-## 10. 文档同步
-
-- README 只保留项目定位、核心功能、快速开始、数据说明和文档入口；详细开发规则写入 `docs/content/docs/` 对应页面。
-- `docs/index.md` 是面向 AI 的短索引；功能、代码地图、待办、待测试分别维护在 `features.mdx`、`code-map.mdx`、`todo.mdx`、`pending-test.mdx`。
-- 已实现但未由用户确认的变化写入 `pending-test.mdx`；确认后再更新正式功能说明。完成 TODO 后先移入 pending-test，不直接写正式功能说明。
-- API、数据表、SSE、资源存储、部署和安全边界发生变化时同步更新对应文档；不要只改代码和 AGENTS。
-- 文档默认中文，不写过期日期，不暴露密钥、Token、Cookie、真实账号或机器敏感路径。
-- 每次任务结束前检查 todo 和 pending-test；没有功能变化时无需机械修改。
-
-## 11. Git、提交与发布
-
-- 不使用破坏性命令覆盖用户数据或工作区；禁止未经明确请求执行 `git reset --hard`、`git checkout --` 或大范围删除。
-- 提交说明使用：`<type>(<scope>): <业务模块> - <变更摘要>`。`type` 使用 `feat|fix|refactor|perf|docs|test|build|ci|chore|revert`，`scope` 使用技术域英文，业务模块和结果用中文。
-- 不把纯文件名列表、纯英文句子或“修了 bug”作为提交 subject；发布使用 `chore(release): 版本发布 - publish vX.Y.Z`。
-- 发布前整理 `CHANGELOG.md` 的 `Unreleased`、更新 `VERSION`、提交当前改动并创建对应 tag；除非用户明确要求，发布流程不执行编译、测试或构建。
-- Pull Request 应包含改动摘要、风险、验证方式和必要截图；不得提交 `.env`、数据库、数据目录、生成产物或真实密钥。
-
-## 12. 交付前检查清单
-
-- [ ] 是否先读了相关入口、调用方、依赖版本和现有样式，而不是凭记忆添加规则？
-- [ ] 是否只改任务相关文件，且没有用重复 helper 或 CSS override 扩大项目？
-- [ ] 是否遵守了本文件的 HTTP、数据归属、错误和安全合同？
-- [ ] UI 是否检查了真实第三方 DOM 语义类名，特别是 AntD Modal 的 `.ant-modal-container`？
-- [ ] 是否同步了必要的 API/数据库/SSE/部署文档和 pending-test？
-- [ ] 是否按项目约束明确说明验证是否运行，且没有伪造成功？
-
-## 13. 当前边界
-
-- 画布和素材支持登录后端同步；localForage 仍是缓存及后端/OSS 不可用时的降级存储。
-- 媒体资源支持私有阿里云 OSS、腾讯云 COS 或后端文件存储；删除素材会在无其他业务引用时同步清理对应物理对象，删除画布节点等其他记录本身不主动回收资源。
-- 用户 AI API Key 保存在浏览器本地，任务创建时可能提交到自部署后端；安全说明必须强调 HTTPS 和可信部署。
-- Docker 静态资源和生产部署仍需按待测试清单验证，不得写成已全面生产验证。
+交付前至少检查：改动是否聚焦、调用方和类型是否同步、错误/权限/数据归属是否完整、必要文档是否同步、验证是否如实说明、是否留下密钥或本地数据。

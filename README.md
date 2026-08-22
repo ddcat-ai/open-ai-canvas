@@ -7,314 +7,213 @@
 <p align="center">让一个故事，从文字走向银幕</p>
 
 <p align="center">
-  <a href="https://github.com/ddcat-ai/open-ai-canvas"><img src="https://img.shields.io/github/stars/ddcat-ai/open-ai-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.43-2563eb?style=flat-square" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f97316?style=flat-square" alt="License"></a>
+  <a href="https://github.com/ddcat-ai/open-ai-canvas">GitHub</a> ·
+  <a href="docs/content/docs/overview/features.mdx">功能</a> ·
+  <a href="docs/content/docs/overview/quick-start.mdx">文档</a> ·
+  <a href="SECURITY.md">安全策略</a>
 </p>
 
-一个故事也许始于一页小说、一个人物，或一句还没写完的对白。影策从章节中梳理角色与情节，让人物的外观、声音和气质成为可复用的角色资产，再把分镜、图片、视频和音频组织在同一张画布上。从最初的文字到可以被看见、被听见的镜头，创作者始终掌握故事的方向。
+影策是一个开源的 AI 影视与短剧创作工作台。它把自由画布、结构化分镜、角色与风格资产、图片/视频/音频生成、异步任务和本地 Agent 放在同一条创作链路里，让创作者从文字 brief 走到可复用的镜头资产。
 
-影策是一款面向 AI 影视与短剧创作的开源工作台，集成自由画布、结构化分镜、角色卡、3D 导演台、素材库、异步生成任务和 Agent 协作能力。
+> 项目仍在快速开发，数据结构和外部接口可能直接调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
-> 项目仍在快速开发，数据结构可能直接调整。当前更适合个人、本地或可信环境部署，不建议未经安全配置直接开放公网多人使用。
+当前版本以仓库根目录 [`VERSION`](VERSION) 为准。
 
-## 在线体验
+## 当前能力
 
-- 临时演示环境：[https://ddcat.pronhubcn.com](https://ddcat.pronhubcn.com)
-- 测试账号：`test`
-- 测试密码：`test123456`
-- 测试环境：[https://ai.ddcat.pro/login](https://ai.ddcat.pro/login)
-- 代码仓库：[ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)
+- **自由画布**：项目、节点、连线、框选、缩放、小地图、撤销重做、导入导出和公开只读分享。
+- **影视工作流**：剧本、角色、场景、风格板、参考素材、结构化分镜和 3D 导演台。
+- **多媒体生成**：文本、图片、视频、音频任务，支持参考图、首尾帧、运镜、视频续写、局部修改和批量生成。
+- **任务与素材**：后端异步队列、任务日志、取消/重试、账号素材库、资源引用校验和登录后的跨设备同步。
+- **Agent 协作**：画布助手、本地 Canvas Agent、MCP 工具、Codex App 插件和技能库。
+- **管理与渠道**：系统渠道、逻辑模型、用量/积分、功能开关、对象存储、响应拦截和管理后台。
 
-## 赞助商
+详细功能清单见 [`docs/content/docs/overview/features.mdx`](docs/content/docs/overview/features.mdx)，实现入口见 [`docs/content/docs/backend/code-map.mdx`](docs/content/docs/backend/code-map.mdx)。
 
-| LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
-| --- | --- | --- | --- | --- |
-| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
-| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 快乐机艺术小组，一支跨学科的艺术创作团队，持续探索数字+艺术的全新表达形式。 | 暂无 |
-| <img src="assets/metaso.png" alt="秘塔" width="160"> | 企业 | 秘塔 | **MiniMax H3 视频生成 API｜秘塔科技**<br><br>秘塔科技提供高性价比的 MiniMax H3 视频生成服务：**768P 仅 0.09 元/秒，2K 仅 0.15 元/秒**。支持原生 2K、音画同步，API 兼容 **OpenAI 协议**，同时支持 **ComfyUI**，无需自行部署 GPU。<br><br>🎁 通过[无限画布专属链接注册](https://metaso.cn/minimax-h3/?s=dd)，即可领取赠送额度及专属优惠。 | [metaso.cn](https://metaso.cn/minimax-h3/?s=dd) |
+## 架构概览
 
-## 团队成员
+```text
+浏览器（web/）
+  ├─ React 工作区、画布、任务中心、素材库
+  ├─ localForage/Zustand 本地状态与降级缓存
+  └─ request.ts / channel relay
+          │ 登录态 JSON、SSE、资源请求
+          ▼
+后端（backend/）
+  ├─ Gin handler -> service -> repository/model
+  ├─ SQLite（本地）或 PostgreSQL + Redis（部署）
+  ├─ 异步任务 worker、资源存储、权限和模型中转
+  └─ provider/outbound -> 外部模型渠道
 
-| 头像 | 昵称 | 邮箱 | 个性签名 |
-| --- | --- | --- | --- |
-| <img src="assets/user-sikongyue.png" alt="爱笑的毛毛虫" width="80"> | 爱笑的毛毛虫<br><sub>用户名：sikongyue</sub> | [315515767@qq.com](mailto:315515767@qq.com) | 正在啃 main 分支，争取下次 merge 的时候变成蝴蝶 |
-| <img src="assets/user-delve.jpg" alt="delve-s" width="80"> | delve-s | [3013141136@qq.com](mailto:3013141136@qq.com) | 我亦无他，惟手熟尔 |
-| <img src="assets/user-CyrusAuyeung.jpg" alt="CyrusAuyeung" width="80"> | CyrusAuyeung | [cyrusauyeungho@gmail.com](mailto:cyrusauyeungho@gmail.com) | HKUST(GZ) UG |
-| <img src="assets/user-nz.jpg" alt="奶大佬" width="80"> | 奶大佬 | [1304634970@qq.com](mailto:1304634970@qq.com) | 人生就是要不断的探索 |
-| <img src="assets/user-dyh.jpg" alt="dyh" width="80"> | dyh | [1613203335@qq.com](mailto:1613203335@qq.com) | 无 |
-| <img src="assets/user-kyori.jpg" alt="kyori" width="80"> | kyori | [1771634408@qq.com](mailto:1771634408@qq.com) | 励志成为未来最好用的画布仓库的贡献者 |
-| <img src="assets/user-bowen.jpg" alt="Bowen" width="80"> | Bowen | [admin@bowen.games](mailto:admin@bowen.games) | 剑走偏峰，雷厉风行。 |
-| <img src="assets/user-ken.jpg" alt="ken" width="80"> | ken | [2506802@qq.com](mailto:2506802@qq.com) | 走自己的路 |
-| <img src="assets/user-fish.png.jpg" alt="🐟" width="80"> | 🐟 | [cihai.sea@gmail.com](mailto:cihai.sea@gmail.com) | AI 界 热于助人的拖油瓶 |
-| <img src="assets/user-QAyong.jpg" alt="QAyong" width="80"> | QAyong<br><sub>ID：QAyong<br>B站：QAyong</sub> | [2110491559@qq.com](mailto:2110491559@qq.com) | AI短剧合规，资产确权 |
-| <img src="assets/user-K37ix.jpg" alt="_K37ix." width="80"> | _K37ix. | [2773843782@qq.com](mailto:2773843782@qq.com) | Making things that think |
-
-## 主要功能
-
-- **自由画布**：多项目、节点与连线、框选布局、撤销重做、小地图、导入导出和公开只读分享。
-- **AI 生成**：支持文本、图片、视频和音频任务，以及参考图编辑、首尾帧、运镜、视频续写和局部修改。
-- **影视工作流**：结构化分镜脚本、角色卡、批量镜头节点、3D 导演台和控制图回写。
-- **任务与素材**：后端异步队列、任务日志、失败重试、素材库及登录后的后端同步。
-- **Agent 能力**：网页画布助手、本地 Canvas Agent、Codex App 插件和技能库。
-- **管理与安全**：用户与系统渠道、用量分析、阿里云 OSS / 腾讯云 COS 私有对象存储、资源归属校验和敏感配置加密。
-
-## 界面预览
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="assets/login.png" alt="登录与注册" width="100%">
-      <br><sub><b>登录与注册</b></sub>
-    </td>
-    <td width="50%" valign="top">
-      <img src="assets/create.png" alt="AI 创作工作台" width="100%">
-      <br><sub><b>AI 创作工作台</b></sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="assets/project-detail.png" alt="短剧项目制作概览" width="100%">
-      <br><sub><b>短剧项目制作概览</b></sub>
-    </td>
-    <td width="50%" valign="top">
-      <img src="assets/canvas.png" alt="自由画布创作工作台" width="100%">
-      <br><sub><b>自由画布创作工作台</b></sub>
-    </td>
-  </tr>
-</table>
-
-## 交流与反馈
-
-感谢 [Linux.do 社区](https://linux.do/) 对项目的认可与支持，欢迎在社区参与讨论和分享使用体验。
-
-Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
-
-<p align="center">
-  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="360">
-</p>
-
-## 新服务器一键部署（推荐）
-
-适用于刚买的 Linux 云服务器。准备一台 Ubuntu、Debian、CentOS 或 Rocky Linux 服务器，在云厂商防火墙（安全组）中先仅对自己的公网 IP 放行 TCP `3000` 端口，然后登录服务器执行这一条命令：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
+本地 Agent（canvas-agent/） <-> 浏览器画布 <-> Codex MCP / 本机 CLI
+Codex 插件（plugins/infinite-canvas/）负责把 MCP 接入 Codex App。
 ```
 
-脚本会自动安装 Docker 和 Docker Compose，把项目源码安装到 `/opt/open-ai-canvas`，生成随机数据库密码，在服务器本地构建网页与后端镜像，并启动网页、后端、PostgreSQL 和 Redis。该流程不依赖 GitHub Container Registry（GHCR）的匿名拉取权限；数据库和上传文件使用 Docker 数据卷持久保存，重新启动容器不会丢失。
-
-完成后打开 `http://服务器IP:3000`。第一个注册的账号会自动成为管理员；登录后在系统设置中配置模型渠道即可开始使用。公开注册默认关闭，但不影响第一个管理员注册。
-
-再次执行同一条命令即可拉取新代码并更新。常用排查命令：
-
-```bash
-cd /opt/open-ai-canvas
-sudo docker compose --env-file .env -f docker-compose.deploy.yml -f docker-compose.build.yml ps
-sudo docker compose --env-file .env -f docker-compose.deploy.yml -f docker-compose.build.yml logs -f --tail=200
-```
-
-首次部署需要下载构建依赖并编译前后端，耗时和资源占用会高于直接拉取镜像；后续更新会复用 Docker 构建缓存。需要固定代码版本时，可通过 `REPOSITORY_REF` 指定分支或标签。
-
-### 直接使用 GitHub Packages 镜像
-
-如果服务器不需要源码目录，可以使用只拉取 GitHub Container Registry（GHCR）镜像的快速脚本。脚本会下载部署 Compose 文件，不会 clone Git 仓库；首次执行仍会自动安装 Docker、生成 `/opt/open-ai-canvas/.env` 并启动全部服务：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
-```
-
-该快速脚本仍依赖 GHCR 容器包的可见性。容器包尚未公开时，必须先执行 `docker login ghcr.io`，或在直接运行脚本时提供 `GHCR_USERNAME` 和 `GHCR_TOKEN` 环境变量完成登录；未配置凭据时请使用上方推荐的源码构建脚本。默认使用 `latest` 标签，固定版本或修改端口可在首次执行后编辑 `/opt/open-ai-canvas/.env`，然后重新执行脚本。
-
-部署配置和 PostgreSQL 密码保存在 `/opt/open-ai-canvas/.env`，不要发送给他人，也不要删除 `backend-data`、`postgres-data` 和 `redis-data` 数据卷。数据卷持久化不等于备份，请定期备份 PostgreSQL 和上传文件。直接使用 IP 访问仅适合首次配置；公网长期使用必须绑定域名并配置 HTTPS。
-
-## 生产环境 SSE
-
-文本任务事件流是登录态接口 `GET /api/tasks/:id/text-events`。它只发送当前用户有权限访问的文本任务增量，响应类型为 `text/event-stream`；事件 `delta` 的 `id` 是单调递增的文本序号，`terminal` 表示任务已经成功、失败或取消。画布创作对话还会通过 `/api/ai/system/:channelId/responses`、`/chat/completions` 或 Gemini `:streamGenerateContent` 接口直接接收模型事件流。生产反向代理必须只对这些流式路径关闭响应缓冲和缓存，并允许长时间读取；不要把这些设置复制到所有 `/api/` 请求上。
-
-### Nginx
-
-如果 Docker Compose 的网页容器暴露在本机 `3000` 端口，在 HTTPS server 中加入以下规则，并放在通用 `/api/` 规则之前。`proxy_pass` 也可以按你的部署拓扑改成实际网页入口；不要把后端 `8080` 直接暴露到公网。
-
-```nginx
-location ~ ^/api/tasks/[^/]+/text-events$ {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header Connection "";
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_pass_header X-Accel-Buffering;
-    gzip off;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
-}
-
-location ~ ^/api/ai/system/[^/]+/(?:responses|chat/completions|models/[^/]+:streamGenerateContent)$ {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header Connection "";
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_pass_header X-Accel-Buffering;
-    gzip off;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
-}
-```
-
-项目镜像内的 `nginx.conf` 已包含同等规则，并只对文本任务和系统模型事件流关闭缓冲。自定义渠道共用 `/api/ai/custom`，由后端仅在上游实际返回 `text/event-stream` 时发送 `X-Accel-Buffering: no`；镜像内 Nginx 会继续向外层代理传递这个信号。外层 Nginx 和镜像内 Nginx 都存在时，任一层重新缓冲都会让浏览器看起来直到模型响应结束才收到增量。
-
-### Caddy
-
-Caddy 终止 HTTPS 后，将网页入口转发到 Compose 暴露的 `3000` 端口。`flush_interval -1` 让事件立即下发，长 `read_timeout` 防止长文本任务被网关主动断开：
-
-```caddyfile
-canvas.example.com {
-    @textEvents path_regexp textEvents ^/api/tasks/[^/]+/text-events$
-    reverse_proxy @textEvents 127.0.0.1:3000 {
-        flush_interval -1
-        transport http {
-            read_timeout 1h
-        }
-        header_up X-Forwarded-Proto {scheme}
-        header_down Cache-Control "no-cache, no-transform"
-    }
-
-    @systemModelEvents path_regexp systemModelEvents ^/api/ai/system/[^/]+/(responses|chat/completions|models/[^/]+:streamGenerateContent)$
-    reverse_proxy @systemModelEvents 127.0.0.1:3000 {
-        flush_interval -1
-        transport http {
-            read_timeout 1h
-        }
-        header_up X-Forwarded-Proto {scheme}
-        header_down Cache-Control "no-cache, no-transform"
-    }
-
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-HTTPS 不是可选项：事件流使用登录 Cookie，用户配置的模型凭据也会参与请求；公网浏览器到反向代理的链路必须使用 HTTPS，并保留 `Host`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。反向代理到网页容器可以使用隔离的 Compose 内网 HTTP。不要通过放宽 CORS、关闭鉴权或把 `Last-Event-ID` 放进 URL 来解决断线问题。
-
-### Docker 与健康检查
-
-`docker-compose.deploy.yml` / `docker-compose.server.yml` 只需要对外暴露网页容器的 `3000`；后端 `8080` 留在 Compose 网络内。部署后先确认容器健康：
-
-```bash
-sudo docker compose --env-file .env -f docker-compose.deploy.yml -f docker-compose.build.yml ps
-curl -fsS https://canvas.example.com/api/health
-```
-
-网页容器和后端镜像都带健康检查：网页检查 `/`，后端检查 `/api/health`。健康检查只能证明 HTTP 入口可用，不能证明代理正在逐事件转发；SSE 仍需按下面的命令验证。
-
-### 断线恢复与排障
-
-客户端重连时可以发送 `Last-Event-ID: <最后收到的序号>`，也可以使用 `?after=<序号>`；查询参数优先。服务端只返回 `sequence > after` 的 `delta`，因此同一段文本不会因为重连重复拼接。游标来自 SSE `id`，不是任务 ID。成功任务的增量保留 24 小时，失败或取消任务保留 7 天；超出保留期时应读取任务详情中的最终正文或失败草稿。
-
-在已登录浏览器中复制 `open_ai_canvas_session` Cookie 后，可用 `curl -N` 检查首字节和增量是否在任务运行期间到达：
-
-```bash
-curl -N --http1.1 \
-  -H 'Accept: text/event-stream' \
-  -H 'Last-Event-ID: 0' \
-  -b 'open_ai_canvas_session=<登录 Cookie>' \
-  'https://canvas.example.com/api/tasks/<task-id>/text-events'
-```
-
-正常输出会先出现 `: connected`，随后是带 `id` 的 `event: delta`，最后是 `event: terminal`。如果只在任务结束后一次性出现全部内容，检查每一层是否仍有 `proxy_buffering on`、缓存规则或 gzip；如果长时间没有任何字节，检查 `proxy_read_timeout`、HTTPS 连接和后端容器日志。该排障命令只针对文本事件流，其他 API 仍使用默认缓存、安全和超时策略。
+前端默认把 `/api` 代理到 `http://127.0.0.1:8080`；生产环境由网页容器的 Nginx 代理到后端，只有 web 的 `3000` 端口需要对外暴露。系统模型和文本任务的 SSE 只在明确的流式路径关闭代理缓冲，详见 [`nginx.conf`](nginx.conf) 和 [SSE 文档](docs/content/docs/overview/docker.mdx)。
 
 ## 本地开发
 
-需要 Bun、Go 和可用的 OpenAI 兼容模型渠道。
+### 环境
+
+- Bun（前端和文档站）
+- Go 1.25（后端）
+- Node.js 18+（Canvas Agent）
+- 如使用 Docker 开发，需要 Docker Compose
+
+### 宿主机启动
 
 ```bash
 git clone https://github.com/ddcat-ai/open-ai-canvas.git
 cd open-ai-canvas
-```
 
-后端开发数据统一保存在 Git 忽略的 `.local/project-workbench-debug`。启动前先检查该目录，不要改用 `backend/data` 或其他目录；仅在确认本机没有既有开发数据时创建：
+# 开发数据必须使用 Git 忽略的目录，不要直接使用 backend/data
+mkdir -p .local/project-workbench-debug .local/cache/go-build .local/cache/go-mod
 
-```bash
-if [ -d .local/project-workbench-debug ]; then
-  find .local/project-workbench-debug -maxdepth 1 -type f -name 'open_ai_canvas.db*' -ls
-else
-  mkdir -p .local/project-workbench-debug
-fi
-mkdir -p .local/cache/go-build .local/cache/go-mod
-```
-
-直接在宿主机开发：
-
-```bash
+# 终端一：后端
 cd backend
 CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server
 
-# 另开终端
-cd web
+# 终端二：前端
+cd ../web
 bun install
 bun run dev
 ```
 
-打开 `http://localhost:3000`，注册首个管理员账号，再在系统设置中配置渠道和模型。
+打开 <http://localhost:3000>，注册第一个管理员账号，再在设置中配置模型渠道。前端的 Vite 配置会把 `/api` 代理到本机 `8080`。
 
-资源配额、Worker/渠道/账号任务并发、业务频控、任务超时和渠道中转策略可在“系统配置 → 资源与策略”中统一热更新，支持重置和自用模式；系统渠道可选择跟随全局值，或单独设置 `1-999` 的最大并发数。未保存后台配置时 Worker 和全局渠道并发分别回退到 `CANVAS_WORKER_CONCURRENCY` 和 `CANVAS_CHANNEL_CONCURRENCY`，两者默认均为 `3`。渠道槽位暂满时任务会等待，不会直接标记失败。
+如需修改代理目标，设置 `VITE_API_PROXY_TARGET`；如生产前端与后端不共源，构建时设置 `VITE_CANVAS_BACKEND_URL`。用户的模型 Base URL、API Key 和模型名保存在浏览器本地，真实密钥只应发送到可信且启用 HTTPS 的自部署后端。
 
-Docker 热更新开发：
+### Docker 开发和本地构建
+
+源码热更新（Vite HMR + Air）：
 
 ```bash
-LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f docker-compose.dev.yml up --build
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) \
+  docker compose -f docker-compose.dev.yml up --build
 ```
 
-前端通过 Vite HMR 更新，后端由 Air 在 Go 源码或模块文件变化后重新编译。前端地址为 `http://localhost:3000`，局域网设备可通过 `http://<开发机 IP>:3000` 访问；后端 `8080` 端口只开放给开发机本机，浏览器 API 请求统一由 Vite 转发。
-
-宿主机端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖默认的 3000/8080；建议把本机取值写入 Git 忽略的 `.local/docker-compose.dev.env`，并在 Compose 命令中使用 `--env-file .local/docker-compose.dev.env`。Go 模块和编译缓存保存在 `.local/cache`，重建容器不会重复完整冷编译。
-
-后端默认通过 SSRF 防护拒绝本机、私网和链路本地上游。开发环境需要连接可信局域网模型服务时，在 `.local/docker-compose.dev.env` 中使用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=192.168.1.10` 精确放行；只填写主机名或 IP，多个值用英文逗号分隔，不包含协议、端口和路径。精确白名单中的自定义渠道可使用 HTTP，但 API Key 会在后端到上游的链路中明文传输，仅限可信网络；其他自定义渠道仍要求 HTTPS。保持 `CANVAS_ALLOW_PRIVATE_UPSTREAMS=false`，避免放行所有私网目标。
-
-桌面本机渠道使用独立安全能力，不复用上述私网白名单。该能力默认关闭；仅本机桌面启动后端时同时设置 `CANVAS_BACKEND_ADDR=127.0.0.1:8080` 与 `CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED=true` 才会启用，并且渠道自身仍需打开“允许本机渠道”。启用后只额外允许 Base URL 的文本主机精确为 `127.0.0.1` 或 `localhost`，例如 `http://127.0.0.1:8000`；不允许 `::1`、其他 127/8 写法、局域网、私网或链路本地地址，也不跟随重定向。云端、Docker 默认 `:8080` 绑定和普通 Web 部署即使持久化了该渠道标记也不会获得本机访问能力。
-
-Docker 一体化运行（静态前端和 release 后端，不提供源码热更新）：
+本地构建前后端 release 镜像：
 
 ```bash
 docker compose -f docker-compose.local.yml up -d --build
 ```
 
-## 数据说明
+两种方式都使用容器内的数据卷；源码热更新编排额外绑定 `.local/project-workbench-debug`，避免 Compose 静默创建另一套开发账号数据。端口冲突时可通过 `CANVAS_WEB_HOST_PORT`、`CANVAS_BACKEND_HOST_PORT` 覆盖开发端口。
 
-- 用户自定义 AI API Key 保存在浏览器本地；登录态拉取模型目录时会临时提交给自部署后端但不会保存，创建异步任务时会加密入队；仅应使用可信部署，生产环境必须启用 HTTPS。
-- 画布和素材登录后同步到后端，本地 `localForage` 继续承担缓存和降级存储。
-- 媒体资源在启用对象存储时可保存到私有阿里云 OSS 或腾讯云 COS，否则保存到后端数据目录；两种对象存储均可选填 CDN 加速域名。上传继续使用 Endpoint，配置 CDN 后登录资源、公开画布分享及管理后台媒体的下载与预览会在权限校验后统一重定向到 CDN；需要同源 Blob 的内部读取仍由后端代理，但后端同样通过 CDN 取源。CDN 地址不携带 OSS/COS 签名，敏感资源必须在 CDN 侧配置 URL 鉴权，并为需要浏览器跨域读取的场景配置 CORS。用户删除素材时，后端会先检查项目、画布、任务、其他素材、工作流、风格和声音等引用；存在占用时保留素材并返回具体来源，不存在占用时同步删除对应的本地文件或 OSS/COS 对象及资源记录，物理对象删除失败也会阻止素材记录删除；删除画布、节点等其他业务记录仍不会自动清理远端对象。
-- 用户主动上传、Agent 会话附件和 AI 生成资源的单文件上限、账号容量及 UTC 日上传总量由后台“资源与策略”统一维护，默认分别为 50MB、32MB、64MB、2GB 和 200MB；管理员可按可信部署需要调整，单文件业务上限最高 999MB，Nginx 请求体硬上限为 1024MB。
+### 私网模型和本机渠道
 
-## 公网部署安全
+后端默认拒绝本机、私网和链路本地模型地址。开发时只为可信主机设置精确白名单：
 
-- 服务首次启动后应先在受控网络完成首个管理员注册，再开放公网入口。
-- 生产环境保持 `CANVAS_REGISTRATION_ENABLED=false`，确需开放注册时应同时配置系统渠道用量预算。
-- `CANVAS_CORS_ORIGINS` 必须设置为实际前端 Origin 列表，不要在公网使用 `*`。
-- 后端和前端必须通过 HTTPS 提供服务，并限制数据目录、数据库、备份和 `.settings-key` 的访问权限。
+```bash
+CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=192.168.1.10
+```
 
-## 项目文件
+不要用 `CANVAS_ALLOW_PRIVATE_UPSTREAMS=true` 代替白名单。桌面本机渠道是另一项能力，只有后端绑定 `127.0.0.1:8080` 且设置 `CANVAS_DESKTOP_LOCAL_CHANNELS_ENABLED=true` 才会生效，云端和 Docker 默认不会获得该能力。
 
-- [更新日志](CHANGELOG.md)
-- [安全策略](SECURITY.md)
-- [贡献指南](CONTRIBUTING.md)
-- [行为准则](CODE_OF_CONDUCT.md)
-- [上游与第三方声明](NOTICE)
-- [本地 Canvas Agent](canvas-agent/README.md)
-- [Codex App 插件](plugins/infinite-canvas/README.md)
+## 服务器部署
 
-## 上游致谢与二次开发
+### 一键源码构建（推荐）
 
-本项目基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) `v0.5.0`（提交 `568f0f1838df8de31fe885a4e130e2f346dd14ab`）进行二次开发。上游项目由 `basketikun` 维护，该基线提交作者为 `HouYunFei`；上游作者和贡献者继续保留其对应代码的权利与署名。
+适用于 Linux 云服务器。脚本会安装 Docker，拉取源码，生成受保护的 `.env`，构建网页/后端镜像并启动 PostgreSQL、Redis、后端和网页：
 
-漏洞请按 [SECURITY.md](SECURITY.md) 提交。项目采用 [MIT](LICENSE) 协议。
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
+```
+
+默认访问 `http://服务器IP:3000`。第一个注册账号会成为管理员；公开注册默认关闭。更新或排查：
+
+```bash
+cd /opt/open-ai-canvas
+sudo docker compose --env-file .env \
+  -f docker-compose.deploy.yml -f docker-compose.build.yml ps
+sudo docker compose --env-file .env \
+  -f docker-compose.deploy.yml -f docker-compose.build.yml logs -f --tail=200
+```
+
+### 直接使用 GHCR 镜像
+
+服务器不需要源码时可使用镜像脚本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
+```
+
+容器包不可匿名拉取时，先通过 `GHCR_USERNAME` 和 `GHCR_TOKEN` 登录 GHCR。需要固定版本或端口时，在 `/opt/open-ai-canvas/.env` 中设置 `CANVAS_IMAGE_TAG`、`CANVAS_HTTP_PORT` 后重新启动。
+
+### 公网必做事项
+
+- 先在受控网络注册首个管理员，再开放公网入口；保持 `CANVAS_REGISTRATION_ENABLED=false`。
+- 设置准确的 `CANVAS_CORS_ORIGINS`，不要在公网使用 `*`。
+- 使用 HTTPS，并保留反向代理的 `Host`、`X-Forwarded-For`、`X-Forwarded-Proto`。
+- 只对 `/api/tasks/:id/text-events` 和系统模型事件流路径关闭缓冲、缓存和 gzip；不要把 SSE 配置复制给所有 `/api/` 请求。
+- 限制 `.env`、数据库、PostgreSQL/Redis 数据卷、上传目录、备份和 `.settings-key` 的权限；数据卷不等于备份。
+- 后端 `8080` 留在 Compose 网络内，不要直接暴露到公网。
+
+具体 Nginx/Caddy 示例和断线恢复方式见 [`docs/content/docs/overview/docker.mdx`](docs/content/docs/overview/docker.mdx)。
+
+## 数据和安全边界
+
+- 画布、项目、任务和素材登录后同步到后端；浏览器 `localForage` 仍承担缓存和后端不可用时的降级存储。
+- 本地默认使用 SQLite；部署 Compose 使用 PostgreSQL 和 Redis。多实例 PostgreSQL 模式需要 `REDIS_URL` 用于限流、并发和熔断协调。
+- 媒体资源可使用后端数据目录、阿里云 OSS 或腾讯云 COS。资源长期引用使用 `resource:<id>`，删除素材前会检查业务引用。
+- 用户 API Key 不应出现在 URL、日志、错误上报或服务端长期明文存储中；使用真实 Key 前确认部署可信且链路为 HTTPS。
+- 自定义渠道经后端 `/api/ai/custom` 中转；默认 SSRF 防护拒绝本机和私网目标，可信开发主机必须显式白名单。
+
+安全问题请按 [`SECURITY.md`](SECURITY.md) 报告，不要在公开 Issue 中粘贴密钥、Cookie、数据库或生产日志。
+
+## Canvas Agent 和 Codex 插件
+
+本地 Agent 用来连接网页画布与本机 Codex/CLI：
+
+```bash
+npx -y @ddcat666/open-ai-canvas-agent
+```
+
+仓库内开发构建：
+
+```bash
+cd canvas-agent
+npm install
+npm run build
+node dist/index.js
+```
+
+启动后将终端输出的 Local URL 和 Connect token 填入画布右上角 Agent 面板。Agent 默认只监听 `127.0.0.1`，token 不应写入 URL、日志或任务正文。完整 MCP 工具、Codex App 插件安装和本地安全边界见 [`canvas-agent/README.md`](canvas-agent/README.md) 与 [`plugins/infinite-canvas/README.md`](plugins/infinite-canvas/README.md)。
+
+## 验证命令
+
+项目不会在每次修改后自动执行验证；按改动范围手动运行：
+
+```bash
+# 前端
+cd web && bun run build
+
+# 后端
+cd backend && go test ./...
+
+# Canvas Agent
+cd canvas-agent && npm test && npm run build
+
+# 文档站
+cd docs && bun run types:check
+```
+
+前端专项测试和后端集成测试较多，优先运行与改动模块相关的测试；UI 改动还应在浏览器检查关键路由、主题、弹窗、滚动和空态。验证结果必须在提交或交付说明中如实记录。
+
+## 文档导航
+
+- [快速开始](docs/content/docs/overview/quick-start.mdx)
+- [功能介绍](docs/content/docs/overview/features.mdx)
+- [代码功能地图](docs/content/docs/backend/code-map.mdx)
+- [本地开发](docs/content/docs/backend/local-development.mdx)
+- [数据库结构](docs/content/docs/backend/backend-database.mdx)
+- [画布操作手册](docs/content/docs/canvas/canvas-node-manual.mdx)
+- [插件系统](docs/content/docs/plugins/plugin-system.mdx)
+- [待办与待测试](docs/content/docs/progress/todo.mdx) · [待测试清单](docs/content/docs/progress/pending-test.mdx)
+- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [上游声明](NOTICE)
+
+根目录 [`AGENTS.md`](AGENTS.md) 约束协作方式；`docs/index.md` 是面向 AI 的文档索引。
+
+## 许可证和上游
+
+本项目采用 [MIT](LICENSE) 协议。影策基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
