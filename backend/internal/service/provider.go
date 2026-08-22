@@ -73,6 +73,7 @@ type providerConfig struct {
 	VQuality              string                 `json:"vquality"`
 	VideoGenerateAudio    string                 `json:"videoGenerateAudio"`
 	VideoWatermark        string                 `json:"videoWatermark"`
+	ArkPrivateAssetUpload string                 `json:"videoArkPrivateAssetUpload"`
 	AudioVoice            string                 `json:"audioVoice"`
 	AudioFormat           string                 `json:"audioFormat"`
 	AudioSpeed            string                 `json:"audioSpeed"`
@@ -311,6 +312,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if resumedProviderRequestID(ctx) == "" {
 		requirePublicURL := input.Config.InterfaceType == "newapi-channel-1" || input.Config.InterfaceType == "newapi-channel-2" || input.Config.InterfaceType == string(model.ChannelInterfaceVolcengineArkVideo) || input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo)
 		if err := s.hydrateGenerationMedia(userID, &input, requirePublicURL); err != nil {
+			return nil, err
+		}
+		if err := s.prepareArkPrivateAssetReferences(ctx, userID, &input); err != nil {
 			return nil, err
 		}
 	}
