@@ -99,10 +99,13 @@ function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProp
             {previewUrl ? (
                 <img src={previewUrl} alt="绘图预览" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
             ) : (
-                <div className="absolute inset-0 grid place-items-center" style={{ backgroundImage: `radial-gradient(circle, ${theme.node.stroke} 1px, transparent 1px)`, backgroundSize: "18px 18px" }}>
-                    <span className="grid size-12 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
-                        <Pencil className="size-5" />
-                    </span>
+                <div className="absolute inset-0 grid place-items-center" style={{ background: theme.node.panel, backgroundImage: `radial-gradient(circle, ${theme.node.stroke} 1px, transparent 1px)`, backgroundSize: "18px 18px" }}>
+                    <div className="flex flex-col items-center gap-2 rounded-[var(--r-lg)] px-4 py-3" style={{ border: `1px solid ${theme.node.edge}`, background: theme.node.fill, color: theme.node.muted }}>
+                        <span className="grid size-10 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.panel, border: `1px solid ${theme.node.edge}`, color: theme.node.text }}>
+                            <Pencil className="size-5" />
+                        </span>
+                        <span className="text-[var(--fs-tiny)] font-medium">打开绘图</span>
+                    </div>
                 </div>
             )}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 px-4 pb-3 pt-12" style={{ background: `linear-gradient(to top, ${theme.node.fill}, ${theme.node.fill}e6 55%, transparent)` }}>

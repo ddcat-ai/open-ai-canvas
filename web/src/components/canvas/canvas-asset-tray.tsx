@@ -21,6 +21,14 @@ const TRAY_DEFAULT_HEIGHT = 520;
 const TRAY_MIN_HEIGHT = 400;
 const TRAY_BOTTOM_SAFE_SPACE = 82;
 
+type ResizeSession = {
+    pointerId: number;
+    startY: number;
+    startHeight: number;
+    nextHeight: number;
+    frameId: number | null;
+};
+
 function getMaxTrayHeight() {
     if (typeof window === "undefined") return 520;
     return Math.max(360, window.innerHeight - TRAY_BOTTOM_SAFE_SPACE);
@@ -49,7 +57,10 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     const [tab, setTab] = useState<TrayTab>(() => showLibrary ? "library" : "canvas");
     const [keyword, setKeyword] = useState("");
     const [trayHeight, setTrayHeight] = useState(() => clampTrayHeight(TRAY_DEFAULT_HEIGHT));
-    const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+    const panelRef = useRef<HTMLElement>(null);
+    const resizeRef = useRef<ResizeSession | null>(null);
+    const resizeCleanupRef = useRef<(() => void) | null>(null);
+    const resizeHandleRef = useRef<{ element: HTMLButtonElement; pointerId: number } | null>(null);
     const query = keyword.trim().toLowerCase();
     const filteredAssets = useMemo(() => assetImages.filter((asset) => !query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)), [assetImages, query]);
     const filteredNodes = useMemo(() => canvasImages.filter((node) => !query || canvasImageTitle(node).toLowerCase().includes(query)), [canvasImages, query]);
@@ -63,29 +74,70 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
         event.dataTransfer.setData("text/plain", asset.title);
     };
 
-    const startResize = useCallback(
-        (event: ReactPointerEvent<HTMLButtonElement>) => {
-            event.preventDefault();
-            event.stopPropagation();
-            resizeRef.current = { startY: event.clientY, startHeight: safeTrayHeight };
+    const paintResize = useCallback(() => {
+        const session = resizeRef.current;
+        if (!session || session.frameId !== null) return;
+        session.frameId = window.requestAnimationFrame(() => {
+            session.frameId = null;
+            if (resizeRef.current !== session || !panelRef.current) return;
+            panelRef.current.style.height = String(session.nextHeight) + "px";
+        });
+    }, []);
 
-            const updateHeight = (moveEvent: PointerEvent) => {
-                if (!resizeRef.current) return;
-                setTrayHeight(clampTrayHeight(resizeRef.current.startHeight + resizeRef.current.startY - moveEvent.clientY));
-            };
-            const stopResize = () => {
-                resizeRef.current = null;
-                window.removeEventListener("pointermove", updateHeight);
-                window.removeEventListener("pointerup", stopResize);
-                window.removeEventListener("pointercancel", stopResize);
-            };
+    const stopResize = useCallback(() => {
+        const session = resizeRef.current;
+        if (!session) return;
+        resizeCleanupRef.current?.();
+        resizeCleanupRef.current = null;
+        if (session.frameId !== null) {
+            window.cancelAnimationFrame(session.frameId);
+            session.frameId = null;
+        }
+        const finalHeight = session.nextHeight;
+        if (panelRef.current) {
+            panelRef.current.style.height = String(finalHeight) + "px";
+            panelRef.current.classList.remove("is-resizing");
+        }
+        const handle = resizeHandleRef.current;
+        if (handle?.element.hasPointerCapture(handle.pointerId)) handle.element.releasePointerCapture(handle.pointerId);
+        resizeHandleRef.current = null;
+        resizeRef.current = null;
+        setTrayHeight(finalHeight);
+    }, []);
 
-            window.addEventListener("pointermove", updateHeight);
-            window.addEventListener("pointerup", stopResize, { once: true });
-            window.addEventListener("pointercancel", stopResize, { once: true });
-        },
-        [safeTrayHeight],
-    );
+    const startResize = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        stopResize();
+        const session: ResizeSession = { pointerId: event.pointerId, startY: event.clientY, startHeight: safeTrayHeight, nextHeight: safeTrayHeight, frameId: null };
+        const updateHeight = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== session.pointerId) return;
+            session.nextHeight = clampTrayHeight(session.startHeight + session.startY - moveEvent.clientY);
+            paintResize();
+        };
+        const finish = (endEvent: PointerEvent) => {
+            if (endEvent.pointerId === session.pointerId) stopResize();
+        };
+        resizeRef.current = session;
+        resizeHandleRef.current = { element: event.currentTarget, pointerId: event.pointerId };
+        panelRef.current?.classList.add("is-resizing");
+        event.currentTarget.setPointerCapture(event.pointerId);
+        window.addEventListener("pointermove", updateHeight);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+        resizeCleanupRef.current = () => {
+            window.removeEventListener("pointermove", updateHeight);
+            window.removeEventListener("pointerup", finish);
+            window.removeEventListener("pointercancel", finish);
+        };
+    }, [paintResize, safeTrayHeight, stopResize]);
+
+    useEffect(() => () => {
+        resizeCleanupRef.current?.();
+        const session = resizeRef.current;
+        if (session && session.frameId !== null) window.cancelAnimationFrame(session.frameId);
+        resizeRef.current = null;
+    }, []);
 
     useEffect(() => {
         const syncHeight = () => setTrayHeight((height) => clampTrayHeight(height));
@@ -134,11 +186,12 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                         animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
                         exit={{ opacity: 0, y: 14, scale: 0.95, rotateX: 3 }}
                         transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] border p-2.5 backdrop-blur-2xl"
+                        ref={panelRef}
+                        className="canvas-asset-tray-panel aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] border p-2.5 backdrop-blur-2xl"
                         style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, height: safeTrayHeight, minHeight: Math.min(TRAY_MIN_HEIGHT, getMaxTrayHeight()), maxHeight: "calc(100vh - 6rem)", boxShadow: `0 32px 100px ${theme.spatial.shadow}` }}
                     >
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
-                        <button type="button" className="absolute left-1/2 top-1 z-10 flex h-5 w-28 -translate-x-1/2 cursor-ns-resize items-center justify-center rounded-full opacity-35 transition-opacity hover:opacity-75" onPointerDown={startResize} aria-label="从顶部调整素材托盘高度" title="拖动调整高度">
+                        <button type="button" className="canvas-asset-tray-resize-handle absolute left-1/2 top-1 z-10 flex h-5 w-28 -translate-x-1/2 items-center justify-center rounded-full opacity-35 transition-opacity hover:opacity-75" onPointerDown={startResize} aria-label="从顶部调整素材托盘高度" title="拖动调整高度">
                             <span className="h-1 w-12 rounded-full bg-current" />
                         </button>
 

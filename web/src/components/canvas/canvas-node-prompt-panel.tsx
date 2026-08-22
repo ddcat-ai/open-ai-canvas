@@ -104,6 +104,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const activeReferenceCount = activeReferences.length;
     const videoFrameOptions = mentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
     const monochromeAccent = theme.node.activeStroke;
+    const composerTokens = {
+        "--canvas-composer-surface": theme.node.panel,
+        "--canvas-composer-control-surface": theme.toolbar.itemHover,
+        "--canvas-composer-control-hover": theme.toolbar.activeBg,
+        "--canvas-composer-shadow": theme.node.shadow,
+        "--cn-text": theme.node.text,
+    } as CSSProperties;
+    const composerSurfaceStyle = {
+        ...composerTokens,
+        border: `1px solid ${theme.node.edge}`,
+        background: theme.node.panel,
+        color: theme.node.text,
+        boxShadow: theme.node.shadow,
+    } as CSSProperties;
     const controlSurface = "var(--canvas-composer-control-surface)";
     const promptBounds = promptEditorBounds(false, activeReferenceCount > 0);
     const expandedPromptBounds = promptEditorBounds(true, activeReferenceCount > 0);
@@ -187,7 +201,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <Tooltip title="放大编辑">
                         <button
                             type="button"
-                            className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-white/[.06] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
+                            className="canvas-node-composer-icon-button grid size-6 shrink-0 place-items-center rounded-md transition-[background-color,filter] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
                             style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
                             onClick={() => setExpandedPromptOpen(true)}
                             aria-label="放大编辑提示词"
@@ -333,6 +347,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     return (
         <div
             className="canvas-node-composer"
+            style={composerSurfaceStyle}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
@@ -346,7 +361,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 <div className="canvas-node-composer-parameters overflow-hidden">
                     <button
                         type="button"
-                        className="flex w-full items-center gap-1.5 px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors hover:bg-white/[.04]"
+                        className="canvas-node-composer-parameters-toggle flex w-full items-center gap-1.5 rounded-[var(--r-md)] px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors"
                         style={{ color: theme.node.muted }}
                         onClick={() => setParamsExpanded(!paramsExpanded)}
                         aria-expanded={paramsExpanded}
@@ -379,11 +394,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     setExpandedPromptOpen(false);
                 }}
                 styles={{
-                    container: { border: 0, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: "var(--canvas-composer-surface)", boxShadow: "var(--canvas-composer-shadow)" },
+                    container: { border: `1px solid ${theme.node.edge}`, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: theme.node.panel, boxShadow: theme.node.shadow },
                     body: { minHeight: 0, padding: 0 },
                 }}
             >
-                <div className="flex min-h-0 flex-col gap-2.5 p-3" style={{ color: theme.node.text }}>
+                <div className="flex min-h-0 flex-col gap-2.5 p-3" style={{ ...composerTokens, color: theme.node.text }}>
                     <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                     {renderPromptEditor(true)}
                     {mode === "video" && !simpleMode ? (

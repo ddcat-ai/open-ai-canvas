@@ -4,6 +4,8 @@ import "antd/dist/reset.css";
 import "./styles/globals.css";
 import { RouterProvider } from "react-router";
 
+import "@/lib/plugins/builtin";
+
 import { AppProviders } from "@/components/layout/app-providers";
 import { router } from "@/router";
 
