@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+func TestArkPrivateAssetUsesRegionalArkControlPlane(t *testing.T) {
+	const expected = "https://ark.cn-beijing.volcengineapi.com"
+	if arkPrivateAssetDefaultBaseURL != expected {
+		t.Fatalf("asset API base URL = %q, want %q", arkPrivateAssetDefaultBaseURL, expected)
+	}
+}
+
 func TestCallArkPrivateAssetAPISignsAndUsesAssetContract(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

@@ -27,7 +27,10 @@ const (
 	arkPrivateAssetPollLimit  = 3 * time.Minute
 )
 
-var arkPrivateAssetAPIBaseURL = "https://open.volcengineapi.com"
+// 私域虚拟人像素材库是方舟北京区域的控制面 API，不能复用通用 OpenAPI 主机。
+const arkPrivateAssetDefaultBaseURL = "https://ark.cn-beijing.volcengineapi.com"
+
+var arkPrivateAssetAPIBaseURL = arkPrivateAssetDefaultBaseURL
 
 type taskExecutionIDContextKey struct{}
 
