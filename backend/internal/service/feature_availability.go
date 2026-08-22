@@ -14,10 +14,11 @@ import (
 const featureAvailabilitySettingKey = "feature_availability"
 
 const (
-	FeatureShortDrama     = "shortDrama"
-	FeatureTaskCenter     = "taskCenter"
-	FeatureCredits        = "credits"
-	FeatureCustomChannels = "customChannels"
+	FeatureShortDrama        = "shortDrama"
+	FeatureTaskCenter        = "taskCenter"
+	FeatureCredits           = "credits"
+	FeatureCustomChannels    = "customChannels"
+	FeatureFrontendModels    = "frontendModels"
 )
 
 type FeatureAvailability struct {
@@ -25,6 +26,7 @@ type FeatureAvailability struct {
 	TaskCenterEnabled     bool `json:"taskCenterEnabled"`
 	CreditsEnabled        bool `json:"creditsEnabled"`
 	CustomChannelsEnabled bool `json:"customChannelsEnabled"`
+	FrontendModelsEnabled bool `json:"frontendModelsEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -37,7 +39,7 @@ type PublicFeatureAvailability struct {
 
 func defaultFeatureAvailability() FeatureAvailability {
 	// 缺少配置代表尚未由运维接管，默认保持现有功能全部开放。
-	return FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: true}
+	return FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: true, FrontendModelsEnabled: true}
 }
 
 func (s *Service) FeatureAvailability() (*PublicFeatureAvailability, error) {
@@ -94,6 +96,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.CreditsEnabled, nil
 	case FeatureCustomChannels:
 		return value.CustomChannelsEnabled, nil
+	case FeatureFrontendModels:
+		return value.FrontendModelsEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -116,6 +120,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return Forbidden("积分功能暂未开放")
 	case FeatureCustomChannels:
 		return Forbidden("自定义渠道暂未开放")
+	case FeatureFrontendModels:
+		return Forbidden("前台模型目录暂未开放")
 	default:
 		return Forbidden("该功能暂未开放")
 	}

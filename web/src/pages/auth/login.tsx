@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { applyUserSession } from "@/lib/user-session";
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, login } from "@/services/api/auth";
+import { useUserStore } from "@/stores/use-user-store";
 import { LinuxDOIcon } from "./auth-scene";
 
 export default function LoginPage() {
@@ -16,6 +17,15 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [linuxdoEnabled, setLinuxdoEnabled] = useState(false);
     const next = safeNext(params.get("next"));
+    const user = useUserStore((state) => state.user);
+    const hydrated = useUserStore((state) => state.hydrated);
+
+    // 如果已登录，直接跳转
+    useEffect(() => {
+        if (hydrated && user) {
+            navigate(next, { replace: true });
+        }
+    }, [hydrated, user, next, navigate]);
 
     useEffect(() => {
         void getAuthSettings().then((settings) => setLinuxdoEnabled(settings.linuxdoEnabled)).catch(() => undefined);

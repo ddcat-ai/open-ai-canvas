@@ -41,7 +41,6 @@ type LogicalModelRequest struct {
 	// SourceChannelModelID 仅供系统渠道同步流程使用，前台模型不再拥有独立的能力和价格真相。
 	SourceChannelModelID string `json:"-"`
 }
-
 type LogicalRouteRequest struct {
 	ChannelModelID string `json:"channelModelId"`
 	Enabled        bool   `json:"enabled"`
@@ -58,6 +57,9 @@ type PublicLogicalModel struct {
 	Capability              string                        `json:"capability"`
 	SortOrder               int                           `json:"sortOrder"`
 	PricePolicy             string                        `json:"pricePolicy"`
+	PricingMode             string                        `json:"pricingMode"`
+	DisplayPrice            *int64                        `json:"displayPrice,omitempty"`
+	PriceLabel              string                        `json:"priceLabel"`
 	BillingMode             string                        `json:"billingMode"`
 	UnitPriceMicrocredits   int64                         `json:"unitPriceMicrocredits"`
 	InputPriceMicrocredits  int64                         `json:"inputPriceMicrocredits"`
@@ -180,7 +182,23 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 			profiles = append(profiles, route.CapabilitySpec)
 		}
 	}
-	return PublicLogicalModel{ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon, Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder, PricePolicy: item.PricePolicy, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputPriceMicrocredits: item.InputPriceMicrocredits, OutputPriceMicrocredits: item.OutputPriceMicrocredits, CachedPriceMicrocredits: item.CachedPriceMicrocredits, PriceTiers: publicLogicalModelPriceTiers(cached), LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON), CapabilitySpec: productSpec, CapabilityProfiles: profiles, DefaultOptions: cached.Defaults, Available: available}
+
+	priceTiers := publicLogicalModelPriceTiers(cached)
+	pricingMode, displayPrice, priceLabel := computeModelPriceDisplay(item, priceTiers)
+
+	return PublicLogicalModel{
+		ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon,
+		Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder,
+		PricePolicy: item.PricePolicy, PricingMode: pricingMode, DisplayPrice: displayPrice,
+		PriceLabel: priceLabel, BillingMode: item.BillingMode,
+		UnitPriceMicrocredits: item.UnitPriceMicrocredits,
+		InputPriceMicrocredits: item.InputPriceMicrocredits,
+		OutputPriceMicrocredits: item.OutputPriceMicrocredits,
+		CachedPriceMicrocredits: item.CachedPriceMicrocredits,
+		PriceTiers: priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
+		CapabilitySpec: productSpec, CapabilityProfiles: profiles,
+		DefaultOptions: cached.Defaults, Available: available,
+	}
 }
 
 func publicLogicalModelPriceTiers(cached cachedLogicalModel) []PublicLogicalModelPriceTier {
@@ -1059,4 +1077,58 @@ func boolValues(supportsTrue bool) OptionConstraint {
 
 func numericRange(minimum float64, maximum float64, step float64) OptionConstraint {
 	return OptionConstraint{Min: &minimum, Max: &maximum, Step: &step}
+}
+
+// computeModelPriceDisplay 计算模型的价格展示信息
+// 返回：pricingMode, displayPrice, priceLabel
+func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogicalModelPriceTier) (string, *int64, string) {
+	if model.PricePolicy == "channel" {
+		// 跟随渠道价格
+		if len(priceTiers) == 0 {
+			return "provider", nil, "未配置"
+		}
+		// 检查是否所有价格档都相同
+		if len(priceTiers) == 1 {
+			tier := priceTiers[0]
+			price := getTierDisplayPrice(tier)
+			if price > 0 {
+				return "provider", &price, ""
+			}
+		}
+		// 多个价格档或价格为0，显示"按渠道规格计费"
+		return "provider", nil, "按渠道规格计费"
+	}
+
+	// 统一定价模式
+	if model.BillingMode == "fixed_request" && model.UnitPriceMicrocredits > 0 {
+		price := model.UnitPriceMicrocredits
+		return "unified", &price, ""
+	}
+	if model.BillingMode == "per_second" && model.UnitPriceMicrocredits > 0 {
+		price := model.UnitPriceMicrocredits
+		return "unified", &price, "按秒"
+	}
+	if model.BillingMode == "token" {
+		// Token 计费显示输入/输出价格
+		if model.InputPriceMicrocredits > 0 || model.OutputPriceMicrocredits > 0 {
+			return "unified", nil, "按 Token"
+		}
+	}
+
+	return "unified", nil, "未配置"
+}
+
+// getTierDisplayPrice 获取价格档的展示价格
+func getTierDisplayPrice(tier PublicLogicalModelPriceTier) int64 {
+	if tier.BillingMode == "fixed_request" || tier.BillingMode == "per_second" {
+		return tier.UnitPriceMicrocredits
+	}
+	// Token 计费返回输出价格（如果有）
+	if tier.OutputTokenPriceMicrocredits > 0 {
+		return tier.OutputTokenPriceMicrocredits
+	}
+	if tier.InputTokenPriceMicrocredits > 0 {
+		return tier.InputTokenPriceMicrocredits
+	}
+	return 0
 }

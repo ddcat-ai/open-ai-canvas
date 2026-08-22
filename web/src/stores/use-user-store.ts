@@ -29,6 +29,7 @@ export type FeatureAvailability = {
     taskCenterEnabled: boolean;
     creditsEnabled: boolean;
     customChannelsEnabled: boolean;
+    frontendModelsEnabled: boolean;
     desktopLocalChannelsEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
@@ -40,6 +41,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     taskCenterEnabled: true,
     creditsEnabled: true,
     customChannelsEnabled: true,
+    frontendModelsEnabled: true,
     desktopLocalChannelsEnabled: false,
 };
 

@@ -121,6 +121,56 @@ export type LogicalModelQuote = {
     estimated: boolean;
 };
 
+export type ModelCatalogSource = "frontend" | "system";
+
+export type PublicChannelCatalog = {
+    id: string;
+    name: string;
+    displayName: string;
+    models: PublicChannelModel[];
+};
+
+export type PublicChannelModel = {
+    id: string;
+    modelKey: string;
+    displayName: string;
+    capability: string;
+    capabilityConfig?: Record<string, any>;
+    priceTiers: PublicChannelModelPriceTier[];
+    pricingMode: string;
+    displayPrice?: number;
+    priceLabel: string;
+    available: boolean;
+};
+
+export type PublicChannelModelPriceTier = {
+    id: string;
+    selector?: Record<string, string>;
+    resolution: string;
+    videoSeconds: number;
+    billingMode: string;
+    unitPriceMicrocredits: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
+};
+
+export type ModelCatalogResponse = {
+    source: ModelCatalogSource;
+    models?: PublicLogicalModel[];
+    channels?: PublicChannelCatalog[];
+};
+
+// 统一模型目录接口 - 根据 frontendModelsEnabled 开关返回前台模型或系统渠道模型
+export function getModelCatalog() {
+    return request<ModelCatalogResponse>(apiClient.get("/model-catalog"));
+}
+
+export function getAvailableModelCatalog(intent: ModelRequestIntent) {
+    return request<ModelCatalogResponse>(apiClient.post("/model-catalog/available", intent));
+}
+
+// 旧接口，保持兼容
 export function listLogicalModels() {
     return request<{ models: PublicLogicalModel[] }>(apiClient.get("/models"));
 }

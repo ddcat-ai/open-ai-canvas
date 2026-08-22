@@ -25,16 +25,38 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+
+	// 根据 frontendModelsEnabled 开关强制分流模型选择
+	frontendEnabled, err := s.FeatureEnabled(FeatureFrontendModels)
+	if err != nil {
+		return nil, err
+	}
+
 	var routed *RoutedModel
 	logicalModelID := strings.TrimSpace(req.LogicalModelID)
-	if logicalModelID != "" {
+
+	if frontendEnabled {
+		// 前台模型模式：必须有 logicalModelId
+		if logicalModelID == "" {
+			return nil, InvalidModelSelection("前台模型模式下必须指定 logicalModelId")
+		}
 		intent := ModelRequestIntentFromTaskInput(normalizedInput, taskType, req.Operation)
 		routed, err = s.ResolveLogicalModel(logicalModelID, intent)
 		if err != nil {
 			return nil, err
 		}
 		normalizedInput = applyRoutedProviderSelection(normalizedInput, routed)
+	} else {
+		// 系统渠道模型模式：禁止 logicalModelId
+		if logicalModelID != "" {
+			return nil, ModelCatalogMismatch("模型目录已更新，请重新选择")
+		}
+		// 必须校验 channelId + model 属于启用的系统渠道模型
+		if err := s.validateSystemChannelModelSelection(normalizedInput); err != nil {
+			return nil, err
+		}
 	}
+
 	if strings.HasPrefix(taskType, "video_") && !hasExecutableProviderVideoConfig(normalizedInput) {
 		if mode, _ := normalizedInput["mode"].(string); mode != "video" {
 			return nil, errors.New("视频任务必须使用 video 模式")
@@ -234,6 +256,49 @@ func (s *Service) requireCustomChannelsForTaskInput(input map[string]any) error 
 		return nil
 	}
 	return s.RequireFeature(FeatureCustomChannels)
+}
+
+// validateSystemChannelModelSelection 校验系统渠道模型选择的有效性
+func (s *Service) validateSystemChannelModelSelection(input map[string]any) error {
+	config, ok := input["config"].(map[string]any)
+	if !ok {
+		return InvalidModelSelection("缺少模型配置")
+	}
+
+	channelID, _ := config["channelId"].(string)
+	modelKey, _ := config["model"].(string)
+
+	channelID = strings.TrimSpace(channelID)
+	modelKey = strings.TrimSpace(modelKey)
+
+	if channelID == "" || modelKey == "" {
+		return InvalidModelSelection("必须指定系统渠道和模型")
+	}
+
+	// 验证渠道存在且启用
+	channel, err := s.repo.SystemChannel(channelID)
+	if err != nil {
+		return InvalidModelSelection("指定的渠道不存在")
+	}
+	if !channel.Enabled || channel.Scope != model.ChannelScopeSystem {
+		return InvalidModelSelection("指定的渠道不可用")
+	}
+
+	// 验证渠道模型存在且启用
+	channelModel, err := s.repo.ChannelModelByKey(channelID, modelKey)
+	if err != nil {
+		return InvalidModelSelection("指定的模型不存在")
+	}
+	if !channelModel.Enabled {
+		return InvalidModelSelection("指定的模型已停用")
+	}
+
+	// 验证价格配置
+	if !HasValidPrice(channelModel) {
+		return ModelPriceNotConfigured("指定的模型未配置有效价格")
+	}
+
+	return nil
 }
 
 func taskInputUsesCustomChannel(input map[string]any) bool {

@@ -32,12 +32,14 @@ import { WORKSPACE_SIDEBAR_STORAGE_KEY } from "@/components/layout/workspace-sid
 import { getAdminAntThemeConfig } from "@/lib/app-theme";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 
 type AdminNavigationItem = {
     path: string;
     label: string;
     description: string;
     icon: ReactNode;
+    requireFeature?: "frontendModelsEnabled";
 };
 
 const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = [
@@ -50,7 +52,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
         items: [
             { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
-            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" /> },
+            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
         ],
     },
@@ -160,62 +162,70 @@ export function AdminPageFrame({ title, actions, back, scroll = false, children 
 }
 
 function MobileAdminNavigation() {
+    const features = useUserStore((state) => state.features);
+    const visibleItems = adminNavigation.flatMap((group) => group.items).filter((item) => !item.requireFeature || features[item.requireFeature]);
+
     return (
         <nav className="app-workspace-navigation hide-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 px-3 py-2 lg:hidden" aria-label="管理后台分区">
-            {adminNavigation
-                .flatMap((group) => group.items)
-                .map((item) => (
-                    <NavLink
-                        key={item.path}
-                        to={item.path}
-                        end={item.path === "/admin"}
-                        className={({ isActive }) =>
-                            cn("app-workspace-nav-link flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors", isActive ? "is-active font-medium" : "text-foreground/60 hover:bg-surface-hover hover:text-foreground")
-                        }
-                    >
-                        {item.icon}
-                        <span>{item.label}</span>
-                    </NavLink>
-                ))}
+            {visibleItems.map((item) => (
+                <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/admin"}
+                    className={({ isActive }) =>
+                        cn("app-workspace-nav-link flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors", isActive ? "is-active font-medium" : "text-foreground/60 hover:bg-surface-hover hover:text-foreground")
+                    }
+                >
+                    {item.icon}
+                    <span>{item.label}</span>
+                </NavLink>
+            ))}
             <AppChangelogButton className="grid size-8 shrink-0 place-items-center rounded-md text-foreground/55 transition-colors hover:bg-surface-hover hover:text-foreground [&_svg]:size-4" />
         </nav>
     );
 }
 
 function AdminNavigation({ collapsed }: { collapsed: boolean }) {
+    const features = useUserStore((state) => state.features);
+
     return (
         <nav className="thin-scrollbar flex-1 overflow-y-auto px-2 py-2" aria-label="管理后台菜单">
-            {adminNavigation.map((group) => (
-                <div key={group.label} className="mb-3">
-                    {!collapsed ? (
-                        <div className="admin-nav-group-label mb-1 px-2.5 text-[var(--fs-tiny)] font-medium text-foreground/38">
-                            <span>{group.label}</span>
+            {adminNavigation.map((group) => {
+                const visibleItems = group.items.filter((item) => !item.requireFeature || features[item.requireFeature]);
+                if (visibleItems.length === 0) return null;
+
+                return (
+                    <div key={group.label} className="mb-3">
+                        {!collapsed ? (
+                            <div className="admin-nav-group-label mb-1 px-2.5 text-[var(--fs-tiny)] font-medium text-foreground/38">
+                                <span>{group.label}</span>
+                            </div>
+                        ) : (
+                            <div className="mx-auto mb-1.5 h-px w-7 bg-border/80" />
+                        )}
+                        <div className="space-y-0.5">
+                            {visibleItems.map((item) => (
+                                <Tooltip key={item.path} mouseEnterDelay={0.1} title={collapsed ? item.label : undefined} placement="right">
+                                    <NavLink
+                                        to={item.path}
+                                        end={item.path === "/admin"}
+                                        className={({ isActive }) =>
+                                            cn(
+                                                "app-workspace-nav-link flex h-8 items-center rounded-md text-[var(--fs-body)] transition-colors",
+                                                collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
+                                                isActive ? "is-active font-medium" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
+                                            )
+                                        }
+                                    >
+                                        {item.icon}
+                                        {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                                    </NavLink>
+                                </Tooltip>
+                            ))}
                         </div>
-                    ) : (
-                        <div className="mx-auto mb-1.5 h-px w-7 bg-border/80" />
-                    )}
-                    <div className="space-y-0.5">
-                        {group.items.map((item) => (
-                            <Tooltip key={item.path} mouseEnterDelay={0.1} title={collapsed ? item.label : undefined} placement="right">
-                                <NavLink
-                                    to={item.path}
-                                    end={item.path === "/admin"}
-                                    className={({ isActive }) =>
-                                        cn(
-                                            "app-workspace-nav-link flex h-8 items-center rounded-md text-[var(--fs-body)] transition-colors",
-                                            collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
-                                            isActive ? "is-active font-medium" : "text-foreground/62 hover:bg-surface-hover hover:text-foreground",
-                                        )
-                                    }
-                                >
-                                    {item.icon}
-                                    {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                                </NavLink>
-                            </Tooltip>
-                        ))}
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </nav>
     );
 }

@@ -370,7 +370,7 @@ export function getAdminFeatureAvailability() {
     return request<{ features: FeatureAvailability }>(api.get("/admin/settings/features"));
 }
 
-export function updateAdminFeatureAvailability(features: Pick<FeatureAvailability, "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled">) {
+export function updateAdminFeatureAvailability(features: Pick<FeatureAvailability, "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled">) {
     return request<{ features: FeatureAvailability }>(api.patch("/admin/settings/features", features));
 }
 
