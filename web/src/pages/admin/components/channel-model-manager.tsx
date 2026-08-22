@@ -31,8 +31,9 @@ type PriceTierFormValues = {
 	operation: string;
 	quality: string;
 	size: string;
-    resolution: string;
-    videoSeconds: number;
+	resolution: string;
+	videoSeconds: number;
+	imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
     unitPrice: number;
@@ -129,7 +130,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 			priceTiers: item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)],
             enabled: item.enabled,
             capabilityConfig: item.capability === "text" || item.capability === "image" || item.capability === "video"
-                ? normalizeModelCapabilityConfig(item.capabilityConfig, item.protocol, item.providerModelKey || item.modelKey, channel.apiFormat)
+            ? normalizeModelCapabilityConfig(item.capabilityConfig || defaultModelCapabilityConfig(item.protocol, item.providerModelKey || item.modelKey))
                 : undefined,
         });
         setEditorOpen(true);
@@ -139,7 +140,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         const values = await form.validateFields();
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig = values.capability === "text" || values.capability === "image" || values.capability === "video"
-            ? normalizeModelCapabilityConfig(values.capabilityConfig, values.protocol, upstreamModel, channel.apiFormat)
+            ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel))
             : undefined;
         setSaving(true);
         try {
@@ -183,7 +184,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         const values = await form.validateFields(["modelKey", "providerModelKey", "capability", "protocol", ...(modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? ["capabilityConfig"] : [])]);
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig = values.capability === "text" || values.capability === "image" || values.capability === "video"
-            ? normalizeModelCapabilityConfig(values.capabilityConfig, values.protocol, upstreamModel, channel.apiFormat)
+            ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel))
             : undefined;
         setTesting(true);
         try {
@@ -217,12 +218,6 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         if (changed.protocol && (modelCapability === "image" || modelCapability === "video")) {
             form.setFieldValue("capabilityConfig", defaultModelCapabilityConfig(changed.protocol, form.getFieldValue("modelKey")));
         }
-        const currentBillingMode = form.getFieldValue("billingMode") as ChannelModel["billingMode"] | undefined;
-        const currentCapability = form.getFieldValue("capability") as EditableCapability | undefined;
-        const currentProtocol = form.getFieldValue("protocol") as ModelProtocol | undefined;
-        if ((currentBillingMode === "per_second" && currentCapability !== "video") || (currentBillingMode === "token" && !modelProtocolSupportsTokenBilling(currentCapability, currentProtocol))) {
-            form.setFieldValue("billingMode", "fixed_request");
-        }
         if (!changed.capability) return;
         const current = form.getFieldValue("protocol") as ModelProtocol | undefined;
         if (modelProtocolCapability(current) !== changed.capability) {
@@ -235,8 +230,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 			operation: tier.operation || "*",
 			quality: changed.capability === "image" ? tier.quality || "*" : "*",
 			size: changed.capability === "image" ? tier.size || "*" : "*",
-			resolution: changed.capability === "video" ? tier.resolution || "*" : "*",
-			videoSeconds: changed.capability === "video" ? tier.videoSeconds || 0 : 0,
+						resolution: changed.capability === "video" ? tier.resolution || "*" : "*",
+						videoSeconds: changed.capability === "video" ? tier.videoSeconds || 0 : 0,
+						imageCount: changed.capability === "video" ? tier.imageCount || 0 : 0,
 			billingMode: tier.billingMode === "per_second" && changed.capability !== "video" ? "fixed_request" : tier.billingMode,
 		}));
 		form.setFieldValue("priceTiers", nextTiers);
@@ -523,11 +519,16 @@ function PriceTierFields({
                         <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
                     </Form.Item>
                 ) : null}
-                {isVideo ? (
-                    <Form.Item className="mb-0 lg:col-span-3" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
-                        {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} />}
-                    </Form.Item>
+	                {isVideo ? (
+	                    <Form.Item className="mb-0 lg:col-span-3" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
+	                        {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} />}
+	                    </Form.Item>
                 ) : null}
+				{isVideo ? (
+					<Form.Item className="mb-0 lg:col-span-3" name={[index, "imageCount"]} label="参考图数量" rules={[{ required: true, message: "请输入参考图数量" }]}>
+						<InputNumber className="w-full" min={0} max={9} precision={0} placeholder="0 表示任意数量" />
+					</Form.Item>
+				) : null}
 				{isImage ? (
 					<Form.Item className="mb-0 lg:col-span-3" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
 						<Select options={[{ label: "任意质量", value: "*" }, { label: "1K", value: "1k" }, { label: "2K", value: "2k" }, { label: "4K", value: "4k" }]} />
@@ -580,13 +581,13 @@ function PriceTierFields({
 }
 
 function defaultPriceTier(): PriceTierFormValues {
-    return { operation: "*", quality: "*", size: "*", resolution: "*", videoSeconds: 0, providerModelKey: "", billingMode: "fixed_request", unitPrice: 0, inputTokenPrice: 0, outputTokenPrice: 0, cachedTokenPrice: 0, priceConfigured: true, enabled: true };
+	return { operation: "*", quality: "*", size: "*", resolution: "*", videoSeconds: 0, imageCount: 0, providerModelKey: "", billingMode: "fixed_request", unitPrice: 0, inputTokenPrice: 0, outputTokenPrice: 0, cachedTokenPrice: 0, priceConfigured: true, enabled: true };
 }
 
 function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
     return {
 		operation: tier.selector?.operation || "*", quality: tier.selector?.quality || "*", size: tier.selector?.size || "*",
-        resolution: tier.resolution || "*", videoSeconds: tier.videoSeconds || 0, providerModelKey: tier.providerModelKey || "", billingMode: tier.billingMode,
+		resolution: tier.resolution || "*", videoSeconds: tier.videoSeconds || 0, imageCount: Number(tier.selector?.imageCount || 0), providerModelKey: tier.providerModelKey || "", billingMode: tier.billingMode,
         unitPrice: tier.unitPriceMicrocredits / 1_000_000, inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000, cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
         priceConfigured: tier.priceConfigured, enabled: tier.enabled,
@@ -595,7 +596,7 @@ function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
 
 function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
     return {
-        operation: "*", quality: "*", size: "*", resolution: "*", videoSeconds: 0, providerModelKey: item.providerModelKey || "", billingMode: item.billingMode,
+		operation: "*", quality: "*", size: "*", resolution: "*", videoSeconds: 0, imageCount: 0, providerModelKey: item.providerModelKey || "", billingMode: item.billingMode,
         unitPrice: item.unitPriceMicrocredits / 1_000_000, inputTokenPrice: item.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: item.outputTokenPriceMicrocredits / 1_000_000, cachedTokenPrice: item.cachedTokenPriceMicrocredits / 1_000_000,
         priceConfigured: item.priceConfigured, enabled: item.enabled,
@@ -615,7 +616,8 @@ function priceTierLabel(tier: ChannelModelPriceTier) {
         selector.quality && selector.quality !== "*" ? selector.quality.toUpperCase() : "",
         selector.size && selector.size !== "*" ? selector.size : "",
         tier.resolution === "*" ? "" : tier.resolution.toUpperCase(),
-        tier.videoSeconds ? `${tier.videoSeconds} 秒` : "",
+		tier.videoSeconds ? `${tier.videoSeconds} 秒` : "",
+		selector.imageCount && selector.imageCount !== "*" ? `${selector.imageCount} 张参考图` : "",
     ].filter(Boolean);
     const spec = specParts.length ? specParts.join(" / ") : "默认规格";
     if (tier.billingMode === "token") return `${spec} · ${formatCredits(tier.outputTokenPriceMicrocredits)} / 百万 Token`;
@@ -640,6 +642,7 @@ function skuSelectorFromForm(capability: EditableCapability, tier: PriceTierForm
 	if (capability === "video") {
 		if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
 		if (Number(tier.videoSeconds) > 0) selector.videoSeconds = String(Number(tier.videoSeconds));
+		if (Number(tier.imageCount) > 0) selector.imageCount = String(Number(tier.imageCount));
 	}
 	if (capability === "image") {
 		if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;

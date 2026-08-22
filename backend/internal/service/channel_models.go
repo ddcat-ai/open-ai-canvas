@@ -36,7 +36,7 @@ type ChannelModelRequest struct {
 // ChannelModelPriceTierRequest 是系统渠道内某个规格的上游 SKU 与结算价格。
 // Resolution="*"、VideoSeconds=0 分别表示任意分辨率和任意时长。
 type ChannelModelPriceTierRequest struct {
-	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds；
+	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
 	Selector                     map[string]string `json:"selector"`
 	Resolution                   string            `json:"resolution"`
@@ -84,7 +84,7 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
+	if _, err := s.adminSystemChannel(channelID); err != nil {
 		return nil, err
 	}
 	items, err := s.ensureChannelModels(channelID, true)
@@ -99,7 +99,7 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 		if decodeErr != nil || config == nil {
 			continue
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfig(items[index].Capability, string(items[index].Protocol), firstNonEmpty(items[index].ProviderModelKey, items[index].ModelKey), channel.APIFormat, config)
+		normalized, normalizeErr := NormalizeModelCapabilityConfig(items[index].Capability, string(items[index].Protocol), config)
 		if normalizeErr != nil || normalized == nil {
 			continue
 		}
@@ -203,7 +203,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), providerModelKey, channel.APIFormat, req.CapabilityConfig); err != nil {
+		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -233,7 +233,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.Protocol = protocol
 	s.applyChannelModelPriceTierSummary(item, tiers)
 	if capability == "text" || capability == "image" || capability == "video" {
-		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), providerModelKey, channel.APIFormat, req.CapabilityConfig)
+		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -403,6 +403,15 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 				continue
 			}
 			value = strconv.Itoa(seconds)
+		case "imageCount":
+			count, err := strconv.Atoi(value)
+			if err != nil || count < 0 {
+				return nil, "", 0, BadAuthRequest("参考图片数量必须是非负整数")
+			}
+			if count == 0 {
+				continue
+			}
+			value = strconv.Itoa(count)
 		default:
 			return nil, "", 0, BadAuthRequest("价格档不支持规格字段：" + key)
 		}
@@ -432,6 +441,9 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 	}
 	if _, exists := selector["videoSeconds"]; exists && capability != "video" {
 		return nil, "", 0, BadAuthRequest("只有视频模型可以按时长配置价格档")
+	}
+	if _, exists := selector["imageCount"]; exists && capability != "video" {
+		return nil, "", 0, BadAuthRequest("只有视频模型可以按参考图片数量配置价格档")
 	}
 	resolution := "*"
 	if value := selector["vquality"]; value != "" {
@@ -522,7 +534,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		return nil, err
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), providerModelKey, channel.APIFormat, req.CapabilityConfig); err != nil {
+		if _, err := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -552,7 +564,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	imageSize, imageQuality := "", ""
 	var imageProfile *ImageCapabilityConfig
 	if capability == "image" {
-		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), providerModelKey, channel.APIFormat, req.CapabilityConfig)
+		profile, normalizeErr := NormalizeModelCapabilityConfig(capability, string(protocol), req.CapabilityConfig)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}

@@ -579,6 +579,14 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	return validateVideoTask(profile.Video, taskInput)
 }
 
+// applyModelSpecificImageCapability is retained as a narrow normalization hook
+// for provider-specific image validation. The stored capability profile is
+// already normalized when the channel model is saved, so no second override is
+// needed here.
+func applyModelSpecificImageCapability(profile *ImageCapabilityConfig, _ string, _ string, _ string) *ImageCapabilityConfig {
+	return profile
+}
+
 // applyFixedVideoResolution 让单档位 SKU 的预扣、恢复和上游请求保持同一分辨率。
 func applyFixedVideoResolution(input *canvasGenerationInput, profile *VideoCapabilityConfig) {
 	if input == nil || profile == nil || len(profile.Resolutions) != 1 {

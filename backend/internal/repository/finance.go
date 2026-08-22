@@ -187,8 +187,10 @@ func (r *Repository) attachChannelModelPriceTiers(items []*model.ChannelModel) e
 		ids = append(ids, item.ID)
 	}
 	var tiers []model.ChannelModelPriceTier
-	if err := r.db.Where("channel_model_id IN ?", ids).Order("selector_key asc, created_at asc").Find(&tiers).Error; err != nil {
-		return err
+	if r.db.Migrator().HasTable(&model.ChannelModelPriceTier{}) {
+		if err := r.db.Where("channel_model_id IN ?", ids).Order("selector_key asc, created_at asc").Find(&tiers).Error; err != nil {
+			return err
+		}
 	}
 	for index := range tiers {
 		tiers[index].Selector = model.DecodeSKUSelector(tiers[index].SelectorJSON)
@@ -199,6 +201,16 @@ func (r *Repository) attachChannelModelPriceTiers(items []*model.ChannelModel) e
 	}
 	for _, item := range items {
 		item.PriceTiers = tiersByModelID[item.ID]
+		// 兼容尚未执行价格档回填的旧数据库；正式迁移会将同一数据持久化为默认档。
+		if len(item.PriceTiers) == 0 && item.PriceConfigured {
+			item.PriceTiers = []model.ChannelModelPriceTier{{
+				ChannelModelID: item.ID, SelectorKey: "{}", SelectorJSON: "{}", Resolution: "*",
+				ProviderModelKey: item.ProviderModelKey, BillingMode: item.BillingMode,
+				UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
+				OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
+				PriceConfigured: item.PriceConfigured, Enabled: item.Enabled, PriceVersion: item.PriceVersion,
+			}}
+		}
 	}
 	return nil
 }

@@ -837,7 +837,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		if item.Enabled && item.PriceConfigured {
 			capabilityConfig, decodeErr := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
 			if decodeErr == nil && capabilityConfig != nil {
-				if normalized, normalizeErr := NormalizeModelCapabilityConfig(item.Capability, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), channel.APIFormat, capabilityConfig); normalizeErr == nil {
+				if normalized, normalizeErr := NormalizeModelCapabilityConfig(item.Capability, string(item.Protocol), capabilityConfig); normalizeErr == nil {
 					capabilityConfig = normalized
 				}
 			}

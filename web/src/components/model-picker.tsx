@@ -60,7 +60,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const resolvedCurrent = resolveCompatibleModel(config, storedCurrent, selectionRequirements) || storedCurrent;
     // 旧画布可能保存过已下架或前端历史内置模型；它们不能重新进入当前可选目录。
     const current = options.includes(resolvedCurrent) ? resolvedCurrent : "";
-    const currentPrice = modelMenuPrice(config, current, capability);
+	const currentPrice = modelMenuPrice(config, current, capability, false, requirements);
     const quoteRequest = useMemo(() => modelQuoteRequest(config, current, capability, requirements), [capability, config, current, requirements]);
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | undefined>();
     const creationVariant = variant === "creation";
@@ -354,7 +354,7 @@ type ModelMenuPrice =
     | { kind: "estimate" }
     | { kind: "fixed"; value: number; unit: "次" | "秒" | "百万 Token" };
 
-function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapability, summary = false): ModelMenuPrice | null | undefined {
+function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapability, summary = false, requirements?: ModelRequirements): ModelMenuPrice | null | undefined {
     if (!model) return undefined;
     const channel = resolveModelChannel(config, model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
@@ -362,7 +362,7 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
     if (cost.pricePolicy === "channel") {
         const tiers = cost.logicalPriceTiers || [];
         if (!tiers.length) return null;
-        const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config);
+		const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config, requirements);
         return channelTierPriceSummary(matched.length ? matched : tiers, tiers);
     }
     if (cost.billingMode === "token") return { kind: "estimate" };
@@ -381,12 +381,15 @@ function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredM
 
 function priceTiersForCurrentSelection(
     tiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>,
-    capability: ModelCapability | undefined,
-    config: AiConfig,
+	capability: ModelCapability | undefined,
+	config: AiConfig,
+	requirements?: ModelRequirements,
 ) {
     const requested: Record<string, string> = {};
-    if (capability === "video") {
-        const resolution = normalizeTierResolution(config.vquality);
+	if (capability === "video") {
+		const imageCount = (requirements?.input?.imageCount || 0) + (requirements?.input?.characterCount || 0);
+		if (imageCount > 0) requested.imageCount = String(imageCount);
+		const resolution = normalizeTierResolution(config.vquality);
         if (resolution !== "*") requested.vquality = resolution;
         const seconds = Math.max(0, Math.floor(Number(config.videoSeconds) || 0));
         if (seconds > 0) requested.videoSeconds = String(seconds);
@@ -471,6 +474,7 @@ function tierSpecificationLabel(tier: NonNullable<NonNullable<AiConfig["channels
 		selector.size && selector.size !== "*" ? selector.size : "",
 		tier.resolution !== "*" ? tierResolutionLabel(tier.resolution) : "",
 		tier.videoSeconds ? tierDurationLabel(tier.videoSeconds) : "",
+		selector.imageCount && selector.imageCount !== "*" ? `${selector.imageCount} 张参考图` : "",
 	].filter(Boolean);
 	return details.length ? details.join(" / ") : "默认规格";
 }

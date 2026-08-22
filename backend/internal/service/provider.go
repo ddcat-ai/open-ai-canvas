@@ -825,14 +825,19 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		modelKey = requestedModel
 	}
 	if modelKey == "" {
-		models := channelModelNames(*channel)
-		if len(models) == 0 {
-			return providerConfig{}, errors.New("系统渠道未配置可用模型")
+		channelModels, listErr := s.repo.ChannelModels(channel.ID, false)
+		if listErr != nil {
+			return providerConfig{}, listErr
 		}
-		modelKey = models[0]
-	}
-	if !stringInSlice(modelKey, channelModelNames(*channel)) {
-		return providerConfig{}, errors.New("当前系统渠道未授权该模型")
+		if len(channelModels) > 0 {
+			modelKey = channelModels[0].ModelKey
+		} else {
+			models := channelModelNames(*channel)
+			if len(models) == 0 {
+				return providerConfig{}, errors.New("系统渠道未配置可用模型")
+			}
+			modelKey = models[0]
+		}
 	}
 	if _, err := s.validateChannelOutboundURL(channel.BaseURL, channel.AllowLocalChannel, false); err != nil {
 		return providerConfig{}, err
