@@ -13,7 +13,7 @@
 | `web/` | Vite、React 19、TypeScript、React Router、Ant Design、Tailwind、Zustand、TanStack Query | `web/src/application.tsx`、`web/src/router.tsx` | 工作区 UI、画布交互、浏览器缓存、API 调用和模型协议适配 |
 | `backend/` | Go 1.25、Gin、GORM、SQLite/PostgreSQL、Redis 协调 | `backend/cmd/server/main.go` | 登录、权限、业务 API、任务队列、资源、模型中转和后台管理 |
 | `canvas-agent/` | Node.js 18+、TypeScript、Express、MCP SDK、Codex SDK | `canvas-agent/src/index.ts` | 本机 Agent、MCP、画布会话桥接和本地渠道 |
-| `plugins/infinite-canvas/` | Codex App 插件清单和 skills | `.codex-plugin/plugin.json` | 将 Canvas Agent MCP 接入 Codex App |
+| `plugins/yingce/` | Codex App 插件清单和 skills | `.codex-plugin/plugin.json` | 将 Canvas Agent MCP 接入 Codex App |
 | `docs/` | Next.js、Fumadocs、MDX | `docs/content/docs/` | 面向用户和开发者的专题文档；构建配置见 `docs/source.config.ts` |
 
 根目录的 `Dockerfile` 构建前端静态镜像；`nginx.conf` 托管 SPA 并代理后端。`docker-compose.dev.yml` 是源码热更新开发编排，`docker-compose.local.yml` 是本地构建运行，`docker-compose.deploy.yml` 是 PostgreSQL + Redis 部署编排。
@@ -54,7 +54,7 @@
 ### Agent、插件和文档
 
 - 修改 `canvas-agent/` 前先读 `canvas-agent/README.md`，它有独立的 Node 版本、构建、发布和 token 边界。
-- 修改 `plugins/infinite-canvas/` 前先读插件 README、manifest 和对应 skill；不要把主应用的页面约定套到插件运行时。
+- 修改 `plugins/yingce/` 前先读插件 README、manifest 和对应 skill；不要把主应用的页面约定套到插件运行时。
 - 修改 `docs/` 前确认内容属于专题文档，而不是把长篇说明重新复制到根 README。目录索引见 `docs/index.md`。
 
 ## 4. 前端 API 和状态合同

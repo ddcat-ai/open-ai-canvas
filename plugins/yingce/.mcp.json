@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "infinite-canvas": {
+    "yingce": {
       "command": "npx",
       "args": ["-y", "@ddcat666/open-ai-canvas-agent", "mcp"],
       "startup_timeout_sec": 20,

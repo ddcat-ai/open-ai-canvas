@@ -17,7 +17,7 @@ const config: CanvasAgentConfig = {
 type CommandFactory = () => { command: string; args: string[] };
 type CodexConfigFactory = (configDir?: string) => {
     mcp_servers: {
-        "infinite-canvas": {
+        "yingce": {
             command: string;
             args: string[];
             env?: Record<string, string>;
@@ -44,7 +44,7 @@ test("internal Codex MCP config binds only the parent Runtime config directory",
     assert.equal(typeof configFactory, "function");
     if (!configFactory) return;
     const configDir = path.resolve("fixture-runtime-config-18871");
-    const server = configFactory(configDir).mcp_servers["infinite-canvas"];
+    const server = configFactory(configDir).mcp_servers["yingce"];
     assert.deepEqual(server.env, { FRAMEFIELD_LOCAL_RUNTIME_CONFIG_DIR: configDir });
     assert.equal(server.args.includes("--canvas-only"), true);
     assert.equal(server.args.some((value) => /token|secret/i.test(value)), false);
@@ -55,7 +55,7 @@ test("internal MCP tool timeout covers the Canvas generation continuation window
     const configFactory = (agentsModule as unknown as { codexConfig?: CodexConfigFactory }).codexConfig;
     assert.equal(typeof configFactory, "function");
     if (!configFactory) return;
-    const timeoutMs = configFactory().mcp_servers["infinite-canvas"].tool_timeout_sec * 1_000;
+    const timeoutMs = configFactory().mcp_servers["yingce"].tool_timeout_sec * 1_000;
     assert.ok(timeoutMs >= 35 * 60 * 1_000, `internal MCP timeout ${timeoutMs}ms must cover the 35-minute generation continuation window`);
     assert.ok(timeoutMs > 35 * 60 * 1_000, "internal MCP timeout must leave shutdown/response margin after the Canvas continuation window");
 });

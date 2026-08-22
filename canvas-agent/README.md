@@ -47,14 +47,14 @@ Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接
 
 ### Codex app 插件
 
-仓库内提供了 Codex app 插件：`plugins/infinite-canvas`。该插件尚未上架公共插件目录，直接搜索不会显示；在 Codex app 中添加本仓库的 marketplace 后即可安装。插件会注册同一个 `infinite-canvas` MCP，并带上画布操作说明。
+仓库内提供了 Codex app 插件：`plugins/yingce`。该插件尚未上架公共插件目录，直接搜索不会显示；在 Codex app 中添加本仓库的 marketplace 后即可安装。插件会注册 `yingce` MCP，并带上画布操作说明。
 
 添加本地 marketplace 时建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
 
 ```bash
-cd /path/to/infinite-canvas
+cd /path/to/open-ai-canvas
 codex plugin marketplace add "$(pwd)"
-codex plugin add infinite-canvas@infinite-canvas-local
+codex plugin add yingce@yingce-local
 ```
 
 插件默认通过 npm 启动 MCP：
@@ -68,13 +68,13 @@ npx -y @ddcat666/open-ai-canvas-agent mcp
 Canvas Agent 启动后，给 Codex 添加 MCP：
 
 ```bash
-codex mcp add infinite-canvas -- npx -y @ddcat666/open-ai-canvas-agent mcp
+codex mcp add yingce -- npx -y @ddcat666/open-ai-canvas-agent mcp
 ```
 
 本仓库开发时可以改成，实际使用建议替换为本机绝对路径：
 
 ```bash
-codex mcp add infinite-canvas -- node /path/to/infinite-canvas/canvas-agent/dist/index.js mcp
+codex mcp add yingce -- node /path/to/open-ai-canvas/canvas-agent/dist/index.js mcp
 ```
 
 Canvas Agent 源码使用 TypeScript 编写，MCP 协议层使用官方 `@modelcontextprotocol/sdk`，工具入参使用 `zod` 描述。
@@ -82,7 +82,7 @@ Canvas Agent 源码使用 TypeScript 编写，MCP 协议层使用官方 `@modelc
 如果希望终端里的 Codex 不被 MCP 审批卡住，可以在 `~/.codex/config.toml` 里给这个 MCP 设置自动放行：
 
 ```toml
-[mcp_servers.infinite-canvas]
+[mcp_servers.yingce]
 command = "npx"
 args = ["-y", "@ddcat666/open-ai-canvas-agent", "mcp"]
 default_tools_approval_mode = "approve"
@@ -115,7 +115,7 @@ default_tools_approval_mode = "approve"
 
 ## 侧边栏 Codex
 
-本地面板会把提示词发送给 Canvas Agent。Canvas Agent 使用官方 `@openai/codex` CLI 的 `codex app-server --stdio` 启动并复用同一个 Codex thread，启动时会注入 `infinite-canvas` MCP 配置并自动放行 MCP 审批，真正执行画布修改前仍由网页侧边栏二次确认。
+本地面板会把提示词发送给 Canvas Agent。Canvas Agent 使用官方 `@openai/codex` CLI 的 `codex app-server --stdio` 启动并复用同一个 Codex thread，启动时会注入 `yingce` MCP 配置并自动放行 MCP 审批，真正执行画布修改前仍由网页侧边栏二次确认。
 
 侧边栏会展示 Codex 返回的 `thread.started`、`turn.started`、`item.*`、`turn.completed` 等结构化事件；收到 app-server 的 `item/agentMessage/delta` 时，Canvas Agent 会转成 `item.updated`，网页会用同一条消息做真实流式更新，并把工具细节收进运行日志。
 
@@ -128,13 +128,13 @@ Claude Code Adapter 代码暂时保留，但当前网页侧边栏只开放 Codex
 如果希望 Claude Code 也能操作画布，需要给 Claude Code 添加同一个 MCP。建议用 user scope，避免 Canvas Agent 从不同目录启动时找不到配置：
 
 ```bash
-claude mcp add --scope user --transport stdio infinite-canvas -- npx -y @ddcat666/open-ai-canvas-agent mcp
+claude mcp add --scope user --transport stdio yingce -- npx -y @ddcat666/open-ai-canvas-agent mcp
 ```
 
 本仓库开发时可以改成：
 
 ```bash
-claude mcp add --scope user --transport stdio infinite-canvas -- node /path/to/infinite-canvas/canvas-agent/dist/index.js mcp
+claude mcp add --scope user --transport stdio yingce -- node /path/to/open-ai-canvas/canvas-agent/dist/index.js mcp
 ```
 
-Canvas Agent 调用 Claude Code 时会默认带上 `--allowedTools mcp__infinite-canvas__*`，画布写操作仍由网页侧边栏确认。
+Canvas Agent 调用 Claude Code 时会默认带上 `--allowedTools mcp__yingce__*`，画布写操作仍由网页侧边栏确认。

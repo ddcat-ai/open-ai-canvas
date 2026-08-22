@@ -1,14 +1,14 @@
 {
-  "name": "infinite-canvas-local",
+  "name": "yingce-local",
   "interface": {
     "displayName": "影策 Local"
   },
   "plugins": [
     {
-      "name": "infinite-canvas",
+      "name": "yingce",
       "source": {
         "source": "local",
-        "path": "./plugins/infinite-canvas"
+        "path": "./plugins/yingce"
       },
       "policy": {
         "installation": "AVAILABLE",

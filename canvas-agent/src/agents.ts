@@ -95,7 +95,7 @@ export async function archiveCodexThread(emit: AgentEmit, threadId: string, cwd?
 
 export function runClaudeTurn(prompt: string, emit: AgentEmit) {
     if (!prompt.trim()) return;
-    const child = spawnAgent("claude", ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--allowedTools", "mcp__infinite-canvas__*", prompt], ["ignore", "pipe", "pipe"], emit);
+    const child = spawnAgent("claude", ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--allowedTools", "mcp__yingce__*", prompt], ["ignore", "pipe", "pipe"], emit);
     if (!child) return;
     pipeJsonLines(child, emit, "claude");
 }
@@ -277,7 +277,7 @@ export function canvasAgentMcpCommand() {
 export function codexConfig(configDir = CONFIG_DIR) {
     return {
         mcp_servers: {
-            "infinite-canvas": {
+            "yingce": {
                 command: canvasAgentMcp.command,
                 args: canvasAgentMcp.args,
                 env: { FRAMEFIELD_LOCAL_RUNTIME_CONFIG_DIR: configDir },

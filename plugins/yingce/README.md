@@ -13,9 +13,9 @@
 ```text
 请从 https://github.com/ddcat-ai/open-ai-canvas.git 安装影策 Codex 插件。
 请 clone 仓库到 ~/plugins/open-ai-canvas，确认 .agents/plugins/marketplace.json 和
-plugins/infinite-canvas/.codex-plugin/plugin.json 都存在。然后运行
+plugins/yingce/.codex-plugin/plugin.json 都存在。然后运行
 codex plugin marketplace add ~/plugins/open-ai-canvas，
-再运行 codex plugin add infinite-canvas@infinite-canvas-local。
+再运行 codex plugin add yingce@yingce-local。
 安装后请校验插件，并告诉我是否需要开启一个新对话来加载新技能和 MCP 工具。
 ```
 
@@ -32,7 +32,7 @@ git clone https://github.com/ddcat-ai/open-ai-canvas.git ~/plugins/open-ai-canva
 
 ```bash
 codex plugin marketplace add ~/plugins/open-ai-canvas
-codex plugin add infinite-canvas@infinite-canvas-local
+codex plugin add yingce@yingce-local
 ```
 
 安装后建议开启一个新的 Codex 对话，让新的 skill 和 MCP 工具完整加载。
@@ -42,9 +42,9 @@ codex plugin add infinite-canvas@infinite-canvas-local
 如果你就在影策仓库中调试插件，可以直接添加当前仓库。建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
 
 ```bash
-cd /path/to/infinite-canvas
+cd /path/to/open-ai-canvas
 codex plugin marketplace add "$(pwd)"
-codex plugin add infinite-canvas@infinite-canvas-local
+codex plugin add yingce@yingce-local
 ```
 
 ## 使用

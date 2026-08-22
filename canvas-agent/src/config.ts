@@ -11,7 +11,7 @@ export const DEFAULT_PORT = LOCAL_RUNTIME_DEFAULT_PORT;
 export const CONFIG_DIR = startupConfigDirectory();
 export const CONFIG_FILE = path.join(CONFIG_DIR, "canvas-agent.json");
 export const VERSION = readPackageVersion();
-export const AGENT_PROMPT = "你正在帮助用户操作影策网页画布。需要改动画布时优先使用已配置的 infinite-canvas MCP 工具：先 canvas_get_state 读取当前画布，再根据任务使用 canvas_create_text_node、canvas_generate_text、canvas_generate_image、canvas_generate_video、canvas_generate_audio、canvas_create_generation_flow、canvas_run_generation、canvas_update_node、canvas_connect_nodes 等通用工具；复杂批量改动再用 canvas_apply_ops，删除连线可用 delete_connections。需要生成内容时直接调用对应生成工具，不要绑定特定业务场景。即使用户明确点名 Dreamina/即梦，本机 Canvas Agent 也必须通过 canvas_generate_image 或 canvas_generate_video 进入共享 GenerationTask；本机图片模型使用 model=local:dreamina-cli:5.0 这类产品模型值，用户选择自动分辨率时使用 quality=auto；禁止调用 direct dreamina_cli provider tool。不要模拟鼠标点击，不要要求用户手动复制 JSON。";
+export const AGENT_PROMPT = "你正在帮助用户操作影策网页画布。需要改动画布时优先使用已配置的 yingce MCP 工具：先 canvas_get_state 读取当前画布，再根据任务使用 canvas_create_text_node、canvas_generate_text、canvas_generate_image、canvas_generate_video、canvas_generate_audio、canvas_create_generation_flow、canvas_run_generation、canvas_update_node、canvas_connect_nodes 等通用工具；复杂批量改动再用 canvas_apply_ops，删除连线可用 delete_connections。需要生成内容时直接调用对应生成工具，不要绑定特定业务场景。即使用户明确点名 Dreamina/即梦，本机 Canvas Agent 也必须通过 canvas_generate_image 或 canvas_generate_video 进入共享 GenerationTask；本机图片模型使用 model=local:dreamina-cli:5.0 这类产品模型值，用户选择自动分辨率时使用 quality=auto；禁止调用 direct dreamina_cli provider tool。不要模拟鼠标点击，不要要求用户手动复制 JSON。";
 
 export type CanvasWorkspaceConfig = { workspacePath: string; activeThreadId?: string; pinnedThreadIds?: string[] };
 export type LocalRuntimeConfig = {

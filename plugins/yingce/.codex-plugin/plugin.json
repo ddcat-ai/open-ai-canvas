@@ -1,5 +1,5 @@
 {
-  "name": "infinite-canvas",
+  "name": "yingce",
   "version": "0.1.0",
   "description": "Use Codex to read and operate Yingce through the local Canvas Agent MCP server.",
   "author": {
@@ -7,7 +7,7 @@
   },
   "repository": "https://github.com/ddcat-ai/open-ai-canvas",
   "license": "MIT",
-  "keywords": ["infinite-canvas", "canvas", "mcp", "agent"],
+  "keywords": ["yingce", "影策", "canvas", "mcp", "agent"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {

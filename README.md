@@ -74,7 +74,7 @@
   └─ provider/outbound -> 外部模型渠道
 
 本地 Agent（canvas-agent/） <-> 浏览器画布 <-> Codex MCP / 本机 CLI
-Codex 插件（plugins/infinite-canvas/）负责把 MCP 接入 Codex App。
+Codex 插件（`plugins/yingce/`）负责把 MCP 接入 Codex App。
 ```
 
 前端默认把 `/api` 代理到 `http://127.0.0.1:8080`；生产环境由网页容器的 Nginx 代理到后端，只有 web 的 `3000` 端口需要对外暴露。系统模型和文本任务的 SSE 只在明确的流式路径关闭代理缓冲，详见 [`nginx.conf`](nginx.conf) 和 [SSE 文档](docs/content/docs/overview/docker.mdx)。
@@ -206,7 +206,7 @@ npm run build
 node dist/index.js
 ```
 
-启动后将终端输出的 Local URL 和 Connect token 填入画布右上角 Agent 面板。Agent 默认只监听 `127.0.0.1`，token 不应写入 URL、日志或任务正文。完整 MCP 工具、Codex App 插件安装和本地安全边界见 [`canvas-agent/README.md`](canvas-agent/README.md) 与 [`plugins/infinite-canvas/README.md`](plugins/infinite-canvas/README.md)。
+启动后将终端输出的 Local URL 和 Connect token 填入画布右上角 Agent 面板。Agent 默认只监听 `127.0.0.1`，token 不应写入 URL、日志或任务正文。完整 MCP 工具、Codex App 插件安装和本地安全边界见 [`canvas-agent/README.md`](canvas-agent/README.md) 与 [`plugins/yingce/README.md`](plugins/yingce/README.md)。
 
 ## 验证命令
 

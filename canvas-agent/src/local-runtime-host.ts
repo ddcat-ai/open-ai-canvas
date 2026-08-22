@@ -95,7 +95,7 @@ export function startLocalRuntime(options: StartLocalRuntimeOptions = {}) {
             await listening(server);
             log("Framefield Local Runtime");
             log("Runtime is listening on 127.0.0.1");
-            log("Codex MCP: codex mcp add infinite-canvas -- npx -y @ddcat666/open-ai-canvas-agent mcp");
+            log("Codex MCP: codex mcp add yingce -- npx -y @ddcat666/open-ai-canvas-agent mcp");
         } catch (startupError) {
             sessions.dispose();
             const cleanupErrors: unknown[] = [];
