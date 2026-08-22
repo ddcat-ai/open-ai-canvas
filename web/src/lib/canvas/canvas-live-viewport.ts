@@ -4,15 +4,20 @@ export const CANVAS_VIEWPORT_PREVIEW_EVENT = "canvas:viewport-preview";
 export const CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT = "canvas:graphics-viewport-preview";
 export const CANVAS_SELECTION_PREVIEW_EVENT = "canvas:selection-preview";
 
-// 空间网格点模式的点半径（像素单位）。远距（缩放 < 0.12）时用更小半径避免糊成一团。
-// 同时被 <CanvasGrid>（infinite-canvas）与滚动同步（applyCanvasLiveViewport）共享，避免两处漂移。
+// 空间网格点模式的点半径（像素单位）。远距时使用更小半径，避免点阵糊成一团。
 export function canvasDotPx(scale: number): string {
-    return scale < 0.12 ? "0.8px" : "1.25px";
+    return scale < 0.12 ? "0.6px" : "0.8px";
+}
+
+// 点阵在缩小时不再无限压缩到屏幕像素，避免密集视觉噪声。
+export function canvasDotGridPx(scale: number): number {
+    return Math.max(48 * scale, 32);
 }
 
 export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewport: ViewportTransform, notify = true) {
     if (!container) return;
     const gridSize = 48 * viewport.k;
+    const dotGridSize = canvasDotGridPx(viewport.k);
     const committedScale = Number(container.style.getPropertyValue("--canvas-committed-scale")) || viewport.k;
     container.style.setProperty("--canvas-live-x", `${viewport.x}px`);
     container.style.setProperty("--canvas-live-y", `${viewport.y}px`);
@@ -23,6 +28,9 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
     container.style.setProperty("--canvas-grid-size", `${gridSize}px`);
     container.style.setProperty("--canvas-grid-x", `${viewport.x % gridSize}px`);
     container.style.setProperty("--canvas-grid-y", `${viewport.y % gridSize}px`);
+    container.style.setProperty("--canvas-dot-grid-size", `${dotGridSize}px`);
+    container.style.setProperty("--canvas-dot-grid-x", `${viewport.x % dotGridSize}px`);
+    container.style.setProperty("--canvas-dot-grid-y", `${viewport.y % dotGridSize}px`);
     container.style.setProperty("--canvas-dot-size", canvasDotPx(viewport.k));
     // 图形层必须逐帧跟随 DOM 世界层；浮层和滚动通知仍可按原频率节流。
     container.dispatchEvent(new CustomEvent<ViewportTransform>(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, { detail: viewport }));

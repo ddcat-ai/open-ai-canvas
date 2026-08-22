@@ -5,7 +5,7 @@ export const canvasThemes = {
     light: {
         canvas: {
             background: "#ffffff",
-            dot: "rgba(15,23,42,.30)",
+            dot: "rgba(15,23,42,.20)",
             line: "rgba(15,23,42,.15)",
             selectionFill: "rgba(17,17,17,.10)",
         },
@@ -71,7 +71,7 @@ export const canvasThemes = {
     dark: {
         canvas: {
             background: "#0b0b0b",
-            dot: "rgba(178,178,178,.27)",
+            dot: "rgba(178,178,178,.18)",
             line: "rgba(178,178,178,.14)",
             selectionFill: "rgba(255,255,255,.12)",
         },
