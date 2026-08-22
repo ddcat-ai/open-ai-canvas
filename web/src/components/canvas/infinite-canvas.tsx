@@ -426,7 +426,7 @@ function CanvasGrid({ mode }: { mode: CanvasBackgroundMode }) {
                 backgroundImage,
                 backgroundSize: "var(--canvas-grid-size) var(--canvas-grid-size)",
                 transform: "translate3d(var(--canvas-grid-x), var(--canvas-grid-y), 0)",
-                opacity: 0.55,
+                opacity: 0.42,
                 willChange: "transform",
             }}
         />

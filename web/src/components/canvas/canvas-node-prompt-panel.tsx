@@ -394,7 +394,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     setExpandedPromptOpen(false);
                 }}
                 styles={{
-                    container: { border: `1px solid ${theme.node.edge}`, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: theme.node.panel, boxShadow: theme.node.shadow },
+                    container: { border: 0, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: theme.node.panel, boxShadow: theme.node.shadow },
                     body: { minHeight: 0, padding: 0 },
                 }}
             >

@@ -110,6 +110,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
+    const isComposerNode = data.type === CanvasNodeType.Config;
     const hasMediaContent = hasImageContent || hasVideoContent || hasAudioContent;
     const hasReplaceAction = !readOnly && (data.type === CanvasNodeType.Image || data.type === CanvasNodeType.Video);
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
@@ -292,8 +293,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 data-state={data.metadata?.status || (isActive ? "active" : isRelated ? "related" : "idle")}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
-                    border: `1px solid ${theme.node.edge}`,
-                    boxShadow: isSelected ? `0 0 0 2px ${theme.node.activeStroke}, ${theme.node.hoverShadow}` : hovered ? theme.node.hoverShadow : theme.node.shadow,
+                    border: isComposerNode || isSelected ? "0" : `1px solid ${theme.node.edge}`,
+                    boxShadow: isComposerNode ? "none" : isSelected || hovered ? theme.node.hoverShadow : theme.node.shadow,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -636,12 +637,10 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
             className="canvas-node-external-header absolute bottom-full left-0 z-[var(--node-z-overlay)] flex h-6 items-center gap-1 overflow-hidden"
             style={{
                 maxWidth: maxHeaderWidth,
-                border: `1px solid ${theme.node.edge}`,
                 borderRadius: "var(--r-sm)",
                 background: theme.node.panel,
                 paddingInline: "var(--space-1-half)",
                 color: active ? theme.node.text : theme.node.label,
-                boxShadow: active ? theme.node.shadow : undefined,
                 transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`,
                 transformOrigin: "left bottom",
             }}
@@ -653,8 +652,8 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                 <input
                     autoFocus
                     value={draft}
-                    className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded border bg-transparent px-1.5 text-xs font-medium outline-none"
-                    style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: "var(--elevation-card)" }}
+                    className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
+                    style={{ background: theme.spatial.elevated, color: theme.node.text }}
                     onChange={(event) => onDraftChange(event.target.value)}
                     onFocus={(event) => event.currentTarget.select()}
                     onBlur={onCommit}
@@ -665,7 +664,7 @@ function NodeExternalHeader({ node, scale, active, editable, editing, draft, the
                     aria-label="节点名称"
                 />
             ) : editable ? (
-                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:ring-1" style={{ opacity: active ? 1 : 0.78, "--tw-ring-color": theme.node.activeStroke } as React.CSSProperties} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
+                <button type="button" className="group flex min-w-0 flex-1 items-center gap-1 rounded px-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1" style={{ opacity: active ? 1 : 0.78, outlineColor: theme.node.muted }} onClick={onEdit} aria-label={`编辑节点名称：${node.title}`}>
                     <span className="min-w-0 flex-1 truncate" title={node.title}>{node.title}</span>
                     <Pencil className="size-2.5 shrink-0 opacity-55 transition-opacity group-hover:opacity-100" />
                 </button>
