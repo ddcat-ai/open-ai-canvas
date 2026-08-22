@@ -152,28 +152,39 @@ func (s *Service) SyncResourceToArkPrivateAsset(ctx context.Context, actor *mode
 func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, resource *model.Resource, settingRecord *model.SystemSetting, setting *arkPrivateAssetSettingValue) (string, error) {
 	binding, err := s.repo.ArkPrivateAssetBinding(resource.ID, setting.ProjectName)
 	if err == nil {
-		return s.waitForArkPrivateAsset(ctx, binding, setting)
+		if !shouldRetryArkPrivateAssetBinding(binding) {
+			return s.waitForArkPrivateAsset(ctx, binding, setting)
+		}
+		// 早期字段解析未识别方舟返回的 Id。仅重试尚未创建素材或素材组的记录，
+		// 审核拒绝等真实业务失败仍保持终态，避免重复上传。
+		binding.Status = arkPrivateAssetStatusNew
+		binding.Error = ""
+		if err := s.repo.SaveArkPrivateAssetBinding(binding); err != nil {
+			return "", err
+		}
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", err
-	}
-	binding = &model.ArkPrivateAssetBinding{
-		ID:          newID(),
-		UserID:      userID,
-		ResourceID:  resource.ID,
-		ProjectName: setting.ProjectName,
-		Status:      arkPrivateAssetStatusNew,
-	}
-	created, err := s.repo.CreateArkPrivateAssetBinding(binding)
 	if err != nil {
-		return "", err
-	}
-	if !created {
-		binding, err = s.repo.ArkPrivateAssetBinding(resource.ID, setting.ProjectName)
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", err
+		}
+		binding = &model.ArkPrivateAssetBinding{
+			ID:          newID(),
+			UserID:      userID,
+			ResourceID:  resource.ID,
+			ProjectName: setting.ProjectName,
+			Status:      arkPrivateAssetStatusNew,
+		}
+		created, err := s.repo.CreateArkPrivateAssetBinding(binding)
 		if err != nil {
 			return "", err
 		}
-		return s.waitForArkPrivateAsset(ctx, binding, setting)
+		if !created {
+			binding, err = s.repo.ArkPrivateAssetBinding(resource.ID, setting.ProjectName)
+			if err != nil {
+				return "", err
+			}
+			return s.waitForArkPrivateAsset(ctx, binding, setting)
+		}
 	}
 
 	groupID, err := s.ensureArkPrivateAssetGroup(ctx, settingRecord, setting)
@@ -195,7 +206,7 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 	if err != nil {
 		return "", s.failArkPrivateAssetBinding(binding, fmt.Errorf("上传方舟可信素材失败：%w", err))
 	}
-	assetID := arkPrivateAssetResponseField(response, "AssetId", "AssetID", "asset_id", "id")
+	assetID := arkPrivateAssetResponseField(response, "AssetId", "AssetID", "asset_id", "Id", "ID", "id")
 	if assetID == "" {
 		return "", s.failArkPrivateAssetBinding(binding, errors.New("方舟素材库没有返回素材 ID"))
 	}
@@ -221,7 +232,7 @@ func (s *Service) ensureArkPrivateAssetGroup(ctx context.Context, settingRecord 
 	if err != nil {
 		return "", fmt.Errorf("创建方舟素材组失败：%w", err)
 	}
-	groupID := arkPrivateAssetResponseField(response, "GroupId", "GroupID", "group_id", "id")
+	groupID := arkPrivateAssetResponseField(response, "GroupId", "GroupID", "group_id", "Id", "ID", "id")
 	if groupID == "" {
 		return "", errors.New("方舟素材库没有返回素材组 ID")
 	}
@@ -233,6 +244,13 @@ func (s *Service) ensureArkPrivateAssetGroup(ctx context.Context, settingRecord 
 		return "", err
 	}
 	return groupID, nil
+}
+
+func shouldRetryArkPrivateAssetBinding(binding *model.ArkPrivateAssetBinding) bool {
+	if binding == nil || strings.ToLower(strings.TrimSpace(binding.Status)) != arkPrivateAssetStatusFail || binding.AssetGroupID != "" || binding.ArkAssetID != "" {
+		return false
+	}
+	return strings.Contains(binding.Error, "方舟素材库没有返回素材组 ID") || strings.Contains(binding.Error, "方舟素材库没有返回素材 ID")
 }
 
 func (s *Service) waitForArkPrivateAsset(ctx context.Context, binding *model.ArkPrivateAssetBinding, setting *arkPrivateAssetSettingValue) (string, error) {
@@ -349,11 +367,13 @@ func arkPrivateAssetResponseField(response map[string]interface{}, keys ...strin
 
 func arkPrivateAssetResponseMaps(response map[string]interface{}) []map[string]interface{} {
 	result := []map[string]interface{}{response}
-	for _, key := range []string{"Result", "Asset", "Data"} {
+	for _, key := range []string{"Result", "Asset", "Group", "Data"} {
 		if value, ok := response[key].(map[string]interface{}); ok {
 			result = append(result, value)
-			if nested, ok := value["Asset"].(map[string]interface{}); ok {
-				result = append(result, nested)
+			for _, nestedKey := range []string{"Asset", "Group", "Data"} {
+				if nested, ok := value[nestedKey].(map[string]interface{}); ok {
+					result = append(result, nested)
+				}
 			}
 		}
 	}

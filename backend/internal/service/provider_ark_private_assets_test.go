@@ -98,3 +98,14 @@ func TestArkPrivateAssetResponseFieldReadsNestedAssetStatus(t *testing.T) {
 		t.Fatalf("asset ID = %q", got)
 	}
 }
+
+func TestArkPrivateAssetResponseFieldReadsCreateGroupID(t *testing.T) {
+	response := map[string]interface{}{
+		"Result": map[string]interface{}{
+			"Group": map[string]interface{}{"Id": "group-created"},
+		},
+	}
+	if got := arkPrivateAssetResponseField(response, "GroupId", "Id"); got != "group-created" {
+		t.Fatalf("group ID = %q", got)
+	}
+}
