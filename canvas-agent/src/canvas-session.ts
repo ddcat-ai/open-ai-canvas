@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { ServerResponse } from "node:http";
 
 import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
+import { buildCanvasContext, findCanvasNodes, getCanvasResources, validateCanvasOps } from "./canvas-context.js";
 import { type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
@@ -88,9 +89,13 @@ export class CanvasSession {
             if (!input.projectId) throw new Error("当前画布没有关联短剧项目");
             return await this.requestCanvasTool(tool, input);
         }
-        const readTool = ["canvas_get_state", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
+        const readTool = ["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
         if (tool === "canvas_get_state" || tool === "canvas_export_snapshot") return compactCanvasState(this.canvasState);
+        if (tool === "canvas_get_context") return buildCanvasContext(this.canvasState);
+        if (tool === "canvas_find_nodes") return findCanvasNodes(this.canvasState, input as Parameters<typeof findCanvasNodes>[1]);
+        if (tool === "canvas_get_resources") return getCanvasResources(this.canvasState, input as Parameters<typeof getCanvasResources>[1]);
+        if (tool === "canvas_validate_ops") return validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
         if (tool === "canvas_get_selection") {
             const ids = new Set(this.canvasState?.selectedNodeIds || []);
             return { nodes: (this.canvasState?.nodes || []).filter((node) => ids.has(node.id)).map(compactNode) };
@@ -176,6 +181,12 @@ export class CanvasSession {
         }
         if (tool !== "canvas_apply_ops") throw new Error(`未知工具：${tool}`);
         if (!this.clients.size) throw new Error("当前没有已连接画布");
+        const expectedStateHash = typeof input.expectedStateHash === "string" ? input.expectedStateHash : "";
+        if (expectedStateHash && expectedStateHash !== buildCanvasContext(this.canvasState).stateHash) {
+            throw new Error("画布状态已变化，请重新读取 canvas_get_context 后再执行写操作");
+        }
+        const validation = validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
+        if (!validation.ok) throw new Error(`画布操作校验失败：${validation.issues.filter((item) => item.severity === "error").map((item) => item.message).join("；")}`);
         return await this.requestCanvasTool(tool, input);
     }
 

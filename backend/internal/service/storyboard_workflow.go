@@ -112,6 +112,7 @@ func parseStoryboardTaskInput(task model.Task, label string) (agentStoryboardInp
 }
 
 func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, input agentStoryboardInput, shotDuration int, shotCount int) (agentStoryboardPlan, []storyboardAsset, error) {
+	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	if !providerConfigReady(input.Config) {
 		return agentStoryboardPlan{}, nil, errors.New("请先配置可用的文本模型")
 	}

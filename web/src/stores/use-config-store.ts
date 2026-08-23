@@ -13,7 +13,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
 import type { CapabilitySpec, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
 
-export type ApiCallFormat = "openai" | "gemini";
+export type ApiCallFormat = "openai" | "gemini" | "claude";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
 
@@ -537,7 +537,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
         headers: channel.headers,
-        apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : ("openai" as const)) : channel.apiFormat,
+        apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : interfaceType === "claude-api" ? ("claude" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",
     });
@@ -600,7 +600,7 @@ function capabilityForChannelInterface(interfaceType?: ChannelInterfaceType): Mo
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-    return apiFormat === "gemini" ? "gemini" : "openai";
+    return apiFormat === "gemini" || apiFormat === "claude" ? apiFormat : "openai";
 }
 
 function normalizeChannelInterfaceType(value: unknown): ChannelInterfaceType | undefined {
@@ -631,9 +631,25 @@ function normalizeRawModelName(value: unknown) {
 export function buildApiUrl(baseUrl: string, path: string) {
     let normalizedBaseUrl = resolveBackendApiUrl(baseUrl).replace(/\/+$/, "");
     normalizedBaseUrl = normalizeArkPlanBaseUrl(normalizedBaseUrl);
-    const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
-    const apiBaseUrl = isSystemProxyBaseUrl(normalizedBaseUrl) || lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
-    return `${apiBaseUrl}${path}`;
+    const requestPath = path.startsWith("/") ? path : `/${path}`;
+    if (isSystemProxyBaseUrl(normalizedBaseUrl)) return `${normalizedBaseUrl}${requestPath}`;
+
+    const knownPrefixes = ["/api/plan/v3", "/api/v3", "/v1beta", "/v1", "/v2", "/v3"];
+    const requestPrefixFor = (value: string) => knownPrefixes.find((prefix) => {
+        const lower = value.toLowerCase();
+        return lower === prefix || lower.startsWith(`${prefix}/`) || lower.startsWith(`${prefix}?`) || lower.startsWith(`${prefix}#`);
+    }) || "";
+    const basePrefixFor = (value: string) => knownPrefixes.find((prefix) => {
+        const lower = value.toLowerCase();
+        return lower.endsWith(prefix) || lower.includes(`${prefix}/`) || lower.includes(`${prefix}?`) || lower.includes(`${prefix}#`);
+    }) || "";
+    const basePrefix = basePrefixFor(normalizedBaseUrl);
+    const requestPrefix = requestPrefixFor(requestPath);
+    if (requestPrefix) {
+        const root = basePrefix ? normalizedBaseUrl.slice(0, -basePrefix.length) : normalizedBaseUrl;
+        return `${root}${requestPath}`;
+    }
+    return `${normalizedBaseUrl}${basePrefix ? "" : "/v1"}${requestPath}`;
 }
 
 export function resolveBackendApiUrl(value: string) {
@@ -646,11 +662,21 @@ export function resolveBackendApiUrl(value: string) {
 }
 
 export function isSystemProxyBaseUrl(baseUrl: string) {
-    const marker = "/api/ai/system/";
-    const index = baseUrl.toLowerCase().indexOf(marker);
-    if (index < 0) return false;
-    const channelId = baseUrl.slice(index + marker.length);
-    return Boolean(channelId && !channelId.includes("/") && !channelId.includes("?") && !channelId.includes("#"));
+    return Boolean(systemProxyChannelId(baseUrl));
+}
+
+export function systemProxyChannelId(baseUrl: string) {
+    const value = baseUrl.trim();
+    const lowerValue = value.toLowerCase();
+    for (const marker of ["/api/ai/system/", "/api/"]) {
+        const index = lowerValue.lastIndexOf(marker);
+        if (index < 0) continue;
+        const remainder = value.slice(index + marker.length);
+        if (/[/?#]/.test(remainder)) continue;
+        const channelId = remainder.trim();
+        if (channelId && !channelId.includes("\\") && !["v1", "v1beta", "v2", "v3", "plan", "ai"].includes(channelId.toLowerCase())) return channelId;
+    }
+    return "";
 }
 
 function normalizeArkPlanBaseUrl(baseUrl: string) {

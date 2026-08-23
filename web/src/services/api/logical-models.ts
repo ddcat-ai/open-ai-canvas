@@ -135,6 +135,7 @@ export type PublicChannelModel = {
     modelKey: string;
     displayName: string;
     capability: string;
+    protocol?: string;
     capabilityConfig?: Record<string, any>;
     priceTiers: PublicChannelModelPriceTier[];
     pricingMode: string;

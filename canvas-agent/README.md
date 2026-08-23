@@ -91,6 +91,10 @@ default_tools_approval_mode = "approve"
 可用工具：
 
 - `canvas_get_state`
+- `canvas_get_context`
+- `canvas_find_nodes`
+- `canvas_get_resources`
+- `canvas_validate_ops`
 - `canvas_get_selection`
 - `canvas_export_snapshot`
 - `canvas_apply_ops`
@@ -112,6 +116,8 @@ default_tools_approval_mode = "approve"
   ]
 }
 ```
+
+推荐的 Agent 工作流是：先调用 `canvas_get_context` 读取语义化上下文和 `stateHash`；不知道节点 id 时调用 `canvas_find_nodes`；涉及图片、视频或音频参考时调用 `canvas_get_resources`；复杂写操作先调用 `canvas_validate_ops`，通过后再调用 `canvas_apply_ops`。这样 Agent 不需要猜测节点 id，也不会把 loading/error/占位媒体误判成可用资源。
 
 ## 侧边栏 Codex
 

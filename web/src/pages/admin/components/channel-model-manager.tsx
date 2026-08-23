@@ -8,7 +8,8 @@ import { ModelIcon } from "@/components/model-picker";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker, type ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
-import { MODEL_PROTOCOLS, modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
+import { modelProtocolCapability, modelProtocolDefinition, modelProtocolLabel, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
+import { fetchProtocolCatalog } from "@/services/api/protocols";
 import { createAdminChannelModel, deleteAdminChannelModel, fetchAdminChannelModels, listAdminChannelModels, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelModelPriceTier } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { AdminPageFrame } from "./admin-shell";
@@ -21,7 +22,7 @@ type FormValues = {
     providerModelKey?: string;
     displayName?: string;
     capability: EditableCapability;
-    protocol: ModelProtocol;
+    protocol?: ModelProtocol;
 	priceTiers: PriceTierFormValues[];
     enabled: boolean;
     capabilityConfig?: ModelCapabilityConfig;
@@ -58,6 +59,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [status, setStatus] = useState<"all" | "enabled" | "disabled">("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
+    const [availableProtocols, setAvailableProtocols] = useState<import("@/lib/model-protocols").ModelProtocolDefinition[]>([]);
     const [form] = Form.useForm<FormValues>();
     const modelCapability = Form.useWatch("capability", form);
     const modelProtocol = Form.useWatch("protocol", form);
@@ -79,6 +81,7 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
 
     useEffect(() => {
         void reload();
+        void fetchProtocolCatalog("admin.system-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
         setEditing(null);
         setEditorOpen(false);
         setKeyword("");
@@ -111,10 +114,10 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             providerModelKey: "",
             displayName: "",
             capability: "text",
-            protocol: "chat-completion",
+            protocol: availableProtocols.find((item) => item.capability === "text")?.value,
 			priceTiers: [defaultPriceTier()],
             enabled: true,
-            capabilityConfig: defaultModelCapabilityConfig("chat-completion", ""),
+            capabilityConfig: defaultModelCapabilityConfig(availableProtocols.find((item) => item.capability === "text")?.value, ""),
         });
         setEditorOpen(true);
     };
@@ -220,8 +223,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         }
         if (!changed.capability) return;
         const current = form.getFieldValue("protocol") as ModelProtocol | undefined;
-        if (modelProtocolCapability(current) !== changed.capability) {
-            const nextProtocol = MODEL_PROTOCOLS.find((item) => item.capability === changed.capability)?.value;
+        if (modelProtocolCapability(current, availableProtocols) !== changed.capability) {
+            const nextProtocol = availableProtocols.find((item) => item.capability === changed.capability)?.value;
             form.setFieldValue("protocol", nextProtocol);
             form.setFieldValue("capabilityConfig", changed.capability === "text" || changed.capability === "image" || changed.capability === "video" ? defaultModelCapabilityConfig(nextProtocol, form.getFieldValue("modelKey")) : undefined);
         }
@@ -262,8 +265,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
             render: (value: ModelProtocol) =>
                 value ? (
                     <div>
-                        <div className="text-xs font-medium">{modelProtocolLabel(value)}</div>
-                        <div className="truncate text-[var(--fs-tiny)] text-foreground/45">{modelProtocolDefinition(value)?.create}</div>
+                        <div className="text-xs font-medium">{modelProtocolLabel(value, availableProtocols)}</div>
+                        <div className="truncate text-[var(--fs-tiny)] text-foreground/45">{modelProtocolDefinition(value, availableProtocols)?.create}</div>
                     </div>
                 ) : (
                     <AdminStatusBadge label="待配置" tone="warning" />
@@ -423,9 +426,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                             <Form.Item className="mb-0" name="capability" label="模型能力" rules={[{ required: true }]}>
                                 <CapabilityCardPicker density="compact" />
                             </Form.Item>
-                            <Form.Item className="mb-0" name="protocol" label="请求协议" rules={[{ required: true, message: "请选择模型请求协议" }]}>
-                                <ProtocolCardPicker capability={modelCapability} density="compact" />
-                            </Form.Item>
+                            {availableProtocols.length ? <Form.Item className="mb-0" name="protocol" label="请求协议" rules={[{ required: true, message: "请选择模型请求协议" }]}>
+                                <ProtocolCardPicker capability={modelCapability} density="compact" protocols={availableProtocols} />
+                            </Form.Item> : null}
                         </div>
                         {modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? (
                             <Form.Item name="capabilityConfig" rules={[{ required: true, message: `请配置${capabilityLabel(modelCapability)}能力参数` }]}>

@@ -37,6 +37,8 @@ type Service struct {
 	sessionCreationCoordinator *sessionCreationCoordinator
 	sessionUploadCoordinator   *sessionUploadCoordinator
 	runtimeErr                 error
+	pluginRuntime              *pluginRuntime
+	pluginRuntimeErr           error
 	workerID                   string
 	routeCatalogMu             sync.RWMutex
 	routeCatalogRefreshMu      sync.Mutex
@@ -95,7 +97,8 @@ func New(repo *repository.Repository, dataDir string) *Service {
 
 func NewWithRuntimeCapabilities(repo *repository.Repository, dataDir string, capabilities RuntimeCapabilities) *Service {
 	coordinator, err := newRuntimeCoordinator(repo.Dialect())
-	service := &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time)}
+	pluginRuntime, pluginRuntimeErr := newPluginRuntime(dataDir)
+	service := &Service{repo: repo, dataDir: dataDir, runtimeCapabilities: capabilities, activeCancels: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, pluginRuntime: pluginRuntime, pluginRuntimeErr: pluginRuntimeErr, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time)}
 	service.taskBillingCoordinator = newTaskBillingCoordinator(service.repo)
 	service.taskTerminalCoordinator = newTaskTerminalCoordinator(service)
 	service.taskRouteExecutor = newTaskRouteExecutor(service)

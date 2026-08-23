@@ -15,6 +15,16 @@ import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInput
 
 export { logicalModelIDForConfig };
 
+// 只要模型明确选择了请求协议，就统一交给后端协议运行时执行：逻辑模型
+// 由逻辑模型路由解析协议，系统渠道由 channelId 解析真实渠道模型，用户
+// 自建渠道则由所选协议插件负责第三方字段映射和结果解析。没有显式协议
+// 的旧配置继续保留前端直连兼容路径。
+export function backendModelRuntimeRequired(config: AiConfig) {
+    if (logicalModelIDForConfig(config)) return true;
+    const requestConfig = resolveModelRequestConfig(config, config.model);
+    return Boolean(requestConfig.channelId || requestConfig.interfaceType);
+}
+
 export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 
 export type BackendGenerationResult = {
@@ -121,13 +131,14 @@ export async function runBackendToolGenerationTask(options: {
 }): Promise<ToolResponseResult> {
     throwIfAborted(options.signal);
     const logicalModelId = logicalModelIDForConfig(options.config);
-    if (!logicalModelId) throw new Error("当前模型不是平台系统模型");
+    const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
+    if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议");
     const task = await createGenerationTask({
         type: "canvas_text",
         operation: "text",
         prompt: options.prompt,
         model: options.config.model,
-        logicalModelId,
+        ...(logicalModelId ? { logicalModelId } : {}),
         input: {
             mode: "text",
             prompt: options.prompt,

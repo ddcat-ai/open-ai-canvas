@@ -33,6 +33,40 @@ export function toResponseTool(tool: ResponseFunctionTool): ResponseApiToolDefin
     };
 }
 
+export function toClaudeBody(config: AiConfig, messages: ResponseInputMessage[], tools: ResponseFunctionTool[] = []) {
+    const system = [config.systemPrompt.trim(), ...messages.flatMap((message) => !(("type" in message)) && message.role === "system" ? [String(message.content || "")] : [])].filter(Boolean).join("\n\n");
+    const bodyMessages: Array<Record<string, unknown>> = [];
+    for (const message of messages) {
+        if ("type" in message) {
+            bodyMessages.push({ role: "assistant", content: [{ type: "tool_use", id: message.call_id, name: message.name, input: jsonObject(message.arguments) }] });
+        } else if (message.role === "system") {
+            continue;
+        } else if (message.role === "tool") {
+            bodyMessages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: message.tool_call_id, content: message.content }] });
+        } else {
+            bodyMessages.push({ role: message.role === "assistant" ? "assistant" : "user", content: toClaudeContent(message.content) });
+        }
+    }
+    return {
+        model: config.model,
+        max_tokens: 4096,
+        messages: bodyMessages,
+        ...(system ? { system } : {}),
+        ...(tools.length ? { tools: tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters })) } : {}),
+    };
+}
+
+function toClaudeContent(content: ResponseMessageContent): unknown {
+    if (!Array.isArray(content)) return String(content || "");
+    return content.map((item) => {
+        if (item.type === "text") return { type: "text", text: item.text };
+        const value = item.type === "image_url" ? item.image_url.url : item.file_url.url;
+        const match = value.match(/^data:([^;,]+);base64,(.+)$/);
+        if (match) return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
+        return item.type === "image_url" ? { type: "image", source: { type: "url", url: value } } : { type: "text", text: `${item.file_url.name}: ${value}` };
+    });
+}
+
 export function toChatCompletionMessages(messages: ResponseInputMessage[]) {
     const result: Array<Record<string, unknown>> = [];
     for (let index = 0; index < messages.length;) {

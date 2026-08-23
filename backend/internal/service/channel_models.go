@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/gorm"
@@ -190,7 +191,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
-	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContract(channel, req)
+	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +530,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if err != nil {
 		return nil, err
 	}
-	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContract(channel, req)
+	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
 	if err != nil {
 		return nil, err
 	}
@@ -610,6 +611,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		Operation: "admin_model_test", Model: modelKey, VideoSeconds: videoSecondsValue,
 	})
 	testCtx = withProviderOutboundPolicy(testCtx, input.Config)
+	testCtx = withProtocolRegistry(testCtx, s.protocolRegistry())
 	startedAt := time.Now()
 	switch capability {
 	case "text":
@@ -648,6 +650,14 @@ func imageTestDefaults(profile *ImageCapabilityConfig) (string, string) {
 }
 
 func normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModelRequest) (string, string, string, model.ChannelInterfaceType, error) {
+	return normalizeChannelModelContractWithRegistry(protocol.Builtins(), channel, req)
+}
+
+func (s *Service) normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModelRequest) (string, string, string, model.ChannelInterfaceType, error) {
+	return normalizeChannelModelContractWithRegistry(s.protocolRegistry(), channel, req)
+}
+
+func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, channel *model.ModelChannel, req ChannelModelRequest) (string, string, string, model.ChannelInterfaceType, error) {
 	modelKey := strings.TrimPrefix(strings.TrimSpace(req.ModelKey), "models/")
 	if modelKey == "" {
 		return "", "", "", "", BadAuthRequest("请填写模型标识")
@@ -660,11 +670,12 @@ func normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModel
 	if capability == "" {
 		return "", "", "", "", BadAuthRequest("请选择模型能力")
 	}
-	protocol := model.ChannelInterfaceType(strings.TrimSpace(req.Protocol))
-	if !validChannelInterfaceType(protocol) {
+	adapter, ok := registry.Resolve(strings.TrimSpace(req.Protocol))
+	if !ok || !adapter.Metadata().Enabled || adapter.Metadata().UnavailableReason != "" {
 		return "", "", "", "", BadAuthRequest("请选择有效的模型请求协议")
 	}
-	if expected := capabilityForProtocol(protocol); expected != "" && expected != capability {
+	protocol := model.ChannelInterfaceType(adapter.Metadata().ID)
+	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}
 	if (protocol == model.ChannelInterfaceVolcengineJiMengImage || protocol == model.ChannelInterfaceVolcengineJiMengVideo) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
@@ -813,17 +824,17 @@ func (s *Service) syncChannelModelNames(channel *model.ModelChannel) error {
 	return s.repo.Save(channel)
 }
 
-func capabilityForProtocol(protocol model.ChannelInterfaceType) string {
-	switch protocol {
-	case model.ChannelInterfaceOpenAIImage, model.ChannelInterfaceGrokImage, model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceGeminiImage:
-		return "image"
-	case model.ChannelInterfaceOpenAIAudio, model.ChannelInterfaceAsyncAudio:
-		return "audio"
-	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceNovitaVideo, model.ChannelInterfaceMiniMaxVideo:
-		return "video"
-	case model.ChannelInterfaceChatCompletion, model.ChannelInterfaceOpenAIResponse:
-		return "text"
-	default:
+func (s *Service) capabilityForProtocol(protocol model.ChannelInterfaceType) string {
+	metadata, ok := s.channelProtocolMetadata(string(protocol))
+	if !ok {
 		return ""
 	}
+	return protocolCapabilityFromMetadata(metadata)
+}
+
+func protocolCapabilityFromMetadata(metadata protocol.Metadata) string {
+	if len(metadata.Categories) == 0 {
+		return ""
+	}
+	return string(metadata.Categories[0])
 }

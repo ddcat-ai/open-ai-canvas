@@ -419,6 +419,10 @@ function stringOrNull(value: unknown) {
 function toolName(name: string) {
     if (name === "canvas_apply_ops") return "画布操作";
     if (name === "canvas_get_state") return "读取画布";
+    if (name === "canvas_get_context") return "读取画布上下文";
+    if (name === "canvas_find_nodes") return "检索画布节点";
+    if (name === "canvas_get_resources") return "读取画布资源";
+    if (name === "canvas_validate_ops") return "校验画布操作";
     if (name === "canvas_get_selection") return "读取选区";
     if (name === "canvas_export_snapshot") return "导出快照";
     if (name === "canvas_create_text_node") return "创建文本";

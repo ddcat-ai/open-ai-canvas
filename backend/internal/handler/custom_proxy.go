@@ -120,6 +120,9 @@ func proxyCustomRelayRequestWithService(c *gin.Context, policy service.RuntimeRe
 	service.ApplyDefaultOutboundHeaders(upstreamReq)
 	if apiFormat == "gemini" {
 		upstreamReq.Header.Set("x-goog-api-key", apiKey)
+	} else if apiFormat == "claude" {
+		upstreamReq.Header.Set("x-api-key", apiKey)
+		upstreamReq.Header.Set("anthropic-version", "2023-06-01")
 	} else {
 		upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}

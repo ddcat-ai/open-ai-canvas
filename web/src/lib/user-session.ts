@@ -135,7 +135,9 @@ function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChan
         return {
             id: channel.id,
             name: channel.displayName,
-            baseUrl: "/api",
+            // 系统渠道必须走带渠道 ID 的站内代理；/api 只是业务 API 根路径，
+            // 不能作为模型请求的运行时 Base URL 传给 channelRequest。
+            baseUrl: `/api/${channel.id}`,
             apiKey: "system",
             apiFormat: "openai",
             scope: "system" as const,
@@ -167,6 +169,7 @@ function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChan
                     description: "",
                     icon: "",
                     capability: model.capability as ModelCapability,
+                    protocol: model.protocol as any,
                     pricePolicy: "channel" as const,
                     billingMode: billingMode as any,
                     unitPriceMicrocredits: unitPrice,

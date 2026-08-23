@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
@@ -18,7 +19,7 @@ func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled {
+	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
@@ -34,7 +35,7 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled {
+	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
@@ -42,14 +43,17 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 func TestUpdateFeatureAvailabilityPersistsAndAudits(t *testing.T) {
 	svc, db := newFeatureAvailabilityTestService(t)
 	actor := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
-	want := FeatureAvailability{ShortDramaEnabled: false, TaskCenterEnabled: true, CreditsEnabled: false, CustomChannelsEnabled: true}
+	want := FeatureAvailability{ShortDramaEnabled: false, TaskCenterEnabled: true, CreditsEnabled: false, CustomChannelsEnabled: true, PluginCenterEnabled: false, SystemPluginsVisibleToUsers: false}
 
 	setting, err := svc.UpdateFeatureAvailability(actor, want)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !setting.Configured || setting.ShortDramaEnabled || !setting.TaskCenterEnabled || setting.CreditsEnabled || !setting.CustomChannelsEnabled {
+	if !setting.Configured || setting.ShortDramaEnabled || !setting.TaskCenterEnabled || setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.PluginCenterEnabled || setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("UpdateFeatureAvailability() = %#v", setting)
+	}
+	if enabled, err := svc.FeatureEnabled(FeaturePluginCenter); err != nil || enabled {
+		t.Fatalf("FeatureEnabled(pluginCenter) = %v, %v", enabled, err)
 	}
 	if err := svc.RequireFeature(FeatureShortDrama); err == nil {
 		t.Fatal("RequireFeature(shortDrama) error = nil")
@@ -65,6 +69,36 @@ func TestUpdateFeatureAvailabilityPersistsAndAudits(t *testing.T) {
 	}
 	if auditCount != 1 {
 		t.Fatalf("audit count = %d, want 1", auditCount)
+	}
+}
+
+func TestPluginsForUserHidesBundledPluginsOnlyForOrdinaryUsers(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+	if _, err := svc.UpdateFeatureAvailability(admin, FeatureAvailability{
+		ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true,
+		CustomChannelsEnabled: true, PluginCenterEnabled: true, SystemPluginsVisibleToUsers: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc.pluginRuntime = &pluginRuntime{plugins: map[string]pluginRecord{
+		"bundled":  {Source: "bundled", Metadata: protocol.Metadata{ID: "bundled", Name: "系统协议", Version: "1"}},
+		"uploaded": {Source: "uploaded", Metadata: protocol.Metadata{ID: "uploaded", Name: "用户协议", Version: "1"}},
+	}}
+
+	visibleToUser, err := svc.PluginsForUser(&model.User{ID: "user-1", Role: model.UserRoleUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visibleToUser) != 1 || visibleToUser[0].Source != "uploaded" {
+		t.Fatalf("PluginsForUser(user) = %#v", visibleToUser)
+	}
+	visibleToAdmin, err := svc.PluginsForUser(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visibleToAdmin) != 2 {
+		t.Fatalf("PluginsForUser(admin) = %#v", visibleToAdmin)
 	}
 }
 

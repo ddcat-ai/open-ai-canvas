@@ -311,6 +311,9 @@ func (s *Service) AcquireChannelSlot(ctx context.Context, channelID string, fall
 }
 
 func (s *Service) ValidateRuntime() error {
+	if s.pluginRuntimeErr != nil {
+		return s.pluginRuntimeErr
+	}
 	return s.runtimeErr
 }
 

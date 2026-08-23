@@ -2,8 +2,20 @@ import type { Asset } from "@/stores/use-asset-store";
 
 export const PLUGIN_API_VERSION = "1" as const;
 
-export type PluginCategory = "asset-source" | "canvas-node" | "workflow" | "ai-capability" | "import-export" | "agent";
+export type PluginCategory = "asset-source" | "canvas-node" | "workflow" | "ai-capability" | "import-export" | "agent" | "protocol";
 export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source";
+export type ProtocolCapability = "text" | "image" | "video" | "audio";
+export type ProtocolScope = "admin.system-channel" | "user.custom-channel" | "canvas" | "creation" | "agent" | string;
+export type ProtocolPluginInfo = {
+    categories: ProtocolCapability[];
+    scopes: ProtocolScope[];
+    create?: string;
+    poll?: string;
+    cancel?: string;
+    contentType?: string;
+    documentation?: string;
+    parameters?: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>;
+};
 export type PluginPermission =
     | "canvas.read"
     | "canvas.write"
@@ -23,11 +35,17 @@ export type PluginManifest = {
     apiVersion: string;
     category: PluginCategory;
     description: string;
+    documentation?: string;
     author?: string;
     entry?: string;
     surfaces: PluginSurface[];
     permissions: PluginPermission[];
     trusted?: boolean;
+    kind?: "ui" | "protocol";
+    configuration?: {
+        fields: string[];
+    };
+    protocol?: ProtocolPluginInfo;
 };
 
 export type PluginStorage = {
@@ -96,6 +114,7 @@ export type AssetSourceProvider = {
 
 export type RegisteredPlugin = {
     manifest: PluginManifest;
+    source?: "bundled" | "uploaded" | string;
     activate?: (context: PluginHostContext) => Promise<void> | void;
     deactivate?: (context: PluginHostContext) => Promise<void> | void;
     createAssetSource?: (context: PluginHostContext) => AssetSourceProvider;

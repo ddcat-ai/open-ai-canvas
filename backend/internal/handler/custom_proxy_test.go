@@ -126,6 +126,45 @@ func TestCustomRelayConvertsGeminiAuthentication(t *testing.T) {
 	}
 }
 
+func TestCustomRelayConvertsClaudeAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const apiKey = "claude-secret-key"
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/messages" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get("x-api-key") != apiKey {
+			t.Errorf("x-api-key = %q", r.Header.Get("x-api-key"))
+		}
+		if r.Header.Get("Authorization") != "" {
+			t.Errorf("Authorization should not be forwarded, got %q", r.Header.Get("Authorization"))
+		}
+		if r.Header.Get("anthropic-version") != "2023-06-01" {
+			t.Errorf("anthropic-version = %q", r.Header.Get("anthropic-version"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"content":[{"type":"text","text":"claude relay works"}]}`)
+	}))
+	defer upstream.Close()
+	useCustomRelayTestClient(t, upstream.Client())
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/ai/custom", strings.NewReader(`{"model":"claude-test","messages":[]}`))
+	request.Header.Set("Authorization", "Bearer "+apiKey)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Canvas-Upstream-URL", upstream.URL+"/v1/messages")
+	request.Header.Set("X-Canvas-Upstream-Format", "claude")
+	markDesktopLocalRelayTestRequest(request, upstream.URL)
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = request
+
+	proxyCustomRelayRequestWithCapabilities(context, defaultCustomRelayTestPolicy(), true)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "claude relay works") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestCustomRelayStreamsBeforeUpstreamCompletes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const apiKey = "stream-secret"

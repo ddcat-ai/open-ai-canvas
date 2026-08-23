@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { App, Button, Drawer, InputNumber, Segmented, Tag } from "antd";
 import { ChevronRight, FlaskConical, Settings2 } from "lucide-react";
 
@@ -6,8 +6,9 @@ import { testChannelModelConnection } from "@/lib/model-connection-test";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { CapabilityCardPicker, ProtocolCardPicker } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
-import { MODEL_PROTOCOLS, modelProtocolCapability, modelProtocolDefinition, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
-import { modelMatchesCapability, modelOptionName, type ModelChannel } from "@/stores/use-config-store";
+import { modelProtocolCapability, modelProtocolDefinition, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
+import { fetchProtocolCatalog } from "@/services/api/protocols";
+import { modelOptionName, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
 
@@ -15,12 +16,16 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     const { message } = App.useApp();
     const [testingModel, setTestingModel] = useState("");
     const [activeModel, setActiveModel] = useState<string | null>(null);
+    const [availableProtocols, setAvailableProtocols] = useState<import("@/lib/model-protocols").ModelProtocolDefinition[]>([]);
+    useEffect(() => {
+        void fetchProtocolCatalog("user.custom-channel").then(setAvailableProtocols).catch(() => setAvailableProtocols([]));
+    }, []);
     if (!channel.models.length) return null;
 
     const updateCost = (model: string, patch: Partial<ModelCost>) => {
         const current = channel.modelCosts?.find((item) => item.model === model) || {
             model,
-            capability: modelProtocolCapability(defaultProtocolForModel(channel, model)) || "text",
+            capability: modelProtocolCapability(defaultProtocolForModel(channel, model), availableProtocols) || "text",
             protocol: defaultProtocolForModel(channel, model),
             billingMode: "fixed_request" as const,
             unitPriceMicrocredits: 0,
@@ -44,7 +49,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
 
     const activeModelCost = activeModel ? channel.modelCosts?.find((item) => item.model === activeModel) : undefined;
     const activeProtocol = activeModel ? activeModelCost?.protocol || defaultProtocolForModel(channel, activeModel) : undefined;
-    const activeCapability = activeModel ? activeModelCost?.capability || modelProtocolCapability(activeProtocol) || "text" : undefined;
+    const activeCapability = activeModel ? activeModelCost?.capability || modelProtocolCapability(activeProtocol, availableProtocols) || "text" : undefined;
     const activeBillingMode = activeModelCost?.billingMode || "fixed_request";
     const activeTokenBillingSupported = modelProtocolSupportsTokenBilling(activeCapability, activeProtocol);
 
@@ -62,7 +67,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                     const model = modelOptionName(rawModel);
                     const cost = channel.modelCosts?.find((item) => item.model === model);
                     const protocol = cost?.protocol || defaultProtocolForModel(channel, model);
-                    const capability = cost?.capability || modelProtocolCapability(protocol) || "text";
+                    const capability = cost?.capability || modelProtocolCapability(protocol, availableProtocols) || "text";
                     const billingMode = cost?.billingMode || "fixed_request";
                     const displayName = cost?.displayName?.trim() || model;
                     return (
@@ -78,8 +83,8 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     <Tag className="mr-0 text-[var(--fs-tiny)]" bordered={false}>
                                         {capabilityLabel(capability)}
                                     </Tag>
-                                    <span className="truncate font-mono text-[var(--fs-tiny)] text-foreground/40" title={modelProtocolDefinition(protocol)?.create}>
-                                        {modelProtocolDefinition(protocol)?.create || "待配置请求协议"}
+                                    <span className="truncate font-mono text-[var(--fs-tiny)] text-foreground/40" title={modelProtocolDefinition(protocol, availableProtocols)?.create}>
+                                        {modelProtocolDefinition(protocol, availableProtocols)?.create || "待配置请求协议"}
                                     </span>
                                 </div>
                             </div>
@@ -121,7 +126,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                             <CapabilityCardPicker
                                 value={activeCapability}
                                 onChange={(nextCapability) => {
-                                    const nextProtocol = MODEL_PROTOCOLS.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || MODEL_PROTOCOLS.find((item) => item.capability === nextCapability)?.value;
+                                    const nextProtocol = availableProtocols.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || availableProtocols.find((item) => item.capability === nextCapability)?.value;
                                     if (!nextProtocol) return;
                                     updateCost(activeModel, {
                                         protocol: nextProtocol,
@@ -132,14 +137,15 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                 }}
                             />
                         </section>
-                        <section className="space-y-2">
+                        {availableProtocols.length ? <section className="space-y-2">
                             <div className="text-xs font-medium">请求协议</div>
                             <ProtocolCardPicker
                                 capability={activeCapability}
                                 value={activeProtocol}
+                                protocols={availableProtocols}
                                 onChange={(nextProtocol) => updateCost(activeModel, { protocol: nextProtocol, billingMode: activeBillingMode === "token" && !modelProtocolSupportsTokenBilling(activeCapability, nextProtocol) ? "fixed_request" : activeBillingMode, capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined })}
                             />
-                        </section>
+                        </section> : null}
                         {activeCapability === "video" ? (
                             <div className="space-y-2">
                                 <div className="text-xs font-medium">计费方式</div>
@@ -182,12 +188,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
 }
 
 function defaultProtocolForModel(channel: ModelChannel, model: string): ModelProtocol {
-    if (channel.interfaceType) return channel.interfaceType;
-    if (channel.apiFormat === "gemini" && modelMatchesCapability(model, "video")) return "gemini-veo";
-    if (modelMatchesCapability(model, "video")) return "newapi";
-    if (modelOptionName(model).trim().toLowerCase().startsWith("grok-imagine-image")) return "grok-image";
-    if (modelMatchesCapability(model, "image")) return "openai-image";
-    return "chat-completion";
+    return channel.interfaceType || "";
 }
 
 function capabilityLabel(value: ModelCost["capability"]) {

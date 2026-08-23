@@ -427,17 +427,6 @@ export default function TasksPage() {
         <>
             <WorkspacePage grid className="library-page task-library-page">
                 <div className="studio-band">
-                    <PageHeader
-                        title="任务中心"
-                        description="跟踪生成任务的排队、进度与失败原因。"
-                        meta={<span className="app-projects-header-meta">{filteredTasks.length} 个任务{loading ? " · 同步中" : ""}</span>}
-                            actions={(
-                                <>
-                                <Button icon={<RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />} onClick={() => void loadTasks(true)}>刷新</Button>
-                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>
-                                </>
-                            )}
-                    />
                     <ListToolbar
                         className="library-toolbar task-library-toolbar"
                         active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}

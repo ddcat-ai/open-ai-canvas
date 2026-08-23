@@ -1,18 +1,20 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { App, Switch } from "antd";
-import { Clapperboard, Coins, ListChecks, RadioTower, ToggleLeft, Sparkles, Settings } from "lucide-react";
+import { Clapperboard, Coins, ListChecks, PlugZap, RadioTower, ToggleLeft, Sparkles, Settings } from "lucide-react";
 
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { SettingsSectionCard } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
 
 const userFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; description: string; icon: ReactNode }> = [
     { key: "shortDramaEnabled", title: "短剧创作", menu: "/projects", description: "关闭后隐藏短剧入口，并拦截项目列表、详情和项目 API。已有项目数据不会删除。", icon: <Clapperboard className="size-4" /> },
     { key: "taskCenterEnabled", title: "任务", menu: "/tasks", description: "关闭后仅隐藏并拦截任务中心页面；生成任务仍会创建、执行、记录和恢复。", icon: <ListChecks className="size-4" /> },
     { key: "creditsEnabled", title: "积分中心", menu: "/wallet", description: "关闭后隐藏用户积分入口，新创建的任务和系统渠道请求不再冻结或消费积分。", icon: <Coins className="size-4" /> },
     { key: "customChannelsEnabled", title: "自定义渠道", menu: "/settings?section=channels", description: "关闭后隐藏用户自定义渠道入口，并拦截模型目录拉取、渠道中转和新的生成任务。已有渠道配置不会删除。", icon: <RadioTower className="size-4" /> },
+    { key: "pluginCenterEnabled", title: "插件中心", menu: "/plugins", description: "关闭后普通用户无法进入插件中心或调用插件中心相关接口；管理员仍可进入后台恢复开关。已有插件不会删除。", icon: <PlugZap className="size-4" /> },
+    { key: "systemPluginsVisibleToUsers", title: "向普通用户显示系统插件（不可编辑）", menu: "/plugins", description: "仅在插件中心开启时生效。关闭后普通用户看不到系统插件，用户插件不受影响。", icon: <PlugZap className="size-4" /> },
 ];
 
 const adminFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; description: string; icon: ReactNode }> = [
@@ -48,6 +50,8 @@ export default function FeatureAvailabilityPanel() {
                 creditsEnabled: next.creditsEnabled,
                 customChannelsEnabled: next.customChannelsEnabled,
                 frontendModelsEnabled: next.frontendModelsEnabled,
+                pluginCenterEnabled: next.pluginCenterEnabled,
+                systemPluginsVisibleToUsers: next.systemPluginsVisibleToUsers,
             });
             setFeatures(result.features);
             setGlobalFeatures(result.features);
@@ -108,7 +112,7 @@ export default function FeatureAvailabilityPanel() {
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
                             </div>
-                            <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
+                            <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key) || (item.key === "systemPluginsVisibleToUsers" && features?.pluginCenterEnabled !== true)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
                         </div>
                     ))}
                 </div>

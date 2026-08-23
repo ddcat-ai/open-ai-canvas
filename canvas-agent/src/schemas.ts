@@ -11,6 +11,10 @@ const projectShotSchema = z.object({ id: z.string().optional(), unitId: z.string
 
 export const toolNames = [
     "canvas_get_state",
+    "canvas_get_context",
+    "canvas_find_nodes",
+    "canvas_get_resources",
+    "canvas_validate_ops",
     "canvas_get_selection",
     "canvas_export_snapshot",
     "canvas_apply_ops",
@@ -90,9 +94,13 @@ const generationFlowSchema = z.object({
 
 export const toolInputSchemas = {
     canvas_get_state: z.object({}).passthrough(),
+    canvas_get_context: z.object({}).passthrough(),
+    canvas_find_nodes: z.object({ query: z.string().optional(), ids: z.array(z.string()).optional(), types: z.array(z.string()).optional(), statuses: z.array(z.string()).optional(), resourceOnly: z.boolean().optional(), limit: z.number().int().min(1).max(200).optional() }),
+    canvas_get_resources: z.object({ nodeIds: z.array(z.string()).optional(), status: z.string().optional(), limit: z.number().int().min(1).max(300).optional() }),
+    canvas_validate_ops: z.object({ ops: z.array(canvasOpSchema) }),
     canvas_get_selection: z.object({}).passthrough(),
     canvas_export_snapshot: z.object({}).passthrough(),
-    canvas_apply_ops: z.object({ ops: z.array(canvasOpSchema) }),
+    canvas_apply_ops: z.object({ ops: z.array(canvasOpSchema), expectedStateHash: z.string().min(1).optional() }),
     canvas_create_node: z.object({ nodeType: nodeTypeSchema, title: z.string().optional(), x: z.number().optional(), y: z.number().optional(), width: z.number().optional(), height: z.number().optional(), metadata: recordSchema.optional() }),
     canvas_create_text_node: z.object({ text: z.string().optional(), x: z.number().optional(), y: z.number().optional(), title: z.string().optional(), width: z.number().optional(), height: z.number().optional() }),
     canvas_create_text_nodes: z.object({ items: z.array(textNodeSchema).min(1), x: z.number().optional(), y: z.number().optional(), gap: z.number().optional(), direction: z.enum(["row", "column"]).optional() }),
@@ -125,6 +133,10 @@ export const toolInputSchemas = {
 
 export const toolDescriptions: Record<ToolName, string> = {
     canvas_get_state: "读取当前网页画布的节点、连线、选区和视口。",
+    canvas_get_context: "读取面向 Agent 的语义化画布上下文：节点用途、连接关系、选区、资源引用、生成状态和状态哈希。优先于直接猜测节点 metadata。",
+    canvas_find_nodes: "按标题、内容、提示词、类型、状态、资产或工作流检索真实节点，返回可用于后续写操作的节点 id。",
+    canvas_get_resources: "读取当前画布引用的媒体资源清单，包括资源/资产引用、类型、尺寸、大小、时长和就绪状态；不会返回媒体 URL。",
+    canvas_validate_ops: "在真正写入前校验批量操作中的节点 id、连接关系和参数，避免对不存在节点或错误资源执行操作。",
     canvas_get_selection: "读取当前网页画布选中的节点。",
     canvas_export_snapshot: "导出当前画布快照，用于理解布局。",
     canvas_apply_ops: "批量操作当前网页画布。ops 支持 add_node、update_node、delete_node、delete_connections、connect_nodes、set_viewport、select_nodes、run_generation。",

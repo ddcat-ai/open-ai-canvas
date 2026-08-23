@@ -37,5 +37,5 @@ export function EmailSettingsPage() {
 }
 
 export function FeatureAvailabilityPage() {
-    return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道与计费模式" scroll><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
+    return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道、插件与计费模式" scroll><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
 }

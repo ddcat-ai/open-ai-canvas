@@ -23,7 +23,7 @@ export function channelRequest(config: RelayConfig, upstreamUrl: string, headers
     normalizedHeaders.delete("x-goog-api-key");
     normalizedHeaders.set("Authorization", `Bearer ${runtimeConfig.apiKey}`);
     normalizedHeaders.set("X-Canvas-Upstream-URL", normalizedUpstreamUrl);
-    normalizedHeaders.set("X-Canvas-Upstream-Format", runtimeConfig.apiFormat === "gemini" ? "gemini" : "openai");
+    normalizedHeaders.set("X-Canvas-Upstream-Format", runtimeConfig.apiFormat === "gemini" ? "gemini" : runtimeConfig.apiFormat === "claude" ? "claude" : "openai");
     if (runtimeConfig.allowLocalChannel === true) {
         normalizedHeaders.set("X-Canvas-Allow-Local-Channel", "1");
         normalizedHeaders.set("X-Canvas-Upstream-Base-URL", normalizedBaseUrl);

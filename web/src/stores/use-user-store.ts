@@ -30,6 +30,8 @@ export type FeatureAvailability = {
     creditsEnabled: boolean;
     customChannelsEnabled: boolean;
     frontendModelsEnabled: boolean;
+    pluginCenterEnabled: boolean;
+    systemPluginsVisibleToUsers: boolean;
     desktopLocalChannelsEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
@@ -42,6 +44,8 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     creditsEnabled: true,
     customChannelsEnabled: true,
     frontendModelsEnabled: false,
+    pluginCenterEnabled: true,
+    systemPluginsVisibleToUsers: true,
     desktopLocalChannelsEnabled: false,
 };
 

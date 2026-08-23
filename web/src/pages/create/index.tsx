@@ -21,7 +21,7 @@ import { buildImageResolutionOptions, formatImageResolutionSize, imageRatioForSi
 import { VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
-import { isGenerationTaskCancelled, logicalModelIDForConfig, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
+import { backendModelRuntimeRequired, isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerationTaskBatch, type BackendGenerationResult } from "@/services/api/generation-task";
 import { requestImageQuestion, type AiTextContentPart } from "@/services/api/image";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
@@ -538,7 +538,7 @@ export default function CreatePage() {
         };
         try {
             if (mode === "text") {
-				if (logicalModelIDForConfig(requestConfig)) {
+                if (backendModelRuntimeRequired(requestConfig)) {
 					const result = await runGenerationOperationOnce(retryContext?.clientOperationId, () => runBackendGenerationTask({
 						mode: "text",
 						prompt: expandedPrompt,

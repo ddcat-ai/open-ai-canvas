@@ -23,6 +23,7 @@ import {
     type AgentThreadSummary,
 } from "@/stores/canvas/use-canvas-agent-store";
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { isProjectAgentReadTool, isProjectAgentToolName, runProjectAgentTool } from "@/services/api/project-agent-tools";
@@ -383,9 +384,17 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const result =
                 payload.name === "canvas_apply_ops"
                     ? await onApplyOpsRef.current((input.ops || []) as CanvasAgentOp[], { source: "local", conversationId: activeThreadId || clientIdRef.current, messageId: payload.requestId })
-                    : projectToolName
-                      ? await runProjectAgentTool(projectToolName, input, snapshotRef.current.domainProjectId)
-                      : snapshotRef.current;
+                    : payload.name === "canvas_get_context"
+                      ? buildCanvasAgentContext(snapshotRef.current)
+                      : payload.name === "canvas_find_nodes"
+                        ? findCanvasAgentNodes(snapshotRef.current, input as Parameters<typeof findCanvasAgentNodes>[1])
+                        : payload.name === "canvas_get_resources"
+                          ? getCanvasAgentResources(snapshotRef.current, input as Parameters<typeof getCanvasAgentResources>[1])
+                          : payload.name === "canvas_validate_ops"
+                            ? validateCanvasAgentOps(snapshotRef.current, (input.ops || []) as CanvasAgentOp[])
+                            : projectToolName
+                              ? await runProjectAgentTool(projectToolName, input, snapshotRef.current.domainProjectId)
+                              : snapshotRef.current;
             await postToolResult(clientIdRef.current, { requestId: payload.requestId, result });
             if (payload.name === "canvas_apply_ops") syncState(clientIdRef.current, result as CanvasAgentSnapshot);
             setAgentState({ activity: "工具完成", waiting: true });

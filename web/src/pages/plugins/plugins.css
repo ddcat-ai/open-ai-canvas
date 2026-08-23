@@ -1,10 +1,5 @@
 .plugins-page {
-    --plugins-card-radius: var(--r-xl);
-}
-
-.plugins-page-content {
-    width: min(100%, 1440px);
-    margin: 0 auto;
+    --plugins-card-radius: var(--r-md);
 }
 
 .plugin-trust-label {
@@ -16,14 +11,138 @@
 }
 
 .plugins-page-content {
+    width: auto;
+    min-width: 0;
+    margin: 0;
     padding: var(--space-5) var(--space-6) var(--space-8);
+}
+
+.plugins-page-layout {
+    display: grid;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    grid-template-columns: 208px minmax(0, 1fr);
+    align-items: start;
+}
+
+.plugins-sidebar {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+    min-height: calc(100vh - 72px);
+    border-right: 1px solid var(--workspace-border);
+    padding: var(--space-6) var(--space-3) var(--space-8) var(--space-5);
+}
+
+.plugins-sidebar-heading {
+    padding: 0 var(--space-2) var(--space-4);
+}
+
+.plugins-sidebar-kicker {
+    color: var(--workspace-accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.plugins-sidebar-heading h1 {
+    margin-top: var(--space-2);
+    color: var(--foreground);
+    font-size: var(--fs-title);
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.plugins-sidebar-heading p {
+    margin-top: var(--space-2);
+    color: color-mix(in srgb, var(--foreground) 44%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.55;
+}
+
+.plugins-sidebar-nav {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.plugins-sidebar-item {
+    display: flex;
+    width: 100%;
+    min-height: 36px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: transparent;
+    padding: 0 var(--space-2);
+    color: color-mix(in srgb, var(--foreground) 53%, transparent);
+    font-size: var(--fs-caption);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color var(--motion-state) ease-out,
+        color var(--motion-state) ease-out;
+}
+
+.plugins-sidebar-item:hover {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    color: var(--foreground);
+}
+
+.plugins-sidebar-item:focus-visible {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    color: var(--foreground);
+    outline: 2px solid color-mix(in srgb, var(--foreground) 58%, transparent);
+    outline-offset: 2px;
+}
+
+.plugins-sidebar-item.is-active {
+    border-color: color-mix(in srgb, var(--foreground) 11%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: var(--foreground);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.plugins-sidebar-item > span:last-child {
+    min-width: 22px;
+    border-radius: var(--r-sm);
+    background: transparent;
+    padding: 2px 5px;
+    color: color-mix(in srgb, var(--foreground) 36%, transparent);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.plugins-sidebar-item.is-active > span:last-child {
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    background: transparent;
+}
+
+.plugins-sidebar-item-label {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 .plugins-toolbar {
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(132px, 0.24fr)) auto;
+    grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(128px, 0.24fr)) auto auto;
     align-items: center;
     gap: var(--space-2);
+}
+
+.plugins-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    white-space: nowrap;
 }
 
 .plugins-search,
@@ -56,32 +175,120 @@
     color: color-mix(in srgb, var(--foreground) 48%, transparent);
 }
 
+.plugins-sections {
+    display: grid;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
+}
+
+.plugin-section {
+    min-width: 0;
+}
+
+.plugin-section-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--workspace-border);
+}
+
+.plugin-section-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: color-mix(in srgb, var(--foreground) 68%, transparent);
+}
+
+.plugin-section-heading > div {
+    min-width: 0;
+}
+
+.plugin-section-heading h2 {
+    color: var(--foreground);
+    font-size: var(--fs-body-lg);
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.plugin-section-heading p {
+    margin-top: var(--space-half);
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.45;
+}
+
+.plugin-section-count {
+    display: inline-grid;
+    min-width: 28px;
+    height: 24px;
+    margin-left: auto;
+    place-items: center;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+
 .plugins-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     align-items: stretch;
-    gap: var(--space-4);
-    margin-top: var(--space-5);
+    gap: var(--space-3);
+    margin-top: var(--space-3);
 }
 
 .plugin-card {
     display: flex;
     min-width: 0;
-    min-height: 286px;
+    min-height: 232px;
     flex-direction: column;
-    padding: var(--space-4);
+    padding: var(--space-3);
     border-radius: var(--plugins-card-radius);
-    transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease-out;
+    transition: background-color var(--motion-state) ease-out;
 }
 
 .plugin-card:hover,
 .plugin-card:focus-within {
-    transform: translateY(var(--library-hover-offset));
+    transform: none;
+}
+
+.plugin-card:focus-within {
+    box-shadow: none;
 }
 
 .plugin-card-main {
+    appearance: none;
+    display: block;
+    width: 100%;
     min-width: 0;
     flex: 1 1 auto;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.plugin-card-main:focus-visible {
+    border-radius: var(--r-md);
+    outline: 1px solid color-mix(in srgb, var(--foreground) 38%, transparent);
+    outline-offset: -1px;
+}
+
+.plugin-card-main:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
 }
 
 .plugin-card-heading {
@@ -93,26 +300,27 @@
 
 .plugin-icon-tile {
     display: grid;
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
     flex: 0 0 auto;
     place-items: center;
-    border-radius: var(--r-lg);
+    border-radius: var(--r-md);
     background: color-mix(in srgb, var(--foreground) 7%, transparent);
     color: color-mix(in srgb, var(--foreground) 65%, transparent);
-    transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out, transform var(--motion-state) var(--motion-ease-out);
+    transition:
+        background-color var(--motion-state) ease-out,
+        color var(--motion-state) ease-out;
 }
 
 .plugin-card:hover .plugin-icon-tile,
 .plugin-card:focus-within .plugin-icon-tile {
-    transform: translateY(-2px);
     background: color-mix(in srgb, var(--foreground) 10%, transparent);
     color: var(--foreground);
 }
 
 .plugin-icon-tile.is-trusted {
-    background: color-mix(in srgb, var(--status-success) 14%, transparent);
-    color: var(--status-success);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: color-mix(in srgb, var(--foreground) 65%, transparent);
 }
 
 .plugin-card-title-row {
@@ -155,6 +363,7 @@
 }
 
 .plugin-category-label,
+.plugin-source-label,
 .plugin-card-tags span {
     display: inline-flex;
     align-items: center;
@@ -167,14 +376,25 @@
     line-height: 1.4;
 }
 
+.plugin-source-label {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-weight: 600;
+}
+
+.plugin-source-label.is-system {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+}
+
 .plugin-trust-label {
     font-size: var(--fs-micro);
 }
 
 .plugin-card-description {
     display: -webkit-box;
-    min-height: 3.2em;
-    margin-top: var(--space-4);
+    min-height: 2.9em;
+    margin-top: var(--space-3);
     overflow: hidden;
     color: color-mix(in srgb, var(--foreground) 52%, transparent);
     font-size: var(--fs-caption);
@@ -185,7 +405,7 @@
 
 .plugin-card-meta {
     gap: var(--space-3);
-    margin-top: var(--space-4);
+    margin-top: var(--space-3);
     color: color-mix(in srgb, var(--foreground) 43%, transparent);
     font-size: var(--fs-label);
 }
@@ -207,8 +427,8 @@
     min-width: 0;
     align-items: center;
     gap: var(--space-2);
-    margin-top: var(--space-5);
-    padding-top: var(--space-3);
+    margin-top: var(--space-3);
+    padding-top: var(--space-2);
     border-top: 1px solid color-mix(in srgb, var(--workspace-border) 72%, transparent);
 }
 
@@ -216,8 +436,289 @@
     margin-right: auto;
 }
 
+.plugin-card-actions .ant-switch {
+    flex: 0 0 auto;
+}
+
 .plugin-settings-button {
     flex: 0 0 auto;
+}
+
+.plugin-details-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.plugin-details-title > span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-modal.plugin-details-modal {
+    width: min(1240px, calc(100vw - var(--space-4))) !important;
+}
+
+.workspace-modal.plugin-upload-modal {
+    width: min(1480px, calc(100vw - var(--space-4))) !important;
+}
+
+.plugin-upload-layout {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.65fr);
+    gap: var(--space-6);
+}
+
+.plugin-upload-guide {
+    min-width: 0;
+    max-height: min(75vh, 780px);
+    overflow: auto;
+    padding-right: var(--space-4);
+    border-right: 1px solid var(--workspace-border);
+}
+
+.plugin-upload-guide .plugin-markdown-table-wrap {
+    margin-block: var(--space-3);
+}
+
+.plugin-upload-guide .plugin-markdown table {
+    min-width: 560px;
+}
+
+.plugin-upload-panel {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-self: start;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--foreground) 3%, var(--workspace-surface-strong));
+}
+
+.plugin-upload-panel-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+}
+
+.plugin-upload-panel-heading h2 {
+    color: var(--foreground);
+    font-size: var(--fs-body-lg);
+    font-weight: 700;
+}
+
+.plugin-upload-panel-heading p {
+    margin-top: var(--space-1);
+    color: color-mix(in srgb, var(--foreground) 50%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.55;
+}
+
+.plugin-upload-panel-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+    color: var(--workspace-accent);
+}
+
+.plugin-upload-dropzone.ant-upload-wrapper .ant-upload-drag {
+    min-height: 250px;
+    border-color: color-mix(in srgb, var(--workspace-accent) 32%, var(--workspace-border));
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--workspace-accent) 4%, transparent);
+}
+
+.plugin-upload-dropzone.ant-upload-wrapper .ant-upload-drag:hover {
+    border-color: var(--workspace-accent);
+}
+
+.plugin-upload-dropzone-icon {
+    width: 30px;
+    height: 30px;
+    margin-bottom: var(--space-3);
+    color: var(--workspace-accent);
+}
+
+.plugin-upload-dropzone .ant-upload-text {
+    color: var(--foreground);
+    font-size: var(--fs-body);
+    font-weight: 650;
+}
+
+.plugin-upload-dropzone .ant-upload-hint {
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    font-size: var(--fs-label);
+}
+
+.plugin-upload-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: color-mix(in srgb, var(--foreground) 49%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.55;
+}
+
+.plugin-upload-notice svg {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    color: var(--status-success);
+}
+
+.plugin-markdown {
+    max-width: none;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: var(--fs-caption);
+    line-height: 1.7;
+}
+
+.plugin-details-document {
+    width: 100%;
+    padding: var(--space-2) 0 var(--space-6);
+}
+
+.plugin-details-document > p,
+.plugin-details-document > ul,
+.plugin-details-document > ol,
+.plugin-details-document > blockquote {
+    max-width: 88ch;
+}
+
+.plugin-markdown h1,
+.plugin-markdown h2,
+.plugin-markdown h3 {
+    color: var(--foreground);
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.plugin-markdown h1 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--fs-title);
+}
+
+.plugin-markdown h2 {
+    margin: var(--space-6) 0 var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--workspace-border);
+    font-size: var(--fs-body-lg);
+}
+
+.plugin-markdown h3 {
+    margin: var(--space-4) 0 var(--space-2);
+    font-size: var(--fs-body);
+}
+
+.plugin-markdown p {
+    margin: var(--space-2) 0;
+}
+
+.plugin-markdown ul {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-5);
+}
+
+.plugin-markdown ol {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-5);
+}
+
+.plugin-markdown a {
+    color: var(--workspace-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.plugin-markdown li + li {
+    margin-top: var(--space-1);
+}
+
+.plugin-markdown strong {
+    color: var(--foreground);
+    font-weight: 650;
+}
+
+.plugin-markdown code {
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    padding: 2px 5px;
+    color: color-mix(in srgb, var(--workspace-accent) 78%, var(--foreground));
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.92em;
+}
+
+.plugin-markdown pre {
+    overflow-x: auto;
+    margin: var(--space-3) 0;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 5%, var(--workspace-surface-strong));
+    padding: var(--space-3);
+}
+
+.plugin-markdown pre code {
+    display: block;
+    padding: 0;
+    background: transparent;
+    color: var(--foreground);
+    line-height: 1.6;
+    white-space: pre;
+}
+
+.plugin-markdown-table-wrap {
+    overflow-x: auto;
+    margin: var(--space-3) 0;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-md);
+}
+
+.plugin-markdown table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+    font-size: var(--fs-label);
+}
+
+.plugin-markdown th,
+.plugin-markdown td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--workspace-border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.plugin-markdown th {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.plugin-markdown tr:last-child td {
+    border-bottom: 0;
+}
+
+.plugin-markdown blockquote {
+    margin: var(--space-3) 0;
+    border-left: 3px solid var(--workspace-accent);
+    background: color-mix(in srgb, var(--workspace-accent) 7%, transparent);
+    padding: var(--space-2) var(--space-3);
+    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+}
+
+.plugin-markdown hr {
+    margin: var(--space-5) 0;
+    border: 0;
+    border-top: 1px solid var(--workspace-border);
 }
 
 .plugin-settings-panel {
@@ -342,8 +843,45 @@
 }
 
 @media (max-width: 900px) {
+    .plugins-page-layout {
+        display: block;
+    }
+
+    .plugins-sidebar {
+        position: static;
+        min-height: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--workspace-border);
+        padding: var(--space-4) var(--space-4) 0;
+    }
+
+    .plugins-sidebar-heading {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        padding: 0 var(--space-1) var(--space-3);
+    }
+
+    .plugins-sidebar-heading p {
+        margin-top: 0;
+    }
+
+    .plugins-sidebar-nav {
+        display: flex;
+        gap: var(--space-1);
+        overflow-x: auto;
+        padding-bottom: var(--space-3);
+    }
+
+    .plugins-sidebar-item {
+        width: auto;
+        flex: 0 0 auto;
+        padding-inline: var(--space-3);
+        white-space: nowrap;
+    }
+
     .plugins-toolbar {
-        grid-template-columns: minmax(0, 1fr) repeat(3, minmax(120px, 1fr));
+        grid-template-columns: minmax(0, 1fr) repeat(2, minmax(120px, 1fr));
     }
 
     .plugins-search {
@@ -353,11 +891,36 @@
     .plugins-filter-icon {
         display: none;
     }
+
+    .plugins-toolbar-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+    }
+
+    .plugin-upload-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .plugin-upload-guide {
+        max-height: 48vh;
+        padding-right: 0;
+        padding-bottom: var(--space-4);
+        border-right: 0;
+        border-bottom: 1px solid var(--workspace-border);
+    }
 }
 
 @media (max-width: 640px) {
     .plugins-page-content {
         padding-inline: var(--space-4);
+    }
+
+    .plugins-sidebar-heading {
+        display: block;
+    }
+
+    .plugins-sidebar-heading p {
+        margin-top: var(--space-1);
     }
 
     .plugins-toolbar {
@@ -372,8 +935,50 @@
         grid-template-columns: 1fr;
     }
 
+    .plugins-sections {
+        gap: var(--space-6);
+        margin-top: var(--space-6);
+    }
+
+    .plugin-section-heading {
+        gap: var(--space-2);
+    }
+
     .plugin-card {
         min-height: 0;
+    }
+
+    .plugin-card-actions {
+        flex-wrap: wrap;
+    }
+
+    .plugin-upload-panel {
+        padding: var(--space-3);
+    }
+
+    .plugin-upload-dropzone.ant-upload-wrapper .ant-upload-drag {
+        min-height: 210px;
+    }
+
+    .plugin-card-actions .settings-channel-status {
+        width: 100%;
+        margin-right: 0;
+    }
+
+    .plugin-settings-button {
+        flex: 1 1 0;
+    }
+
+    .plugins-toolbar-actions {
+        width: 100%;
+    }
+
+    .plugins-toolbar-actions > * {
+        flex: 1 1 0;
+    }
+
+    .plugins-toolbar-actions .ant-btn {
+        width: 100%;
     }
 }
 

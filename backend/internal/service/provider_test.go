@@ -42,6 +42,50 @@ func TestProviderRequestErrorDetails(t *testing.T) {
 	}
 }
 
+func TestChannelAPIURLNormalizesConfiguredVersionPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+		path string
+		want string
+	}{
+		{name: "host", base: "http://provider.test:8000", path: "/chat/completions", want: "http://provider.test:8000/v1/chat/completions"},
+		{name: "host slash", base: "http://provider.test:8000/", path: "/chat/completions", want: "http://provider.test:8000/v1/chat/completions"},
+		{name: "v1", base: "http://provider.test:8000/v1", path: "/chat/completions", want: "http://provider.test:8000/v1/chat/completions"},
+		{name: "v1 slash", base: "http://provider.test:8000/v1/", path: "/chat/completions", want: "http://provider.test:8000/v1/chat/completions"},
+		{name: "path carries v1beta", base: "http://provider.test:8000", path: "/v1beta/models/model", want: "http://provider.test:8000/v1beta/models/model"},
+		{name: "same v1beta is not duplicated", base: "http://provider.test:8000/v1beta", path: "/v1beta/models/model", want: "http://provider.test:8000/v1beta/models/model"},
+		{name: "path carries v2", base: "http://provider.test:8000/v1", path: "/v2/tasks", want: "http://provider.test:8000/v2/tasks"},
+		{name: "ark v3", base: "https://ark.example.com/api/v3", path: "/images/generations", want: "https://ark.example.com/api/v3/images/generations"},
+		{name: "path carries ark v3", base: "https://ark.example.com", path: "/api/v3/images/generations", want: "https://ark.example.com/api/v3/images/generations"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ChannelAPIURL(tt.base, tt.path); got != tt.want {
+				t.Fatalf("ChannelAPIURL(%q, %q) = %q, want %q", tt.base, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestChannelAPIURLForProtocolUsesGeminiDefault(t *testing.T) {
+	if got := ChannelAPIURLForProtocol("https://generativelanguage.googleapis.com", "/models/gemini:generateContent", model.ChannelInterfaceGeminiVeo); got != "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent" {
+		t.Fatalf("Gemini URL = %q", got)
+	}
+}
+
+func TestSystemChannelIDFromBaseURLSupportsShortAndLegacyProxyPaths(t *testing.T) {
+	for _, test := range []struct{ base, want string }{
+		{base: "/api/channel-1", want: "channel-1"},
+		{base: "/api/ai/system/channel-2", want: "channel-2"},
+		{base: "https://canvas.example.com/api/channel-3", want: "channel-3"},
+	} {
+		if got := systemChannelIDFromBaseURL(test.base); got != test.want {
+			t.Fatalf("systemChannelIDFromBaseURL(%q) = %q, want %q", test.base, got, test.want)
+		}
+	}
+}
+
 func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -105,6 +149,17 @@ data: [DONE]
 	if got, err := parseTextEventStream(chat, "chat-completion"); err != nil || got != "第一镜：远景" {
 		t.Fatalf("Chat stream = %q, err = %v", got, err)
 	}
+
+	claude := []byte(`event: content_block_delta
+data: {"delta":{"type":"text_delta","text":"第一镜"}}
+
+event: content_block_delta
+data: {"delta":{"type":"text_delta","text":"：远景"}}
+
+`)
+	if got, err := parseTextEventStream(claude, "claude-api"); err != nil || got != "第一镜：远景" {
+		t.Fatalf("Claude stream = %q, err = %v", got, err)
+	}
 }
 
 func TestParseAgentToolPayloadSupportsChatCompletions(t *testing.T) {
@@ -161,6 +216,59 @@ func TestParseAgentToolPayloadSupportsResponses(t *testing.T) {
 	function, _ := call["function"].(map[string]interface{})
 	if call["id"] != "call-2" || function["name"] != "canvas_apply_ops" || function["arguments"] != `{"ops":[]}` {
 		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestParseAgentToolPayloadSupportsClaude(t *testing.T) {
+	result, err := parseAgentToolPayload(map[string]interface{}{
+		"content": []interface{}{
+			map[string]interface{}{"type": "text", "text": "开始操作"},
+			map[string]interface{}{"type": "tool_use", "id": "call-3", "name": "canvas_get_state", "input": map[string]interface{}{}},
+		},
+	}, "claude-api")
+	if err != nil {
+		t.Fatalf("parseAgentToolPayload() error = %v", err)
+	}
+	if result["text"] != "开始操作" {
+		t.Fatalf("text = %v", result["text"])
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	if len(calls) != 1 {
+		t.Fatalf("toolCalls = %#v", result["toolCalls"])
+	}
+	call, _ := calls[0].(map[string]interface{})
+	function, _ := call["function"].(map[string]interface{})
+	if call["id"] != "call-3" || function["name"] != "canvas_get_state" || function["arguments"] != "{}" {
+		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestClaudeAgentBodyMapsOpenAIStyleTools(t *testing.T) {
+	body := claudeAgentBody(map[string]interface{}{
+		"messages": []interface{}{
+			map[string]interface{}{"role": "system", "content": "You are concise."},
+			map[string]interface{}{"role": "user", "content": "读取画布"},
+			map[string]interface{}{"role": "assistant", "content": nil, "tool_calls": []interface{}{map[string]interface{}{
+				"id": "call-4", "function": map[string]interface{}{"name": "canvas_get_state", "arguments": `{}`},
+			}}},
+			map[string]interface{}{"role": "tool", "tool_call_id": "call-4", "content": `{"nodes":[]}`},
+		},
+		"tools": []interface{}{map[string]interface{}{"type": "function", "function": map[string]interface{}{
+			"name": "canvas_get_state", "description": "读取画布", "parameters": map[string]interface{}{"type": "object"},
+		}}},
+		"tool_choice": "required",
+	})
+	if body["system"] != "You are concise." || body["max_tokens"] != 4096 {
+		t.Fatalf("body = %#v", body)
+	}
+	messages, _ := body["messages"].([]interface{})
+	if len(messages) != 3 {
+		t.Fatalf("messages = %#v", messages)
+	}
+	tools, _ := body["tools"].([]interface{})
+	tool, _ := tools[0].(map[string]interface{})
+	if tool["name"] != "canvas_get_state" || body["tool_choice"].(map[string]interface{})["type"] != "any" {
+		t.Fatalf("tools/choice = %#v / %#v", body["tools"], body["tool_choice"])
 	}
 }
 

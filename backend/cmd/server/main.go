@@ -98,10 +98,12 @@ func main() {
 	handler.RegisterSkillRoutes(api, svc)
 	handler.RegisterUserDataRoutes(api, svc)
 	handler.RegisterPluginRoutes(api, svc)
+	handler.RegisterProtocolRoutes(api, svc)
 	projectAPI := api.Group("")
 	projectAPI.Use(handler.RequireFeature(svc, service.FeatureShortDrama))
 	handler.RegisterProjectRoutes(projectAPI, svc)
 	handler.RegisterCanvasShareRoutes(api, svc)
+	r.NoRoute(handler.SystemProxyNoRouteHandler(svc))
 
 	log.Printf("影策 backend listening on %s", addr)
 	if err := r.Run(addr); err != nil {

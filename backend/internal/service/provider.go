@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 
 	"gorm.io/gorm"
 )
@@ -253,6 +254,7 @@ func providerPayloadErrorMessage(raw string) string {
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
+	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	var input canvasGenerationInput
 	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
 		return nil, fmt.Errorf("任务输入解析失败：%w", err)
@@ -293,7 +295,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
 		return nil, errors.New("后端生成任务缺少 Base URL、API Key 或模型名")
 	}
-	if err := validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
+	if err := s.validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
 		return nil, err
 	}
 	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
@@ -345,6 +347,12 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 }
 
 func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if adapter, ok := agentProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runDeclarativeAgentTask(ctx, input, adapter)
+	}
+	if input.AgentRequests == nil {
+		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
+	}
 	request := input.AgentRequests.ChatCompletion
 	path := "/chat/completions"
 	protocol := "chat-completion"
@@ -352,11 +360,17 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 		request = input.AgentRequests.Responses
 		path = "/responses"
 		protocol = "responses"
+	} else if input.Config.InterfaceType == string(model.ChannelInterfaceClaudeAPI) {
+		path = "/messages"
+		protocol = "claude-api"
 	}
 	if request == nil {
 		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
 	}
 	body := cloneStringAnyMap(request)
+	if protocol == "claude-api" {
+		body = claudeAgentBody(body)
+	}
 	body["model"] = input.Config.Model
 	var payload map[string]interface{}
 	err := postJSON(ctx, input.Config, path, body, &payload)
@@ -378,6 +392,152 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 		return nil, err
 	}
 	return parseAgentToolPayload(payload, protocol)
+}
+
+func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, adapter protocol.AgentAdapter) (map[string]interface{}, error) {
+	if input.AgentRequests == nil {
+		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
+	}
+	request := map[string]any{
+		"chatCompletion": input.AgentRequests.ChatCompletion,
+		"responses":      input.AgentRequests.Responses,
+	}
+	spec, err := adapter.BuildAgent(ctx, protocol.AgentRequestContext{BaseURL: input.Config.BaseURL, Model: input.Config.Model, Request: request})
+	if err != nil {
+		return nil, err
+	}
+	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := adapter.ParseAgent(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]interface{}{"mode": "text", "text": parsed.Text, "toolCalls": []interface{}{}}
+	if parsed.Reasoning != "" {
+		result["reasoning"] = parsed.Reasoning
+	}
+	calls := make([]interface{}, 0, len(parsed.ToolCalls))
+	for _, call := range parsed.ToolCalls {
+		calls = append(calls, map[string]interface{}{
+			"id":       call.ID,
+			"type":     "function",
+			"function": map[string]interface{}{"name": call.Name, "arguments": call.Arguments},
+		})
+	}
+	result["toolCalls"] = calls
+	if strings.TrimSpace(parsed.Text) == "" && len(calls) == 0 {
+		return nil, errors.New("声明式 Agent 接口没有返回内容")
+	}
+	return result, nil
+}
+
+func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{"max_tokens": 4096}
+	if messages, ok := request["messages"].([]interface{}); ok {
+		claudeMessages := make([]interface{}, 0, len(messages))
+		var system []string
+		for _, value := range messages {
+			message, _ := value.(map[string]interface{})
+			role := strings.ToLower(strings.TrimSpace(stringField(message, "role")))
+			if role == "system" {
+				if content := strings.TrimSpace(fmt.Sprint(message["content"])); content != "" {
+					system = append(system, content)
+				}
+				continue
+			}
+			if role == "tool" {
+				claudeMessages = append(claudeMessages, map[string]interface{}{"role": "user", "content": []interface{}{map[string]interface{}{
+					"type": "tool_result", "tool_use_id": stringField(message, "tool_call_id"), "content": fmt.Sprint(message["content"]),
+				}}})
+				continue
+			}
+			role = mapClaudeMessageRole(role)
+			content := message["content"]
+			if content == nil {
+				content = ""
+			}
+			if toolCalls, ok := message["tool_calls"].([]interface{}); ok && len(toolCalls) > 0 {
+				blocks := make([]interface{}, 0, len(toolCalls))
+				for _, value := range toolCalls {
+					toolCall, _ := value.(map[string]interface{})
+					function, _ := toolCall["function"].(map[string]interface{})
+					blocks = append(blocks, map[string]interface{}{
+						"type": "tool_use", "id": stringField(toolCall, "id"), "name": stringField(function, "name"), "input": claudeToolInput(function["arguments"]),
+					})
+				}
+				content = blocks
+			}
+			claudeMessages = append(claudeMessages, map[string]interface{}{"role": role, "content": content})
+		}
+		body["messages"] = claudeMessages
+		if len(system) > 0 {
+			body["system"] = strings.Join(system, "\n\n")
+		}
+	}
+	if tools, ok := request["tools"].([]interface{}); ok && len(tools) > 0 {
+		claudeTools := make([]interface{}, 0, len(tools))
+		for _, value := range tools {
+			tool, _ := value.(map[string]interface{})
+			function, _ := tool["function"].(map[string]interface{})
+			if len(function) == 0 {
+				continue
+			}
+			claudeTools = append(claudeTools, map[string]interface{}{
+				"name": stringField(function, "name"), "description": stringField(function, "description"), "input_schema": function["parameters"],
+			})
+		}
+		if len(claudeTools) > 0 {
+			body["tools"] = claudeTools
+		}
+	}
+	if choice, ok := request["tool_choice"]; ok {
+		body["tool_choice"] = claudeToolChoice(choice)
+	}
+	return body
+}
+
+func mapClaudeMessageRole(role string) string {
+	if role == "assistant" {
+		return "assistant"
+	}
+	return "user"
+}
+
+func claudeToolInput(value interface{}) interface{} {
+	if raw, ok := value.(string); ok {
+		var parsed interface{}
+		if json.Unmarshal([]byte(raw), &parsed) == nil && parsed != nil {
+			return parsed
+		}
+	}
+	if value != nil {
+		return value
+	}
+	return map[string]interface{}{}
+}
+
+func claudeToolChoice(value interface{}) interface{} {
+	switch choice := value.(type) {
+	case string:
+		switch strings.ToLower(strings.TrimSpace(choice)) {
+		case "required":
+			return map[string]interface{}{"type": "any"}
+		case "none":
+			return map[string]interface{}{"type": "auto"}
+		default:
+			return map[string]interface{}{"type": "auto"}
+		}
+	case map[string]interface{}:
+		if function, ok := choice["function"].(map[string]interface{}); ok && stringField(function, "name") != "" {
+			return map[string]interface{}{"type": "tool", "name": stringField(function, "name")}
+		}
+		if name := stringField(choice, "name"); name != "" {
+			return map[string]interface{}{"type": "tool", "name": name}
+		}
+	}
+	return map[string]interface{}{"type": "auto"}
 }
 
 func isAgentToolChoiceCompatibilityError(err error) bool {
@@ -416,6 +576,28 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 			calls = append(calls, map[string]interface{}{"id": firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), "type": "function", "function": map[string]interface{}{"name": stringField(item, "name"), "arguments": stringField(item, "arguments")}})
 		}
 		result["toolCalls"] = calls
+		return result, nil
+	}
+	if protocol == "claude-api" {
+		content := interfaceSlice(payload["content"])
+		calls := make([]interface{}, 0)
+		for _, value := range content {
+			item, _ := value.(map[string]interface{})
+			switch stringField(item, "type") {
+			case "text":
+				result["text"] = result["text"].(string) + stringField(item, "text")
+			case "tool_use":
+				arguments, err := json.Marshal(item["input"])
+				if err != nil {
+					return nil, err
+				}
+				calls = append(calls, map[string]interface{}{"id": stringField(item, "id"), "type": "function", "function": map[string]interface{}{"name": stringField(item, "name"), "arguments": string(arguments)}})
+			}
+		}
+		result["toolCalls"] = calls
+		if result["text"] == "" && len(calls) == 0 {
+			return nil, errors.New("Claude Agent 接口没有返回内容")
+		}
 		return result, nil
 	}
 	choices := interfaceSlice(payload["choices"])
@@ -877,6 +1059,8 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	// 模型协议是实际请求契约；混合渠道中鉴权格式也必须随模型协议切换。
 	if config.InterfaceType == string(model.ChannelInterfaceGeminiVeo) || config.InterfaceType == string(model.ChannelInterfaceGeminiImage) {
 		config.APIFormat = "gemini"
+	} else if config.InterfaceType == string(model.ChannelInterfaceClaudeAPI) {
+		config.APIFormat = "claude"
 	} else if config.InterfaceType != "" {
 		config.APIFormat = "openai"
 	}
@@ -900,21 +1084,37 @@ func providerChannelModelKey(config providerConfig) string {
 
 func systemChannelIDFromBaseURL(baseURL string) string {
 	value := strings.TrimSpace(baseURL)
-	for _, marker := range []string{"/api/ai/system/", "api/ai/system/"} {
-		index := strings.Index(value, marker)
+	lowerValue := strings.ToLower(value)
+	for _, marker := range []string{"/api/ai/system/", "/api/"} {
+		index := strings.LastIndex(lowerValue, marker)
 		if index < 0 {
 			continue
 		}
 		id := strings.Trim(value[index+len(marker):], "/")
-		if slash := strings.Index(id, "/"); slash >= 0 {
-			id = id[:slash]
+		if queryIndex := strings.IndexAny(id, "?#"); queryIndex >= 0 {
+			id = id[:queryIndex]
 		}
-		return strings.TrimSpace(id)
+		if slash := strings.Index(id, "/"); slash >= 0 {
+			continue
+		}
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		switch strings.ToLower(id) {
+		case "v1", "v1beta", "v2", "v3", "plan", "ai":
+			continue
+		default:
+			return id
+		}
 	}
 	return ""
 }
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runDeclarativeProtocolTask(ctx, input)
+	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
 		return runGrokImageTask(ctx, input)
 	}
@@ -1390,11 +1590,16 @@ func normalizeVolcengineArkImageSize(value string) string {
 }
 
 func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runDeclarativeProtocolTask(ctx, input)
+	}
 	switch input.Config.InterfaceType {
 	case "chat-completion":
 		return runChatCompletionsTextTask(ctx, input)
 	case "openai-response":
 		return runResponsesTextTask(ctx, input)
+	case string(model.ChannelInterfaceClaudeAPI):
+		return runClaudeTextTask(ctx, input)
 	}
 	return runLegacyTextTask(ctx, input)
 }
@@ -1449,6 +1654,68 @@ func runChatCompletionsTextTask(ctx context.Context, input canvasGenerationInput
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "text", "text": text}, nil
+}
+
+func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if len(input.ReferenceVideos) > 0 {
+		return nil, errors.New("Claude API 当前不支持视频参考输入")
+	}
+	messages := make([]map[string]interface{}, 0, len(input.TextHistory)+1)
+	for _, message := range validatedTextHistory(input.TextHistory) {
+		messages = append(messages, message)
+	}
+	content, err := claudeTextContent(input)
+	if err != nil {
+		return nil, err
+	}
+	messages = append(messages, map[string]interface{}{"role": "user", "content": content})
+	body := map[string]interface{}{"model": input.Config.Model, "max_tokens": 4096, "messages": messages}
+	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
+		body["system"] = systemPrompt
+	}
+	text, err := requestTextProvider(ctx, input.Config, "/messages", body, "claude-api", input.StreamText)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"mode": "text", "text": text}, nil
+}
+
+func claudeTextContent(input canvasGenerationInput) (interface{}, error) {
+	if len(input.ReferenceImages) == 0 {
+		return input.Prompt, nil
+	}
+	content := []map[string]interface{}{{"type": "text", "text": input.Prompt}}
+	for _, image := range input.ReferenceImages {
+		value, err := openAIImageInputURL(image)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasPrefix(value, "data:") {
+			mimeType, data, ok := splitDataURL(value)
+			if !ok {
+				return nil, errors.New("Claude 参考图片 data URL 无效")
+			}
+			content = append(content, map[string]interface{}{"type": "image", "source": map[string]interface{}{"type": "base64", "media_type": mimeType, "data": data}})
+		} else {
+			content = append(content, map[string]interface{}{"type": "image", "source": map[string]interface{}{"type": "url", "url": value}})
+		}
+	}
+	return content, nil
+}
+
+func splitDataURL(value string) (string, string, bool) {
+	if !strings.HasPrefix(value, "data:") {
+		return "", "", false
+	}
+	separator := strings.Index(value, ",")
+	if separator <= len("data:") {
+		return "", "", false
+	}
+	header := strings.TrimPrefix(value[:separator], "data:")
+	if !strings.HasSuffix(header, ";base64") {
+		return "", "", false
+	}
+	return strings.TrimSuffix(header, ";base64"), value[separator+1:], value[separator+1:] != ""
 }
 
 func textResponseInput(input canvasGenerationInput) (interface{}, error) {
@@ -1573,6 +1840,9 @@ func shouldFallbackTextToChat(err error) bool {
 }
 
 func runAudioTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runDeclarativeProtocolTask(ctx, input)
+	}
 	if resolved, ok := input.Metadata["resolvedCharacterVersions"].([]interface{}); ok && len(resolved) > 0 {
 		voiceKey := metadataString(input.Metadata, "resolvedCharacterVoiceKey")
 		if voiceKey == "" || strings.TrimSpace(input.Config.AudioVoice) != voiceKey {
@@ -1605,6 +1875,215 @@ func runAudioTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "audio", "audio": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType, "format": format}}, nil
+}
+
+// runDeclarativeProtocolTask is the host runtime for JSON manifest plugins.
+// Manifest code only describes request/response mapping; credentials, outbound
+// policy, polling and result downloads remain owned by the host.
+func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType)
+	if !ok {
+		return nil, fmt.Errorf("接口类型 %s 未安装声明式适配器", input.Config.InterfaceType)
+	}
+	request := protocolRequestFromInput(input)
+	taskID := resumedProviderRequestID(ctx)
+	var created protocol.CreateResult
+	if taskID == "" {
+		spec, err := adapter.BuildCreate(ctx, protocol.RequestContext{BaseURL: input.Config.BaseURL, Request: request})
+		if err != nil {
+			return nil, err
+		}
+		body, err := executeProtocolRequest(ctx, input.Config, spec)
+		if err != nil {
+			return nil, err
+		}
+		created, err = adapter.ParseCreate(ctx, body)
+		if err != nil {
+			return nil, err
+		}
+		taskID = created.TaskID
+		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
+			return nil, protocolResultError(created.Message, taskID)
+		}
+		if created.Status == protocol.StatusSucceeded {
+			return finishProtocolResult(ctx, input.Config, input.Mode, created.Result)
+		}
+		if taskID == "" {
+			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
+		}
+	}
+
+	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
+		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
+		if err != nil {
+			return nil, err
+		}
+		body, err := executeProtocolRequest(ctx, input.Config, spec)
+		if err != nil {
+			return nil, err
+		}
+		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, body)
+		if err != nil {
+			return nil, err
+		}
+		if state.TaskID != "" {
+			taskID = state.TaskID
+		}
+		switch state.Status {
+		case protocol.StatusSucceeded:
+			return finishProtocolResult(ctx, input.Config, input.Mode, state.Result)
+		case protocol.StatusFailed, protocol.StatusCancelled:
+			return nil, protocolResultError(state.Message, taskID)
+		}
+		if err := sleepContext(ctx, 2500*time.Millisecond); err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("声明式协议任务超时（任务 %s）", taskID)
+}
+
+func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
+	request := protocol.GenerationRequest{
+		Model:         input.Config.Model,
+		Prompt:        input.Prompt,
+		Images:        protocolMediaReferences(input.ReferenceImages, "image"),
+		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
+		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
+		AspectRatio:   input.Config.Size,
+		Resolution:    input.Config.VQuality,
+		Quality:       input.Config.Quality,
+		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),
+		Watermark:     parseBool(input.Config.VideoWatermark, false),
+		Operation:     metadataString(input.Metadata, "videoOperation"),
+		Extra: map[string]any{
+			"videoSeconds": input.Config.VideoSeconds,
+			"audioVoice":   input.Config.AudioVoice,
+			"audioFormat":  input.Config.AudioFormat,
+			"count":        input.Config.Count,
+		},
+	}
+	if duration, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds)); err == nil && duration > 0 {
+		request.Duration = duration
+	}
+	if count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count)); err == nil && count > 0 {
+		request.ImageCount = count
+	}
+	return request
+}
+
+func protocolMediaReferences(values []providerMedia, kind string) []protocol.MediaReference {
+	result := make([]protocol.MediaReference, 0, len(values))
+	for _, value := range values {
+		item := protocol.MediaReference{URL: strings.TrimSpace(value.URL), DataURL: strings.TrimSpace(value.DataURL), Kind: kind}
+		if item.URL != "" || item.DataURL != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func executeProtocolRequest(ctx context.Context, config providerConfig, spec protocol.RequestSpec) ([]byte, error) {
+	if err := spec.Validate(); err != nil {
+		return nil, err
+	}
+	method := strings.ToUpper(strings.TrimSpace(spec.Method))
+	var body io.Reader
+	if spec.Body != nil {
+		contentType := strings.ToLower(strings.TrimSpace(strings.Split(spec.ContentType, ";")[0]))
+		if contentType != "" && contentType != "application/json" {
+			return nil, fmt.Errorf("声明式协议暂不支持 %s 请求体", spec.ContentType)
+		}
+		data, err := json.Marshal(spec.Body)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(data)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, apiURL(config.BaseURL, spec.Path), body)
+	if err != nil {
+		return nil, err
+	}
+	applyProviderAuth(req, config)
+	if spec.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for name, value := range spec.Headers {
+		req.Header.Set(name, value)
+	}
+	ApplyOutboundHeaders(req, config.Headers)
+	data, _, err := doBinary(req)
+	return data, err
+}
+
+func finishProtocolResult(ctx context.Context, config providerConfig, mode string, result *protocol.Result) (map[string]interface{}, error) {
+	if result == nil {
+		return nil, errors.New("声明式协议已完成但没有返回结果")
+	}
+	if mode == "text" {
+		output := map[string]interface{}{"mode": "text", "text": result.Text}
+		if strings.TrimSpace(result.Reasoning) != "" {
+			output["reasoning"] = result.Reasoning
+		}
+		return output, nil
+	}
+	var references []protocol.MediaReference
+	switch mode {
+	case "image":
+		references = result.Images
+	case "video":
+		references = result.Videos
+	case "audio":
+		references = result.Audios
+	default:
+		return nil, fmt.Errorf("声明式协议不支持生成模式 %s", mode)
+	}
+	if len(references) == 0 {
+		return nil, errors.New("声明式协议已完成但没有返回媒体地址")
+	}
+	items := make([]interface{}, 0, len(references))
+	for _, reference := range references {
+		data, mimeType, err := protocolMediaBytes(ctx, config, reference)
+		if err != nil {
+			return nil, err
+		}
+		item := map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}
+		items = append(items, item)
+	}
+	switch mode {
+	case "image":
+		return map[string]interface{}{"mode": "image", "images": items}, nil
+	case "video":
+		return map[string]interface{}{"mode": "video", "video": items[0]}, nil
+	default:
+		return map[string]interface{}{"mode": "audio", "audio": items[0]}, nil
+	}
+}
+
+func protocolMediaBytes(ctx context.Context, config providerConfig, reference protocol.MediaReference) ([]byte, string, error) {
+	if strings.TrimSpace(reference.DataURL) != "" {
+		mimeType, data, err := decodeProviderDataURL(reference.DataURL)
+		return data, mimeType, err
+	}
+	value := strings.TrimSpace(reference.URL)
+	if value == "" {
+		return nil, "", errors.New("声明式协议媒体结果地址为空")
+	}
+	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+	if err != nil {
+		return nil, "", fmt.Errorf("声明式协议媒体结果下载失败：%w", err)
+	}
+	return data, normalizedMediaMimeType(mimeType, data), nil
+}
+
+func protocolResultError(message, taskID string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "上游返回失败状态"
+	}
+	if taskID == "" {
+		return errors.New(message)
+	}
+	return fmt.Errorf("声明式协议任务失败（任务 %s）：%s", taskID, message)
 }
 
 func runAsyncAudioTask(ctx context.Context, input canvasGenerationInput, body map[string]interface{}, format string) (map[string]interface{}, error) {
@@ -1808,6 +2287,9 @@ func audioFormatMimeType(format string) string {
 }
 
 func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		return runDeclarativeProtocolTask(ctx, input)
+	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceMiniMaxVideo) {
 		return runMiniMaxVideoTask(ctx, input)
 	}
@@ -2306,11 +2788,7 @@ func getGeminiBinary(ctx context.Context, config providerConfig, rawURL string) 
 }
 
 func geminiVeoURL(baseURL string, path string) string {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if !strings.HasSuffix(strings.ToLower(base), "/v1beta") {
-		base += "/v1beta"
-	}
-	return base + "/" + strings.TrimLeft(path, "/")
+	return apiURLWithDefaultPrefix(baseURL, path, "/v1beta")
 }
 
 func findProviderMediaURL(value interface{}) string {
@@ -2798,20 +3276,39 @@ func firstNonEmptyString(values ...string) string {
 }
 
 func validateGenerationInterface(mode string, interfaceType string) error {
+	return validateGenerationInterfaceWithRegistry(protocol.Builtins(), mode, interfaceType)
+}
+
+func (s *Service) validateGenerationInterface(mode string, interfaceType string) error {
+	return validateGenerationInterfaceWithRegistry(s.protocolRegistry(), mode, interfaceType)
+}
+
+func validateGenerationInterfaceWithRegistry(registry *protocol.Registry, mode string, interfaceType string) error {
 	interfaceType = strings.TrimSpace(interfaceType)
 	if interfaceType == "" {
 		return nil
 	}
-	allowed := map[string]map[string]bool{
-		"text":  {"chat-completion": true, "openai-response": true},
-		"image": {"openai-image": true, "grok-image": true, "volcengine-ark-image": true, "volcengine-jimeng-image": true, "gemini-image": true},
-		"video": {"newapi": true, "newapi-channel-1": true, "newapi-channel-2": true, "xai-video": true, "volcengine-ark-video": true, "volcengine-jimeng-video": true, "gemini-veo": true, "novita-video": true, "minimax-video": true},
-		"audio": {"openai-audio": true, "async-audio": true},
+	adapter, ok := registry.Resolve(interfaceType)
+	if !ok {
+		return fmt.Errorf("接口类型 %s 未安装", interfaceType)
 	}
-	if allowed[mode] != nil && !allowed[mode][interfaceType] {
+	metadata := adapter.Metadata()
+	if !metadata.Enabled || metadata.UnavailableReason != "" {
+		return fmt.Errorf("接口类型 %s 当前不可用：%s", interfaceType, metadata.UnavailableReason)
+	}
+	if mode != "" && !protocolCapabilityMatches(metadata, protocol.Capability(mode)) {
 		return fmt.Errorf("接口类型 %s 不支持%s生成", interfaceType, mode)
 	}
 	return nil
+}
+
+func protocolCapabilityMatches(metadata protocol.Metadata, capability protocol.Capability) bool {
+	for _, item := range metadata.Categories {
+		if item == capability {
+			return true
+		}
+	}
+	return false
 }
 
 func grokVideoBody(input canvasGenerationInput) (map[string]interface{}, error) {
@@ -3076,6 +3573,17 @@ func postStreamingText(ctx context.Context, config providerConfig, path string, 
 }
 
 func extractTextPayload(payload map[string]interface{}, protocol string) string {
+	if protocol == "claude-api" {
+		content, _ := payload["content"].([]interface{})
+		var result strings.Builder
+		for _, item := range content {
+			record, _ := item.(map[string]interface{})
+			if stringField(record, "type") == "text" {
+				result.WriteString(stringField(record, "text"))
+			}
+		}
+		return result.String()
+	}
 	if protocol == "responses" {
 		text := stringField(payload, "output_text")
 		if text == "" {
@@ -3131,6 +3639,11 @@ func parseTextEventStream(data []byte, protocol string) (string, error) {
 		}
 		if protocol == "responses" {
 			text.WriteString(stringField(payload, "delta"))
+		} else if protocol == "claude-api" {
+			delta, _ := payload["delta"].(map[string]interface{})
+			if stringField(delta, "type") == "text_delta" {
+				text.WriteString(stringField(delta, "text"))
+			}
 		} else {
 			choices, _ := payload["choices"].([]interface{})
 			for _, choice := range choices {
@@ -3193,7 +3706,7 @@ func postStreamingBinary(ctx context.Context, config providerConfig, path string
 	if err != nil {
 		return nil, "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	applyProviderAuth(req, config)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	ApplyOutboundHeaders(req, config.Headers)
@@ -3206,10 +3719,23 @@ func postJSON(ctx context.Context, config providerConfig, path string, body inte
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	applyProviderAuth(req, config)
 	req.Header.Set("Content-Type", "application/json")
 	ApplyOutboundHeaders(req, config.Headers)
 	return doJSON(req, target)
+}
+
+func applyProviderAuth(req *http.Request, config providerConfig) {
+	if config.APIFormat == "claude" {
+		req.Header.Set("x-api-key", config.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		return
+	}
+	if config.APIFormat == "gemini" {
+		req.Header.Set("x-goog-api-key", config.APIKey)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 }
 
 func postForm(ctx context.Context, config providerConfig, path string, contentType string, body io.Reader, target interface{}) error {
@@ -3269,7 +3795,7 @@ func getProviderExternalBinary(ctx context.Context, config providerConfig, rawUR
 		return nil, "", err
 	}
 	if sameProviderOrigin(config.BaseURL, rawURL) {
-		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+		applyProviderAuth(req, config)
 		ApplyOutboundHeaders(req, config.Headers)
 	}
 	return doBinary(req)
@@ -3548,17 +4074,73 @@ func providerRequestKind(method string, path string) string {
 }
 
 func apiURL(baseURL string, path string) string {
+	return apiURLWithDefaultPrefix(baseURL, path, "/v1")
+}
+
+// ChannelAPIURL is the single URL join point for provider requests. A channel
+// may be configured as host, host/, host/v1 or host/v1/; callers should pass
+// protocol paths without hard-coding a version prefix whenever possible.
+func ChannelAPIURL(baseURL string, path string) string {
+	return apiURL(baseURL, path)
+}
+
+// ChannelAPIURLForProtocol keeps protocol-specific defaults at the transport
+// boundary. In particular, Gemini uses v1beta while OpenAI-compatible APIs
+// conventionally use v1. An explicit version in either input wins.
+func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.ChannelInterfaceType) string {
+	defaultPrefix := "/v1"
+	if interfaceType == model.ChannelInterfaceGeminiVeo || interfaceType == model.ChannelInterfaceGeminiImage {
+		defaultPrefix = "/v1beta"
+	}
+	return apiURLWithDefaultPrefix(baseURL, path, defaultPrefix)
+}
+
+var channelAPIPrefixes = []string{"/api/plan/v3", "/api/v3", "/v1beta", "/v1", "/v2", "/v3"}
+
+func apiURLWithDefaultPrefix(baseURL string, path string, defaultPrefix string) string {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if strings.HasPrefix(path, "/v2/") {
-		if strings.HasSuffix(base, "/v2") {
-			return base + strings.TrimPrefix(path, "/v2")
+	requestPath := strings.TrimSpace(path)
+	if requestPath == "" {
+		return base
+	}
+	if !strings.HasPrefix(requestPath, "/") {
+		requestPath = "/" + requestPath
+	}
+
+	requestPrefix := requestAPIPathPrefix(requestPath)
+	basePrefix := baseAPIPathPrefix(base)
+	if requestPrefix != "" {
+		if basePrefix == requestPrefix {
+			return base + strings.TrimPrefix(requestPath, requestPrefix)
 		}
-		return base + path
+		// An explicit request version takes precedence over a version accidentally
+		// left on the configured base URL (for example base=/v1, path=/v2/...).
+		return strings.TrimSuffix(base, basePrefix) + requestPath
 	}
-	if strings.HasSuffix(base, "/v1") || strings.HasSuffix(base, "/v1beta") || strings.HasSuffix(base, "/v2") || strings.HasSuffix(base, "/api/v3") || strings.HasSuffix(base, "/api/plan/v3") {
-		return base + path
+	if basePrefix != "" {
+		return base + requestPath
 	}
-	return base + "/v1" + path
+	return base + defaultPrefix + requestPath
+}
+
+func requestAPIPathPrefix(value string) string {
+	lower := strings.ToLower(value)
+	for _, prefix := range channelAPIPrefixes {
+		if lower == prefix || strings.HasPrefix(lower, prefix+"/") || strings.HasPrefix(lower, prefix+"?") || strings.HasPrefix(lower, prefix+"#") {
+			return prefix
+		}
+	}
+	return ""
+}
+
+func baseAPIPathPrefix(value string) string {
+	lower := strings.ToLower(strings.TrimRight(value, "/"))
+	for _, prefix := range channelAPIPrefixes {
+		if lower == prefix || strings.HasSuffix(lower, prefix) {
+			return prefix
+		}
+	}
+	return ""
 }
 
 func writeField(writer *multipart.Writer, key string, value string) {

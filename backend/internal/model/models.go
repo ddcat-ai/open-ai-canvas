@@ -64,6 +64,7 @@ const (
 
 	ChannelInterfaceChatCompletion        ChannelInterfaceType = "chat-completion"
 	ChannelInterfaceOpenAIResponse        ChannelInterfaceType = "openai-response"
+	ChannelInterfaceClaudeAPI             ChannelInterfaceType = "claude-api"
 	ChannelInterfaceOpenAIImage           ChannelInterfaceType = "openai-image"
 	ChannelInterfaceGrokImage             ChannelInterfaceType = "grok-image"
 	ChannelInterfaceVolcengineArkImage    ChannelInterfaceType = "volcengine-ark-image"
@@ -80,6 +81,7 @@ const (
 	ChannelInterfaceGeminiVeo             ChannelInterfaceType = "gemini-veo"
 	ChannelInterfaceNovitaVideo           ChannelInterfaceType = "novita-video"
 	ChannelInterfaceMiniMaxVideo          ChannelInterfaceType = "minimax-video"
+	ChannelInterfaceAgnesVideo            ChannelInterfaceType = "agnes-video"
 
 	ApiCallStatusSucceeded ApiCallStatus = "succeeded"
 	ApiCallStatusFailed    ApiCallStatus = "failed"
