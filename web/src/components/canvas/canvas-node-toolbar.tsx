@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { App, Button, Dropdown, Input, Modal, Segmented, Tag } from "antd";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { App, Button, Dropdown, Input, Modal, Tag } from "antd";
 import type { MenuProps } from "antd";
 import { ChevronDown, Ellipsis, Lock, Plus, Unlock } from "lucide-react";
 
@@ -346,32 +346,12 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
 
 export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, readOnly = false, onUnauthorized }: { node: CanvasNodeData | null; open: boolean; onClose: () => void; onMetadataChange?: (nodeId: string, metadata: Partial<CanvasNodeMetadata>) => void; readOnly?: boolean; onUnauthorized?: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const [view, setView] = useState<"info" | "json">("info");
     const [assetTags, setAssetTags] = useState<string[]>([]);
     const [assetTagInput, setAssetTagInput] = useState("");
     const [assetCategory, setAssetCategory] = useState<CanvasAssetCategory>("other");
     const imageBytes = node?.type === CanvasNodeType.Image && node.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = node?.type === CanvasNodeType.Image ? node.metadata?.batchChildIds?.length || 0 : 0;
     const nodeTypeLabel = node?.type === CanvasNodeType.Text ? "文本" : node?.type === CanvasNodeType.Script ? "分镜脚本" : node?.type === CanvasNodeType.Skill ? "技能" : node?.type === CanvasNodeType.Image ? "图片" : node?.type === CanvasNodeType.Video ? "视频" : node?.type === CanvasNodeType.Audio ? "音频" : node?.type === CanvasNodeType.Drawing ? "绘图" : node?.type === CanvasNodeType.Frame ? "背板" : "生成配置";
-    const json = useMemo(() => {
-        if (!node) return "";
-        return JSON.stringify(
-            node,
-            (key, value) => {
-                if (key === "title") return undefined;
-                if (key === "content" && typeof value === "string" && value.startsWith("data:image/")) {
-                    return "[base64 image]";
-                }
-                return value;
-            },
-            2,
-        );
-    }, [node]);
-
-    useEffect(() => {
-        if (open) setView("info");
-    }, [node?.id, open]);
-
     useEffect(() => {
         setAssetTags(node?.metadata?.assetTags || []);
         setAssetTagInput("");
@@ -411,15 +391,6 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                 <div className="text-[var(--fs-heading-lg)] font-semibold">节点信息</div>
                 {node ? <div className="canvas-node-inspector-id">{node.id}</div> : null}
             </div>
-            <Segmented
-                size="small"
-                value={view}
-                onChange={(value) => setView(value as "info" | "json")}
-                options={[
-                    { label: "信息", value: "info" },
-                    { label: "JSON", value: "json" },
-                ]}
-            />
         </div>
     );
 
@@ -431,11 +402,11 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
             centered
             footer={null}
             onCancel={onClose}
+            width="min(920px, calc(100vw - 32px))"
             styles={{ body: { paddingTop: 4 } }}
         >
             {node ? (
                 <div className="canvas-node-inspector" style={{ color: theme.node.text }}>
-                    {view === "info" ? (
                         <div className="thin-scrollbar canvas-node-inspector-scroll">
                             <section className="canvas-node-inspector-section">
                                 <div className="canvas-node-inspector-section-heading"><span>基础信息</span><em>{node.metadata?.status || "idle"}</em></div>
@@ -464,7 +435,16 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                             {node.metadata?.prompt ? (
                                 <section className="canvas-node-inspector-section">
                                     <div className="canvas-node-inspector-section-heading"><span>提示词</span></div>
-                                    <div className="canvas-node-inspector-copy">{node.metadata.prompt}</div>
+                                    <div className="canvas-node-inspector-copy canvas-node-inspector-prompt">{node.metadata.prompt}</div>
+                                </section>
+                            ) : null}
+
+                            {nodeGenerationRows(node).length ? (
+                                <section className="canvas-node-inspector-section">
+                                    <div className="canvas-node-inspector-section-heading"><span>生成信息</span></div>
+                                    <div className="canvas-node-inspector-facts">
+                                        {nodeGenerationRows(node).map((item) => <InfoRow key={item.label} label={item.label} value={item.value} />)}
+                                    </div>
                                 </section>
                             ) : null}
 
@@ -520,11 +500,6 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                 </section>
                             ) : null}
                         </div>
-                    ) : (
-                        <pre className="thin-scrollbar canvas-node-inspector-json" style={{ color: theme.node.text }}>
-                            {json}
-                        </pre>
-                    )}
                 </div>
             ) : null}
         </Modal>
@@ -538,4 +513,42 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
             <strong>{value}</strong>
         </div>
     );
+}
+
+function nodeGenerationRows(node: CanvasNodeData) {
+    const metadata = node.metadata;
+    if (!metadata) return [] as Array<{ label: string; value: string }>;
+    const rows: Array<{ label: string; value: string }> = [];
+    const add = (label: string, value: unknown) => {
+        if (value === undefined || value === null || value === "") return;
+        rows.push({ label, value: String(value) });
+    };
+    const addTime = (label: string, value?: string) => {
+        if (!value) return;
+        const timestamp = Date.parse(value);
+        add(label, Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : value);
+    };
+    const addDuration = (value?: number) => {
+        if (typeof value !== "number" || !Number.isFinite(value)) return;
+        const totalSeconds = Math.max(0, Math.round(value / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        add("耗时", minutes ? `${minutes}分 ${seconds}秒` : `${seconds}秒`);
+    };
+
+    add("模型", metadata.model);
+    add("生成尺寸", metadata.size);
+    add("分辨率", metadata.vquality || metadata.quality);
+    add("秒数", metadata.seconds ? `${metadata.seconds} 秒` : undefined);
+    add("生成声音", metadata.generateAudio === undefined ? undefined : metadata.generateAudio === "true" ? "开启" : "关闭");
+    add("水印", metadata.watermark === undefined ? undefined : metadata.watermark === "true" ? "开启" : "关闭");
+    if (metadata.references?.length) {
+        const referenceNames = metadata.references.slice(0, 3).map((reference) => reference.split("/").pop() || reference).join("、");
+        add("引用素材", `${metadata.references.length} 个${referenceNames ? `（${referenceNames}${metadata.references.length > 3 ? "…" : ""}）` : ""}`);
+    }
+    addTime("创建时间", metadata.taskCreatedAt);
+    addTime("开始时间", metadata.taskStartedAt);
+    addTime("完成时间", metadata.taskCompletedAt);
+    addDuration(metadata.taskDurationMs);
+    return rows;
 }

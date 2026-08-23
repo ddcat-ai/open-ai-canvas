@@ -161,6 +161,9 @@ export function useCanvasGenerationExecutor({
                                           taskStage: undefined,
                                           taskProgress: undefined,
                                           taskCreatedAt: undefined,
+                                          taskStartedAt: undefined,
+                                          taskCompletedAt: undefined,
+                                          taskDurationMs: undefined,
                                           errorDetails: controller.signal.aborted ? undefined : errorDetails,
                                       },
                                   }
@@ -188,7 +191,7 @@ export function useCanvasGenerationExecutor({
                     const errorDetails = generationErrorMessage(error);
                     if (isPreparingEmptyImage)
                         setNodes((current) =>
-                            current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, errorDetails } } : node)),
+                            current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, taskStartedAt: undefined, taskCompletedAt: undefined, taskDurationMs: undefined, errorDetails } } : node)),
                         );
                     finishGenerationRequest(nodeId, controller);
                     setRunningNodeId(null);
@@ -215,7 +218,7 @@ export function useCanvasGenerationExecutor({
             }
             if (controller.signal.aborted) {
                 if (isPreparingEmptyImage)
-                    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined } } : node)));
+                    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, taskStartedAt: undefined, taskCompletedAt: undefined, taskDurationMs: undefined } } : node)));
                 finishGenerationRequest(nodeId, controller);
                 setRunningNodeId(null);
                 return;
@@ -289,6 +292,9 @@ export function useCanvasGenerationExecutor({
                             delete metadata.taskStage;
                             delete metadata.taskCreatedAt;
                             delete metadata.taskUpdatedAt;
+                            delete metadata.taskStartedAt;
+                            delete metadata.taskCompletedAt;
+                            delete metadata.taskDurationMs;
                             return { ...node, metadata };
                         }),
                     );

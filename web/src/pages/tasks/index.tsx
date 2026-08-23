@@ -529,6 +529,9 @@ export default function TasksPage() {
                             <InfoItem label="模型" value={formatModelName(effectiveConfig, detailTask)} />
                             <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
                             <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
+                            <InfoItem label="开始时间" value={formatDate(detailTask.startedAt)} />
+                            <InfoItem label="完成时间" value={formatDate(detailTask.completedAt)} />
+                            <InfoItem label="耗时" value={formatTaskDuration(detailTask)} />
                             {detailTask.providerCancelStatus ? <InfoItem label="上游取消" value={providerCancelStatusLabel(detailTask)} /> : null}
                             {detailTask.providerCancelRequestedAt ? <InfoItem label="请求取消时间" value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
                         </div>
@@ -548,7 +551,8 @@ export default function TasksPage() {
                         </div>
                         {detailTask.error ? <pre className="task-detail-error max-h-28 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
-                        <DetailBlock title="输入" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.inputJson)} />
+                        <DetailBlock title="提示词" value={detailLoading ? "详情加载中..." : detailTask.prompt || "无"} tall />
+                        <TaskParameters inputJson={detailLoading ? undefined : detailTask.inputJson} />
                         <DetailBlock title="结果" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.resultJson)} />
                         <div>
                             <Typography.Text strong>日志</Typography.Text>
@@ -685,26 +689,120 @@ function formatDate(value?: string) {
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function formatTaskDuration(task: GenerationTask) {
+    if (!task.createdAt) return "-";
+    const start = new Date(task.startedAt || task.createdAt).getTime();
+    const end = task.completedAt ? new Date(task.completedAt).getTime() : task.status === "queued" || task.status === "running" ? Date.now() : Number.NaN;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "-";
+    const totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes ? `${minutes}分 ${seconds}秒` : `${seconds}秒`;
+}
+
+function InfoItem({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
     return (
         <div className="task-detail-fact min-w-0 px-3 py-2.5">
             <Typography.Text type="secondary" className="block text-xs">
                 {label}
             </Typography.Text>
-            <Typography.Text className="block truncate text-sm" title={value}>
+            <Typography.Text className={`block text-sm ${wrap ? "whitespace-pre-wrap break-words" : "truncate"}`} title={value}>
                 {value}
             </Typography.Text>
         </div>
     );
 }
 
-function DetailBlock({ title, value }: { title: string; value: string }) {
+function DetailBlock({ title, value, tall = false }: { title: string; value: string; tall?: boolean }) {
     return (
         <div>
             <Typography.Text strong>{title}</Typography.Text>
-            <pre className="mt-2 max-h-60 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100">{value}</pre>
+            <pre className={`mt-2 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100 ${tall ? "h-40 whitespace-pre-wrap break-words" : "max-h-60"}`}>{value}</pre>
         </div>
     );
+}
+
+function TaskParameters({ inputJson }: { inputJson?: string }) {
+    const fields = taskParameterFields(inputJson);
+    return (
+        <div>
+            <Typography.Text strong>参数</Typography.Text>
+            {fields.length ? (
+                <div className="task-detail-facts mt-2 grid text-sm sm:grid-cols-2">
+                    {fields.map((field) => <InfoItem key={field.label} label={field.label} value={field.value} wrap />)}
+                </div>
+            ) : (
+                <div className="mt-2 rounded-md bg-foreground/[.04] px-3 py-3 text-sm text-foreground/50">暂无参数记录</div>
+            )}
+        </div>
+    );
+}
+
+function taskParameterFields(inputJson?: string) {
+    const input = parseTaskInput(inputJson);
+    if (!input) return [];
+    const config = asRecord(input.config);
+    const fields: Array<{ label: string; value: string }> = [];
+    const add = (label: string, value: unknown) => {
+        const text = formatParameterValue(value);
+        if (text) fields.push({ label, value: text });
+    };
+
+    add("模式", input.mode);
+    add("尺寸 / 比例", config.size);
+    add("分辨率", config.vquality || config.quality);
+    add("时长", config.videoSeconds === undefined ? undefined : `${config.videoSeconds} 秒`);
+    add("生成数量", config.count);
+    add("生成声音", booleanParameter(config.videoGenerateAudio));
+    add("水印", booleanParameter(config.videoWatermark));
+    add("音色", config.audioVoice);
+    add("音频格式", config.audioFormat);
+    add("音频速度", config.audioSpeed);
+
+    add("参考图片", formatReferenceList(input.referenceImages, "图片"));
+    add("参考视频", formatReferenceList(input.referenceVideos, "视频"));
+    add("参考音频", formatReferenceList(input.referenceAudios, "音频"));
+    add("遮罩图片", formatReferenceList(input.mask ? [input.mask] : [], "遮罩"));
+    return fields;
+}
+
+function parseTaskInput(value?: string): Record<string, unknown> | null {
+    if (!value) return null;
+    try {
+        const parsed: unknown = JSON.parse(value);
+        return asRecord(parsed);
+    } catch {
+        return null;
+    }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function formatParameterValue(value: unknown) {
+    if (value === undefined || value === null || value === "") return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    return "";
+}
+
+function booleanParameter(value: unknown) {
+    if (value === true || value === "true") return "是";
+    if (value === false || value === "false") return "否";
+    return undefined;
+}
+
+function formatReferenceList(value: unknown, kind: string) {
+    if (!Array.isArray(value) || !value.length) return "无";
+    return value.map((item, index) => {
+        const reference = asRecord(item);
+        const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : `${kind}${index + 1}`;
+        const dimensions = typeof reference.width === "number" && typeof reference.height === "number" ? `${reference.width}×${reference.height}` : "";
+        const duration = typeof reference.durationMs === "number" && reference.durationMs > 0 ? `${Math.round(reference.durationMs / 100) / 10}s` : "";
+        const details = [dimensions, duration].filter(Boolean).join("，");
+        return details ? `${name}（${details}）` : name;
+    }).join("、");
 }
 
 function formatTaskJson(value?: string) {

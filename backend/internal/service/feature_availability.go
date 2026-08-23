@@ -38,8 +38,8 @@ type PublicFeatureAvailability struct {
 }
 
 func defaultFeatureAvailability() FeatureAvailability {
-	// 缺少配置代表尚未由运维接管，默认保持现有功能全部开放。
-	return FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: true, FrontendModelsEnabled: true}
+	// 缺少配置代表尚未由运维接管；前台模型需要明确配置后才开放。
+	return FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: true, FrontendModelsEnabled: false}
 }
 
 func (s *Service) FeatureAvailability() (*PublicFeatureAvailability, error) {

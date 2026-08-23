@@ -188,7 +188,9 @@ export function videoResolutionLabel(value: string) {
 export function videoSizeLabel(value: string) {
     const ratio = normalizeSeedanceRatio(value);
     if (value === "adaptive" || value === "auto") return "自适应";
-    if (ratio === value) return seedanceRatioOptions.find((item) => item.value === ratio)?.label || ratio;
+    // The compact summary must mirror the selected value (for example 16:9),
+    // while the settings panel can still use semantic labels such as 横屏.
+    if (ratio === value) return ratio;
     const size = normalizeVideoSizeValue(value);
     return sizeOptions.find((item) => item.value === size)?.label || size;
 }

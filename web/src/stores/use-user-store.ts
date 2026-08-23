@@ -41,7 +41,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     taskCenterEnabled: true,
     creditsEnabled: true,
     customChannelsEnabled: true,
-    frontendModelsEnabled: true,
+    frontendModelsEnabled: false,
     desktopLocalChannelsEnabled: false,
 };
 

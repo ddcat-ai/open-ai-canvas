@@ -152,6 +152,9 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
         taskProgress: progress,
         taskStage: task.stage,
         taskProvider: task.provider,
+        taskStartedAt: task.startedAt,
+        taskCompletedAt: task.completedAt,
+        taskDurationMs: task.startedAt && task.completedAt ? Math.max(0, Date.parse(task.completedAt) - Date.parse(task.startedAt)) : undefined,
         taskErrorCode: task.errorCode,
         taskOfficialStatus: task.officialStatus,
         taskReceiptRecorded: task.receiptRecorded,
@@ -177,6 +180,9 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
     delete next.taskProgress;
     delete next.taskStage;
     delete next.taskProvider;
+    delete next.taskStartedAt;
+    delete next.taskCompletedAt;
+    delete next.taskDurationMs;
     delete next.taskErrorCode;
     delete next.taskOfficialStatus;
     delete next.taskReceiptRecorded;

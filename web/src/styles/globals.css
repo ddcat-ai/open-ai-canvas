@@ -7266,6 +7266,8 @@
     .canvas-node-inspector-help { margin-top: 8px; color: color-mix(in srgb, currentColor 43%, transparent); font-size: var(--fs-micro); line-height: 1.55; }
     .canvas-node-inspector-copy, .canvas-node-inspector-json, .canvas-node-inspector-notice { border: 0; border-radius: var(--r-md); background: color-mix(in srgb, currentColor 4%, transparent); }
     .canvas-node-inspector-copy { padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+    .canvas-node-info-modal { width: min(920px, calc(100vw - 32px)) !important; }
+    .canvas-node-inspector-prompt { height: min(220px, 32vh); min-height: 120px; overflow: auto; }
     .canvas-node-inspector-subheading { margin: 14px 0 8px; color: color-mix(in srgb, currentColor 58%, transparent); }
     .canvas-node-inspector-tag-editor { display: flex; gap: 8px; }
     .canvas-node-inspector-tags { display: flex; min-height: 36px; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

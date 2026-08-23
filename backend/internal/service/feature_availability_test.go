@@ -11,14 +11,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestFeatureAvailabilityDefaultsToEnabled(t *testing.T) {
+func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	svc, _ := newFeatureAvailabilityTestService(t)
 
 	setting, err := svc.FeatureAvailability()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled {
+	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
@@ -34,7 +34,7 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled {
+	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
