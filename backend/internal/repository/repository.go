@@ -784,6 +784,32 @@ func (r *Repository) SaveSystemSettings(settings ...*model.SystemSetting) error 
 	})
 }
 
+func (r *Repository) ArkPrivateAssetBinding(resourceID string, projectName string) (*model.ArkPrivateAssetBinding, error) {
+	var binding model.ArkPrivateAssetBinding
+	if err := r.db.Where("resource_id = ? AND project_name = ?", resourceID, projectName).First(&binding).Error; err != nil {
+		return nil, err
+	}
+	return &binding, nil
+}
+
+// CreateArkPrivateAssetBinding establishes a single uploader for a resource
+// and Ark Project. Other workers can wait for that binding instead of
+// importing the same image repeatedly.
+func (r *Repository) CreateArkPrivateAssetBinding(binding *model.ArkPrivateAssetBinding) (bool, error) {
+	result := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "resource_id"}, {Name: "project_name"}},
+		DoNothing: true,
+	}).Create(binding)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+func (r *Repository) SaveArkPrivateAssetBinding(binding *model.ArkPrivateAssetBinding) error {
+	return r.db.Save(binding).Error
+}
+
 func (r *Repository) DeleteSystemSetting(key string) error {
 	return r.db.Delete(&model.SystemSetting{}, "key = ?", key).Error
 }

@@ -385,6 +385,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         vquality: normalizeVideoResolution(node?.metadata?.vquality ?? config.vquality ?? defaultConfig.vquality),
         videoGenerateAudio: node?.metadata?.generateAudio ?? config.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: node?.metadata?.watermark ?? config.videoWatermark ?? defaultConfig.videoWatermark,
+        videoArkPrivateAssetUpload: node?.metadata?.arkPrivateAssetUpload ?? config.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
         audioVoice: node?.metadata?.audioVoice ?? config.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node?.metadata?.audioFormat ?? config.audioFormat ?? defaultConfig.audioFormat,
         audioSpeed: node?.metadata?.audioSpeed ?? config.audioSpeed ?? defaultConfig.audioSpeed,

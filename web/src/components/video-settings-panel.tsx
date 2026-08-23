@@ -19,7 +19,7 @@ const sizeOptions = [
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark", value: string) => void;
+    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     className?: string;
@@ -117,6 +117,8 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
     const duration = normalizeSeedanceDuration(config.videoSeconds);
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
     const watermark = boolConfig(config.videoWatermark, profile.watermark.default);
+    const useArkPrivateAssets = boolConfig(config.videoArkPrivateAssetUpload, true);
+    const isArkSeedance = resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-ark-video";
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -167,6 +169,13 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                         {profile.watermark.supported ? <SwitchRow label="添加水印" checked={watermark} theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} /> : null}
                     </div>
                 </SettingGroup>
+                {isArkSeedance ? (
+                    <SettingGroup title="参考图" color={theme.node.muted}>
+                        <div className="rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
+                            <SwitchRow label="自动同步可信素材（确认拥有使用权）" checked={useArkPrivateAssets} theme={theme} onChange={(checked) => onConfigChange("videoArkPrivateAssetUpload", String(checked))} />
+                        </div>
+                    </SettingGroup>
+                ) : null}
             </div>
         </ImageSettingsTheme>
     );

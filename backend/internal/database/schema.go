@@ -39,6 +39,7 @@ func Models() []any {
 		&model.AdminAuditEvent{},
 		&model.UserDailyActivity{},
 		&model.SystemSetting{},
+		&model.ArkPrivateAssetBinding{},
 		&model.UserOSSSetting{},
 		&model.UserDailyUploadUsage{},
 		&model.Skill{},

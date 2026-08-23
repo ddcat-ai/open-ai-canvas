@@ -26,6 +26,21 @@ type SystemSetting struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// ArkPrivateAssetBinding caches the approved Ark private-library asset for an
+// immutable local Resource. Ark asset IDs are scoped to one Ark Project.
+type ArkPrivateAssetBinding struct {
+	ID           string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID       string    `json:"userId" gorm:"index;size:36"`
+	ResourceID   string    `json:"resourceId" gorm:"index;uniqueIndex:idx_ark_private_asset_binding_resource_project,priority:1;size:36"`
+	ProjectName  string    `json:"projectName" gorm:"uniqueIndex:idx_ark_private_asset_binding_resource_project,priority:2;size:160"`
+	AssetGroupID string    `json:"assetGroupId" gorm:"index;size:120"`
+	ArkAssetID   string    `json:"arkAssetId" gorm:"index;size:120"`
+	Status       string    `json:"status" gorm:"index;size:24"`
+	Error        string    `json:"error" gorm:"type:text"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
 type UserOSSSetting struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
 	UserID    string    `json:"userId" gorm:"index;size:36;index:idx_user_oss_settings_user_created,priority:1"`

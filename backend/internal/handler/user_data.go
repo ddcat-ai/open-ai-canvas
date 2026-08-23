@@ -119,6 +119,23 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"usage": usage})
 	})
+	r.POST("/resources/:id/ark-private-asset", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-ark-private-asset:"+user.ID, policy.Request.ResourceImportPerMinute, time.Minute) {
+			return
+		}
+		result, err := svc.SyncResourceToArkPrivateAsset(c.Request.Context(), user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sync": result})
+	})
 	r.POST("/resources", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

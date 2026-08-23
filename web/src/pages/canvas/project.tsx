@@ -7,7 +7,9 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { readLocalRuntimeBootstrapState } from "@/services/local-runtime-bootstrap";
 import { createCanvasGenerationLiveProjectAdapter, registerCanvasGenerationLiveProject } from "@/services/canvas-generation-consumer";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
+import { uploadImage } from "@/services/image-storage";
+import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
@@ -20,7 +22,7 @@ import { flushCanvasStorePersistence } from "@/stores/canvas/use-canvas-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { App } from "antd";
+import { App, Modal } from "antd";
 import { getNodeSpec } from "@/constant/canvas";
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
 import { CanvasConfigNodePanel } from "@/components/canvas/canvas-config-node-panel";
@@ -201,6 +203,7 @@ function InfiniteCanvasPage() {
     const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
+    const [arkPrivateAssetUploadNodeId, setArkPrivateAssetUploadNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
     const [textEditorNodeId, setTextEditorNodeId] = useState<string | null>(null);
@@ -1366,6 +1369,42 @@ function InfiniteCanvasPage() {
         [message, releaseCopiedNodesPastePriority],
     );
 
+    const uploadNodeImageToArkPrivateAsset = useCallback(async (node: CanvasNodeData) => {
+        if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
+            message.warning("请选择一张可用图片后再上传");
+            return;
+        }
+        if (arkPrivateAssetUploadNodeId === node.id) return;
+        const feedbackKey = `ark-private-asset-${node.id}`;
+        setArkPrivateAssetUploadNodeId(node.id);
+        message.loading({ key: feedbackKey, content: "正在保存并上传到方舟素材库...", duration: 0 });
+        try {
+            let resourceID = resourceIdFromStorageKey(node.metadata.storageKey);
+            if (!resourceID) {
+                const uploaded = await uploadImage(node.metadata.content);
+                resourceID = resourceIdFromStorageKey(uploaded.storageKey);
+                if (!resourceID) throw new Error("图片未能保存到系统素材库，请检查对象存储配置后重试");
+                handleConfigNodeChange(node.id, imageMetadata(uploaded));
+            }
+            await syncResourceToArkPrivateAsset(resourceID);
+            message.success({ key: feedbackKey, content: "已同步到方舟素材库，Seedance 将自动复用该素材", duration: 4 });
+        } catch (error) {
+            message.error({ key: feedbackKey, content: error instanceof Error ? error.message : "上传到方舟素材库失败", duration: 5 });
+        } finally {
+            setArkPrivateAssetUploadNodeId((current) => current === node.id ? null : current);
+        }
+    }, [arkPrivateAssetUploadNodeId, handleConfigNodeChange, message]);
+
+    const confirmUploadNodeImageToArkPrivateAsset = useCallback((node: CanvasNodeData) => {
+        Modal.confirm({
+            title: "上传到方舟素材库",
+            content: "仅可上传你拥有肖像、版权或其他合法使用权的图片。方舟审核通过后，Seedance 会使用受控素材标识生成视频。",
+            okText: "确认拥有使用权并上传",
+            cancelText: "取消",
+            onOk: () => uploadNodeImageToArkPrivateAsset(node),
+        });
+    }, [uploadNodeImageToArkPrivateAsset]);
+
     const handleCanvasContextMenu = useCallback(
         (event: ReactMouseEvent) => {
             const target = event.target instanceof Element ? event.target : null;
@@ -2224,6 +2263,7 @@ function InfiniteCanvasPage() {
                         onCopyMediaUrl={(node) => {
                             void copyNodeMediaUrlToClipboard(node);
                         }}
+                        onUploadToArkPrivateAsset={confirmUploadNodeImageToArkPrivateAsset}
                         onSetAssetCategory={(nodeId, assetCategory) => handleConfigNodeChange(nodeId, { assetCategory })}
                         onToggleFrame={(node) => handleFrameToggle(node.id)}
                     />
