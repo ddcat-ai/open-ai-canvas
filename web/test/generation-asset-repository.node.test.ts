@@ -187,7 +187,7 @@ test("generation asset replay rejects a deterministic row deleted after its base
                 throw new Error("tombstoned generation asset must not be persisted");
             },
         } as Parameters<typeof insertOrReturnGenerationAsset>[0]),
-        /生成素材已被用户删除/,
+        /the-generated-asset-was-deleted-by-the-user/,
     );
     assert.deepEqual(assets, []);
 });
@@ -306,7 +306,7 @@ test("competing browser generation asset writes fail closed before entering stor
                 },
                 { requireCrossRealmLock: true },
             );
-        await Promise.all([assert.rejects(compete(), /跨标签存储锁/), assert.rejects(compete(), /跨标签存储锁/)]);
+        await Promise.all([assert.rejects(compete(), /cross-tab-storage-locks/), assert.rejects(compete(), /cross-tab-storage-locks/)]);
         assert.equal(entered, 0, "neither competing generation write may enter the critical section without a cross-tab lock");
     } finally {
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;

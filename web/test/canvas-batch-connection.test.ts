@@ -59,7 +59,7 @@ describe("planBatchConnections", () => {
         });
 
         expect(result.connected).toEqual(["text-a"]);
-        expect(result.skipped).toEqual([{ nodeId: "frame", reason: "背板不能作为连接源" }]);
+        expect(result.skipped).toEqual([{ nodeId: "frame", reason: "canvas:backplates-cannot-be-a-connection-source" }]);
     });
 
     it("keeps every legal graph edge when a newly created node exceeds provider reference capacity", () => {

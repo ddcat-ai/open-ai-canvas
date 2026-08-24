@@ -268,7 +268,7 @@ describe("图片参考图上限", () => {
         ];
 
         expect(canvasImageReferenceLimitError(config, references)).toContain("canvas:the-image-model-supports-at-most-param-references");
-        expect(() => assertCanvasImageReferenceLimit(config, references)).toThrow("请移除多余连线后重试");
+        expect(() => assertCanvasImageReferenceLimit(config, references)).toThrow("canvas:the-image-model-supports-at-most-param-references-param-connected-remove");
         expect(references).toHaveLength(2);
     });
 });

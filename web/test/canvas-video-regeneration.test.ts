@@ -46,12 +46,12 @@ function supportedVideoConfig(overrides: { model?: string; maxVideos?: number; m
 describe("videoReferenceRegenerationError", () => {
     test("模型不支持参考视频时返回提示", () => {
         const config: AiConfig = { ...defaultConfig, model: "default::grok-imagine-video", videoModel: "default::grok-imagine-video" };
-        expect(videoReferenceRegenerationError(config)).toContain("不支持参考视频");
+        expect(videoReferenceRegenerationError(config)).toContain("canvas:the-selected-video-model-does-not-support-reference-videos-trim-and-rege");
     });
 
     test("模型没有可用生成模式时返回提示", () => {
         const config = supportedVideoConfig({ operations: [] });
-        expect(videoReferenceRegenerationError(config)).toContain("没有可用的视频生成模式");
+        expect(videoReferenceRegenerationError(config)).toContain("canvas:the-current-video-model-has-no-available-generation-modes");
     });
 
     test("模型支持参考视频且有可用模式时无错误", () => {
@@ -62,7 +62,7 @@ describe("videoReferenceRegenerationError", () => {
 describe("videoReferenceOperationError", () => {
     test("所选模式不在模型能力中时返回提示", () => {
         const config = supportedVideoConfig({ operations: ["text_to_video", "image_to_video", "extend"] });
-        expect(videoReferenceOperationError(config, "inpaint")).toContain("不支持所选生成模式");
+        expect(videoReferenceOperationError(config, "inpaint")).toContain("canvas:the-current-video-model-does-not-support-the-selected-mode");
     });
 
     test("所选模式在模型能力中时无错误", () => {
@@ -95,12 +95,12 @@ describe("listVideoReferenceModels", () => {
 describe("videoReferenceSegmentError", () => {
     test("片段超过模型参考视频上限时返回提示", () => {
         const config = supportedVideoConfig({ maxVideoDurationSeconds: 15 });
-        expect(videoReferenceSegmentError(config, 16000)).toContain("不能超过当前模型参考视频上限（15 秒）");
+        expect(videoReferenceSegmentError(config, 16000)).toContain("canvas:segments-cannot-exceed-the-model-s-reference-video-limit-params");
     });
 
     test("Seedance 单段少于 2 秒时返回提示", () => {
         const config = supportedVideoConfig({ model: "seedance-1.0-pro" });
-        expect(videoReferenceSegmentError(config, 1500)).toContain("至少 2 秒");
+        expect(videoReferenceSegmentError(config, 1500)).toContain("canvas:seedance-reference-segments-need-at-least-2-seconds-extend-the-trim-rang");
     });
 
     test("合法片段时长无错误", () => {
@@ -115,14 +115,14 @@ describe("validateVideoSegmentBatch", () => {
 
     test("模型不支持参考视频时返回首个错误", () => {
         const config: AiConfig = { ...defaultConfig, model: "default::grok-imagine-video", videoModel: "default::grok-imagine-video" };
-        expect(validateVideoSegmentBatch(config, [{ startMs: 2000, endMs: 5000 }], "extend")).toContain("不支持参考视频");
+        expect(validateVideoSegmentBatch(config, [{ startMs: 2000, endMs: 5000 }], "extend")).toContain("canvas:the-selected-video-model-does-not-support-reference-videos-trim-and-rege");
     });
 
     test("模式不在模型能力中时返回操作错误", () => {
-        expect(validateVideoSegmentBatch(supportedVideoConfig(), [{ startMs: 2000, endMs: 5000 }], "inpaint")).toContain("不支持所选生成模式");
+        expect(validateVideoSegmentBatch(supportedVideoConfig(), [{ startMs: 2000, endMs: 5000 }], "inpaint")).toContain("canvas:the-current-video-model-does-not-support-the-selected-mode");
     });
 
     test("片段超过模型时长上限时返回片段错误", () => {
-        expect(validateVideoSegmentBatch(supportedVideoConfig({ maxVideoDurationSeconds: 15 }), [{ startMs: 0, endMs: 16000 }], "extend")).toContain("不能超过当前模型参考视频上限");
+        expect(validateVideoSegmentBatch(supportedVideoConfig({ maxVideoDurationSeconds: 15 }), [{ startMs: 0, endMs: 16000 }], "extend")).toContain("canvas:segments-cannot-exceed-the-model-s-reference-video-limit-params");
     });
 });

@@ -154,14 +154,14 @@ describe("connectionInputSummary——计数与跨类型覆盖", () => {
 
 describe("节点注册表——列表标签", () => {
     test("派生自 label，背板显式钉住不带「节点」后缀", () => {
-        expect(getNodeListLabel(CanvasNodeType.Image)).toBe("图片节点");
-        expect(getNodeListLabel(CanvasNodeType.Text)).toBe("文本节点");
-        expect(getNodeListLabel(CanvasNodeType.Drawing)).toBe("绘图节点");
-        expect(getNodeListLabel(CanvasNodeType.Script)).toBe("分镜脚本节点");
-        expect(getNodeListLabel(CanvasNodeType.Skill)).toBe("技能节点");
-        expect(getNodeListLabel(CanvasNodeType.Config)).toBe("生成配置节点");
-        expect(getNodeListLabel(CanvasNodeType.Video)).toBe("视频节点");
-        expect(getNodeListLabel(CanvasNodeType.Audio)).toBe("音频节点");
-        expect(getNodeListLabel(CanvasNodeType.Frame)).toBe("背板");
+        expect(getNodeListLabel(CanvasNodeType.Image)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Text)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Drawing)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Script)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Skill)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Config)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Video)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Audio)).toBe("canvas:param-node");
+        expect(getNodeListLabel(CanvasNodeType.Frame)).toBe("canvas:backplate");
     });
 });

@@ -39,7 +39,7 @@ describe("creation library button", () => {
         expect(source).not.toContain("onUpload={() => fileInputRef.current?.click()}");
         const zhCatalog = readFileSync(resolve(import.meta.dir, "../src/locales/zh-CN/canvas.json"), "utf8");
         expect(zhCatalog).toContain("上传后保存到素材库");
-        expect(pickerSource).toContain("保存完成后会自动选中");
+        expect(pickerSource).toContain('t("domain:automatically-selected-after-saving"');
         expect(source).toContain('t("canvas:param-assets-uploaded-to-the-library-and-selected-automatically"');
     });
 

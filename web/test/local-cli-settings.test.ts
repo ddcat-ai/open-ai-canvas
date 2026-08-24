@@ -23,8 +23,8 @@ test("Local CLI settings automatically connects without any browser-confirmation
         dreamina: undefined,
     });
     expect(obsoleteConnectionState).toMatchObject({
-        runtime: { label: "尚未检测", action: "refresh" },
-        dreamina: { label: "连接本机服务后自动检测", action: null },
+        runtime: { label: "settings:not-checked-yet", action: "refresh" },
+        dreamina: { label: "settings:detected-automatically-once-the-local-service-connects", action: null },
     });
 
     const reconnect = present({
@@ -33,8 +33,8 @@ test("Local CLI settings automatically connects without any browser-confirmation
         dreamina: undefined,
     });
     expect(reconnect).toMatchObject({
-        runtime: { label: "需要重新连接", action: "refresh", actionLabel: "重新连接" },
-        dreamina: { label: "连接本机服务后自动检测", action: null },
+        runtime: { label: "settings:reconnect-required", action: "refresh", actionLabel: "settings:reconnect" },
+        dreamina: { label: "settings:detected-automatically-once-the-local-service-connects", action: null },
     });
 
     const installed = present({
@@ -51,8 +51,8 @@ test("Local CLI settings automatically connects without any browser-confirmation
         },
     });
     expect(installed).toMatchObject({
-        runtime: { label: "已连接", action: "refresh" },
-        dreamina: { label: "未登录", action: "login" },
+        runtime: { label: "settings:connected", action: "refresh" },
+        dreamina: { label: "settings:not-signed-in", action: "login" },
     });
 
     const authenticated = present({
@@ -68,7 +68,7 @@ test("Local CLI settings automatically connects without any browser-confirmation
         },
     });
     expect(authenticated.dreamina).toMatchObject({
-        label: "已登录",
+        label: "settings:signed-in",
         action: "logout",
     });
     expect(authenticated.dreamina.creditLabel).toBeUndefined();
@@ -133,7 +133,7 @@ test("Dreamina model and credit cache scope follows accountBinding plus sessionE
         },
     });
     expect(authenticated.dreamina.creditLabel).toBe("即梦积分 24,940");
-    expect(authenticated.dreamina.creditObservedAtLabel).toBe("上次刷新积分 20:34");
+    expect(authenticated.dreamina.creditObservedAtLabel).toBe("settings:credits-last-refreshed-param");
 
     const invalidObservedAt = present({
         connection: "connected",
@@ -168,7 +168,7 @@ test("Local CLI settings keeps the Runtime compact and uses the official Dreamin
     expect(source.match(/void connect\(controller\.signal\)/g)).toHaveLength(1);
     expect(source).not.toContain("runtimeController");
     expect(source).toContain('void runDreamina("refresh")');
-    expect(source.match(/官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。/g)).toHaveLength(1);
+    expect(source.match(/official-cli-credentials-stay-on-this-machine-this-page-never-reads-or-u/g)).toHaveLength(1);
     expect(source.match(/LOCAL_CLI_SETTINGS_COPY\.dreaminaAccountSwitch/g)).toHaveLength(1);
     expect(source).not.toContain("dreaminaSafety");
     expect(source).not.toContain("Framefield 不读取或上传 Cookie、浏览器 Profile 或登录令牌。");
@@ -230,18 +230,18 @@ type PresentationResult = {
 declare function presentationContract(input: PresentationInput): PresentationResult;
 
 const compactCopyContract = {
-    runtimeTitle: "本机连接",
-    runtimeConnected: "本机服务已连接，CLI 状态会自动同步。",
-    runtimeDetecting: "正在检测本机服务；请确认已启动当前版本。",
-    runtimeReconnect: "重新连接",
-    runtimeSafety: "官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。",
-    runtimeRefresh: "刷新状态",
-    dreaminaDescription: "直接读取当前 Windows 用户的官方即梦 CLI 登录状态。",
-    dreaminaDisconnected: "连接本机服务后自动检测",
-    dreaminaDisconnectedMessage: "重新连接本机服务后，将自动读取官方 CLI 状态。",
-    dreaminaMembership: "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
-    dreaminaConsistency: "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
-    dreaminaCancel: "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
-    dreaminaAccountSwitch: "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
-    dreaminaRefresh: "刷新状态",
+    runtimeTitle: "settings:local-connection",
+    runtimeConnected: "settings:local-service-connected-cli-status-syncs-automatically",
+    runtimeDetecting: "settings:detecting-local-service-make-sure-the-current-version-is-running",
+    runtimeReconnect: "settings:reconnect",
+    runtimeSafety: "settings:official-cli-credentials-stay-on-this-machine-this-page-never-reads-or-u",
+    runtimeRefresh: "settings:refresh-status",
+    dreaminaDescription: "settings:reads-the-official-dreamina-cli-sign-in-status-for-the-current-windows-u",
+    dreaminaDisconnected: "settings:detected-automatically-once-the-local-service-connects",
+    dreaminaDisconnectedMessage: "settings:the-official-cli-status-is-read-automatically-after-reconnecting-the-loc",
+    dreaminaMembership: "settings:account-generation-permission-unknown-this-page-only-verifies-adapter-su",
+    dreaminaConsistency: "settings:task-states-are-synced-by-backend-polling-not-pushed-in-real-time-closin",
+    dreaminaCancel: "settings:the-official-dreamina-cli-offers-no-cancel-command-accepted-tasks-keep-s",
+    dreaminaAccountSwitch: "settings:do-not-switch-dreamina-cli-accounts-in-other-apps-while-local-tasks-run",
+    dreaminaRefresh: "settings:refresh-status",
 } as const;

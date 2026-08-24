@@ -36,7 +36,6 @@ export const LOCAL_CLI_SETTINGS_COPY = {
 } as const;
 
 export function localCliSettingsPresentation(input: { connection: string; moduleAvailable: boolean; dreamina?: DreaminaCliStatus; timeZone?: string }): { runtime: Presentation; dreamina: Presentation } {
-    const { t } = useTranslation("canvas");
     const runtime = runtimePresentation(input.connection as LocalRuntimeConnectionState);
     if (input.connection !== "connected") {
         return { runtime, dreamina: { label: LOCAL_CLI_SETTINGS_COPY.dreaminaDisconnected, tone: "default", action: null } };
@@ -281,7 +280,6 @@ export function LocalCliSettings() {
 }
 
 function runtimePresentation(connection: LocalRuntimeConnectionState): Presentation {
-    const { t } = useTranslation("canvas");
     if (connection === "connected") return { label: t("settings:connected"), tone: "success", action: "refresh" };
     if (connection === "connecting") return { label: t("settings:detecting"), tone: "processing", action: null };
     if (connection === "origin_not_trusted") return { label: t("settings:reconnect-required"), tone: "error", action: "refresh", actionLabel: LOCAL_CLI_SETTINGS_COPY.runtimeReconnect };
@@ -292,7 +290,6 @@ function runtimePresentation(connection: LocalRuntimeConnectionState): Presentat
 }
 
 function dreaminaEmptyMessage(connection: LocalRuntimeConnectionState, moduleAvailable: boolean) {
-    const { t } = useTranslation("canvas");
     if (connection !== "connected") return LOCAL_CLI_SETTINGS_COPY.dreaminaDisconnectedMessage;
     if (!moduleAvailable) return t("settings:the-current-runtime-has-no-dreamina-module-loaded-update-and-restart-the");
     return t("settings:detecting-dreamina-cli");
