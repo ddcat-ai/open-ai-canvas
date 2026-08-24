@@ -12,8 +12,40 @@ export type NamespaceName = (typeof NAMESPACES)[number];
 
 // Vite 构建时 import.meta.glob 被替换为静态映射；用 eager 直接把资源挂进构建产物，
 // 避免开发环境下动态 loader 的路径匹配或首帧时序导致 namespace 没有加载。
-const localeModules = (import.meta.glob as (pattern: string, options?: { eager?: boolean }) => Record<string, { default: Record<string, unknown> }>)
-    ("../locales/*/*.json", { eager: true });
+// ⚠️ 不能在模块顶层直接调用：bun test / SSR 无 import.meta.glob，测试 import 服务层
+// 就会在模块求值时崩溃。延迟到 loadLocaleResources 内，非 Vite 环境回落到 fs 读盘。
+type LocaleModuleMap = Record<string, { default: Record<string, unknown> }>;
+
+let localeModules: LocaleModuleMap | null = null;
+
+async function resolveLocaleModules(): Promise<LocaleModuleMap> {
+    if (localeModules) return localeModules;
+    const glob = (import.meta as { glob?: unknown }).glob;
+    if (typeof glob === "function") {
+        localeModules = (glob as (pattern: string, options?: { eager?: boolean }) => LocaleModuleMap)("../locales/*/*.json", { eager: true });
+        return localeModules;
+    }
+    // Node/bun（bun test / SSR）：import.meta.glob 不存在，直接读磁盘。
+    // Vite 浏览器构建不执行此分支（惰性 import 会被外部化，仅提示无害）。
+    try {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const localesDir = path.join(process.cwd(), "src", "locales");
+        const out: LocaleModuleMap = {};
+        for (const lang of fs.readdirSync(localesDir)) {
+            const langDir = path.join(localesDir, lang);
+            if (!fs.statSync(langDir).isDirectory()) continue;
+            for (const file of fs.readdirSync(langDir)) {
+                if (!file.endsWith(".json")) continue;
+                out["../locales/" + lang + "/" + file] = { default: JSON.parse(fs.readFileSync(path.join(langDir, file), "utf8")) };
+            }
+        }
+        localeModules = out;
+    } catch {
+        localeModules = {};
+    }
+    return localeModules;
+}
 
 function namespaceFromPath(path: string): string {
     const file = path.split("/").pop() || "";
@@ -21,9 +53,10 @@ function namespaceFromPath(path: string): string {
 }
 
 async function loadLocaleResources(lng: LocaleName): Promise<void> {
+    const modules = await resolveLocaleModules();
     const localePath = `/locales/${lng}/`;
     await Promise.all(
-        Object.entries(localeModules)
+        Object.entries(modules)
             .filter(([path]) => {
                 // glob 的键可能是相对路径，也可能被构建器规范化成绝对路径。
                 const normalizedPath = path.replaceAll("\\", "/");
