@@ -278,6 +278,11 @@ export default function LogicalModelsPage() {
     return (
         <AdminPageFrame
             title="前台模型目录"
+            actions={
+                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openModel()}>
+                    新增模型
+                </Button>
+            }
         >
             <AdminDataTable
                 toolbar={
