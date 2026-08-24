@@ -7,20 +7,20 @@ import "infinite-canvas/backend/internal/model"
 func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
 	switch billingMode {
 	case "fixed_request":
-		// 固定价格模式：必须配置单价且大于 0
-		return unitPrice > 0
+		// 固定价格模式：0 表示免费，负数无效。
+		return unitPrice >= 0
 	case "per_second":
-		// 按秒计费：必须配置单价且大于 0
-		return unitPrice > 0
+		// 按秒计费：0 表示免费，负数无效。
+		return unitPrice >= 0
 	case "token":
 		if capability == "video" {
-			return protocol == model.ChannelInterfaceVolcengineArkVideo && outputPrice > 0
+			return protocol == model.ChannelInterfaceVolcengineArkVideo && inputPrice >= 0 && outputPrice >= 0 && cachedPrice >= 0
 		}
 		if capability != "" && capability != "text" {
 			return false
 		}
-		// 文本模型：至少配置一项价格
-		return inputPrice > 0 || outputPrice > 0 || cachedPrice > 0
+		// 文本模型：所有 Token 价格为 0 时表示免费。
+		return inputPrice >= 0 && outputPrice >= 0 && cachedPrice >= 0
 	default:
 		return false
 	}
@@ -58,7 +58,7 @@ func HasValidPrice(channelModel *model.ChannelModel) bool {
 	// 如果有价格档，检查价格档
 	if len(channelModel.PriceTiers) > 0 {
 		for _, tier := range channelModel.PriceTiers {
-			if tier.Enabled && ValidatePriceTierPrice(&tier, channelModel.Capability, channelModel.Protocol) {
+			if tier.Enabled && tier.PriceConfigured && ValidatePriceTierPrice(&tier, channelModel.Capability, channelModel.Protocol) {
 				return true
 			}
 		}
@@ -66,7 +66,7 @@ func HasValidPrice(channelModel *model.ChannelModel) bool {
 	}
 
 	// 否则检查模型级别的价格
-	return ValidateChannelModelPrice(channelModel.BillingMode, channelModel.Capability, channelModel.Protocol, channelModel.UnitPriceMicrocredits, channelModel.InputTokenPriceMicrocredits, channelModel.OutputTokenPriceMicrocredits, channelModel.CachedTokenPriceMicrocredits)
+	return channelModel.PriceConfigured && ValidateChannelModelPrice(channelModel.BillingMode, channelModel.Capability, channelModel.Protocol, channelModel.UnitPriceMicrocredits, channelModel.InputTokenPriceMicrocredits, channelModel.OutputTokenPriceMicrocredits, channelModel.CachedTokenPriceMicrocredits)
 }
 
 // ValidateLogicalModelPrice 校验前台模型的价格配置

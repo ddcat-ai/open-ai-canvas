@@ -191,11 +191,11 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 		Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder,
 		PricePolicy: item.PricePolicy, PricingMode: pricingMode, DisplayPrice: displayPrice,
 		PriceLabel: priceLabel, BillingMode: item.BillingMode,
-		UnitPriceMicrocredits: item.UnitPriceMicrocredits,
-		InputPriceMicrocredits: item.InputPriceMicrocredits,
+		UnitPriceMicrocredits:   item.UnitPriceMicrocredits,
+		InputPriceMicrocredits:  item.InputPriceMicrocredits,
 		OutputPriceMicrocredits: item.OutputPriceMicrocredits,
 		CachedPriceMicrocredits: item.CachedPriceMicrocredits,
-		PriceTiers: priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
+		PriceTiers:              priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
 		CapabilitySpec: productSpec, CapabilityProfiles: profiles,
 		DefaultOptions: cached.Defaults, Available: available,
 	}
@@ -692,9 +692,6 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "unified" && billingMode == "token" {
 		if !supportsLogicalModelTokenBilling(capability, enabledRouteProtocols) {
 			return nil, nil, nil, false, BadAuthRequest("Token 计费仅支持文本前台模型，或全部启用供应线路均为火山方舟视频协议的视频前台模型")
-		}
-		if capability == "video" && req.OutputPriceMicrocredits <= 0 {
-			return nil, nil, nil, false, BadAuthRequest("火山方舟视频 Token 计费需要配置每百万视频 Token 价格")
 		}
 	}
 	// 停用必须始终可执行，便于管理员立即阻止失效线路继续对外服务；重新启用时再强校验结构能力和计费可用性。
