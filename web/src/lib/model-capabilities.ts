@@ -292,7 +292,10 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.generateAudio = { supported: true, default: true };
     }
     if (protocol === "volcengine-ark-video" || protocol === "newapi-channel-1") video.resolutions = ["480p", "720p", "1080p"];
-    if (protocol === "volcengine-ark-video") video.watermark = { supported: true, default: false };
+    if (protocol === "volcengine-ark-video") {
+        video.watermark = { supported: true, default: false };
+        video.operations.push("reference_to_video", "audio_to_video");
+    }
     if (protocol === "novita-video") {
         video.references.maxImages = 1;
         video.references.maxImageBytes = 10 * 1024 * 1024;

@@ -1446,12 +1446,19 @@ func TestVolcengineArkVideoProtocolUsesContentTaskAndDownloadsResult(t *testing.
 				t.Fatalf("decode request: %v", err)
 			}
 			content, _ := body["content"].([]interface{})
-			if len(content) != 2 {
+			if len(content) != 4 {
 				t.Errorf("body = %#v", body)
 				return
 			}
-			imageContent, _ := content[1].(map[string]interface{})
-			if body["model"] != "doubao-seedance-test" || imageContent["role"] != "reference_image" {
+			wantTypes := []string{"text", "image_url", "video_url", "audio_url"}
+			wantRoles := []string{"", "reference_image", "reference_video", "reference_audio"}
+			for index, item := range content {
+				entry, _ := item.(map[string]interface{})
+				if entry["type"] != wantTypes[index] || (wantRoles[index] != "" && entry["role"] != wantRoles[index]) {
+					t.Errorf("content[%d] = %#v", index, entry)
+				}
+			}
+			if body["model"] != "doubao-seedance-test" {
 				t.Errorf("body = %#v", body)
 			}
 			_, _ = w.Write([]byte(`{"id":"ark-task-1","status":"running"}`))
@@ -1470,6 +1477,8 @@ func TestVolcengineArkVideoProtocolUsesContentTaskAndDownloadsResult(t *testing.
 		Prompt:          "make it move",
 		Config:          providerConfig{BaseURL: server.URL + "/api/v3", APIKey: "test-key", Model: "doubao-seedance-test", InterfaceType: "volcengine-ark-video"},
 		ReferenceImages: []providerMedia{{ID: "start", URL: server.URL + "/reference.png"}},
+		ReferenceVideos: []providerMedia{{ID: "motion", URL: server.URL + "/reference.mp4"}},
+		ReferenceAudios: []providerMedia{{ID: "music", URL: server.URL + "/reference.mp3"}},
 		Metadata:        map[string]interface{}{"videoStartFrameNodeId": "start"},
 	})
 	if err != nil {

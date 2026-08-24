@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { unwrapEnvelope, videoTaskId } from "../src/services/api/video-response";
+import { defaultConfig } from "../src/stores/use-config-store";
+import { createSeedanceTask } from "../src/services/api/video-provider-seedance";
+import type { VideoProviderDeps } from "../src/services/api/video-provider-deps";
+import { unwrapEnvelope, videoResponseTools, videoTaskId } from "../src/services/api/video-response";
 import { isPublicMediaUrl, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "../src/services/api/video-validation";
 
 describe("video API response contracts", () => {
@@ -32,5 +35,68 @@ describe("video request normalization", () => {
         expect(isPublicMediaUrl("asset://resource-1")).toBe(false);
         expect(isPublicMediaUrl("data:video/mp4;base64,AAAA")).toBe(false);
         expect(isPublicMediaUrl("/resources/video.mp4")).toBe(false);
+    });
+});
+
+describe("Volcengine Ark full-modal references", () => {
+    const model = "seedance-2-0-250824";
+    const config = {
+        ...defaultConfig,
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        apiKey: "test-key",
+        interfaceType: "volcengine-ark-video",
+        channels: [
+            {
+                id: "ark",
+                name: "Ark",
+                baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+                apiKey: "test-key",
+                secretKey: "",
+                headers: [],
+                apiFormat: "openai",
+                interfaceType: "volcengine-ark-video",
+                models: [model],
+                scope: "user",
+                enabled: true,
+            },
+        ],
+    };
+
+    test("映射图片、视频和音频参考素材", async () => {
+        let requestUrl = "";
+        let requestBody: unknown;
+        const deps = {
+            transport: {
+                post: async (url: string, body: unknown) => {
+                    requestUrl = url;
+                    requestBody = body;
+                    return { id: "task-1", status: "queued" };
+                },
+            },
+            response: videoResponseTools,
+        } as unknown as VideoProviderDeps;
+
+        await createSeedanceTask(
+            deps,
+            config as never,
+            model,
+            "保持主体一致",
+            [{ id: "image-1", name: "image.png", type: "image/png", dataUrl: "", url: "https://cdn.example.com/image.png" }],
+            [{ id: "video-1", name: "video.mp4", type: "video/mp4", url: "https://cdn.example.com/video.mp4" }],
+            [{ id: "audio-1", name: "audio.mp3", type: "audio/mpeg", url: "https://cdn.example.com/audio.mp3" }],
+        );
+
+        expect(requestUrl).toBe("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks");
+        expect((requestBody as { content: unknown[] }).content).toEqual([
+            { type: "text", text: "保持主体一致" },
+            { type: "image_url", image_url: { url: "https://cdn.example.com/image.png" }, role: "reference_image" },
+            { type: "video_url", video_url: { url: "https://cdn.example.com/video.mp4" }, role: "reference_video" },
+            { type: "audio_url", audio_url: { url: "https://cdn.example.com/audio.mp3" }, role: "reference_audio" },
+        ]);
+    });
+
+    test("拒绝纯音频和文本加音频", async () => {
+        const deps = { transport: {}, response: videoResponseTools } as unknown as VideoProviderDeps;
+        await expect(createSeedanceTask(deps, config as never, model, "跟随节奏", [], [], [{ id: "audio-1", name: "audio.mp3", type: "audio/mpeg", url: "https://cdn.example.com/audio.mp3" }])).rejects.toThrow("不支持纯音频或文本+音频");
     });
 });

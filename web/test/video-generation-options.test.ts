@@ -22,4 +22,8 @@ describe("video generation resolution options", () => {
         expect(defaultModelCapabilityConfig("volcengine-jimeng-video").video?.resolutions).toEqual(["720p"]);
         expect(defaultModelCapabilityConfig("gemini-veo").video?.resolutions).toEqual(["720p", "1080p"]);
     });
+
+    test("火山方舟默认开启全模态参考模式", () => {
+        expect(defaultModelCapabilityConfig("volcengine-ark-video").video?.operations).toEqual(expect.arrayContaining(["reference_to_video", "audio_to_video"]));
+    });
 });

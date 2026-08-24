@@ -43,6 +43,7 @@ export const operationOptions = [
     { label: "Agent 会话：拆解影视工作流", value: "agent_session" },
     { label: "文生视频", value: "text_to_video" },
     { label: "图生视频", value: "image_to_video" },
+    { label: "全模态参考", value: "reference_to_video" },
     { label: "视频续写", value: "extend" },
     { label: "视频局部修改", value: "inpaint" },
     { label: "元素替换", value: "replace_element" },
