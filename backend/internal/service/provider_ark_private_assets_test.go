@@ -96,6 +96,18 @@ func TestArkPrivateAssetControlPlaneDisablesGenerationAnalytics(t *testing.T) {
 	}
 }
 
+func TestArkPrivateAssetAutomaticSyncIsOptionalWhenSettingDisabled(t *testing.T) {
+	enabled, err := arkPrivateAssetAutomaticSyncEnabled(arkPrivateAssetSettingValue{})
+	if err != nil || enabled {
+		t.Fatalf("arkPrivateAssetAutomaticSyncEnabled() = %v, %v; want false, nil", enabled, err)
+	}
+
+	_, err = arkPrivateAssetAutomaticSyncEnabled(arkPrivateAssetSettingValue{Enabled: true})
+	if err == nil || !strings.Contains(err.Error(), "尚未配置") {
+		t.Fatalf("enabled incomplete setting error = %v, want configuration error", err)
+	}
+}
+
 func TestArkPrivateAssetSettingsEncryptSecret(t *testing.T) {
 	svc := &Service{dataDir: t.TempDir()}
 	value, err := arkPrivateAssetSettingFromRequest(ArkPrivateAssetSettingRequest{
