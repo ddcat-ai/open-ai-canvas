@@ -67,15 +67,29 @@ export function waitForCanvasRuntimeReconnect(signal: AbortSignal, delayMs = 1_0
     });
 }
 
-export async function postCanvasRuntimeState(client: LocalRuntimeTransport, clientId: string, snapshot: unknown) {
+export type CanvasRuntimeStateResult = {
+    accepted: boolean;
+    revision: number;
+    stateHash: string;
+    idempotent?: boolean;
+    reason?: string;
+};
+
+export async function postCanvasRuntimeState(client: LocalRuntimeTransport, clientId: string, snapshot: unknown): Promise<CanvasRuntimeStateResult> {
     try {
         const response = await client.request(`/canvas/state?clientId=${encodeURIComponent(clientId)}`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(snapshot),
         });
-        if (!response.ok) throw new Error("state rejected");
-    } catch {
+        const body = await response.json().catch(() => null) as Partial<CanvasRuntimeStateResult> | null;
+        if (!response.ok && response.status !== 409) throw new Error("Canvas Agent 状态同步请求失败");
+        if (body?.accepted !== true || typeof body.revision !== "number" || typeof body.stateHash !== "string") {
+            throw new CanvasRuntimeStreamError("canvas_state_conflict", body?.reason === "stale_revision" || body?.reason === "revision_conflict" ? "画布状态已被其他操作更新，请重新读取后再试" : "画布状态同步被拒绝");
+        }
+        return { accepted: true, revision: body.revision, stateHash: body.stateHash, idempotent: body.idempotent, reason: body.reason };
+    } catch (error) {
+        if (error instanceof CanvasRuntimeStreamError) throw error;
         throw new CanvasRuntimeStreamError("canvas_state_sync_failed", "画布状态同步失败");
     }
 }

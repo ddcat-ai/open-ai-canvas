@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { ServerResponse } from "node:http";
 
 import { CANVAS_GENERATION_CONTINUATION_TIMEOUT_MS } from "./canvas-tool-timeouts.js";
-import { buildCanvasContext, findCanvasNodes, getCanvasResources, validateCanvasOps } from "./canvas-context.js";
+import { buildCanvasContext, findCanvasNodes, getCanvasConnection, getCanvasGenerationTasks, getCanvasNode, getCanvasResources, hashState, validateCanvasOps } from "./canvas-context.js";
 import { type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
 import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
@@ -52,7 +52,20 @@ export class CanvasSession {
     }
 
     updateState(body: unknown, clientId?: string) {
-        this.canvasState = { ...((body && typeof body === "object" && !Array.isArray(body) ? body : {}) as Record<string, unknown>), clientId } as CanvasSnapshot;
+        const candidate = { ...((body && typeof body === "object" && !Array.isArray(body) ? body : {}) as Record<string, unknown>), clientId } as CanvasSnapshot;
+        const incomingRevision = typeof candidate.revision === "number" && Number.isInteger(candidate.revision) && candidate.revision >= 0 ? candidate.revision : undefined;
+        const actualHash = hashState(candidate);
+        const suppliedHash = typeof (body as Record<string, unknown> | null)?.stateHash === "string" ? String((body as Record<string, unknown>).stateHash) : undefined;
+        if (suppliedHash && suppliedHash !== actualHash) return { accepted: false, revision: this.canvasState?.revision ?? 0, stateHash: this.canvasState ? hashState(this.canvasState) : actualHash, reason: "state_hash_mismatch" as const };
+        const previousState = this.canvasState;
+        const currentRevision = previousState?.revision ?? 0;
+        if (previousState) {
+            if (incomingRevision !== undefined && incomingRevision < currentRevision) return { accepted: false, revision: currentRevision, stateHash: hashState(previousState), reason: "stale_revision" as const };
+            if (incomingRevision === currentRevision && actualHash !== hashState(previousState)) return { accepted: false, revision: currentRevision, stateHash: hashState(previousState), reason: "revision_conflict" as const };
+        }
+        const revision = incomingRevision ?? (this.canvasState ? currentRevision + 1 : 0);
+        this.canvasState = { ...candidate, revision };
+        return { accepted: true, idempotent: Boolean(previousState && incomingRevision === currentRevision && actualHash === hashState(previousState)), revision, stateHash: actualHash };
     }
 
     resolveResult(body: { requestId?: string; error?: string; result?: unknown }) {
@@ -89,16 +102,23 @@ export class CanvasSession {
             if (!input.projectId) throw new Error("当前画布没有关联短剧项目");
             return await this.requestCanvasTool(tool, input);
         }
-        const readTool = ["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
+        const readTool = ["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_node", "canvas_get_connection", "canvas_get_generation_tasks", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
         if (tool === "canvas_get_state" || tool === "canvas_export_snapshot") return compactCanvasState(this.canvasState);
         if (tool === "canvas_get_context") return buildCanvasContext(this.canvasState);
         if (tool === "canvas_find_nodes") return findCanvasNodes(this.canvasState, input as Parameters<typeof findCanvasNodes>[1]);
+        if (tool === "canvas_get_node") return getCanvasNode(this.canvasState, input as Parameters<typeof getCanvasNode>[1]);
+        if (tool === "canvas_get_connection") return getCanvasConnection(this.canvasState, input as Parameters<typeof getCanvasConnection>[1]);
+        if (tool === "canvas_get_generation_tasks") return getCanvasGenerationTasks(this.canvasState, input as Parameters<typeof getCanvasGenerationTasks>[1]);
         if (tool === "canvas_get_resources") return getCanvasResources(this.canvasState, input as Parameters<typeof getCanvasResources>[1]);
         if (tool === "canvas_validate_ops") return validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
         if (tool === "canvas_get_selection") {
             const ids = new Set(this.canvasState?.selectedNodeIds || []);
             return { nodes: (this.canvasState?.nodes || []).filter((node) => ids.has(node.id)).map(compactNode) };
+        }
+        if (tool === "canvas_create_workflow") {
+            input = { ops: workflowOps(input as Record<string, unknown>, this.canvasState) };
+            tool = "canvas_apply_ops";
         }
         if (tool === "canvas_create_node") {
             const data = input as { nodeType: CanvasNodeType; title?: string; x?: number; y?: number; width?: number; height?: number; metadata?: Record<string, unknown> };
@@ -112,6 +132,8 @@ export class CanvasSession {
         }
         if (tool === "canvas_create_text_nodes") {
             const data = input as { items: Array<{ text: string; title?: string; x?: number; y?: number; width?: number; height?: number }>; x?: number; y?: number; gap?: number; direction?: "row" | "column" };
+            const batchText = data.items.map((item) => `${item.title || ""} ${item.text || ""}`).join(" ");
+            if (/流水线|工作流|工作流图|管线|节点图|连线|pipeline|workflow/i.test(batchText)) throw new Error("检测到工作流意图，请使用 canvas_create_workflow 创建真实类型节点和连线");
             const x = Number(data.x ?? nextCanvasX(this.canvasState));
             const y = Number(data.y ?? 0);
             const gap = Number(data.gap ?? 40);
@@ -181,8 +203,13 @@ export class CanvasSession {
         }
         if (tool !== "canvas_apply_ops") throw new Error(`未知工具：${tool}`);
         if (!this.clients.size) throw new Error("当前没有已连接画布");
+        const currentContext = buildCanvasContext(this.canvasState);
+        const expectedRevision = typeof input.expectedRevision === "number" ? input.expectedRevision : undefined;
         const expectedStateHash = typeof input.expectedStateHash === "string" ? input.expectedStateHash : "";
-        if (expectedStateHash && expectedStateHash !== buildCanvasContext(this.canvasState).stateHash) {
+        if (expectedRevision !== undefined && expectedRevision !== currentContext.revision) {
+            throw new Error(`画布 revision 已从 ${expectedRevision} 变为 ${currentContext.revision}，请重新读取 canvas_get_context 后再执行写操作`);
+        }
+        if (expectedStateHash && expectedStateHash !== currentContext.stateHash) {
             throw new Error("画布状态已变化，请重新读取 canvas_get_context 后再执行写操作");
         }
         const validation = validateCanvasOps(this.canvasState, (input as { ops: unknown[] }).ops);
@@ -228,6 +255,116 @@ function hasGenerationContinuation(name: ToolName, input: Record<string, unknown
 
 function sendEvent(res: ServerResponse, type: string, payload: unknown) {
     res.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
+}
+
+function workflowOps(input: Record<string, unknown>, state: CanvasSnapshot | null) {
+    const nodes = Array.isArray(input.nodes) ? input.nodes as Array<Record<string, unknown>> : [];
+    if (!nodes.length) throw new Error("工作流至少需要一个节点");
+    const refs = new Set<string>();
+    for (const node of nodes) {
+        const ref = String(node.ref || "").trim();
+        const title = String(node.title || "").trim();
+        const kind = String(node.kind || "text");
+        const prompt = String(node.prompt || node.content || workflowPrompt(kind, title, input)).trim();
+        if (!ref || !title) throw new Error("工作流节点必须包含 ref 和 title");
+        if (refs.has(ref)) throw new Error(`工作流节点 ref「${ref}」重复`);
+        if (!["text", "script"].includes(workflowNodeType(kind)) && !prompt) throw new Error(`媒体工作流节点「${title}」缺少 prompt/content，不能创建空资源节点`);
+        refs.add(ref);
+        for (const nodeId of Array.isArray(node.referenceNodeIds) ? node.referenceNodeIds : []) {
+            if (!existingNodeId(state, String(nodeId))) throw new Error(`节点「${title}」引用的现有节点「${String(nodeId)}」不存在`);
+        }
+    }
+    const direction = input.direction === "vertical" ? "vertical" : "horizontal";
+    const gap = Math.max(48, Number(input.gap || 120));
+    const existing = state?.nodes || [];
+    const maxX = existing.reduce((max, node) => Math.max(max, node.position.x + node.width), 0);
+    const maxY = existing.reduce((max, node) => Math.max(max, node.position.y + node.height), 0);
+    const start = input.start && typeof input.start === "object" ? input.start as { x: number; y: number } : { x: existing.length ? maxX + 160 : 80, y: existing.length ? Math.max(80, maxY - 520) : 80 };
+    const ids = new Map(nodes.map((node) => [String(node.ref), `agent-workflow-${slug(String(node.ref))}-${crypto.randomUUID().slice(0, 8)}`]));
+    const ops: Array<Record<string, unknown>> = [];
+    let cursor = { x: Number(start.x), y: Number(start.y) };
+    for (const node of nodes) {
+        const kind = String(node.kind || "text");
+        const type = workflowNodeType(kind);
+        const size = workflowNodeSize(type, kind, node.width, node.height);
+        const prompt = String(node.prompt || node.content || workflowPrompt(kind, String(node.title), input));
+        const position = { ...cursor };
+        const internalReferenceIds = Array.isArray(node.referenceRefs) ? node.referenceRefs.map((ref) => ids.get(String(ref))).filter(Boolean) : [];
+        const externalReferenceIds = Array.isArray(node.referenceNodeIds) ? node.referenceNodeIds.map(String) : [];
+        ops.push({ type: "add_node", id: ids.get(String(node.ref)), nodeType: type, title: String(node.title), position, width: size.width, height: size.height, metadata: { content: type === "text" ? String(node.content || prompt) : "", composerContent: prompt || undefined, prompt: prompt || undefined, workflowKind: workflowKind(kind), workflowTitle: input.title, workflowDescription: node.description || input.description, generationMode: type === "image" ? "image" : type === "video" ? "video" : type === "audio" ? "audio" : undefined, status: type === "text" || type === "script" ? "success" : "idle", referenceNodeIds: [...internalReferenceIds, ...externalReferenceIds].length ? [...internalReferenceIds, ...externalReferenceIds] : undefined } });
+        cursor = direction === "vertical" ? { x: Number(start.x), y: cursor.y + size.height + gap } : { x: cursor.x + size.width + gap, y: Number(start.y) };
+    }
+    const edges = Array.isArray(input.edges) && input.edges.length ? input.edges as Array<Record<string, unknown>> : nodes.slice(0, -1).map((node, index) => ({ from: node.ref, to: nodes[index + 1].ref }));
+    const keys = new Set<string>();
+    for (const edge of edges) {
+        const from = String(edge.from || "");
+        const to = String(edge.to || "");
+        if (!ids.has(from) || !ids.has(to)) throw new Error(`工作流连线引用不存在的节点：${from} → ${to}`);
+        const key = `${from}\0${to}`;
+        if (keys.has(key)) continue;
+        keys.add(key);
+        ops.push({ type: "connect_nodes", fromNodeId: ids.get(from), toNodeId: ids.get(to) });
+    }
+    for (const node of nodes) for (const ref of Array.isArray(node.referenceRefs) ? node.referenceRefs : []) {
+        const from = String(ref);
+        const to = String(node.ref);
+        if (!ids.has(from)) throw new Error(`节点「${to}」引用了不存在的节点「${from}」`);
+        const key = `${from}\0${to}`;
+        if (keys.has(key)) continue;
+        keys.add(key);
+        ops.push({ type: "connect_nodes", fromNodeId: ids.get(from), toNodeId: ids.get(to) });
+    }
+    for (const node of nodes) for (const ref of Array.isArray(node.referenceNodeIds) ? node.referenceNodeIds : []) {
+        const from = String(ref);
+        const to = String(node.ref);
+        const key = `${from}\0${to}`;
+        if (keys.has(key)) continue;
+        keys.add(key);
+        ops.push({ type: "connect_nodes", fromNodeId: from, toNodeId: ids.get(to) });
+    }
+    ops.push({ type: "select_nodes", ids: nodes.map((node) => ids.get(String(node.ref))) });
+    if (input.autoRun === true || nodes.some((node) => node.runGeneration === true)) for (const node of nodes) {
+        const type = workflowNodeType(String(node.kind || "text"));
+        if (!["image", "video", "audio"].includes(type) || (input.autoRun !== true && node.runGeneration !== true)) continue;
+        ops.push({ type: "run_generation", nodeId: ids.get(String(node.ref)), mode: type, prompt: node.prompt || node.content || workflowPrompt(String(node.kind || "text"), String(node.title), input) });
+    }
+    return ops;
+}
+
+function existingNodeId(state: CanvasSnapshot | null, id: string) {
+    return Boolean(state?.nodes?.some((node) => node.id === id));
+}
+
+function workflowNodeType(kind: string) {
+    if (kind === "script") return "script";
+    if (["image", "character_cards", "character_three_view"].includes(kind)) return "image";
+    if (["video", "storyboard_video"].includes(kind)) return "video";
+    if (kind === "audio") return "audio";
+    return "text";
+}
+
+function workflowNodeSize(type: string, kind: string, width: unknown, height: unknown) {
+    const defaults = type === "image" ? { width: 560, height: 380 } : type === "video" ? { width: 640, height: 360 } : type === "script" ? { width: 920, height: 360 } : type === "audio" ? { width: 340, height: 160 } : { width: 420, height: 240 };
+    return { width: typeof width === "number" && width > 0 ? width : defaults.width, height: typeof height === "number" && height > 0 ? height : defaults.height };
+}
+
+function workflowPrompt(kind: string, title: string, input: Record<string, unknown>) {
+    const workflowTitle = String(input.title || input.description || "当前创作项目").trim();
+    if (kind === "character_cards") return `请基于「${workflowTitle}」拆分主要角色，并为每个角色生成可用于后续创作的角色图片卡片：外观、服饰、身份、性格和视觉辨识点。`;
+    if (kind === "character_three_view") return `请基于上游角色卡片生成「${title}」：同一角色的正面、侧面、背面三视图，保持服饰、发型、道具和比例一致。`;
+    if (kind === "storyboard_video") return `请基于上游角色三视图，为「${workflowTitle}」制作分镜剧情视频方案：包含镜头顺序、景别、动作、节奏和画面连续性。`;
+    return "";
+}
+
+function workflowKind(kind: string) {
+    if (["character_cards", "character_three_view"].includes(kind)) return "character";
+    if (kind === "storyboard_video") return "storyboard";
+    if (kind === "script") return "script";
+    return "free";
+}
+
+function slug(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "node";
 }
 
 function textNodeOp(input: { id?: string; text?: string; title?: string; width?: number; height?: number }, x: number, y: number) {

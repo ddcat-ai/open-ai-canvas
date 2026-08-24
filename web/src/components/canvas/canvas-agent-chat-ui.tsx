@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Button, Tooltip } from "antd";
+import { motion, useReducedMotion } from "motion/react";
 import { ArrowUp, CheckCircle2, CircleAlert, ImagePlus, LoaderCircle, Sparkles, UserRound, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -22,12 +23,36 @@ export type CanvasAgentChatMessage = {
     attachments?: CanvasAgentChatAttachment[];
 };
 
+export type CanvasAgentQuickAction = { label: string; prompt: string };
+
+/**
+ * Turn the short numbered choices the Agent already emits into real UI actions.
+ * This deliberately stays conservative: only assistant messages with 1–4
+ * numbered lines are eligible, and code blocks are ignored.
+ */
+export function extractCanvasAgentQuickActions(text: string): CanvasAgentQuickAction[] {
+    if (!text.trim() || text.includes("```")) return [];
+    const actions: CanvasAgentQuickAction[] = [];
+    const seen = new Set<string>();
+    for (const line of text.split(/\r?\n/u)) {
+        const match = /^\s*(?:[-*]\s*)?(\d{1,2})[.)、]\s*(.+?)\s*$/u.exec(line);
+        if (!match) continue;
+        const label = match[2].replace(/^[*_\s]+|[*_\s]+$/gu, "").trim();
+        if (!label || label.length > 96 || seen.has(label)) continue;
+        seen.add(label);
+        actions.push({ label, prompt: label });
+        if (actions.length >= 4) break;
+    }
+    return actions;
+}
+
 const WORKING_TEXT = "正在推演...";
 
-export function AgentChatMessage({ item, theme, user, isStreaming = false, onRejectTool, onApproveTool }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void }) {
+export function AgentChatMessage({ item, theme, user, isStreaming = false, onRejectTool, onApproveTool, onQuickAction }: { item: CanvasAgentChatMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; user: LocalUser | null; isStreaming?: boolean; onRejectTool?: (id: string) => void; onApproveTool?: (id: string) => void; onQuickAction?: (prompt: string) => void }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
     const color = item.role === "error" ? "#dc2626" : item.role === "tool" ? "#2563eb" : theme.node.text;
+    const quickActions = item.role === "assistant" && !isStreaming ? extractCanvasAgentQuickActions(item.text) : [];
     if (isSystem) {
         return (
             <div className="flex justify-center text-xs">
@@ -52,6 +77,22 @@ export function AgentChatMessage({ item, theme, user, isStreaming = false, onRej
             {!isUser ? <AgentAvatar theme={theme} /> : null}
             <div className={`min-w-0 max-w-[86%] text-sm leading-6 ${isUser ? "rounded-md px-3 py-2.5 text-right" : "text-left"}`} style={{ color, ...(isUser ? { background: theme.accent.primarySoft } : {}) }}>
                 {item.role === "assistant" ? <AIMessageMarkdown className="text-left" isStreaming={isStreaming}>{item.text}</AIMessageMarkdown> : <div className="whitespace-pre-wrap break-words text-left">{item.text}</div>}
+                {quickActions.length && onQuickAction ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="快捷选项">
+                        {quickActions.map((action) => (
+                            <motion.button
+                                key={action.label}
+                                type="button"
+                                className="rounded-full px-3 py-1.5 text-left text-xs font-medium outline-none transition-[background-color,transform,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-current/30 hover:-translate-y-px"
+                                style={{ background: theme.spatial.surface, color: theme.node.text, boxShadow: `0 4px 14px ${theme.spatial.shadow}` }}
+                                whileTap={{ scale: 0.97 }}
+                                onClick={() => onQuickAction(action.prompt)}
+                            >
+                                {action.label}
+                            </motion.button>
+                        ))}
+                    </div>
+                ) : null}
                 {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
                 {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
             </div>
@@ -209,6 +250,7 @@ export function AgentChatComposer({
     const [slashIndex, setSlashIndex] = useState(0);
     const availableSlashSkills = slashSkills ?? [];
     const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
+    const reducedMotion = useReducedMotion();
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(availableSlashSkills.length - 1, 0));
 
     // 在输入值末尾检测「/关键词」打开技能候选；选择后替换为 @[skill:xxx] 引用 token（保持在 prompt 文本里）。
@@ -270,15 +312,22 @@ export function AgentChatComposer({
     };
 
     return (
-        <div className="px-3 pb-3 pt-1" onWheelCapture={(event) => event.stopPropagation()}>
-            <div className="rounded-lg border px-3 pb-2.5 pt-3 transition-[border-color,box-shadow] duration-150 focus-within:border-current" style={{ background: theme.node.fill, borderColor: theme.toolbar.border, color: theme.accent.primary, boxShadow: `0 10px 30px ${theme.spatial.shadow}` }}>
+        <div className="px-3 pb-3 pt-2" onWheelCapture={(event) => event.stopPropagation()}>
+            <div
+                className="group/composer rounded-[22px] px-3 pb-2.5 pt-3 transition-[background-color,box-shadow,transform] duration-200 focus-within:-translate-y-px"
+                style={{
+                    background: theme.node.fill,
+                    color: theme.accent.primary,
+                    boxShadow: `0 16px 40px ${theme.spatial.shadow}, inset 0 1px 0 rgba(255,255,255,0.045)`,
+                }}
+            >
                 {attachments.length ? (
                     <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
                         {attachments.map((item) => (
                             <div key={item.id} className="group relative size-14 shrink-0 overflow-hidden rounded-md" title={item.name}>
                                 <img src={item.url} alt={item.name} className="size-full object-cover" />
                                 {onRemoveAttachment ? (
-                                    <button type="button" className="absolute right-1 top-1 grid size-5 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover:opacity-100" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }} onClick={() => onRemoveAttachment(item.id)} aria-label="移除图片">
+                                    <button type="button" className="absolute right-1 top-1 grid size-5 place-items-center rounded-full opacity-0 shadow-sm transition group-hover:opacity-100" style={{ background: theme.toolbar.panel, color: theme.node.text }} onClick={() => onRemoveAttachment(item.id)} aria-label="移除图片">
                                         <X className="size-3" />
                                     </button>
                                 ) : null}
@@ -306,8 +355,8 @@ export function AgentChatComposer({
                     {slash && availableSlashSkills.length ? (
                         <div
                             data-agent-slash-menu
-                            className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-1.5 w-full max-w-xs overflow-hidden rounded-lg border p-1 shadow-lg"
-                            style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
+                            className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
+                            style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
                             onMouseDown={(event) => event.preventDefault()}
                         >
                             {availableSlashSkills.map((skill, index) => (
@@ -336,13 +385,38 @@ export function AgentChatComposer({
                                     event.target.value = "";
                                 }} />
                                 <Tooltip title="上传图片">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
+                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95" disabled={sending} style={{ color: theme.node.muted }} icon={<ImagePlus className="size-4" />} onClick={() => fileInputRef.current?.click()} />
                                 </Tooltip>
                             </>
                         ) : null}
                         {left}
                     </div>
-                    <Button type="primary" className="!h-8 !w-8 !min-w-8 !rounded-md !p-0" disabled={!canSubmit} icon={sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />} onClick={() => void onSubmit()} aria-label="发送" />
+                    <motion.button
+                        type="button"
+                        disabled={!canSubmit}
+                        aria-label={sending ? "发送中" : "发送"}
+                        onClick={() => void onSubmit()}
+                        whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
+                        whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
+                        animate={sending && !reducedMotion ? { scale: [1, 0.94, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
+                        transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
+                        className="grid size-9 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                        style={{
+                            background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
+                            color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
+                            boxShadow: canSubmit || sending ? `0 8px 20px ${theme.accent.primary}45` : "none",
+                        }}
+                    >
+                        <motion.span
+                            key={sending ? "sending" : "ready"}
+                            initial={reducedMotion ? false : { opacity: 0, scale: 0.65, rotate: sending ? -25 : 25 }}
+                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                            transition={{ duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }}
+                            className="grid place-items-center"
+                        >
+                            {sending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+                        </motion.span>
+                    </motion.button>
                 </div>
             </div>
         </div>
@@ -351,11 +425,11 @@ export function AgentChatComposer({
 
 export function AgentPanelTabs<T extends string>({ value, items, theme, right, onChange }: { value: T; items: { value: T; label: string; icon?: ReactNode; count?: number }[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; right?: ReactNode; onChange: (value: T) => void }) {
     return (
-        <div className="shrink-0 px-3 pb-2">
-            <div className="flex min-h-9 items-center justify-between gap-2 rounded-md p-1" style={{ background: theme.spatial.surface }}>
-                <nav className="grid min-w-0 flex-1 grid-flow-col auto-cols-fr items-center gap-0.5 text-xs" role="tablist" aria-label="Agent 面板">
+        <div className="shrink-0 px-3 pb-1">
+            <div className="flex min-h-8 items-center justify-between gap-2 rounded-lg px-0.5 py-0.5" style={{ background: "transparent" }}>
+                <nav className="grid min-w-0 flex-1 grid-flow-col auto-cols-fr items-center gap-0.5 text-[var(--fs-label)]" role="tablist" aria-label="Agent 面板">
                     {items.map((item) => (
-                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-8 min-w-0 items-center justify-center gap-1 rounded-[var(--r-sm)] px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`} style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 1px 5px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item.value)}>
+                        <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`} style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }} onClick={() => onChange(item.value)}>
                             <span className="shrink-0">{item.icon}</span>
                             <span className="min-w-0 truncate">{item.label}</span>
                             {item.count ? <span className="shrink-0 tabular-nums opacity-60">{item.count}</span> : null}

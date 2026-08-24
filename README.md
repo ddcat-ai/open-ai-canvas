@@ -47,6 +47,14 @@
 | <img src="assets/user-QAyong.jpg" alt="QAyong" width="80"> | QAyong<br><sub>ID：QAyong<br>B站：QAyong</sub> | [2110491559@qq.com](mailto:2110491559@qq.com) | AI 短剧合规，资产确权 |
 | <img src="assets/user-K37ix.jpg" alt="_K37ix." width="80"> | _K37ix. | [2773843782@qq.com](mailto:2773843782@qq.com) | Making things that think |
 
+## 交流与反馈
+
+Issue 反馈、技术讨论和产品升级建议都可以在 QQ 群中沟通。群内还会不定期组织 AI 学习与培训交流会。
+
+<p align="center">
+  <img src="assets/qq.jpg" alt="影策 QQ 交流群" width="360">
+</p>
+
 ## 当前能力
 
 - **自由画布**：项目、节点、连线、框选、缩放、小地图、撤销重做、导入导出和公开只读分享。

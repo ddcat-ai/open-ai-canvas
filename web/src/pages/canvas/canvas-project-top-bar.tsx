@@ -325,7 +325,7 @@ export function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWork
                 whileHover={reducedMotion ? undefined : { y: -1 }}
                 whileTap={reducedMotion ? undefined : { scale: 0.97 }}
                 transition={aceternityMotion.spring.dock}
-                className="canvas-mode-switch-trigger flex h-10 min-w-28 items-center gap-2 rounded-xl border px-2.5 text-left outline-none backdrop-blur-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="canvas-mode-switch-trigger flex h-10 min-w-28 items-center gap-2 rounded-xl px-2.5 text-left outline-none backdrop-blur-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{ ...canvasDockStyle(theme, theme.node.text), background: open ? "var(--dock-command-active)" : "var(--dock-surface)", outlineColor: theme.accent.primary }}
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -351,7 +351,7 @@ export function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWork
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.95 }}
                             transition={aceternityMotion.spring.panel}
-                            className="canvas-mode-switch-menu aceternity-floating-panel w-full overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl"
+                            className="canvas-mode-switch-menu aceternity-floating-panel w-full overflow-hidden rounded-[var(--r-lg)] p-1.5 backdrop-blur-2xl"
                             style={{ ...canvasDockStyle(theme, theme.node.text), background: "var(--dock-surface)" }}
                         >
                             <ModeOption active={simple} motionEnabled={!reducedMotion} icon={<Sparkles className="size-4" />} title="简洁模式" description="保留核心创作路径，降低参数密度" theme={theme} onClick={() => selectMode("simple")} />

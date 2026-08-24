@@ -93,13 +93,39 @@ default_tools_approval_mode = "approve"
 - `canvas_get_state`
 - `canvas_get_context`
 - `canvas_find_nodes`
+- `canvas_get_node`
+- `canvas_get_connection`
+- `canvas_get_generation_tasks`
 - `canvas_get_resources`
 - `canvas_validate_ops`
 - `canvas_get_selection`
 - `canvas_export_snapshot`
 - `canvas_apply_ops`
+- `canvas_create_workflow`
 - `canvas_create_text_node`
 - `canvas_create_image_prompt_flow`
+
+`canvas_create_workflow` 是创建流水线/节点图的高阶工具，不要把工作流退化成批量文本节点。它会根据节点语义自动选择真实节点类型、按实际尺寸布局、创建默认顺序连线，并复核连接与重叠结果：
+
+| kind | 画布节点类型 | 用途 |
+| --- | --- | --- |
+| `character_cards` | `image` | 角色拆分图片卡片 |
+| `character_three_view` | `image` | 角色正面/侧面/背面三视图 |
+| `storyboard_video` | `video` | 分镜剧情视频 |
+| `script` | `script` | 剧本或分镜文字 |
+
+媒体节点优先提供 `prompt`/`content`；对三个影视语义节点，即使模型漏填提示词，工具也会从工作流标题和节点语义生成最小可用创作提示词。已有画布素材必须先通过 `canvas_find_nodes` 或 `canvas_get_resources` 获取真实 node id，再放入 `referenceNodeIds`。
+
+```json
+{
+  "title": "搞笑修仙小说流水线",
+  "nodes": [
+    { "ref": "cards", "kind": "character_cards", "title": "角色拆分图片卡片" },
+    { "ref": "views", "kind": "character_three_view", "title": "角色三视图", "referenceRefs": ["cards"] },
+    { "ref": "video", "kind": "storyboard_video", "title": "分镜剧情视频", "referenceRefs": ["views"], "runGeneration": false }
+  ]
+}
+```
 
 `canvas_apply_ops` 示例：
 
@@ -117,7 +143,9 @@ default_tools_approval_mode = "approve"
 }
 ```
 
-推荐的 Agent 工作流是：先调用 `canvas_get_context` 读取语义化上下文和 `stateHash`；不知道节点 id 时调用 `canvas_find_nodes`；涉及图片、视频或音频参考时调用 `canvas_get_resources`；复杂写操作先调用 `canvas_validate_ops`，通过后再调用 `canvas_apply_ops`。这样 Agent 不需要猜测节点 id，也不会把 loading/error/占位媒体误判成可用资源。
+画布写工具返回的结果包含 `ok`、`message` 和 `data`。`data.snapshot` 是本地 Runtime 写入后的最新快照，`data.verification` 会列出 `createdNodeIds`、`removedNodeIds`、缺失节点/连线、前后状态摘要和生成任务观察结果。生成任务的 `message` 会明确区分“已提交/生成中，尚未完成”和“已完成且资源就绪”；不要只根据节点已经创建就向用户报告生成完成。
+
+推荐的 Agent 工作流是：先调用 `canvas_get_context` 读取语义化上下文和 `stateHash`；不知道节点 id 时调用 `canvas_find_nodes`，已经知道 id 后用 `canvas_get_node` 或 `canvas_get_connection` 做精确复核；需要观察生成中的节点时调用 `canvas_get_generation_tasks`；涉及图片、视频或音频参考时调用 `canvas_get_resources`；复杂写操作先调用 `canvas_validate_ops`，通过后再调用 `canvas_apply_ops`。这样 Agent 不需要猜测节点 id，也不会把 loading/error/占位媒体误判成可用资源。
 
 ## 侧边栏 Codex
 
@@ -126,6 +154,8 @@ default_tools_approval_mode = "approve"
 侧边栏会展示 Codex 返回的 `thread.started`、`turn.started`、`item.*`、`turn.completed` 等结构化事件；收到 app-server 的 `item/agentMessage/delta` 时，Canvas Agent 会转成 `item.updated`，网页会用同一条消息做真实流式更新，并把工具细节收进运行日志。
 
 侧边栏上传或粘贴的图片会先发到本机 Canvas Agent，再由 Canvas Agent 临时写入本机文件并作为 app-server `localImage` 输入传给 Codex；前端会提示附件体积，单次请求体限制为 30MB。
+
+侧边栏 Composer 中显式提及的网页技能不会被拼接进用户 Prompt。网页把技能 bundle 传给本机 Runtime，Runtime 为当前 turn 临时生成受限的 `SKILL.md`，并通过 Codex app-server 的原生 `skill` 输入项加载；技能不会被复制进文本输入，也不会添加 `$skill-name` 伪标记，turn 完成后删除临时文件。未被用户提及的技能不会进入该 turn。
 
 ## Claude Code
 

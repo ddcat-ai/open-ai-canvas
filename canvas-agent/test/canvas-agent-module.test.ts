@@ -3,16 +3,50 @@ import { EventEmitter } from "node:events";
 import http, { type Server } from "node:http";
 import { test } from "node:test";
 
+import { buildCanvasContext } from "../src/canvas-context.js";
 import { CanvasSession } from "../src/canvas-session.js";
 import { createLocalRuntimeApp } from "../src/local-runtime.js";
 import { LocalRuntimeSessionManager } from "../src/local-runtime-session.js";
 import { createCanvasAgentHttpModule } from "../src/modules/canvas-agent-http.js";
+import { toolDescriptions, toolInputSchemas, toolNames } from "../src/schemas.js";
 import type { LocalRuntimeConfig } from "../src/config.js";
 
 const authority = "127.0.0.1:41743";
 const endpoint = `http://${authority}`;
 const origin = "http://127.0.0.1:3001";
 const token = "legacy-canvas-token-fixture";
+
+test("MCP manifest exposes the semantic canvas read tools with schemas and descriptions", () => {
+    const expected = [
+        "canvas_get_context",
+        "canvas_find_nodes",
+        "canvas_get_node",
+        "canvas_get_connection",
+        "canvas_get_generation_tasks",
+        "canvas_get_resources",
+        "canvas_validate_ops",
+    ];
+    for (const name of expected) {
+        assert.ok(toolNames.includes(name as typeof toolNames[number]), `${name} is missing from toolNames`);
+        assert.ok(toolDescriptions[name as keyof typeof toolDescriptions], `${name} is missing a description`);
+        assert.ok(toolInputSchemas[name as keyof typeof toolInputSchemas], `${name} is missing an input schema`);
+    }
+    assert.deepEqual(
+        toolNames.filter((name) => name.startsWith("canvas_")).slice(0, 10),
+        [
+            "canvas_get_state",
+            "canvas_get_context",
+            "canvas_find_nodes",
+            "canvas_get_node",
+            "canvas_get_connection",
+            "canvas_get_generation_tasks",
+            "canvas_get_resources",
+            "canvas_validate_ops",
+            "canvas_get_selection",
+            "canvas_export_snapshot",
+        ],
+    );
+});
 
 test("Canvas module declares only Canvas scopes and constructs without CLI side effects", () => {
     const calls: string[] = [];
@@ -101,6 +135,23 @@ test("CanvasSession dispose closes streams and a replaced stream cannot clear th
     second.response.emit("close");
 });
 
+test("CanvasSession exposes precise node and connection reads", async () => {
+    const session = new CanvasSession();
+    const response = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=precise-read"), response.response as never);
+    session.updateState({
+        nodes: [
+            { id: "node-a", type: "text", title: "A", position: { x: 0, y: 0 }, width: 320, height: 240 },
+            { id: "node-b", type: "image", title: "B", position: { x: 400, y: 0 }, width: 320, height: 320, metadata: { status: "success", storageKey: "resource:b" } },
+        ],
+        connections: [{ id: "connection-1", fromNodeId: "node-a", toNodeId: "node-b" }],
+    }, "precise-read");
+    assert.equal((await session.callTool("canvas_get_node", { id: "node-b" }) as { found: boolean }).found, true);
+    assert.equal((await session.callTool("canvas_get_connection", { id: "connection-1" }) as { found: boolean }).found, true);
+    assert.equal((await session.callTool("canvas_get_node", { id: "missing" }) as { found: boolean }).found, false);
+    session.dispose();
+});
+
 test("CanvasSession closes only streams owned by a revoked Runtime session", async () => {
     const session = new CanvasSession();
     const closeRuntimeSession = (session as CanvasSession & {
@@ -154,6 +205,64 @@ test("Canvas generation tool continuation survives a browser stream reconnect un
         session.openEvents(new URL("http://127.0.0.1/events?clientId=agent-client-after-refresh"), second.response as never);
         session.resolveResult({ requestId: call.requestId, result: { accepted: true } });
         assert.deepEqual(await pending, { accepted: true });
+    } finally {
+        session.dispose();
+    }
+});
+
+test("CanvasSession expands a workflow into semantic nodes, non-overlapping layout, real edges, and selective generation", async () => {
+    const session = new CanvasSession();
+    const events = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=agent-workflow"), events.response as never);
+    session.updateState({
+        nodes: [{ id: "existing-character", type: "image", title: "角色原画", position: { x: 0, y: 0 }, width: 560, height: 380, metadata: { status: "success", storageKey: "resource:character" } }],
+        connections: [],
+    }, "agent-workflow");
+
+    try {
+        const pending = session.callTool("canvas_create_workflow", {
+            title: "搞笑修仙小说流水线",
+            nodes: [
+                { ref: "cards", kind: "character_cards", title: "角色拆分图片卡片", referenceNodeIds: ["existing-character"] },
+                { ref: "views", kind: "character_three_view", title: "角色三视图", prompt: "基于角色卡片生成正面、侧面、背面三视图", referenceRefs: ["cards"] },
+                { ref: "storyboard", kind: "storyboard_video", title: "分镜剧情视频", prompt: "基于三视图制作分镜剧情视频", referenceRefs: ["views"], runGeneration: true },
+            ],
+        });
+        const call = latestToolCall(events.writes());
+        const ops = (call.input as { ops: Array<Record<string, unknown>> }).ops;
+        const added = ops.filter((op) => op.type === "add_node");
+        const edges = ops.filter((op) => op.type === "connect_nodes");
+        const runs = ops.filter((op) => op.type === "run_generation");
+
+        assert.deepEqual(added.map((op) => op.nodeType), ["image", "image", "video"]);
+        assert.match(String((added[0]?.metadata as Record<string, unknown>)?.prompt), /拆分主要角色/);
+        assert.equal(edges.length, 3, "two workflow edges plus one existing reference edge");
+        assert.equal(runs.length, 1, "runGeneration only affects the explicitly requested node");
+        assert.equal(runs[0]?.nodeId, added[2]?.id);
+        assert.ok(Number((added[1]?.position as { x: number }).x) > Number((added[0]?.position as { x: number }).x) + Number(added[0]?.width));
+        assert.ok(Number((added[2]?.position as { x: number }).x) > Number((added[1]?.position as { x: number }).x) + Number(added[1]?.width));
+        assert.ok(edges.some((op) => op.fromNodeId === "existing-character" && op.toNodeId === added[0]?.id));
+
+        session.resolveResult({ requestId: call.requestId, result: { accepted: true } });
+        assert.deepEqual(await pending, { accepted: true });
+    } finally {
+        session.dispose();
+    }
+});
+
+test("CanvasSession rejects media workflow nodes without real creative content", async () => {
+    const session = new CanvasSession();
+    const events = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=agent-workflow-invalid"), events.response as never);
+    session.updateState({ nodes: [] }, "agent-workflow-invalid");
+    try {
+        await assert.rejects(
+            session.callTool("canvas_create_workflow", {
+                nodes: [{ ref: "empty-image", kind: "image", title: "空图片节点" }],
+            }),
+            /缺少 prompt\/content/,
+        );
+        assert.equal(events.writes().some((value) => value.includes("event: tool_call")), false);
     } finally {
         session.dispose();
     }
@@ -372,3 +481,56 @@ function listening(server: Server) {
 function close(server: Server) {
     return new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
+
+test("CanvasSession rejects stale state revisions and accepts idempotent retries", () => {
+    const session = new CanvasSession();
+    const first = session.updateState({ projectId: "canvas-1", nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 } }, "fixture");
+    assert.equal(first.accepted, true);
+    assert.equal(first.revision, 0);
+
+    const idempotent = session.updateState({ projectId: "canvas-1", nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 }, revision: 0 }, "fixture");
+    assert.equal(idempotent.accepted, true);
+    assert.equal(idempotent.idempotent, true);
+
+    const conflict = session.updateState({ projectId: "canvas-1", nodes: [{ id: "n-1", type: "text", position: { x: 0, y: 0 }, width: 100, height: 100 }], connections: [], viewport: { x: 0, y: 0, k: 1 }, revision: 0 }, "fixture");
+    assert.equal(conflict.accepted, false);
+    assert.equal(conflict.reason, "revision_conflict");
+
+    const next = session.updateState({ projectId: "canvas-1", nodes: [{ id: "n-1", type: "text", position: { x: 0, y: 0 }, width: 100, height: 100 }], connections: [], viewport: { x: 0, y: 0, k: 1 }, revision: 1 }, "fixture");
+    assert.equal(next.accepted, true);
+    assert.equal(next.revision, 1);
+
+    const stale = session.updateState({ projectId: "canvas-1", nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 }, revision: 0 }, "fixture");
+    assert.equal(stale.accepted, false);
+    assert.equal(stale.reason, "stale_revision");
+    session.dispose();
+});
+
+
+test("canvas_apply_ops enforces expected revision and state hash before dispatch", async () => {
+    const session = new CanvasSession();
+    const events = eventResponse();
+    session.openEvents(new URL("http://127.0.0.1/events?clientId=guarded-write"), events.response as never);
+    session.updateState({ nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 } }, "guarded-write");
+    const context = buildCanvasContext({ nodes: [], connections: [], viewport: { x: 0, y: 0, k: 1 }, revision: 0 });
+    try {
+        const accepted = session.callTool("canvas_apply_ops", { ops: [], expectedRevision: 0, expectedStateHash: context.stateHash });
+        const call = latestToolCall(events.writes());
+        session.resolveResult({ requestId: call.requestId, result: { accepted: true } });
+        assert.deepEqual(await accepted, { accepted: true });
+
+        const writeCount = events.writes().length;
+        await assert.rejects(
+            session.callTool("canvas_apply_ops", { ops: [], expectedRevision: 1 }),
+            /revision.*重新读取 canvas_get_context/
+        );
+        assert.equal(events.writes().length, writeCount);
+        await assert.rejects(
+            session.callTool("canvas_apply_ops", { ops: [], expectedRevision: 0, expectedStateHash: "bad-hash" }),
+            /画布状态已变化.*重新读取 canvas_get_context/
+        );
+        assert.equal(events.writes().length, writeCount);
+    } finally {
+        session.dispose();
+    }
+});

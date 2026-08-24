@@ -59,7 +59,7 @@ export function writeCanvasAgentEnabledPreference(enabled: boolean, storage: Pic
 }
 
 export function canvasAgentConnectionStartingPatch() {
-    return { enabled: true, connected: false, activity: "连接中", connectError: "", activeTab: "setup" as const };
+    return { enabled: true, connected: false, activity: "连接中", connectError: "", activeTab: "chat" as const };
 }
 
 export function canvasAgentTransientDisconnectPatch(activity: string, connectError: string) {
@@ -89,7 +89,7 @@ export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     activeThreadId: "",
     workspacePath: "",
     loadingThreads: false,
-    activeTab: "setup",
+    activeTab: "chat",
     confirmTools: true,
     activity: "就绪",
     connectError: "",

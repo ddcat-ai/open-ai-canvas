@@ -1836,7 +1836,8 @@ function InfiniteCanvasPage() {
                     {!focusMode ? (
                         <div
                             data-canvas-no-zoom
-                            className="pointer-events-none absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16))] right-[var(--canvas-inset-x)] z-[var(--z-toolbar)] lg:bottom-[var(--canvas-inset-y)]"
+                            className="pointer-events-none absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16))] z-[var(--z-toolbar)] transition-[right,bottom] duration-300 lg:bottom-[var(--canvas-inset-y)]"
+                            style={{ right: assistantMounted ? `calc(var(--canvas-inset-x) + ${assistantWidth}px + var(--space-3))` : "var(--canvas-inset-x)" }}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
                             onWheel={(event) => event.stopPropagation()}

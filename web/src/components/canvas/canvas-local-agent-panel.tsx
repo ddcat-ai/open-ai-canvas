@@ -22,12 +22,13 @@ import {
     type AgentPendingToolCall,
     type AgentThreadSummary,
 } from "@/stores/canvas/use-canvas-agent-store";
-import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
+import { canvasAgentPostconditionMessage, hashCanvasAgentSnapshot, previewCanvasAgentOps, summarizeCanvasAgentOps, verifyCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
+import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentConnection, getCanvasAgentGenerationTasks, getCanvasAgentNode, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { buildCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
+import { resolveSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { isProjectAgentReadTool, isProjectAgentToolName, runProjectAgentTool } from "@/services/api/project-agent-tools";
-import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { AgentChatEmptyState } from "./canvas-agent-panel-chrome";
 
@@ -131,19 +132,42 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     const errorLoggedRef = useRef(false);
     const attachmentUrlsRef = useRef(new Set<string>());
     const clientIdRef = useRef(createClientId());
+    const runtimeRevisionRef = useRef(0);
+    const runtimeStateHashRef = useRef("");
+    const runtimeCanonicalStateHashRef = useRef("");
+    const runtimeSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
     const connectionControllerRef = useRef<AbortController | null>(null);
     const activeToolRequestIdsRef = useRef(new Set<string>());
     const recoveredToolResultIdsRef = useRef(new Set<string>());
     const syncState = useCallback(
         (clientId: string, nextSnapshot: CanvasAgentSnapshot) => {
-            void postCanvasRuntimeState(getLocalRuntimeSessionClient(), clientId, nextSnapshot).catch(() => {
-                pushEventLog({
-                    id: `${Date.now()}-${Math.random()}`,
-                    time: new Date().toLocaleTimeString(),
-                    title: "状态同步失败",
-                    text: "本机 Runtime 暂未接收画布状态",
+            const stateHash = hashCanvasAgentSnapshot(nextSnapshot);
+            if (runtimeStateHashRef.current !== stateHash) {
+                runtimeRevisionRef.current = runtimeStateHashRef.current ? runtimeRevisionRef.current + 1 : nextSnapshot.revision ?? 0;
+                runtimeStateHashRef.current = stateHash;
+            }
+            // Canvas Agent 的 canonical hash 是服务端 SHA-256；浏览器本地校验使用轻量 FNV hash。
+            // 不把浏览器 hash 当作服务端 hash 上送，避免跨运行时误判；服务端会根据完整快照重新计算。
+            const envelope = { ...nextSnapshot, revision: runtimeRevisionRef.current };
+            const queued = runtimeSyncQueueRef.current
+                .catch(() => undefined)
+                .then(async () => {
+                    const result = await postCanvasRuntimeState(getLocalRuntimeSessionClient(), clientId, envelope);
+                    runtimeRevisionRef.current = result.revision;
+                    runtimeCanonicalStateHashRef.current = result.stateHash;
+                    return result;
+                })
+                .catch(() => {
+                    pushEventLog({
+                        id: `${Date.now()}-${Math.random()}`,
+                        time: new Date().toLocaleTimeString(),
+                        title: "状态同步失败",
+                        text: "本机 Runtime 暂未接收画布状态",
+                    });
+                    return undefined;
                 });
-            });
+            runtimeSyncQueueRef.current = queued.then(() => undefined);
+            return queued;
         },
         [pushEventLog],
     );
@@ -174,6 +198,11 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     useEffect(() => {
         snapshotRef.current = snapshot;
     }, [snapshot]);
+    useEffect(() => {
+        runtimeRevisionRef.current = 0;
+        runtimeStateHashRef.current = "";
+        runtimeCanonicalStateHashRef.current = "";
+    }, [snapshot.projectId]);
     useEffect(() => {
         if (!connected) return;
         const clientId = clientIdRef.current;
@@ -284,6 +313,10 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     }, [connected, loadThreads, snapshot.projectId]);
 
     useEffect(() => {
+        if (activeTab === "history" && connected) void loadThreads();
+    }, [activeTab, connected, loadThreads]);
+
+    useEffect(() => {
         if (!connected) return;
         const timer = setTimeout(() => syncState(clientIdRef.current, snapshot), 300);
         return () => clearTimeout(timer);
@@ -292,6 +325,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
     const sendPrompt = async (overrideText?: string) => {
         const text = (overrideText ?? prompt).trim();
         const files = attachments;
+        const mentionedSkills = resolveSkillMentions(text, composerSkills);
         const requestPrompt = promptWithAttachments(text, files);
         if (!connected || !requestPrompt || sending || waiting) return;
         if (attachmentPayloadBytes(files) > MAX_ATTACHMENT_PAYLOAD_BYTES) {
@@ -305,7 +339,13 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const data = await fetchAgentJson<{ threadId?: string }>("/agent/codex/turn", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ prompt: requestPrompt, canvasId: snapshotRef.current.projectId, threadId: useCanvasAgentStore.getState().activeThreadId || undefined, attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })) }),
+                body: JSON.stringify({
+                    prompt: requestPrompt,
+                    canvasId: snapshotRef.current.projectId,
+                    threadId: useCanvasAgentStore.getState().activeThreadId || undefined,
+                    attachments: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
+                    skills: mentionedSkills.map((skill) => ({ skillId: skill.skill_id, name: skill.skill_name, description: skill.description, instruction: skill.instruction || skill.description })),
+                }),
             });
             if (data.threadId) setAgentState({ activeThreadId: data.threadId });
             addEventLog("本地 Agent 已接收", { accepted: true });
@@ -381,28 +421,63 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
             const projectToolName = isProjectAgentToolName(payload.name) ? payload.name : null;
             setAgentState({ activity: payload.name === "canvas_apply_ops" ? "执行画布操作" : projectToolName ? "执行项目工具" : "读取画布", waiting: true });
             addEventLog(toolName(payload.name), payload, payload);
+            if (payload.name === "canvas_apply_ops") {
+                const currentSnapshot = snapshotRef.current;
+                if (typeof input.expectedRevision === "number" && input.expectedRevision !== runtimeRevisionRef.current) throw new Error(`画布 revision 已从 ${input.expectedRevision} 变为 ${runtimeRevisionRef.current}，请重新读取 canvas_get_context 后再执行写操作`);
+                // expectedStateHash is the Canvas Agent Runtime's canonical
+                // SHA-256 hash. The browser intentionally uses a different,
+                // synchronous fingerprint for local bookkeeping, so the
+                // Runtime has already performed the authoritative check before
+                // emitting this tool call. Comparing the two algorithms here
+                // would reject every valid local write.
+                const validation = validateCanvasAgentOps(currentSnapshot, (input.ops || []) as CanvasAgentOp[]);
+                if (!validation.ok) throw new Error(`画布操作校验失败：${validation.issues.filter((item) => item.severity === "error").map((item) => item.message).join("；")}`);
+            }
             const result =
                 payload.name === "canvas_apply_ops"
-                    ? await onApplyOpsRef.current((input.ops || []) as CanvasAgentOp[], { source: "local", conversationId: activeThreadId || clientIdRef.current, messageId: payload.requestId })
+                    ? await (async () => {
+                          const before = snapshotRef.current;
+                          const next = await onApplyOpsRef.current((input.ops || []) as CanvasAgentOp[], { source: "local", conversationId: activeThreadId || clientIdRef.current, messageId: payload.requestId });
+                          const verification = verifyCanvasAgentOps(before, next, (input.ops || []) as CanvasAgentOp[]);
+                          return {
+                              ok: verification.ok,
+                              message: canvasAgentPostconditionMessage(verification),
+                              data: { verification, snapshot: next },
+                              snapshot: next,
+                          };
+                      })()
+                    : payload.name === "canvas_get_state" || payload.name === "canvas_export_snapshot"
+                      ? snapshotRef.current
                     : payload.name === "canvas_get_context"
-                      ? buildCanvasAgentContext(snapshotRef.current)
+                      ? await readLocalCanvasContext()
                       : payload.name === "canvas_find_nodes"
                         ? findCanvasAgentNodes(snapshotRef.current, input as Parameters<typeof findCanvasAgentNodes>[1])
+                        : payload.name === "canvas_get_node"
+                          ? getCanvasAgentNode(snapshotRef.current, { id: requireString(input.id, "id") })
+                        : payload.name === "canvas_get_connection"
+                            ? getCanvasAgentConnection(snapshotRef.current, { id: requireString(input.id, "id") })
+                        : payload.name === "canvas_get_generation_tasks"
+                          ? getCanvasAgentGenerationTasks(snapshotRef.current, input as Parameters<typeof getCanvasAgentGenerationTasks>[1])
                         : payload.name === "canvas_get_resources"
                           ? getCanvasAgentResources(snapshotRef.current, input as Parameters<typeof getCanvasAgentResources>[1])
-                          : payload.name === "canvas_validate_ops"
+                        : payload.name === "canvas_validate_ops"
                             ? validateCanvasAgentOps(snapshotRef.current, (input.ops || []) as CanvasAgentOp[])
+                            : payload.name === "canvas_get_selection"
+                              ? (() => {
+                                    const ids = new Set(snapshotRef.current.selectedNodeIds || []);
+                                    return { nodes: snapshotRef.current.nodes.filter((node) => ids.has(node.id)) };
+                                })()
                             : projectToolName
                               ? await runProjectAgentTool(projectToolName, input, snapshotRef.current.domainProjectId)
                               : snapshotRef.current;
             await postToolResult(clientIdRef.current, { requestId: payload.requestId, result });
-            if (payload.name === "canvas_apply_ops") syncState(clientIdRef.current, result as CanvasAgentSnapshot);
+            if (payload.name === "canvas_apply_ops") syncState(clientIdRef.current, (result as { snapshot?: CanvasAgentSnapshot }).snapshot || snapshotRef.current);
             setAgentState({ activity: "工具完成", waiting: true });
             addEventLog(`${toolName(payload.name)}完成`, result, result);
             addMessage({
                 role: "tool",
                 title: `${toolName(payload.name)}完成`,
-                text: payload.name === "canvas_apply_ops" ? summarizeCanvasAgentOps((input.ops || []) as CanvasAgentOp[]) || "画布操作" : "已完成",
+                text: payload.name === "canvas_apply_ops" ? (result as { message?: string }).message || summarizeCanvasAgentOps((input.ops || []) as CanvasAgentOp[]) || "画布操作" : "已完成",
                 detail: { requestId: payload.requestId, name: payload.name, input, result },
             });
         } catch (error) {
@@ -413,6 +488,17 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
         } finally {
             activeToolRequestIdsRef.current.delete(payload.requestId);
         }
+    };
+
+    const readLocalCanvasContext = async () => {
+        // Flush the latest browser snapshot first, then expose the Runtime's
+        // canonical state hash to Codex. This keeps the local MCP path's
+        // read→write precondition compatible with the server-side path.
+        const synced = await syncState(clientIdRef.current, snapshotRef.current);
+        const stateHash = synced?.stateHash || runtimeCanonicalStateHashRef.current;
+        return buildCanvasAgentContext(snapshotRef.current, {
+            ...(stateHash ? { stateHash, hashSource: "canvas-agent-server" as const } : {}),
+        });
     };
 
     const rejectPendingTool = async () => {
@@ -584,31 +670,26 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
 
     const content = (
         <>
-            <AgentPanelTabs
-                value={activeTab}
-                theme={theme}
-                items={[
-                    { value: "setup", label: "连接", icon: <PlugZap className="size-3.5" /> },
-                    { value: "chat", label: "对话", icon: <MessageSquareText className="size-3.5" /> },
-                    { value: "history", label: "历史", icon: <History className="size-3.5" />, count: threads.length },
-                    { value: "log", label: "日志", icon: <Terminal className="size-3.5" />, count: eventLogs.length },
-                ]}
-                onChange={(activeTab) => {
-                    setAgentState({ activeTab });
-                    if (activeTab === "history") void loadThreads();
-                }}
-                right={
-                    <>
-                        <Tooltip title={undoOpsCount ? `撤销最近一批 Agent 写回，可撤销 ${undoOpsCount} 批` : "没有可撤销的 Agent 写回"}>
-                            <Button size="small" type="text" className="!h-8 !w-8 !min-w-8" disabled={!canUndoOps} icon={<RotateCcw className="size-3.5" />} onClick={undoLastTool} aria-label="撤销最近一批 Agent 写回" />
-                        </Tooltip>
-                    </>
-                }
-            />
+            <div className="flex min-h-8 shrink-0 items-center justify-end gap-1 px-3 pb-1">
+                <div className="mr-auto min-w-0 truncate px-1 text-[var(--fs-tiny)]" style={{ color: connected ? "#16a34a" : theme.node.muted }}>
+                    {connected ? "本机 Agent 已连接" : canvasAgentConnectionStatusText({ enabled, connected, activity, connectError })}
+                </div>
+                {!connected ? (
+                    <Button size="small" type={enabled ? "default" : "primary"} className="!h-7 !px-2.5" icon={<PlugZap className="size-3.5" />} onClick={toggleAgentConnection}>
+                        {enabled ? "连接中" : "连接"}
+                    </Button>
+                ) : null}
+                <Tooltip title={threads.length ? `历史会话 · ${threads.length}` : "历史会话"}>
+                    <Button type="text" className={`!h-7 !min-w-7 !px-1.5 ${activeTab === "history" ? "font-medium" : ""}`} style={{ color: activeTab === "history" ? theme.node.text : theme.node.muted, background: activeTab === "history" ? theme.spatial.surface : "transparent" }} icon={<History className="size-3.5" />} onClick={() => setAgentState({ activeTab: activeTab === "history" ? "chat" : "history" })} aria-label="打开历史会话">
+                        {threads.length ? <span className="text-[var(--fs-tiny)] tabular-nums">{threads.length}</span> : null}
+                    </Button>
+                </Tooltip>
+                <Tooltip title="新对话">
+                    <Button type="text" shape="circle" className="!h-7 !w-7 !min-w-7" disabled={!connected || loadingThreads} style={{ color: theme.node.muted }} icon={<Plus className="size-3.5" />} onClick={() => void startNewThread()} aria-label="新建对话" />
+                </Tooltip>
+            </div>
 
-            {activeTab === "setup" ? (
-                <AgentConnectView theme={theme} enabled={enabled} connected={connected} activity={activity} connectError={connectError} onToggleEnabled={toggleAgentConnection} />
-            ) : activeTab === "history" ? (
+            {activeTab === "history" ? (
                 <AgentHistoryView
                     theme={theme}
                     threads={threads}
@@ -620,15 +701,6 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                     onNewThread={() => void startNewThread()}
                     onResumeThread={(threadId) => void resumeThread(threadId)}
                     onDeleteThread={confirmDeleteThread}
-                />
-            ) : activeTab === "log" ? (
-                <AgentLogView
-                    logs={eventLogs}
-                    theme={theme}
-                    context={{ connected, enabled, activity, waiting, sending, messages: messages.length, pendingTool: pendingTool?.name }}
-                    onClear={clearEventLogs}
-                    onCopied={(text) => message.success(text)}
-                    onCopyBlocked={(text) => message.warning(text)}
                 />
             ) : (
                 <>
@@ -644,7 +716,7 @@ export const CanvasLocalAgentPanel = memo(function CanvasLocalAgentPanel({
                             />
                         ) : null}
                         {messages.map((item) => (
-                            <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} isStreaming={(sending || waiting) && item.id === messages.at(-1)?.id && item.role === "assistant"} />
+                            <AgentChatMessage key={item.id} item={agentMessageToChatMessage(item)} theme={theme} user={user} isStreaming={(sending || waiting) && item.id === messages.at(-1)?.id && item.role === "assistant"} onQuickAction={(text) => void sendPrompt(text)} />
                         ))}
                         {pendingTool ? (
                             <AgentPendingToolCard
@@ -1044,6 +1116,13 @@ function isConnectionErrorMessage(item: AgentChatItem) {
 function toolName(name: string) {
     if (name === "canvas_apply_ops") return "画布操作";
     if (name === "canvas_get_state") return "读取画布";
+    if (name === "canvas_get_context") return "读取上下文";
+    if (name === "canvas_find_nodes") return "检索节点";
+    if (name === "canvas_get_node") return "读取节点";
+    if (name === "canvas_get_connection") return "读取连线";
+    if (name === "canvas_get_generation_tasks") return "读取生成任务";
+    if (name === "canvas_get_resources") return "读取资源";
+    if (name === "canvas_validate_ops") return "校验操作";
     if (name === "canvas_get_selection") return "读取选区";
     if (name === "canvas_export_snapshot") return "导出快照";
     if (name === "canvas_create_node") return "创建节点";
@@ -1078,7 +1157,7 @@ function toolName(name: string) {
 }
 
 function isReadTool(name: string) {
-    return name === "canvas_get_state" || name === "canvas_get_selection" || name === "canvas_export_snapshot" || isProjectAgentReadTool(name);
+    return name === "canvas_get_state" || name === "canvas_get_context" || name === "canvas_find_nodes" || name === "canvas_get_node" || name === "canvas_get_connection" || name === "canvas_get_generation_tasks" || name === "canvas_get_resources" || name === "canvas_validate_ops" || name === "canvas_get_selection" || name === "canvas_export_snapshot" || isProjectAgentReadTool(name);
 }
 
 function isMcpToolItem(item?: AgentEventItem) {
@@ -1123,6 +1202,11 @@ function normalizeText(value: unknown) {
 
 function stringText(value: unknown) {
     return typeof value === "string" ? value : "";
+}
+
+function requireString(value: unknown, field: string) {
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${field} 必须是非空字符串`);
+    return value;
 }
 
 function objectField(value: unknown, key: string) {

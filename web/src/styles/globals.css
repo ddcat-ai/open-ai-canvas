@@ -1426,9 +1426,9 @@
     }
 
     .canvas-mode-switch-trigger {
-        border-color: var(--dock-border);
-        box-shadow: var(--elevation-overlay);
-        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+        border: 0;
+        box-shadow: 0 14px 34px color-mix(in srgb, var(--cn-spatial-shadow) 72%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out, box-shadow var(--motion-instant) ease-out;
     }
 
     .canvas-mode-switch-trigger:hover:not(:disabled) {
@@ -1436,7 +1436,8 @@
     }
 
     .canvas-mode-switch-menu {
-        border-color: var(--dock-border);
+        border: 0;
+        box-shadow: 0 22px 56px color-mix(in srgb, var(--cn-spatial-shadow) 80%, transparent), inset 0 1px 0 rgba(255,255,255,.04);
         transform-origin: bottom right;
     }
 
@@ -6284,8 +6285,9 @@
     }
 
     .canvas-mode-switch-trigger {
+        border: 0 !important;
         border-color: transparent !important;
-        box-shadow: var(--elevation-overlay);
+        box-shadow: 0 14px 34px color-mix(in srgb, var(--cn-spatial-shadow) 72%, transparent), inset 0 1px 0 rgba(255,255,255,.045);
     }
 
     .canvas-tool-button,

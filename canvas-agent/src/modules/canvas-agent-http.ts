@@ -40,8 +40,16 @@ export function createCanvasAgentHttpModule(
             );
         }, { queryKeys: ["clientId"], lastEventId: true }),
         canvasRoute("POST", "/canvas/state", (req, res) => {
-            session.updateState(jsonBody(req), queryValue(req, "clientId") || undefined);
-            res.json({ ok: true });
+            const result = session.updateState(jsonBody(req), queryValue(req, "clientId") || undefined);
+            if (!result) {
+                res.json({ ok: true });
+                return;
+            }
+            if (result && !result.accepted) {
+                res.status(409).json({ ok: false, ...result });
+                return;
+            }
+            res.json({ ok: true, ...result });
         }, { queryKeys: ["clientId"] }),
         canvasRoute("POST", "/canvas/result", (req, res) => {
             session.resolveResult(jsonBody(req) as { requestId?: string; error?: string; result?: unknown });
@@ -112,6 +120,7 @@ export function createCanvasAgentHttpModule(
             const attachments = Array.isArray(body.attachments)
                 ? body.attachments as AgentAttachment[]
                 : [];
+            const skills = parseAgentSkills(body.skills);
             const workspace = ensureCanvasWorkspace(config, String(body.canvasId || ""));
             let threadId = String(body.threadId || workspace.activeThreadId || "");
             void (async () => {
@@ -128,6 +137,7 @@ export function createCanvasAgentHttpModule(
                     emit,
                     attachments,
                     {
+                        skills,
                         threadId,
                         cwd: workspace.workspacePath,
                         onThreadId: (nextThreadId) => updateCanvasWorkspace(
@@ -202,6 +212,23 @@ function jsonRecord(req: Request) {
         throw new Error("Canvas request body is invalid");
     }
     return value as Record<string, unknown>;
+}
+
+export function parseAgentSkills(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, 8).flatMap((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+        const input = item as Record<string, unknown>;
+        const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
+        const instruction = typeof input.instruction === "string" ? input.instruction.trim().slice(0, 24_000) : "";
+        if (!name || !instruction) return [];
+        return [{
+            ...(typeof input.skillId === "string" ? { skillId: input.skillId.trim().slice(0, 120) } : {}),
+            name,
+            ...(typeof input.description === "string" ? { description: input.description.trim().slice(0, 500) } : {}),
+            instruction,
+        }];
+    });
 }
 
 function queryValue(req: Request, key: string) {
