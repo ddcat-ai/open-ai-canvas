@@ -150,6 +150,41 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 	}
 }
 
+func TestArkVideoAdapterMapsFullModalReferences(t *testing.T) {
+	adapter, ok := Builtins().Get("volcengine-ark-video")
+	if !ok {
+		t.Fatal("adapter missing")
+	}
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:  "doubao-seedance-2-0-260128",
+		Prompt: "follow all references",
+		Images: []MediaReference{{URL: "https://example.com/subject.png"}},
+		Videos: []MediaReference{{URL: "https://example.com/motion.mp4"}},
+		Audios: []MediaReference{{URL: "https://example.com/music.mp3"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := spec.Body.(map[string]any)
+	content := body["content"].([]any)
+	want := []string{"text", "image_url", "video_url", "audio_url"}
+	if len(content) != len(want) {
+		t.Fatalf("content = %#v", content)
+	}
+	for index, item := range content {
+		if item.(map[string]any)["type"] != want[index] {
+			t.Fatalf("content[%d] = %#v, want type %q", index, item, want[index])
+		}
+	}
+
+	_, err = adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "doubao-seedance-2-0-260128", Prompt: "follow the soundtrack", Audios: []MediaReference{{URL: "https://example.com/music.mp3"}},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "文本+音频") {
+		t.Fatalf("audio-only combination error = %v", err)
+	}
+}
+
 func TestAsyncVideoResponseNormalizesStatusAndResult(t *testing.T) {
 	adapter, _ := Builtins().Get("minimax-video")
 	created, err := adapter.ParseCreate(context.Background(), []byte(`{"task":{"id":"mm-1","status":"processing"}}`))

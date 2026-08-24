@@ -367,9 +367,21 @@ func arkVideosAdapter() Adapter {
 	info := metadata("volcengine-ark-video", "火山方舟视频", "Volcengine Ark", CapabilityVideo, "POST /api/v3/contents/generations/tasks", "GET /api/v3/contents/generations/tasks/{task_id}", "application/json")
 	info.Parameters = videoParams()
 	return videoAdapter(info, func(r GenerationRequest) (RequestSpec, error) {
+		if len(r.Images) > 9 || len(r.Videos) > 3 || len(r.Audios) > 3 {
+			return RequestSpec{}, fmt.Errorf("火山方舟全模态参考最多支持 9 张图片、3 个视频和 3 个音频")
+		}
+		if len(r.Audios) > 0 && len(r.Images) == 0 && len(r.Videos) == 0 {
+			return RequestSpec{}, fmt.Errorf("火山方舟全模态参考不支持纯音频或文本+音频，请同时添加参考图片或参考视频")
+		}
 		content := []any{map[string]any{"type": "text", "text": r.Prompt}}
 		for _, image := range r.Images {
 			content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": mediaValue(image)}, "role": "reference_image"})
+		}
+		for _, video := range r.Videos {
+			content = append(content, map[string]any{"type": "video_url", "video_url": map[string]any{"url": mediaValue(video)}, "role": "reference_video"})
+		}
+		for _, audio := range r.Audios {
+			content = append(content, map[string]any{"type": "audio_url", "audio_url": map[string]any{"url": mediaValue(audio)}, "role": "reference_audio"})
 		}
 		body := map[string]any{"model": r.Model, "content": content, "ratio": defaultValue(r.AspectRatio, "16:9"), "resolution": defaultValue(r.Resolution, "720p"), "duration": defaultInt(r.Duration, 5)}
 		if r.GenerateAudio {

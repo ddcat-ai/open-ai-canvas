@@ -336,7 +336,7 @@ function videoOperationLabel(operation: string) {
     if (operation === "text_to_video") return "文生视频";
     if (operation === "image_to_video") return "图生视频";
     if (operation === "audio_to_video") return "音频生视频";
-    if (operation === "reference_to_video") return "参考素材生视频";
+    if (operation === "reference_to_video") return "全模态参考";
     if (operation === "extend") return "视频续写";
     return "当前生成模式";
 }
