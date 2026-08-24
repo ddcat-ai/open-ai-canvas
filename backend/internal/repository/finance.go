@@ -615,7 +615,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		if order.Status == model.BillingStatusRefunded {
 			return errors.New("billing order already refunded")
 		}
-		if order.BillingMode == "token" {
+		if order.BillingMode == "token" && !zeroPricedTokenOrder(order) {
 			usage, err := billingUsage(tx, id)
 			if err != nil {
 				return err
@@ -715,6 +715,13 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			Scene:                      order.Scene,
 		}).Error
 	})
+}
+
+func zeroPricedTokenOrder(order model.BillingOrder) bool {
+	return order.BillingMode == "token" &&
+		order.InputTokenPriceMicrocredits == 0 &&
+		order.OutputTokenPriceMicrocredits == 0 &&
+		order.CachedTokenPriceMicrocredits == 0
 }
 
 func (r *Repository) RefundBillingOrder(id string, errorText string) error {

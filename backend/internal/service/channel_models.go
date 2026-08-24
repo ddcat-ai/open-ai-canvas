@@ -473,12 +473,6 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if !input.PriceConfigured {
 		return nil
 	}
-	if billingMode == "token" && input.InputTokenPriceMicrocredits == 0 && input.OutputTokenPriceMicrocredits == 0 && input.CachedTokenPriceMicrocredits == 0 {
-		return BadAuthRequest("Token 计费至少需要配置一项价格")
-	}
-	if billingMode == "token" && capability == "video" && input.OutputTokenPriceMicrocredits == 0 {
-		return BadAuthRequest("火山方舟视频 Token 计费需要配置每百万视频 Token 价格")
-	}
 	const maxTokenPriceMicrocredits = int64(1_000_000) * CreditScale
 	if input.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
 		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
