@@ -684,6 +684,14 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 	}
 	switch normalizeCapability(intent.Capability) {
 	case "video":
+		// 价格档按实际参考素材归类。供应商执行仍可使用 reference_to_video、extend
+		// 等细分操作；计价时视频参考优先归为视频生视频，其余图片参考无论数量
+		// 都归为图生视频。
+		if intent.Inputs["video"] > 0 {
+			selector["operation"] = "video_to_video"
+		} else if intent.Inputs["image"] > 0 {
+			selector["operation"] = "image_to_video"
+		}
 		if count := intent.Inputs["image"]; count > 0 {
 			selector["imageCount"] = strconv.Itoa(count)
 		}

@@ -31,3 +31,50 @@ func TestSKUSelectorIncludesVideoReferenceImageCount(t *testing.T) {
 		t.Fatalf("matched tier = %#v", matched)
 	}
 }
+
+func TestSKUSelectorTreatsAnyVideoReferenceAsVideoToVideo(t *testing.T) {
+	intent := ModelRequestIntentFromTaskInput(map[string]any{
+		"mode":              "video",
+		"referenceImages":   []any{map[string]any{"url": "https://example.com/reference.png"}},
+		"referenceVideos":   []any{map[string]any{"url": "https://example.com/reference.mp4"}},
+		"referenceAudios":   []any{map[string]any{"url": "https://example.com/reference.mp3"}},
+		"capabilityOptions": map[string]any{"vquality": "720p"},
+	}, "canvas_video", "reference_to_video")
+	selector := skuSelectorForIntent(intent)
+	if selector["operation"] != "video_to_video" {
+		t.Fatalf("operation = %q, want video_to_video; selector = %#v", selector["operation"], selector)
+	}
+
+	modelWithTiers := model.ChannelModel{PriceTiers: []model.ChannelModelPriceTier{
+		{SelectorJSON: `{}`, Enabled: true, PriceConfigured: true},
+		{SelectorJSON: `{"operation":"video_to_video"}`, Enabled: true, PriceConfigured: true},
+	}}
+	matched := channelModelPriceTierForIntent(modelWithTiers, intent)
+	if matched == nil || matched.SelectorJSON != `{"operation":"video_to_video"}` {
+		t.Fatalf("matched tier = %#v", matched)
+	}
+}
+
+func TestSKUSelectorTreatsAnyImageReferenceCountAsImageToVideo(t *testing.T) {
+	intent := ModelRequestIntentFromTaskInput(map[string]any{
+		"mode": "video",
+		"referenceImages": []any{
+			map[string]any{"url": "https://example.com/reference-1.png"},
+			map[string]any{"url": "https://example.com/reference-2.png"},
+			map[string]any{"url": "https://example.com/reference-3.png"},
+		},
+	}, "canvas_video", "reference_to_video")
+	selector := skuSelectorForIntent(intent)
+	if selector["operation"] != "image_to_video" || selector["imageCount"] != "3" {
+		t.Fatalf("selector = %#v, want image_to_video with imageCount 3", selector)
+	}
+
+	modelWithTiers := model.ChannelModel{PriceTiers: []model.ChannelModelPriceTier{
+		{SelectorJSON: `{}`, Enabled: true, PriceConfigured: true},
+		{SelectorJSON: `{"operation":"image_to_video"}`, Enabled: true, PriceConfigured: true},
+	}}
+	matched := channelModelPriceTierForIntent(modelWithTiers, intent)
+	if matched == nil || matched.SelectorJSON != `{"operation":"image_to_video"}` {
+		t.Fatalf("matched tier = %#v", matched)
+	}
+}
