@@ -81,3 +81,82 @@ Eagle 插件把桌面 Eagle 资料库接入影策素材面板。浏览器不会�
 - [Eagle API Documentation](https://api.eagle.cool/)
 - [Eagle 产品与下载](https://eagle.cool/)
 `;
+
+export const eaglePluginDocumentationEnglish = `# Eagle library
+
+The Eagle plugin connects a desktop Eagle library to the Yingce asset panel. The browser does not access Eagle directly. Read, search, download, and write requests first reach the Yingce backend, which then accesses the administrator-configured Eagle Local API URL.
+
+## Before you start
+
+1. Install and start the Eagle desktop client, then open the library you want to use.
+2. Confirm that the Eagle Local API is available. Its default URL is \`http://127.0.0.1:41595\`.
+3. Open plugin settings as an administrator, enter the Base URL, and load folders.
+4. Save the configuration. You can then select Eagle as a source in the asset library and browse or import assets.
+
+> Eagle must remain running. Closing the client, switching libraries, or changing the local API port causes a connection error and must not be reported as an empty result.
+
+## Yingce backend endpoints
+
+| Action | Yingce endpoint | Purpose |
+| --- | --- | --- |
+| Read library | \`GET /api/plugins/eagle/library?baseUrl=...\` | Get the Eagle version, library name, and folder tree |
+| List assets | \`GET /api/plugins/eagle/items\` | Read assets by folder, keyword, and pagination |
+| Thumbnail | \`GET /api/plugins/eagle/items/{id}/thumbnail\` | Proxy an Eagle thumbnail |
+| Original file | \`GET /api/plugins/eagle/items/{id}/file\` | Download and import into Yingce resource storage |
+| Write asset | \`POST /api/plugins/eagle/items?baseUrl=...\` | Write an image, video, or audio file to Eagle |
+| Create folder | \`POST /api/plugins/eagle/folders?baseUrl=...\` | Create a folder in Eagle |
+
+These are authenticated internal Yingce APIs. They use cookie authentication and must not be called as if they were official Eagle endpoints.
+
+## Browse and search
+
+The plugin reads the Eagle folder tree and builds full hierarchy paths. Asset queries support \`folderId\`, \`keyword\`, \`limit\`, and \`offset\`. The folder list is cached within the current plugin instance and refreshed after a folder is created. Reopen plugin settings and verify the folders after switching Eagle libraries.
+
+## Import into Yingce
+
+During import, the backend proxies the original Eagle file and the frontend stores it in Yingce image or media storage. Images preserve detectable dimensions and MIME types. Video, audio, and model files preserve byte size, extension, Eagle item ID, folder, and source metadata.
+
+| Eagle content | Yingce result | Current limitation |
+| --- | --- | --- |
+| Image | Image asset | Uses the original file, not the thumbnail |
+| Video | Video asset | Falls back to 1280x720 for display when metadata has no dimensions; the original file is unchanged |
+| Audio | Audio asset | Duration depends on browser media probing |
+| Other file | Model asset | Stored as a file resource only |
+| Text/entity | Unsupported | Import returns an explicit error |
+
+## Write back to Eagle
+
+The plugin converts Yingce images, videos, or audio to data URLs before adding them to Eagle. Existing local blobs are read first; remote generation URLs are downloaded only when no local copy exists. A manually uploaded file is limited to 96 MB and its MIME type must begin with \`image/\`, \`video/\`, or \`audio/\`.
+
+When automatic result upload is enabled, generated assets can be written to the configured destination folder. A write-back failure must be shown as such and must not be reported as "saved to Eagle" merely because Yingce saved its own copy.
+
+## Configuration
+
+| Field | Description | Default |
+| --- | --- | --- |
+| \`baseUrl\` | Eagle Local API URL; must be an explicit HTTP(S) URL | \`http://127.0.0.1:41595\` |
+| \`autoUploadGenerated\` | Automatically write supported generation results to Eagle | Enabled |
+| \`generatedFolderId\` | Destination folder ID for automatic write-back | Empty; uses the Eagle default location |
+
+## Security boundaries
+
+- Eagle usually runs locally. The backend must continue validating private-network targets and allow only explicitly configured local services. This proxy must not become an arbitrary URL fetcher.
+- \`baseUrl\` stores only the service URL and must not contain tokens, cookies, or query credentials.
+- Original files and data URLs must not enter logs, localStorage, or error reporting.
+- In a multi-user deployment, server-side \`127.0.0.1\` refers to the server, not a visitor's computer. Such deployments need a local Agent or tunnel instead of pretending a direct connection is possible.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Cannot read the library | Eagle process, Base URL and port, and backend network access |
+| Folder is empty | The library currently open in Eagle, filters, and folder hierarchy |
+| Thumbnail works but import fails | Original file existence, file permissions, and backend response status |
+| Write-back fails | File size and MIME type, destination folder, and remote URL expiration |
+| Deployed server cannot reach local Eagle | The network topology requires a local bridge, not a different frontend URL |
+
+## Official resources
+
+- [Eagle API Documentation](https://api.eagle.cool/)
+- [Eagle product and downloads](https://eagle.cool/)
+`;

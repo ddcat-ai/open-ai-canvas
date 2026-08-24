@@ -154,5 +154,18 @@
     "protocol-capabilities-scopes-param": "协议能力：{{categories}}；可用场景：{{scopes}}。",
     "not-declared": "未声明",
     "model-protocol-adapter-plugin": "模型请求协议适配插件",
-    "canvas-assets-and-workflow-extensions": "画布、素材与工作流扩展"
+    "canvas-assets-and-workflow-extensions": "画布、素材与工作流扩展",
+    "install-plugin-package": "安装插件包",
+    "select-valid-plugin-manifest": "选择符合清单规范的 JSON 文件，安装后会立即进入插件中心。",
+    "select-plugin-file": "点击选择插件文件",
+    "plugin-file-requirements": "仅支持 JSON 清单，大小不超过 512 KiB",
+    "plugin-upload-security-notice": "上传前请确认插件来源可信。协议插件不会在浏览器运行任意脚本，密钥也不会从清单读取。",
+    "plugin-description-missing": "该插件没有提供简介。",
+    "plugin-information": "插件信息",
+    "plugin-author-line": "- 作者：{{value}}",
+    "plugin-version-line": "- 版本：{{value}}",
+    "plugin-capabilities-line": "- 能力：{{value}}",
+    "protocol-documentation-missing": "> 此请求协议没有提供接入文档。请联系插件作者补充 `metadata.documentation`，不要仅凭清单字段推测上游接口。",
+    "plugin-documentation-missing": "> 该插件当前没有单独的使用文档。",
+    "list-separator": "、"
 }

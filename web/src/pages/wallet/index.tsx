@@ -3,6 +3,7 @@ import { App, Button, Grid, Input, Segmented, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowDownLeft, ArrowUpRight, CalendarCheck, Coins, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, TicketCheck } from "lucide-react";
+import i18next from "i18next";
 
 import { formatCredits } from "@/constant/credits";
 import { PaginationBar, TableSurface } from "@/components/layout/workspace-page";
@@ -357,5 +358,9 @@ function sceneLabel(scene?: string) {
 }
 
 function formatTime(value?: string) {
-    return value ? new Date(value).toLocaleString(undefined, { hour12: false }) : "--";
+    return value ? new Date(value).toLocaleString(getLocale(), { hour12: false }) : "--";
+}
+
+function getLocale() {
+    return i18next.resolvedLanguage || i18next.language || "en";
 }

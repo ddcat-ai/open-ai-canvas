@@ -65,7 +65,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     const resizeHandleRef = useRef<{ element: HTMLButtonElement; pointerId: number } | null>(null);
     const query = keyword.trim().toLowerCase();
     const filteredAssets = useMemo(() => assetImages.filter((asset) => !query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)), [assetImages, query]);
-    const filteredNodes = useMemo(() => canvasImages.filter((node) => !query || canvasImageTitle(node).toLowerCase().includes(query)), [canvasImages, query]);
+    const filteredNodes = useMemo(() => canvasImages.filter((node) => !query || canvasImageTitle(node, t).toLowerCase().includes(query)), [canvasImages, query, t]);
     const activeItems = showLibrary && tab === "library" ? filteredAssets : filteredNodes;
     const safeTrayHeight = clampTrayHeight(trayHeight);
     const motionEnabled = !reducedMotion;
@@ -202,7 +202,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                         exit={{ opacity: 0, y: 14, scale: 0.95, rotateX: 3 }}
                         transition={aceternityMotion.spring.panel}
                         ref={panelRef}
-                        className="canvas-asset-tray-panel aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] p-2.5 backdrop-blur-2xl"
+                        className="canvas-asset-tray-panel aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(92vw,360px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] p-2.5 backdrop-blur-2xl"
                         style={{
                             background: theme.spatial.elevated,
                             color: theme.node.text,
@@ -295,7 +295,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                                     {filteredNodes.map((node) => (
                                         <AssetTrayRow
                                             key={node.id}
-                                            title={canvasImageTitle(node)}
+                                                title={canvasImageTitle(node, t)}
                                             imageUrl={node.metadata?.content || ""}
                                             storageKey={node.metadata?.storageKey}
                                             active={activeNodeId === node.id}
@@ -393,7 +393,7 @@ function AssetTrayRow({
             </span>
             <span className="min-w-0">
                 <span className="block truncate text-[var(--fs-tiny)] font-semibold">{title}</span>
-                <span className="mt-0.5 block text-[var(--fs-micro)] opacity-45">{active ? t("domain:currently-selected") : draggable ? t("domain:drag-onto-the-canvas-or-click-to-insert") : t("domain:click-to-locate-on-canvas")}</span>
+                <span className="mt-0.5 block truncate text-[var(--fs-micro)] opacity-45">{active ? t("domain:currently-selected") : draggable ? t("domain:drag-onto-the-canvas-or-click-to-insert") : t("domain:click-to-locate-on-canvas")}</span>
             </span>
             <span
                 className={cn(
@@ -422,8 +422,7 @@ function TrayEmpty({ text, theme }: { text: string; theme: CanvasTheme }) {
     );
 }
 
-function canvasImageTitle(node: CanvasNodeData) {
-    const { t } = useTranslation("canvas");
+function canvasImageTitle(node: CanvasNodeData, t: (key: string) => string) {
     if (node.type !== CanvasNodeType.Image) return node.title;
     return node.title || node.metadata?.prompt || t("canvas:image-node");
 }

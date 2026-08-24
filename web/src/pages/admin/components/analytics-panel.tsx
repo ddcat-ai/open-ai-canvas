@@ -5,6 +5,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { useSearchParams } from "react-router";
+import i18next from "i18next";
 
 import { ListToolbar, PaginationBar } from "@/components/layout/workspace-page";
 import {
@@ -22,7 +23,6 @@ import {
 } from "@/services/api/auth";
 import { AdminDataTable, AdminExportButton, AdminFilterChip, AdminRowActions, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { useTranslation } from "react-i18next";
-import { t } from "@/i18n";
 
 type Props = {
     users: AdminReferenceData["users"];
@@ -41,13 +41,6 @@ type PricingFormValues = {
     perMedia?: number;
     perVideoSecond?: number;
 };
-
-const capabilityOptions = [
-    { label: t("admin:text"), value: "text" },
-    { label: t("admin:image"), value: "image" },
-    { label: t("admin:video"), value: "video" },
-    { label: t("admin:audio"), value: "audio" },
-];
 
 export default function AnalyticsPanel({ users, channels }: Props) {
     const { t } = useTranslation("canvas");
@@ -72,6 +65,16 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const [pricingPage, setPricingPage] = useState(1);
     const [form] = Form.useForm<PricingFormValues>();
     const analyticsPageSize = 20;
+    const capabilityOptions = useMemo(
+        () => [
+            { label: t("admin:text"), value: "text" },
+            { label: t("admin:image"), value: "image" },
+            { label: t("admin:video"), value: "video" },
+            { label: t("admin:audio"), value: "audio" },
+        ],
+        [t],
+    );
+    const capabilityLabel = useCallback((value: string) => capabilityOptions.find((item) => item.value === value)?.label || t("admin:uncategorized"), [capabilityOptions, t]);
 
     const filters = useMemo<AnalyticsFilters>(
         () => ({
@@ -134,7 +137,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const modelOptions = useMemo(() => {
         const names = new Set<string>();
         channels.forEach((channel) => channel.models?.forEach((name) => names.add(name)));
-        data?.models.forEach((item) => item.model !== "未识别" && names.add(item.model));
+        data?.models.forEach((item) => item.model && !["未识别", "Unknown", "unknown"].includes(item.model) && names.add(item.model));
         return [...names].sort().map((name) => ({ label: name, value: name }));
     }, [channels, data?.models]);
 
@@ -242,7 +245,12 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     ];
 
     const failureColumns: ColumnsType<AdminAnalytics["failures"][number]> = [
-        { title: t("admin:error-types"), dataIndex: "type", width: 120, render: (value) => <AdminStatusBadge label={value} tone={value === "超时" ? "warning" : "error"} /> },
+        {
+            title: t("admin:error-types"),
+            dataIndex: "type",
+            width: 120,
+            render: (value) => <AdminStatusBadge label={failureTypeLabel(value)} tone={isTimeoutFailure(value) ? "warning" : "error"} />,
+        },
         { title: t("admin:models"), dataIndex: "model", width: 220 },
         { title: t("admin:count"), dataIndex: "count", width: 90 },
         { title: t("admin:recent-errors"), dataIndex: "lastError", ellipsis: true, render: (value) => <Tooltip title={value}>{value || "--"}</Tooltip> },
@@ -308,10 +316,10 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 active={Boolean(userId || model || channelId || capability)}
                 activeFilters={
                     <>
-                        {userId ? <AdminFilterChip label={`用户：${userOptions.find((user) => user.id === userId)?.displayName || userId}`} onRemove={() => setUserId(undefined)} /> : null}
+                        {userId ? <AdminFilterChip label={t("admin:user-param", { user: userOptions.find((user) => user.id === userId)?.displayName || userId })} onRemove={() => setUserId(undefined)} /> : null}
                         {model ? <AdminFilterChip label={t("admin:model-param", { model: model })} onRemove={() => setModel(undefined)} /> : null}
-                        {channelId ? <AdminFilterChip label={`渠道：${channels.find((channel) => channel.id === channelId)?.name || channelId}`} onRemove={() => setChannelId(undefined)} /> : null}
-                        {capability ? <AdminFilterChip label={`能力：${capabilityLabel(capability)}`} onRemove={() => setCapability(undefined)} /> : null}
+                        {channelId ? <AdminFilterChip label={t("admin:channel-param", { channel: channels.find((channel) => channel.id === channelId)?.name || channelId })} onRemove={() => setChannelId(undefined)} /> : null}
+                        {capability ? <AdminFilterChip label={t("admin:capability-param", { capability: capabilityLabel(capability) })} onRemove={() => setCapability(undefined)} /> : null}
                     </>
                 }
                 onReset={() => {
@@ -363,7 +371,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     label={t("admin:generation-tasks")}
                     value={data ? formatNumber(data.kpi.generationTasks) : "--"}
                     trend={formatCountDelta(currentTrend?.tasks, previousTrend?.tasks)}
-                    detail={data ? `队列 ${formatNumber(data.kpi.currentQueuedTasks)}` : undefined}
+                    detail={data ? t("admin:queue-param", { count: formatNumber(data.kpi.currentQueuedTasks) }) : undefined}
                 />
                 <AdminStatTile
                     label={t("admin:request-success-rate")}
@@ -540,10 +548,6 @@ function PriceInput({ name, label }: { name: keyof PricingFormValues; label: str
     );
 }
 
-function capabilityLabel(value: string) {
-    return capabilityOptions.find((item) => item.value === value)?.label || t("admin:uncategorized");
-}
-
 function percent(value: number) {
     return `${Number(value || 0).toFixed(1)}%`;
 }
@@ -554,7 +558,7 @@ function formatDuration(value: number) {
 }
 
 function formatNumber(value: number) {
-    return new Intl.NumberFormat("zh-CN", { notation: value >= 100000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+    return new Intl.NumberFormat(getLocale(), { notation: value >= 100000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
 }
 
 function formatCountDelta(current?: number, previous?: number) {
@@ -577,12 +581,26 @@ function formatCost(micros: number, currency?: string, available?: boolean) {
 }
 
 function formatMoney(value: number, currency = "USD") {
-    if (currency === "MIXED") return `${value.toFixed(6)}（混合币种）`;
+    if (currency === "MIXED") return `${value.toFixed(6)} (${i18next.t("admin:mixed-currency")})`;
     try {
-        return new Intl.NumberFormat("zh-CN", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value);
+        return new Intl.NumberFormat(getLocale(), { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value);
     } catch {
         return `${currency} ${value.toFixed(6)}`;
     }
+}
+
+function failureTypeLabel(value: string) {
+    if (!value) return i18next.t("admin:unknown");
+    if (isTimeoutFailure(value)) return i18next.t("admin:task-timeout");
+    return value;
+}
+
+function isTimeoutFailure(value: string) {
+    return value === "超时" || value.toLowerCase() === "timeout";
+}
+
+function getLocale() {
+    return i18next.resolvedLanguage || i18next.language || "en";
 }
 
 function fromMicros(value: number) {

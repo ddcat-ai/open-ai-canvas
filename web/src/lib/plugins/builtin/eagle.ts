@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { t } from "@/i18n";
+import { formatLocale } from "@/lib/format-locale";
 
 import { addEagleItem, createEagleFolder, downloadEagleItem, eagleItemFileUrl, eagleItemThumbnailUrl, getEagleLibrary, listEagleItems, type EagleFolder, type EagleItem } from "@/services/api/eagle";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
@@ -8,7 +9,7 @@ import { imageToDataUrl, uploadImage } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
 import { registerPlugin } from "../plugin-registry";
 import type { AssetSourceProvider, ExternalAssetItem, PluginHostContext, RegisteredPlugin } from "../plugin-types";
-import { eaglePluginDocumentation } from "./eagle-documentation";
+import { eaglePluginDocumentation, eaglePluginDocumentationEnglish } from "./eagle-documentation";
 
 export const EAGLE_PLUGIN_ID = "eagle-asset-connector";
 export const EAGLE_DEFAULT_BASE_URL = "http://127.0.0.1:41595";
@@ -16,15 +17,23 @@ export const EAGLE_DEFAULT_BASE_URL = "http://127.0.0.1:41595";
 export const eagleAssetPlugin: RegisteredPlugin = {
     manifest: {
         id: EAGLE_PLUGIN_ID,
-        name: t("lib:eagle-library"),
+        get name() {
+            return t("lib:eagle-library");
+        },
         version: "0.3.0",
         publishedAt: "2026-08-21",
         updatedAt: "2026-08-22",
         apiVersion: "1",
         category: "asset-source",
-        description: t("lib:use-eagle-as-an-external-asset-source-for-yingce-browse-original-folders"),
-        documentation: eaglePluginDocumentation,
-        author: t("lib:yingce-community"),
+        get description() {
+            return t("lib:use-eagle-as-an-external-asset-source-for-yingce-browse-original-folders");
+        },
+        get documentation() {
+            return formatLocale().startsWith("en") ? eaglePluginDocumentationEnglish : eaglePluginDocumentation;
+        },
+        get author() {
+            return t("lib:yingce-community");
+        },
         surfaces: ["asset-source"],
         permissions: ["asset.read", "asset.search", "asset.upload", "external.open"],
         trusted: true,

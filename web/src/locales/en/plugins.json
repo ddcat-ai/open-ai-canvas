@@ -154,5 +154,18 @@
     "protocol-capabilities-scopes-param": "Protocol: {{categories}}; Available in: {{scopes}}.",
     "not-declared": "Not declared",
     "model-protocol-adapter-plugin": "Model request protocol adapter plugin",
-    "canvas-assets-and-workflow-extensions": "Canvas, asset & workflow extensions"
+    "canvas-assets-and-workflow-extensions": "Canvas, asset & workflow extensions",
+    "install-plugin-package": "Install plugin package",
+    "select-valid-plugin-manifest": "Choose a valid JSON manifest. The plugin appears in the plugin center immediately after installation.",
+    "select-plugin-file": "Select a plugin file",
+    "plugin-file-requirements": "JSON manifests only, up to 512 KiB",
+    "plugin-upload-security-notice": "Verify that the plugin source is trusted before uploading. Protocol plugins cannot run arbitrary scripts in the browser, and credentials are never read from manifests.",
+    "plugin-description-missing": "This plugin does not provide a description.",
+    "plugin-information": "Plugin information",
+    "plugin-author-line": "- Author: {{value}}",
+    "plugin-version-line": "- Version: {{value}}",
+    "plugin-capabilities-line": "- Capabilities: {{value}}",
+    "protocol-documentation-missing": "> This request protocol does not provide integration documentation. Ask the plugin author to add `metadata.documentation`; do not infer the upstream API from manifest fields alone.",
+    "plugin-documentation-missing": "> This plugin does not currently provide separate usage documentation.",
+    "list-separator": ", "
 }

@@ -1,10 +1,10 @@
 import { App, Button, Input, Modal, Select, Switch, Typography } from "antd";
+import type { TFunction } from "i18next";
 import { AudioLines, CalendarDays, CheckCircle2, Clock3, CloudUpload, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 
-import { t } from "@/i18n";
 import { formatLocale } from "@/lib/format-locale";
 import { listRegisteredPlugins } from "@/lib/plugins/plugin-registry";
 import "@/lib/plugins/builtin";
@@ -18,34 +18,6 @@ import { useUserStore } from "@/stores/use-user-store";
 import { PluginDetailsModal, UploadPluginModal } from "./plugin-documentation-modals";
 import "./plugins.css";
 
-const categoryLabels: Record<string, string> = {
-    "asset-source": t("plugins:asset-sources"),
-    "canvas-node": t("plugins:canvas-nodes"),
-    workflow: t("plugins:workflows"),
-    "ai-capability": t("plugins:ai-capabilities"),
-    "import-export": t("plugins:import-export"),
-    agent: t("plugins:agent"),
-    protocol: t("plugins:request-protocol"),
-};
-
-const surfaceLabels: Record<string, string> = {
-    node: t("plugins:canvas-nodes"),
-    fullscreen: t("plugins:fullscreen-studio"),
-    hybrid: t("plugins:hybrid-access"),
-    "asset-source": t("plugins:asset-library"),
-};
-
-const permissionLabels: Record<string, string> = {
-    "canvas.read": t("plugins:read-canvas"),
-    "canvas.write": t("plugins:modify-canvas"),
-    "asset.read": t("plugins:reading-assets"),
-    "asset.search": t("plugins:search-assets"),
-    "asset.import": t("plugins:import-assets"),
-    "asset.upload": t("plugins:upload-assets"),
-    "generation.run": t("plugins:invoke-generation"),
-    "external.open": t("plugins:open-external-details"),
-};
-
 // 语言切换后模块级 formatter 不会重建：按 locale 惰性缓存
 const pluginDateFormatters = new Map<string, Intl.DateTimeFormat>();
 function pluginDateFormatter() {
@@ -54,13 +26,6 @@ function pluginDateFormatter() {
     if (!formatter) pluginDateFormatters.set(locale, (formatter = new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" })));
     return formatter;
 }
-
-const protocolSectionMeta = [
-    { key: "text", label: t("plugins:text-protocol"), description: t("plugins:text-protocol-description"), icon: MessageSquareText },
-    { key: "image", label: t("plugins:image-protocol"), description: t("plugins:image-protocol-description"), icon: ImageIcon },
-    { key: "video", label: t("plugins:video-protocol"), description: t("plugins:video-protocol-description"), icon: Film },
-    { key: "audio", label: t("plugins:audio-protocol"), description: t("plugins:audio-protocol-description"), icon: AudioLines },
-] as const;
 
 export default function PluginsPage() {
     const { message } = App.useApp();
@@ -89,6 +54,37 @@ export default function PluginsPage() {
     const [eagleFolders, setEagleFolders] = useState<EagleFolder[]>([]);
     const [eagleFoldersLoading, setEagleFoldersLoading] = useState(false);
     const [eagleFoldersError, setEagleFoldersError] = useState("");
+    const categoryLabels = useMemo<Record<string, string>>(() => ({
+        "asset-source": t("plugins:asset-sources"),
+        "canvas-node": t("plugins:canvas-nodes"),
+        workflow: t("plugins:workflows"),
+        "ai-capability": t("plugins:ai-capabilities"),
+        "import-export": t("plugins:import-export"),
+        agent: t("plugins:agent"),
+        protocol: t("plugins:request-protocol"),
+    }), [t]);
+    const surfaceLabels = useMemo<Record<string, string>>(() => ({
+        node: t("plugins:canvas-nodes"),
+        fullscreen: t("plugins:fullscreen-studio"),
+        hybrid: t("plugins:hybrid-access"),
+        "asset-source": t("plugins:asset-library"),
+    }), [t]);
+    const permissionLabels = useMemo<Record<string, string>>(() => ({
+        "canvas.read": t("plugins:read-canvas"),
+        "canvas.write": t("plugins:modify-canvas"),
+        "asset.read": t("plugins:reading-assets"),
+        "asset.search": t("plugins:search-assets"),
+        "asset.import": t("plugins:import-assets"),
+        "asset.upload": t("plugins:upload-assets"),
+        "generation.run": t("plugins:invoke-generation"),
+        "external.open": t("plugins:open-external-details"),
+    }), [t]);
+    const protocolSectionMeta = useMemo(() => [
+        { key: "text", label: t("plugins:text-protocol"), description: t("plugins:text-protocol-description"), icon: MessageSquareText },
+        { key: "image", label: t("plugins:image-protocol"), description: t("plugins:image-protocol-description"), icon: ImageIcon },
+        { key: "video", label: t("plugins:video-protocol"), description: t("plugins:video-protocol-description"), icon: Film },
+        { key: "audio", label: t("plugins:audio-protocol"), description: t("plugins:audio-protocol-description"), icon: AudioLines },
+    ] as const, [t]);
 
     useEffect(() => {
         for (const plugin of builtinPlugins) ensurePlugin(plugin.manifest);
@@ -110,7 +106,7 @@ export default function PluginsPage() {
         void reloadBackendPlugins();
     }, []);
 
-    const remotePlugins = useMemo(() => backendPlugins.map(toRegisteredPlugin), [backendPlugins]);
+    const remotePlugins = useMemo(() => backendPlugins.map((plugin) => toRegisteredPlugin(plugin, t)), [backendPlugins, t]);
     const registeredPlugins = useMemo(() => [...builtinPlugins, ...remotePlugins], [builtinPlugins, remotePlugins]);
     const backendPluginById = useMemo(() => new Map(backendPlugins.map((plugin) => [plugin.manifest.id, plugin])), [backendPlugins]);
 
@@ -145,14 +141,14 @@ export default function PluginsPage() {
             if (statusFilter === "disabled" && enabled) return false;
             return true;
         });
-    }, [backendPluginById, categoryFilter, features.systemPluginsVisibleToUsers, installations, registeredPlugins, search, statusFilter, trustFilter, user?.role]);
+    }, [backendPluginById, categoryFilter, categoryLabels, features.systemPluginsVisibleToUsers, installations, registeredPlugins, search, statusFilter, trustFilter, user?.role]);
 
     const pluginSections = useMemo(
         () => [
             ...protocolSectionMeta.map((section) => ({ ...section, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind === "protocol" && plugin.manifest.protocol?.categories.includes(section.key)) })),
             { key: "other", label: t("plugins:app-plugins"), description: t("plugins:canvas-assets-and-workflow-extensions"), icon: PlugZap, plugins: filteredPlugins.filter((plugin) => plugin.manifest.kind !== "protocol") },
         ],
-        [filteredPlugins],
+        [filteredPlugins, protocolSectionMeta, t],
     );
 
     const categoryCounts = useMemo(() => {
@@ -388,11 +384,11 @@ export default function PluginsPage() {
                                                                 <div className="plugin-card-meta">
                                                                     <span>
                                                                         <CalendarDays className="size-3.5" />
-                                                                        {t("plugins:published-param", { date: formatPluginDate(plugin.manifest.publishedAt) })}
+                                                                        {t("plugins:published-param", { date: formatPluginDate(plugin.manifest.publishedAt, t) })}
                                                                     </span>
                                                                     <span>
                                                                         <Clock3 className="size-3.5" />
-                                                                        {t("plugins:updated-param", { date: formatPluginDate(plugin.manifest.updatedAt) })}
+                                                                        {t("plugins:updated-param", { date: formatPluginDate(plugin.manifest.updatedAt, t) })}
                                                                     </span>
                                                                 </div>
 
@@ -401,7 +397,7 @@ export default function PluginsPage() {
                                                                         <span key={surface}>{surfaceLabels[surface] ?? surface}</span>
                                                                     ))}
                                                                     {plugin.manifest.protocol?.categories.map((capability) => (
-                                                                        <span key={capability}>{capabilityLabel(capability)}</span>
+                                                                        <span key={capability}>{capabilityLabel(capability, t)}</span>
                                                                     ))}
                                                                     {plugin.manifest.protocol?.poll ? <span>{t("plugins:async-polling")}</span> : null}
                                                                     <span>{t("plugins:capabilities-count-param", { count: plugin.manifest.permissions.length })}</span>
@@ -537,8 +533,8 @@ export default function PluginsPage() {
                                         <div className="plugin-settings-empty">
                                             {settingsPlugin.manifest.kind === "protocol"
                                                 ? t("plugins:protocol-capabilities-scopes-param", {
-                                                      categories: settingsPlugin.manifest.protocol?.categories.map(capabilityLabel).join("、") || t("plugins:not-declared"),
-                                                      scopes: settingsPlugin.manifest.protocol?.scopes.join("、") || t("plugins:not-declared"),
+                                                      categories: settingsPlugin.manifest.protocol?.categories.map((category) => capabilityLabel(category, t)).join(t("plugins:list-separator")) || t("plugins:not-declared"),
+                                                      scopes: settingsPlugin.manifest.protocol?.scopes.join(t("plugins:list-separator")) || t("plugins:not-declared"),
                                                   })
                                                 : t("plugins:no-editable-settings-for-this-plugin-yet-its-integration-points-and-perm")}
                                         </div>
@@ -547,11 +543,11 @@ export default function PluginsPage() {
                                     <div className="plugin-permissions">
                                         <div>
                                             <span>{t("plugins:integration-points")}</span>
-                                            {settingsPlugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join("、")}
+                                            {settingsPlugin.manifest.surfaces.map((surface) => surfaceLabels[surface] ?? surface).join(t("plugins:list-separator"))}
                                         </div>
                                         <div>
                                             <span>{t("plugins:plugin-capabilities")}</span>
-                                            {settingsPlugin.manifest.permissions.map((permission) => permissionLabels[permission] ?? permission).join("、")}
+                                            {settingsPlugin.manifest.permissions.map((permission) => permissionLabels[permission] ?? permission).join(t("plugins:list-separator"))}
                                         </div>
                                     </div>
                                 </div>
@@ -565,13 +561,13 @@ export default function PluginsPage() {
     );
 }
 
-function formatPluginDate(value?: string) {
-    if (!value) return t("plugins:not-recorded");
+function formatPluginDate(value: string | undefined, translate: TFunction) {
+    if (!value) return translate("plugins:not-recorded");
     const timestamp = Date.parse(value);
-    return Number.isFinite(timestamp) ? pluginDateFormatter().format(timestamp) : t("plugins:not-recorded");
+    return Number.isFinite(timestamp) ? pluginDateFormatter().format(timestamp) : translate("plugins:not-recorded");
 }
 
-function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
+function toRegisteredPlugin(plugin: BackendPlugin, translate: TFunction): RegisteredPlugin {
     const manifest: PluginManifest = {
         id: plugin.manifest.id,
         name: plugin.manifest.name,
@@ -580,7 +576,7 @@ function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
         updatedAt: plugin.updatedAt,
         apiVersion: plugin.manifest.apiVersion,
         category: "protocol",
-        description: plugin.manifest.description || t("plugins:model-protocol-adapter-plugin"),
+        description: plugin.manifest.description || translate("plugins:model-protocol-adapter-plugin"),
         author: plugin.manifest.author,
         surfaces: ["hybrid"],
         permissions: ["generation.run"],
@@ -591,8 +587,8 @@ function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
     return { manifest, source: plugin.source };
 }
 
-function capabilityLabel(value: string) {
-    return ({ text: t("lib:text"), image: t("lib:image"), video: t("lib:video"), audio: t("lib:audio") } as Record<string, string>)[value] || value;
+function capabilityLabel(value: string, translate: TFunction) {
+    return ({ text: translate("lib:text"), image: translate("lib:image"), video: translate("lib:video"), audio: translate("lib:audio") } as Record<string, string>)[value] || value;
 }
 
 function eagleFolderOptions(folders: EagleFolder[]) {
