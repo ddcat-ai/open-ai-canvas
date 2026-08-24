@@ -27,6 +27,24 @@ const (
 	arkPrivateAssetPollLimit  = 3 * time.Minute
 )
 
+// ResourceForUser 按操作者归属读取素材（d774326 引用的辅助方法，原实现缺失，此处按既有语义补齐）。
+func (s *Service) ResourceForUser(user *model.User, id string) (*model.Resource, error) {
+	if user == nil || strings.TrimSpace(user.ID) == "" {
+		return nil, BadAuthRequest("未识别当前用户")
+	}
+	resource, err := s.repo.ResourceForUser(user.ID, id)
+	if err != nil {
+		return nil, err
+	}
+	resource.PublicURL = ""
+	return resource, nil
+}
+
+// providerResourceURL 为模型上游签发短时下载地址。
+func (s *Service) providerResourceURL(resource *model.Resource, expiresAt time.Time) (string, error) {
+	return s.directResourceURL(resource, expiresAt)
+}
+
 // Tests can inject a local control-plane server. Production derives the Ark
 // control-plane address from the administrator's explicit Region setting.
 var arkPrivateAssetAPIBaseURLOverride string
