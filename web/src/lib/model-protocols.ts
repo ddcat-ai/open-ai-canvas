@@ -8,7 +8,9 @@ export function protocolGroups(protocols: ModelProtocolDefinition[]) {
 export function modelProtocolDefinition(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return definitions.find((item) => item.value === value); }
 export function modelProtocolLabel(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return modelProtocolDefinition(value, definitions)?.label || (value ? value : "未安装协议"); }
 export function modelProtocolCapability(value: string | undefined, definitions: ModelProtocolDefinition[] = []) { return modelProtocolDefinition(value, definitions)?.capability; }
-export function modelProtocolSupportsTokenBilling(capability?: string, _protocol?: string) { return capability === "text"; }
+export function modelProtocolSupportsTokenBilling(capability?: string, protocol?: string) {
+    return capability === "text" || (capability === "video" && protocol === "volcengine-ark-video");
+}
 
 export function protocolForModelCatalog(_endpointTypes: string[] = []): ModelProtocol | undefined {
     // A provider catalog cannot invent a protocol ID. The channel's selected
