@@ -1198,5 +1198,10 @@
     "canvas-nodes-found": "Real nodes retrieved by the given criteria.",
     "canvas-resources-read": "Canvas resource inventory read.",
     "ops-validation-passed": "Operation validation passed.",
-    "ops-validation-failed": "Operation validation failed."
+    "ops-validation-failed": "Operation validation failed.",
+    "the-current-model-has-no-available-request-protocol": "The current model has no available request protocol",
+    "claude-request-failed": "Claude request failed",
+    "claude-stream-response-invalid": "Invalid Claude streaming response format",
+    "claude-upstream-returned-failure": "Claude upstream returned a failure",
+    "claude-api-returned-no-content": "The Claude API returned no content"
 }

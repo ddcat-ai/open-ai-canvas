@@ -1,6 +1,6 @@
 /**
- * Eagle 插件文档（markdown）。
- * 插件自带说明数据，非 UI catalog 文案：不在 MIGRATED 探针名单内，
+ * Eagle 插件文档（markdown，随插件清单渲染）。
+ * 插件自带说明数据而非 UI catalog 文案：不属于 MIGRATED 探针名单，
  * 需要双语时按插件文档资源维护，而不是进 i18n catalog。
  */
 export const eaglePluginDocumentation = `# Eagle 素材库
@@ -80,13 +80,4 @@ Eagle 插件把桌面 Eagle 资料库接入影策素材面板。浏览器不会�
 
 - [Eagle API Documentation](https://api.eagle.cool/)
 - [Eagle 产品与下载](https://eagle.cool/)
-`;
-
-export const eagleAssetPlugin: RegisteredPlugin = {
-    manifest: {
-        id: EAGLE_PLUGIN_ID,
-        name: "Eagle 素材库",
-        version: "0.3.0",
-        publishedAt: "2026-08-21",
-        updatedAt: "2026-08-22",
 `;

@@ -1198,5 +1198,10 @@
     "canvas-nodes-found": "已按条件检索真实节点。",
     "canvas-resources-read": "已读取画布资源清单。",
     "ops-validation-passed": "操作校验通过。",
-    "ops-validation-failed": "操作校验失败。"
+    "ops-validation-failed": "操作校验失败。",
+    "the-current-model-has-no-available-request-protocol": "当前模型未选择可用请求协议",
+    "claude-request-failed": "Claude 请求失败",
+    "claude-stream-response-invalid": "Claude 流式响应格式无效",
+    "claude-upstream-returned-failure": "Claude 上游返回失败",
+    "claude-api-returned-no-content": "Claude 接口没有返回内容"
 }
