@@ -478,19 +478,20 @@ export function modelOptionsFromChannels(channels: ModelChannel[]) {
 
 export function hasSystemModelPrice(channel: ModelChannel, model: string) {
     if (channel.scope !== "system") return true;
-    const positive = (value: number | undefined) => typeof value === "number" && Number.isFinite(value) && value > 0;
+    // 价格字段已由后端按“非负数”校验；0 表示免费模型，不能在目录重建时被过滤。
+    const configured = (value: number | undefined) => typeof value === "number" && Number.isFinite(value) && value >= 0;
     return channel.modelCosts?.some((item) => {
         if (item.model !== model) return false;
         const tiers = item.logicalPriceTiers || [];
         if (tiers.length) {
             return tiers.some((tier) => tier.billingMode === "token"
-                ? [tier.inputTokenPriceMicrocredits, tier.outputTokenPriceMicrocredits, tier.cachedTokenPriceMicrocredits].some(positive)
-                : positive(tier.unitPriceMicrocredits));
+                ? [tier.inputTokenPriceMicrocredits, tier.outputTokenPriceMicrocredits, tier.cachedTokenPriceMicrocredits].every(configured)
+                : configured(tier.unitPriceMicrocredits));
         }
         if (item.billingMode === "token") {
-            return [item.inputTokenPriceMicrocredits, item.outputTokenPriceMicrocredits, item.cachedTokenPriceMicrocredits].some(positive);
+            return [item.inputTokenPriceMicrocredits, item.outputTokenPriceMicrocredits, item.cachedTokenPriceMicrocredits].every(configured);
         }
-        return positive(item.unitPriceMicrocredits);
+        return configured(item.unitPriceMicrocredits);
     }) === true;
 }
 
