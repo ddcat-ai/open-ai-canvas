@@ -748,6 +748,11 @@
     --canvas-mention-menu-max-height: 320px;
     --canvas-mention-search-height: 40px;
     --canvas-mention-item-height: 34px;
+    --canvas-mention-chip-height: 1.68em;
+    --canvas-mention-chip-preview-size: 1.18em;
+    --canvas-mention-chip-gap: 0.18em;
+    --canvas-mention-chip-padding-inline: 0.22em;
+    --canvas-mention-chip-offset-y: 0.08em;
 
     /* Modal 组件（对话框，对应 #98 面板层级）*/
     --modal-radius: var(--r-lg);
@@ -7021,6 +7026,65 @@
 
     .canvas-node-composer-resize-handle:focus-visible {
         outline: none;
+    }
+
+    .canvas-resource-inline-mention {
+        display: inline-flex;
+        min-width: 0;
+        max-width: 100%;
+        height: var(--canvas-mention-chip-height);
+        align-items: center;
+        gap: var(--canvas-mention-chip-gap);
+        margin-inline: 0.06em;
+        overflow: hidden;
+        border-radius: var(--r-xs);
+        background: var(--canvas-composer-control-surface);
+        padding-inline: var(--canvas-mention-chip-padding-inline);
+        color: inherit;
+        font-size: 0.92em;
+        font-weight: 500;
+        line-height: 1;
+        vertical-align: baseline;
+        user-select: none;
+        transform: translateY(var(--canvas-mention-chip-offset-y));
+    }
+
+    .canvas-resource-inline-at,
+    .canvas-resource-inline-label {
+        flex: 0 0 auto;
+    }
+
+    .canvas-resource-inline-at {
+        opacity: 0.9;
+    }
+
+    .canvas-resource-inline-preview {
+        display: block;
+        width: var(--canvas-mention-chip-preview-size);
+        min-width: var(--canvas-mention-chip-preview-size);
+        max-width: var(--canvas-mention-chip-preview-size);
+        height: var(--canvas-mention-chip-preview-size);
+        min-height: var(--canvas-mention-chip-preview-size);
+        max-height: var(--canvas-mention-chip-preview-size);
+        flex: 0 0 var(--canvas-mention-chip-preview-size);
+        overflow: hidden;
+        border-radius: var(--r-xs);
+        object-fit: cover;
+    }
+
+    .canvas-resource-inline-preview.is-video {
+        background: var(--color-neutral-950);
+    }
+
+    .canvas-resource-inline-preview.is-character {
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        object-fit: contain;
+    }
+
+    .canvas-resource-inline-preview.is-fallback {
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, currentColor 10%, transparent);
     }
 
     .canvas-resource-mention-menu {

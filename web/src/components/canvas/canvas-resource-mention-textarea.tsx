@@ -409,17 +409,17 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
     const chip = document.createElement("span");
     chip.contentEditable = "false";
     chip.dataset.mentionToken = token;
-    chip.className = "mx-[0.06em] inline-flex h-[1.68em] translate-y-[0.08em] select-none items-center gap-[0.18em] rounded-[0.38em] bg-black/[0.06] px-[0.22em] text-[0.92em] font-medium leading-none text-current align-baseline dark:bg-white/[0.1]";
+    chip.className = "canvas-resource-inline-mention";
 
     const at = document.createElement("span");
-    at.className = "shrink-0 opacity-90";
+    at.className = "canvas-resource-inline-at";
     at.textContent = "@";
     chip.appendChild(at);
 
     chip.appendChild(createInlinePreview(reference));
 
     const label = document.createElement("span");
-    label.className = "shrink-0";
+    label.className = "canvas-resource-inline-label";
     label.textContent = reference.label;
     chip.appendChild(label);
 
@@ -429,7 +429,7 @@ function createInlineMentionChip(reference: CanvasResourceReference, token: stri
 function createInlinePreview(reference: CanvasResourceReference) {
     if ((reference.kind === "image" || reference.kind === "video" || reference.kind === "character") && reference.previewUrl) {
         const media = document.createElement(reference.kind === "video" ? "video" : "img");
-        media.className = `size-[1.18em] shrink-0 rounded-[0.24em] ${reference.kind === "video" ? "bg-black object-cover" : reference.kind === "character" ? "bg-black/5 object-contain" : "object-cover"}`;
+        media.className = `canvas-resource-inline-preview is-${reference.kind}`;
         media.setAttribute("src", reference.previewUrl);
         media.setAttribute("alt", "");
         if (media instanceof HTMLVideoElement) {
@@ -439,7 +439,7 @@ function createInlinePreview(reference: CanvasResourceReference) {
         return media;
     }
     const fallback = document.createElement("span");
-    fallback.className = "grid size-[1.18em] shrink-0 place-items-center rounded-[0.24em] bg-current/10";
+    fallback.className = "canvas-resource-inline-preview is-fallback";
     fallback.textContent = reference.sourceType === CanvasNodeType.Drawing ? "✎" : reference.kind === "audio" ? "♪" : reference.kind === "video" ? "▶" : reference.kind === "image" ? "□" : reference.kind === "skill" ? "✦" : "";
     return fallback;
 }
