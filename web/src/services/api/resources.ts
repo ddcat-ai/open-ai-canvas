@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getActiveUserScope } from "@/lib/user-scope";
 import axios from "axios";
 import { apiBaseURL, apiClient, request, type BackendEnvelope } from "@/services/api/request";
@@ -111,7 +112,7 @@ export function getResource(id: string): Promise<RemoteResource> {
     const cacheKey = resourceCacheKey(id);
     const cached = resourceCache.get(cacheKey);
     if (cached) return Promise.resolve(cached);
-    if (missingResourceIds.has(cacheKey)) return Promise.reject(new Error("资源不存在或已被删除"));
+    if (missingResourceIds.has(cacheKey)) return Promise.reject(new Error(t("domain:the-resource-does-not-exist-or-has-been-deleted")));
     const pending = resourceRequests.get(cacheKey);
     if (pending) return pending;
     const task = request<{ resource: RemoteResource }>(api.get(`/resources/${encodeURIComponent(id)}`))
@@ -130,13 +131,13 @@ export function getResource(id: string): Promise<RemoteResource> {
 
 export async function getResourceOSSUrl(storageKey?: string) {
     const id = resourceIdFromStorageKey(storageKey);
-    if (!id) throw new Error("当前媒体尚未上传到后端资源存储");
+    if (!id) throw new Error(t("domain:this-media-has-not-been-uploaded-to-backend-resource-storage-yet"));
     try {
         const data = await request<{ url: string }>(api.get(`/resources/${encodeURIComponent(id)}/oss-url`));
-        if (!data.url) throw new Error("后端未返回对象存储地址");
+        if (!data.url) throw new Error(t("domain:the-backend-did-not-return-an-object-storage-address"));
         return data.url;
     } catch (error) {
-        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data.msg || error.message || "获取对象存储地址失败");
+        if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) throw new Error(error.response?.data.msg || error.message || t("domain:failed-to-get-object-storage-url"));
         throw error;
     }
 }

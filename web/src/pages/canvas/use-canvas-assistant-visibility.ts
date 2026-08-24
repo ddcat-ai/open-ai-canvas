@@ -32,9 +32,12 @@ export function useCanvasAssistantVisibility() {
         }, CANVAS_AGENT_PANEL_MOTION_MS);
     }, [assistantClosing, assistantMounted]);
 
-    useEffect(() => () => {
-        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    }, []);
+    useEffect(
+        () => () => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        },
+        [],
+    );
 
     return {
         agentMode,

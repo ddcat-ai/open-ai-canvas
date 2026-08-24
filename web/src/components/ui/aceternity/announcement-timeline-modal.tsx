@@ -5,6 +5,8 @@ import { Bell, BellOff, CircleAlert, Info, ShieldAlert, Wrench } from "lucide-re
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { AnnouncementContent } from "@/components/ui/announcement-content";
 import type { AnnouncementLevel, SystemAnnouncement } from "@/services/api/announcements";
+import { useLocaleStore } from "@/stores/use-locale-store";
+import { useTranslation } from "react-i18next";
 
 type AnnouncementTimelineModalProps = {
     open: boolean;
@@ -15,15 +17,20 @@ type AnnouncementTimelineModalProps = {
     onRetry?: () => void;
 };
 
-const levelMeta: Record<AnnouncementLevel, { label: string; dot: string; icon: typeof Info }> = {
-    info: { label: "平台通知", dot: "bg-sky-500", icon: Info },
-    success: { label: "状态恢复", dot: "bg-emerald-500", icon: Wrench },
-    warning: { label: "服务提醒", dot: "bg-amber-500", icon: CircleAlert },
-    critical: { label: "重要通知", dot: "bg-red-500", icon: ShieldAlert },
-};
+function levelMeta(t: (key: string, options?: Record<string, unknown>) => string): Record<AnnouncementLevel, { label: string; dot: string; icon: typeof Info }> {
+    return {
+        info: { label: t("domain:platform-announcements"), dot: "bg-sky-500", icon: Info },
+        success: { label: t("domain:status-recovery"), dot: "bg-emerald-500", icon: Wrench },
+        warning: { label: t("domain:service-alerts"), dot: "bg-amber-500", icon: CircleAlert },
+        critical: { label: t("domain:important-notices"), dot: "bg-red-500", icon: ShieldAlert },
+    };
+}
 
 export function AnnouncementTimelineModal({ open, announcements, loading = false, error = "", onClose, onRetry }: AnnouncementTimelineModalProps) {
+    const { t } = useTranslation("canvas");
+    const locale = useLocaleStore((state) => state.locale);
     const reducedMotion = useReducedMotion();
+    const dateLocale = locale === "en" ? "en-US" : "zh-CN";
 
     return (
         <Modal
@@ -38,18 +45,14 @@ export function AnnouncementTimelineModal({ open, announcements, loading = false
                         <Bell className="size-4.5" />
                     </span>
                     <div className="min-w-0">
-                        <div className="text-lg font-semibold tracking-normal text-foreground">系统公告</div>
-                        <div className="mt-0.5 text-xs font-normal text-foreground/45">{announcements.length ? `${announcements.length} 条当前公告` : "当前没有进行中的公告"}</div>
+                        <div className="text-lg font-semibold tracking-normal text-foreground">{t("domain:system-announcements-3")}</div>
+                        <div className="mt-0.5 text-xs font-normal text-foreground/45">{announcements.length ? t("domain:param-active-announcements", { length: announcements.length }) : t("domain:no-active-announcements-right-now")}</div>
                     </div>
                 </div>
             }
             styles={{ body: { paddingTop: 8, maxHeight: "min(72vh, 720px)", overflowY: "auto", overscrollBehavior: "contain" } }}
             modalRender={(node) => (
-                <motion.div
-                    initial={reducedMotion ? false : { opacity: 0, y: 14, scale: 0.975 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
-                >
+                <motion.div initial={reducedMotion ? false : { opacity: 0, y: 14, scale: 0.975 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}>
                     {node}
                 </motion.div>
             )}
@@ -58,31 +61,46 @@ export function AnnouncementTimelineModal({ open, announcements, loading = false
                 {loading ? (
                     <motion.div key="loading" role="status" className="grid min-h-60 place-items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div className="flex flex-col items-center gap-3 text-sm text-foreground/50">
-                            <motion.span aria-hidden className="size-7 rounded-full border-2 border-foreground/15 border-t-foreground/70" animate={reducedMotion ? undefined : { rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }} />
-                            正在读取公告
+                            <motion.span
+                                aria-hidden
+                                className="size-7 rounded-full border-2 border-foreground/15 border-t-foreground/70"
+                                animate={reducedMotion ? undefined : { rotate: 360 }}
+                                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                            />
+                            {t("domain:loading-announcements")}
                         </div>
                     </motion.div>
                 ) : error ? (
                     <motion.div key="error" className="grid min-h-60 place-items-center text-center" initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                         <div>
                             <CircleAlert className="mx-auto size-7 text-red-500" />
-                            <p className="mt-3 text-sm font-medium text-foreground">公告读取失败</p>
+                            <p className="mt-3 text-sm font-medium text-foreground">{t("domain:failed-to-load-announcements-2")}</p>
                             <p className="mt-1 max-w-sm text-xs leading-5 text-foreground/50">{error}</p>
-                            {onRetry ? <button type="button" className="mt-4 h-8 rounded-md border border-border px-3 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onRetry}>重新加载</button> : null}
+                            {onRetry ? (
+                                <button
+                                    type="button"
+                                    className="mt-4 h-8 rounded-md border border-border px-3 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    onClick={onRetry}
+                                >
+                                    {t("domain:reload-2")}
+                                </button>
+                            ) : null}
                         </div>
                     </motion.div>
                 ) : announcements.length ? (
                     <motion.div key="timeline" className="py-3 sm:px-2" initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.055 } } }}>
                         {announcements.map((announcement, index) => (
-                            <AnnouncementTimelineItem key={announcement.id} announcement={announcement} last={index === announcements.length - 1} reducedMotion={Boolean(reducedMotion)} />
+                            <AnnouncementTimelineItem key={announcement.id} announcement={announcement} last={index === announcements.length - 1} reducedMotion={Boolean(reducedMotion)} t={t} dateLocale={dateLocale} />
                         ))}
                     </motion.div>
                 ) : (
                     <motion.div key="empty" className="grid min-h-60 place-items-center text-center" initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                         <div>
-                            <span className="mx-auto grid size-12 place-items-center rounded-full border border-border bg-muted/40 text-foreground/45"><BellOff className="size-5" /></span>
-                            <p className="mt-3 text-sm font-medium text-foreground">暂无系统公告</p>
-                            <p className="mt-1 text-xs text-foreground/45">有新的服务动态时会在这里展示</p>
+                            <span className="mx-auto grid size-12 place-items-center rounded-full border border-border bg-muted/40 text-foreground/45">
+                                <BellOff className="size-5" />
+                            </span>
+                            <p className="mt-3 text-sm font-medium text-foreground">{t("domain:no-system-announcements")}</p>
+                            <p className="mt-1 text-xs text-foreground/45">{t("domain:service-updates-will-appear-here")}</p>
                         </div>
                     </motion.div>
                 )}
@@ -91,8 +109,9 @@ export function AnnouncementTimelineModal({ open, announcements, loading = false
     );
 }
 
-function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { announcement: SystemAnnouncement; last: boolean; reducedMotion: boolean }) {
-    const meta = levelMeta[announcement.level] || levelMeta.info;
+function AnnouncementTimelineItem({ announcement, last, reducedMotion, t, dateLocale }: { announcement: SystemAnnouncement; last: boolean; reducedMotion: boolean; t: (key: string, options?: Record<string, unknown>) => string; dateLocale: string }) {
+    const metaMap = levelMeta(t);
+    const meta = metaMap[announcement.level] || metaMap.info;
     const Icon = meta.icon;
     return (
         <motion.article
@@ -107,28 +126,33 @@ function AnnouncementTimelineItem({ announcement, last, reducedMotion }: { annou
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <h3 className="text-[var(--fs-body-lg)] font-semibold leading-6 tracking-normal text-foreground sm:text-base">{announcement.title}</h3>
-                    <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-foreground/45"><Icon className="size-3" />{meta.label}</span>
+                    <span className="inline-flex items-center gap-1 text-[var(--fs-label)] font-medium text-foreground/45">
+                        <Icon className="size-3" />
+                        {meta.label}
+                    </span>
                 </div>
                 <AnnouncementContent content={announcement.content} className="mt-1 text-sm leading-6 text-foreground/75 sm:text-[var(--fs-body-lg)]" />
-                <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">{relativeTime(announcement.publishedAt)} · {formatDateTime(announcement.publishedAt)}</time>
+                <time dateTime={announcement.publishedAt} className="mt-2 block text-xs tabular-nums text-foreground/40">
+                    {relativeTime(t, announcement.publishedAt)} · {formatDateTime(announcement.publishedAt, dateLocale)}
+                </time>
             </div>
         </motion.article>
     );
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, locale: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "--";
-    return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date).replaceAll("/", "-");
+    return new Intl.DateTimeFormat(locale, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date).replaceAll("/", "-");
 }
 
-function relativeTime(value: string) {
+function relativeTime(t: (key: string, options?: Record<string, unknown>) => string, value: string) {
     const timestamp = new Date(value).getTime();
-    if (!Number.isFinite(timestamp)) return "刚刚";
+    if (!Number.isFinite(timestamp)) return t("domain:just-now");
     const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-    if (seconds < 60) return "刚刚";
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
-    if (seconds < 86400 * 7) return `${Math.floor(seconds / 86400)} 天前`;
-    return `${Math.floor(seconds / (86400 * 7))} 周前`;
+    if (seconds < 60) return t("domain:just-now");
+    if (seconds < 3600) return t("domain:minutes-ago", { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return t("domain:hours-ago", { count: Math.floor(seconds / 3600) });
+    if (seconds < 86400 * 7) return t("domain:days-ago", { count: Math.floor(seconds / 86400) });
+    return t("domain:weeks-ago", { count: Math.floor(seconds / (86400 * 7)) });
 }

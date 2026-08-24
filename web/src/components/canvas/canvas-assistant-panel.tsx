@@ -9,6 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestToolResponse, type ResponseFunctionTool, type ResponseInputMessage, type ResponseToolCall } from "@/services/api/image";
 import { backendModelRuntimeRequired, runBackendToolGenerationTask } from "@/services/api/generation-task";
+import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { imageToDataUrl } from "@/services/image-storage";
 import { isCanvasGenerationDurableAckError, persistCanvasCinematicSessionContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
@@ -30,167 +31,14 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasAssistantMessage, type CanvasAssistantPendingBackendSession, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasAgentStore } from "@/stores/canvas/use-canvas-agent-store";
 import { previewCanvasAgentOps, summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentOperationImpact, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import { buildCanvasAgentContext, findCanvasAgentNodes, getCanvasAgentResources, validateCanvasAgentOps } from "@/lib/canvas/canvas-agent-context";
 import { canvasAgentPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
+import { ONLINE_AGENT_MAX_STEPS, ONLINE_AGENT_PROMPT, ONLINE_AGENT_TOOLS, ONLINE_READ_TOOLS } from "@/components/canvas/canvas-online-agent-protocol";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 export const CANVAS_AGENT_PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = CANVAS_AGENT_PANEL_MOTION_MS / 1000;
-const ONLINE_AGENT_MAX_STEPS = 4;
-const ONLINE_AGENT_PROMPT =
-    "你是影策网页内置在线画布助手。首轮必须先调用 canvas_get_context；涉及已有节点时用 canvas_find_nodes 获取真实 id，涉及媒体参考时用 canvas_get_resources。复杂写操作先 canvas_validate_ops，再执行 canvas_apply_ops。不要输出 JSON ops、不要猜 id、不要把未就绪资源当作可用素材、不要编造执行结果；工具返回真实结果后再回答。";
-const JSON_RECORD_SCHEMA = { type: "object", additionalProperties: true };
-const POSITION_SCHEMA = { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"], additionalProperties: false };
-const VIEWPORT_SCHEMA = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, k: { type: "number" } }, required: ["x", "y", "k"], additionalProperties: false };
-const NODE_TYPE_SCHEMA = { type: "string", enum: ["image", "text", "skill", "video", "audio"] };
-const GENERATION_MODE_SCHEMA = { type: "string", enum: ["text", "image", "video", "audio"] };
-const GENERATION_OPTION_PROPERTIES = {
-    model: { type: "string" },
-    size: { type: "string" },
-    quality: { type: "string" },
-    transparentBackground: { type: "string", enum: ["true", "false"] },
-    count: { type: "number" },
-    seconds: { type: "string" },
-    vquality: { type: "string" },
-    generateAudio: { type: "string" },
-    watermark: { type: "string" },
-    audioVoice: { type: "string" },
-    audioFormat: { type: "string" },
-    audioSpeed: { type: "string" },
-    audioInstructions: { type: "string" },
-};
-const CANVAS_OP_SCHEMA = {
-    type: "object",
-    properties: {
-        type: { type: "string", enum: ["add_node", "update_node", "delete_node", "delete_connections", "connect_nodes", "set_viewport", "select_nodes", "run_generation"] },
-        id: { type: "string" },
-        ids: { type: "array", items: { type: "string" } },
-        nodeType: NODE_TYPE_SCHEMA,
-        title: { type: "string" },
-        x: { type: "number" },
-        y: { type: "number" },
-        width: { type: "number" },
-        height: { type: "number" },
-        position: POSITION_SCHEMA,
-        metadata: JSON_RECORD_SCHEMA,
-        patch: JSON_RECORD_SCHEMA,
-        all: { type: "boolean" },
-        fromNodeId: { type: "string" },
-        toNodeId: { type: "string" },
-        viewport: VIEWPORT_SCHEMA,
-        nodeId: { type: "string" },
-        mode: GENERATION_MODE_SCHEMA,
-        prompt: { type: "string" },
-        retry: { type: "boolean" },
-    },
-    required: ["type"],
-    additionalProperties: false,
-};
-const ONLINE_READ_TOOLS = new Set(["canvas_get_state", "canvas_get_context", "canvas_find_nodes", "canvas_get_resources", "canvas_validate_ops", "canvas_get_selection", "canvas_export_snapshot"]);
-
-function toolDefinition(name: string, description: string, properties: Record<string, unknown>, required: string[] = [], strict = false): ResponseFunctionTool {
-    return { type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false }, strict } };
-}
-
-function generationToolDefinition(name: string, description: string, mode?: "text" | "image" | "video" | "audio") {
-    return toolDefinition(
-        name,
-        description,
-        {
-            prompt: { type: "string" },
-            title: { type: "string" },
-            x: { type: "number" },
-            y: { type: "number" },
-            referenceNodeIds: { type: "array", items: { type: "string" } },
-            ...(mode ? {} : { mode: GENERATION_MODE_SCHEMA }),
-            autoRun: { type: "boolean" },
-            ...GENERATION_OPTION_PROPERTIES,
-        },
-        ["prompt"],
-    );
-}
-
-const ONLINE_AGENT_TOOLS: ResponseFunctionTool[] = [
-    toolDefinition("canvas_get_state", "读取当前网页画布的节点、连线、选区和视口。", {}),
-    toolDefinition("canvas_get_context", "读取语义化画布上下文、真实节点 id、连接关系、资源就绪状态和状态哈希。", {}),
-    toolDefinition("canvas_find_nodes", "按标题、内容、提示词、类型、状态或资产检索真实节点。", { query: { type: "string" }, ids: { type: "array", items: { type: "string" } }, types: { type: "array", items: { type: "string" } }, statuses: { type: "array", items: { type: "string" } }, resourceOnly: { type: "boolean" }, limit: { type: "number" } }),
-    toolDefinition("canvas_get_resources", "读取画布媒体资源引用、类型、尺寸、大小、时长和就绪状态，不返回媒体 URL。", { nodeIds: { type: "array", items: { type: "string" } }, status: { type: "string" }, limit: { type: "number" } }),
-    toolDefinition("canvas_validate_ops", "在写入前校验节点 id、连接关系和批量操作参数。", { ops: { type: "array", items: CANVAS_OP_SCHEMA } }, ["ops"]),
-    toolDefinition("canvas_get_selection", "读取当前网页画布选中的节点。", {}),
-    toolDefinition("canvas_export_snapshot", "导出当前画布快照，用于理解布局。", {}),
-    toolDefinition(
-        "canvas_apply_ops",
-        "批量操作当前网页画布。复杂写操作应先 canvas_validate_ops；可传 canvas_get_context 返回的 expectedStateHash 防止基于过期状态写入。",
-        { ops: { type: "array", items: CANVAS_OP_SCHEMA }, expectedStateHash: { type: "string" } },
-        ["ops"],
-        false,
-    ),
-    toolDefinition(
-        "canvas_create_node",
-        "创建任意类型节点：text、image、video、audio。适合创建文本、媒体占位或自定义 metadata 节点。",
-        { nodeType: NODE_TYPE_SCHEMA, title: { type: "string" }, x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" }, metadata: JSON_RECORD_SCHEMA },
-        ["nodeType"],
-    ),
-    toolDefinition("canvas_create_text_node", "在当前画布创建单个文本节点。", { text: { type: "string" }, x: { type: "number" }, y: { type: "number" }, title: { type: "string" }, width: { type: "number" }, height: { type: "number" } }),
-    toolDefinition(
-        "canvas_create_text_nodes",
-        "批量创建文本节点，适合生成标题、段落、脚本、说明等内容块。",
-        {
-            items: {
-                type: "array",
-                minItems: 1,
-                items: {
-                    type: "object",
-                    properties: { text: { type: "string" }, title: { type: "string" }, x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" } },
-                    required: ["text"],
-                    additionalProperties: false,
-                },
-            },
-            x: { type: "number" },
-            y: { type: "number" },
-            gap: { type: "number" },
-            direction: { type: "string", enum: ["row", "column"] },
-        },
-        ["items"],
-    ),
-    toolDefinition("canvas_create_cinematic_session", "把自然语言创作指令提交给后端影视 Agent 会话，后端拆解为剧本、场景、分镜、镜头和成片节点，并返回可写回画布的操作。", { prompt: { type: "string" } }, ["prompt"]),
-    toolDefinition(
-        "canvas_create_image_prompt_flow",
-        "创建提示词文本节点和图片目标节点并自动连线，可选择立即触发生图。",
-        { prompt: { type: "string" }, x: { type: "number" }, y: { type: "number" }, autoRun: { type: "boolean" }, ...GENERATION_OPTION_PROPERTIES },
-        ["prompt"],
-    ),
-    generationToolDefinition("canvas_create_generation_flow", "创建通用生成流程：提示词文本节点、对应类型的生成目标节点和参考节点连线，可用于文案、生图、视频或音频。"),
-    generationToolDefinition("canvas_generate_text", "创建通用文本生成流程并立即触发生成。", "text"),
-    generationToolDefinition("canvas_generate_image", "创建通用图片生成流程并立即触发生成。", "image"),
-    generationToolDefinition("canvas_generate_video", "创建通用视频生成流程并立即触发生成。", "video"),
-    generationToolDefinition("canvas_generate_audio", "创建通用音频生成流程并立即触发生成。", "audio"),
-    toolDefinition("canvas_update_node", "更新节点基础字段或 metadata。", { id: { type: "string" }, patch: JSON_RECORD_SCHEMA, metadata: JSON_RECORD_SCHEMA }, ["id"]),
-    toolDefinition("canvas_update_node_text", "更新文本节点内容和标题。", { id: { type: "string" }, text: { type: "string" }, title: { type: "string" } }, ["id", "text"]),
-    toolDefinition(
-        "canvas_move_nodes",
-        "移动一个或多个节点，支持绝对坐标或 dx/dy 偏移。",
-        {
-            items: {
-                type: "array",
-                minItems: 1,
-                items: { type: "object", properties: { id: { type: "string" }, x: { type: "number" }, y: { type: "number" }, dx: { type: "number" }, dy: { type: "number" } }, required: ["id"], additionalProperties: false },
-            },
-        },
-        ["items"],
-    ),
-    toolDefinition("canvas_resize_node", "调整节点尺寸。", { id: { type: "string" }, width: { type: "number" }, height: { type: "number" }, freeResize: { type: "boolean" } }, ["id", "width", "height"]),
-    toolDefinition("canvas_delete_nodes", "删除指定节点及相关连线。", { ids: { type: "array", items: { type: "string" }, minItems: 1 } }, ["ids"]),
-    toolDefinition(
-        "canvas_connect_nodes",
-        "批量连接节点。",
-        { connections: { type: "array", minItems: 1, items: { type: "object", properties: { fromNodeId: { type: "string" }, toNodeId: { type: "string" } }, required: ["fromNodeId", "toNodeId"], additionalProperties: false } } },
-        ["connections"],
-    ),
-    toolDefinition("canvas_select_nodes", "设置当前选中节点。", { ids: { type: "array", items: { type: "string" } } }, ["ids"]),
-    toolDefinition("canvas_set_viewport", "调整画布视口。", { viewport: VIEWPORT_SCHEMA }, ["viewport"]),
-    toolDefinition("canvas_run_generation", "触发指定节点生成；对已有生成任务明确重试时传 retry=true。", { nodeId: { type: "string" }, mode: GENERATION_MODE_SCHEMA, prompt: { type: "string" }, retry: { type: "boolean" } }, ["nodeId"]),
-];
 type OnlineAgentTab = "setup" | "chat" | "history" | "log";
 type OnlineAgentLog = { id: string; time: string; title: string; data?: unknown };
 type OnlineAgentLogContext = { model: string; running: boolean; confirmTools: boolean; messages: number; nodes: number; connections: number };
@@ -313,6 +161,7 @@ export function CanvasAssistantPanel({
     onCinematicEntryConsumed,
     resizing = false,
 }: CanvasAssistantPanelProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
@@ -328,7 +177,7 @@ export function CanvasAssistantPanel({
     const [deleteChatIds, setDeleteChatIds] = useState<string[]>([]);
     const [onlineLogs, setOnlineLogs] = useState<OnlineAgentLog[]>([]);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
-    const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
+    const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession(t("canvas:new-conversation-2"))]));
     const localSessionsRef = useRef(localSessions);
     const [localActiveSessionId, setLocalActiveSessionIdState] = useState<string | null>(activeSessionId);
     const localActiveSessionIdRef = useRef(localActiveSessionId);
@@ -375,7 +224,7 @@ export function CanvasAssistantPanel({
         onSessionsChange(localSessions, localActiveSessionId);
     }, [activeSessionId, localActiveSessionId, localSessions, onSessionsChange, sessions]);
 
-    const safeSessions = localSessions.length ? localSessions : [createSession()];
+    const safeSessions = localSessions.length ? localSessions : [createSession(t("canvas:new-conversation-2"))];
     const activeSession = useMemo(() => safeSessions.find((session) => session.id === localActiveSessionId) || safeSessions[0] || null, [localActiveSessionId, safeSessions]);
     const historySessions = safeSessions.filter((session) => session.messages.length > 0);
     const messages = activeSession?.messages || [];
@@ -425,7 +274,7 @@ export function CanvasAssistantPanel({
     const appendMessage = (sessionId: string, message: CanvasAssistantMessage) => {
         updateSession(sessionId, (session) => ({
             ...session,
-            title: session.messages.length ? session.title : message.text.slice(0, 18) || "新对话",
+            title: session.messages.length ? session.title : message.text.slice(0, 18) || t("canvas:new-conversation-2"),
             messages: [...session.messages, message],
             updatedAt: new Date().toISOString(),
         }));
@@ -437,7 +286,7 @@ export function CanvasAssistantPanel({
             const exists = session.messages.some((item) => item.id === message.id);
             return {
                 ...session,
-                title: session.messages.length ? session.title : message.text.slice(0, 18) || "新对话",
+                title: session.messages.length ? session.title : message.text.slice(0, 18) || t("canvas:new-conversation-2"),
                 messages: exists ? session.messages.map((item) => (item.id === message.id ? { ...item, ...message } : item)) : [...session.messages, message],
                 updatedAt: new Date().toISOString(),
             };
@@ -459,8 +308,8 @@ export function CanvasAssistantPanel({
             messages: upsertAssistantMessage(session.messages, {
                 id: pending.messageId,
                 role: "assistant",
-                title: "影视项目生成中",
-                text: "后端影视 Agent 正在处理。即使页面刷新，也会在重新进入画布后继续等待结果。",
+                title: t("domain:film-project-generating"),
+                text: t("domain:the-backend-film-agent-is-processing-even-after-a-page-refresh-it-keeps"),
                 detail: { kind: "cinematic", backendSessionId, status: "pending", startedAt },
             }),
             updatedAt: startedAt,
@@ -472,15 +321,15 @@ export function CanvasAssistantPanel({
             const pending = session.pendingBackendSession;
             if (pending?.id !== backendSessionId) return session;
             const completedAt = new Date().toISOString();
-            const summary = summarizeCanvasAgentOps(ops) || "影视项目已写回当前画布。";
+            const summary = summarizeCanvasAgentOps(ops) || t("domain:film-project-written-back-to-this-canvas");
             const completed = {
                 ...session,
                 pendingBackendSession: undefined,
                 messages: upsertAssistantMessage(session.messages, {
                     id: pending.messageId,
                     role: "assistant",
-                    title: recovered ? "影视项目已恢复并写回" : "影视项目已写回",
-                    text: recovered ? `页面重新连接后已恢复后台结果：${summary}` : summary,
+                    title: recovered ? t("domain:film-project-restored-and-written-back") : t("domain:film-project-written-back"),
+                    text: recovered ? t("domain:background-results-restored-after-reconnection-param", { summary: summary }) : summary,
                     detail: { kind: "cinematic", backendSessionId, status: "completed", recovered, completedAt },
                 }),
                 updatedAt: completedAt,
@@ -494,14 +343,14 @@ export function CanvasAssistantPanel({
             const pending = session.pendingBackendSession;
             if (pending?.id !== backendSessionId) return session;
             const failedAt = new Date().toISOString();
-            const text = error instanceof Error ? error.message : "影视项目生成失败";
+            const text = error instanceof Error ? error.message : t("domain:film-project-generation-failed");
             return {
                 ...session,
                 pendingBackendSession: undefined,
                 messages: upsertAssistantMessage(session.messages, {
                     id: pending.messageId,
                     role: "error",
-                    title: "影视项目生成失败",
+                    title: t("domain:film-project-generation-failed"),
                     text,
                     detail: { kind: "cinematic", backendSessionId, status: "failed", failedAt },
                 }),
@@ -534,7 +383,7 @@ export function CanvasAssistantPanel({
                         cinematicSessionControllersRef.current.delete(requestKey);
                         cinematicSessionControllersRef.current.set(backendSessionId, controller);
                         setPendingCinematicSession(sessionId, backendSessionId);
-                        addOnlineLog("后端影视 Agent 会话已创建", { backendSessionId });
+                        addOnlineLog(t("domain:backend-film-agent-session-created"), { backendSessionId });
                         onCreated?.(backendSessionId);
                     },
                 },
@@ -558,7 +407,7 @@ export function CanvasAssistantPanel({
             setLocalActiveSessionId(activeSession.id);
             return;
         }
-        const session = createSession();
+        const session = createSession(t("canvas:new-conversation-2"));
         setLocalSessions((prev) => [session, ...prev]);
         setLocalActiveSessionId(session.id);
     };
@@ -566,7 +415,7 @@ export function CanvasAssistantPanel({
     const removeSessions = (ids: string[]) => {
         const next = safeSessions.filter((session) => !ids.includes(session.id));
         if (!next.length) {
-            const session = createSession();
+            const session = createSession(t("canvas:new-conversation-2"));
             setLocalSessions([session]);
             setLocalActiveSessionId(session.id);
         } else {
@@ -577,7 +426,7 @@ export function CanvasAssistantPanel({
     };
 
     const clearSessions = () => {
-        const session = createSession();
+        const session = createSession(t("canvas:new-conversation-2"));
         setLocalSessions([session]);
         setLocalActiveSessionId(session.id);
         cleanupImages({ sessions: [session] });
@@ -590,7 +439,7 @@ export function CanvasAssistantPanel({
             return;
         }
 
-        const session = activeSession || createSession();
+        const session = activeSession || createSession(t("canvas:new-conversation-2"));
         if (!activeSession) {
             setLocalSessions([session]);
             setLocalActiveSessionId(session.id);
@@ -600,7 +449,7 @@ export function CanvasAssistantPanel({
         const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", text, references: refs };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
-        addOnlineLog("发送请求", { text, selectedNodeIds: snapshotRef.current.selectedNodeIds, nodeCount: snapshotRef.current.nodes.length, connectionCount: snapshotRef.current.connections.length });
+        addOnlineLog(t("domain:send-request"), { text, selectedNodeIds: snapshotRef.current.selectedNodeIds, nodeCount: snapshotRef.current.nodes.length, connectionCount: snapshotRef.current.connections.length });
         setPrompt("");
         setIsRunning(true);
         void runOnlineAgentStep(session.id, assistantId, history, userMessage, { step: 1 });
@@ -611,40 +460,47 @@ export function CanvasAssistantPanel({
         try {
             setIsRunning(true);
             const messages = await buildToolAgentMessages(snapshotRef.current, history, userMessage);
-            addOnlineLog(`Agent Tool Loop ${loop.step} 开始`, { toolChoice: "required" });
+            addOnlineLog(t("domain:agent-tool-loop-param-started", { step: loop.step }), { toolChoice: "required" });
             let streamed = "";
-            const result = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, messages, "required", userMessage.text, (text) => {
-                streamed = text;
-                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-            }, canvasAgentPromptCacheKey(sessionId));
-            addOnlineLog("模型工具回复", result);
+            const result = await requestOnlineAgentModel(
+                { ...requestConfig, systemPrompt: "" },
+                messages,
+                "required",
+                userMessage.text,
+                (text) => {
+                    streamed = text;
+                    if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+                },
+                canvasAgentPromptCacheKey(sessionId),
+            );
+            addOnlineLog(t("domain:model-tool-reply"), result);
             if (result.toolCalls.length) {
                 const writableCalls = result.toolCalls.filter(isWritableToolCall);
                 if (confirmTools && writableCalls.length) {
-                    upsertMessage(sessionId, { id: assistantId, role: "assistant", text: result.content || streamed || "准备执行工具，等待确认。" });
+                    upsertMessage(sessionId, { id: assistantId, role: "assistant", text: result.content || streamed || t("domain:tool-ready-awaiting-confirmation") });
                     const toolMessageId = nanoid();
                     pendingToolContextRef.current.set(toolMessageId, { messages, toolCalls: result.toolCalls, assistantId, step: loop.step });
                     const toolMessage: CanvasAssistantMessage = {
                         id: toolMessageId,
                         role: "tool",
-                        title: "确认工具调用",
+                        title: t("domain:confirm-tool-call-2"),
                         text: summarizeToolCalls(result.toolCalls),
                         detail: { status: "pending", step: loop.step, toolCalls: result.toolCalls, impact: previewOnlineToolCalls(result.toolCalls, snapshotRef.current, effectiveConfig) },
                     };
                     appendMessage(sessionId, toolMessage);
-                    addOnlineLog("等待用户确认", result.toolCalls);
+                    addOnlineLog(t("domain:awaiting-user-confirmation"), result.toolCalls);
                     return;
                 }
                 await continueOnlineToolLoop(sessionId, assistantId, messages, result, loop.step);
             } else {
-                if (!result.content.trim()) throw new Error("模型没有返回工具调用，画布操作未执行。");
-                upsertMessage(sessionId, { id: assistantId, role: "assistant", text: result.content || streamed || "没有返回内容。" });
-                addOnlineLog(`Agent Tool Loop ${loop.step} 结束`, { reply: result.content });
+                if (!result.content.trim()) throw new Error(t("domain:the-model-returned-nothing-the-canvas-was-not-changed"));
+                upsertMessage(sessionId, { id: assistantId, role: "assistant", text: result.content || streamed || t("domain:no-content-returned") });
+                addOnlineLog(t("domain:agent-tool-loop-param-finished", { step: loop.step }), { reply: result.content });
             }
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) return;
-            addOnlineLog("请求失败", error instanceof Error ? error.message : error);
-            appendMessage(sessionId, { id: nanoid(), role: "error", title: "操作失败", text: error instanceof Error ? error.message : "操作失败" });
+            addOnlineLog(t("domain:request-failed"), error instanceof Error ? error.message : error);
+            appendMessage(sessionId, { id: nanoid(), role: "error", title: t("domain:operation-failed"), text: error instanceof Error ? error.message : t("domain:operation-failed") });
         } finally {
             setIsRunning(false);
         }
@@ -652,11 +508,11 @@ export function CanvasAssistantPanel({
 
     const continueOnlineToolLoop = async (sessionId: string, assistantId: string, messages: ResponseInputMessage[], result: { content: string; toolCalls: ResponseToolCall[] }, step: number) => {
         const toolResults = await executeOnlineToolCalls(sessionId, result.toolCalls);
-        addOnlineLog("工具执行结果", toolResults);
+        addOnlineLog(t("domain:tool-execution-result"), toolResults);
         appendMessage(sessionId, {
             id: nanoid(),
             role: "tool",
-            title: "工具自动执行完成",
+            title: t("domain:tools-auto-executed"),
             text: toolResults.map((item) => toolResultText(item.result)).join("\n"),
             detail: { status: "completed", step, toolCalls: result.toolCalls, results: toolResults },
         });
@@ -666,37 +522,44 @@ export function CanvasAssistantPanel({
     const continueOnlineToolLoopAfterResults = async (sessionId: string, assistantId: string, messages: ResponseInputMessage[], toolCalls: ResponseToolCall[], toolResults: OnlineExecutedToolCall[], step: number) => {
         const nextMessages: ResponseInputMessage[] = [...messages, ...toolCalls.map(toolCallToResponseInput), ...toolResults.map((item) => ({ role: "tool" as const, tool_call_id: item.toolCallId, content: JSON.stringify(item.result) }))];
         if (step >= ONLINE_AGENT_MAX_STEPS) {
-            upsertMessage(sessionId, { id: assistantId, role: "assistant", text: toolResults.map((item) => toolResultText(item.result)).join("\n") || "工具已执行。" });
-            addOnlineLog("Agent Tool Loop 达到步数上限", { maxSteps: ONLINE_AGENT_MAX_STEPS });
+            upsertMessage(sessionId, { id: assistantId, role: "assistant", text: toolResults.map((item) => toolResultText(item.result)).join("\n") || t("domain:tool-executed") });
+            addOnlineLog(t("domain:agent-tool-loop-param-finished", { step }), { maxSteps: ONLINE_AGENT_MAX_STEPS });
             return;
         }
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         let streamed = "";
-        const next = await requestOnlineAgentModel({ ...requestConfig, systemPrompt: "" }, nextMessages, "auto", "继续处理画布工具结果", (text) => {
-            streamed = text;
-            if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
-        }, canvasAgentPromptCacheKey(sessionId));
+        const next = await requestOnlineAgentModel(
+            { ...requestConfig, systemPrompt: "" },
+            nextMessages,
+            "auto",
+            t("domain:continue-processing-canvas-tool-results"),
+            (text) => {
+                streamed = text;
+                if (text.trim()) upsertMessage(sessionId, { id: assistantId, role: "assistant", text });
+            },
+            canvasAgentPromptCacheKey(sessionId),
+        );
         addOnlineLog(`Agent Tool Loop ${step + 1} 回复`, next);
         if (next.toolCalls.length) {
             const writableCalls = next.toolCalls.filter(isWritableToolCall);
             if (confirmTools && writableCalls.length) {
-                upsertMessage(sessionId, { id: assistantId, role: "assistant", text: next.content || streamed || "准备执行工具，等待确认。" });
+                upsertMessage(sessionId, { id: assistantId, role: "assistant", text: next.content || streamed || t("domain:tool-ready-awaiting-confirmation") });
                 const toolMessageId = nanoid();
                 pendingToolContextRef.current.set(toolMessageId, { messages: nextMessages, toolCalls: next.toolCalls, assistantId, step: step + 1 });
                 appendMessage(sessionId, {
                     id: toolMessageId,
                     role: "tool",
-                    title: "确认工具调用",
+                    title: t("domain:confirm-tool-call-2"),
                     text: summarizeToolCalls(next.toolCalls),
                     detail: { status: "pending", step: step + 1, toolCalls: next.toolCalls, impact: previewOnlineToolCalls(next.toolCalls, snapshotRef.current, effectiveConfig) },
                 });
-                addOnlineLog("等待用户确认", next.toolCalls);
+                addOnlineLog(t("domain:awaiting-user-confirmation"), next.toolCalls);
                 return;
             }
             await continueOnlineToolLoop(sessionId, assistantId, nextMessages, next, step + 1);
             return;
         }
-        upsertMessage(sessionId, { id: assistantId, role: "assistant", text: next.content || streamed || toolResults.map((item) => toolResultText(item.result)).join("\n") || "工具已执行。" });
+        upsertMessage(sessionId, { id: assistantId, role: "assistant", text: next.content || streamed || toolResults.map((item) => toolResultText(item.result)).join("\n") || t("domain:tool-executed") });
     };
 
     const executeOps = async (ops: CanvasAgentOp[], context?: { conversationId?: string; messageId?: string; source?: "online" | "local" }) => {
@@ -714,19 +577,19 @@ export function CanvasAssistantPanel({
         const current = snapshotRef.current;
         try {
             const expectedStateHash = typeof args.expectedStateHash === "string" ? args.expectedStateHash : "";
-            if (expectedStateHash && expectedStateHash !== buildCanvasAgentContext(current).stateHash) return { ok: false, message: "画布状态已变化，请重新读取 canvas_get_context 后再执行写操作。" };
+            if (expectedStateHash && expectedStateHash !== buildCanvasAgentContext(current).stateHash) return { ok: false, message: t("domain:canvas-state-changed-reread-context") };
             if (name === "canvas_get_state") return { ok: true, message: describeCanvasSnapshot(current), data: compactSnapshot(current) };
-            if (name === "canvas_get_context") return { ok: true, message: "已读取语义化画布上下文。", data: buildCanvasAgentContext(current) };
-            if (name === "canvas_find_nodes") return { ok: true, message: "已按条件检索真实节点。", data: findCanvasAgentNodes(current, args as Parameters<typeof findCanvasAgentNodes>[1]) };
-            if (name === "canvas_get_resources") return { ok: true, message: "已读取画布资源清单。", data: getCanvasAgentResources(current, args as Parameters<typeof getCanvasAgentResources>[1]) };
+            if (name === "canvas_get_context") return { ok: true, message: t("domain:canvas-context-read"), data: buildCanvasAgentContext(current) };
+            if (name === "canvas_find_nodes") return { ok: true, message: t("domain:canvas-nodes-found"), data: findCanvasAgentNodes(current, args as Parameters<typeof findCanvasAgentNodes>[1]) };
+            if (name === "canvas_get_resources") return { ok: true, message: t("domain:canvas-resources-read"), data: getCanvasAgentResources(current, args as Parameters<typeof getCanvasAgentResources>[1]) };
             if (name === "canvas_validate_ops") {
                 const result = validateCanvasAgentOps(current, requireOps(args.ops));
-                return { ok: result.ok, message: result.ok ? "操作校验通过。" : "操作校验失败。", data: result };
+                return { ok: result.ok, message: result.ok ? t("domain:ops-validation-passed") : t("domain:ops-validation-failed"), data: result };
             }
             if (name === "canvas_export_snapshot") return { ok: true, message: describeCanvasSnapshot(current), data: compactSnapshot(current) };
             if (name === "canvas_get_selection") {
                 const ids = new Set(current.selectedNodeIds || []);
-                return { ok: true, message: `当前选中 ${ids.size} 个节点。`, data: { nodes: compactSnapshot({ ...current, nodes: current.nodes.filter((node) => ids.has(node.id)) }).nodes } };
+                return { ok: true, message: t("domain:param-nodes-selected", { size: ids.size }), data: { nodes: compactSnapshot({ ...current, nodes: current.nodes.filter((node) => ids.has(node.id)) }).nodes } };
             }
             if (name === "canvas_create_cinematic_session") {
                 const cinematic = await runCinematicSession(sessionId, requireString(args.prompt, "prompt"), current, effectiveConfig);
@@ -745,21 +608,25 @@ export function CanvasAssistantPanel({
                         restoreLiveSnapshot: restoreCinematicSnapshot,
                         failProvider: (failure) => failCinematicSession(sessionId, cinematic.backendSessionId, failure),
                     });
-                    continuationResult = { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || "后端影视 Agent 已写回画布。" : result.noopReason, data: result };
+                    continuationResult = {
+                        ok: result.changed,
+                        message: result.changed ? summarizeCanvasAgentOps(cinematic.ops) || t("domain:backend-film-agent-wrote-back-to-the-canvas") : result.noopReason,
+                        data: result,
+                    };
                 };
                 if (cinematic.continuationTask) {
                     await consumeGenerationTaskAgent(cinematic.continuationTask, cinematic.backendSessionId, applyContinuation, { signal: generationConsumerControllerRef.current.signal });
                 } else {
                     await applyContinuation();
                 }
-                return continuationResult ?? { ok: true, message: "后端影视 Agent 已完成。" };
+                return continuationResult ?? { ok: true, message: t("domain:skip") };
             }
             const ops = onlineToolToOps(name, args, current, effectiveConfig);
             const result = await executeOps(ops, { source: "online", conversationId: sessionId, messageId: messageId || sessionId });
-            return { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(ops) || "画布操作已执行。" : result.noopReason, data: result };
+            return { ok: result.changed, message: result.changed ? summarizeCanvasAgentOps(ops) || t("domain:skip-2") : result.noopReason, data: result };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
-            return { ok: false, message: error instanceof Error ? error.message : "工具执行失败" };
+            return { ok: false, message: error instanceof Error ? error.message : t("domain:tool-execution-failed") };
         }
     };
 
@@ -769,7 +636,7 @@ export function CanvasAssistantPanel({
             return { toolCallId: toolCall.id, name: toolCall.function.name, result };
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) throw error;
-            return { toolCallId: toolCall.id, name: toolCall.function.name, result: { ok: false, message: error instanceof Error ? error.message : "工具参数错误" } };
+            return { toolCallId: toolCall.id, name: toolCall.function.name, result: { ok: false, message: error instanceof Error ? error.message : t("domain:invalid-tool-arguments") } };
         }
     };
 
@@ -778,7 +645,7 @@ export function CanvasAssistantPanel({
         let stopped = false;
         for (const toolCall of toolCalls) {
             if (stopped) {
-                results.push({ toolCallId: toolCall.id, name: toolCall.function.name, result: { ok: false, message: "前一个工具调用失败，未继续执行。" } });
+                results.push({ toolCallId: toolCall.id, name: toolCall.function.name, result: { ok: false, message: t("domain:previous-tool-call-failed-execution-stopped") } });
                 continue;
             }
             const result = await executeOnlineToolCall(sessionId, toolCall);
@@ -795,24 +662,24 @@ export function CanvasAssistantPanel({
         const toolCalls = pendingContext?.toolCalls || toolCallsFromDetail(detail);
         const previousMessages = pendingContext?.messages || [];
         const session = safeSessions.find((session) => session.messages.some((item) => item.id === messageId));
-        addOnlineLog("批准工具", { messageId, toolCalls });
+        addOnlineLog(t("domain:approve-tool"), { messageId, toolCalls });
         const assistantId = pendingContext?.assistantId || "";
         if (!session) return;
         if (!toolCalls.length || !previousMessages.length || !assistantId) {
-            upsertMessage(session.id, { id: messageId, role: "tool", title: "工具执行失败", text: "工具上下文不完整，无法执行。", detail: { ...detail, status: "failed" } });
+            upsertMessage(session.id, { id: messageId, role: "tool", title: t("domain:tool-execution-failed"), text: t("domain:incomplete-tool-context-cannot-execute"), detail: { ...detail, status: "failed" } });
             return;
         }
         try {
             setIsRunning(true);
             const results = await executeOnlineToolCalls(session.id, toolCalls);
-            addOnlineLog("工具执行结果", results);
-            upsertMessage(session.id, { id: messageId, role: "tool", title: "工具执行完成", text: results.map((item) => toolResultText(item.result)).join("\n"), detail: { ...detail, results, status: "completed" } });
+            addOnlineLog(t("domain:tool-execution-result"), results);
+            upsertMessage(session.id, { id: messageId, role: "tool", title: t("domain:tool-execution-finished"), text: results.map((item) => toolResultText(item.result)).join("\n"), detail: { ...detail, results, status: "completed" } });
             pendingToolContextRef.current.delete(messageId);
             await continueOnlineToolLoopAfterResults(session.id, assistantId, previousMessages, toolCalls, results, pendingContext?.step || Number(detail.step) || 1);
         } catch (error) {
             if (isAgentSessionPollingAbort(error)) return;
-            addOnlineLog("工具续跑失败", error instanceof Error ? error.message : error);
-            appendMessage(session.id, { id: nanoid(), role: "error", title: "操作失败", text: error instanceof Error ? error.message : "操作失败" });
+            addOnlineLog(t("domain:failed-to-resume-tool-run"), error instanceof Error ? error.message : error);
+            appendMessage(session.id, { id: nanoid(), role: "error", title: t("domain:operation-failed"), text: error instanceof Error ? error.message : t("domain:operation-failed") });
         } finally {
             setIsRunning(false);
         }
@@ -820,16 +687,24 @@ export function CanvasAssistantPanel({
 
     const rejectOnlineTool = (messageId: string) => {
         const session = safeSessions.find((session) => session.messages.some((item) => item.id === messageId));
-        addOnlineLog("拒绝工具", { messageId });
+        addOnlineLog(t("domain:decline-tool"), { messageId });
         pendingToolContextRef.current.delete(messageId);
-        if (session) upsertMessage(session.id, { id: messageId, role: "tool", title: "已拒绝执行", text: "工具调用已取消", detail: { ...objectDetail(session.messages.find((item) => item.id === messageId)?.detail), status: "rejected" } });
+        if (session)
+            upsertMessage(session.id, { id: messageId, role: "tool", title: t("domain:declined"), text: t("domain:tool-call-cancelled"), detail: { ...objectDetail(session.messages.find((item) => item.id === messageId)?.detail), status: "rejected" } });
     };
 
     const undoLastOnlineBatch = () => {
         const restored = onUndoOps();
         if (!restored) return;
         snapshotRef.current = restored;
-        if (activeSession) appendMessage(activeSession.id, { id: nanoid(), role: "tool", title: "已撤销 Agent 批次", text: "已恢复到本次写回前的画布状态", detail: { status: "completed", remainingUndoCount: Math.max(0, undoOpsCount - 1) } });
+        if (activeSession)
+            appendMessage(activeSession.id, {
+                id: nanoid(),
+                role: "tool",
+                title: t("canvas:agent-batch-undone"),
+                text: t("canvas:canvas-restored-to-its-state-before-this-write-back"),
+                detail: { status: "completed", remainingUndoCount: Math.max(0, undoOpsCount - 1) },
+            });
     };
 
     const submit = async () => {
@@ -854,7 +729,7 @@ export function CanvasAssistantPanel({
             navigateToSettings({ continueCreation: true });
             return;
         }
-        const session = activeSession || createSession();
+        const session = activeSession || createSession(t("canvas:new-conversation-2"));
         if (!activeSession) {
             setLocalSessions([session]);
             setLocalActiveSessionId(session.id);
@@ -900,7 +775,7 @@ export function CanvasAssistantPanel({
             if (continuationFailureDisposition) return;
             handleCinematicContinuationFailure(error, (failure) => {
                 if (backendSessionId) failCinematicSession(session.id, backendSessionId, failure);
-                else appendMessage(session.id, { id: nanoid(), role: "error", title: "影视项目生成失败", text: failure instanceof Error ? failure.message : "影视项目生成失败" });
+                else appendMessage(session.id, { id: nanoid(), role: "error", title: t("domain:film-project-generation-failed"), text: failure instanceof Error ? failure.message : t("domain:film-project-generation-failed") });
             });
         } finally {
             setIsRunning(false);
@@ -912,7 +787,7 @@ export function CanvasAssistantPanel({
         const controller = new AbortController();
         cinematicSessionControllersRef.current.set(pending.id, controller);
         setIsRunning(true);
-        addOnlineLog("恢复后端影视 Agent 会话", { backendSessionId: pending.id });
+        addOnlineLog(t("domain:restore-backend-film-agent-session"), { backendSessionId: pending.id });
         let continuationFailureDisposition: CinematicContinuationFailureDisposition | undefined;
         try {
             const detail = await resumeCinematicAgentSession(pending.id, { signal: controller.signal });
@@ -932,14 +807,14 @@ export function CanvasAssistantPanel({
                     restoreLiveSnapshot: restoreCinematicSnapshot,
                     failProvider: (failure) => {
                         failCinematicSession(sessionId, pending.id, failure);
-                        addOnlineLog("后端影视 Agent 会话恢复失败", failure instanceof Error ? failure.message : failure);
+                        addOnlineLog(t("domain:failed-to-restore-backend-film-agent-session"), failure instanceof Error ? failure.message : failure);
                     },
                     onFailureDisposition: (disposition, error) => {
                         continuationFailureDisposition = disposition;
-                        if (disposition === "durable-ack") addOnlineLog("后端影视 Agent 会话持久化失败，保留待恢复状态", error instanceof Error ? error.message : error);
+                        if (disposition === "durable-ack") addOnlineLog(t("domain:failed-to-persist-backend-film-agent-session-kept-for-recovery"), error instanceof Error ? error.message : error);
                     },
                 });
-                addOnlineLog("后端影视 Agent 会话恢复完成", { backendSessionId: pending.id });
+                addOnlineLog(t("domain:backend-film-agent-session-restored"), { backendSessionId: pending.id });
             };
             if (continuationTask) {
                 await consumeGenerationTaskAgent(continuationTask, pending.id, applyContinuation, { signal: controller.signal });
@@ -950,9 +825,9 @@ export function CanvasAssistantPanel({
             if (continuationFailureDisposition) return;
             const disposition = handleCinematicContinuationFailure(error, (failure) => {
                 failCinematicSession(sessionId, pending.id, failure);
-                addOnlineLog("后端影视 Agent 会话恢复失败", failure instanceof Error ? failure.message : failure);
+                addOnlineLog(t("domain:failed-to-restore-backend-film-agent-session"), failure instanceof Error ? failure.message : failure);
             });
-            if (disposition === "durable-ack") addOnlineLog("后端影视 Agent 会话持久化失败，保留待恢复状态", error instanceof Error ? error.message : error);
+            if (disposition === "durable-ack") addOnlineLog(t("domain:failed-to-persist-backend-film-agent-session-kept-for-recovery"), error instanceof Error ? error.message : error);
         } finally {
             if (cinematicSessionControllersRef.current.get(pending.id) === controller) cinematicSessionControllersRef.current.delete(pending.id);
             if (cinematicSessionControllersRef.current.size === 0) setIsRunning(false);
@@ -981,16 +856,16 @@ export function CanvasAssistantPanel({
                 value={view}
                 theme={theme}
                 items={[
-                    { value: "setup", label: "配置", icon: <Settings2 className="size-3.5" /> },
-                    { value: "chat", label: "对话", icon: <MessageSquareText className="size-3.5" /> },
-                    { value: "history", label: "历史", icon: <History className="size-3.5" />, count: historySessions.length },
-                    { value: "log", label: "记录", icon: <ScrollText className="size-3.5" />, count: onlineLogs.length },
+                    { value: "setup", label: t("domain:configure-2"), icon: <Settings2 className="size-3.5" /> },
+                    { value: "chat", label: t("canvas:conversations-2"), icon: <MessageSquareText className="size-3.5" /> },
+                    { value: "history", label: t("canvas:history-2"), icon: <History className="size-3.5" />, count: historySessions.length },
+                    { value: "log", label: t("canvas:record-3"), icon: <ScrollText className="size-3.5" />, count: onlineLogs.length },
                 ]}
                 onChange={setView}
                 right={
                     <>
                         {view === "history" ? (
-                            <Tooltip title="删除全部">
+                            <Tooltip title={t("domain:delete-all")}>
                                 <Button
                                     type="text"
                                     shape="circle"
@@ -1002,7 +877,7 @@ export function CanvasAssistantPanel({
                                 />
                             </Tooltip>
                         ) : null}
-                        <Tooltip title="新对话">
+                        <Tooltip title={t("canvas:new-conversation-2")}>
                             <Button
                                 type="text"
                                 shape="circle"
@@ -1045,7 +920,14 @@ export function CanvasAssistantPanel({
                         <>
                             {messages.map((message) => (
                                 <div key={message.id} className="space-y-2">
-                                    <AgentChatMessage item={assistantMessageToChatMessage(message)} theme={theme} user={user} isStreaming={agentBusy && message.id === messages.at(-1)?.id && message.role === "assistant"} onRejectTool={rejectOnlineTool} onApproveTool={approveOnlineTool} />
+                                    <AgentChatMessage
+                                        item={assistantMessageToChatMessage(message)}
+                                        theme={theme}
+                                        user={user}
+                                        isStreaming={agentBusy && message.id === messages.at(-1)?.id && message.role === "assistant"}
+                                        onRejectTool={rejectOnlineTool}
+                                        onApproveTool={approveOnlineTool}
+                                    />
                                     {message.references?.length ? <MessageReferences message={message} /> : null}
                                 </div>
                             ))}
@@ -1084,7 +966,7 @@ export function CanvasAssistantPanel({
                     <AgentChatComposer
                         prompt={prompt}
                         sending={agentBusy}
-                        placeholder={cinematicEntryActive ? "一句话描述题材、角色和核心冲突" : "描述你想让 Agent 如何操作画布"}
+                        placeholder={cinematicEntryActive ? t("domain:one-line-genre-characters-core-conflict") : t("domain:describe-how-the-agent-should-operate-the-canvas")}
                         theme={theme}
                         onPromptChange={setPrompt}
                         onSubmit={cinematicEntryActive ? () => submitCinematicProject(prompt) : submit}
@@ -1095,7 +977,7 @@ export function CanvasAssistantPanel({
                                 <AgentTextModelPicker config={effectiveConfig} value={effectiveConfig.textModel} onChange={(model) => updateConfig("textModel", model)} />
                                 {cinematicEntryActive ? (
                                     <span className="ml-2 inline-flex h-6 items-center rounded-md px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.spatial.surface, color: theme.node.muted }}>
-                                        影视项目
+                                        {t("domain:film-project")}
                                     </span>
                                 ) : null}
                             </>
@@ -1105,13 +987,13 @@ export function CanvasAssistantPanel({
             ) : null}
 
             <Modal
-                title="删除对话记录？"
+                title={t("domain:delete-conversation-history")}
                 open={deleteChatIds.length > 0}
                 centered
                 onCancel={() => setDeleteChatIds([])}
                 footer={
                     <>
-                        <Button onClick={() => setDeleteChatIds([])}>取消</Button>
+                        <Button onClick={() => setDeleteChatIds([])}>{t("canvas:cancel-11")}</Button>
                         <Button
                             danger
                             type="primary"
@@ -1120,12 +1002,14 @@ export function CanvasAssistantPanel({
                                 setDeleteChatIds([]);
                             }}
                         >
-                            删除
+                            {t("canvas:delete-5")}
                         </Button>
                     </>
                 }
             >
-                <p className="text-sm opacity-60">将删除 {deleteChatIds.length} 条对话记录，此操作不可撤销。</p>
+                <p className="text-sm opacity-60">
+                    {t("domain:will-be-deleted-2")} {deleteChatIds.length} {t("domain:conversation-records-this-cannot-be-undone")}
+                </p>
             </Modal>
         </>
     );
@@ -1163,6 +1047,7 @@ export function CanvasAssistantPanel({
 }
 
 function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; value: string; onChange: (model: string) => void }) {
+    const { t } = useTranslation("canvas");
     const options = useMemo(() => Array.from(new Set([value, ...selectableModelsByCapability(config, "text")].filter(Boolean))), [config, value]);
     const current = value || "";
     return (
@@ -1174,7 +1059,7 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
                 className="agent-text-model-select w-full"
                 popupMatchSelectWidth={288}
                 options={options.map((model) => ({ value: model, label: agentModelLabel(config, model) }))}
-                notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">暂无文本模型</span>}
+                notFoundContent={<span className="block py-2 text-center text-xs text-foreground/48">{t("domain:no-text-models-available")}</span>}
                 optionRender={(option) => {
                     const model = String(option.value);
                     return (
@@ -1188,13 +1073,13 @@ function AgentTextModelPicker({ config, value, onChange }: { config: AiConfig; v
                 labelRender={() => (
                     <span className="flex min-w-0 items-center gap-1.5">
                         <AgentModelIcon config={config} model={current} />
-                        <span className="min-w-0 truncate">{current ? modelDisplayName(config, current) : "选择文本模型"}</span>
+                        <span className="min-w-0 truncate">{current ? modelDisplayName(config, current) : t("canvas:select-text-model")}</span>
                         {current && agentModelSource(config, current) ? <span className="shrink-0 opacity-55">{agentModelSource(config, current)}</span> : null}
                     </span>
                 )}
                 onChange={onChange}
-                aria-label="选择 Agent 文本模型"
-                title={current ? agentModelLabel(config, current) : "选择文本模型"}
+                aria-label={t("domain:choose-agent-text-model")}
+                title={current ? agentModelLabel(config, current) : t("canvas:select-text-model")}
             />
         </div>
     );
@@ -1212,16 +1097,23 @@ function agentModelLabel(config: AiConfig, model: string) {
 
 function AgentModelIcon({ config, model }: { config: AiConfig; model: string }) {
     const icon = modelIcon(config, model);
-    return icon ? <span className="inline-flex size-4 shrink-0 items-center justify-center"><ModelLogo icon={icon} size={16} /></span> : <Cpu className="size-4 shrink-0 opacity-70" />;
+    return icon ? (
+        <span className="inline-flex size-4 shrink-0 items-center justify-center">
+            <ModelLogo icon={icon} size={16} />
+        </span>
+    ) : (
+        <Cpu className="size-4 shrink-0 opacity-70" />
+    );
 }
 
 function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessions: CanvasAssistantSession[]; activeSession: CanvasAssistantSession | null; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (
         <div className="space-y-3">
             <div className="text-sm" style={{ color: theme.node.muted }}>
-                {sessions.length ? `${sessions.length} 条历史` : "暂无历史"}
+                {sessions.length ? t("canvas:param-entries", { length: sessions.length }) : t("canvas:no-history-yet-2")}
             </div>
             {sessions.map((session) => (
                 <div key={session.id} className="rounded-md px-2.5 py-2 transition-colors" style={{ background: session.id === activeSession?.id ? theme.accent.primarySoft : "transparent", color: theme.node.text }}>
@@ -1230,7 +1122,7 @@ function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessi
                             <div className="flex min-w-0 items-center gap-1.5">
                                 {session.id === activeSession?.id ? (
                                     <span className="shrink-0 text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.text }}>
-                                        当前
+                                        {t("canvas:current-4")}
                                     </span>
                                 ) : null}
                                 <div className="truncate text-sm font-medium leading-5">{session.title}</div>
@@ -1240,9 +1132,9 @@ function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessi
                         <div className="flex shrink-0 items-center gap-1">
                             <span className="text-[var(--fs-tiny)] opacity-55">{formatSessionTime(session.updatedAt || session.createdAt)}</span>
                             <Button size="small" className="!h-6 !px-2" onClick={() => onOpen(session.id)}>
-                                进入
+                                {t("canvas:enter-2")}
                             </Button>
-                            <Tooltip title="删除记录">
+                            <Tooltip title={t("canvas:delete-record")}>
                                 <Button size="small" danger type="text" className="!h-6 !w-6 !min-w-6" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(session.id)} />
                             </Tooltip>
                         </div>
@@ -1251,7 +1143,7 @@ function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessi
             ))}
             {!sessions.length ? (
                 <div className="px-3 py-8 text-center text-sm" style={{ color: theme.node.muted }}>
-                    网站 Agent 的对话记录会显示在这里
+                    {t("domain:web-agent-conversations-appear-here")}
                 </div>
             ) : null}
         </div>
@@ -1259,25 +1151,26 @@ function AssistantHistory({ sessions, activeSession, onOpen, onDelete }: { sessi
 }
 
 function OnlineAgentSetupView({ theme, activeModel, onOpenConfig }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; activeModel: string; onOpenConfig: () => void }) {
+    const { t } = useTranslation("canvas");
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
             <div className="space-y-4">
                 <div>
-                    <div className="text-base font-semibold leading-6">连接配置</div>
+                    <div className="text-base font-semibold leading-6">{t("domain:connection")}</div>
                     <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
-                        网站 Agent 直接使用当前网页配置的文本模型和 API。
+                        {t("domain:the-web-agent-uses-this-browser-s-configured-text-model-and-api-directly")}
                     </div>
                 </div>
                 <div className="rounded-md p-3" style={{ background: theme.spatial.surface }}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium leading-5">文本模型</div>
+                            <div className="text-sm font-medium leading-5">{t("domain:text-model")}</div>
                             <div className="mt-1 truncate text-xs leading-5" style={{ color: theme.node.muted }}>
-                                {activeModel || "未配置模型"}
+                                {activeModel || t("domain:no-model-configured")}
                             </div>
                         </div>
                         <Button className="!h-8 !px-3" type="primary" icon={<Settings2 className="size-4" />} onClick={onOpenConfig}>
-                            配置
+                            {t("domain:configure-2")}
                         </Button>
                     </div>
                 </div>
@@ -1287,6 +1180,7 @@ function OnlineAgentSetupView({ theme, activeModel, onOpenConfig }: { theme: (ty
 }
 
 function OnlineAgentLogView({ logs, theme, context, onClear }: { logs: OnlineAgentLog[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; context: OnlineAgentLogContext; onClear: () => void }) {
+    const { t } = useTranslation("canvas");
     const [mode, setMode] = useState<"text" | "json">("text");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const content = mode === "text" ? formatOnlineLogText(logs, context) : formatOnlineLogJson(logs, context);
@@ -1304,22 +1198,22 @@ function OnlineAgentLogView({ logs, theme, context, onClear }: { logs: OnlineAge
                     value={mode}
                     onChange={(value) => setMode(value as "text" | "json")}
                     options={[
-                        { label: "排查日志", value: "text" },
-                        { label: "原始 JSON", value: "json" },
+                        { label: t("canvas:diagnostics-log"), value: "text" },
+                        { label: t("canvas:raw-json"), value: "json" },
                     ]}
                 />
                 <div className="flex items-center gap-2">
                     <span className="text-xs" style={{ color: theme.node.muted }}>
-                        {logs.length} 条
+                        {logs.length} {t("canvas:item-4")}
                     </span>
                     <Button size="small" icon={<Copy className="size-3.5" />} disabled={!logs.length} onClick={() => void copy()}>
-                        复制
+                        {t("canvas:copy-4")}
                     </Button>
                     <Button size="small" disabled={!lastError} onClick={() => lastError && void copy(formatOnlineLogText([lastError], context))}>
-                        最近错误
+                        {t("canvas:latest-error-2")}
                     </Button>
                     <Button size="small" danger type="text" icon={<Trash2 className="size-3.5" />} disabled={!logs.length} onClick={onClear}>
-                        清空
+                        {t("canvas:clear-4")}
                     </Button>
                 </div>
             </div>
@@ -1346,8 +1240,9 @@ function MessageReferences({ message }: { message: CanvasAssistantMessage }) {
 }
 
 function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssistantReference; label?: string; onRemove?: () => void }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const text = (item.text || item.title).replace(/\s+/g, " ").trim().slice(0, 1) || "文";
+    const text = (item.text || item.title).replace(/\s+/g, " ").trim().slice(0, 1) || t("domain:chars");
     return (
         <div className="group/chip relative inline-flex h-8 max-w-[150px] shrink-0 items-center gap-1.5 rounded-lg text-sm" style={{ color: theme.node.text }}>
             {item.dataUrl ? (
@@ -1366,7 +1261,7 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
                     className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover/chip:opacity-100"
                     style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}
                     onClick={onRemove}
-                    aria-label="移除引用"
+                    aria-label={t("domain:remove-reference")}
                 >
                     <X className="size-3" />
                 </button>
@@ -1390,7 +1285,7 @@ function formatSessionTime(value?: string) {
 }
 
 function sessionPreview(session: CanvasAssistantSession) {
-    return session.messages.at(-1)?.text || `${session.messages.length} 条消息`;
+    return session.messages.at(-1)?.text || t("domain:param-messages", { length: session.messages.length });
 }
 
 function objectDetail(value: unknown) {
@@ -1403,7 +1298,7 @@ function stringifyLog(value: unknown) {
 
 function formatOnlineLogText(logs: OnlineAgentLog[], context: OnlineAgentLogContext) {
     const head = [
-        "影策网站 Agent 诊断日志",
+        t("domain:yingce-web-agent-diagnostics-log"),
         `model: ${context.model || "none"}`,
         `running: ${context.running}`,
         `confirmTools: ${context.confirmTools}`,
@@ -1413,7 +1308,7 @@ function formatOnlineLogText(logs: OnlineAgentLog[], context: OnlineAgentLogCont
         `logs: ${logs.length}`,
     ].join("\n");
     const body = logs.map((log, index) => [`#${index + 1} ${log.time} ${log.title}`, log.data === undefined ? "" : stringifyLog(log.data)].filter(Boolean).join("\n")).join("\n\n---\n\n");
-    return [head, body || "暂无事件日志"].join("\n\n");
+    return [head, body || t("canvas:no-event-logs-yet")].join("\n\n");
 }
 
 function formatOnlineLogJson(logs: OnlineAgentLog[], context: OnlineAgentLogContext) {
@@ -1431,10 +1326,10 @@ function describeCanvasSnapshot(snapshot: CanvasAgentSnapshot) {
 function parseToolArguments(value: string) {
     try {
         const parsed = JSON.parse(value || "{}");
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("工具参数必须是 JSON 对象");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(t("domain:tool-arguments-must-be-a-json-object"));
         return parsed as Record<string, unknown>;
     } catch {
-        throw new Error("工具参数不是合法 JSON 对象");
+        throw new Error(t("domain:tool-arguments-are-not-a-valid-json-object"));
     }
 }
 
@@ -1492,7 +1387,7 @@ export function onlineToolToOps(name: string, input: Record<string, unknown>, sn
     if (name === "canvas_select_nodes") return [{ type: "select_nodes", ids: requireStringArray(input.ids, "ids") }];
     if (name === "canvas_set_viewport") return [{ type: "set_viewport", viewport: requireViewport(input.viewport) }];
     if (name === "canvas_run_generation") return [runGenerationOp(requireString(input.nodeId, "nodeId"), generationMode(input.mode), stringOptional(input.prompt), input.retry === true)];
-    throw new Error(`不支持的工具：${name}`);
+    throw new Error(t("domain:unsupported-tool-param", { name: name }));
 }
 
 function generationFlowOps(input: Record<string, unknown>, snapshot: CanvasAgentSnapshot, config: AiConfig): CanvasAgentOp[] {
@@ -1505,7 +1400,7 @@ function generationFlowOps(input: Record<string, unknown>, snapshot: CanvasAgent
     const referenceNodeIds = Array.isArray(input.referenceNodeIds) ? input.referenceNodeIds.filter((id): id is string => typeof id === "string") : [];
     const tokens = [`@[node:${textId}]`, ...referenceNodeIds.map((id) => `@[node:${id}]`)];
     return [
-        textNodeOp({ id: textId, text: prompt, title: stringOptional(input.title) || "提示词" }, x, y),
+        textNodeOp({ id: textId, text: prompt, title: stringOptional(input.title) || t("canvas:prompt-4") }, x, y),
         generationTargetNodeOp(targetId, { ...input, prompt: tokens.join("\n") }, x + NODE_DEFAULT_SIZE[CanvasNodeType.Text].width + 80, y, config),
         { type: "connect_nodes", fromNodeId: textId, toNodeId: targetId },
         ...referenceNodeIds.map((fromNodeId) => ({ type: "connect_nodes" as const, fromNodeId, toNodeId: targetId })),
@@ -1602,7 +1497,7 @@ async function requestOnlineAgentModel(config: AiConfig, messages: ResponseInput
 }
 
 function summarizeToolCalls(calls: ResponseToolCall[]) {
-    return calls.map((call) => toolCallLabel(call.function.name)).join("，") || "工具调用";
+    return calls.map((call) => toolCallLabel(call.function.name)).join("，") || t("domain:tool-call");
 }
 
 function previewOnlineToolCalls(calls: ResponseToolCall[], snapshot: CanvasAgentSnapshot, config: AiConfig): CanvasAgentOperationImpact {
@@ -1624,35 +1519,35 @@ function previewOnlineToolCalls(calls: ResponseToolCall[], snapshot: CanvasAgent
     return {
         ...impact,
         operationCount: impact.operationCount + deferredCinematicCount,
-        items: [...impact.items, "启动影视 Agent，会话完成后将剧本、分镜和生成节点写回当前画布"].slice(0, 8),
-        warning: [impact.warning, "影视 Agent 的具体写回范围将在后端完成拆解后确定。"].filter(Boolean).join(" "),
+        items: [...impact.items, t("domain:skip-3")].slice(0, 8),
+        warning: [impact.warning, t("domain:skip-4")].filter(Boolean).join(" "),
     };
 }
 
 function toolCallLabel(name: string) {
-    if (name === "canvas_apply_ops") return "画布操作";
-    if (name === "canvas_get_state") return "读取画布";
-    if (name === "canvas_get_selection") return "读取选区";
-    if (name === "canvas_export_snapshot") return "导出快照";
-    if (name === "canvas_create_cinematic_session") return "创建影视项目";
-    if (name === "canvas_create_node") return "创建节点";
-    if (name === "canvas_create_text_node") return "创建文本";
-    if (name === "canvas_create_text_nodes") return "批量创建文本";
-    if (name === "canvas_create_image_prompt_flow") return "创建生图流程";
-    if (name === "canvas_create_generation_flow") return "创建生成流程";
-    if (name === "canvas_generate_text") return "生成文本";
-    if (name === "canvas_generate_image") return "生成图片";
-    if (name === "canvas_generate_video") return "生成视频";
-    if (name === "canvas_generate_audio") return "生成音频";
-    if (name === "canvas_update_node") return "更新节点";
-    if (name === "canvas_update_node_text") return "更新文本";
-    if (name === "canvas_move_nodes") return "移动节点";
-    if (name === "canvas_resize_node") return "调整节点尺寸";
-    if (name === "canvas_delete_nodes") return "删除节点";
-    if (name === "canvas_connect_nodes") return "连接节点";
-    if (name === "canvas_select_nodes") return "选择节点";
-    if (name === "canvas_set_viewport") return "调整视口";
-    if (name === "canvas_run_generation") return "触发生成";
+    if (name === "canvas_apply_ops") return t("canvas:canvas-operation");
+    if (name === "canvas_get_state") return t("canvas:read-canvas-2");
+    if (name === "canvas_get_selection") return t("canvas:read-selection");
+    if (name === "canvas_export_snapshot") return t("canvas:export-snapshot");
+    if (name === "canvas_create_cinematic_session") return t("domain:create-film-project");
+    if (name === "canvas_create_node") return t("canvas:create-node");
+    if (name === "canvas_create_text_node") return t("canvas:create-text");
+    if (name === "canvas_create_text_nodes") return t("canvas:batch-create-text");
+    if (name === "canvas_create_image_prompt_flow") return t("canvas:create-image-generation-flow");
+    if (name === "canvas_create_generation_flow") return t("canvas:create-generation-flow");
+    if (name === "canvas_generate_text") return t("canvas:generate-text");
+    if (name === "canvas_generate_image") return t("canvas:generate-image");
+    if (name === "canvas_generate_video") return t("canvas:generate-video");
+    if (name === "canvas_generate_audio") return t("canvas:generate-audio-2");
+    if (name === "canvas_update_node") return t("canvas:update-node");
+    if (name === "canvas_update_node_text") return t("canvas:update-text");
+    if (name === "canvas_move_nodes") return t("canvas:move-node");
+    if (name === "canvas_resize_node") return t("canvas:resize-node");
+    if (name === "canvas_delete_nodes") return t("canvas:delete-node");
+    if (name === "canvas_connect_nodes") return t("canvas:connect-nodes");
+    if (name === "canvas_select_nodes") return t("canvas:select-nodes");
+    if (name === "canvas_set_viewport") return t("canvas:adjust-viewport");
+    if (name === "canvas_run_generation") return t("canvas:trigger-generation");
     return name;
 }
 
@@ -1661,13 +1556,13 @@ function toolResultText(result: OnlineToolResult) {
 }
 
 function requireStringArray(value: unknown, field: string): string[] {
-    if (!Array.isArray(value)) throw new Error(`${field} 必须是字符串数组`);
-    if (!value.every((item) => typeof item === "string" && Boolean(item))) throw new Error(`${field} 必须只包含非空字符串`);
+    if (!Array.isArray(value)) throw new Error(t("domain:param-must-be-an-array-of-strings", { field: field }));
+    if (!value.every((item) => typeof item === "string" && Boolean(item))) throw new Error(t("domain:param-must-contain-only-non-empty-strings", { field: field }));
     return value as string[];
 }
 
 function requireOps(value: unknown): CanvasAgentOp[] {
-    if (!Array.isArray(value)) throw new Error("ops 必须是数组");
+    if (!Array.isArray(value)) throw new Error(t("domain:ops-must-be-an-array"));
     return value.map(toCanvasAgentOp);
 }
 
@@ -1695,31 +1590,31 @@ function toCanvasAgentOp(value: unknown): CanvasAgentOp {
     if (type === "set_viewport") return { type, viewport: requireViewport(item.viewport) };
     if (type === "select_nodes") return { type, ids: requireStringArray(item.ids, "ids") };
     if (type === "run_generation") return { type, nodeId: requireString(item.nodeId, "nodeId"), mode: generationMode(item.mode), prompt: stringOptional(item.prompt), ...(item.retry === true ? { retry: true } : {}) };
-    throw new Error("不支持的画布操作类型");
+    throw new Error(t("domain:unsupported-canvas-operation-type"));
 }
 
 function requireRecordArray(value: unknown, field: string): Record<string, unknown>[] {
-    if (!Array.isArray(value)) throw new Error(`${field} 必须是数组`);
+    if (!Array.isArray(value)) throw new Error(t("domain:param-must-be-an-array", { field: field }));
     return value.map((item) => {
         const record = objectDetail(item);
-        if (!Object.keys(record).length) throw new Error(`${field} 必须只包含对象`);
+        if (!Object.keys(record).length) throw new Error(t("domain:param-must-contain-only-objects", { field: field }));
         return record;
     });
 }
 
 function requireString(value: unknown, field: string) {
-    if (typeof value !== "string" || !value) throw new Error(`${field} 必须是非空字符串`);
+    if (typeof value !== "string" || !value) throw new Error(t("domain:param-must-be-a-non-empty-string", { field: field }));
     return value;
 }
 
 function requireNumber(value: unknown, field: string) {
-    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${field} 必须是数字`);
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(t("domain:param-must-be-a-number", { field: field }));
     return value;
 }
 
 function requireNodeType(value: unknown): CanvasNodeType {
     if (Object.values(CanvasNodeType).includes(value as CanvasNodeType)) return value as CanvasNodeType;
-    throw new Error("节点类型必须是 text、image、config、video 或 audio");
+    throw new Error(t("domain:node-type-must-be-text-image-config-video-or-audio"));
 }
 
 function requireViewport(value: unknown) {
@@ -1752,10 +1647,10 @@ function generationMode(value: unknown): "text" | "image" | "video" | "audio" {
 }
 
 function generationTitle(mode: "text" | "image" | "video" | "audio") {
-    if (mode === "text") return "文本生成";
-    if (mode === "video") return "视频生成";
-    if (mode === "audio") return "音频生成";
-    return "图片生成";
+    if (mode === "text") return t("domain:text-generation");
+    if (mode === "video") return t("canvas:video-generation");
+    if (mode === "audio") return t("domain:audio-generation");
+    return t("canvas:image-generation");
 }
 
 function defaultGenerationModel(config: AiConfig, mode: "text" | "image" | "video" | "audio") {
@@ -1783,7 +1678,7 @@ function snapshotSignature(snapshot: CanvasAgentSnapshot) {
 }
 
 function explainNoop(ops: CanvasAgentOp[], snapshot: CanvasAgentSnapshot) {
-    if (!ops.length) return "模型没有返回可执行的画布操作。";
+    if (!ops.length) return t("domain:the-model-returned-no-executable-canvas-operations");
     const nodeIds = new Set(snapshot.nodes.map((node) => node.id));
     const connectionIds = new Set(snapshot.connections.map((conn) => conn.id));
     const deleteConnectionOps = ops.filter((op): op is Extract<CanvasAgentOp, { type: "delete_connections" }> => op.type === "delete_connections");
@@ -1792,18 +1687,18 @@ function explainNoop(ops: CanvasAgentOp[], snapshot: CanvasAgentSnapshot) {
     const updateOps = ops.filter((op): op is Extract<CanvasAgentOp, { type: "update_node" }> => op.type === "update_node");
     const selectOps = ops.filter((op): op is Extract<CanvasAgentOp, { type: "select_nodes" }> => op.type === "select_nodes");
     const generationOps = ops.filter((op): op is Extract<CanvasAgentOp, { type: "run_generation" }> => op.type === "run_generation");
-    if (deleteConnectionOps.length && !snapshot.connections.length) return "画布当前没有连线可删除。";
-    if (deleteConnectionOps.length && deleteConnectionOps.every((op) => !op.all && [...(op.ids || []), ...(op.id ? [op.id] : [])].every((id) => !connectionIds.has(id)))) return "没有找到要删除的连线。";
-    if (connectOps.length && connectOps.every((op) => snapshot.connections.some((conn) => conn.fromNodeId === op.fromNodeId && conn.toNodeId === op.toNodeId))) return "这些节点已经存在对应连线，无需重复连接。";
-    if (connectOps.length && connectOps.every((op) => !nodeIds.has(op.fromNodeId) || !nodeIds.has(op.toNodeId))) return "没有找到要连接的节点。";
-    if (deleteNodeOps.length && deleteNodeOps.every((op) => op.nodeType === CanvasNodeType.Config) && !snapshot.nodes.some((node) => node.type === CanvasNodeType.Config)) return "画布当前没有生成配置节点可删除。";
-    if (deleteNodeOps.length && deleteNodeOps.every((op) => [...(op.ids || []), ...(op.id ? [op.id] : [])].every((id) => !nodeIds.has(id)))) return "没有找到要删除的节点。";
-    if (updateOps.length && updateOps.every((op) => !nodeIds.has(op.id))) return "没有找到要更新的节点。";
-    if (selectOps.length && selectOps.every((op) => !(op.ids || []).some((id) => nodeIds.has(id)))) return "没有找到要选择的节点。";
-    if (generationOps.length && generationOps.every((op) => !nodeIds.has(op.nodeId))) return "没有找到要触发生成的节点。";
-    if (ops.every((op) => op.type === "set_viewport")) return "视图已经是目标状态。";
-    if (selectOps.length && selectOps.every((op) => JSON.stringify(op.ids || []) === JSON.stringify(snapshot.selectedNodeIds))) return "选区已经是目标状态。";
-    return "工具已执行，但画布状态没有变化；请在日志 tab 查看工具参数和执行前后状态。";
+    if (deleteConnectionOps.length && !snapshot.connections.length) return t("domain:this-canvas-has-no-connections-to-delete");
+    if (deleteConnectionOps.length && deleteConnectionOps.every((op) => !op.all && [...(op.ids || []), ...(op.id ? [op.id] : [])].every((id) => !connectionIds.has(id)))) return t("domain:no-matching-connection-to-delete");
+    if (connectOps.length && connectOps.every((op) => snapshot.connections.some((conn) => conn.fromNodeId === op.fromNodeId && conn.toNodeId === op.toNodeId))) return t("domain:these-nodes-are-already-connected-no-need-to-connect-again");
+    if (connectOps.length && connectOps.every((op) => !nodeIds.has(op.fromNodeId) || !nodeIds.has(op.toNodeId))) return t("domain:no-nodes-found-to-connect");
+    if (deleteNodeOps.length && deleteNodeOps.every((op) => op.nodeType === CanvasNodeType.Config) && !snapshot.nodes.some((node) => node.type === CanvasNodeType.Config)) return t("domain:this-canvas-has-no-generation-config-nodes-to-delete");
+    if (deleteNodeOps.length && deleteNodeOps.every((op) => [...(op.ids || []), ...(op.id ? [op.id] : [])].every((id) => !nodeIds.has(id)))) return t("domain:no-nodes-found-to-delete");
+    if (updateOps.length && updateOps.every((op) => !nodeIds.has(op.id))) return t("domain:no-node-found-to-update");
+    if (selectOps.length && selectOps.every((op) => !(op.ids || []).some((id) => nodeIds.has(id)))) return t("domain:no-node-found-to-select");
+    if (generationOps.length && generationOps.every((op) => !nodeIds.has(op.nodeId))) return t("domain:no-node-found-to-trigger-generation-on");
+    if (ops.every((op) => op.type === "set_viewport")) return t("domain:the-view-is-already-in-the-target-state");
+    if (selectOps.length && selectOps.every((op) => JSON.stringify(op.ids || []) === JSON.stringify(snapshot.selectedNodeIds))) return t("domain:the-selection-is-already-in-the-target-state");
+    return t("domain:tool-executed-but-canvas-state-did-not-change-check-the-log-tab-for-argu");
 }
 
 function nodeToReference(node: CanvasNodeData): CanvasAssistantReference | null {
@@ -1839,7 +1734,7 @@ async function buildToolAgentMessages(snapshot: CanvasAgentSnapshot, history: Ca
         {
             role: "user",
             content: [
-                ...refs.flatMap((item) => (item.text ? [{ type: "text" as const, text: `选中节点 ${item.title}：${item.text}` }] : [])),
+                ...refs.flatMap((item) => (item.text ? [{ type: "text" as const, text: t("domain:selected-node-param-param", { title: item.title, text: item.text }) }] : [])),
                 { type: "text", text: `当前画布：${JSON.stringify(compactSnapshot(snapshot))}\n\n用户需求：${userMessage.text}` },
                 ...(await Promise.all(refs.filter((item) => item.dataUrl).map(async (item) => ({ type: "image_url" as const, image_url: { url: await imageToDataUrl(item) } })))),
             ],
@@ -1923,7 +1818,7 @@ function upsertAssistantMessage(messages: CanvasAssistantMessage[], message: Can
     return exists ? messages.map((item) => (item.id === message.id ? { ...item, ...message } : item)) : [...messages, message];
 }
 
-function createSession(): CanvasAssistantSession {
+function createSession(title: string): CanvasAssistantSession {
     const now = new Date().toISOString();
-    return { id: nanoid(), title: "新对话", messages: [], createdAt: now, updatedAt: now };
+    return { id: nanoid(), title, messages: [], createdAt: now, updatedAt: now };
 }

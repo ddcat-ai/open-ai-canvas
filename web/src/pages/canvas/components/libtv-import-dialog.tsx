@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { buildLibTVImagePreviewUrl, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
 import { importLibTVCanvas, type LibTVImportResult } from "@/services/api/libtv";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type Props = {
     open: boolean;
@@ -46,6 +47,7 @@ function buildCanvasNodes(result: LibTVImportResult, viewport: ViewportTransform
 }
 
 export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onClose, onApply }: Props) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [value, setValue] = useState("");
     const [loading, setLoading] = useState(false);
@@ -70,14 +72,14 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
 
     const load = async () => {
         if (!uuid) {
-            message.error("请填写 LibTV 画布 UUID 或链接");
+            message.error(t("canvas:enter-a-libtv-canvas-uuid-or-link"));
             return;
         }
         setLoading(true);
         try {
             setResult(await importLibTVCanvas(projectId, uuid));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取 LibTV 画布失败");
+            message.error(error instanceof Error ? error.message : t("canvas:failed-to-read-libtv-canvas"));
         } finally {
             setLoading(false);
         }
@@ -90,9 +92,9 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
             await onApply(buildCanvasNodes(result, viewport, viewportSize), result.connections);
             reset();
             onClose();
-            message.success(`已导入 ${result.importedNodeCount} 个节点和 ${result.importedConnectionCount} 条连接`);
+            message.success(t("canvas:imported-param-nodes-and-param-connections", { importedNodeCount: result.importedNodeCount, importedConnectionCount: result.importedConnectionCount }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存导入结果失败");
+            message.error(error instanceof Error ? error.message : t("canvas:failed-to-save-import-result"));
         } finally {
             setLoading(false);
         }
@@ -103,32 +105,32 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
             className="workspace-modal"
             open={open}
             onCancel={close}
-            title="导入 LibTV 画布"
+            title={t("canvas:import-libtv-canvas")}
             width={620}
             footer={
                 result ? (
                     [
                         <Button key="close" onClick={close}>
-                            关闭
+                            {t("canvas:close-3")}
                         </Button>,
                         <Button key="apply" type="primary" icon={<Import className="size-4" />} loading={loading} onClick={() => void apply()}>
-                            确认导入
+                            {t("canvas:confirm-import-2")}
                         </Button>,
                     ]
                 ) : (
                     <Button type="primary" loading={loading} onClick={() => void load()}>
-                        读取画布
+                        {t("canvas:read-canvas-2")}
                     </Button>
                 )
             }
         >
             <div className="space-y-4">
                 <div>
-                    <label className="mb-2 block text-sm font-medium">LibTV 画布 UUID 或链接</label>
+                    <label className="mb-2 block text-sm font-medium">{t("canvas:libtv-canvas-uuid-or-link")}</label>
                     <Input
                         value={value}
                         onChange={(event) => changeValue(event.target.value)}
-                        placeholder="粘贴 32 位 UUID、画布链接或分享链接"
+                        placeholder={t("canvas:paste-a-32-character-uuid-canvas-link-or-share-link")}
                         disabled={loading}
                         suffix={uuid && value !== uuid ? <ExternalLink className="size-4 text-foreground/35" /> : null}
                     />
@@ -136,7 +138,7 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
                 {loading && !result ? (
                     <div className="flex items-center gap-2 text-sm text-foreground/55">
                         <LoaderCircle className="size-4 animate-spin" />
-                        正在读取 LibTV 画布…
+                        {t("canvas:reading-libtv-canvas")}
                     </div>
                 ) : null}
                 {result ? (
@@ -144,29 +146,62 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
                         <div className="rounded-xl p-4" style={{ background: "var(--library-surface)" }}>
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-sm font-semibold">{result.projectName || "LibTV 画布"}</div>
-                                    <div className="mt-1 text-sm text-foreground/60">可导入 {result.importedNodeCount} 个节点 · {result.importedConnectionCount} 条连线</div>
+                                    <div className="text-sm font-semibold">{result.projectName || t("canvas:libtv-canvas")}</div>
+                                    <div className="mt-1 text-sm text-foreground/60">
+                                        {t("canvas:importable-2")} {result.importedNodeCount} {t("canvas:nodes-3")} {result.importedConnectionCount} {t("canvas:connections-2")}
+                                    </div>
                                 </div>
-                                <Tag color="blue">批次：{formatLibTVBatchTime(result.batchCreatedAt)}</Tag>
+                                <Tag color="blue">
+                                    {t("canvas:batches-3")}
+                                    {formatLibTVBatchTime(result.batchCreatedAt)}
+                                </Tag>
                             </div>
-                            <div className="mt-3 text-xs leading-5 text-foreground/50">节点会保留相对位置，并整体放到当前可视区域中心。</div>
+                            <div className="mt-3 text-xs leading-5 text-foreground/50">{t("canvas:nodes-keep-their-relative-layout-and-are-centered-in-the-current-viewpor")}</div>
                         </div>
                         {result.skippedNodes.length || result.skippedConnections.length || result.multiResultNodeCount || result.staleNodeCount || result.reusedFailedNodeCount || result.placeholderNodeCount || result.convertedSpecialCount ? (
                             <div className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-xs leading-5 text-foreground/60" style={{ background: "var(--surface-hover)" }}>
                                 <CircleAlert className="mt-0.5 size-4 shrink-0" />
                                 <div>
-                                    {result.skippedNodes.length ? <div>{result.skippedNodes.length} 个暂不支持的节点未导入，相关连线已自动忽略。</div> : null}
-                                    {!result.skippedNodes.length && result.skippedConnections.length ? <div>{result.skippedConnections.length} 条无效连线已自动忽略。</div> : null}
-                                    {result.reusedFailedNodeCount ? <div>{result.reusedFailedNodeCount} 个最近任务失败但仍有历史结果的节点已保留。</div> : null}
-                                    {result.placeholderNodeCount ? <div>{result.placeholderNodeCount} 个尚未生成结果的节点已作为占位节点保留。</div> : null}
-                                    {result.convertedSpecialCount ? <div>{result.convertedSpecialCount} 个特殊节点已转换为图片参考节点。</div> : null}
-                                    {result.multiResultNodeCount ? <div>{result.multiResultNodeCount} 个多结果节点已使用首个结果。</div> : null}
-                                    {result.staleNodeCount ? <div>{result.staleNodeCount} 个过期标记节点仍保留现有结果。</div> : null}
+                                    {result.skippedNodes.length ? (
+                                        <div>
+                                            {result.skippedNodes.length} {t("canvas:unsupported-node-types-were-skipped-their-connections-were-ignored-2")}
+                                        </div>
+                                    ) : null}
+                                    {!result.skippedNodes.length && result.skippedConnections.length ? (
+                                        <div>
+                                            {result.skippedConnections.length} {t("canvas:invalid-connections-were-ignored-2")}
+                                        </div>
+                                    ) : null}
+                                    {result.reusedFailedNodeCount ? (
+                                        <div>
+                                            {result.reusedFailedNodeCount} {t("canvas:nodes-with-failed-recent-tasks-kept-their-historical-results-2")}
+                                        </div>
+                                    ) : null}
+                                    {result.placeholderNodeCount ? (
+                                        <div>
+                                            {result.placeholderNodeCount} {t("canvas:nodes-without-results-were-kept-as-placeholders-2")}
+                                        </div>
+                                    ) : null}
+                                    {result.convertedSpecialCount ? (
+                                        <div>
+                                            {result.convertedSpecialCount} {t("canvas:special-nodes-were-converted-to-image-reference-nodes")}
+                                        </div>
+                                    ) : null}
+                                    {result.multiResultNodeCount ? (
+                                        <div>
+                                            {result.multiResultNodeCount} {t("canvas:multi-result-nodes-use-their-first-result-2")}
+                                        </div>
+                                    ) : null}
+                                    {result.staleNodeCount ? (
+                                        <div>
+                                            {result.staleNodeCount} {t("canvas:stale-flagged-nodes-keep-their-current-results")}
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                            <Tag>等待确认导入</Tag>
+                            <Tag>{t("canvas:waiting-for-import-confirmation-2")}</Tag>
                         </div>
                     </div>
                 ) : null}

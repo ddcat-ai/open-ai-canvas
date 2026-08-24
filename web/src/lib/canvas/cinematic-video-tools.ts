@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 export type CameraMovePreset = {
     id: string;
     label: string;
@@ -24,8 +25,8 @@ export const CAMERA_MOVE_PRESETS: CameraMovePreset[] = [
     { id: "dolly_backward", label: "后退撤离", prompt: "镜头向后移动远离主体，空间逐渐扩大，制造疏离或揭示全局。" },
     { id: "crane_up", label: "升起俯视", prompt: "镜头从人物高度缓慢升起，转为俯视视角，展示环境规模。" },
     { id: "crane_down", label: "下降贴近", prompt: "镜头从高位缓慢下降至主体高度，逐步进入人物情绪空间。" },
-    { id: "orbit_left", label: "左环绕", prompt: "镜头围绕主体向左半环绕运动，保持主体居中，展示轮廓和空间层次。" },
-    { id: "orbit_right", label: "右环绕", prompt: "镜头围绕主体向右半环绕运动，保持主体清晰，增强戏剧张力。" },
+    { id: "orbit_left", label: t("canvas:orbit-left"), prompt: "镜头围绕主体向左半环绕运动，保持主体居中，展示轮廓和空间层次。" },
+    { id: "orbit_right", label: t("canvas:orbit-right"), prompt: "镜头围绕主体向右半环绕运动，保持主体清晰，增强戏剧张力。" },
     { id: "handheld", label: "手持微晃", prompt: "镜头带轻微手持晃动，保留真实摄影的不稳定呼吸感，但主体始终清晰。" },
     { id: "steadicam", label: "稳定跟随", prompt: "镜头以稳定器方式跟随主体移动，运动平滑连续，保持电影感节奏。" },
     { id: "tracking_forward", label: "正面跟拍", prompt: "镜头在主体正前方后退跟拍，主体朝镜头方向移动，表情和动作保持稳定可见。" },
@@ -43,7 +44,7 @@ export const CAMERA_MOVE_PRESETS: CameraMovePreset[] = [
 export const TIME_SEQUENCE_PRESETS: TimeSequencePreset[] = [
     {
         id: "short_6s",
-        label: "6秒",
+        label: t("canvas:6s"),
         seconds: "6",
         prompt: `[0s] 主体处于起始画面，交代动作、景别和空间关系
 [2s] 镜头运动或主体动作发生明显变化
@@ -52,7 +53,7 @@ export const TIME_SEQUENCE_PRESETS: TimeSequencePreset[] = [
     },
     {
         id: "short_9s",
-        label: "9秒",
+        label: t("canvas:9s"),
         seconds: "9",
         prompt: `[0s] 起始画面，明确主体、景别和环境关系
 [3s] 主体动作展开，镜头保持连续
@@ -61,7 +62,7 @@ export const TIME_SEQUENCE_PRESETS: TimeSequencePreset[] = [
     },
     {
         id: "standard_10s",
-        label: "10秒",
+        label: t("canvas:10s-2"),
         seconds: "10",
         prompt: `[0s] 起始画面，明确主体位置、景别和环境
 [2s] 主体开始动作或表情变化，镜头保持连贯
@@ -72,7 +73,7 @@ export const TIME_SEQUENCE_PRESETS: TimeSequencePreset[] = [
     },
     {
         id: "seedance_15s",
-        label: "15秒",
+        label: t("canvas:15s-2"),
         seconds: "15",
         prompt: `[0s] 起始画面，交代主体、景别、机位和环境氛围
 [3s] 主体开始主要动作，表情和身体姿态发生变化

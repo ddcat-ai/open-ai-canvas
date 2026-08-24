@@ -7,6 +7,7 @@ import { subscribeGenerationTasks, type GenerationTask } from "@/services/api/ta
 import { persistCanvasAgentGenerationContinuationEffect } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskAgent } from "@/services/project-asset-sync";
 import type { CanvasConnection, CanvasNodeData, ContextMenuState, ViewportTransform } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 export type CanvasAgentGenerationContext = { conversationId?: string; messageId?: string; source?: "online" | "local" };
 type CanvasAgentRetryContext = GenerationRetryContext;
@@ -78,6 +79,7 @@ export async function runCanvasAgentGenerationOps({
     resumeAgent = async () => undefined,
     onContinuation,
 }: RunCanvasAgentGenerationOpsInput) {
+    const { t } = useTranslation("canvas");
     const observations = new Map<string, Promise<void>>();
     const observe = (taskId: string, nodeId: string, continuationIdPromise?: Promise<string>) => {
         const existing = observations.get(taskId);
@@ -142,7 +144,7 @@ export async function runCanvasAgentGenerationOps({
             const target = nodes.find((node) => node.id === op.nodeId);
             const prompt = op.prompt?.trim() ? op.prompt : (target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
             const retryOf = op.retry ? target?.metadata?.taskId : undefined;
-            if (op.retry && !retryOf) throw new Error("当前节点没有可重试的生成任务");
+            if (op.retry && !retryOf) throw new Error(t("canvas:this-node-has-no-generation-tasks-to-retry"));
             const retryContext = retryOf ? await createGenerationRetryContext(retryOf, target?.metadata?.attemptGroupId) : undefined;
             const continuationIdPromise = canvasAgentGenerationContinuationId(op.nodeId, context);
             let observation: Promise<void> | undefined;
@@ -231,6 +233,7 @@ export function useCanvasAgentOperations({
     setContextMenu,
     focusSelection,
 }: UseCanvasAgentOperationsOptions) {
+    const { t } = useTranslation("canvas");
     const undoStackRef = useRef<CanvasAgentUndoBatch[]>([]);
     const [undoOpsCount, setUndoOpsCount] = useState(0);
     const [lastAgentChange, setLastAgentChange] = useState<CanvasAgentChange | null>(null);
@@ -280,7 +283,7 @@ export function useCanvasAgentOperations({
             setViewport(next.viewport);
             setContextMenu(null);
             if (safeOps.length) {
-                const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasAgentOps(safeOps) || "画布操作已完成", nodeIds: affectedNodeIds };
+                const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasAgentOps(safeOps) || t("canvas:canvas-operation-completed"), nodeIds: affectedNodeIds };
                 undoStackRef.current = [...undoStackRef.current, { snapshot: before, afterNodes: next.nodes, afterConnections: next.connections, change }].slice(-10);
                 const nextUndoCount = undoStackRef.current.length;
                 setUndoOpsCount(nextUndoCount);

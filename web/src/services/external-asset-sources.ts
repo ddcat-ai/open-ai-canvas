@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import "@/lib/plugins/builtin";
 
 import { getRegisteredPlugin } from "@/lib/plugins/plugin-registry";
@@ -62,20 +63,20 @@ export async function uploadGeneratedAssetToConfiguredSources(asset: Asset, sign
     const uploaded: ExternalAssetItem[] = [];
     const failures: ExternalAssetSyncResult["failures"] = [];
     for (const installation of autoUploadInstallations) {
-        if (signal?.aborted) throw new DOMException("请求已取消", "AbortError");
+        if (signal?.aborted) throw new DOMException(t("domain:request-cancelled-3"), "AbortError");
         const source = sources.find((candidate) => candidate.id === installation.manifest.id);
         const folderId = stringConfig(installation.config.generatedFolderId);
         const existing = records.find((record) => record.sourceId === installation.manifest.id);
         if (existing?.status === "synced" && existing.folderId === folderId) continue;
 
         if (!source) {
-            const error = "插件未能加载素材来源";
+            const error = t("domain:plugin-failed-to-load-asset-sources");
             replaceSyncRecord(records, { sourceId: installation.manifest.id, sourceName: installation.manifest.name, status: "failed", folderId, error, updatedAt: new Date().toISOString() });
             failures.push({ sourceId: installation.manifest.id, sourceName: installation.manifest.name, error });
             continue;
         }
         if (!source.provider.uploadAsset && !source.provider.uploadAssetToFolder) {
-            const error = "当前插件不支持自动写入生成结果";
+            const error = t("domain:this-plugin-does-not-support-auto-writing-generation-results");
             replaceSyncRecord(records, { sourceId: source.id, sourceName: source.name, status: "failed", folderId, error, updatedAt: new Date().toISOString() });
             failures.push({ sourceId: source.id, sourceName: source.name, error });
             continue;
@@ -87,7 +88,7 @@ export async function uploadGeneratedAssetToConfiguredSources(asset: Asset, sign
             replaceSyncRecord(records, { sourceId: source.id, sourceName: source.name, status: "synced", externalId: item.id, folderId, updatedAt: new Date().toISOString() });
         } catch (reason) {
             if (reason instanceof DOMException && reason.name === "AbortError") throw reason;
-            const error = reason instanceof Error ? reason.message : "插件写入失败";
+            const error = reason instanceof Error ? reason.message : t("domain:plugin-write-failed");
             replaceSyncRecord(records, { sourceId: source.id, sourceName: source.name, status: "failed", folderId, error, updatedAt: new Date().toISOString() });
             failures.push({ sourceId: source.id, sourceName: source.name, error });
         }

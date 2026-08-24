@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
 
@@ -42,9 +43,9 @@ export function expandSkillMentions(prompt: string, skills: Skill[]) {
 export function renderSkillPrompt(skill: Pick<Skill, "skill_name" | "description" | "instruction">) {
     return [
         `【技能：${skill.skill_name}】`,
-        skill.description ? `用途：${skill.description}` : "",
+        skill.description ? t("canvas:purpose-param", { description: skill.description }) : "",
         skill.instruction ? `执行指令：\n${skill.instruction}` : "",
-        "请严格执行该技能，只输出结果，不要输出解释性套话。",
+        t("canvas:follow-the-skill-strictly-and-output-only-the-result-without-explanatory"),
     ]
         .filter(Boolean)
         .join("\n\n");

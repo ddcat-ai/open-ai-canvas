@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 export type ImageResolutionTier = "1k" | "2k" | "4k";
 
 export type ImageResolutionOption = {
@@ -49,13 +50,16 @@ export function imageRatioForSize(size: string) {
 }
 
 export function formatImageResolutionSize(size: string, options: ImageResolutionOption[]) {
-    if (size.trim().toLowerCase() === "auto") return "自动";
+    if (size.trim().toLowerCase() === "auto") return t("lib:auto");
     const option = imageResolutionOption(options, size);
     return option ? `${option.ratio} · ${option.tier.toUpperCase()}` : size;
 }
 
 function parseImageResolutionOption(value: string): ImageResolutionOption | null {
-    const match = value.trim().toLowerCase().match(/^(\d+)x(\d+)$/);
+    const match = value
+        .trim()
+        .toLowerCase()
+        .match(/^(\d+)x(\d+)$/);
     if (!match) return null;
     const width = Number(match[1]);
     const height = Number(match[2]);

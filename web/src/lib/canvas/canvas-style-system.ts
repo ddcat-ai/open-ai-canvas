@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { StyleProfileSnapshot } from "@/lib/canvas/style-profile";
 
 export type ProjectStyleWorldId = "xianxia" | "urban" | "historical" | "suspense" | "science-fiction" | "pastoral";
@@ -39,7 +40,7 @@ type StyleOption<T extends string> = {
 export const projectStyleWorlds: Array<StyleOption<ProjectStyleWorldId>> = [
     {
         id: "xianxia",
-        label: "仙侠",
+        label: t("canvas:xianxia"),
         description: "宗门、仙城、洞府、云海与法术规则共同构成东方修行世界。",
         prompt: "东方仙侠世界以宗门、境界、法器、灵兽和因果秩序为基础；奇观从中式山水、木构建筑、道家意象和修行体系演化，所有地点共享明确的时代、地理与力量规则。",
         palette: "云雾白、黛青、青玉、朱砂、古铜与阵营能量色",
@@ -156,7 +157,7 @@ export const projectStyleTones: Array<StyleOption<ProjectStyleToneId>> = [
 export const projectStyleMedia: Array<StyleOption<ProjectStyleMediumId> & { characters: ProjectStyleCharacterId[] }> = [
     {
         id: "live-action",
-        label: "真人实拍",
+        label: t("canvas:live-action"),
         description: "真实演员、可信光学、服化道和物理环境。",
         prompt: "采用真人影视拍摄媒介：真实人物比例、自然皮肤与发丝、可信镜头光学和现场光源，服装、建筑、道具与特效保持真实材质响应。",
         motion: "动作遵循真实重心、惯性、衣料重量和摄影机物理运动",
@@ -183,7 +184,7 @@ export const projectStyleMedia: Array<StyleOption<ProjectStyleMediumId> & { char
     },
     {
         id: "2d-guoman",
-        label: "国漫 2D",
+        label: t("canvas:chinese-animation-2d"),
         description: "稳定线稿、赛璐璐角色与东方绘景体系。",
         prompt: "采用国漫 2D 动画媒介：有粗细变化的稳定线稿、两至三阶赛璐璐明暗、清晰角色剪影和东方绘景层次；全项目保持二维绘画语言。",
         motion: "使用明确关键姿势、有限但准确的二维运动，口型、发丝、衣摆与特效遵循统一帧间节奏",
@@ -301,10 +302,13 @@ export function parseCanvasStyleSelection(id?: string): ProjectStyleSelection | 
     const parts = id.slice(3).split("--");
     if (parts.length !== 4) return null;
     const selection = { world: parts[0], tone: parts[1], medium: parts[2], character: parts[3] } as ProjectStyleSelection;
-    if (!projectStyleWorlds.some((item) => item.id === selection.world)
-        || !projectStyleTones.some((item) => item.id === selection.tone)
-        || !projectStyleMedia.some((item) => item.id === selection.medium)
-        || !projectStyleCharacters.some((item) => item.id === selection.character)) return null;
+    if (
+        !projectStyleWorlds.some((item) => item.id === selection.world) ||
+        !projectStyleTones.some((item) => item.id === selection.tone) ||
+        !projectStyleMedia.some((item) => item.id === selection.medium) ||
+        !projectStyleCharacters.some((item) => item.id === selection.character)
+    )
+        return null;
     return selection;
 }
 
@@ -347,6 +351,6 @@ function stylePreviewImage(selection: ProjectStyleSelection) {
 
 function requiredOption<T extends string>(options: Array<StyleOption<T>>, id: T) {
     const option = options.find((item) => item.id === id);
-    if (!option) throw new Error(`未知项目画风选项：${id}`);
+    if (!option) throw new Error(t("canvas:unknown-project-style-option-param", { id: id }));
     return option;
 }

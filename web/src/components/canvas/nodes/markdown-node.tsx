@@ -5,6 +5,7 @@ import { useUpstreamNodes } from "@/components/canvas/canvas-node-graph-context"
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasNodeData } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type MarkdownNodeContentProps = {
     node: CanvasNodeData;
@@ -19,6 +20,7 @@ type MarkdownNodeContentProps = {
  * 判定文本素材复用注册表的 resourceKind，不在这里另立一套判断。
  */
 export function MarkdownNodeContent({ node, theme }: MarkdownNodeContentProps) {
+    const { t } = useTranslation("canvas");
     const upstream = useUpstreamNodes(node.id);
     const own = node.metadata?.content || "";
     const inherited = upstream.find((item) => getNodeResourceKind(item) === "text");
@@ -28,20 +30,14 @@ export function MarkdownNodeContent({ node, theme }: MarkdownNodeContentProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center" style={{ color: theme.node.muted }}>
                 <FileText className="size-5 opacity-60" />
-                <span style={{ fontSize: "var(--fs-label)" }}>连接文本节点，或双击编辑 Markdown</span>
+                <span style={{ fontSize: "var(--fs-label)" }}>{t("domain:connect-a-text-node-or-double-click-to-edit-markdown")}</span>
             </div>
         );
     }
 
     return (
         // 滚动区要吞掉 wheel 并标 data-canvas-no-zoom，否则滚动会被画布缩放拦走。
-        <div
-            className="h-full w-full overflow-y-auto overflow-x-hidden px-4 py-3"
-            data-canvas-no-zoom
-            style={{ color: theme.node.text }}
-            onWheel={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-        >
+        <div className="h-full w-full overflow-y-auto overflow-x-hidden px-4 py-3" data-canvas-no-zoom style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
             <AIMessageMarkdown>{source}</AIMessageMarkdown>
         </div>
     );

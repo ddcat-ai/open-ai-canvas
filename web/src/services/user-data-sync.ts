@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteUserDataSnapshot, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
@@ -49,7 +50,7 @@ export async function syncRemoteUserData(userId?: string | null) {
     try {
         await saveRemoteUserDataNow();
     } catch (error) {
-        console.warn("登录后画布首次同步失败，保留本地项目等待重试", error);
+        console.warn(t("domain:first-post-sign-in-canvas-sync-failed-keeping-local-projects-for-retry"), error);
     }
     scheduleRemoteUserDataSync();
 }
@@ -150,14 +151,14 @@ export function scheduleRemoteUserDataSync() {
     if (syncTimer) window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {
         syncTimer = null;
-        void saveRemoteUserDataNow().catch((error) => console.warn("云端自动同步失败", error));
+        void saveRemoteUserDataNow().catch((error) => console.warn(t("domain:cloud-auto-sync-failed"), error));
     }, 1200);
 }
 
 export async function createCanvasProjectWithRemoteSync(title: string, projectId?: string, initialContent?: Partial<Pick<CanvasProject, "nodes" | "connections">>) {
     const id = useCanvasStore.getState().createProject(title, projectId);
     if (initialContent) useCanvasStore.getState().updateProject(id, initialContent);
-    if (!activeRemoteUserId) return { id, syncError: new Error("尚未建立云端同步会话") };
+    if (!activeRemoteUserId) return { id, syncError: new Error(t("domain:no-cloud-sync-session-established-yet")) };
     try {
         await saveRemoteUserDataNow();
         return { id };

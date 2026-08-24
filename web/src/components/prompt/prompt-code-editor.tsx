@@ -21,21 +21,25 @@ export const PromptCodeEditor = forwardRef<PromptCodeEditorHandle, PromptCodeEdi
     const theme = useThemeStore((state) => state.theme);
     const viewRef = useRef<EditorView | null>(null);
 
-    useImperativeHandle(ref, () => ({
-        insertText(text) {
-            const view = viewRef.current;
-            if (!view || readOnly) return;
-            const selection = view.state.selection.main;
-            view.dispatch({
-                changes: { from: selection.from, to: selection.to, insert: text },
-                selection: { anchor: selection.from + text.length },
-            });
-            view.focus();
-        },
-        focus() {
-            viewRef.current?.focus();
-        },
-    }), [readOnly]);
+    useImperativeHandle(
+        ref,
+        () => ({
+            insertText(text) {
+                const view = viewRef.current;
+                if (!view || readOnly) return;
+                const selection = view.state.selection.main;
+                view.dispatch({
+                    changes: { from: selection.from, to: selection.to, insert: text },
+                    selection: { anchor: selection.from + text.length },
+                });
+                view.focus();
+            },
+            focus() {
+                viewRef.current?.focus();
+            },
+        }),
+        [readOnly],
+    );
 
     return (
         <CodeMirror
@@ -48,7 +52,9 @@ export const PromptCodeEditor = forwardRef<PromptCodeEditorHandle, PromptCodeEdi
             extensions={[EditorView.lineWrapping]}
             basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: !readOnly, highlightActiveLineGutter: !readOnly }}
             aria-label={ariaLabel}
-            onCreateEditor={(view) => { viewRef.current = view; }}
+            onCreateEditor={(view) => {
+                viewRef.current = view;
+            }}
             onChange={onChange}
         />
     );

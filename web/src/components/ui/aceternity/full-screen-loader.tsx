@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
 type FullScreenLoaderProps = {
     label?: string;
@@ -8,15 +9,9 @@ type FullScreenLoaderProps = {
     className?: string;
 };
 
-export function FullScreenLoader({ label = "正在恢复工作区", detail = "同步账号、模型和项目数据", className }: FullScreenLoaderProps) {
+export function FullScreenLoader({ label = t("domain:restoring-workspace"), detail = t("domain:syncing-account-models-and-project-data"), className }: FullScreenLoaderProps) {
     return (
-        <div
-            data-full-screen-loader
-            role="status"
-            aria-live="polite"
-            aria-label={`${label}，${detail}`}
-            className={cn("full-screen-loader", className)}
-        >
+        <div data-full-screen-loader role="status" aria-live="polite" aria-label={`${label}，${detail}`} className={cn("full-screen-loader", className)}>
             <div className="full-screen-loader-shell">
                 <header className="full-screen-loader-topbar" aria-hidden="true">
                     <div className="full-screen-loader-topbar-group">
@@ -65,7 +60,7 @@ export function FullScreenLoader({ label = "正在恢复工作区", detail = "�
     );
 }
 
-export function WorkspaceRouteLoader({ label = "正在打开页面" }: { label?: string }) {
+export function WorkspaceRouteLoader({ label = t("domain:opening-page") }: { label?: string }) {
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {

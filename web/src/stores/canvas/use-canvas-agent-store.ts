@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { CanvasAgentOp } from "@/lib/canvas/canvas-agent-ops";
+import { t } from "@/i18n";
 
 export type AgentChatRole = "user" | "assistant" | "system" | "tool" | "error";
 export type AgentAttachment = { id: string; name: string; type: string; size: number; url: string; dataUrl: string };
@@ -59,7 +60,8 @@ export function writeCanvasAgentEnabledPreference(enabled: boolean, storage: Pic
 }
 
 export function canvasAgentConnectionStartingPatch() {
-    return { enabled: true, connected: false, activity: "连接中", connectError: "", activeTab: "setup" as const };
+
+    return { enabled: true, connected: false, activity: t("domain:connecting"), connectError: "", activeTab: "setup" as const };
 }
 
 export function canvasAgentTransientDisconnectPatch(activity: string, connectError: string) {
@@ -68,7 +70,7 @@ export function canvasAgentTransientDisconnectPatch(activity: string, connectErr
 
 export function canvasAgentConnectionStatusText({ enabled, connected, activity, connectError }: Pick<CanvasAgentStore, "enabled" | "connected" | "activity" | "connectError">) {
     if (enabled && !connected && activity === "正在重连") return activity;
-    return connectError ? "连接失败" : connected ? activity : enabled ? "连接中" : "未连接";
+    return connectError ? t("domain:connection-failed") : connected ? activity : enabled ? t("domain:connecting") : t("domain:not-connected");
 }
 
 function browserPreferenceStorage(): CanvasAgentPreferenceStorage | undefined {
@@ -91,7 +93,7 @@ export const useCanvasAgentStore = create<CanvasAgentStore>((set) => ({
     loadingThreads: false,
     activeTab: "setup",
     confirmTools: true,
-    activity: "就绪",
+    activity: "",
     connectError: "",
     pendingTool: null,
     setAgentState: (patch) => {

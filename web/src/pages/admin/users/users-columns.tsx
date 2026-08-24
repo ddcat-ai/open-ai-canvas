@@ -5,17 +5,18 @@ import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
+import { t } from "@/i18n";
 
 export type UserColumnKey = "user" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
 
 export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locked?: boolean }> = [
-    { key: "user", label: "用户", locked: true },
-    { key: "email", label: "邮箱" },
-    { key: "credits", label: "当前积分" },
-    { key: "role", label: "角色" },
-    { key: "status", label: "状态" },
-    { key: "createdAt", label: "注册时间" },
-    { key: "actions", label: "操作", locked: true },
+    { key: "user", label: t("admin:users-2"), locked: true },
+    { key: "email", label: t("admin:email") },
+    { key: "credits", label: t("admin:credits") },
+    { key: "role", label: t("admin:role") },
+    { key: "status", label: t("admin:status") },
+    { key: "createdAt", label: t("admin:registered-at") },
+    { key: "actions", label: t("admin:actions"), locked: true },
 ];
 
 export function createUserColumns({
@@ -34,47 +35,56 @@ export function createUserColumns({
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
         {
             key: "user",
-            title: "用户",
+            title: t("admin:users-2"),
             dataIndex: "username",
             render: (_, user) => (
                 <div>
-                    <div className="flex items-center gap-1.5"><button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>{user.displayName || user.username}</button><IdentityProviderBadge user={user} /></div>
+                    <div className="flex items-center gap-1.5">
+                        <button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>
+                            {user.displayName || user.username}
+                        </button>
+                        <IdentityProviderBadge user={user} />
+                    </div>
                     <div className="text-xs text-foreground/45">@{user.username}</div>
                 </div>
             ),
         },
-        { key: "email", title: "邮箱", dataIndex: "email", render: (email) => email || <span className="text-foreground/40">未填写</span> },
+        { key: "email", title: t("admin:email"), dataIndex: "email", render: (email) => email || <span className="text-foreground/40">{t("admin:not-filled-in-3")}</span> },
         {
             key: "credits",
-            title: "当前积分",
+            title: t("admin:credits"),
             dataIndex: "availableMicrocredits",
             width: 130,
             align: "right",
-            render: (value, user) => <span className="tabular-nums" title={`冻结积分：${formatCredits(user.reservedMicrocredits)}`}>{formatCredits(value)}</span>,
+            render: (value, user) => (
+                <span className="tabular-nums" title={`冻结积分：${formatCredits(user.reservedMicrocredits)}`}>
+                    {formatCredits(value)}
+                </span>
+            ),
         },
-        { key: "role", title: "角色", dataIndex: "role", width: 110, render: (role) => <AdminStatusBadge label={role === "admin" ? "管理员" : "普通用户"} tone={role === "admin" ? "info" : "neutral"} /> },
-        { key: "status", title: "状态", dataIndex: "status", width: 110, render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
-        { key: "createdAt", title: "注册时间", dataIndex: "createdAt", width: 180, render: formatTime },
+        { key: "role", title: t("admin:role"), dataIndex: "role", width: 110, render: (role) => <AdminStatusBadge label={role === "admin" ? t("admin:admin") : t("admin:user")} tone={role === "admin" ? "info" : "neutral"} /> },
+        { key: "status", title: t("admin:status"), dataIndex: "status", width: 110, render: (status) => <AdminStatusBadge label={status === "active" ? t("admin:enabled") : t("admin:disabled")} tone={status === "active" ? "success" : "neutral"} /> },
+        { key: "createdAt", title: t("admin:registered-at"), dataIndex: "createdAt", width: 180, render: formatTime },
         {
             key: "actions",
-            title: "操作",
+            title: t("admin:actions"),
             width: 180,
             align: "right",
             render: (_, user) => (
                 <AdminRowActions
-                    primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => onView(user) }}
+                    primary={{ label: t("admin:details"), icon: <Eye className="size-3.5" />, onClick: () => onView(user) }}
                     actions={[
-                        { key: "edit", label: "编辑用户", icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
+                        { key: "edit", label: t("admin:edit-user"), icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
                         {
                             key: "toggle-status",
-                            label: user.status === "active" ? "停用用户" : "重新启用",
+                            label: user.status === "active" ? t("admin:disable-user") : t("admin:re-enable"),
                             icon: <Power className="size-3.5" />,
                             danger: user.status === "active",
                             disabled: user.id === actorId,
                             confirm: {
-                                title: user.status === "active" ? "停用这个用户？" : "重新启用这个用户？",
-                                description: user.status === "active" ? "停用后会清除该用户登录态，但保留身份、任务和积分流水。" : "启用后，该用户可以重新登录并继续使用原有数据。",
-                                okText: user.status === "active" ? "确认停用" : "确认启用",
+                                title: user.status === "active" ? t("admin:disable-this-user") : t("admin:re-enable-this-user"),
+                                description: user.status === "active" ? t("admin:disabling-clears-the-user-s-sessions-but-keeps-identity-tasks-and-credit") : t("admin:after-enabling-the-user-can-sign-in-again-and-keeps-all-existing-data"),
+                                okText: user.status === "active" ? t("admin:confirm-disable") : t("admin:confirm-enable"),
                             },
                             onClick: () => onToggleStatus(user),
                         },

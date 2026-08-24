@@ -83,11 +83,7 @@ test("Dreamina official failure uses stable neutral copy without exposing provid
             },
             idempotencyKey: () => "dreamina-official-fail-0001",
         }),
-    ).rejects.toMatchObject({
-        code: "dreamina_official_failed",
-        message: "任务未成功。当前 Dreamina CLI 无法可靠判断是官网取消还是生成失败。",
-        status: 502,
-    });
+    ).rejects.toMatchObject({ code: "dreamina_official_failed", status: 502 });
 });
 
 test("Dreamina Web parsing preserves the shared orthogonal task contract while keeping the legacy DTO", async () => {
@@ -136,7 +132,7 @@ test("Dreamina Web parsing preserves the shared orthogonal task contract while k
     });
     expect(projected.projectId).toBeUndefined();
     expect(projected.status).toBe("failed");
-    expect(projected.error).toBe("任务未成功。当前 Dreamina CLI 无法可靠判断是官网取消还是生成失败。");
+    expect(projected.error).toBe("domain:the-task-did-not-succeed-the-current-dreamina-cli-cannot-reliably-tell-w");
 });
 
 test("Dreamina SUBMISSION_UNCERTAIN projects as failed attention without claiming official completion", () => {
@@ -409,11 +405,7 @@ test("Dreamina generation asks to reconnect without exposing origin authorizatio
                 idempotencyKey: () => "seedance-reconnect-copy-0001",
             },
         ),
-    ).rejects.toMatchObject({
-        code: "origin_not_trusted",
-        message: "本机连接需要重新建立",
-        status: 403,
-    });
+    ).rejects.toMatchObject({ code: "origin_not_trusted", status: 403 });
     expect(requests).toBe(0);
 });
 

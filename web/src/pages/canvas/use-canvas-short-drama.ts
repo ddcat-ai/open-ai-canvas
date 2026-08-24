@@ -3,6 +3,7 @@ import { App } from "antd";
 
 import { createShortDramaPipeline, deriveShortDramaProgress, persistShortDramaGuideDismissed, readShortDramaGuideDismissed, type CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import type { CanvasConnection, CanvasNodeData, Position } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type UseCanvasShortDramaOptions = {
     nodes: CanvasNodeData[];
@@ -21,21 +22,40 @@ type UseCanvasShortDramaOptions = {
     openTextEditor: (node: CanvasNodeData) => void;
 };
 
-export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setStylePickerOpen, fitCanvasSelection, focusCanvasNode, openTextEditor }: UseCanvasShortDramaOptions) {
+export function useCanvasShortDrama({
+    nodes,
+    connections,
+    nodesRef,
+    connectionsRef,
+    selectedNodeIdsRef,
+    getCanvasCenter,
+    setNodes,
+    setConnections,
+    setSelectedNodeIds,
+    setSelectedConnectionId,
+    setStylePickerOpen,
+    fitCanvasSelection,
+    focusCanvasNode,
+    openTextEditor,
+}: UseCanvasShortDramaOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const dismissedRef = useRef(readShortDramaGuideDismissed());
     const [guideCollapsed, setGuideCollapsed] = useState(dismissedRef.current);
     const progress = useMemo(() => deriveShortDramaProgress(nodes, connections), [connections, nodes]);
 
-    const selectNodes = useCallback((ids: string[]) => {
-        const selection = new Set(ids);
-        selectedNodeIdsRef.current = selection;
-        setSelectedNodeIds(selection);
-        setSelectedConnectionId(null);
-    }, [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
+    const selectNodes = useCallback(
+        (ids: string[]) => {
+            const selection = new Set(ids);
+            selectedNodeIdsRef.current = selection;
+            setSelectedNodeIds(selection);
+            setSelectedConnectionId(null);
+        },
+        [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds],
+    );
 
     const createPipeline = useCallback(() => {
-        if (nodesRef.current.length) return message.info("当前画布已有内容，请在新画布创建短剧流水线");
+        if (nodesRef.current.length) return message.info(t("canvas:current-canvas-is-not-empty-create-the-drama-pipeline-in-a-new-canvas"));
         const pipeline = createShortDramaPipeline(getCanvasCenter());
         nodesRef.current = pipeline.nodes;
         connectionsRef.current = pipeline.connections;
@@ -47,31 +67,36 @@ export function useCanvasShortDrama({ nodes, connections, nodesRef, connectionsR
             fitCanvasSelection();
             setStylePickerOpen(true);
         });
-        message.success("短剧流水线已创建");
+        message.success(t("canvas:drama-pipeline-created"));
     }, [connectionsRef, fitCanvasSelection, getCanvasCenter, message, nodesRef, selectNodes, setConnections, setNodes, setStylePickerOpen]);
 
-    const openStoryInput = useCallback((nodeId?: string) => {
-        const storyNode = (nodeId ? nodesRef.current.find((node) => node.id === nodeId) : undefined)
-            || nodesRef.current.find((node) => node.metadata?.workflowKind === "story_input")
-            || nodesRef.current.find((node) => node.metadata?.workflowKind === "script");
-        if (!storyNode) return;
-        focusCanvasNode(storyNode.id);
-        queueMicrotask(() => openTextEditor(storyNode));
-    }, [focusCanvasNode, nodesRef, openTextEditor]);
+    const openStoryInput = useCallback(
+        (nodeId?: string) => {
+            const storyNode =
+                (nodeId ? nodesRef.current.find((node) => node.id === nodeId) : undefined) || nodesRef.current.find((node) => node.metadata?.workflowKind === "story_input") || nodesRef.current.find((node) => node.metadata?.workflowKind === "script");
+            if (!storyNode) return;
+            focusCanvasNode(storyNode.id);
+            queueMicrotask(() => openTextEditor(storyNode));
+        },
+        [focusCanvasNode, nodesRef, openTextEditor],
+    );
 
-    const activateStep = useCallback((stepId: CanvasShortDramaStepId) => {
-        const step = progress.steps.find((item) => item.id === stepId);
-        if (stepId === "style") {
+    const activateStep = useCallback(
+        (stepId: CanvasShortDramaStepId) => {
+            const step = progress.steps.find((item) => item.id === stepId);
+            if (stepId === "style") {
+                if (step?.nodeId) focusCanvasNode(step.nodeId);
+                setStylePickerOpen(true);
+                return;
+            }
+            if (stepId === "story") {
+                openStoryInput(step?.nodeId);
+                return;
+            }
             if (step?.nodeId) focusCanvasNode(step.nodeId);
-            setStylePickerOpen(true);
-            return;
-        }
-        if (stepId === "story") {
-            openStoryInput(step?.nodeId);
-            return;
-        }
-        if (step?.nodeId) focusCanvasNode(step.nodeId);
-    }, [focusCanvasNode, openStoryInput, progress.steps, setStylePickerOpen]);
+        },
+        [focusCanvasNode, openStoryInput, progress.steps, setStylePickerOpen],
+    );
 
     const skipGuide = useCallback(() => {
         dismissedRef.current = true;

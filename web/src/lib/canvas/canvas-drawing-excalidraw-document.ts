@@ -20,17 +20,19 @@ export function createExcalidrawDrawingFromImage(source: DrawingImageSource) {
     const scale = Math.min(1, INITIAL_DRAWING_SHAPE_MAX_DIMENSION / Math.max(source.width, source.height));
     const width = Math.max(1, Math.round(source.width * scale));
     const height = Math.max(1, Math.round(source.height * scale));
-    const elements = convertToExcalidrawElements([{
-        type: "image",
-        x: -width / 2,
-        y: -height / 2,
-        width,
-        height,
-        fileId,
-        status: "saved",
-        scale: [1, 1],
-        crop: null,
-    }]);
+    const elements = convertToExcalidrawElements([
+        {
+            type: "image",
+            x: -width / 2,
+            y: -height / 2,
+            width,
+            height,
+            fileId,
+            status: "saved",
+            scale: [1, 1],
+            crop: null,
+        },
+    ]);
     const files: BinaryFiles = {
         [fileId]: {
             id: fileId,

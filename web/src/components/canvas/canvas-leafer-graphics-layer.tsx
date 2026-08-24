@@ -228,13 +228,7 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
     scene.draft.visible = Boolean(connecting);
     if (connecting) {
         scene.draft.set({
-            path: activeConnectionPath(
-                props.nodeById.get(connecting.nodeId),
-                connecting,
-                props.mouseWorld,
-                props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined,
-                props.scriptScrollTopById[connecting.nodeId] || 0,
-            ),
+            path: activeConnectionPath(props.nodeById.get(connecting.nodeId), connecting, props.mouseWorld, props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined, props.scriptScrollTopById[connecting.nodeId] || 0),
             stroke: props.theme.accent.primary,
             strokeCap: "round",
             opacity: 0.72,
@@ -251,16 +245,18 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
         const source = props.nodeById.get(sourceNodeId);
         if (!source) return;
         const handle: ConnectionHandle = { nodeId: source.id, handleType: "source" };
-        scene.batchDrafts.add(new Path({
-            path: activeConnectionPath(source, handle, batch.mouseWorld, target, props.scriptScrollTopById[source.id] || 0),
-            stroke,
-            strokeWidth: 1.4,
-            strokeScaleFixed: true,
-            strokeCap: "round",
-            dashPattern: [8, 8],
-            opacity: 0.72,
-            hittable: false,
-        }));
+        scene.batchDrafts.add(
+            new Path({
+                path: activeConnectionPath(source, handle, batch.mouseWorld, target, props.scriptScrollTopById[source.id] || 0),
+                stroke,
+                strokeWidth: 1.4,
+                strokeScaleFixed: true,
+                strokeCap: "round",
+                dashPattern: [8, 8],
+                opacity: 0.72,
+                hittable: false,
+            }),
+        );
     });
 }
 

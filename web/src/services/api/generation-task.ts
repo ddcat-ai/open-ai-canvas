@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
@@ -121,18 +122,11 @@ export async function runBackendGenerationTask(
     return createAndWaitGenerationTask({ projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, signal, metadata, onTaskUpdate }, prepared, dependencies);
 }
 
-export async function runBackendToolGenerationTask(options: {
-    prompt: string;
-    config: AiConfig;
-    messages: ResponseInputMessage[];
-    tools: ResponseFunctionTool[];
-    toolChoice: ToolChoice;
-    signal?: AbortSignal;
-}): Promise<ToolResponseResult> {
+export async function runBackendToolGenerationTask(options: { prompt: string; config: AiConfig; messages: ResponseInputMessage[]; tools: ResponseFunctionTool[]; toolChoice: ToolChoice; signal?: AbortSignal }): Promise<ToolResponseResult> {
     throwIfAborted(options.signal);
     const logicalModelId = logicalModelIDForConfig(options.config);
     const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
-    if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议");
+    if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error(t("domain:the-current-model-has-no-available-request-protocol"));
     const task = await createGenerationTask({
         type: "canvas_text",
         operation: "text",
@@ -160,7 +154,7 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
-    if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
+    if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error(t("domain:generation-retry-batch-task-count-mismatch"));
     if (isLocalDreaminaModel(options.config.model)) {
         await dependencies.ensureLocalDreaminaReady?.(options.signal);
         throwIfAborted(options.signal);
@@ -199,7 +193,7 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
 }
 
 async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies): Promise<BackendGenerationResult> {
-    if (options.mode !== "image" && options.mode !== "video") throw new Error("即梦 CLI 仅支持图片或视频生成");
+    if (options.mode !== "image" && options.mode !== "video") throw new Error(t("domain:the-dreamina-cli-only-supports-image-or-video-generation"));
     const runtimeId = stripLocalDreaminaTaskPrefix(options.localIdempotencyKey || options.clientOperationId || dependencies.createId());
     const clientOperationId = options.clientOperationId ?? runtimeId;
     const context = localTaskContext(options);
@@ -271,7 +265,7 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
                     : !cancelled
                       ? {
                             ...(localErrorCode ? { errorCode: localErrorCode } : {}),
-                            error: error instanceof Error ? error.message : "即梦本机生成失败",
+                            error: error instanceof Error ? error.message : t("domain:dreamina-local-generation-failed"),
                         }
                       : {}),
             });
@@ -282,13 +276,16 @@ async function runLocalDreaminaGeneration(options: BackendGenerationTaskOptions,
 
 function generationOperation(options: BackendGenerationTaskOptions) {
     if (options.mode !== "video") return options.mode;
-    return resolveVideoOperation({
-        textCount: 0,
-        imageCount: options.referenceImages?.length ?? 0,
-        videoCount: options.referenceVideos?.length ?? 0,
-        audioCount: options.referenceAudios?.length ?? 0,
-        characterCount: 0,
-    }, options.metadata?.videoEditOperation as string | undefined);
+    return resolveVideoOperation(
+        {
+            textCount: 0,
+            imageCount: options.referenceImages?.length ?? 0,
+            videoCount: options.referenceVideos?.length ?? 0,
+            audioCount: options.referenceAudios?.length ?? 0,
+            characterCount: 0,
+        },
+        options.metadata?.videoEditOperation as string | undefined,
+    );
 }
 
 export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {
@@ -300,7 +297,7 @@ async function localGenerationReferences(images: ReferenceImage[], videos: Refer
     const imageReferences = await Promise.all(
         images.map(async (image) => {
             const source = image.dataUrl || image.url;
-            if (!source && !image.storageKey) throw new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦图片参考素材不可用", 400);
+            if (!source && !image.storageKey) throw new LocalDreaminaGenerationClientError("dreamina_reference_invalid", t("domain:dreamina-image-reference-assets-unavailable"), 400);
             const blob = image.storageKey ? await getImageBlob(image.storageKey) : await (await fetch(source!)).blob();
             if (!blob || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw invalidLocalReference();
             return {
@@ -336,7 +333,7 @@ async function localGenerationReferences(images: ReferenceImage[], videos: Refer
 }
 
 function invalidLocalReference() {
-    return new LocalDreaminaGenerationClientError("dreamina_reference_invalid", "即梦参考素材无效", 400);
+    return new LocalDreaminaGenerationClientError("dreamina_reference_invalid", t("domain:invalid-dreamina-reference-assets"), 400);
 }
 
 function compactReferenceMetadata(metadata: Record<string, string | number | undefined>) {
@@ -428,13 +425,13 @@ async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAud
     let blob: Blob | null = null;
     if (media.storageKey) blob = await getMediaBlob(media.storageKey);
     if (!blob && (url.startsWith("blob:") || url.startsWith("data:"))) blob = await (await fetch(url)).blob();
-    if (!blob) throw new Error("参考媒体尚未保存，请重新上传后再生成");
+    if (!blob) throw new Error(t("domain:reference-media-has-not-been-saved-yet-re-upload-before-generating"));
     try {
         const kind: "video" | "audio" | "file" = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
         const resource = await uploadResourceFile(blob, kind, { fileName: media.name, width: "width" in media ? media.width : undefined, height: "height" in media ? media.height : undefined, durationMs: media.durationMs });
         return backendMediaReference(media, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || media.type || blob.type });
     } catch (error) {
-        throw new Error(error instanceof Error ? `参考媒体上传失败：${error.message}` : "参考媒体上传失败");
+        throw new Error(error instanceof Error ? t("domain:reference-media-upload-failed-param", { message: error.message }) : t("domain:reference-media-upload-failed"));
     }
 }
 
@@ -443,12 +440,12 @@ async function prepareBackendImageReference(image: ReferenceImage) {
     const sourceUrl = image.url || image.dataUrl;
     if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
     const blob = image.storageKey ? await getImageBlob(image.storageKey) : sourceUrl ? await (await fetch(sourceUrl)).blob() : null;
-    if (!blob) throw new Error("参考图片尚未保存，请重新上传后再生成");
+    if (!blob) throw new Error(t("domain:reference-images-have-not-been-saved-yet-re-upload-before-generating"));
     try {
         const resource = await uploadResourceFile(blob, "image", { fileName: image.name });
         return backendImageReference(image, { storageKey: resourceStorageKey(resource.id), type: resource.mimeType || image.type || blob.type });
     } catch (error) {
-        throw new Error(error instanceof Error ? `参考图片上传失败：${error.message}` : "参考图片上传失败");
+        throw new Error(error instanceof Error ? t("domain:reference-image-upload-failed-param", { message: error.message }) : t("domain:reference-image-upload-failed"));
     }
 }
 
@@ -517,19 +514,20 @@ export function backendProviderConfig(config: AiConfig) {
 function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode) {
     const channel = resolveModelChannel(config, config.model);
     const spec = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalCapabilitySpec;
-    const candidates: Record<string, unknown> = mode === "image"
-        ? { size: config.size, quality: config.quality, transparentBackground: config.transparentBackground === "true", count: Number(config.count) }
-        : mode === "video"
-            ? { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
-            : mode === "audio"
+    const candidates: Record<string, unknown> =
+        mode === "image"
+            ? { size: config.size, quality: config.quality, transparentBackground: config.transparentBackground === "true", count: Number(config.count) }
+            : mode === "video"
+              ? { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
+              : mode === "audio"
                 ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) }
                 : {};
     return Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
 }
 
 export function parseBackendGenerationResult(task: GenerationTask): BackendGenerationResult {
-    if (!task.resultJson) throw new Error("后端任务没有返回结果");
+    if (!task.resultJson) throw new Error(t("domain:the-backend-task-returned-no-result"));
     const result = JSON.parse(task.resultJson) as BackendGenerationResult;
-    if (!result || typeof result !== "object") throw new Error("后端任务结果格式错误");
+    if (!result || typeof result !== "object") throw new Error(t("domain:the-backend-task-result-is-malformed"));
     return result;
 }

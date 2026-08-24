@@ -21,7 +21,7 @@ const DEFAULT_MIN_SIZE = { width: 220, height: 160 } as const;
  */
 const BUILTIN_NODE_TRAITS = {
     [CanvasNodeType.Image]: {
-        label: "图片",
+        labelKey: "canvas:images-3",
         icon: <ImageIcon />,
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: (node: CanvasNodeData) => !node.metadata?.freeResize,
@@ -31,7 +31,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "image",
     },
     [CanvasNodeType.Text]: {
-        label: "文本",
+        labelKey: "canvas:texts-2",
         icon: <Type />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -40,7 +40,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "text",
     },
     [CanvasNodeType.Drawing]: {
-        label: "绘图",
+        labelKey: "canvas:drawing",
         icon: <Pencil />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -49,7 +49,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "image",
     },
     [CanvasNodeType.Script]: {
-        label: "分镜脚本",
+        labelKey: "canvas:storyboard-script",
         icon: <Clapperboard />,
         // 分镜脚本的表格布局需要更宽的下限；高度仍由内容动态撑开（见 canvas-node.tsx）。
         minSize: { width: 800, height: DEFAULT_MIN_SIZE.height },
@@ -58,7 +58,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "text",
     },
     [CanvasNodeType.Skill]: {
-        label: "技能",
+        labelKey: "canvas:skills",
         icon: <Sparkles />,
         minSize: DEFAULT_MIN_SIZE,
         // 技能节点由技能库插入，不占创建菜单格位。
@@ -68,7 +68,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "text",
     },
     [CanvasNodeType.Config]: {
-        label: "生成配置",
+        labelKey: "canvas:generation-config",
         icon: <Settings2 />,
         minSize: DEFAULT_MIN_SIZE,
         // 生成配置由连线时自动创建。
@@ -78,7 +78,7 @@ const BUILTIN_NODE_TRAITS = {
         // 不设 inputKind：配置节点本身不是参考素材，不参与容量计数。
     },
     [CanvasNodeType.Video]: {
-        label: "视频",
+        labelKey: "canvas:videos-4",
         icon: <Video />,
         minSize: MEDIA_NODE_MIN_SIZE,
         keepAspectRatio: () => true,
@@ -88,7 +88,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "video",
     },
     [CanvasNodeType.Audio]: {
-        label: "音频",
+        labelKey: "canvas:audio-3",
         icon: <Music2 />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -97,16 +97,16 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "audio",
     },
     [CanvasNodeType.Frame]: {
-        label: "背板",
+        labelKey: "canvas:backplate",
         // 背板在列表里就叫「背板」，不是「背板节点」——显式钉住，避免被 label 派生改写。
-        listLabel: "背板",
+        listLabelKey: "canvas:backplate",
         icon: <PanelTop />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
         // 背板只是视觉容器，既不是素材也不参与计数。
     },
     [CanvasNodeType.Markdown]: {
-        label: "Markdown",
+        labelKey: "canvas:markdown",
         icon: <FileText />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -116,7 +116,7 @@ const BUILTIN_NODE_TRAITS = {
         // 不设 generationMode：它是展示节点，自身不发起生成。
     },
     [CanvasNodeType.Svg]: {
-        label: "SVG",
+        labelKey: "canvas:svg",
         icon: <Shapes />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -125,7 +125,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "text",
     },
     [CanvasNodeType.Html]: {
-        label: "HTML",
+        labelKey: "canvas:html",
         icon: <Code />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
@@ -133,7 +133,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "text",
     },
     [CanvasNodeType.Panorama]: {
-        label: "全景",
+        labelKey: "canvas:full-view",
         icon: <Globe />,
         minSize: MEDIA_NODE_MIN_SIZE,
         showInCreateMenu: true,
@@ -141,7 +141,7 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "image",
     },
     [CanvasNodeType.Compare]: {
-        label: "对比",
+        labelKey: "canvas:contrast",
         icon: <Columns2 />,
         minSize: MEDIA_NODE_MIN_SIZE,
         showInCreateMenu: true,
@@ -149,14 +149,14 @@ const BUILTIN_NODE_TRAITS = {
         inputKind: "image",
     },
     [CanvasNodeType.Chart]: {
-        label: "图表",
+        labelKey: "canvas:chart",
         icon: <ChartColumn />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
         inputKind: "text",
     },
     [CanvasNodeType.ColorGrade]: {
-        label: "调色",
+        labelKey: "canvas:color-grade",
         icon: <Palette />,
         minSize: MEDIA_NODE_MIN_SIZE,
         showInCreateMenu: true,
@@ -166,14 +166,14 @@ const BUILTIN_NODE_TRAITS = {
         resourceKind: () => "image",
         inputKind: "image",
     },
-} satisfies Record<CanvasNodeType, Omit<CanvasNodeDefinition, "type" | "defaultTitle" | "defaultSize" | "defaultMetadata">>;
+} satisfies Record<CanvasNodeType, Omit<CanvasNodeDefinition, "type" | "defaultTitleKey" | "defaultSize" | "defaultMetadata">>;
 
 export const BUILTIN_NODE_DEFINITIONS: CanvasNodeDefinition[] = (Object.keys(BUILTIN_NODE_TRAITS) as CanvasNodeType[]).map((type) => {
     const spec = NODE_SPECS[type];
     return {
         type,
         ...BUILTIN_NODE_TRAITS[type],
-        defaultTitle: spec.title,
+        defaultTitleKey: spec.titleKey,
         defaultSize: { width: spec.width, height: spec.height },
         defaultMetadata: spec.metadata,
     };

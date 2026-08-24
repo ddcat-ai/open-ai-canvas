@@ -3,6 +3,7 @@ import { create } from "zustand";
 
 import { getDreaminaModelCatalogSnapshotWithSessionRecovery, type DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
 import { getLocalRuntimeSessionClient, useLocalRuntimeStore } from "@/stores/use-local-runtime-store";
+import { t } from "@/i18n";
 
 type CatalogSnapshot = Awaited<ReturnType<typeof getDreaminaModelCatalogSnapshotWithSessionRecovery>>;
 type RuntimeCatalogState = { connection: string; modules: Array<{ id: string; scopes: string[] }> };
@@ -36,7 +37,7 @@ export function createLocalDreaminaModelStore(dependencies: Dependencies) {
                 activeRequest?.controller.abort();
                 activeRequest = null;
                 set({ state: "idle", models: [], cacheScope: undefined });
-                return Promise.reject(new Error("即梦本机模型目录尚未就绪"));
+                return Promise.reject(new Error(t("domain:the-dreamina-local-model-catalog-is-not-ready-yet")));
             }
             const current = get();
             if (!force && current.state === "ready" && current.models.length) return Promise.resolve(current.models);

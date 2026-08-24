@@ -5,16 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import {
-    closeAdminAnnouncement,
-    createAdminAnnouncement,
-    listAdminAnnouncements,
-    updateAdminAnnouncement,
-    type AnnouncementLevel,
-    type AnnouncementStatus,
-    type SystemAnnouncement,
-} from "@/services/api/announcements";
+import { closeAdminAnnouncement, createAdminAnnouncement, listAdminAnnouncements, updateAdminAnnouncement, type AnnouncementLevel, type AnnouncementStatus, type SystemAnnouncement } from "@/services/api/announcements";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type AnnouncementFormValues = {
     title: string;
@@ -23,20 +17,21 @@ type AnnouncementFormValues = {
 };
 
 const levelOptions: Array<{ value: AnnouncementLevel; label: string }> = [
-    { value: "info", label: "平台通知" },
-    { value: "success", label: "状态恢复" },
-    { value: "warning", label: "服务提醒" },
-    { value: "critical", label: "重要通知" },
+    { value: "info", label: t("admin:platform-announcements") },
+    { value: "success", label: t("admin:status-recovery") },
+    { value: "warning", label: t("admin:service-alerts") },
+    { value: "critical", label: t("admin:important-notices") },
 ];
 
 const levelMeta: Record<AnnouncementLevel, { label: string; tone: "info" | "success" | "warning" | "error" }> = {
-    info: { label: "平台通知", tone: "info" },
-    success: { label: "状态恢复", tone: "success" },
-    warning: { label: "服务提醒", tone: "warning" },
-    critical: { label: "重要通知", tone: "error" },
+    info: { label: t("admin:platform-announcements"), tone: "info" },
+    success: { label: t("admin:status-recovery"), tone: "success" },
+    warning: { label: t("admin:service-alerts"), tone: "warning" },
+    critical: { label: t("admin:important-notices"), tone: "error" },
 };
 
 export default function AdminAnnouncementsPanel() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [form] = Form.useForm<AnnouncementFormValues>();
     const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
@@ -59,7 +54,7 @@ export default function AdminAnnouncementsPanel() {
             setAnnouncements(data.announcements || []);
             setTotal(data.total || 0);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取公告列表失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-load-announcements"));
         } finally {
             setLoading(false);
         }
@@ -92,9 +87,9 @@ export default function AdminAnnouncementsPanel() {
             setEditingAnnouncement(null);
             setPage(1);
             await reload();
-            message.success(editingAnnouncement ? "公告已更新并重新发布" : "公告已发布");
+            message.success(editingAnnouncement ? t("admin:announcement-updated-and-republished") : t("admin:announcement-published"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : editingAnnouncement ? "更新公告失败" : "发布公告失败");
+            message.error(error instanceof Error ? error.message : editingAnnouncement ? t("admin:failed-to-update-announcement") : t("admin:failed-to-publish-announcement"));
         } finally {
             setPublishing(false);
         }
@@ -105,9 +100,9 @@ export default function AdminAnnouncementsPanel() {
         try {
             await closeAdminAnnouncement(announcement.id);
             await reload();
-            message.success("公告已关闭");
+            message.success(t("admin:announcement-closed"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "关闭公告失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-close-announcement"));
         } finally {
             setClosingId("");
         }
@@ -115,18 +110,20 @@ export default function AdminAnnouncementsPanel() {
 
     const columns: ColumnsType<SystemAnnouncement> = [
         {
-            title: "公告内容",
+            title: t("admin:announcement-content"),
             dataIndex: "title",
             minWidth: 360,
             render: (_, announcement) => (
                 <div className="min-w-0 py-0.5">
-                    <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>{announcement.title}</div>
+                    <div className="truncate text-sm font-medium text-foreground" title={announcement.title}>
+                        {announcement.title}
+                    </div>
                     <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-foreground/50">{announcement.content}</div>
                 </div>
             ),
         },
         {
-            title: "级别",
+            title: t("admin:level"),
             dataIndex: "level",
             width: 120,
             render: (level: AnnouncementLevel) => {
@@ -135,55 +132,167 @@ export default function AdminAnnouncementsPanel() {
             },
         },
         {
-            title: "状态",
+            title: t("admin:status"),
             dataIndex: "status",
             width: 100,
-            render: (value: AnnouncementStatus) => <AdminStatusBadge label={value === "active" ? "发布中" : "已关闭"} tone={value === "active" ? "success" : "neutral"} />,
+            render: (value: AnnouncementStatus) => <AdminStatusBadge label={value === "active" ? t("admin:published") : t("admin:closed")} tone={value === "active" ? "success" : "neutral"} />,
         },
         {
-            title: "发布时间",
+            title: t("admin:published-at"),
             dataIndex: "publishedAt",
             width: 170,
             render: formatDateTime,
         },
         {
-            title: "关闭时间",
+            title: t("admin:closed-at"),
             dataIndex: "closedAt",
             width: 170,
-            render: (value?: string) => value ? formatDateTime(value) : "--",
+            render: (value?: string) => (value ? formatDateTime(value) : "--"),
         },
         {
-            title: "操作",
+            title: t("admin:actions"),
             key: "actions",
             width: 160,
-            render: (_, announcement) => <AdminRowActions primary={{ label: "编辑", onClick: () => openEditModal(announcement) }} actions={announcement.status === "active" ? [{ key: "close", label: "关闭", danger: true, disabled: closingId === announcement.id, onClick: () => void closeAnnouncement(announcement), confirm: { title: "关闭这条公告？", description: "关闭后用户公告中心将不再展示，历史记录会保留。", okText: "关闭公告" } }] : []} />,
+            render: (_, announcement) => (
+                <AdminRowActions
+                    primary={{ label: t("admin:edit-2"), onClick: () => openEditModal(announcement) }}
+                    actions={
+                        announcement.status === "active"
+                            ? [
+                                  {
+                                      key: "close",
+                                      label: t("admin:close-4"),
+                                      danger: true,
+                                      disabled: closingId === announcement.id,
+                                      onClick: () => void closeAnnouncement(announcement),
+                                      confirm: { title: t("admin:close-this-announcement"), description: t("admin:it-disappears-from-the-user-announcement-center-once-closed-history-is-k"), okText: t("admin:close-announcement") },
+                                  },
+                              ]
+                            : []
+                    }
+                />
+            ),
         },
     ];
 
     return (
         <>
             <AdminDataTable
-                toolbar={<Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索公告标题或正文" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />}
-                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => { setKeyword(""); setPage(1); }} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "active" ? "发布中" : "已关闭"}`} onRemove={() => { setStatus("all"); setPage(1); }} /> : null}</>}
+                toolbar={
+                    <Input
+                        allowClear
+                        className="app-list-search"
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        value={keyword}
+                        placeholder={t("admin:search-announcement-titles-or-body-text")}
+                        onChange={(event) => {
+                            setKeyword(event.target.value);
+                            setPage(1);
+                        }}
+                    />
+                }
+                toolbarActiveFilters={
+                    <>
+                        {keyword ? (
+                            <AdminFilterChip
+                                label={t("admin:search-param", { keyword: keyword })}
+                                onRemove={() => {
+                                    setKeyword("");
+                                    setPage(1);
+                                }}
+                            />
+                        ) : null}
+                        {status !== "all" ? (
+                            <AdminFilterChip
+                                label={`状态：${status === "active" ? t("admin:published") : t("admin:closed")}`}
+                                onRemove={() => {
+                                    setStatus("all");
+                                    setPage(1);
+                                }}
+                            />
+                        ) : null}
+                    </>
+                }
                 toolbarActive={Boolean(keyword || status !== "all")}
-                toolbarFilters={<Select className="w-32" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[{ label: "全部状态", value: "all" }, { label: "发布中", value: "active" }, { label: "已关闭", value: "closed" }]} />}
-                onReset={() => { setKeyword(""); setStatus("all"); setPage(1); }}
-                trailing={<Button type="primary" size="small" icon={<Plus className="size-4" />} onClick={openPublishModal}>发布公告</Button>}
+                toolbarFilters={
+                    <Select
+                        className="w-32"
+                        value={status}
+                        onChange={(value) => {
+                            setStatus(value);
+                            setPage(1);
+                        }}
+                        options={[
+                            { label: t("admin:all-statuses"), value: "all" },
+                            { label: t("admin:published"), value: "active" },
+                            { label: t("admin:closed"), value: "closed" },
+                        ]}
+                    />
+                }
+                onReset={() => {
+                    setKeyword("");
+                    setStatus("all");
+                    setPage(1);
+                }}
+                trailing={
+                    <Button type="primary" size="small" icon={<Plus className="size-4" />} onClick={openPublishModal}>
+                        {t("admin:publish-announcement")}
+                    </Button>
+                }
                 table={{ rowKey: "id", size: "small", loading, pagination: false, columns, dataSource: announcements, scroll: { x: 1020 } }}
-                empty={<AdminTableEmpty filtered={Boolean(keyword || status !== "all")} title="暂无公告" />}
-                footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />}
+                empty={<AdminTableEmpty filtered={Boolean(keyword || status !== "all")} title={t("admin:no-announcements-yet")} />}
+                footer={
+                    <PaginationBar
+                        alwaysShow
+                        current={page}
+                        pageSize={pageSize}
+                        total={total}
+                        onChange={(nextPage, nextPageSize) => {
+                            setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                            setPageSize(nextPageSize);
+                        }}
+                    />
+                }
             />
 
-            <Modal title={editingAnnouncement ? "编辑并重新发布公告" : "发布系统公告"} open={modalOpen} width={760} centered okText={editingAnnouncement ? "保存并重新发布" : "立即发布"} cancelText="取消" confirmLoading={publishing} onOk={() => void publish()} onCancel={() => { setModalOpen(false); setEditingAnnouncement(null); }} destroyOnHidden>
+            <Modal
+                title={editingAnnouncement ? t("admin:edit-and-republish-announcement") : t("admin:publish-system-announcement")}
+                open={modalOpen}
+                width={760}
+                centered
+                okText={editingAnnouncement ? t("admin:save-and-republish") : t("admin:publish-now")}
+                cancelText={t("admin:cancel-4")}
+                confirmLoading={publishing}
+                onOk={() => void publish()}
+                onCancel={() => {
+                    setModalOpen(false);
+                    setEditingAnnouncement(null);
+                }}
+                destroyOnHidden
+            >
                 <Form form={form} layout="vertical" className="pt-3" requiredMark={false}>
-                    <Form.Item name="title" label="公告标题" rules={[{ required: true, whitespace: true, message: "请填写公告标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
-                        <Input maxLength={120} showCount placeholder="例如：视频模型已恢复正常使用" />
+                    <Form.Item
+                        name="title"
+                        label={t("admin:title")}
+                        rules={[
+                            { required: true, whitespace: true, message: t("admin:enter-a-title") },
+                            { max: 120, message: t("admin:title-cannot-exceed-120-characters") },
+                        ]}
+                    >
+                        <Input maxLength={120} showCount placeholder={t("admin:e-g-video-models-have-fully-recovered")} />
                     </Form.Item>
-                    <Form.Item name="level" label="公告级别" rules={[{ required: true, message: "请选择公告级别" }]}>
+                    <Form.Item name="level" label={t("admin:level-2")} rules={[{ required: true, message: t("admin:choose-a-level") }]}>
                         <Select options={levelOptions} />
                     </Form.Item>
-                    <Form.Item name="content" label="公告正文" rules={[{ required: true, whitespace: true, message: "请填写公告正文" }, { max: 4000, message: "正文不能超过 4000 个字符" }]}>
-                        <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder="填写服务状态、影响范围和用户需要采取的操作" />
+                    <Form.Item
+                        name="content"
+                        label={t("admin:body")}
+                        rules={[
+                            { required: true, whitespace: true, message: t("admin:enter-the-body-text") },
+                            { max: 4000, message: t("admin:body-cannot-exceed-4000-characters") },
+                        ]}
+                    >
+                        <Input.TextArea maxLength={4000} showCount autoSize={{ minRows: 6, maxRows: 12 }} placeholder={t("admin:describe-service-status-impact-scope-and-any-action-users-should-take")} />
                     </Form.Item>
                 </Form>
             </Modal>

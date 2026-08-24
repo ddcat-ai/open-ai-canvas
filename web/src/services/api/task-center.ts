@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { DREAMINA_SUBMIT_ERROR_MESSAGES, generationErrorMessage } from "@/lib/generation-error";
 import { apiClient, request, type BackendEnvelope } from "@/services/api/request";
 import {
@@ -166,7 +167,7 @@ export type CreateSessionInput = {
     projectStyle?: { presetId: string; title: string; prompt: string };
     characters?: Array<{ assetId: string; versionId: string; name: string; definition: Record<string, unknown> }>;
     config?: Record<string, unknown>;
-	logicalModelId?: string;
+    logicalModelId?: string;
 };
 
 export type CreateTaskInput = {
@@ -177,7 +178,7 @@ export type CreateTaskInput = {
     prompt: string;
     provider?: string;
     model?: string;
-	logicalModelId?: string;
+    logicalModelId?: string;
     input?: Record<string, unknown>;
 };
 
@@ -194,7 +195,7 @@ export function queryAgentSession(id: string) {
     return request<AgentSessionDetail>(api.get(`/sessions/${encodeURIComponent(id)}`));
 }
 
-export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback = "后端影视 Agent 会话失败") {
+export function agentSessionFailureMessage(detail: AgentSessionDetail, fallback = t("domain:backend-film-agent-session-failed")) {
     for (let index = detail.tasks.length - 1; index >= 0; index -= 1) {
         const task = detail.tasks[index];
         if ((task.status === "failed" || task.status === "cancelled") && task.error?.trim()) return generationErrorMessage(task.error.trim());
@@ -320,7 +321,7 @@ export function queryGenerationTask(id: string, options?: { signal?: AbortSignal
 }
 
 export function waitForLocalGenerationTask(id: string, options?: { signal?: AbortSignal }) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不是本机即梦任务"));
+    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error(t("domain:this-task-is-not-a-local-dreamina-task")));
     return waitForLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), undefined, {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
 }
 
@@ -407,12 +408,12 @@ export function queryFailedVideoProviderTask(id: string) {
 }
 
 export function refreshGenerationTaskStatus(id: string, options?: { signal?: AbortSignal }) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不支持手动更新官方状态"));
+    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error(t("domain:manual-official-status-updates-are-not-supported-for-this-task")));
     return refreshLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id), {}, options?.signal).then((task) => projectLocalDreaminaTask(task));
 }
 
 export function deleteGenerationTask(id: string) {
-    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error("当前任务不支持删除"));
+    if (!isLocalDreaminaTaskId(id)) return Promise.reject(new Error(t("domain:this-task-cannot-be-deleted")));
     return deleteLocalDreaminaGenerationTask(stripLocalDreaminaTaskPrefix(id));
 }
 
@@ -485,9 +486,9 @@ export async function waitForGenerationTask(id: string, options?: { signal?: Abo
             options?.onTaskUpdate?.(task);
             if (task.status === "succeeded") return task;
             if (task.status === "failed" || task.status === "cancelled") {
-                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? "已取消" : "失败"}`);
+                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? t("domain:cancelled") : t("domain:failed")}`);
             }
-            throw new Error("本机即梦任务等待提前结束");
+            throw new Error(t("domain:waiting-for-the-local-dreamina-task-to-end-early"));
         } catch (error) {
             if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
             throw error;
@@ -517,7 +518,7 @@ export async function waitForGenerationTask(id: string, options?: { signal?: Abo
             }
             if (task.status === "failed" || task.status === "cancelled") {
                 window.dispatchEvent(new CustomEvent("wallet:updated"));
-                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? "已取消" : "失败"}`);
+                throw new Error(task.error ? generationErrorMessage(task.error) : `任务${task.status === "cancelled" ? t("domain:cancelled") : t("domain:failed")}`);
             }
             await delay(intervalMs, options?.signal);
         }
@@ -528,7 +529,7 @@ export async function waitForGenerationTask(id: string, options?: { signal?: Abo
         }
         throw error;
     }
-    throw new Error(lastQueryError instanceof Error ? `任务状态同步失败：${lastQueryError.message}` : "任务执行超时，请稍后重试");
+    throw new Error(lastQueryError instanceof Error ? t("domain:task-status-sync-failed-param", { message: lastQueryError.message }) : t("domain:task-execution-timed-out-try-again-later"));
 }
 
 function taskWaitTimeoutMs(task?: GenerationTask) {

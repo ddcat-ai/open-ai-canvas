@@ -24,6 +24,8 @@ export function pluginStorageFor(pluginId: string): PluginStorage {
             }
             await storage.setItem(keyFor(key), serialized);
         },
-        remove: async (key) => { await storage.removeItem(keyFor(key)); },
+        remove: async (key) => {
+            await storage.removeItem(keyFor(key));
+        },
     };
 }

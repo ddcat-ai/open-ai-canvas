@@ -20,6 +20,8 @@ import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/ty
 import { executeImageGeneration } from "./canvas-image-generation-executor";
 import { executeAudioGeneration, executeVideoGeneration } from "./canvas-media-generation-executors";
 import { executeTextGeneration } from "./canvas-text-generation-executor";
+import { textEditInstruction } from "./canvas-prompts";
+import { useTranslation } from "react-i18next";
 
 type UseCanvasGenerationExecutorOptions = {
     projectId: string;
@@ -70,6 +72,7 @@ export function useCanvasGenerationExecutor({
     bindGenerationTask,
     applyGenerationTaskResult,
 }: UseCanvasGenerationExecutorOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -78,7 +81,7 @@ export function useCanvasGenerationExecutor({
         async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => {
             const sourceNode = nodesRef.current.find((node) => node.id === nodeId);
             if (sourceNode?.type === CanvasNodeType.Video && sourceNode.metadata?.videoEditOperation === "concat") {
-                message.info("合并成片节点不直接重新生成，请重新选择源视频合并");
+                message.info(t("canvas:merged-video-nodes-do-not-regenerate-directly-select-source-videos-to-me"));
                 return;
             }
             let generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
@@ -119,7 +122,7 @@ export function useCanvasGenerationExecutor({
                                       ...node.metadata,
                                       prompt,
                                       status: NODE_STATUS_LOADING,
-                                      taskStage: "正在准备生成任务",
+                                      taskStage: t("canvas:preparing-generation-tasks"),
                                       taskProgress: 0,
                                       taskCreatedAt: new Date().toISOString(),
                                       errorDetails: undefined,
@@ -136,17 +139,17 @@ export function useCanvasGenerationExecutor({
             // 视频文本只保留输入框内容；连接的媒体仍作为结构化参考传递。
             const promptOnly = mode === "video";
             try {
-                const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : generationPrompt, assets, promptOnly);
+                const baseContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? textEditInstruction(sourceTextContent, prompt) : generationPrompt, assets, promptOnly);
                 const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
                 const compatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, requirements);
-                if (compatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${compatibilityError}`);
+                if (compatibilityError) throw new Error(t("canvas:the-current-model-cannot-handle-these-inputs-and-parameters-param", { compatibilityError: compatibilityError }));
                 const referenceLimits = modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
                 rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits);
                 const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                 generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements);
                 const hydratedCompatibilityError = modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
-                if (hydratedCompatibilityError) throw new Error(`当前模型无法支持这组输入和参数：${hydratedCompatibilityError}`);
+                if (hydratedCompatibilityError) throw new Error(t("canvas:the-current-model-cannot-handle-these-inputs-and-parameters-param-2", { hydratedCompatibilityError: hydratedCompatibilityError }));
             } catch (error) {
                 const errorDetails = generationErrorMessage(error);
                 if (isPreparingEmptyImage) {
@@ -191,7 +194,24 @@ export function useCanvasGenerationExecutor({
                     const errorDetails = generationErrorMessage(error);
                     if (isPreparingEmptyImage)
                         setNodes((current) =>
-                            current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, taskStartedAt: undefined, taskCompletedAt: undefined, taskDurationMs: undefined, errorDetails } } : node)),
+                            current.map((node) =>
+                                node.id === nodeId
+                                    ? {
+                                          ...node,
+                                          metadata: {
+                                              ...node.metadata,
+                                              status: NODE_STATUS_ERROR,
+                                              taskStage: undefined,
+                                              taskProgress: undefined,
+                                              taskCreatedAt: undefined,
+                                              taskStartedAt: undefined,
+                                              taskCompletedAt: undefined,
+                                              taskDurationMs: undefined,
+                                              errorDetails,
+                                          },
+                                      }
+                                    : node,
+                            ),
                         );
                     finishGenerationRequest(nodeId, controller);
                     setRunningNodeId(null);
@@ -204,21 +224,30 @@ export function useCanvasGenerationExecutor({
                 if (generationContext.characterReferences.length !== 1) {
                     finishGenerationRequest(nodeId, controller);
                     setRunningNodeId(null);
-                    message.error("角色配音一次只能引用一个角色卡");
+                    message.error(t("canvas:character-dubbing-can-reference-only-one-character-card-at-a-time"));
                     return;
                 }
                 const voice = generationContext.resolvedCharacterVoices[0];
                 if (!voice) {
                     finishGenerationRequest(nodeId, controller);
                     setRunningNodeId(null);
-                    message.error("角色尚未绑定可用声音，无法创建角色配音任务");
+                    message.error(t("canvas:character-has-no-usable-voice-bound-cannot-create-a-dubbing-task"));
                     return;
                 }
                 generationConfig = { ...generationConfig, audioVoice: voice.voiceKey, audioInstructions: [voice.instructions, generationConfig.audioInstructions].filter(Boolean).join("；") };
             }
             if (controller.signal.aborted) {
                 if (isPreparingEmptyImage)
-                    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, taskStartedAt: undefined, taskCompletedAt: undefined, taskDurationMs: undefined } } : node)));
+                    setNodes((current) =>
+                        current.map((node) =>
+                            node.id === nodeId
+                                ? {
+                                      ...node,
+                                      metadata: { ...node.metadata, status: NODE_STATUS_IDLE, taskStage: undefined, taskProgress: undefined, taskCreatedAt: undefined, taskStartedAt: undefined, taskCompletedAt: undefined, taskDurationMs: undefined },
+                                  }
+                                : node,
+                        ),
+                    );
                 finishGenerationRequest(nodeId, controller);
                 setRunningNodeId(null);
                 return;
@@ -336,7 +365,7 @@ function generationModelRequirements(
     mode: CanvasNodeGenerationMode,
     input: Pick<Awaited<ReturnType<typeof hydrateNodeGenerationContext>>, "textCount" | "imageCount" | "videoCount" | "audioCount" | "characterReferences">,
     sourceNode: CanvasNodeData | undefined,
-	config: ReturnType<typeof useEffectiveConfig>,
+    config: ReturnType<typeof useEffectiveConfig>,
     includeCharacterMinimum = false,
 ): ModelRequirements {
     return {
@@ -349,7 +378,7 @@ function generationModelRequirements(
             characterCount: includeCharacterMinimum ? input.characterReferences.length : 0,
         },
         videoOperation: sourceNode?.metadata?.videoEditOperation,
-		videoSeconds: config.videoSeconds,
-		options: modelRequestOptions(config, mode),
+        videoSeconds: config.videoSeconds,
+        options: modelRequestOptions(config, mode),
     };
 }

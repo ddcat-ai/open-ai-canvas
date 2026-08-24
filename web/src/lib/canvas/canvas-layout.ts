@@ -73,16 +73,18 @@ export function layoutCanvasFlow(nodes: CanvasNodeData[], connections: CanvasCon
     const top = Math.min(...nodes.map((node) => node.position.y));
     const result = new Map<string, Position>();
     let x = left;
-    [...groups.keys()].sort((a, b) => a - b).forEach((layer) => {
-        const column = groups.get(layer)!.sort((a, b) => a.position.y - b.position.y);
-        let y = top;
-        const width = Math.max(...column.map((node) => node.width));
-        column.forEach((node) => {
-            result.set(node.id, { x, y });
-            y += node.height + 48;
+    [...groups.keys()]
+        .sort((a, b) => a - b)
+        .forEach((layer) => {
+            const column = groups.get(layer)!.sort((a, b) => a.position.y - b.position.y);
+            let y = top;
+            const width = Math.max(...column.map((node) => node.width));
+            column.forEach((node) => {
+                result.set(node.id, { x, y });
+                y += node.height + 48;
+            });
+            x += width + 120;
         });
-        x += width + 120;
-    });
     return result;
 }
 

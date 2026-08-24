@@ -1,0 +1,727 @@
+{
+    "ns": "wallet",
+    "entries": {
+        "t:全部": {
+            "type": "ui",
+            "zh": "全部",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "all",
+            "en": "All"
+        },
+        "t:充值与调整": {
+            "type": "ui",
+            "zh": "充值与调整",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "top-ups-and-adjustments",
+            "en": "Top-ups & adjustments"
+        },
+        "t:模型消费": {
+            "type": "ui",
+            "zh": "模型消费",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 19
+                },
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 280
+                }
+            ],
+            "key": "model-usage",
+            "en": "Model usage"
+        },
+        "t:退款": {
+            "type": "ui",
+            "zh": "退款",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 20
+                }
+            ],
+            "key": "refunds",
+            "en": "Refunds"
+        },
+        "t:读取积分记录失败": {
+            "type": "ui",
+            "zh": "读取积分记录失败",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 45
+                }
+            ],
+            "key": "failed-to-load-credit-history",
+            "en": "Failed to load credit history"
+        },
+        "t:请输入完整的 32 位兑换码": {
+            "type": "ui",
+            "zh": "请输入完整的 32 位兑换码",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 58
+                }
+            ],
+            "key": "enter-the-full-32-character-redeem-code",
+            "en": "Enter the full 32-character redeem code"
+        },
+        "t:兑换成功，积分已到账": {
+            "type": "ui",
+            "zh": "兑换成功，积分已到账",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 68
+                }
+            ],
+            "key": "redeemed-credits-added",
+            "en": "Redeemed. Credits added"
+        },
+        "t:兑换失败": {
+            "type": "ui",
+            "zh": "兑换失败",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 70
+                }
+            ],
+            "key": "redemption-failed",
+            "en": "Redemption failed"
+        },
+        "t:签到成功，积分已到账": {
+            "type": "ui",
+            "zh": "签到成功，积分已到账",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 82
+                }
+            ],
+            "key": "checked-in-credits-added",
+            "en": "Checked in. Credits added"
+        },
+        "t:签到失败": {
+            "type": "ui",
+            "zh": "签到失败",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 84
+                }
+            ],
+            "key": "check-in-failed",
+            "en": "Check-in failed"
+        },
+        "t:发生时间": {
+            "type": "ui",
+            "zh": "发生时间",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 95
+                }
+            ],
+            "key": "occurred-at",
+            "en": "Occurred at"
+        },
+        "t:类型": {
+            "type": "ui",
+            "zh": "类型",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 96
+                }
+            ],
+            "key": "type",
+            "en": "Type"
+        },
+        "t:明细": {
+            "type": "ui",
+            "zh": "明细",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 98
+                }
+            ],
+            "key": "details",
+            "en": "Details"
+        },
+        "t:无补充说明": {
+            "type": "ui",
+            "zh": "无补充说明",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 104
+                }
+            ],
+            "key": "no-notes",
+            "en": "No notes"
+        },
+        "t:积分变化": {
+            "type": "ui",
+            "zh": "积分变化",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 109
+                }
+            ],
+            "key": "credit-change",
+            "en": "Credit change"
+        },
+        "t:变更后余额": {
+            "type": "ui",
+            "zh": "变更后余额",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 115
+                }
+            ],
+            "key": "balance-after-change",
+            "en": "Balance after change"
+        },
+        "jsx:src/pages/wallet/index.tsx:积分中心:6001": {
+            "type": "jsxtext",
+            "zh": "积分中心",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 125
+                }
+            ],
+            "key": "credits-center",
+            "en": "Credits center"
+        },
+        "jsx:src/pages/wallet/index.tsx:模型调用、冻结与退款都在同一条可追溯流水中。:6101": {
+            "type": "jsxtext",
+            "zh": "模型调用、冻结与退款都在同一条可追溯流水中。",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 126
+                }
+            ],
+            "key": "model-calls-freezes-and-refunds-share-one-traceable-ledger",
+            "en": "Model calls, freezes, and refunds share one traceable ledger."
+        },
+        "jsx:src/pages/wallet/index.tsx:可用:6426": {
+            "type": "jsxtext",
+            "zh": "可用",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 131
+                }
+            ],
+            "key": "available",
+            "en": "Available"
+        },
+        "t:今日已签到": {
+            "type": "ui",
+            "zh": "今日已签到",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 135
+                }
+            ],
+            "key": "already-checked-in-today",
+            "en": "Already checked in today"
+        },
+        "cx:src/pages/wallet/index.tsx:6903": {
+            "type": "skipped",
+            "zh": "`签到 +${formatCredits(wallet?.policy.checkinBonusMicrocredits || 0)}`",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 135
+                }
+            ]
+        },
+        "jsx:src/pages/wallet/index.tsx:刷新余额:7137": {
+            "type": "jsxtext",
+            "zh": "刷新余额",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 137
+                }
+            ],
+            "key": "refresh-balance",
+            "en": "Refresh balance"
+        },
+        "jsx:src/pages/wallet/index.tsx:可用创作积分:7871": {
+            "type": "jsxtext",
+            "zh": "可用创作积分",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 150
+                }
+            ],
+            "key": "available-creative-credits",
+            "en": "Available creative credits"
+        },
+        "jsx:src/pages/wallet/index.tsx:最近更新:7892": {
+            "type": "jsxtext",
+            "zh": "最近更新",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 150
+                }
+            ],
+            "key": "recently-updated",
+            "en": "Recently updated"
+        },
+        "jsx:src/pages/wallet/index.tsx:积分:8209": {
+            "type": "jsxtext",
+            "zh": "积分",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 154
+                }
+            ],
+            "key": "credits",
+            "en": "Credits"
+        },
+        "jsx:src/pages/wallet/index.tsx:账户正常:8453": {
+            "type": "jsxtext",
+            "zh": "账户正常",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 158
+                }
+            ],
+            "key": "account-healthy",
+            "en": "Account healthy"
+        },
+        "t:冻结积分": {
+            "type": "ui",
+            "zh": "冻结积分",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 159
+                }
+            ],
+            "key": "frozen-credits",
+            "en": "Frozen credits"
+        },
+        "t:调用中或待核对": {
+            "type": "ui",
+            "zh": "调用中或待核对",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 159
+                }
+            ],
+            "key": "in-use-or-under-review",
+            "en": "In use or under review"
+        },
+        "t:账户总额": {
+            "type": "ui",
+            "zh": "账户总额",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "total-balance",
+            "en": "Total balance"
+        },
+        "t:可用与冻结合计": {
+            "type": "ui",
+            "zh": "可用与冻结合计",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "available-plus-frozen",
+            "en": "Available plus frozen"
+        },
+        "jsx:src/pages/wallet/index.tsx:兑换积分:9607": {
+            "type": "jsxtext",
+            "zh": "兑换积分",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 171
+                }
+            ],
+            "key": "redeem-credits",
+            "en": "Redeem credits"
+        },
+        "jsx:src/pages/wallet/index.tsx:输入管理员发放的 32 位兑换码。:9707": {
+            "type": "jsxtext",
+            "zh": "输入管理员发放的 32 位兑换码。",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 172
+                }
+            ],
+            "key": "enter-the-32-character-code-issued-by-an-admin",
+            "en": "Enter the 32-character code issued by an admin."
+        },
+        "jsx:src/pages/wallet/index.tsx:兑换码:9939": {
+            "type": "jsxtext",
+            "zh": "兑换码",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 176
+                }
+            ],
+            "key": "redemption-codes",
+            "en": "Redemption codes"
+        },
+        "jsx:src/pages/wallet/index.tsx:兑换成功后立即到账:10427": {
+            "type": "jsxtext",
+            "zh": "兑换成功后立即到账",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 180
+                }
+            ],
+            "key": "credits-arrive-immediately-after-redemption",
+            "en": "Credits arrive immediately after redemption"
+        },
+        "jsx:src/pages/wallet/index.tsx:兑换积分:10726": {
+            "type": "jsxtext",
+            "zh": "兑换积分",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 183
+                }
+            ],
+            "key": "redeem-credits-2",
+            "en": "Redeem credits"
+        },
+        "jsx:src/pages/wallet/index.tsx:积分流水:11194": {
+            "type": "jsxtext",
+            "zh": "积分流水",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 192
+                }
+            ],
+            "key": "credit-ledger",
+            "en": "Credit ledger"
+        },
+        "jsx:src/pages/wallet/index.tsx:当前展示最近:11280": {
+            "type": "jsxtext",
+            "zh": "当前展示最近",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "showing-the-latest",
+            "en": "Showing the latest"
+        },
+        "jsx:src/pages/wallet/index.tsx:条记录。:11316": {
+            "type": "jsxtext",
+            "zh": "条记录。",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "entries",
+            "en": "entries."
+        },
+        "t:没有匹配的积分记录": {
+            "type": "ui",
+            "zh": "没有匹配的积分记录",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 211
+                }
+            ],
+            "key": "no-matching-credit-records",
+            "en": "No matching credit records"
+        },
+        "t:切换流水类型，或完成一次生成后再回来查看。": {
+            "type": "ui",
+            "zh": "切换流水类型，或完成一次生成后再回来查看。",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 211
+                }
+            ],
+            "key": "switch-ledger-type-or-come-back-after-your-next-generation",
+            "en": "Switch ledger type, or come back after your next generation."
+        },
+        "t:兑换充值": {
+            "type": "ui",
+            "zh": "兑换充值",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 278
+                }
+            ],
+            "key": "redemption-top-up",
+            "en": "Redemption top-up"
+        },
+        "t:管理员充值": {
+            "type": "ui",
+            "zh": "管理员充值",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 279
+                }
+            ],
+            "key": "admin-top-up",
+            "en": "Admin top-up"
+        },
+        "t:积分冻结": {
+            "type": "ui",
+            "zh": "积分冻结",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 281
+                }
+            ],
+            "key": "credit-freeze",
+            "en": "Credit freeze"
+        },
+        "t:消费退款": {
+            "type": "ui",
+            "zh": "消费退款",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 282
+                }
+            ],
+            "key": "usage-refund",
+            "en": "Usage refund"
+        },
+        "t:管理员调账": {
+            "type": "ui",
+            "zh": "管理员调账",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 283
+                }
+            ],
+            "key": "admin-adjustment",
+            "en": "Admin adjustment"
+        },
+        "t:注册奖励": {
+            "type": "ui",
+            "zh": "注册奖励",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 284
+                }
+            ],
+            "key": "sign-up-bonus",
+            "en": "Sign-up bonus"
+        },
+        "t:签到奖励": {
+            "type": "ui",
+            "zh": "签到奖励",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 285
+                }
+            ],
+            "key": "daily-check-in-bonus",
+            "en": "Daily check-in bonus"
+        },
+        "t:其他积分变动": {
+            "type": "ui",
+            "zh": "其他积分变动",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 287
+                }
+            ],
+            "key": "other-credit-changes",
+            "en": "Other credit changes"
+        },
+        "t:兑换码充值": {
+            "type": "ui",
+            "zh": "兑换码充值",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 291
+                }
+            ],
+            "key": "redeem-code-top-up",
+            "en": "Redeem code top-up"
+        },
+        "t:模型消费退款": {
+            "type": "ui",
+            "zh": "模型消费退款",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 292
+                }
+            ],
+            "key": "model-usage-refund",
+            "en": "Model usage refund"
+        },
+        "t:模型调用": {
+            "type": "ui",
+            "zh": "模型调用",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 293
+                }
+            ],
+            "key": "model-call",
+            "en": "Model call"
+        },
+        "t:新用户注册奖励": {
+            "type": "ui",
+            "zh": "新用户注册奖励",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 294
+                }
+            ],
+            "key": "new-user-sign-up-bonus",
+            "en": "New user sign-up bonus"
+        },
+        "t:每日签到奖励": {
+            "type": "ui",
+            "zh": "每日签到奖励",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 295
+                }
+            ],
+            "key": "daily-check-in-reward",
+            "en": "Daily check-in reward"
+        },
+        "t:积分调整": {
+            "type": "ui",
+            "zh": "积分调整",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 296
+                }
+            ],
+            "key": "credit-adjustment",
+            "en": "Credit adjustment"
+        },
+        "t:图片生成": {
+            "type": "ui",
+            "zh": "图片生成",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 304
+                }
+            ],
+            "key": "image-generation",
+            "en": "Image generation"
+        },
+        "t:文本生成": {
+            "type": "ui",
+            "zh": "文本生成",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 304
+                }
+            ],
+            "key": "text-generation",
+            "en": "Text generation"
+        },
+        "t:视频生成": {
+            "type": "ui",
+            "zh": "视频生成",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 304
+                }
+            ],
+            "key": "video-generation",
+            "en": "Video generation"
+        },
+        "t:音频生成": {
+            "type": "ui",
+            "zh": "音频生成",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 304
+                }
+            ],
+            "key": "audio-generation",
+            "en": "Audio generation"
+        },
+        "t:分镜生成": {
+            "type": "ui",
+            "zh": "分镜生成",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 304
+                }
+            ],
+            "key": "storyboard-generation",
+            "en": "Storyboard generation"
+        },
+        "t:其他场景": {
+            "type": "ui",
+            "zh": "其他场景",
+            "locations": [
+                {
+                    "file": "src/pages/wallet/index.tsx",
+                    "line": 305
+                }
+            ],
+            "key": "other-scenarios",
+            "en": "Other scenarios"
+        }
+    }
+}

@@ -5,6 +5,7 @@ import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { importResourceFromUrl, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { cacheResourceObjectUrl, getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { t } from "@/i18n";
 
 export type UploadedImage = {
     url: string;
@@ -143,7 +144,7 @@ function blobToDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("读取图片失败"));
+        reader.onerror = () => reject(new Error(t("domain:failed-to-read-the-image")));
         reader.readAsDataURL(blob);
     });
 }
@@ -152,7 +153,7 @@ async function normalizeImageBlob(blob: Blob, sourceName = "") {
     if (blob.type.startsWith("image/")) return blob;
     const bytes = new Uint8Array(await blob.slice(0, 32).arrayBuffer());
     const mimeType = detectImageMimeType(bytes) || imageMimeTypeFromName(sourceName);
-    if (!mimeType) throw new Error("无法识别参考图片格式，请重新上传 PNG、JPEG、WebP 或 GIF 图片");
+    if (!mimeType) throw new Error(t("domain:unrecognized-reference-image-format-re-upload-a-png-jpeg-webp-or-gif-ima"));
     return blob.slice(0, blob.size, mimeType);
 }
 

@@ -8,6 +8,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
+import { useTranslation } from "react-i18next";
 
 type CanvasImageSettingsPopoverProps = {
     config: AiConfig;
@@ -22,6 +23,7 @@ type CanvasImageSettingsPopoverProps = {
 };
 
 export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChange, buttonClassName, placement = "topLeft", showCount = true }: CanvasImageSettingsPopoverProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const buttonRef = useRef<HTMLSpanElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -32,8 +34,8 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const summaryParts = [
         ...(profile.size.parameter !== "none" ? [imageSizeLabel(normalized.size)] : []),
         ...(profile.quality.supported ? [imageQualityLabel(normalized.quality)] : []),
-        ...(showCount && profile.maxOutputs > 1 ? [`${normalized.count} 张`] : []),
-        ...(profile.transparentBackground.supported && normalized.transparentBackground === "true" ? ["透明"] : []),
+        ...(showCount && profile.maxOutputs > 1 ? [t("canvas:param", { count: normalized.count })] : []),
+        ...(profile.transparentBackground.supported && normalized.transparentBackground === "true" ? [t("domain:transparent")] : []),
     ];
     const summary = summaryParts.join(" · ");
     const hasSettings = profile.size.parameter !== "none" || profile.quality.supported || profile.transparentBackground.supported || (showCount && profile.maxOutputs > 1);
@@ -72,7 +74,17 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     return (
         <>
             <span ref={buttonRef} className="inline-flex min-w-0">
-                <Button size="small" type="text" className={`canvas-generation-settings-trigger ${buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"}`} style={{ background: theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5" />} aria-expanded={open} aria-label={`图像设置：${summary}`} title={`图像设置 · ${summary}`} onClick={() => updateOpen(!open)}>
+                <Button
+                    size="small"
+                    type="text"
+                    className={`canvas-generation-settings-trigger ${buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"}`}
+                    style={{ background: theme.node.fill, color: theme.node.text }}
+                    icon={<Settings2 className="size-3.5" />}
+                    aria-expanded={open}
+                    aria-label={t("domain:image-settings-param", { summary: summary })}
+                    title={t("domain:image-settings-param-2", { summary: summary })}
+                    onClick={() => updateOpen(!open)}
+                >
                     <span className="truncate">{summary}</span>
                 </Button>
             </span>

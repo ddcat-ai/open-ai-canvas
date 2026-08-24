@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { getResourceOSSUrl } from "@/services/api/resources";
@@ -15,22 +16,32 @@ export function isSeedanceConfig(config: ResolvedAiConfig) {
     return config.interfaceType === "volcengine-ark-video" || isSeedanceVideoConfig(config);
 }
 
-export async function createSeedanceTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+export async function createSeedanceTask(
+    deps: VideoProviderDeps,
+    config: ResolvedAiConfig,
+    model: string,
+    prompt: string,
+    references: ReferenceImage[],
+    videoReferences: ReferenceVideo[],
+    audioReferences: ReferenceAudio[],
+    options?: RequestOptions,
+): Promise<VideoGenerationTask> {
     assertSeedanceVideoReferences(videoReferences);
     assertSeedanceAudioReferences(audioReferences);
     const isVolcengineArk = config.interfaceType === "volcengine-ark-video";
-    const payload = isVolcengineArk || isArkPlanBaseUrl(config.baseUrl)
-        ? await buildSeedanceAgentPlanPayload(config, model, prompt, references, videoReferences, audioReferences, deps)
-        : await buildSeedanceVideosPayload(config, model, prompt, references, videoReferences, audioReferences, deps);
+    const payload =
+        isVolcengineArk || isArkPlanBaseUrl(config.baseUrl)
+            ? await buildSeedanceAgentPlanPayload(config, model, prompt, references, videoReferences, audioReferences, deps)
+            : await buildSeedanceVideosPayload(config, model, prompt, references, videoReferences, audioReferences, deps);
 
     try {
         const raw = await deps.transport.post<ApiEnvelope<SeedanceTask>>(seedanceApiUrl(config), payload, options);
         const created = deps.response.unwrapSeedanceTask(raw);
         const id = created.id || created.task_id;
-        if (!id) throw new Error("Seedance 接口没有返回任务 ID");
+        if (!id) throw new Error(t("domain:the-seedance-api-did-not-return-a-task-id"));
         return { id, provider: "seedance", model };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "Seedance 任务创建失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:seedance-task-creation-failed")));
     }
 }
 
@@ -41,15 +52,16 @@ export async function pollSeedanceTask(deps: VideoProviderDeps, config: Resolved
         if (state.status === "succeeded" || state.status === "completed") {
             const url = state.video_url || state.content?.video_url;
             if (url) return { status: "completed", result: await deps.response.videoResultFromUrl(url, options) };
-            if (isArkPlanBaseUrl(config.baseUrl)) return { status: "failed", error: "Seedance 任务成功但没有返回视频 URL" };
+            if (isArkPlanBaseUrl(config.baseUrl)) return { status: "failed", error: t("domain:the-seedance-task-succeeded-but-returned-no-video-url") };
             const content = await deps.transport.getBlob(deps.transport.apiUrl(`/videos/${task.id}/content`), options);
             await deps.response.assertVideoBlob(content);
             return { status: "completed", result: { blob: content } };
         }
-        if (state.status === "failed" || state.status === "cancelled" || state.status === "expired") return { status: "failed", error: seedanceErrorMessage(state) || `Seedance 视频生成${state.status === "expired" ? "超时" : "失败"}` };
+        if (state.status === "failed" || state.status === "cancelled" || state.status === "expired")
+            return { status: "failed", error: seedanceErrorMessage(state) || `Seedance 视频生成${state.status === "expired" ? t("domain:timed-out") : t("domain:failed")}` };
         return { status: "pending" };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "Seedance 任务查询失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:seedance-task-query-failed")));
     }
 }
 
@@ -59,20 +71,20 @@ function assertSeedanceVideoReferences(videoReferences: ReferenceVideo[]) {
     let total = 0;
     for (const video of videoReferences) {
         if (!video.durationMs) continue;
-        if (video.durationMs < 2000 || video.durationMs > 15000) throw new Error("Seedance 参考视频单个时长需要在 2-15 秒之间");
+        if (video.durationMs < 2000 || video.durationMs > 15000) throw new Error(t("domain:each-seedance-reference-video-must-be-between-2-and-15-seconds"));
         total += video.durationMs;
     }
-    if (total > 15000) throw new Error("Seedance 参考视频总时长不能超过 15 秒");
+    if (total > 15000) throw new Error(t("domain:total-seedance-reference-video-duration-cannot-exceed-15-seconds"));
 }
 
 function assertSeedanceAudioReferences(audioReferences: ReferenceAudio[]) {
     let total = 0;
     for (const audio of audioReferences) {
         if (!audio.durationMs) continue;
-        if (audio.durationMs < 2000 || audio.durationMs > 15000) throw new Error("Seedance 参考音频单个时长需要在 2-15 秒之间");
+        if (audio.durationMs < 2000 || audio.durationMs > 15000) throw new Error(t("domain:each-seedance-reference-audio-must-be-between-2-and-15-seconds"));
         total += audio.durationMs;
     }
-    if (total > 15000) throw new Error("Seedance 参考音频总时长不能超过 15 秒");
+    if (total > 15000) throw new Error(t("domain:seedance-reference-audio-must-total-no-more-than-15-seconds"));
 }
 
 function seedanceApiUrl(config: ResolvedAiConfig, taskId?: string) {
@@ -82,12 +94,10 @@ function seedanceApiUrl(config: ResolvedAiConfig, taskId?: string) {
 
 async function buildSeedanceAgentPlanPayload(config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], deps: VideoProviderDeps) {
     if (config.interfaceType !== "volcengine-ark-video" && audioReferences.length && !references.length && !videoReferences.length) {
-        throw new Error("Seedance 参考音频不能单独使用，请同时添加参考图或参考视频");
+        throw new Error(t("domain:seedance-reference-audio-cannot-be-used-alone-add-reference-images-or-vi"));
     }
-    const content = config.interfaceType === "volcengine-ark-video"
-        ? await buildVolcengineArkContent(prompt, references, videoReferences, audioReferences)
-        : await buildSeedanceContent(config, prompt, references, videoReferences, audioReferences, deps);
-    if (!content.length) throw new Error("请输入视频提示词，或连接参考图片/视频/音频");
+    const content = config.interfaceType === "volcengine-ark-video" ? await buildVolcengineArkContent(prompt, references, videoReferences, audioReferences) : await buildSeedanceContent(config, prompt, references, videoReferences, audioReferences, deps);
+    if (!content.length) throw new Error(t("domain:enter-a-video-prompt-or-connect-reference-images-videos-audio"));
     const profile = modelCapabilityConfigFor(config, model).video!;
     return {
         model: modelOptionName(model),
@@ -118,12 +128,12 @@ async function buildVolcengineArkContent(prompt: string, references: ReferenceIm
 async function resolveVolcengineArkReferenceUrl(value: string | undefined, storageKey?: string) {
     if (storageKey?.startsWith("resource:")) return getResourceOSSUrl(storageKey);
     if (isPublicMediaUrl(value || "") || String(value || "").startsWith("asset://")) return String(value);
-    throw new Error("火山方舟视频参考素材需要公网 URL 或 asset:// 素材 ID；请先将本地素材保存到对象存储");
+    throw new Error(t("domain:volcengine-ark-video-references-require-a-public-url-or-an-asset-media-i"));
 }
 
 async function buildSeedanceVideosPayload(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], deps: VideoProviderDeps) {
     if ((videoReferences.length || audioReferences.length) && !references.length) {
-        throw new Error("Seedance 参考视频或参考音频需要同时连接至少 1 张主参考图");
+        throw new Error(t("domain:seedance-reference-video-or-audio-requires-at-least-one-main-reference-i"));
     }
     const imageUrls = await Promise.all(references.slice(0, SEEDANCE_REFERENCE_LIMITS.images).map(resolveSeedanceVideosImageUrl));
     const videoUrls = await Promise.all(videoReferences.slice(0, SEEDANCE_REFERENCE_LIMITS.videos).map((media) => resolveSeedanceVideosMediaUrl(media, deps)));
@@ -152,10 +162,10 @@ async function buildSeedanceContent(config: AiConfig, prompt: string, references
         content.push({ type: "image_url", image_url: { url: await resolveSeedanceImageUrl(image) }, role: "reference_image" });
     }
     for (const video of videoReferences.slice(0, SEEDANCE_REFERENCE_LIMITS.videos)) {
-        content.push({ type: "video_url", video_url: { url: await resolveSeedanceMediaUrl(video, deps, "参考视频") }, role: "reference_video" });
+        content.push({ type: "video_url", video_url: { url: await resolveSeedanceMediaUrl(video, deps, t("domain:reference-videos")) }, role: "reference_video" });
     }
     for (const audio of audioReferences.slice(0, SEEDANCE_REFERENCE_LIMITS.audios)) {
-        content.push({ type: "audio_url", audio_url: { url: await resolveSeedanceMediaUrl(audio, deps, "参考音频") }, role: "reference_audio" });
+        content.push({ type: "audio_url", audio_url: { url: await resolveSeedanceMediaUrl(audio, deps, t("domain:reference-audio")) }, role: "reference_audio" });
     }
     return content;
 }
@@ -164,7 +174,7 @@ async function resolveSeedanceImageUrl(image: ReferenceImage) {
     const directUrl = image.url || image.dataUrl;
     if (isPublicMediaUrl(directUrl) || directUrl.startsWith("asset://")) return directUrl;
     const dataUrl = await imageToDataUrl(image);
-    if (!dataUrl) throw new Error("参考图读取失败，请换一张图片或重新上传");
+    if (!dataUrl) throw new Error(t("domain:failed-to-read-the-reference-image-try-another-image-or-re-upload-2"));
     return dataUrl;
 }
 
@@ -172,7 +182,7 @@ async function resolveSeedanceVideosImageUrl(image: ReferenceImage) {
     const directUrl = image.url || image.dataUrl;
     if (isPublicMediaUrl(directUrl) || directUrl.startsWith("data:")) return directUrl;
     const dataUrl = await imageToDataUrl(image);
-    if (!dataUrl) throw new Error("参考图读取失败，请换一张图片或重新上传");
+    if (!dataUrl) throw new Error(t("domain:failed-to-read-the-reference-image-try-another-image-or-re-upload-2"));
     return dataUrl;
 }
 
@@ -181,7 +191,7 @@ async function resolveSeedanceMediaUrl(media: ReferenceVideo | ReferenceAudio, d
     let blob: Blob | null = null;
     if (media.storageKey) blob = await getMediaBlob(media.storageKey);
     if (!blob && media.url?.startsWith("blob:")) blob = await (await fetch(media.url)).blob();
-    if (!blob) throw new Error(`${label}必须是公网 URL、素材 ID，或本地已保存素材`);
+    if (!blob) throw new Error(t("domain:param-must-be-a-public-url-an-asset-id-or-a-locally-saved-asset", { label: label }));
     return deps.response.blobToDataUrl(blob);
 }
 
@@ -190,7 +200,7 @@ async function resolveSeedanceVideosMediaUrl(media: ReferenceVideo | ReferenceAu
     let blob: Blob | null = null;
     if (media.storageKey) blob = await getMediaBlob(media.storageKey);
     if (!blob && media.url?.startsWith("blob:")) blob = await (await fetch(media.url)).blob();
-    if (!blob) throw new Error("Seedance /videos 参考素材必须是公网 URL、data URL，或本地已保存素材");
+    if (!blob) throw new Error(t("domain:seedance-videos-reference-media-must-be-a-public-url-data-url-or-locally"));
     return deps.response.blobToDataUrl(blob);
 }
 

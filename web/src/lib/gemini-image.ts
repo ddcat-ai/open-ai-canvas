@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 export type GeminiImageGenerationConfig = {
     responseModalities: ["TEXT", "IMAGE"];
     imageConfig?: { aspectRatio?: string; imageSize?: "1K" | "2K" | "4K" };
@@ -21,11 +22,11 @@ type GeminiInlineImageGenerationSize = "1K" | "2K" | "4K";
 
 export function parseGeminiImageDataUrl(dataUrl: string): GeminiInlineImage {
     const match = dataUrl.trim().match(/^data:([^;,\s]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=_-]+)$/i);
-    if (!match) throw new Error("参考图片读取失败：未得到有效的 image data URL");
+    if (!match) throw new Error(t("lib:failed-to-read-the-reference-image-no-valid-image-data-url-was-produced"));
     const mimeType = match[1].toLowerCase();
     const data = match[2].replace(/-/g, "+").replace(/_/g, "/");
-    if (!mimeType.startsWith("image/")) throw new Error(`参考图片 MIME 类型无效：${mimeType}`);
-    if (!data) throw new Error("参考图片读取失败：图片数据为空");
+    if (!mimeType.startsWith("image/")) throw new Error(t("lib:invalid-reference-image-mime-type-param", { mimeType: mimeType }));
+    if (!data) throw new Error(t("lib:failed-to-read-the-reference-image-image-data-is-empty"));
     return { mimeType, data };
 }
 

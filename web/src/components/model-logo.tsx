@@ -5,6 +5,7 @@ import { Cpu, Search, X } from "lucide-react";
 import { toc } from "@lobehub/icons/es/toc";
 
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
@@ -43,11 +44,14 @@ function loadIcon(icon?: string) {
 }
 
 export function ModelLogo({ icon, size = 18, className }: { icon?: string; size?: number; className?: string }) {
-    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => icon ? iconRegistry.get(icon) : undefined);
+    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => (icon ? iconRegistry.get(icon) : undefined));
     useEffect(() => {
         let cancelled = false;
         setIcon(icon ? iconRegistry.get(icon) : undefined);
-        if (!icon || !iconLoaders[icon]) return () => { cancelled = true; };
+        if (!icon || !iconLoaders[icon])
+            return () => {
+                cancelled = true;
+            };
         void loadIcon(icon).then((loaded) => {
             if (!cancelled) setIcon(loaded);
         });
@@ -60,6 +64,7 @@ export function ModelLogo({ icon, size = 18, className }: { icon?: string; size?
 }
 
 export function ModelIconPicker({ value, onChange }: { value?: string; onChange?: (value: string) => void }) {
+    const { t } = useTranslation("canvas");
     const [open, setOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
     const filteredIcons = useMemo(() => {
@@ -70,14 +75,14 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
     const content = (
         <div className="w-full max-w-xl space-y-2" data-canvas-no-zoom>
             <div className="flex items-center gap-2">
-                <Input size="small" prefix={<Search className="size-3.5 text-foreground/40" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索 Logo" allowClear />
+                <Input size="small" prefix={<Search className="size-3.5 text-foreground/40" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={t("domain:search-logos")} allowClear />
                 {value ? (
-                    <button type="button" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/45 hover:text-foreground" onClick={() => onChange?.("")} aria-label="清除 Logo">
+                    <button type="button" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/45 hover:text-foreground" onClick={() => onChange?.("")} aria-label={t("domain:clear-logo")}>
                         <X className="size-3.5" />
                     </button>
                 ) : null}
             </div>
-            <div className="grid max-h-96 grid-cols-12 gap-1 overflow-y-auto pr-1" role="listbox" aria-label="模型 Logo">
+            <div className="grid max-h-96 grid-cols-12 gap-1 overflow-y-auto pr-1" role="listbox" aria-label={t("domain:model-logo")}>
                 {filteredIcons.map((item) => {
                     const selected = value === item.id;
                     return (
@@ -103,9 +108,9 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
 
     return (
         <Popover trigger="click" open={open} onOpenChange={setOpen} arrow={{ pointAtCenter: true }} placement="bottomLeft" classNames={{ root: "model-logo-picker-popover" }} content={content}>
-            <button type="button" className="flex min-h-9 w-full items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 text-left text-sm hover:bg-muted/20" aria-label="选择模型 Logo">
+            <button type="button" className="flex min-h-9 w-full items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 text-left text-sm hover:bg-muted/20" aria-label={t("domain:select-model-logo")}>
                 <ModelLogo icon={value} size={20} />
-                <span className="min-w-0 flex-1 truncate text-foreground/70">{value ? iconOptions.find((item) => item.id === value)?.title || value : "选择 Logo"}</span>
+                <span className="min-w-0 flex-1 truncate text-foreground/70">{value ? iconOptions.find((item) => item.id === value)?.title || value : t("domain:choose-logo")}</span>
             </button>
         </Popover>
     );

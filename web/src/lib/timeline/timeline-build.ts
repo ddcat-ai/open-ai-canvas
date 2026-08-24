@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 // 从画布节点构建时间线数据：视频/音频节点自动入轨，字幕条目转成字幕片段。
 // 构建是单向快照：时间线保存后用户可自由拖拽，重新构建不覆盖已有时间线。
 
@@ -32,7 +33,7 @@ export function buildTimelineFromNodes(nodes: CanvasNodeData[]): TimelineProject
             trackId: DEFAULT_VIDEO_TRACK_ID,
             startMs: videoCursorMs,
             durationMs,
-            title: node.title || "视频片段",
+            title: node.title || t("lib:video-segments"),
             sourceStartMs: 0,
             sourceDurationMs: durationMs,
         });
@@ -48,7 +49,7 @@ export function buildTimelineFromNodes(nodes: CanvasNodeData[]): TimelineProject
                 trackId: DEFAULT_SUBTITLE_TRACK_ID,
                 startMs,
                 durationMs: Math.max(100, endMs - startMs),
-                title: entry.text || "字幕",
+                title: entry.text || t("lib:subtitles"),
                 sourceStartMs: entry.startMs,
                 sourceDurationMs: Math.max(0, entry.endMs - entry.startMs),
                 subtitleEntryIndex: entry.index,
@@ -68,7 +69,7 @@ export function buildTimelineFromNodes(nodes: CanvasNodeData[]): TimelineProject
             trackId: DEFAULT_AUDIO_TRACK_ID,
             startMs: audioCursorMs,
             durationMs,
-            title: node.title || "音频片段",
+            title: node.title || t("lib:audio-segments"),
             sourceStartMs: 0,
             sourceDurationMs: durationMs,
             volume: 1,

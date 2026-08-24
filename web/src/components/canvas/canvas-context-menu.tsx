@@ -11,17 +11,19 @@ import { isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canvas/tool-registry";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
 const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = [
-    { value: "character", label: "角色" },
-    { value: "environment", label: "场景" },
-    { value: "wardrobe", label: "服饰" },
-    { value: "prop", label: "道具" },
-    { value: "weapon", label: "武器" },
-    { value: "style", label: "画风" },
-    { value: "other", label: "其他" },
+    { value: "character", label: t("canvas:characters") },
+    { value: "environment", label: t("canvas:scenes") },
+    { value: "wardrobe", label: t("canvas:costumes") },
+    { value: "prop", label: t("canvas:props") },
+    { value: "weapon", label: t("canvas:weapons") },
+    { value: "style", label: t("canvas:styles") },
+    { value: "other", label: t("canvas:other") },
 ];
 
 type CanvasNodeContextMenuProps = {
@@ -91,6 +93,7 @@ export function CanvasNodeContextMenu({
     onSetAssetCategory,
     onToggleFrame,
 }: CanvasNodeContextMenuProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const [addOpen, setAddOpen] = useState(false);
@@ -159,79 +162,95 @@ export function CanvasNodeContextMenu({
                 <div className="thin-scrollbar min-h-0 overflow-y-auto">
                     {menu.type === "node" && isMedia && categoryOpen ? (
                         <>
-                            <MenuHeader title="设置资产分类" description={node?.title || nodeTypeLabel(node)} onBack={() => setCategoryOpen(false)} />
-                            <MenuSection label="项目用途" />
+                            <MenuHeader title={t("canvas:set-asset-category")} description={node?.title || nodeTypeLabel(node)} onBack={() => setCategoryOpen(false)} />
+                            <MenuSection label={t("canvas:project-use")} />
                             {assetCategoryOptions.map((option) => (
-                                <MenuButton
-                                    key={option.value}
-                                    icon={assetCategory === option.value ? <Check /> : <Tags />}
-                                    label={option.label}
-                                    active={assetCategory === option.value}
-                                    onClick={() => runAction(() => onSetAssetCategory(option.value))}
-                                />
+                                <MenuButton key={option.value} icon={assetCategory === option.value ? <Check /> : <Tags />} label={option.label} active={assetCategory === option.value} onClick={() => runAction(() => onSetAssetCategory(option.value))} />
                             ))}
                         </>
                     ) : menu.type === "canvas" ? (
                         <>
-                            <MenuHeader title="画布命令" />
-                            <MenuButton icon={<Plus className="size-4" />} label="添加节点" chevron active={addOpen} onClick={() => setAddOpen((value) => !value)} />
-                            <MenuButton icon={<Upload className="size-4" />} label="上传到这里" onClick={() => runAction(onUpload)} />
-                            {!isProjectLinked ? <MenuButton icon={<FolderOpen className="size-4" />} label="从素材库插入" onClick={() => runAction(onOpenAssets)} /> : null}
+                            <MenuHeader title={t("canvas:canvas-commands")} />
+                            <MenuButton icon={<Plus className="size-4" />} label={t("canvas:add-node-3")} chevron active={addOpen} onClick={() => setAddOpen((value) => !value)} />
+                            <MenuButton icon={<Upload className="size-4" />} label={t("canvas:upload-here")} onClick={() => runAction(onUpload)} />
+                            {!isProjectLinked ? <MenuButton icon={<FolderOpen className="size-4" />} label={t("canvas:insert-from-library")} onClick={() => runAction(onOpenAssets)} /> : null}
                             <MenuDivider />
-                            <MenuSection label="历史与剪贴板" />
-                            <MenuButton icon={<Undo2 className="size-4" />} label="撤销" shortcut="⌘Z" disabled={!canUndo} onClick={() => runAction(onUndo)} />
-                            <MenuButton icon={<Redo2 className="size-4" />} label="重做" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => runAction(onRedo)} />
-                            <MenuButton icon={<Clipboard className="size-4" />} label="粘贴" shortcut="⌘V" disabled={!canPaste} onClick={() => runAction(onPaste)} />
+                            <MenuSection label={t("canvas:history-and-clipboard")} />
+                            <MenuButton icon={<Undo2 className="size-4" />} label={t("canvas:undo")} shortcut="⌘Z" disabled={!canUndo} onClick={() => runAction(onUndo)} />
+                            <MenuButton icon={<Redo2 className="size-4" />} label={t("canvas:redo")} shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => runAction(onRedo)} />
+                            <MenuButton icon={<Clipboard className="size-4" />} label={t("canvas:paste")} shortcut="⌘V" disabled={!canPaste} onClick={() => runAction(onPaste)} />
                         </>
                     ) : menu.type === "node" ? (
                         <>
                             {isCharacterReference ? (
                                 <>
-                                    <MenuHeader title="角色卡" description={node?.metadata?.characterName || node?.title} />
-                                    <MenuSection label="角色引用" />
-                                    <MenuButton icon={<UserRound />} label="查看角色详情" onClick={() => runAction(onEditText)} />
+                                    <MenuHeader title={t("canvas:character-card")} description={node?.metadata?.characterName || node?.title} />
+                                    <MenuSection label={t("canvas:character-reference-3")} />
+                                    <MenuButton icon={<UserRound />} label={t("canvas:view-character-details")} onClick={() => runAction(onEditText)} />
                                     <MenuDivider />
-                                    <MenuSection label="节点" />
-                                    <MenuButton icon={<Copy />} label="复制角色引用" shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
-                                    <MenuButton icon={<Layers3 />} label="创建引用副本" shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
-                                    <MenuButton icon={<Trash2 />} label="删除节点" danger onClick={() => runAction(onDelete)} />
+                                    <MenuSection label={t("canvas:nodes-6")} />
+                                    <MenuButton icon={<Copy />} label={t("canvas:copy-character-reference")} shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
+                                    <MenuButton icon={<Layers3 />} label={t("canvas:create-reference-copy")} shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
+                                    <MenuButton icon={<Trash2 />} label={t("canvas:delete-node")} danger onClick={() => runAction(onDelete)} />
                                 </>
                             ) : isMedia ? (
                                 <>
-                                    <MenuHeader title={isImage ? "图片" : "视频"} description={node?.title || nodeTypeLabel(node)} />
-                                    <MenuSection label="查看与归档" />
-                                    <MenuButton icon={<Maximize2 />} label="进入全景预览" disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
-                                    <MenuButton icon={<Tags />} label="设置资产分类" chevron onClick={() => setCategoryOpen(true)} />
-                                    {isImage ? <MenuButton icon={<CloudUpload />} label="上传到方舟素材库" onClick={() => runAction(onUploadToArkPrivateAsset)} /> : null}
+                                    <MenuHeader title={isImage ? t("canvas:images-3") : t("canvas:videos-4")} description={node?.title || nodeTypeLabel(node)} />
+                                    <MenuSection label={t("canvas:view-and-archive")} />
+                                    <MenuButton icon={<Maximize2 />} label={t("canvas:open-full-preview")} disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
+                                    <MenuButton icon={<Tags />} label={t("canvas:set-asset-category")} chevron onClick={() => setCategoryOpen(true)} />
+                                    {isImage ? <MenuButton icon={<CloudUpload />} label={t("canvas:upload-to-ark-asset-library")} onClick={() => runAction(onUploadToArkPrivateAsset)} /> : null}
                                     <MenuDivider />
-                                    <MenuSection label="节点" />
-                                    <MenuButton icon={<Copy />} label="复制节点" shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
-                                    <MenuButton icon={<Link2 />} label={isImage ? "复制图片地址" : "复制视频地址"} disabled={!canCopyMediaUrl} onClick={() => runAction(onCopyMediaUrl)} />
-                                    <MenuButton icon={<Layers3 />} label="创建参数变体" shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
-                                    <MenuButton icon={<Trash2 />} label="删除节点" danger onClick={() => runAction(onDelete)} />
+                                    <MenuSection label={t("canvas:nodes-6")} />
+                                    <MenuButton icon={<Copy />} label={t("canvas:duplicate-node")} shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
+                                    <MenuButton icon={<Link2 />} label={isImage ? t("canvas:copy-image-url") : t("canvas:copy-video-url")} disabled={!canCopyMediaUrl} onClick={() => runAction(onCopyMediaUrl)} />
+                                    <MenuButton icon={<Layers3 />} label={t("canvas:create-parameter-variant")} shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
+                                    <MenuButton icon={<Trash2 />} label={t("canvas:delete-node")} danger onClick={() => runAction(onDelete)} />
                                 </>
                             ) : (
                                 <>
                                     <MenuHeader title={node?.title || nodeTypeLabel(node)} />
-                                    <MenuSection label="节点操作" />
-                                    {isFrame ? <MenuButton icon={isFolder ? <FolderOpen /> : <PanelTop />} label={node?.metadata?.frame?.collapsed ? `展开${isFolder ? "文件夹" : "背板"}` : `折叠${isFolder ? "文件夹" : "背板"}`} onClick={() => runAction(onToggleFrame)} /> : <MenuButton icon={<FolderPlus />} label="保存到我的素材" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />}
-                                    {isText ? <MenuButton icon={<Maximize2 />} label="放大编辑" onClick={() => runAction(onEditText)} /> : null}
-                                    {isDrawing ? <MenuButton icon={<Pencil />} label="打开绘图" onClick={() => runAction(onOpenDrawing)} /> : null}
-                                    {isText ? <MenuButton icon={<ImageIcon />} label="用文本生图" disabled={!canGenerateFromText} onClick={() => runAction(onGenerateImage)} /> : null}
+                                    <MenuSection label={t("canvas:node-actions")} />
+                                    {isFrame ? (
+                                        <MenuButton
+                                            icon={isFolder ? <FolderOpen /> : <PanelTop />}
+                                            label={
+                                                node?.metadata?.frame?.collapsed
+                                                    ? t("canvas:expand-target", { target: isFolder ? t("canvas:folder") : t("canvas:backplate") })
+                                                    : t("canvas:collapse-target", { target: isFolder ? t("canvas:folder") : t("canvas:backplate") })
+                                            }
+                                            onClick={() => runAction(onToggleFrame)}
+                                        />
+                                    ) : (
+                                        <MenuButton icon={<FolderPlus />} label={t("canvas:save-to-my-assets")} disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />
+                                    )}
+                                    {isText ? <MenuButton icon={<Maximize2 />} label={t("canvas:zoom-edit-3")} onClick={() => runAction(onEditText)} /> : null}
+                                    {isDrawing ? <MenuButton icon={<Pencil />} label={t("canvas:open-drawing-3")} onClick={() => runAction(onOpenDrawing)} /> : null}
+                                    {isText ? <MenuButton icon={<ImageIcon />} label={t("canvas:text-to-image")} disabled={!canGenerateFromText} onClick={() => runAction(onGenerateImage)} /> : null}
                                     <MenuDivider />
-                                    <MenuSection label="副本与内容" />
-                                    <MenuButton icon={<Copy />} label={isFrame ? `复制${isFolder ? "文件夹" : "背板"}及内容` : "复制节点"} shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
-                                    {isText ? <MenuButton icon={<Clipboard />} label="复制文本" disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
-                                    <MenuButton icon={<Copy />} label={isFrame ? `创建${isFolder ? "文件夹" : "背板"}副本` : "创建参数变体"} shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
-                                    <MenuButton icon={<Clipboard />} label="粘贴" shortcut="⌘V" disabled={!canPaste} onClick={() => runAction(onPaste)} />
-                                    <MenuButton icon={<Trash2 />} label={isFrame ? `删除${isFolder ? "文件夹" : "背板"}` : "删除节点"} danger onClick={() => runAction(onDelete)} />
+                                    <MenuSection label={t("canvas:copies-and-content")} />
+                                    <MenuButton
+                                        icon={<Copy />}
+                                        label={isFrame ? t("canvas:copy-target-with-content", { target: isFolder ? t("canvas:folder") : t("canvas:backplate") }) : t("canvas:duplicate-node")}
+                                        shortcut="⌘C"
+                                        onClick={() => runAction(onCopyNode)}
+                                    />
+                                    {isText ? <MenuButton icon={<Clipboard />} label={t("canvas:copy-text")} disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
+                                    <MenuButton
+                                        icon={<Copy />}
+                                        label={isFrame ? t("canvas:create-target-copy", { target: isFolder ? t("canvas:folder") : t("canvas:backplate") }) : t("canvas:create-parameter-variant")}
+                                        shortcut="⌘D"
+                                        onClick={() => runAction(onDuplicate)}
+                                    />
+                                    <MenuButton icon={<Clipboard />} label={t("canvas:paste")} shortcut="⌘V" disabled={!canPaste} onClick={() => runAction(onPaste)} />
+                                    <MenuButton icon={<Trash2 />} label={isFrame ? t("canvas:delete-target", { target: isFolder ? t("canvas:folder") : t("canvas:backplate") }) : t("canvas:delete-node")} danger onClick={() => runAction(onDelete)} />
                                 </>
                             )}
                         </>
                     ) : (
                         <>
-                            <MenuHeader title="连接" />
-                            <MenuButton icon={<Trash2 className="size-4" />} label="删除连接" danger onClick={() => runAction(onDelete)} />
+                            <MenuHeader title={t("canvas:connect-2")} />
+                            <MenuButton icon={<Trash2 className="size-4" />} label={t("canvas:delete-connection")} danger onClick={() => runAction(onDelete)} />
                         </>
                     )}
                 </div>
@@ -258,7 +277,31 @@ export function CanvasNodeContextMenu({
     );
 }
 
-function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, reducedMotion, onAddNode, onAddFolder, onChooseStyle, onOpenDirector, onUpload, onOpenAssets, onOpenProjectCharacters }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; reducedMotion: boolean; onAddNode: (type: CanvasNodeType) => void; onAddFolder: () => void; onChooseStyle: () => void; onOpenDirector: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void }) {
+function AddNodeContextMenu({
+    parentPosition,
+    workspaceMode,
+    isProjectLinked,
+    reducedMotion,
+    onAddNode,
+    onAddFolder,
+    onChooseStyle,
+    onOpenDirector,
+    onUpload,
+    onOpenAssets,
+    onOpenProjectCharacters,
+}: {
+    parentPosition: { left: number; top: number };
+    workspaceMode: CanvasWorkspaceMode;
+    isProjectLinked: boolean;
+    reducedMotion: boolean;
+    onAddNode: (type: CanvasNodeType) => void;
+    onAddFolder: () => void;
+    onChooseStyle: () => void;
+    onOpenDirector: () => void;
+    onUpload: () => void;
+    onOpenAssets: () => void;
+    onOpenProjectCharacters: () => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const left = getSubmenuLeft(parentPosition.left);
     const createContext: AddNodeMenuContext = {
@@ -312,8 +355,19 @@ function MenuHeader({ title, description, onBack }: { title: string; description
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
         <div className="mb-0.5 flex items-start gap-1 px-1.5 py-1.5">
-            {onBack ? <button type="button" onClick={onBack} className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md outline-none hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/8" aria-label="返回媒体操作"><ArrowLeft className="size-3.5" /></button> : null}
-            <span className="min-w-0"><span className="block truncate text-xs font-semibold">{title}</span>{description && description !== title ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{description}</span> : null}</span>
+            {onBack ? (
+                <button type="button" onClick={onBack} className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md outline-none hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/8" aria-label={t("canvas:back-to-media-actions")}>
+                    <ArrowLeft className="size-3.5" />
+                </button>
+            ) : null}
+            <span className="min-w-0">
+                <span className="block truncate text-xs font-semibold">{title}</span>
+                {description && description !== title ? (
+                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                        {description}
+                    </span>
+                ) : null}
+            </span>
         </div>
     );
 }
@@ -322,7 +376,29 @@ function MenuSection({ label }: { label: string }) {
     return <div className="px-2 pb-1 pt-1.5 text-[var(--fs-micro)] font-medium opacity-45">{label}</div>;
 }
 
-function MenuButton({ icon, label, detail, shortcut, badge, chevron = false, active = false, disabled = false, danger = false, onClick }: { icon: ReactNode; label: string; detail?: string; shortcut?: string; badge?: string; chevron?: boolean; active?: boolean; disabled?: boolean; danger?: boolean; onClick?: () => void }) {
+function MenuButton({
+    icon,
+    label,
+    detail,
+    shortcut,
+    badge,
+    chevron = false,
+    active = false,
+    disabled = false,
+    danger = false,
+    onClick,
+}: {
+    icon: ReactNode;
+    label: string;
+    detail?: string;
+    shortcut?: string;
+    badge?: string;
+    chevron?: boolean;
+    active?: boolean;
+    disabled?: boolean;
+    danger?: boolean;
+    onClick?: () => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const color = danger ? theme.accent.danger : theme.node.text;
     return (
@@ -333,8 +409,27 @@ function MenuButton({ icon, label, detail, shortcut, badge, chevron = false, act
             disabled={disabled}
             onClick={onClick}
         >
-            <span className="canvas-menu-item-icon grid size-7 shrink-0 place-items-center rounded-md border opacity-75 group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: danger ? `${theme.accent.danger}12` : theme.spatial.surface, borderColor: danger ? `${theme.accent.danger}33` : theme.toolbar.border, color: danger ? theme.accent.danger : theme.node.text }}>{icon}</span>
-            <span className="min-w-0 flex-1"><span className="flex items-center gap-1 text-xs font-medium"><span className="truncate">{label}</span>{badge ? <span className="rounded-full border px-1 py-0.5 text-[var(--fs-nano)] font-bold" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>{badge}</span> : null}</span>{detail ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{detail}</span> : null}</span>
+            <span
+                className="canvas-menu-item-icon grid size-7 shrink-0 place-items-center rounded-md border opacity-75 group-hover:opacity-100 [&_svg]:size-3.5"
+                style={{ background: danger ? `${theme.accent.danger}12` : theme.spatial.surface, borderColor: danger ? `${theme.accent.danger}33` : theme.toolbar.border, color: danger ? theme.accent.danger : theme.node.text }}
+            >
+                {icon}
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-xs font-medium">
+                    <span className="truncate">{label}</span>
+                    {badge ? (
+                        <span className="rounded-full border px-1 py-0.5 text-[var(--fs-nano)] font-bold" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.node.muted }}>
+                            {badge}
+                        </span>
+                    ) : null}
+                </span>
+                {detail ? (
+                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                        {detail}
+                    </span>
+                ) : null}
+            </span>
             {shortcut ? <span className="shrink-0 text-[var(--fs-micro)] opacity-38">{shortcut}</span> : null}
             {chevron ? <ChevronRight className="size-3 shrink-0 opacity-45 transition-transform group-hover:translate-x-0.5" /> : null}
         </button>
@@ -366,14 +461,15 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function nodeTypeLabel(node?: CanvasNodeData | null) {
-    if (!node) return "节点";
-    if (node.type === CanvasNodeType.Image) return "图片节点";
-    if (node.type === CanvasNodeType.Text) return "文本节点";
-    if (node.type === CanvasNodeType.Script) return "分镜脚本节点";
-    if (node.type === CanvasNodeType.Skill) return "技能节点";
-    if (node.type === CanvasNodeType.Video) return "视频节点";
-    if (node.type === CanvasNodeType.Audio) return "音频节点";
-    if (node.type === CanvasNodeType.Drawing) return "绘图节点";
-    if (node.type === CanvasNodeType.Frame) return isCanvasFolderNode(node) ? "文件夹" : "背板";
-    return "生成配置节点";
+    const { t } = useTranslation("canvas");
+    if (!node) return t("canvas:nodes-6");
+    if (node.type === CanvasNodeType.Image) return t("canvas:image-node");
+    if (node.type === CanvasNodeType.Text) return t("canvas:text-node");
+    if (node.type === CanvasNodeType.Script) return t("canvas:storyboard-script-node");
+    if (node.type === CanvasNodeType.Skill) return t("canvas:skill-node");
+    if (node.type === CanvasNodeType.Video) return t("canvas:video-node");
+    if (node.type === CanvasNodeType.Audio) return t("canvas:audio-node");
+    if (node.type === CanvasNodeType.Drawing) return t("canvas:drawing-node");
+    if (node.type === CanvasNodeType.Frame) return isCanvasFolderNode(node) ? t("canvas:folder") : t("canvas:backplate");
+    return t("canvas:generation-config-node");
 }

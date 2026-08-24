@@ -6,6 +6,7 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasNodeData } from "@/types/canvas";
 
 import { SandboxedFrame } from "./sandboxed-frame";
+import { useTranslation } from "react-i18next";
 
 type HtmlNodeContentProps = {
     node: CanvasNodeData;
@@ -22,6 +23,7 @@ type HtmlNodeContentProps = {
  * —— 否则页面能读到本源登录态。
  */
 export function HtmlNodeContent({ node, theme }: HtmlNodeContentProps) {
+    const { t } = useTranslation("canvas");
     const upstream = useUpstreamNodes(node.id);
     const inherited = upstream.find((item) => getNodeResourceKind(item) === "text");
     const upstreamText = inherited?.metadata?.content || inherited?.metadata?.prompt || "";
@@ -37,8 +39,10 @@ export function HtmlNodeContent({ node, theme }: HtmlNodeContentProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center" style={{ color: theme.node.muted }}>
                 <Code className="size-5 opacity-60" />
-                <span style={{ fontSize: "var(--fs-label)" }}>连接输出 HTML 的文本节点</span>
-                <span style={{ fontSize: "var(--fs-tiny)" }}>源码里的 {"{{input}}"} 会替换为上游文本</span>
+                <span style={{ fontSize: "var(--fs-label)" }}>{t("domain:connect-a-text-node-that-outputs-html")}</span>
+                <span style={{ fontSize: "var(--fs-tiny)" }}>
+                    {t("domain:in-the-source")} {"{{input}}"} {t("domain:will-be-replaced-with-the-upstream-text")}
+                </span>
             </div>
         );
     }

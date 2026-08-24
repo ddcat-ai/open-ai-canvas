@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardRow } from "@/types/canvas";
 
 export type StoryboardPipelineItemState = "missing" | "idle" | "loading" | "success" | "error";
@@ -43,17 +44,23 @@ export function deriveStoryboardPipelineProgress(scriptNode: CanvasNodeData, nod
             videoState: nodePipelineState(videoNode, CanvasNodeType.Video),
         };
     });
-    const imageNodes = pipelineRows.flatMap((item) => item.imageNode ? [item.imageNode] : []);
-    const videoNodes = pipelineRows.flatMap((item) => item.videoNode ? [item.videoNode] : []);
+    const imageNodes = pipelineRows.flatMap((item) => (item.imageNode ? [item.imageNode] : []));
+    const videoNodes = pipelineRows.flatMap((item) => (item.videoNode ? [item.videoNode] : []));
     const videoNodeIds = new Set(videoNodes.map((node) => node.id));
-    const linkedFinalNodes = nodes.filter((node) => node.type === CanvasNodeType.Video
-        && node.metadata?.workflowKind === "final"
-        && connections.some((connection) => connection.toNodeId === node.id && (connection.fromNodeId === scriptNode.id || videoNodeIds.has(connection.fromNodeId))));
-    const successfulVideoNodeIds = pipelineRows.flatMap((item) => item.videoState === "success" && item.videoNode ? [item.videoNode.id] : []);
+    const linkedFinalNodes = nodes.filter(
+        (node) => node.type === CanvasNodeType.Video && node.metadata?.workflowKind === "final" && connections.some((connection) => connection.toNodeId === node.id && (connection.fromNodeId === scriptNode.id || videoNodeIds.has(connection.fromNodeId))),
+    );
+    const successfulVideoNodeIds = pipelineRows.flatMap((item) => (item.videoState === "success" && item.videoNode ? [item.videoNode.id] : []));
     return {
         rows: pipelineRows,
-        images: summarizeStage(pipelineRows.map((item) => ({ state: item.imageState, node: item.imageNode })), rows.length),
-        videos: summarizeStage(pipelineRows.map((item) => ({ state: item.videoState, node: item.videoNode })), rows.length),
+        images: summarizeStage(
+            pipelineRows.map((item) => ({ state: item.imageState, node: item.imageNode })),
+            rows.length,
+        ),
+        videos: summarizeStage(
+            pipelineRows.map((item) => ({ state: item.videoState, node: item.videoNode })),
+            rows.length,
+        ),
         final: summarizeFinalStage(linkedFinalNodes, rows.length > 0 || linkedFinalNodes.length > 0),
         successfulVideoNodeIds,
         finalNodeIds: linkedFinalNodes.map((node) => node.id),
@@ -80,7 +87,7 @@ function summarizeStage(items: Array<{ state: StoryboardPipelineItemState; node?
         failed,
         loading,
         incomplete: Math.max(0, total - success),
-        nodeIds: items.flatMap((item) => item.node ? [item.node.id] : []),
+        nodeIds: items.flatMap((item) => (item.node ? [item.node.id] : [])),
     };
 }
 
@@ -102,10 +109,10 @@ function summarizeFinalStage(nodes: CanvasNodeData[], enabled: boolean): Storybo
 }
 
 export function pipelineStatusLabel(stage: StoryboardPipelineStage) {
-    if (!stage.total) return "待开始";
-    if (stage.success >= stage.total) return "已完成";
-    if (stage.loading) return `${stage.success}/${stage.total} · 进行中`;
-    if (stage.failed) return `${stage.success}/${stage.total} · 失败 ${stage.failed}`;
-    if (stage.created) return `${stage.success}/${stage.total} · 已创建 ${stage.created}`;
+    if (!stage.total) return t("canvas:not-started");
+    if (stage.success >= stage.total) return t("canvas:done-2");
+    if (stage.loading) return t("canvas:param-param-in-progress", { success: stage.success, total: stage.total });
+    if (stage.failed) return t("canvas:param-param-param-failed", { success: stage.success, total: stage.total, failed: stage.failed });
+    if (stage.created) return t("canvas:param-param-param-created", { success: stage.success, total: stage.total, created: stage.created });
     return `0/${stage.total}`;
 }

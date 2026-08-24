@@ -16,6 +16,8 @@ import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasVideoEditOperation, CanvasWorkspaceMode } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;
@@ -27,19 +29,20 @@ type CanvasConfigNodePanelProps = {
     workspaceMode?: CanvasWorkspaceMode;
 };
 
-const videoOperationOptions: Array<{ label: string; value: CanvasVideoEditOperation }> = [
-    { label: "文生视频", value: "text_to_video" },
-    { label: "图生视频", value: "image_to_video" },
-    { label: "视频续写", value: "extend" },
-    { label: "局部修改", value: "inpaint" },
-    { label: "元素替换", value: "replace_element" },
-    { label: "运镜调整", value: "camera_motion" },
-    { label: "风格迁移", value: "style_transfer" },
-    { label: "音频生视频", value: "audio_to_video" },
-    { label: "版本对比", value: "compare_versions" },
+const videoOperationOptions = (): Array<{ label: string; value: CanvasVideoEditOperation }> => [
+    { label: t("canvas:text-to-video"), value: "text_to_video" },
+    { label: t("canvas:image-to-video"), value: "image_to_video" },
+    { label: t("canvas:video-extend"), value: "extend" },
+    { label: t("canvas:inpaint-edit"), value: "inpaint" },
+    { label: t("canvas:element-replace"), value: "replace_element" },
+    { label: t("canvas:camera-adjust"), value: "camera_motion" },
+    { label: t("canvas:style-transfer"), value: "style_transfer" },
+    { label: t("canvas:audio-to-video"), value: "audio_to_video" },
+    { label: t("canvas:version-compare"), value: "compare_versions" },
 ];
 
 export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle, workspaceMode = "professional" }: CanvasConfigNodePanelProps) {
+    const { t } = useTranslation("canvas");
     const globalConfig = useEffectiveConfig();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
@@ -50,27 +53,36 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
         input: inputSummary,
         videoOperation: node.metadata?.videoEditOperation,
         videoSeconds: mode === "video" ? node.metadata?.seconds || globalConfig.videoSeconds : undefined,
-        options: modelRequestOptions({
-            ...globalConfig,
-            size: node.metadata?.size || globalConfig.size,
-            quality: node.metadata?.quality || globalConfig.quality,
-            count: String(node.metadata?.count || globalConfig.count),
-            videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
-            vquality: node.metadata?.vquality || globalConfig.vquality,
-            videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio,
-            videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark,
-            audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice,
-            audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat,
-            audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed,
-        }, mode),
+        options: modelRequestOptions(
+            {
+                ...globalConfig,
+                size: node.metadata?.size || globalConfig.size,
+                quality: node.metadata?.quality || globalConfig.quality,
+                count: String(node.metadata?.count || globalConfig.count),
+                videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
+                vquality: node.metadata?.vquality || globalConfig.vquality,
+                videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio,
+                videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark,
+                audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice,
+                audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat,
+                audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed,
+            },
+            mode,
+        ),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
     const videoProfile = mode === "video" ? modelCapabilityConfigFor(config, config.model).video! : undefined;
-    const operationOptions = videoProfile ? videoOperationOptions.filter((item) => videoProfile.operations.includes(item.value) || item.value === "concat") : videoOperationOptions;
+    const operationOptions = videoProfile ? videoOperationOptions().filter((item) => videoProfile.operations.includes(item.value) || item.value === "concat") : videoOperationOptions();
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const textCountValue = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.textCount) || 1))));
     const priceChannel = resolveModelChannel(config, config.model);
-    const credits = requestCreditCost({ channelMode: priceChannel.scope === "system" ? "remote" : "local", modelCosts: priceChannel.modelCosts, model: modelOptionName(config.model), count: mode === "image" ? count : 1, seconds: mode === "video" ? config.videoSeconds : 1 });
+    const credits = requestCreditCost({
+        channelMode: priceChannel.scope === "system" ? "remote" : "local",
+        modelCosts: priceChannel.modelCosts,
+        model: modelOptionName(config.model),
+        count: mode === "image" ? count : 1,
+        seconds: mode === "video" ? config.videoSeconds : 1,
+    });
     const hasPrice = creditsEnabled && credits !== null;
     const chipStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount || inputSummary.characterCount);
@@ -81,64 +93,70 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     return (
         <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="shrink-0 text-sm font-semibold">{simpleMode ? "快速生成" : "生成配置"}</div>
-                {simpleMode ? <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>自动配置</span> : <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
-                    <Segmented
-                        size="small"
-                        className="canvas-config-mode !rounded-md !p-0.5"
-                        value={mode}
-                        onChange={(value) => onConfigChange(node.id, { generationMode: value as CanvasGenerationMode })}
-                        options={[
-                            {
-                                value: "image",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <ImageIcon className="size-3.5" />
-                                        生图
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "text",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <MessageSquare className="size-3.5" />
-                                        文本
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "video",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <Video className="size-3.5" />
-                                        视频
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "audio",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <Music2 className="size-3.5" />
-                                        音频
-                                    </span>
-                                ),
-                            },
-                        ]}
-                    />
-                </div>}
+                <div className="shrink-0 text-sm font-semibold">{simpleMode ? t("canvas:quick-generate") : t("canvas:generation-config")}</div>
+                {simpleMode ? (
+                    <span className="rounded-md px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.node.fill, color: theme.node.muted }}>
+                        {t("canvas:auto-configure-2")}
+                    </span>
+                ) : (
+                    <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
+                        <Segmented
+                            size="small"
+                            className="canvas-config-mode !rounded-md !p-0.5"
+                            value={mode}
+                            onChange={(value) => onConfigChange(node.id, { generationMode: value as CanvasGenerationMode })}
+                            options={[
+                                {
+                                    value: "image",
+                                    label: (
+                                        <span className="inline-flex items-center gap-1">
+                                            <ImageIcon className="size-3.5" />
+                                            {t("canvas:image-gen-3")}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    value: "text",
+                                    label: (
+                                        <span className="inline-flex items-center gap-1">
+                                            <MessageSquare className="size-3.5" />
+                                            {t("canvas:texts-2")}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    value: "video",
+                                    label: (
+                                        <span className="inline-flex items-center gap-1">
+                                            <Video className="size-3.5" />
+                                            {t("canvas:videos-4")}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    value: "audio",
+                                    label: (
+                                        <span className="inline-flex items-center gap-1">
+                                            <Music2 className="size-3.5" />
+                                            {t("canvas:audio-3")}
+                                        </span>
+                                    ),
+                                },
+                            ]}
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="mb-2 flex flex-wrap gap-1.5">
-                <InputChip label="提示词" value={`${inputSummary.textCount} 个`} style={chipStyle} />
-                <InputChip label="参考图" value={`${inputSummary.imageCount} 张`} style={chipStyle} />
-                <InputChip label="参考视频" value={`${inputSummary.videoCount} 个`} style={chipStyle} />
-                <InputChip label="参考音频" value={`${inputSummary.audioCount} 个`} style={chipStyle} />
-                {inputSummary.characterCount ? <InputChip label="角色卡" value={`${inputSummary.characterCount} 个`} style={chipStyle} /> : null}
+                <InputChip label={t("canvas:prompt-4")} value={t("canvas:param-2", { textCount: inputSummary.textCount })} style={chipStyle} />
+                <InputChip label={t("canvas:reference-image-2")} value={t("canvas:param-3", { imageCount: inputSummary.imageCount })} style={chipStyle} />
+                <InputChip label={t("canvas:reference-videos-2")} value={t("canvas:param-4", { videoCount: inputSummary.videoCount })} style={chipStyle} />
+                <InputChip label={t("canvas:reference-audio-2")} value={t("canvas:param-5", { audioCount: inputSummary.audioCount })} style={chipStyle} />
+                {inputSummary.characterCount ? <InputChip label={t("canvas:character-card")} value={t("canvas:param-6", { characterCount: inputSummary.characterCount })} style={chipStyle} /> : null}
                 <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[var(--fs-label)]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
                     {simpleMode ? <MessageSquare className="size-3.5" /> : <Settings2 className="size-3.5" />}
-                    {simpleMode ? "编辑生成内容" : "组装提示词"}
+                    {simpleMode ? t("canvas:edit-generated-content") : t("canvas:compose-prompt")}
                 </button>
             </div>
 
@@ -163,56 +181,101 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             ) : null}
 
             {simpleMode ? (
-                <div className="mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, color: theme.node.muted }}>将使用当前默认模型与生成参数</div>
+                <div className="mb-2 rounded-lg px-2 py-2 text-[var(--fs-label)]" style={{ background: theme.node.fill, color: theme.node.muted }}>
+                    {t("canvas:the-current-default-model-and-parameters-will-be-used-2")}
+                </div>
             ) : (
-                <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" || mode === "text" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
-                    <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })} capability={mode} requirements={requirements} onMissingConfig={() => navigateToSettings({ continueCreation: true })} fullWidth showSelectedPrice={creditsEnabled} />
+                <div
+                    className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" || mode === "text" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`}
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+                    <ModelPicker
+                        className="canvas-compact-control h-10"
+                        config={config}
+                        value={config.model}
+                        onChange={(model) => onConfigChange(node.id, mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model })}
+                        capability={mode}
+                        requirements={requirements}
+                        onMissingConfig={() => navigateToSettings({ continueCreation: true })}
+                        fullWidth
+                        showSelectedPrice={creditsEnabled}
+                    />
                     {mode === "text" ? (
-                        <div className="flex h-10 min-w-0 cursor-default items-center justify-between gap-2 rounded-lg border px-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }} data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                            <span className="inline-flex items-center gap-1 text-[var(--fs-tiny)] font-semibold" style={{ color: theme.node.muted }}><MessageSquare className="size-3.5" />文本份数</span>
-                            <InputNumber size="small" min={1} max={15} value={textCountValue} onChange={(value) => onConfigChange(node.id, { textCount: Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 1))) })} aria-label="文本生成份数" />
+                        <div
+                            className="flex h-10 min-w-0 cursor-default items-center justify-between gap-2 rounded-lg border px-2.5"
+                            style={{ borderColor: theme.node.stroke, background: theme.node.fill }}
+                            data-canvas-no-zoom
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <span className="inline-flex items-center gap-1 text-[var(--fs-tiny)] font-semibold" style={{ color: theme.node.muted }}>
+                                <MessageSquare className="size-3.5" />
+                                {t("canvas:text-outputs-2")}
+                            </span>
+                            <InputNumber
+                                size="small"
+                                min={1}
+                                max={15}
+                                value={textCountValue}
+                                onChange={(value) => onConfigChange(node.id, { textCount: Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 1))) })}
+                                aria-label={t("canvas:text-output-count")}
+                            />
                         </div>
                     ) : mode === "video" ? (
-                        <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                        <CanvasVideoSettingsPopover
+                            config={config}
+                            placement="topRight"
+                            buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
+                            onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+                        />
                     ) : mode === "image" ? (
-                        <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
+                        <CanvasImageSettingsPopover
+                            config={config}
+                            placement="topRight"
+                            autoAdjustOverflow={false}
+                            buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
+                            onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
+                        />
                     ) : mode === "audio" ? (
-                        <CanvasAudioSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                        <CanvasAudioSettingsPopover
+                            config={config}
+                            placement="topRight"
+                            buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
+                            onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))}
+                        />
                     ) : null}
                 </div>
             )}
 
-            {capabilityError ? <div className="mb-2 rounded-md px-2 py-1.5 text-[var(--fs-tiny)]" style={{ background: theme.accent.danger + "18", color: theme.accent.danger }}>{capabilityError}</div> : null}
+            {capabilityError ? (
+                <div className="mb-2 rounded-md px-2 py-1.5 text-[var(--fs-tiny)]" style={{ background: theme.accent.danger + "18", color: theme.accent.danger }}>
+                    {capabilityError}
+                </div>
+            ) : null}
 
-            <Button
-                type="primary"
-                className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
-                disabled={isRunning || !canGenerate}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={() => onGenerate(node.id)}
-            >
+            <Button type="primary" className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg" disabled={isRunning || !canGenerate} onMouseDown={(event) => event.stopPropagation()} onClick={() => onGenerate(node.id)}>
                 <span className="inline-flex items-center gap-1.5">
                     {isRunning ? (
                         <>
                             <LoaderCircle className="size-4 animate-spin" />
-                            <span>生成中</span>
+                            <span>{t("canvas:generating-3")}</span>
                         </>
                     ) : (
                         <>
                             {!creditsEnabled ? (
-                                <span>生成</span>
+                                <span>{t("canvas:generate-5")}</span>
                             ) : hasPrice ? (
                                 <span className="inline-flex items-center gap-1">
                                     <CreditSymbol />
                                     {credits.toLocaleString()}
                                 </span>
                             ) : (
-                                <span className="text-xs" title="当前渠道没有模型价格数据">
-                                    无价格
+                                <span className="text-xs" title={t("canvas:the-current-channel-has-no-model-pricing-data")}>
+                                    {t("canvas:no-pricing-2")}
                                 </span>
                             )}
                             <Play className="size-4" />
-                            <span>开始生成</span>
+                            <span>{t("canvas:generate-3")}</span>
                         </>
                     )}
                 </span>

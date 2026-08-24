@@ -3,6 +3,7 @@ import { Moon, Sun } from "lucide-react";
 import { flushSync } from "react-dom";
 
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
 export type TransitionVariant = "circle" | "square" | "triangle" | "diamond" | "hexagon" | "rectangle" | "star";
 
@@ -191,29 +192,31 @@ export const AnimatedThemeToggler = ({ children, className, duration = 400, vari
 
         const ready = transition?.ready;
         if (ready && typeof ready.then === "function") {
-            void ready.then(() => {
-                if (cleaned) return;
-                themeClipAnimation?.cancel();
-                themeClipAnimation = document.documentElement.animate(
-                    {
-                        clipPath,
-                    },
-                    {
-                        duration,
-                        // Star: linear avoids easing overshoot that fights polygon interpolation at t→1; VT group duration is synced above.
-                        easing: shape === "star" ? "linear" : "ease-in-out",
-                        fill: "forwards",
-                        pseudoElement: "::view-transition-new(root)",
-                    },
-                );
-            }).catch(() => undefined);
+            void ready
+                .then(() => {
+                    if (cleaned) return;
+                    themeClipAnimation?.cancel();
+                    themeClipAnimation = document.documentElement.animate(
+                        {
+                            clipPath,
+                        },
+                        {
+                            duration,
+                            // Star: linear avoids easing overshoot that fights polygon interpolation at t→1; VT group duration is synced above.
+                            easing: shape === "star" ? "linear" : "ease-in-out",
+                            fill: "forwards",
+                            pseudoElement: "::view-transition-new(root)",
+                        },
+                    );
+                })
+                .catch(() => undefined);
         }
     }, [shape, fromCenter, duration, targetTheme, onThemeChange]);
 
     return (
         <button type="button" ref={buttonRef} onClick={toggleTheme} className={cn(className)} {...props}>
             {children ?? (isDark ? <Sun /> : <Moon />)}
-            <span className="sr-only">{props["aria-label"] || "切换主题"}</span>
+            <span className="sr-only">{props["aria-label"] || t("domain:switch-theme")}</span>
         </button>
     );
 };

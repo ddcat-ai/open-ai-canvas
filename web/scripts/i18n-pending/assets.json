@@ -1,0 +1,1737 @@
+{
+    "ns": "assets",
+    "entries": {
+        "t:账号文件容量": {
+            "type": "ui",
+            "zh": "账号文件容量",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 21
+                }
+            ],
+            "key": "account-file-storage",
+            "en": "Account file storage"
+        },
+        "t:包含素材文件和 Agent 会话附件": {
+            "type": "ui",
+            "zh": "包含素材文件和 Agent 会话附件",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 21
+                }
+            ],
+            "key": "includes-asset-files-and-agent-session-attachments",
+            "en": "Includes asset files and Agent session attachments"
+        },
+        "jsx:src/pages/assets/asset-storage-usage.tsx:账号容量:1222": {
+            "type": "jsxtext",
+            "zh": "账号容量",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 25
+                }
+            ],
+            "key": "account-storage",
+            "en": "Account storage"
+        },
+        "t:账号文件容量使用进度": {
+            "type": "ui",
+            "zh": "账号文件容量使用进度",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 34
+                }
+            ],
+            "key": "account-file-storage-usage",
+            "en": "Account file storage usage"
+        },
+        "cx:src/pages/assets/asset-storage-usage.tsx:1877": {
+            "type": "skipped",
+            "zh": "`已使用 ${storageBytes(usage.usedBytes)}，总容量 ${storageBytes(usage.totalBytes)}`",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 38
+                }
+            ]
+        },
+        "jsx:src/pages/assets/asset-storage-usage.tsx:容量统计暂时不可用。:2283": {
+            "type": "jsxtext",
+            "zh": "容量统计暂时不可用。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 45
+                }
+            ],
+            "key": "storage-stats-are-temporarily-unavailable",
+            "en": "Storage stats are temporarily unavailable."
+        },
+        "jsx:src/pages/assets/asset-storage-usage.tsx:重试:2396": {
+            "type": "jsxtext",
+            "zh": "重试",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 47
+                }
+            ],
+            "key": "retry",
+            "en": "Retry"
+        },
+        "jsx:src/pages/assets/asset-storage-usage.tsx:正在统计已用容量…:2563": {
+            "type": "jsxtext",
+            "zh": "正在统计已用容量…",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-storage-usage.tsx",
+                    "line": 52
+                }
+            ],
+            "key": "calculating-used-storage",
+            "en": "Calculating used storage…"
+        },
+        "t:我的素材.zip": {
+            "type": "ui",
+            "zh": "我的素材.zip",
+            "locations": [
+                {
+                    "file": "src/pages/assets/asset-transfer.ts",
+                    "line": 42
+                }
+            ],
+            "key": "my-assets-zip",
+            "en": "My assets.zip"
+        },
+        "t:全部": {
+            "type": "ui",
+            "zh": "全部",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 41
+                }
+            ],
+            "key": "all",
+            "en": "All"
+        },
+        "t:文本": {
+            "type": "ui",
+            "zh": "文本",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 42
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 349
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 749
+                }
+            ],
+            "key": "text",
+            "en": "Text"
+        },
+        "t:图片": {
+            "type": "ui",
+            "zh": "图片",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 43
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 350
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 749
+                }
+            ],
+            "key": "image",
+            "en": "Image"
+        },
+        "t:视频": {
+            "type": "ui",
+            "zh": "视频",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 44
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 749
+                }
+            ],
+            "key": "video",
+            "en": "Video"
+        },
+        "t:音频": {
+            "type": "ui",
+            "zh": "音频",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 45
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 749
+                }
+            ],
+            "key": "audio",
+            "en": "Audio"
+        },
+        "t:3D 模型": {
+            "type": "ui",
+            "zh": "3D 模型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 46
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 749
+                }
+            ],
+            "key": "3d-models",
+            "en": "3D models"
+        },
+        "t:全部分类": {
+            "type": "ui",
+            "zh": "全部分类",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 50
+                }
+            ],
+            "key": "all-categories",
+            "en": "All categories"
+        },
+        "t:角色": {
+            "type": "ui",
+            "zh": "角色",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 51
+                }
+            ],
+            "key": "role",
+            "en": "Role"
+        },
+        "t:场景": {
+            "type": "ui",
+            "zh": "场景",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 52
+                }
+            ],
+            "key": "scenes",
+            "en": "Scenes"
+        },
+        "t:服饰": {
+            "type": "ui",
+            "zh": "服饰",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 53
+                }
+            ],
+            "key": "costumes",
+            "en": "Costumes"
+        },
+        "t:道具": {
+            "type": "ui",
+            "zh": "道具",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 54
+                }
+            ],
+            "key": "props",
+            "en": "Props"
+        },
+        "t:武器": {
+            "type": "ui",
+            "zh": "武器",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 55
+                }
+            ],
+            "key": "weapons",
+            "en": "Weapons"
+        },
+        "t:画风": {
+            "type": "ui",
+            "zh": "画风",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 56
+                }
+            ],
+            "key": "styles",
+            "en": "Styles"
+        },
+        "t:其他": {
+            "type": "ui",
+            "zh": "其他",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 57
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 739
+                }
+            ],
+            "key": "other",
+            "en": "Other"
+        },
+        "t:手动添加": {
+            "type": "ui",
+            "zh": "手动添加",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 137
+                }
+            ],
+            "key": "added-manually",
+            "en": "Added manually"
+        },
+        "t:请选择图片文件": {
+            "type": "ui",
+            "zh": "请选择图片文件",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 177
+                }
+            ],
+            "key": "choose-an-image-file",
+            "en": "Choose an image file"
+        },
+        "t:素材已更新": {
+            "type": "ui",
+            "zh": "素材已更新",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 184
+                }
+            ],
+            "key": "asset-updated",
+            "en": "Asset updated"
+        },
+        "t:素材已保存": {
+            "type": "ui",
+            "zh": "素材已保存",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 184
+                }
+            ],
+            "key": "asset-saved",
+            "en": "Asset saved"
+        },
+        "t:3D模型": {
+            "type": "ui",
+            "zh": "3D模型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 208
+                }
+            ],
+            "key": "3d-models-2",
+            "en": "3D models"
+        },
+        "t:手动上传": {
+            "type": "ui",
+            "zh": "手动上传",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 208
+                }
+            ],
+            "key": "manual-upload",
+            "en": "Manual upload"
+        },
+        "t:3D 模型已保存": {
+            "type": "ui",
+            "zh": "3D 模型已保存",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 209
+                }
+            ],
+            "key": "3d-model-saved",
+            "en": "3D model saved"
+        },
+        "t:文本已复制": {
+            "type": "ui",
+            "zh": "文本已复制",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 214
+                }
+            ],
+            "key": "text-copied",
+            "en": "Text copied"
+        },
+        "t:暂无素材可导出": {
+            "type": "ui",
+            "zh": "暂无素材可导出",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 226
+                }
+            ],
+            "key": "no-assets-to-export",
+            "en": "No assets to export"
+        },
+        "tpl:已导入 {{length}} 个素材": {
+            "type": "template",
+            "zh": "已导入 {{length}} 个素材",
+            "params": {
+                "length": "importedAssets.length"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 243
+                }
+            ],
+            "key": "imported-param-assets",
+            "en": "Imported {{{length}}} assets"
+        },
+        "t:导入失败，请选择有效的素材压缩包": {
+            "type": "ui",
+            "zh": "导入失败，请选择有效的素材压缩包",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 245
+                }
+            ],
+            "key": "import-failed-choose-a-valid-asset-archive",
+            "en": "Import failed. Choose a valid asset archive"
+        },
+        "t:素材已删除": {
+            "type": "ui",
+            "zh": "素材已删除",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "asset-deleted",
+            "en": "Asset deleted"
+        },
+        "t:素材删除失败": {
+            "type": "ui",
+            "zh": "素材删除失败",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "failed-to-delete-asset",
+            "en": "Failed to delete asset"
+        },
+        "tpl:已删除 {{length}} 个素材": {
+            "type": "template",
+            "zh": "已删除 {{length}} 个素材",
+            "params": {
+                "length": "selectedAssets.length"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 271
+                }
+            ],
+            "key": "deleted-param-assets",
+            "en": "Deleted {{{length}}} assets"
+        },
+        "t:批量删除失败": {
+            "type": "ui",
+            "zh": "批量删除失败",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 275
+                }
+            ],
+            "key": "batch-delete-failed",
+            "en": "Batch delete failed"
+        },
+        "t:素材库": {
+            "type": "ui",
+            "zh": "素材库",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 285
+                }
+            ],
+            "key": "asset-library",
+            "en": "Asset library"
+        },
+        "t:管理文本、图片、视频、音频和 3D 模型素材。": {
+            "type": "ui",
+            "zh": "管理文本、图片、视频、音频和 3D 模型素材。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 286
+                }
+            ],
+            "key": "manage-text-image-video-audio-and-3d-model-assets",
+            "en": "Manage text, image, video, audio, and 3D model assets."
+        },
+        "jsx:src/pages/assets/index.tsx:个素材:13346": {
+            "type": "jsxtext",
+            "zh": "个素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 287
+                }
+            ],
+            "key": "assets",
+            "en": "assets"
+        },
+        "jsx:src/pages/assets/index.tsx:新增素材:13681": {
+            "type": "jsxtext",
+            "zh": "新增素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 291
+                }
+            ],
+            "key": "new-asset",
+            "en": "New asset"
+        },
+        "jsx:src/pages/assets/index.tsx:Eagle 素材库:13822": {
+            "type": "jsxtext",
+            "zh": "Eagle 素材库",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 292
+                }
+            ],
+            "key": "eagle-library",
+            "en": "Eagle library"
+        },
+        "t:导出全部素材": {
+            "type": "ui",
+            "zh": "导出全部素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 293
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 293
+                }
+            ],
+            "key": "export-all-assets",
+            "en": "Export all assets"
+        },
+        "t:导入素材包": {
+            "type": "ui",
+            "zh": "导入素材包",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 294
+                }
+            ],
+            "key": "import-asset-archive",
+            "en": "Import asset archive"
+        },
+        "t:上传 3D 模型": {
+            "type": "ui",
+            "zh": "上传 3D 模型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 294
+                }
+            ],
+            "key": "upload-3d-model",
+            "en": "Upload 3D model"
+        },
+        "t:导入素材": {
+            "type": "ui",
+            "zh": "导入素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 295
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 295
+                }
+            ],
+            "key": "import-assets",
+            "en": "Import assets"
+        },
+        "t:搜索标题、内容、标签或来源": {
+            "type": "ui",
+            "zh": "搜索标题、内容、标签或来源",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 303
+                }
+            ],
+            "key": "search-titles-content-tags-or-source",
+            "en": "Search titles, content, tags, or source"
+        },
+        "t:素材类型": {
+            "type": "ui",
+            "zh": "素材类型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 310
+                }
+            ],
+            "key": "asset-type",
+            "en": "Asset type"
+        },
+        "t:业务分类": {
+            "type": "ui",
+            "zh": "业务分类",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 311
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 355
+                }
+            ],
+            "key": "category",
+            "en": "Category"
+        },
+        "t:没有匹配的素材": {
+            "type": "ui",
+            "zh": "没有匹配的素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 322
+                }
+            ],
+            "key": "no-matching-assets",
+            "en": "No matching assets"
+        },
+        "t:调整关键词或左侧分类后再试。": {
+            "type": "ui",
+            "zh": "调整关键词或左侧分类后再试。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 322
+                }
+            ],
+            "key": "adjust-the-keywords-or-category-on-the-left-and-try-again",
+            "en": "Adjust the keywords or category on the left and try again."
+        },
+        "jsx:src/pages/assets/index.tsx:新增素材:17395": {
+            "type": "jsxtext",
+            "zh": "新增素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 327
+                }
+            ],
+            "key": "new-asset-2",
+            "en": "New asset"
+        },
+        "jsx:src/pages/assets/index.tsx:文本、图片、音视频或模型:17490": {
+            "type": "jsxtext",
+            "zh": "文本、图片、音视频或模型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 328
+                }
+            ],
+            "key": "text-image-audio-video-or-model",
+            "en": "Text, image, audio/video, or model"
+        },
+        "t:编辑素材": {
+            "type": "ui",
+            "zh": "编辑素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 343
+                }
+            ],
+            "key": "edit-asset",
+            "en": "Edit asset"
+        },
+        "t:新增素材": {
+            "type": "ui",
+            "zh": "新增素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 343
+                }
+            ],
+            "key": "new-asset-3",
+            "en": "New asset"
+        },
+        "t:保存": {
+            "type": "ui",
+            "zh": "保存",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 343
+                }
+            ],
+            "key": "save",
+            "en": "Save"
+        },
+        "t:取消": {
+            "type": "ui",
+            "zh": "取消",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 343
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 457
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 460
+                }
+            ],
+            "key": "cancel",
+            "en": "Cancel"
+        },
+        "t:类型": {
+            "type": "ui",
+            "zh": "类型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 346
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 696
+                }
+            ],
+            "key": "type",
+            "en": "Type"
+        },
+        "t:标题": {
+            "type": "ui",
+            "zh": "标题",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 358
+                }
+            ],
+            "key": "title",
+            "en": "Title"
+        },
+        "t:请输入标题": {
+            "type": "ui",
+            "zh": "请输入标题",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 358
+                }
+            ],
+            "key": "enter-a-title",
+            "en": "Enter a title"
+        },
+        "t:给素材起一个容易检索的名字": {
+            "type": "ui",
+            "zh": "给素材起一个容易检索的名字",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 359
+                }
+            ],
+            "key": "give-the-asset-an-easily-searchable-name",
+            "en": "Give the asset an easily searchable name"
+        },
+        "t:封面 URL": {
+            "type": "ui",
+            "zh": "封面 URL",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 361
+                }
+            ],
+            "key": "cover-url",
+            "en": "Cover URL"
+        },
+        "t:可粘贴图片 URL，也可以上传本地封面": {
+            "type": "ui",
+            "zh": "可粘贴图片 URL，也可以上传本地封面",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 363
+                }
+            ],
+            "key": "paste-an-image-url-or-upload-a-local-cover",
+            "en": "Paste an image URL or upload a local cover"
+        },
+        "jsx:src/pages/assets/index.tsx:上传:20318": {
+            "type": "jsxtext",
+            "zh": "上传",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 364
+                }
+            ],
+            "key": "upload",
+            "en": "Upload"
+        },
+        "t:标签": {
+            "type": "ui",
+            "zh": "标签",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 369
+                }
+            ],
+            "key": "tags",
+            "en": "Tags"
+        },
+        "t:输入标签后回车": {
+            "type": "ui",
+            "zh": "输入标签后回车",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 370
+                }
+            ],
+            "key": "type-a-tag-and-press-enter",
+            "en": "Type a tag and press Enter"
+        },
+        "t:来源": {
+            "type": "ui",
+            "zh": "来源",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 373
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 710
+                }
+            ],
+            "key": "source",
+            "en": "Source"
+        },
+        "t:手动添加 / 画布 / 任务中心": {
+            "type": "ui",
+            "zh": "手动添加 / 画布 / 任务中心",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 374
+                }
+            ],
+            "key": "manual-canvas-task-center",
+            "en": "Manual / Canvas / Task center"
+        },
+        "t:备注": {
+            "type": "ui",
+            "zh": "备注",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 376
+                }
+            ],
+            "key": "notes",
+            "en": "Notes"
+        },
+        "t:可选": {
+            "type": "ui",
+            "zh": "可选",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 377
+                }
+            ],
+            "key": "optional",
+            "en": "Optional"
+        },
+        "t:文本内容": {
+            "type": "ui",
+            "zh": "文本内容",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 381
+                }
+            ],
+            "key": "text-content",
+            "en": "Text content"
+        },
+        "t:请输入文本内容": {
+            "type": "ui",
+            "zh": "请输入文本内容",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 381
+                }
+            ],
+            "key": "enter-text-content",
+            "en": "Enter text content"
+        },
+        "t:保存提示词、说明文案、参考描述等文本素材": {
+            "type": "ui",
+            "zh": "保存提示词、说明文案、参考描述等文本素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 382
+                }
+            ],
+            "key": "save-prompts-notes-reference-descriptions-and-other-text-assets",
+            "en": "Save prompts, notes, reference descriptions, and other text assets"
+        },
+        "t:图片内容": {
+            "type": "ui",
+            "zh": "图片内容",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 385
+                }
+            ],
+            "key": "image-content",
+            "en": "Image content"
+        },
+        "jsx:src/pages/assets/index.tsx:选择图片文件:21791": {
+            "type": "jsxtext",
+            "zh": "选择图片文件",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 387
+                }
+            ],
+            "key": "choose-an-image-file-2",
+            "en": "Choose an image file"
+        },
+        "jsx:src/pages/assets/index.tsx:未选择图片:22462": {
+            "type": "jsxtext",
+            "zh": "未选择图片",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 395
+                }
+            ],
+            "key": "no-image-selected",
+            "en": "No image selected"
+        },
+        "jsx:src/pages/assets/index.tsx:预览:22869": {
+            "type": "jsxtext",
+            "zh": "预览",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 404
+                }
+            ],
+            "key": "preview",
+            "en": "Preview"
+        },
+        "t:暂无封面": {
+            "type": "ui",
+            "zh": "暂无封面",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 409
+                }
+            ],
+            "key": "no-cover-yet",
+            "en": "No cover yet"
+        },
+        "t:未命名素材": {
+            "type": "ui",
+            "zh": "未命名素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 413
+                }
+            ],
+            "key": "untitled-asset",
+            "en": "Untitled asset"
+        },
+        "jsx:src/pages/assets/index.tsx:未打标签:24269": {
+            "type": "jsxtext",
+            "zh": "未打标签",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 423
+                }
+            ],
+            "key": "untagged",
+            "en": "Untagged"
+        },
+        "t:删除素材": {
+            "type": "ui",
+            "zh": "删除素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 457
+                }
+            ],
+            "key": "delete-asset",
+            "en": "Delete asset"
+        },
+        "t:删除": {
+            "type": "ui",
+            "zh": "删除",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 457
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 460
+                },
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 474
+                }
+            ],
+            "key": "delete",
+            "en": "Delete"
+        },
+        "jsx:src/pages/assets/index.tsx:确定删除「:26062": {
+            "type": "jsxtext",
+            "zh": "确定删除「",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 457
+                }
+            ],
+            "key": "confirm-deleting",
+            "en": "Confirm deleting “"
+        },
+        "jsx:src/pages/assets/index.tsx:」吗？未被其他内容引用的服务器本地或对象存储文件也会同步删除；若仍被画布、任务或其他素材占用，本次删除将被阻止。:26107": {
+            "type": "jsxtext",
+            "zh": "」吗？未被其他内容引用的服务器本地或对象存储文件也会同步删除；若仍被画布、任务或其他素材占用，本次删除将被阻止。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 458
+                }
+            ],
+            "key": "server-side-or-object-storage-files-not-referenced-by-other-content-will",
+            "en": "? Server-side or object-storage files not referenced by other content will be deleted too; deletion is blocked if the asset is still used by canvases, tasks, or other assets."
+        },
+        "t:批量删除素材": {
+            "type": "ui",
+            "zh": "批量删除素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 460
+                }
+            ],
+            "key": "batch-delete-assets",
+            "en": "Batch delete assets"
+        },
+        "jsx:src/pages/assets/index.tsx:确定删除已选择的:26435": {
+            "type": "jsxtext",
+            "zh": "确定删除已选择的",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 460
+                }
+            ],
+            "key": "confirm-deleting-the-selected",
+            "en": "Confirm deleting the selected "
+        },
+        "jsx:src/pages/assets/index.tsx:个素材吗？未被复用的服务器文件会同步删除；仍被画布、任务或其他素材占用的素材会保留并提示具体来源。:26485": {
+            "type": "jsxtext",
+            "zh": "个素材吗？未被复用的服务器文件会同步删除；仍被画布、任务或其他素材占用的素材会保留并提示具体来源。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 461
+                }
+            ],
+            "key": "assets-unused-server-files-are-deleted-too-assets-still-used-by-canvases",
+            "en": " assets? Unused server files are deleted too; assets still used by canvases, tasks, or other assets are kept with their sources listed."
+        },
+        "t:编辑": {
+            "type": "ui",
+            "zh": "编辑",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 470
+                }
+            ],
+            "key": "edit",
+            "en": "Edit"
+        },
+        "t:复制文本": {
+            "type": "ui",
+            "zh": "复制文本",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 471
+                }
+            ],
+            "key": "copy-text",
+            "en": "Copy text"
+        },
+        "t:下载": {
+            "type": "ui",
+            "zh": "下载",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 472
+                }
+            ],
+            "key": "download",
+            "en": "Download"
+        },
+        "t:未标注来源": {
+            "type": "ui",
+            "zh": "未标注来源",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 486
+                }
+            ],
+            "key": "no-source-recorded",
+            "en": "No source recorded"
+        },
+        "tpl:查看素材：{{title}}": {
+            "type": "template",
+            "zh": "查看素材：{{title}}",
+            "params": {
+                "title": "asset.title"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 502
+                }
+            ],
+            "key": "view-asset-param",
+            "en": "View asset: {{{title}}}"
+        },
+        "tpl:选择 {{title}}": {
+            "type": "template",
+            "zh": "选择 {{title}}",
+            "params": {
+                "title": "asset.title"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 520
+                }
+            ],
+            "key": "select-param",
+            "en": "Select {{{title}}}"
+        },
+        "t:更多素材操作": {
+            "type": "ui",
+            "zh": "更多素材操作",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 525
+                }
+            ],
+            "key": "more-asset-actions",
+            "en": "More asset actions"
+        },
+        "t:更多操作": {
+            "type": "ui",
+            "zh": "更多操作",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 525
+                }
+            ],
+            "key": "more-actions",
+            "en": "More actions"
+        },
+        "t:空白文本素材": {
+            "type": "ui",
+            "zh": "空白文本素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 546
+                }
+            ],
+            "key": "blank-text-asset",
+            "en": "Blank text asset"
+        },
+        "t:批量操作": {
+            "type": "ui",
+            "zh": "批量操作",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 562
+                }
+            ],
+            "key": "batch-actions",
+            "en": "Batch actions"
+        },
+        "jsx:src/pages/assets/index.tsx:已选择:32709": {
+            "type": "jsxtext",
+            "zh": "已选择",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 563
+                }
+            ],
+            "key": "selected",
+            "en": "Selected"
+        },
+        "jsx:src/pages/assets/index.tsx:个素材:32737": {
+            "type": "jsxtext",
+            "zh": "个素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 563
+                }
+            ],
+            "key": "assets-2",
+            "en": "assets"
+        },
+        "jsx:src/pages/assets/index.tsx:全选:32927": {
+            "type": "jsxtext",
+            "zh": "全选",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 565
+                }
+            ],
+            "key": "select-all",
+            "en": "Select all"
+        },
+        "jsx:src/pages/assets/index.tsx:取消选择:32995": {
+            "type": "jsxtext",
+            "zh": "取消选择",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 566
+                }
+            ],
+            "key": "deselect-all",
+            "en": "Deselect all"
+        },
+        "jsx:src/pages/assets/index.tsx:导出:33107": {
+            "type": "jsxtext",
+            "zh": "导出",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 567
+                }
+            ],
+            "key": "export",
+            "en": "Export"
+        },
+        "jsx:src/pages/assets/index.tsx:删除:33222": {
+            "type": "jsxtext",
+            "zh": "删除",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 568
+                }
+            ],
+            "key": "delete-2",
+            "en": "Delete"
+        },
+        "t:ASSET.01 · 天台重逢": {
+            "type": "ui",
+            "zh": "ASSET.01 · 天台重逢",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 575
+                }
+            ],
+            "key": "asset-01-rooftop-reunion",
+            "en": "ASSET.01 · Rooftop reunion"
+        },
+        "t:ASSET.02 · 雨夜霓虹": {
+            "type": "ui",
+            "zh": "ASSET.02 · 雨夜霓虹",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 576
+                }
+            ],
+            "key": "asset-02-neon-rain-night",
+            "en": "ASSET.02 · Neon rain night"
+        },
+        "t:ASSET.03 · 暗巷追逐": {
+            "type": "ui",
+            "zh": "ASSET.03 · 暗巷追逐",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 577
+                }
+            ],
+            "key": "asset-03-alley-chase",
+            "en": "ASSET.03 · Alley chase"
+        },
+        "jsx:src/pages/assets/index.tsx:影策素材库:34316": {
+            "type": "jsxtext",
+            "zh": "影策素材库",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 590
+                }
+            ],
+            "key": "yingce-asset-library",
+            "en": "Yingce asset library"
+        },
+        "jsx:src/pages/assets/index.tsx:把每次创作的结果，留档成可复用的资产:34328": {
+            "type": "jsxtext",
+            "zh": "把每次创作的结果，留档成可复用的资产",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 590
+                }
+            ],
+            "key": "archive-every-generation-into-reusable-assets",
+            "en": "Archive every generation into reusable assets"
+        },
+        "jsx:src/pages/assets/index.tsx:新建素材:34617": {
+            "type": "jsxtext",
+            "zh": "新建素材",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 595
+                }
+            ],
+            "key": "new-asset-4",
+            "en": "New asset"
+        },
+        "jsx:src/pages/assets/index.tsx:录入提示词、说明文案，或上传图片资产。:34658": {
+            "type": "jsxtext",
+            "zh": "录入提示词、说明文案，或上传图片资产。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 596
+                }
+            ],
+            "key": "enter-prompts-and-notes-or-upload-image-assets",
+            "en": "Enter prompts and notes, or upload image assets."
+        },
+        "jsx:src/pages/assets/index.tsx:导入素材包:34910": {
+            "type": "jsxtext",
+            "zh": "导入素材包",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 600
+                }
+            ],
+            "key": "import-asset-archive-2",
+            "en": "Import asset archive"
+        },
+        "jsx:src/pages/assets/index.tsx:从素材压缩包一键恢复旧资产，继续创作。:34952": {
+            "type": "jsxtext",
+            "zh": "从素材压缩包一键恢复旧资产，继续创作。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 601
+                }
+            ],
+            "key": "restore-old-assets-from-an-archive-in-one-click-and-keep-creating",
+            "en": "Restore old assets from an archive in one click and keep creating."
+        },
+        "jsx:src/pages/assets/index.tsx:去画布保存:35212": {
+            "type": "jsxtext",
+            "zh": "去画布保存",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 605
+                }
+            ],
+            "key": "save-from-canvas",
+            "en": "Save from canvas"
+        },
+        "jsx:src/pages/assets/index.tsx:把画布上满意的镜头与画面留档进素材库。:35254": {
+            "type": "jsxtext",
+            "zh": "把画布上满意的镜头与画面留档进素材库。",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 606
+                }
+            ],
+            "key": "archive-shots-and-frames-you-like-from-the-canvas-into-the-asset-library",
+            "en": "Archive shots and frames you like from the canvas into the asset library."
+        },
+        "t:素材档案": {
+            "type": "ui",
+            "zh": "素材档案",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 636
+                }
+            ],
+            "key": "asset-archive",
+            "en": "Asset archive"
+        },
+        "jsx:src/pages/assets/index.tsx:创建:37478": {
+            "type": "jsxtext",
+            "zh": "创建",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 643
+                }
+            ],
+            "key": "create",
+            "en": "Create"
+        },
+        "jsx:src/pages/assets/index.tsx:所属项目:39432": {
+            "type": "jsxtext",
+            "zh": "所属项目",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 673
+                }
+            ],
+            "key": "project",
+            "en": "Project"
+        },
+        "jsx:src/pages/assets/index.tsx:备注:39670": {
+            "type": "jsxtext",
+            "zh": "备注",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 676
+                }
+            ],
+            "key": "notes-2",
+            "en": "Notes"
+        },
+        "jsx:src/pages/assets/index.tsx:复制文本:40061": {
+            "type": "jsxtext",
+            "zh": "复制文本",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 682
+                }
+            ],
+            "key": "copy-text-2",
+            "en": "Copy text"
+        },
+        "t:分类": {
+            "type": "ui",
+            "zh": "分类",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 697
+                }
+            ],
+            "key": "category-2",
+            "en": "Category"
+        },
+        "t:尺寸": {
+            "type": "ui",
+            "zh": "尺寸",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 700
+                }
+            ],
+            "key": "size",
+            "en": "Size"
+        },
+        "t:时长": {
+            "type": "ui",
+            "zh": "时长",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 703
+                }
+            ],
+            "key": "duration",
+            "en": "Duration"
+        },
+        "t:未知": {
+            "type": "ui",
+            "zh": "未知",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 703
+                }
+            ],
+            "key": "unknown",
+            "en": "Unknown"
+        },
+        "t:大小": {
+            "type": "ui",
+            "zh": "大小",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 706
+                }
+            ],
+            "key": "file-size",
+            "en": "File size"
+        },
+        "t:格式": {
+            "type": "ui",
+            "zh": "格式",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 707
+                }
+            ],
+            "key": "format",
+            "en": "Format"
+        },
+        "t:存储": {
+            "type": "ui",
+            "zh": "存储",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 708
+                }
+            ],
+            "key": "storage",
+            "en": "Storage"
+        },
+        "t:未标注": {
+            "type": "ui",
+            "zh": "未标注",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 710
+                }
+            ],
+            "key": "not-labeled",
+            "en": "Not labeled"
+        },
+        "t:创建": {
+            "type": "ui",
+            "zh": "创建",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 711
+                }
+            ],
+            "key": "create-2",
+            "en": "Create"
+        },
+        "t:更新": {
+            "type": "ui",
+            "zh": "更新",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 712
+                }
+            ],
+            "key": "update",
+            "en": "Update"
+        },
+        "t:已关联项目": {
+            "type": "ui",
+            "zh": "已关联项目",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 745
+                }
+            ],
+            "key": "linked-to-project",
+            "en": "Linked to project"
+        },
+        "t:未关联项目": {
+            "type": "ui",
+            "zh": "未关联项目",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 745
+                }
+            ],
+            "key": "not-linked-to-a-project",
+            "en": "Not linked to a project"
+        },
+        "t:下载视频": {
+            "type": "ui",
+            "zh": "下载视频",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 753
+                }
+            ],
+            "key": "download-video",
+            "en": "Download video"
+        },
+        "t:下载音频": {
+            "type": "ui",
+            "zh": "下载音频",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 754
+                }
+            ],
+            "key": "download-audio",
+            "en": "Download audio"
+        },
+        "t:下载模型": {
+            "type": "ui",
+            "zh": "下载模型",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 755
+                }
+            ],
+            "key": "download-model",
+            "en": "Download model"
+        },
+        "t:下载图片": {
+            "type": "ui",
+            "zh": "下载图片",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 756
+                }
+            ],
+            "key": "download-image",
+            "en": "Download image"
+        },
+        "t:时长未知": {
+            "type": "ui",
+            "zh": "时长未知",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 760
+                }
+            ],
+            "key": "unknown-duration",
+            "en": "Unknown duration"
+        },
+        "cx:src/pages/assets/index.tsx:43939": {
+            "type": "skipped",
+            "zh": "`${Math.round(durationMs / 100) / 10} 秒`",
+            "locations": [
+                {
+                    "file": "src/pages/assets/index.tsx",
+                    "line": 761
+                }
+            ]
+        }
+    }
+}

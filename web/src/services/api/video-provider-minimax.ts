@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getMediaBlob } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig } from "@/lib/seedance-video";
@@ -10,10 +11,19 @@ import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import type { MiniMaxVideoCreateResponse, MiniMaxVideoTask, RequestOptions, ResolvedAiConfig, VideoGenerationTask, VideoGenerationTaskState } from "./video-contracts";
 import type { VideoProviderDeps } from "./video-provider-deps";
 
-export async function createMiniMaxVideoTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+export async function createMiniMaxVideoTask(
+    deps: VideoProviderDeps,
+    config: ResolvedAiConfig,
+    model: string,
+    prompt: string,
+    references: ReferenceImage[],
+    videoReferences: ReferenceVideo[],
+    audioReferences: ReferenceAudio[],
+    options?: RequestOptions,
+): Promise<VideoGenerationTask> {
     const imageUrls = await Promise.all(references.slice(0, 9).map((image) => resolveMiniMaxImageUrl(image)));
-    const videoUrls = await Promise.all(videoReferences.slice(0, 3).map((video) => resolveMiniMaxMediaUrl(video, "参考视频")));
-    const audioUrls = await Promise.all(audioReferences.slice(0, 3).map((audio) => resolveMiniMaxMediaUrl(audio, "参考音频")));
+    const videoUrls = await Promise.all(videoReferences.slice(0, 3).map((video) => resolveMiniMaxMediaUrl(video, t("domain:reference-videos"))));
+    const audioUrls = await Promise.all(audioReferences.slice(0, 3).map((audio) => resolveMiniMaxMediaUrl(audio, t("domain:reference-audio"))));
     const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt.trim() }];
     imageUrls.forEach((url, index) => {
         // 首尾帧只允许成对出现；三张及以上图片统一作为多模态参考图，避免提交非法组合。
@@ -34,10 +44,10 @@ export async function createMiniMaxVideoTask(deps: VideoProviderDeps, config: Re
     try {
         const created = await deps.transport.post<MiniMaxVideoCreateResponse>(miniMaxVideoUrl(config, "/video_generation"), payload, options);
         const id = created.task_id || created.request_id || created.data?.task_id || created.data?.id || "";
-        if (!id) throw new Error("MiniMax 视频接口没有返回任务 ID");
+        if (!id) throw new Error(t("domain:the-minimax-video-api-did-not-return-a-task-id"));
         return { id, provider: "minimax", model };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "MiniMax 视频任务创建失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:minimax-video-task-creation-failed")));
     }
 }
 
@@ -48,16 +58,16 @@ export async function pollMiniMaxVideoTask(deps: VideoProviderDeps, config: Reso
         const status = String(state.status || "").toLowerCase();
         if (status === "succeeded" || status === "completed") {
             const url = state.content?.url || "";
-            if (!url) return { status: "failed", error: "MiniMax 视频任务已完成但没有返回视频地址" };
+            if (!url) return { status: "failed", error: t("domain:the-minimax-video-task-finished-but-returned-no-video-url") };
             return { status: "completed", result: await deps.response.videoResultFromUrl(url, options) };
         }
         if (status === "failed" || status === "cancelled") {
             const code = state.error?.code ? `${state.error.code}：` : "";
-            return { status: "failed", error: `${code}${state.error?.message || "MiniMax 视频生成失败"}` };
+            return { status: "failed", error: `${code}${state.error?.message || t("domain:minimax-video-generation-failed")}` };
         }
         return { status: "pending" };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "MiniMax 视频任务查询失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:minimax-video-task-query-failed")));
     }
 }
 
@@ -85,7 +95,7 @@ async function resolveMiniMaxImageUrl(image: ReferenceImage) {
     const directUrl = image.url || image.dataUrl;
     if (isPublicMediaUrl(directUrl) || directUrl.startsWith("data:")) return directUrl;
     const dataUrl = await imageToDataUrl(image);
-    if (!dataUrl) throw new Error("MiniMax 参考图读取失败，请换一张图片或重新上传");
+    if (!dataUrl) throw new Error(t("domain:failed-to-read-the-minimax-reference-image-try-another-image-or-re-uploa"));
     return dataUrl;
 }
 
@@ -94,6 +104,6 @@ async function resolveMiniMaxMediaUrl(media: ReferenceVideo | ReferenceAudio, la
     let blob: Blob | null = null;
     if (media.storageKey) blob = await getMediaBlob(media.storageKey);
     if (!blob && media.url?.startsWith("blob:")) blob = await (await fetch(media.url)).blob();
-    if (!blob) throw new Error(`MiniMax ${label}必须是公网 URL 或本地已保存素材`);
+    if (!blob) throw new Error(t("domain:minimax-param-must-be-a-public-url-or-a-locally-saved-asset", { label: label }));
     return blobToDataUrl(blob);
 }

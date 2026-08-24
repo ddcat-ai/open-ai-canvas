@@ -10,15 +10,9 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasThemes } from "@/lib/canvas-theme";
-import {
-    canvasEmotionPresets,
-    emotionBlendshapes,
-    type CanvasEmotionParams,
-    type CanvasEmotionPreset,
-    type CanvasEmotionEditRegion,
-    type CanvasFaceBox,
-} from "@/lib/canvas/canvas-emotion";
+import { canvasEmotionPresets, emotionBlendshapes, type CanvasEmotionParams, type CanvasEmotionPreset, type CanvasEmotionEditRegion, type CanvasFaceBox } from "@/lib/canvas/canvas-emotion";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useTranslation } from "react-i18next";
 
 export type CanvasImageEmotionPayload = CanvasEmotionParams & {
     label: string;
@@ -54,6 +48,7 @@ type CanvasNodeEmotionPanelProps = {
 };
 
 export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, characters, activeCharacterId, preset, generating, error, onSelectCharacter, onManualSelect, onPresetChange, onClose, onConfirm }: CanvasNodeEmotionPanelProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     return (
@@ -79,16 +74,26 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                             style={{ background: activeCharacterId === character.id ? theme.toolbar.activeBg : theme.spatial.surface, borderColor: activeCharacterId === character.id ? theme.spatial.glowStrong : theme.toolbar.border }}
                             onClick={() => onSelectCharacter(character.id)}
                         >
-                            {activeCharacterId === character.id ? <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-[var(--r-md)]" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} /> : null}
+                            {activeCharacterId === character.id ? (
+                                <motion.span layoutId="emotion-active-character" className="absolute inset-0 -z-10 rounded-[var(--r-md)]" style={{ boxShadow: `inset 0 0 0 1px ${theme.accent.primarySoft}` }} transition={aceternityMotion.spring.dock} />
+                            ) : null}
                             <FaceThumbnail dataUrl={dataUrl} imageWidth={imageWidth} imageHeight={imageHeight} box={character.faceBox} />
                             <span>{character.name}</span>
                         </motion.button>
                     ))}
-                    <button type="button" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-2 text-[var(--fs-label)] font-medium opacity-70 transition hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onManualSelect}>
-                        <ScanFace className="size-3.5" />手动框选
+                    <button
+                        type="button"
+                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--dock-item-radius)] border px-2 text-[var(--fs-label)] font-medium opacity-70 transition hover:opacity-100"
+                        style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}
+                        onClick={onManualSelect}
+                    >
+                        <ScanFace className="size-3.5" />
+                        {t("domain:manual-box-select-2")}
                     </button>
                 </div>
-                <button type="button" aria-label="关闭情绪调节" className="grid size-7 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}><X className="size-3.5" /></button>
+                <button type="button" aria-label={t("domain:close-expression-controls")} className="grid size-7 shrink-0 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose}>
+                    <X className="size-3.5" />
+                </button>
             </div>
 
             <div className="grid h-[216px] grid-cols-[minmax(0,1fr)_212px] gap-2.5 p-2.5">
@@ -97,11 +102,28 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
             </div>
 
             <div className="flex min-h-11 items-center gap-2 border-t px-3" style={{ borderColor: theme.toolbar.border }}>
-                <span className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>情绪定位</span>
+                <span className="text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                    {t("domain:emotion-positioning")}
+                </span>
                 <AnimatePresence mode="wait" initial={false}>
-                    <motion.span key={preset.id} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? undefined : { opacity: 0, y: -3, filter: "blur(3px)" }} transition={{ duration: reducedMotion ? 0 : 0.18 }} className="text-xs font-semibold">{preset.label}</motion.span>
+                    <motion.span
+                        key={preset.id}
+                        initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(4px)" }}
+                        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                        exit={reducedMotion ? undefined : { opacity: 0, y: -3, filter: "blur(3px)" }}
+                        transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                        className="text-xs font-semibold"
+                    >
+                        {preset.label}
+                    </motion.span>
                 </AnimatePresence>
-                {error ? <span className="min-w-0 flex-1 truncate text-right text-[var(--fs-tiny)]" style={{ color: theme.accent.danger }} title={error}>{error}</span> : <span className="flex-1" />}
+                {error ? (
+                    <span className="min-w-0 flex-1 truncate text-right text-[var(--fs-tiny)]" style={{ color: theme.accent.danger }} title={error}>
+                        {error}
+                    </span>
+                ) : (
+                    <span className="flex-1" />
+                )}
                 <motion.button
                     type="button"
                     disabled={generating}
@@ -111,7 +133,8 @@ export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, chara
                     style={{ background: theme.node.activeStroke, color: theme.node.panel }}
                     onClick={onConfirm}
                 >
-                    <Sparkles className={`size-3.5 ${generating ? "animate-pulse" : ""}`} />{generating ? "准备生成" : "生成"}
+                    <Sparkles className={`size-3.5 ${generating ? "animate-pulse" : ""}`} />
+                    {generating ? t("domain:ready-to-generate") : t("canvas:generate-5")}
                 </motion.button>
             </div>
         </SpotlightSurface>
@@ -123,12 +146,19 @@ function FaceThumbnail({ dataUrl, imageWidth, imageHeight, box }: { dataUrl: str
     const scaleY = imageHeight / Math.max(1, box.height);
     return (
         <span className="relative block size-6 shrink-0 overflow-hidden rounded-[var(--r-sm)] bg-black/20">
-            <img src={dataUrl} alt="" draggable={false} className="pointer-events-none absolute max-w-none" style={{ width: `${scaleX * 100}%`, height: `${scaleY * 100}%`, left: `${-(box.x / Math.max(1, box.width)) * 100}%`, top: `${-(box.y / Math.max(1, box.height)) * 100}%` }} />
+            <img
+                src={dataUrl}
+                alt=""
+                draggable={false}
+                className="pointer-events-none absolute max-w-none"
+                style={{ width: `${scaleX * 100}%`, height: `${scaleY * 100}%`, left: `${-(box.x / Math.max(1, box.width)) * 100}%`, top: `${-(box.y / Math.max(1, box.height)) * 100}%` }}
+            />
         </span>
     );
 }
 
 function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChange: (preset: CanvasEmotionPreset) => void }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
@@ -145,24 +175,49 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
     const selectedRow = 2 - preset.arousal;
     return (
         <div className="relative rounded-[var(--r-lg)] border px-[25px] pb-[22px] pt-[24px]" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
-            <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>激动</span>
-            <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>平静</span>
-            <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>亲近</span>
-            <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>疏离</span>
+            <span className="pointer-events-none absolute inset-x-0 top-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                {t("domain:excited")}
+            </span>
+            <span className="pointer-events-none absolute inset-x-0 bottom-1.5 text-center text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                {t("domain:calm")}
+            </span>
+            <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>
+                {t("domain:intimate")}
+            </span>
+            <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[var(--fs-micro)] [writing-mode:vertical-rl]" style={{ color: theme.node.muted }}>
+                {t("domain:distant")}
+            </span>
             <div
                 role="slider"
-                aria-label="情绪强度"
+                aria-label={t("domain:emotion-intensity")}
                 aria-valuetext={preset.label}
                 tabIndex={0}
                 className="relative grid size-full touch-none cursor-crosshair grid-cols-5 grid-rows-5 outline-none"
-                onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); setDragging(true); update(event); }}
-                onPointerMove={(event) => { if (dragging) update(event); }}
-                onPointerUp={(event) => { setDragging(false); setPointer(null); event.currentTarget.releasePointerCapture(event.pointerId); }}
-                onPointerCancel={() => { setDragging(false); setPointer(null); }}
+                onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setDragging(true);
+                    update(event);
+                }}
+                onPointerMove={(event) => {
+                    if (dragging) update(event);
+                }}
+                onPointerUp={(event) => {
+                    setDragging(false);
+                    setPointer(null);
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onPointerCancel={() => {
+                    setDragging(false);
+                    setPointer(null);
+                }}
                 onKeyDown={(event) => {
                     const column = Math.max(0, Math.min(4, selectedColumn + (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0)));
                     const row = Math.max(0, Math.min(4, selectedRow + (event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0)));
-                    if (column !== selectedColumn || row !== selectedRow) { event.preventDefault(); onChange(canvasEmotionPresets[row * 5 + column]); }
+                    if (column !== selectedColumn || row !== selectedRow) {
+                        event.preventDefault();
+                        onChange(canvasEmotionPresets[row * 5 + column]);
+                    }
                 }}
             >
                 {canvasEmotionPresets.map((item, index) => {
@@ -178,18 +233,28 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
                                 animate={{ scale: active ? 1.65 : 1 + proximity * 0.42, opacity: active ? 1 : onPath ? 0.88 : 0.42 + proximity * 0.45 }}
                                 transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock}
                                 className={`block rounded-full ${active ? "size-3 border-2 bg-transparent" : "size-2 bg-current"}`}
-                                style={{ color: active || onPath ? theme.node.activeStroke : theme.node.muted, borderColor: theme.node.activeStroke, boxShadow: active ? `0 0 0 5px ${theme.accent.primarySoft}, 0 0 18px ${theme.spatial.glowStrong}` : undefined }}
+                                style={{
+                                    color: active || onPath ? theme.node.activeStroke : theme.node.muted,
+                                    borderColor: theme.node.activeStroke,
+                                    boxShadow: active ? `0 0 0 5px ${theme.accent.primarySoft}, 0 0 18px ${theme.spatial.glowStrong}` : undefined,
+                                }}
                             />
                         </button>
                     );
                 })}
-                {dragging && pointer ? <motion.span className="pointer-events-none absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border" style={{ left: `${10 + pointer.x * 20}%`, top: `${10 + pointer.y * 20}%`, borderColor: theme.spatial.glowStrong, boxShadow: `0 0 18px ${theme.spatial.glow}` }} /> : null}
+                {dragging && pointer ? (
+                    <motion.span
+                        className="pointer-events-none absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border"
+                        style={{ left: `${10 + pointer.x * 20}%`, top: `${10 + pointer.y * 20}%`, borderColor: theme.spatial.glowStrong, boxShadow: `0 0 18px ${theme.spatial.glow}` }}
+                    />
+                ) : null}
             </div>
         </div>
     );
 }
 
 function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
         <div className="relative overflow-hidden rounded-[var(--r-lg)] border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
@@ -198,11 +263,22 @@ function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
                 <ambientLight intensity={0.82} />
                 <directionalLight position={[-2.8, 4, 3]} intensity={1.45} color="#ffffff" />
                 <directionalLight position={[3, 1, 2]} intensity={0.5} color="#c9d0dc" />
-                <Suspense fallback={null}><EmotionFaceModel preset={preset} /></Suspense>
+                <Suspense fallback={null}>
+                    <EmotionFaceModel preset={preset} />
+                </Suspense>
             </Canvas>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/55 to-transparent" />
             <AnimatePresence mode="wait" initial={false}>
-                <motion.span key={preset.id} initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0, filter: "blur(5px)" }} transition={{ duration: aceternityMotion.duration.state }} className="pointer-events-none absolute bottom-2 left-2.5 text-[var(--fs-tiny)] font-medium text-white/72">实时预览 · {preset.label}</motion.span>
+                <motion.span
+                    key={preset.id}
+                    initial={{ opacity: 0, filter: "blur(6px)" }}
+                    animate={{ opacity: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, filter: "blur(5px)" }}
+                    transition={{ duration: aceternityMotion.duration.state }}
+                    className="pointer-events-none absolute bottom-2 left-2.5 text-[var(--fs-tiny)] font-medium text-white/72"
+                >
+                    {t("domain:live-preview")} {preset.label}
+                </motion.span>
             </AnimatePresence>
         </div>
     );
@@ -241,7 +317,9 @@ function EmotionFaceModel({ preset }: { preset: CanvasEmotionPreset }) {
         };
         if (animationRef.current) cancelAnimationFrame(animationRef.current);
         animationRef.current = requestAnimationFrame(animate);
-        return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
+        return () => {
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        };
     }, [invalidate, model, preset, reducedMotion]);
 
     return <primitive object={model} />;

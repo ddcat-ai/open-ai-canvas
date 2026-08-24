@@ -1,3 +1,4 @@
+import { formatLocale } from "@/lib/format-locale";
 import type { ComponentProps } from "react";
 import { Coins } from "lucide-react";
 
@@ -21,7 +22,7 @@ function modelCreditCost(modelCosts: ModelCreditCost[] | undefined, model: strin
 }
 
 export function formatCredits(value: number, maximumFractionDigits = 6) {
-    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits });
+    return (value / 1_000_000).toLocaleString(formatLocale(), { maximumFractionDigits });
 }
 
 export function requestCreditCost(options: { channelMode: string; modelCosts?: ModelCreditCost[]; model: string; count?: string | number; seconds?: string | number }) {
@@ -32,8 +33,6 @@ export function requestCreditCost(options: { channelMode: string; modelCosts?: M
     if (cost.pricePolicy === "channel") return null;
     // Token 订单由服务端按请求体预授权并在 usage 返回后结算，前端不展示无依据的固定价格。
     if (cost.billingMode === "token") return null;
-    const quantity = cost.billingMode === "per_second"
-        ? Math.max(1, Math.floor(Math.abs(Number(options.seconds)) || 1))
-        : Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
+    const quantity = cost.billingMode === "per_second" ? Math.max(1, Math.floor(Math.abs(Number(options.seconds)) || 1)) : Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
     return (cost.unitPriceMicrocredits / 1_000_000) * quantity;
 }

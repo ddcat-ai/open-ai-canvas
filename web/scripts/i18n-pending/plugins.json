@@ -1,0 +1,1612 @@
+{
+    "ns": "plugins",
+    "entries": {
+        "t:连接 Eagle 失败，请确认 Eagle 已启动": {
+            "type": "ui",
+            "zh": "连接 Eagle 失败，请确认 Eagle 已启动",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 65
+                }
+            ],
+            "key": "failed-to-connect-to-eagle-make-sure-eagle-is-running",
+            "en": "Failed to connect to Eagle. Make sure Eagle is running"
+        },
+        "t:已在": {
+            "type": "ui",
+            "zh": "已在",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 98
+                }
+            ],
+            "key": "created-folder-in",
+            "en": "Created folder in "
+        },
+        "t:Eagle 素材库": {
+            "type": "ui",
+            "zh": "Eagle 素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 98
+                },
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 135
+                },
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 154
+                }
+            ],
+            "key": "eagle-library",
+            "en": "Eagle library"
+        },
+        "t:中新建文件夹": {
+            "type": "ui",
+            "zh": "中新建文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 98
+                }
+            ],
+            "key": "item",
+            "en": ""
+        },
+        "t:新建 Eagle 文件夹失败": {
+            "type": "ui",
+            "zh": "新建 Eagle 文件夹失败",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 101
+                }
+            ],
+            "key": "failed-to-create-eagle-folder",
+            "en": "Failed to create Eagle folder"
+        },
+        "t:正在写入 ": {
+            "type": "ui",
+            "zh": "正在写入 ",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 116
+                }
+            ],
+            "key": "writing-to-eagle",
+            "en": "Writing to Eagle… "
+        },
+        "t:已写入 Eagle ": {
+            "type": "ui",
+            "zh": "已写入 Eagle ",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "written-to-eagle",
+            "en": "Written to Eagle: "
+        },
+        "t: 个文件": {
+            "type": "ui",
+            "zh": " 个文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "files",
+            "en": " files"
+        },
+        "t:写入 Eagle 失败": {
+            "type": "ui",
+            "zh": "写入 Eagle 失败",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 123
+                }
+            ],
+            "key": "failed-to-write-to-eagle",
+            "en": "Failed to write to Eagle"
+        },
+        "t:已写入 ": {
+            "type": "ui",
+            "zh": "已写入 ",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 124
+                }
+            ],
+            "key": "written",
+            "en": "Written: "
+        },
+        "t: 个文件，剩余文件未完成": {
+            "type": "ui",
+            "zh": " 个文件，剩余文件未完成",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 124
+                }
+            ],
+            "key": "files-remaining-files-incomplete",
+            "en": " files; remaining files incomplete"
+        },
+        "t:把 Eagle 作为影策的外部素材来源，直接浏览和管理 Eagle 原始文件。": {
+            "type": "ui",
+            "zh": "把 Eagle 作为影策的外部素材来源，直接浏览和管理 Eagle 原始文件。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 136
+                }
+            ],
+            "key": "use-eagle-as-an-external-asset-source-for-yingce-and-browse-manage-origi",
+            "en": "Use Eagle as an external asset source for Yingce and browse/manage original Eagle files directly."
+        },
+        "jsx:src/pages/plugins/eagle.tsx:返回影策素材库:6627": {
+            "type": "jsxtext",
+            "zh": "返回影策素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 137
+                }
+            ],
+            "key": "back-to-yingce-library",
+            "en": "Back to Yingce library"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:先启用 Eagle 素材来源:7110": {
+            "type": "jsxtext",
+            "zh": "先启用 Eagle 素材来源",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 141
+                }
+            ],
+            "key": "enable-the-eagle-source-first",
+            "en": "Enable the Eagle source first"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:启用后，这里会直接显示 Eagle 原本的文件夹和文件，不会把素材复制成影策本地素材。:7217": {
+            "type": "jsxtext",
+            "zh": "启用后，这里会直接显示 Eagle 原本的文件夹和文件，不会把素材复制成影策本地素材。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 142
+                }
+            ],
+            "key": "once-enabled-eagle-s-own-folders-and-files-appear-here-directly-nothing",
+            "en": "Once enabled, Eagle's own folders and files appear here directly — nothing is copied into local Yingce assets."
+        },
+        "jsx:src/pages/plugins/eagle.tsx:去插件中心启用:7403": {
+            "type": "jsxtext",
+            "zh": "去插件中心启用",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "enable-in-plugin-center",
+            "en": "Enable in Plugin center"
+        },
+        "t:Eagle 是影策的外部素材来源；这里复用影策素材库的浏览方式，直接读取和写入 Eagle 原始文件。": {
+            "type": "ui",
+            "zh": "Eagle 是影策的外部素材来源；这里复用影策素材库的浏览方式，直接读取和写入 Eagle 原始文件。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 155
+                }
+            ],
+            "key": "eagle-is-an-external-asset-source-for-yingce-this-view-reuses-the-yingce",
+            "en": "Eagle is an external asset source for Yingce; this view reuses the Yingce library browser to read and write original Eagle files directly."
+        },
+        "t:Eagle · 连接异常": {
+            "type": "ui",
+            "zh": "Eagle · 连接异常",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 156
+                }
+            ],
+            "key": "eagle-connection-error",
+            "en": "Eagle · Connection error"
+        },
+        "t:Eagle · 已连接": {
+            "type": "ui",
+            "zh": "Eagle · 已连接",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 156
+                }
+            ],
+            "key": "eagle-connected",
+            "en": "Eagle · Connected"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:写入素材:8383": {
+            "type": "jsxtext",
+            "zh": "写入素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "write-assets",
+            "en": "Write assets"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:影策素材库:8520": {
+            "type": "jsxtext",
+            "zh": "影策素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 161
+                }
+            ],
+            "key": "yingce-asset-library",
+            "en": "Yingce asset library"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:插件设置:8659": {
+            "type": "jsxtext",
+            "zh": "插件设置",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 162
+                }
+            ],
+            "key": "plugin-settings",
+            "en": "Plugin settings"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:刷新:9174": {
+            "type": "jsxtext",
+            "zh": "刷新",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 171
+                }
+            ],
+            "key": "refresh",
+            "en": "Refresh"
+        },
+        "t:搜索 Eagle 素材标题、标签或文件夹": {
+            "type": "ui",
+            "zh": "搜索 Eagle 素材标题、标签或文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 173
+                }
+            ],
+            "key": "search-eagle-titles-tags-or-folders",
+            "en": "Search Eagle titles, tags, or folders"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:重试:9836": {
+            "type": "jsxtext",
+            "zh": "重试",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 177
+                }
+            ],
+            "key": "retry",
+            "en": "Retry"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:Eagle 文件夹:10419": {
+            "type": "jsxtext",
+            "zh": "Eagle 文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 183
+                }
+            ],
+            "key": "eagle-folders",
+            "en": "Eagle folders"
+        },
+        "t:刷新 Eagle 文件夹": {
+            "type": "ui",
+            "zh": "刷新 Eagle 文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 184
+                }
+            ],
+            "key": "refresh-eagle-folders",
+            "en": "Refresh Eagle folders"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:全部素材:10942": {
+            "type": "jsxtext",
+            "zh": "全部素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 187
+                }
+            ],
+            "key": "all-assets",
+            "en": "All assets"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:文件夹:11199": {
+            "type": "jsxtext",
+            "zh": "文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 191
+                }
+            ],
+            "key": "folders",
+            "en": "Folders"
+        },
+        "t:收起文件夹": {
+            "type": "ui",
+            "zh": "收起文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 194
+                }
+            ],
+            "key": "collapse-folders",
+            "en": "Collapse folders"
+        },
+        "t:展开文件夹": {
+            "type": "ui",
+            "zh": "展开文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 194
+                }
+            ],
+            "key": "expand-folders",
+            "en": "Expand folders"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:Eagle 中还没有文件夹:12122": {
+            "type": "jsxtext",
+            "zh": "Eagle 中还没有文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 197
+                }
+            ],
+            "key": "no-folders-in-eagle-yet",
+            "en": "No folders in Eagle yet"
+        },
+        "t:新文件夹": {
+            "type": "ui",
+            "zh": "新文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 198
+                },
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 216
+                }
+            ],
+            "key": "new-folder",
+            "en": "New folder"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:新建文件夹:12325": {
+            "type": "jsxtext",
+            "zh": "新建文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 198
+                }
+            ],
+            "key": "new-folder-2",
+            "en": "New folder"
+        },
+        "t:Eagle 文件夹路径": {
+            "type": "ui",
+            "zh": "Eagle 文件夹路径",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 202
+                }
+            ],
+            "key": "eagle-folder-path",
+            "en": "Eagle folder path"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:Eagle 素材库:12729": {
+            "type": "jsxtext",
+            "zh": "Eagle 素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 203
+                }
+            ],
+            "key": "eagle-library-2",
+            "en": "Eagle library"
+        },
+        "t:全部素材": {
+            "type": "ui",
+            "zh": "全部素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 210
+                }
+            ],
+            "key": "all-assets-2",
+            "en": "All assets"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:个素材:13580": {
+            "type": "jsxtext",
+            "zh": "个素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 211
+                }
+            ],
+            "key": "assets",
+            "en": "assets"
+        },
+        "t:当前文件夹由 Eagle 管理，影策只负责展示和调用。": {
+            "type": "ui",
+            "zh": "当前文件夹由 Eagle 管理，影策只负责展示和调用。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 213
+                }
+            ],
+            "key": "this-folder-is-managed-by-eagle-yingce-only-displays-and-invokes-it",
+            "en": "This folder is managed by Eagle; Yingce only displays and invokes it."
+        },
+        "t:当前展示 Eagle 素材库中的全部文件。": {
+            "type": "ui",
+            "zh": "当前展示 Eagle 素材库中的全部文件。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 213
+                }
+            ],
+            "key": "showing-all-files-from-the-eagle-library",
+            "en": "Showing all files from the Eagle library."
+        },
+        "jsx:src/pages/plugins/eagle.tsx:新建文件夹:14073": {
+            "type": "jsxtext",
+            "zh": "新建文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 216
+                }
+            ],
+            "key": "new-folder-3",
+            "en": "New folder"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:下载当前文件:14344": {
+            "type": "jsxtext",
+            "zh": "下载当前文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 217
+                }
+            ],
+            "key": "download-current-file",
+            "en": "Download current file"
+        },
+        "t:输入文件夹名称": {
+            "type": "ui",
+            "zh": "输入文件夹名称",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 222
+                }
+            ],
+            "key": "enter-folder-name",
+            "en": "Enter folder name"
+        },
+        "t:新文件夹名称": {
+            "type": "ui",
+            "zh": "新文件夹名称",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 222
+                }
+            ],
+            "key": "new-folder-name",
+            "en": "New folder name"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:创建:14953": {
+            "type": "jsxtext",
+            "zh": "创建",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 223
+                }
+            ],
+            "key": "create",
+            "en": "Create"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:取消:15040": {
+            "type": "jsxtext",
+            "zh": "取消",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 224
+                }
+            ],
+            "key": "cancel",
+            "en": "Cancel"
+        },
+        "t:读取 Eagle 文件…": {
+            "type": "ui",
+            "zh": "读取 Eagle 文件…",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 227
+                }
+            ],
+            "key": "reading-eagle-files",
+            "en": "Reading Eagle files…"
+        },
+        "t:当前 Eagle 文件夹没有文件": {
+            "type": "ui",
+            "zh": "当前 Eagle 文件夹没有文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 234
+                }
+            ],
+            "key": "this-eagle-folder-has-no-files",
+            "en": "This Eagle folder has no files"
+        },
+        "t:查看 Eagle 素材：": {
+            "type": "ui",
+            "zh": "查看 Eagle 素材：",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 249
+                }
+            ],
+            "key": "view-eagle-asset",
+            "en": "View Eagle asset: "
+        },
+        "t:下载原文件：": {
+            "type": "ui",
+            "zh": "下载原文件：",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 257
+                }
+            ],
+            "key": "download-original",
+            "en": "Download original: "
+        },
+        "t:Eagle 根目录": {
+            "type": "ui",
+            "zh": "Eagle 根目录",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 264
+                },
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 264
+                },
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 291
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 271
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 273
+                }
+            ],
+            "key": "eagle-root",
+            "en": "Eagle root"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:Eagle 原文件:18942": {
+            "type": "jsxtext",
+            "zh": "Eagle 原文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 268
+                }
+            ],
+            "key": "eagle-originals",
+            "en": "Eagle originals"
+        },
+        "t:素材档案": {
+            "type": "ui",
+            "zh": "素材档案",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 275
+                }
+            ],
+            "key": "asset-archive",
+            "en": "Asset archive"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:Eagle 原文件 ·:19670": {
+            "type": "jsxtext",
+            "zh": "Eagle 原文件 ·",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 281
+                }
+            ],
+            "key": "eagle-originals-2",
+            "en": "Eagle originals ·"
+        },
+        "t:根目录": {
+            "type": "ui",
+            "zh": "根目录",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 281
+                }
+            ],
+            "key": "root",
+            "en": "Root"
+        },
+        "t:类型": {
+            "type": "ui",
+            "zh": "类型",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 288
+                }
+            ],
+            "key": "type",
+            "en": "Type"
+        },
+        "t:尺寸": {
+            "type": "ui",
+            "zh": "尺寸",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 289
+                }
+            ],
+            "key": "size",
+            "en": "Size"
+        },
+        "t:文件大小": {
+            "type": "ui",
+            "zh": "文件大小",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 290
+                }
+            ],
+            "key": "file-size",
+            "en": "File size"
+        },
+        "t:所在文件夹": {
+            "type": "ui",
+            "zh": "所在文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 291
+                }
+            ],
+            "key": "folder",
+            "en": "Folder"
+        },
+        "t:素材库总大小": {
+            "type": "ui",
+            "zh": "素材库总大小",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 292
+                }
+            ],
+            "key": "total-library-size",
+            "en": "Total library size"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:标签:20563": {
+            "type": "jsxtext",
+            "zh": "标签",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 294
+                }
+            ],
+            "key": "tags",
+            "en": "Tags"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:备注:20799": {
+            "type": "jsxtext",
+            "zh": "备注",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 295
+                }
+            ],
+            "key": "notes",
+            "en": "Notes"
+        },
+        "jsx:src/pages/plugins/eagle.tsx:下载 Eagle 原文件:21195": {
+            "type": "jsxtext",
+            "zh": "下载 Eagle 原文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 296
+                }
+            ],
+            "key": "download-eagle-original",
+            "en": "Download Eagle original"
+        },
+        "t:图片": {
+            "type": "ui",
+            "zh": "图片",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 313
+                }
+            ],
+            "key": "image",
+            "en": "Image"
+        },
+        "t:视频": {
+            "type": "ui",
+            "zh": "视频",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 314
+                }
+            ],
+            "key": "video",
+            "en": "Video"
+        },
+        "t:音频": {
+            "type": "ui",
+            "zh": "音频",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 315
+                }
+            ],
+            "key": "audio",
+            "en": "Audio"
+        },
+        "t:模型": {
+            "type": "ui",
+            "zh": "模型",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 316
+                }
+            ],
+            "key": "models",
+            "en": "Models"
+        },
+        "t:文件": {
+            "type": "ui",
+            "zh": "文件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/eagle.tsx",
+                    "line": 317
+                }
+            ],
+            "key": "files-2",
+            "en": "Files"
+        },
+        "t:素材来源": {
+            "type": "ui",
+            "zh": "素材来源",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 15
+                }
+            ],
+            "key": "asset-sources",
+            "en": "Asset sources"
+        },
+        "t:画布节点": {
+            "type": "ui",
+            "zh": "画布节点",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 16
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "canvas-nodes",
+            "en": "Canvas nodes"
+        },
+        "t:工作流": {
+            "type": "ui",
+            "zh": "工作流",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "workflows",
+            "en": "Workflows"
+        },
+        "t:AI 能力": {
+            "type": "ui",
+            "zh": "AI 能力",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "ai-capabilities",
+            "en": "AI capabilities"
+        },
+        "t:导入导出": {
+            "type": "ui",
+            "zh": "导入导出",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 19
+                }
+            ],
+            "key": "import-export",
+            "en": "Import/export"
+        },
+        "t:智能体": {
+            "type": "ui",
+            "zh": "智能体",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 20
+                }
+            ],
+            "key": "agent",
+            "en": "Agent"
+        },
+        "t:全屏工作台": {
+            "type": "ui",
+            "zh": "全屏工作台",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 25
+                }
+            ],
+            "key": "fullscreen-studio",
+            "en": "Fullscreen studio"
+        },
+        "t:混合接入": {
+            "type": "ui",
+            "zh": "混合接入",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 26
+                }
+            ],
+            "key": "hybrid-access",
+            "en": "Hybrid access"
+        },
+        "t:素材库": {
+            "type": "ui",
+            "zh": "素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 27
+                }
+            ],
+            "key": "asset-library",
+            "en": "Asset library"
+        },
+        "t:读取画布": {
+            "type": "ui",
+            "zh": "读取画布",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "read-canvas",
+            "en": "Read canvas"
+        },
+        "t:修改画布": {
+            "type": "ui",
+            "zh": "修改画布",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 32
+                }
+            ],
+            "key": "modify-canvas",
+            "en": "Modify canvas"
+        },
+        "t:读取素材": {
+            "type": "ui",
+            "zh": "读取素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 33
+                }
+            ],
+            "key": "reading-assets",
+            "en": "Reading assets"
+        },
+        "t:搜索素材": {
+            "type": "ui",
+            "zh": "搜索素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 34
+                }
+            ],
+            "key": "search-assets",
+            "en": "Search assets"
+        },
+        "t:导入素材": {
+            "type": "ui",
+            "zh": "导入素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 35
+                }
+            ],
+            "key": "import-assets",
+            "en": "Import assets"
+        },
+        "t:上传素材": {
+            "type": "ui",
+            "zh": "上传素材",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 36
+                }
+            ],
+            "key": "upload-assets",
+            "en": "Upload assets"
+        },
+        "t:调用生成": {
+            "type": "ui",
+            "zh": "调用生成",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 37
+                }
+            ],
+            "key": "invoke-generation",
+            "en": "Invoke generation"
+        },
+        "t:打开外部详情": {
+            "type": "ui",
+            "zh": "打开外部详情",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 38
+                }
+            ],
+            "key": "open-external-details",
+            "en": "Open external details"
+        },
+        "t:全部分类": {
+            "type": "ui",
+            "zh": "全部分类",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 79
+                }
+            ],
+            "key": "all-categories",
+            "en": "All categories"
+        },
+        "t:读取 Eagle 文件夹失败": {
+            "type": "ui",
+            "zh": "读取 Eagle 文件夹失败",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 109
+                }
+            ],
+            "key": "failed-to-read-eagle-folders",
+            "en": "Failed to read Eagle folders"
+        },
+        "t:Eagle 地址必须以 http:// 或 https:// 开头": {
+            "type": "ui",
+            "zh": "Eagle 地址必须以 http:// 或 https:// 开头",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "the-eagle-address-must-start-with-http-or-https",
+            "en": "The Eagle address must start with http:// or https://"
+        },
+        "t:Eagle 插件配置已保存": {
+            "type": "ui",
+            "zh": "Eagle 插件配置已保存",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 123
+                }
+            ],
+            "key": "eagle-plugin-settings-saved",
+            "en": "Eagle plugin settings saved"
+        },
+        "t:插件筛选": {
+            "type": "ui",
+            "zh": "插件筛选",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 130
+                }
+            ],
+            "key": "filter-plugins",
+            "en": "Filter plugins"
+        },
+        "t:搜索插件名称、描述或作者": {
+            "type": "ui",
+            "zh": "搜索插件名称、描述或作者",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 136
+                }
+            ],
+            "key": "search-plugin-names-descriptions-or-authors",
+            "en": "Search plugin names, descriptions, or authors"
+        },
+        "t:按分类筛选": {
+            "type": "ui",
+            "zh": "按分类筛选",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 139
+                }
+            ],
+            "key": "filter-by-category",
+            "en": "Filter by category"
+        },
+        "t:全部状态": {
+            "type": "ui",
+            "zh": "全部状态",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "all-statuses",
+            "en": "All statuses"
+        },
+        "t:已启用": {
+            "type": "ui",
+            "zh": "已启用",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 143
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 198
+                }
+            ],
+            "key": "enabled",
+            "en": "Enabled"
+        },
+        "t:未启用": {
+            "type": "ui",
+            "zh": "未启用",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 143
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 198
+                }
+            ],
+            "key": "not-enabled",
+            "en": "Not enabled"
+        },
+        "t:按状态筛选": {
+            "type": "ui",
+            "zh": "按状态筛选",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 145
+                }
+            ],
+            "key": "filter-by-status",
+            "en": "Filter by status"
+        },
+        "t:全部来源": {
+            "type": "ui",
+            "zh": "全部来源",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 150
+                }
+            ],
+            "key": "all-sources",
+            "en": "All sources"
+        },
+        "t:可信插件": {
+            "type": "ui",
+            "zh": "可信插件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 150
+                }
+            ],
+            "key": "trusted-plugins",
+            "en": "Trusted plugins"
+        },
+        "t:按来源筛选": {
+            "type": "ui",
+            "zh": "按来源筛选",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 152
+                }
+            ],
+            "key": "filter-by-source",
+            "en": "Filter by source"
+        },
+        "jsx:src/pages/plugins/index.tsx:可信插件:10020": {
+            "type": "jsxtext",
+            "zh": "可信插件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 176
+                }
+            ],
+            "key": "trusted-plugins-2",
+            "en": "Trusted plugins"
+        },
+        "jsx:src/pages/plugins/index.tsx:发布:10677": {
+            "type": "jsxtext",
+            "zh": "发布",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 185
+                }
+            ],
+            "key": "published",
+            "en": "Published"
+        },
+        "jsx:src/pages/plugins/index.tsx:更新:10821": {
+            "type": "jsxtext",
+            "zh": "更新",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 186
+                }
+            ],
+            "key": "update",
+            "en": "Update"
+        },
+        "jsx:src/pages/plugins/index.tsx:项能力:11259": {
+            "type": "jsxtext",
+            "zh": "项能力",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 191
+                }
+            ],
+            "key": "capabilities",
+            "en": "capabilities"
+        },
+        "t:停用": {
+            "type": "ui",
+            "zh": "停用",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 200
+                }
+            ],
+            "key": "disabled",
+            "en": "Disabled"
+        },
+        "t:启用": {
+            "type": "ui",
+            "zh": "启用",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 200
+                }
+            ],
+            "key": "enabled-2",
+            "en": "Enabled"
+        },
+        "jsx:src/pages/plugins/index.tsx:设置:12542": {
+            "type": "jsxtext",
+            "zh": "设置",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 207
+                }
+            ],
+            "key": "settings",
+            "en": "Settings"
+        },
+        "jsx:src/pages/plugins/index.tsx:没有匹配的插件:13249": {
+            "type": "jsxtext",
+            "zh": "没有匹配的插件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 220
+                }
+            ],
+            "key": "no-matching-plugins",
+            "en": "No matching plugins"
+        },
+        "jsx:src/pages/plugins/index.tsx:试试清空搜索词，或放宽筛选条件。:13294": {
+            "type": "jsxtext",
+            "zh": "试试清空搜索词，或放宽筛选条件。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 221
+                }
+            ],
+            "key": "try-clearing-the-search-term-or-loosening-the-filters",
+            "en": "Try clearing the search term or loosening the filters."
+        },
+        "jsx:src/pages/plugins/index.tsx:清除筛选:13460": {
+            "type": "jsxtext",
+            "zh": "清除筛选",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 222
+                }
+            ],
+            "key": "clear-filters",
+            "en": "Clear filters"
+        },
+        "tpl:{{name}} 设置": {
+            "type": "template",
+            "zh": "{{name}} 设置",
+            "params": {
+                "name": "settingsPlugin.manifest.name"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 228
+                }
+            ],
+            "key": "param-settings",
+            "en": "{{{name}}} settings"
+        },
+        "jsx:src/pages/plugins/index.tsx:只展示这个插件实际支持的配置项。:14443": {
+            "type": "jsxtext",
+            "zh": "只展示这个插件实际支持的配置项。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 240
+                }
+            ],
+            "key": "only-shows-settings-this-plugin-actually-supports",
+            "en": "Only shows settings this plugin actually supports."
+        },
+        "jsx:src/pages/plugins/index.tsx:可信插件:14653": {
+            "type": "jsxtext",
+            "zh": "可信插件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 242
+                }
+            ],
+            "key": "trusted-plugins-3",
+            "en": "Trusted plugins"
+        },
+        "jsx:src/pages/plugins/index.tsx:第三方插件:14707": {
+            "type": "jsxtext",
+            "zh": "第三方插件",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 242
+                }
+            ],
+            "key": "third-party-plugins",
+            "en": "Third-party plugins"
+        },
+        "jsx:src/pages/plugins/index.tsx:Eagle 本地 API 地址:15122": {
+            "type": "jsxtext",
+            "zh": "Eagle 本地 API 地址",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 249
+                }
+            ],
+            "key": "eagle-local-api-url",
+            "en": "Eagle local API URL"
+        },
+        "t:Eagle 本地 API 地址": {
+            "type": "ui",
+            "zh": "Eagle 本地 API 地址",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 250
+                }
+            ],
+            "key": "eagle-local-api-url-2",
+            "en": "Eagle local API URL"
+        },
+        "jsx:src/pages/plugins/index.tsx:Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。:15422": {
+            "type": "jsxtext",
+            "zh": "Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 251
+                }
+            ],
+            "key": "eagle-must-run-locally-yingce-reads-and-writes-eagle-s-original-files-di",
+            "en": "Eagle must run locally; Yingce reads and writes Eagle's original files directly through the plugin."
+        },
+        "jsx:src/pages/plugins/index.tsx:自动归档生成结果:15779": {
+            "type": "jsxtext",
+            "zh": "自动归档生成结果",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "auto-archive-results",
+            "en": "Auto-archive results"
+        },
+        "t:自动归档生成结果到 Eagle": {
+            "type": "ui",
+            "zh": "自动归档生成结果到 Eagle",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 256
+                }
+            ],
+            "key": "auto-archive-generated-results-to-eagle",
+            "en": "Auto-archive generated results to Eagle"
+        },
+        "jsx:src/pages/plugins/index.tsx:图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。:16104": {
+            "type": "jsxtext",
+            "zh": "图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "automatically-write-images-videos-and-audio-to-eagle-on-success-yingce-k",
+            "en": "Automatically write images, videos, and audio to Eagle on success. Yingce keeps its own local copies."
+        },
+        "jsx:src/pages/plugins/index.tsx:生成结果写入文件夹:16453": {
+            "type": "jsxtext",
+            "zh": "生成结果写入文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 262
+                }
+            ],
+            "key": "destination-folder-for-results",
+            "en": "Destination folder for results"
+        },
+        "jsx:src/pages/plugins/index.tsx:读取文件夹:16627": {
+            "type": "jsxtext",
+            "zh": "读取文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 263
+                }
+            ],
+            "key": "read-folders",
+            "en": "Read folders"
+        },
+        "t:生成结果写入文件夹": {
+            "type": "ui",
+            "zh": "生成结果写入文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 267
+                }
+            ],
+            "key": "destination-folder-for-results-2",
+            "en": "Destination folder for results"
+        },
+        "t:默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。": {
+            "type": "ui",
+            "zh": "默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 276
+                }
+            ],
+            "key": "defaults-to-the-eagle-root-folder-pick-a-folder-to-archive-into-that-eag",
+            "en": "Defaults to the Eagle root folder. Pick a folder to archive into that Eagle directory instead."
+        },
+        "jsx:src/pages/plugins/index.tsx:保存配置:18072": {
+            "type": "jsxtext",
+            "zh": "保存配置",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 280
+                }
+            ],
+            "key": "save-config",
+            "en": "Save config"
+        },
+        "jsx:src/pages/plugins/index.tsx:打开 Eagle 素材库:18251": {
+            "type": "jsxtext",
+            "zh": "打开 Eagle 素材库",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 281
+                }
+            ],
+            "key": "open-eagle-library",
+            "en": "Open Eagle library"
+        },
+        "jsx:src/pages/plugins/index.tsx:查看 API:18416": {
+            "type": "jsxtext",
+            "zh": "查看 API",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 282
+                }
+            ],
+            "key": "view-api",
+            "en": "View API"
+        },
+        "jsx:src/pages/plugins/index.tsx:该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。:18636": {
+            "type": "jsxtext",
+            "zh": "该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 286
+                }
+            ],
+            "key": "no-editable-settings-for-this-plugin-yet-its-integration-points-and-perm",
+            "en": "No editable settings for this plugin yet. Its integration points and permissions apply automatically from the manifest."
+        },
+        "jsx:src/pages/plugins/index.tsx:接入位置:18832": {
+            "type": "jsxtext",
+            "zh": "接入位置",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 290
+                }
+            ],
+            "key": "integration-points",
+            "en": "Integration points"
+        },
+        "jsx:src/pages/plugins/index.tsx:插件能力:18994": {
+            "type": "jsxtext",
+            "zh": "插件能力",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 291
+                }
+            ],
+            "key": "plugin-capabilities",
+            "en": "Plugin capabilities"
+        },
+        "t:未记录": {
+            "type": "ui",
+            "zh": "未记录",
+            "locations": [
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 303
+                },
+                {
+                    "file": "src/pages/plugins/index.tsx",
+                    "line": 305
+                }
+            ],
+            "key": "not-recorded",
+            "en": "Not recorded"
+        }
+    }
+}

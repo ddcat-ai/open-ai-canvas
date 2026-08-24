@@ -59,20 +59,23 @@ export function CometCard({ containerClassName, className, rotateDepth = 5.5, tr
         settleTimerRef.current = null;
     }, []);
 
-    const resetMotion = useCallback((immediate = false) => {
-        x.set(0);
-        y.set(0);
-        clearSettleTimer();
-        if (immediate || !motionEnabled) {
-            setMotionActive(false);
-            return;
-        }
-        // 等回弹结束后彻底移除 3D 合成层，避免缩放画布中的节点长期使用低分辨率栅格缓存。
-        settleTimerRef.current = window.setTimeout(() => {
-            setMotionActive(false);
-            settleTimerRef.current = null;
-        }, 320);
-    }, [clearSettleTimer, motionEnabled, x, y]);
+    const resetMotion = useCallback(
+        (immediate = false) => {
+            x.set(0);
+            y.set(0);
+            clearSettleTimer();
+            if (immediate || !motionEnabled) {
+                setMotionActive(false);
+                return;
+            }
+            // 等回弹结束后彻底移除 3D 合成层，避免缩放画布中的节点长期使用低分辨率栅格缓存。
+            settleTimerRef.current = window.setTimeout(() => {
+                setMotionActive(false);
+                settleTimerRef.current = null;
+            }, 320);
+        },
+        [clearSettleTimer, motionEnabled, x, y],
+    );
 
     useEffect(() => {
         const unsubscribe = subscribeWindowBlur(() => resetMotion(true));

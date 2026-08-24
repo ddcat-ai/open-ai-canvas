@@ -5,6 +5,7 @@ import { useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { useTranslation } from "react-i18next";
 
 export const APP_VERSION = __APP_VERSION__;
 
@@ -18,13 +19,14 @@ type AppChangelogButtonProps = {
 };
 
 export function AppChangelogButton({ className, style, showVersion = false, showLabel = false, labelClassName, versionClassName }: AppChangelogButtonProps) {
+    const { t } = useTranslation("canvas");
     const [open, setOpen] = useState(false);
 
     return (
         <>
-            <button type="button" className={className} style={style} onClick={() => setOpen(true)} aria-label="查看更新日志" title="更新日志">
+            <button type="button" className={className} style={style} onClick={() => setOpen(true)} aria-label={t("domain:view-changelog")} title={t("domain:changelog-3")}>
                 <ScrollText className="size-4 shrink-0" />
-                {showLabel ? <span className={`whitespace-nowrap ${labelClassName || ""}`}>更新日志</span> : null}
+                {showLabel ? <span className={`whitespace-nowrap ${labelClassName || ""}`}>{t("domain:changelog-3")}</span> : null}
                 {showVersion ? <span className={versionClassName}>v{APP_VERSION.replace(/^v/, "")}</span> : null}
             </button>
             <AppChangelogModal open={open} onClose={() => setOpen(false)} />
@@ -33,12 +35,26 @@ export function AppChangelogButton({ className, style, showVersion = false, show
 }
 
 function AppChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { t } = useTranslation("canvas");
     const reducedMotion = useReducedMotion();
 
     return (
         <Modal
             rootClassName="app-spatial-modal"
-            title={<div className="flex min-w-0 items-center gap-3 pr-8"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-muted/45"><ScrollText className="size-4" /></span><div className="min-w-0"><div className="flex items-center gap-2 text-base font-semibold">更新日志<Tag variant="filled">v{APP_VERSION.replace(/^v/, "")}</Tag></div><div className="mt-0.5 text-xs font-normal text-foreground/45">产品能力、交互与稳定性变化</div></div></div>}
+            title={
+                <div className="flex min-w-0 items-center gap-3 pr-8">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-muted/45">
+                        <ScrollText className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-base font-semibold">
+                            {t("domain:changelog-3")}
+                            <Tag variant="filled">v{APP_VERSION.replace(/^v/, "")}</Tag>
+                        </div>
+                        <div className="mt-0.5 text-xs font-normal text-foreground/45">{t("domain:product-capabilities-ux-and-stability-changes")}</div>
+                    </div>
+                </div>
+            }
             open={open}
             width={760}
             footer={null}

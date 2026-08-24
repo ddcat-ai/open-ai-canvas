@@ -5,6 +5,7 @@ import { useUpstreamNodes } from "@/components/canvas/canvas-node-graph-context"
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasNodeData } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type ChartNodeContentProps = {
     node: CanvasNodeData;
@@ -32,7 +33,10 @@ export function parseChartSource(text: string): ParsedChart | null {
     const series = keys.filter((key) => rows.every((row) => typeof row[key] === "number"));
     const xKey = keys.find((key) => !series.includes(key)) || "__index";
     if (!series.length) return null;
-    if (xKey === "__index") rows.forEach((row, index) => { row.__index = index + 1; });
+    if (xKey === "__index")
+        rows.forEach((row, index) => {
+            row.__index = index + 1;
+        });
     return { rows, xKey, series };
 }
 
@@ -48,7 +52,10 @@ function parseJsonRows(text: string): ChartRow[] | null {
 }
 
 function parseCsvRows(text: string): ChartRow[] | null {
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
     if (lines.length < 2) return null;
     const header = lines[0].split(",").map((cell) => cell.trim());
     if (header.length < 2) return null;
@@ -60,12 +67,14 @@ function parseCsvRows(text: string): ChartRow[] | null {
 
 /** 把看起来是数字的值转成数字，否则 recharts 会把 "12" 当类别处理。 */
 function normalizeRow(row: Record<string, unknown>): ChartRow {
-    return Object.fromEntries(Object.entries(row).map(([key, value]) => {
-        if (typeof value === "number") return [key, value];
-        const text = String(value ?? "").trim();
-        const numeric = text !== "" && Number.isFinite(Number(text));
-        return [key, numeric ? Number(text) : text];
-    }));
+    return Object.fromEntries(
+        Object.entries(row).map(([key, value]) => {
+            if (typeof value === "number") return [key, value];
+            const text = String(value ?? "").trim();
+            const numeric = text !== "" && Number.isFinite(Number(text));
+            return [key, numeric ? Number(text) : text];
+        }),
+    );
 }
 
 const SERIES_COLORS = ["#f59e0b", "#22c55e", "#06b6d4", "#a855f7", "#ef4444"];
@@ -75,6 +84,7 @@ const SERIES_COLORS = ["#f59e0b", "#22c55e", "#06b6d4", "#a855f7", "#ef4444"];
  * metadata.chartKind 为 "line" 时画折线，缺省柱状。
  */
 export function ChartNodeContent({ node, theme }: ChartNodeContentProps) {
+    const { t } = useTranslation("canvas");
     const upstream = useUpstreamNodes(node.id);
     const inherited = upstream.find((item) => getNodeResourceKind(item) === "text");
     const source = node.metadata?.content || inherited?.metadata?.content || inherited?.metadata?.prompt || "";
@@ -85,19 +95,13 @@ export function ChartNodeContent({ node, theme }: ChartNodeContentProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center" style={{ color: theme.node.muted }}>
                 <ChartColumn className="size-5 opacity-60" />
-                <span style={{ fontSize: "var(--fs-label)" }}>{source.trim() ? "无法解析为图表数据（需要 JSON 数组或 CSV）" : "连接输出 JSON 数组或 CSV 的文本节点"}</span>
+                <span style={{ fontSize: "var(--fs-label)" }}>{source.trim() ? t("domain:cannot-parse-as-chart-data-a-json-array-or-csv-is-required") : t("domain:connect-a-text-node-that-outputs-a-json-array-or-csv")}</span>
             </div>
         );
     }
 
     return (
-        <div
-            className="h-full w-full px-2 py-2"
-            data-canvas-no-zoom
-            style={{ color: theme.node.text }}
-            onWheel={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-        >
+        <div className="h-full w-full px-2 py-2" data-canvas-no-zoom style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
             <ResponsiveContainer width="100%" height="100%">
                 {asLine ? (
                     <LineChart data={parsed.rows}>
@@ -106,7 +110,9 @@ export function ChartNodeContent({ node, theme }: ChartNodeContentProps) {
                         <YAxis tick={{ fill: theme.node.muted, fontSize: 11 }} />
                         <Tooltip />
                         {parsed.series.length > 1 ? <Legend /> : null}
-                        {parsed.series.map((key, index) => <Line key={key} type="monotone" dataKey={key} stroke={SERIES_COLORS[index % SERIES_COLORS.length]} dot={false} />)}
+                        {parsed.series.map((key, index) => (
+                            <Line key={key} type="monotone" dataKey={key} stroke={SERIES_COLORS[index % SERIES_COLORS.length]} dot={false} />
+                        ))}
                     </LineChart>
                 ) : (
                     <BarChart data={parsed.rows}>
@@ -115,7 +121,9 @@ export function ChartNodeContent({ node, theme }: ChartNodeContentProps) {
                         <YAxis tick={{ fill: theme.node.muted, fontSize: 11 }} />
                         <Tooltip />
                         {parsed.series.length > 1 ? <Legend /> : null}
-                        {parsed.series.map((key, index) => <Bar key={key} dataKey={key} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />)}
+                        {parsed.series.map((key, index) => (
+                            <Bar key={key} dataKey={key} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
+                        ))}
                     </BarChart>
                 )}
             </ResponsiveContainer>

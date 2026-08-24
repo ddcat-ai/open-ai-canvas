@@ -7,6 +7,7 @@ import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createStyleProfileSnapshot, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { updateProject as updateDomainProject } from "@/services/api/projects";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type UseCanvasStyleWorkflowOptions = {
     domainProjectId?: string;
@@ -21,6 +22,7 @@ type UseCanvasStyleWorkflowOptions = {
 };
 
 export function useCanvasStyleWorkflow({ domainProjectId, nodesRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setSelectedNodeIds, setSelectedConnectionId, setDialogNodeId, setStylePickerOpen }: UseCanvasStyleWorkflowOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const queryClient = useQueryClient();
 
@@ -32,7 +34,7 @@ export function useCanvasStyleWorkflow({ domainProjectId, nodesRef, selectedNode
                 prompt: preset.prompt,
                 status: "success",
                 workflowKind: "styleboard",
-                workflowTitle: "项目画风",
+                workflowTitle: t("canvas:project-style"),
                 workflowDescription: preset.description,
                 stylePresetId: preset.id,
                 styleProfileJson: profileJson,
@@ -40,11 +42,11 @@ export function useCanvasStyleWorkflow({ domainProjectId, nodesRef, selectedNode
             };
             let styleNode: CanvasNodeData;
             if (current) {
-                styleNode = { ...current, title: `画风 · ${preset.title}`, metadata: { ...current.metadata, ...metadata } };
+                styleNode = { ...current, title: t("canvas:style-param", { title: preset.title }), metadata: { ...current.metadata, ...metadata } };
                 nodesRef.current = nodesRef.current.map((node) => (node.id === current.id ? styleNode : node));
             } else {
                 styleNode = createCanvasNode(CanvasNodeType.Text, getCanvasCenter(), metadata);
-                styleNode.title = `画风 · ${preset.title}`;
+                styleNode.title = t("canvas:style-param", { title: preset.title });
                 styleNode.width = 420;
                 styleNode.height = 240;
                 nodesRef.current = [...nodesRef.current, styleNode];
@@ -56,21 +58,21 @@ export function useCanvasStyleWorkflow({ domainProjectId, nodesRef, selectedNode
             setSelectedConnectionId(null);
             setDialogNodeId(null);
             setStylePickerOpen(false);
-            message.success(`已应用“${preset.title}”画风`);
+            message.success(t("canvas:applied-style-param", { title: preset.title }));
         },
         [getCanvasCenter, message, nodesRef, selectedNodeIdsRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setStylePickerOpen],
     );
 
     const persistStyleMutation = useMutation({
         mutationFn: ({ preset, profileJson }: { preset: CanvasStylePreset; profileJson: string }) => {
-            if (!domainProjectId) throw new Error("画布尚未关联项目");
+            if (!domainProjectId) throw new Error(t("canvas:canvas-is-not-linked-to-a-project-yet"));
             return updateDomainProject(domainProjectId, { stylePresetId: preset.id, styleProfileJson: profileJson });
         },
         onSuccess: (_project, { preset, profileJson }) => {
             applyCanvasStyle(preset, profileJson);
             void queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
         },
-        onError: (error) => message.error(error instanceof Error ? error.message : "项目画风保存失败"),
+        onError: (error) => message.error(error instanceof Error ? error.message : t("canvas:failed-to-save-project-style")),
     });
 
     const selectCanvasStyle = useCallback(

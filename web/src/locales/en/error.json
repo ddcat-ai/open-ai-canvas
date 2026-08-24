@@ -1,0 +1,9 @@
+{
+    "address-has-no-page": "This address has no matching page. It may have moved or been merged into another entry.",
+    "back-to-home": "Back to home",
+    "page-did-not-load": "This page did not load correctly",
+    "page-error": "Page error",
+    "page-not-found": "Page not found",
+    "page-temporarily-unavailable": "This page is temporarily unavailable",
+    "reload": "Reload"
+}

@@ -1,10 +1,5 @@
-import {
-    agentSessionFailureMessage,
-    createAgentSession,
-    queryAgentSession,
-    type AgentSessionDetail,
-    type CreateSessionInput,
-} from "@/services/api/task-center";
+import { agentSessionFailureMessage, createAgentSession, queryAgentSession, type AgentSessionDetail, type CreateSessionInput } from "@/services/api/task-center";
+import { t } from "@/i18n";
 
 const CINEMATIC_SESSION_POLL_INTERVAL_MS = 2000;
 const CINEMATIC_SESSION_MAX_POLLS = 120;
@@ -31,8 +26,8 @@ export async function resumeCinematicAgentSession(id: string, options: Cinematic
 }
 
 export function cinematicAgentSessionOpsJson(detail: AgentSessionDetail) {
-    if (detail.session.status !== "completed") throw new Error("后端影视 Agent 会话尚未完成");
-    if (!detail.session.canvasOpsJson) throw new Error("后端影视 Agent 没有返回画布操作");
+    if (detail.session.status !== "completed") throw new Error(t("canvas:the-film-agent-backend-session-has-not-finished-yet"));
+    if (!detail.session.canvasOpsJson) throw new Error(t("canvas:the-film-agent-backend-returned-no-canvas-operations"));
     return detail.session.canvasOpsJson;
 }
 
@@ -49,7 +44,7 @@ async function waitForCinematicAgentSession(initialDetail: AgentSessionDetail, o
         await abortableDelay(CINEMATIC_SESSION_POLL_INTERVAL_MS, options.signal);
         detail = await queryAgentSession(initialDetail.session.id);
     }
-    throw new Error("后端影视 Agent 会话超时");
+    throw new Error(t("canvas:the-film-agent-backend-session-timed-out"));
 }
 
 function abortableDelay(ms: number, signal?: AbortSignal) {

@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { getAdminLibTVSetting, testAdminLibTV, updateAdminLibTVSetting, type AdminLibTVSetting } from "@/services/api/libtv";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import { useTranslation } from "react-i18next";
 
 export default function LibTVSettingsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [setting, setSetting] = useState<AdminLibTVSetting>({ enabled: false, hasToken: false });
     const [enabled, setEnabled] = useState(false);
@@ -26,7 +28,7 @@ export default function LibTVSettingsPage() {
                 setEnabled(next.enabled);
             })
             .catch((error) => {
-                if (!cancelled) message.error(error instanceof Error ? error.message : "读取 LibTV 配置失败");
+                if (!cancelled) message.error(error instanceof Error ? error.message : t("admin:failed-to-read-libtv-config"));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -43,9 +45,9 @@ export default function LibTVSettingsPage() {
             setSetting(next);
             setToken("");
             setEnabled(next.enabled);
-            message.success("LibTV 配置已更新");
+            message.success(t("admin:libtv-config-updated"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存 LibTV 配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-libtv-config"));
         } finally {
             setSaving(false);
         }
@@ -58,9 +60,9 @@ export default function LibTVSettingsPage() {
             setSetting(next);
             setToken("");
             setEnabled(false);
-            message.success("LibTV Token 已清空，导入功能已停用");
+            message.success(t("admin:libtv-token-cleared-import-disabled"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "清空 LibTV Token 失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-clear-libtv-token"));
         } finally {
             setClearing(false);
         }
@@ -68,41 +70,48 @@ export default function LibTVSettingsPage() {
 
     const test = async () => {
         if (!testUuid.trim()) {
-            message.error("请填写用于测试的 LibTV 画布 UUID");
+            message.error(t("admin:enter-a-libtv-canvas-uuid-for-testing"));
             return;
         }
         setTesting(true);
         try {
             await testAdminLibTV(testUuid.trim());
-            message.success("LibTV 连接测试成功");
+            message.success(t("admin:libtv-connection-test-succeeded"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "LibTV 连接测试失败");
+            message.error(error instanceof Error ? error.message : t("admin:libtv-connection-test-failed"));
         } finally {
             setTesting(false);
         }
     };
 
     return (
-        <AdminPageFrame title="第三方参数配置" description="集中维护外部平台的服务端凭证和连接状态，后续平台可在此继续扩展。" scroll>
+        <AdminPageFrame title={t("admin:third-party-parameters")} description={t("admin:centrally-manage-server-side-credentials-and-connection-status-for-exter")} scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     icon={<KeyRound className="size-4" />}
-                    title="LibTV 配置"
-                    description="Token 仅保存在服务端加密配置中，不会回传到浏览器。"
-                    status={<AdminStatusBadge label={setting.hasToken ? "已配置" : "未配置"} tone={setting.hasToken ? "success" : "warning"} />}
+                    title={t("admin:libtv-config")}
+                    description={t("admin:the-token-is-stored-only-in-encrypted-server-config-and-never-sent-back")}
+                    status={<AdminStatusBadge label={setting.hasToken ? t("admin:configured") : t("admin:not-configured-2")} tone={setting.hasToken ? "success" : "warning"} />}
                     footer={
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <span className="text-xs text-foreground/50">{setting.hasToken ? "已保存 Token；输入新值可替换，留空保存会保留现有 Token。" : "请先配置 Token，再启用导入功能。"}</span>
+                            <span className="text-xs text-foreground/50">{setting.hasToken ? t("admin:token-saved-enter-a-new-value-to-replace-it-saving-empty-keeps-the-exist") : t("admin:configure-the-token-before-enabling-import")}</span>
                             <div className="flex items-center gap-2">
                                 {setting.hasToken ? (
-                                    <Popconfirm title="确认清空 LibTV Token？" description="清空后将同时停用 LibTV 画布导入。" okText="清空" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={clearToken}>
+                                    <Popconfirm
+                                        title={t("admin:clear-the-libtv-token")}
+                                        description={t("admin:clearing-also-disables-libtv-canvas-import")}
+                                        okText={t("admin:clear")}
+                                        cancelText={t("admin:cancel-4")}
+                                        okButtonProps={{ danger: true }}
+                                        onConfirm={clearToken}
+                                    >
                                         <Button danger icon={<Trash2 className="size-4" />} loading={clearing} disabled={loading || saving}>
-                                            清空 Token
+                                            {t("admin:clear-token")}
                                         </Button>
                                     </Popconfirm>
                                 ) : null}
                                 <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={loading || clearing} onClick={() => void save()}>
-                                    保存配置
+                                    {t("admin:save-config-5")}
                                 </Button>
                             </div>
                         </div>
@@ -112,28 +121,34 @@ export default function LibTVSettingsPage() {
                         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
                             <div>
                                 <label className="mb-2 block text-sm font-medium">LibTV Token</label>
-                                <Input.Password value={token} onChange={(event) => setToken(event.target.value)} placeholder={setting.hasToken ? "已配置（输入新 Token 可替换）" : "输入 LibTV Token"} disabled={loading || saving || clearing} autoComplete="new-password" />
+                                <Input.Password
+                                    value={token}
+                                    onChange={(event) => setToken(event.target.value)}
+                                    placeholder={setting.hasToken ? t("admin:configured-enter-a-new-token-to-replace") : t("admin:enter-libtv-token")}
+                                    disabled={loading || saving || clearing}
+                                    autoComplete="new-password"
+                                />
                             </div>
                             <div>
-                                <label className="mb-2 block text-sm font-medium">启用导入</label>
+                                <label className="mb-2 block text-sm font-medium">{t("admin:enable-import")}</label>
                                 <div className="flex h-8 items-center gap-3">
                                     <Switch checked={enabled} onChange={setEnabled} disabled={loading || saving || clearing} />
-                                    <span className="text-sm text-foreground/60">{enabled ? "已启用" : "已停用"}</span>
+                                    <span className="text-sm text-foreground/60">{enabled ? t("admin:enabled") : t("admin:disabled")}</span>
                                 </div>
                             </div>
                         </div>
                         <div>
                             <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                                 <Wifi className="size-4" />
-                                测试连接
+                                {t("admin:test-connection-2")}
                             </div>
                             <div className="flex flex-wrap gap-3">
-                                <Input className="min-w-64 flex-1" value={testUuid} onChange={(event) => setTestUuid(event.target.value)} placeholder="输入可访问的 LibTV 画布 UUID" />
+                                <Input className="min-w-64 flex-1" value={testUuid} onChange={(event) => setTestUuid(event.target.value)} placeholder={t("admin:enter-an-accessible-libtv-canvas-uuid")} />
                                 <Button loading={testing} onClick={() => void test()}>
-                                    测试连接
+                                    {t("admin:test-connection-2")}
                                 </Button>
                             </div>
-                            <div className="mt-2 text-xs text-foreground/50">用于验证当前 Token 是否可读取指定 LibTV 画布，不会向当前画布写入节点。</div>
+                            <div className="mt-2 text-xs text-foreground/50">{t("admin:verifies-the-current-token-can-read-the-given-libtv-canvas-no-nodes-are")}</div>
                         </div>
                     </div>
                 </SettingsSectionCard>

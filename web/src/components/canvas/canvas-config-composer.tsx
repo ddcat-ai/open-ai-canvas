@@ -10,6 +10,7 @@ import type { NodeGenerationInput } from "./canvas-node-generation";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
 import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-picker";
 import type { CanvasGenerationMode, CanvasNodeMetadata, CanvasWorkspaceMode } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type CanvasConfigComposerProps = {
     value: string;
@@ -23,9 +24,7 @@ type CanvasConfigComposerProps = {
     workspaceMode?: CanvasWorkspaceMode;
 };
 
-type Token =
-    | { type: "text"; value: string }
-    | { type: "reference"; nodeId: string };
+type Token = { type: "text"; value: string } | { type: "reference"; nodeId: string };
 
 type MentionState = {
     query: string;
@@ -44,6 +43,7 @@ type ComposerCandidate =
 export const CONFIG_REFERENCE_PATTERN = /@\[node:([^\]]+)\]/g;
 
 export function CanvasConfigComposer({ value, inputs, skillReferences = [], generationMode, metadata, onChange, onMetadataChange, onClose, workspaceMode = "professional" }: CanvasConfigComposerProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const editorRef = useRef<HTMLDivElement>(null);
     const composingRef = useRef(false);
@@ -54,13 +54,7 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
     const simpleMode = workspaceMode === "simple";
     const tokens = useMemo(() => parseComposerTokens(value), [value]);
     const referenceById = useMemo(() => new Map(inputs.map((input) => [input.nodeId, input])), [inputs]);
-    const videoFrameOptions = useMemo(
-        () =>
-            inputs
-                .filter((input) => input.type === "image" && input.image)
-                .map((input) => ({ nodeId: input.nodeId, label: resourceLabel(input, inputs), title: input.title, previewUrl: input.image?.dataUrl })),
-        [inputs],
-    );
+    const videoFrameOptions = useMemo(() => inputs.filter((input) => input.type === "image" && input.image).map((input) => ({ nodeId: input.nodeId, label: resourceLabel(input, inputs), title: input.title, previewUrl: input.image?.dataUrl })), [inputs]);
     const candidates = useMemo(() => {
         if (!mention) return [];
         const query = (mention.query || "").trim().toLowerCase();
@@ -167,8 +161,8 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
         >
             <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-baseline gap-2">
-                    <div className="shrink-0 text-xs font-semibold">{simpleMode ? "快速生成" : "组装提示词"}</div>
-                    <div className="truncate text-[var(--fs-label)] opacity-55">{simpleMode ? "已连接素材会自动带入" : "@ 引用已连接素材或已激活技能，发送前自动组装"}</div>
+                    <div className="shrink-0 text-xs font-semibold">{simpleMode ? t("canvas:quick-generate") : t("canvas:compose-prompt")}</div>
+                    <div className="truncate text-[var(--fs-label)] opacity-55">{simpleMode ? t("domain:connected-assets-are-included-automatically") : t("domain:use-to-reference-connected-assets-or-active-skills-assembled-automatical")}</div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                     {simpleMode ? null : <CanvasPresetPicker mode={generationMode || "image"} skillReferences={skillReferences} open={presetOpen} onOpenChange={setPresetOpen} onSelect={insertPreset} />}
@@ -181,7 +175,11 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
                 </div>
             ) : null}
             <div className="relative rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                {!value.trim() ? <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用连接素材或技能</div> : null}
+                {!value.trim() ? (
+                    <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>
+                        {t("domain:type-a-prompt-use-to-reference-connected-assets-or-skills")}
+                    </div>
+                ) : null}
                 <div
                     ref={editorRef}
                     contentEditable
@@ -234,10 +232,9 @@ export function CanvasConfigComposer({ value, inputs, skillReferences = [], gene
                 />
                 {mention && candidates.length ? <MentionMenu candidates={candidates} allInputs={inputs} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertCandidate} /> : null}
             </div>
-            {imagePreview ? <Image src={imagePreview} alt="引用图片预览" style={{ display: "none" }} preview={{ visible: true, src: imagePreview, onVisibleChange: (visible) => !visible && setImagePreview(null) }} /> : null}
+            {imagePreview ? <Image src={imagePreview} alt={t("domain:reference-image-preview")} style={{ display: "none" }} preview={{ visible: true, src: imagePreview, onVisibleChange: (visible) => !visible && setImagePreview(null) }} /> : null}
         </div>
     );
-
 }
 
 function removeActiveSlash(editor: HTMLDivElement) {
@@ -257,7 +254,19 @@ function removeActiveSlash(editor: HTMLDivElement) {
     selection?.addRange(range);
 }
 
-function MentionMenu({ candidates, allInputs, activeIndex, theme, onSelect }: { candidates: ComposerCandidate[]; allInputs: NodeGenerationInput[]; activeIndex: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onSelect: (candidate: ComposerCandidate) => void }) {
+function MentionMenu({
+    candidates,
+    allInputs,
+    activeIndex,
+    theme,
+    onSelect,
+}: {
+    candidates: ComposerCandidate[];
+    allInputs: NodeGenerationInput[];
+    activeIndex: number;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onSelect: (candidate: ComposerCandidate) => void;
+}) {
     const selectedRef = useRef(false);
     const activeItemRef = useRef<HTMLButtonElement | null>(null);
 
@@ -457,7 +466,10 @@ function parseComposerTokens(value: string): Token[] {
 
 function resourceLabel(input: NodeGenerationInput, inputs: NodeGenerationInput[]) {
     const sameTypeInputs = inputs.filter((item) => item.type === input.type && item.sourceKind === input.sourceKind);
-    const index = Math.max(0, sameTypeInputs.findIndex((item) => item.nodeId === input.nodeId));
+    const index = Math.max(
+        0,
+        sameTypeInputs.findIndex((item) => item.nodeId === input.nodeId),
+    );
     if (input.sourceKind === "drawing") return `绘图${index + 1}`;
     if (input.type === "image") return `图片${index + 1}`;
     if (input.type === "video") return `视频${index + 1}`;

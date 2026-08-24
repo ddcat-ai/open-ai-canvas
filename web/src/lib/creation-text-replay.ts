@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { appendTaskTextDelta, completeTextReplayTask, createGenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -41,12 +42,12 @@ export function createTextReplayPublisher(config: AiConfig, prompt: string) {
         try {
             const task = await createGenerationTask({
                 type: "text",
-                prompt: prompt.trim() || "文本创作",
+                prompt: prompt.trim() || t("lib:text-creation"),
                 model: config.model,
                 input: {
                     mode: "text",
                     replay: true,
-                    prompt: prompt.trim() || "文本创作",
+                    prompt: prompt.trim() || t("lib:text-creation"),
                     config: {
                         model: config.model,
                         baseUrl: config.baseUrl,

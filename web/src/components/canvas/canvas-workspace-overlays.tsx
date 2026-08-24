@@ -8,6 +8,7 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ConnectionHandle, type Position, type ViewportTransform } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 export type PendingConnectionCreate = {
     connection: ConnectionHandle;
@@ -17,6 +18,7 @@ export type PendingConnectionCreate = {
 };
 
 export function CanvasSelectionToolbar({ anchorRef, containerRef, count, children }: { anchorRef: RefObject<HTMLDivElement | null>; containerRef: RefObject<HTMLDivElement | null>; count: number; children: ReactNode }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const toolbarRef = useRef<HTMLDivElement>(null);
@@ -48,7 +50,7 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
                 toolbarRef.current.classList.toggle("-translate-y-full", placement === "above");
                 return;
             }
-            setAnchor((current) => current?.left === left && current.top === top && current.placement === placement ? current : { left, top, placement });
+            setAnchor((current) => (current?.left === left && current.top === top && current.placement === placement ? current : { left, top, placement }));
         };
 
         update();
@@ -79,15 +81,39 @@ export function CanvasSelectionToolbar({ anchorRef, containerRef, count, childre
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <motion.div initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: anchor.placement === "above" ? 8 : -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={aceternityMotion.spring.panel} className="flex items-center gap-2">
-                <span className="aceternity-floating-panel shrink-0 rounded-full border px-2.5 py-1.5 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl" style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.accent.primary }}>已选 {count}</span>
+            <motion.div
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: anchor.placement === "above" ? 8 : -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={aceternityMotion.spring.panel}
+                className="flex items-center gap-2"
+            >
+                <span
+                    className="aceternity-floating-panel shrink-0 rounded-full border px-2.5 py-1.5 text-[var(--fs-tiny)] font-semibold tabular-nums backdrop-blur-2xl"
+                    style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.accent.primary }}
+                >
+                    {t("canvas:selected-4")} {count}
+                </span>
                 <div className="max-w-[min(560px,calc(100vw-90px))]">{children}</div>
             </motion.div>
         </div>
     );
 }
 
-export function CanvasNodePanelOverlay({ node, viewport, containerRef, panelWidth, panelHeight = 190, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; panelWidth?: number; panelHeight?: number; children: ReactNode }) {
+export function CanvasNodePanelOverlay({
+    node,
+    viewport,
+    containerRef,
+    panelWidth,
+    panelHeight = 190,
+    children,
+}: {
+    node: CanvasNodeData;
+    viewport: ViewportTransform;
+    containerRef: RefObject<HTMLDivElement | null>;
+    panelWidth?: number;
+    panelHeight?: number;
+    children: ReactNode;
+}) {
     const panelRef = useRef<HTMLDivElement>(null);
     const initialWidth = resolveNodePanelWidth(node, viewport, panelWidth);
     const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, initialWidth, panelHeight);
@@ -133,7 +159,26 @@ function resolveNodePanelWidth(node: CanvasNodeData, viewport: ViewportTransform
     return clamp(Math.round(node.width * viewport.k * 1.5), 680, 920);
 }
 
-export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, containerRef, canCreateDrawing, getDisabledReason, onCreate, onClose }: { pending: PendingConnectionCreate; viewport: ViewportTransform; viewportSize: { width: number; height: number }; containerRef: RefObject<HTMLDivElement | null>; canCreateDrawing: boolean; getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => string; onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => void; onClose: () => void }) {
+export function CanvasConnectionCreateMenu({
+    pending,
+    viewport,
+    viewportSize,
+    containerRef,
+    canCreateDrawing,
+    getDisabledReason,
+    onCreate,
+    onClose,
+}: {
+    pending: PendingConnectionCreate;
+    viewport: ViewportTransform;
+    viewportSize: { width: number; height: number };
+    containerRef: RefObject<HTMLDivElement | null>;
+    canCreateDrawing: boolean;
+    getDisabledReason: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => string;
+    onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing) => void;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
     const menuRef = useRef<HTMLDivElement>(null);
@@ -173,18 +218,41 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1 py-0.5">
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}><WandSparkles className="size-3.5" /></span>
-                    <span className="min-w-0"><span className="block truncate text-[var(--fs-label)] font-semibold">创建下一步</span><span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{pending.batchSourceNodeIds?.length ? `引用已选 ${pending.batchSourceNodeIds.length} 个节点` : "引用当前节点"}</span></span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                        <WandSparkles className="size-3.5" />
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block truncate text-[var(--fs-label)] font-semibold">{t("domain:create-next-step")}</span>
+                        <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                            {pending.batchSourceNodeIds?.length ? t("domain:reference-param-selected-nodes", { length: pending.batchSourceNodeIds.length }) : t("domain:reference-current-node")}
+                        </span>
+                    </span>
                 </span>
-                <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }} onClick={onClose} aria-label="关闭连线创建菜单"><X className="size-3" /></button>
+                <button
+                    type="button"
+                    className="grid size-6 shrink-0 place-items-center rounded-full border opacity-55 transition-opacity hover:opacity-100"
+                    style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}
+                    onClick={onClose}
+                    aria-label={t("domain:close-connection-menu")}
+                >
+                    <X className="size-3" />
+                </button>
             </div>
             <div className="grid gap-1">
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<List className="size-4" />} title="文本生成" disabledReason={getDisabledReason(CanvasNodeType.Text)} onClick={() => onCreate(CanvasNodeType.Text)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Clapperboard className="size-4" />} title="分镜脚本" disabledReason={getDisabledReason(CanvasNodeType.Script)} onClick={() => onCreate(CanvasNodeType.Script)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title="图片生成" disabledReason={getDisabledReason(CanvasNodeType.Image)} onClick={() => onCreate(CanvasNodeType.Image)} />
-                {canCreateDrawing ? <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title="绘图" disabledReason={getDisabledReason(CanvasNodeType.Drawing)} onClick={() => onCreate(CanvasNodeType.Drawing)} /> : null}
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title="视频生成" disabledReason={getDisabledReason(CanvasNodeType.Video)} onClick={() => onCreate(CanvasNodeType.Video)} />
-                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Music2 className="size-4" />} title="音频参考" disabledReason={getDisabledReason(CanvasNodeType.Audio)} onClick={() => onCreate(CanvasNodeType.Audio)} />
+                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<List className="size-4" />} title={t("domain:text-generation")} disabledReason={getDisabledReason(CanvasNodeType.Text)} onClick={() => onCreate(CanvasNodeType.Text)} />
+                <ConnectionCreateOption
+                    motionEnabled={!reducedMotion}
+                    icon={<Clapperboard className="size-4" />}
+                    title={t("canvas:storyboard-script")}
+                    disabledReason={getDisabledReason(CanvasNodeType.Script)}
+                    onClick={() => onCreate(CanvasNodeType.Script)}
+                />
+                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<ImageIcon className="size-4" />} title={t("canvas:image-generation")} disabledReason={getDisabledReason(CanvasNodeType.Image)} onClick={() => onCreate(CanvasNodeType.Image)} />
+                {canCreateDrawing ? (
+                    <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Pencil className="size-4" />} title={t("canvas:drawing")} disabledReason={getDisabledReason(CanvasNodeType.Drawing)} onClick={() => onCreate(CanvasNodeType.Drawing)} />
+                ) : null}
+                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Video className="size-4" />} title={t("canvas:video-generation")} disabledReason={getDisabledReason(CanvasNodeType.Video)} onClick={() => onCreate(CanvasNodeType.Video)} />
+                <ConnectionCreateOption motionEnabled={!reducedMotion} icon={<Music2 className="size-4" />} title={t("domain:audio-references")} disabledReason={getDisabledReason(CanvasNodeType.Audio)} onClick={() => onCreate(CanvasNodeType.Audio)} />
             </div>
         </SpotlightSurface>
     );
@@ -193,11 +261,27 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
 function ConnectionCreateOption({ motionEnabled, icon, title, description, disabledReason, onClick }: { motionEnabled: boolean; icon: ReactNode; title: string; description?: string; disabledReason?: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <motion.button type="button" disabled={Boolean(disabledReason)} title={disabledReason} whileHover={motionEnabled && !disabledReason ? { x: 2 } : undefined} whileTap={motionEnabled && !disabledReason ? { scale: 0.98 } : undefined} transition={aceternityMotion.spring.dock} className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-[var(--dock-item-radius)] border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:border-white/10 dark:hover:bg-white/8" style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties} onClick={onClick}>
-            <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>{icon}</span>
+        <motion.button
+            type="button"
+            disabled={Boolean(disabledReason)}
+            title={disabledReason}
+            whileHover={motionEnabled && !disabledReason ? { x: 2 } : undefined}
+            whileTap={motionEnabled && !disabledReason ? { scale: 0.98 } : undefined}
+            transition={aceternityMotion.spring.dock}
+            className="group flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-[var(--dock-item-radius)] border border-transparent px-2 py-1.5 text-left outline-none hover:border-black/10 hover:bg-black/5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:border-white/10 dark:hover:bg-white/8"
+            style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
+            onClick={onClick}
+        >
+            <span className="grid size-7 shrink-0 place-items-center rounded-[var(--r-md)] opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5" style={{ background: theme.toolbar.itemHover }}>
+                {icon}
+            </span>
             <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-[var(--fs-tiny)] font-semibold leading-4">{title}</span>
-                {disabledReason || description ? <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{disabledReason || description}</span> : null}
+                {disabledReason || description ? (
+                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                        {disabledReason || description}
+                    </span>
+                ) : null}
             </span>
             <ChevronRight className="size-3.5 shrink-0 opacity-35 transition-transform group-hover:translate-x-0.5" />
         </motion.button>

@@ -1,0 +1,4219 @@
+[
+ {
+  "zh": "等",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "删除全部 {{count}} 条连线",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "选择 {{length}} 个节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "调整当前画布视图",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "包含删除操作，批准后可从最近 Agent 批次逐步撤销。",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "生成任务可能产生模型费用，画布撤销不会取消已提交任务。",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "新增节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "删除连线",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "调整视图",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "找不到连接源节点",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "目标节点不能连接到自身",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "节点之间不能连接",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "背板不能作为连接源",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "分镜脚本需要按行连接",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "生成配置不能作为聚合连接源",
+  "files": [
+   "src/lib/canvas/canvas-batch-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【角色卡：{{name}}】",
+  "files": [
+   "src/lib/canvas/canvas-character-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色“{{name}}”缺少剧情定位、稳定设定或声音画像，请重新提取",
+  "files": [
+   "src/lib/canvas/canvas-character-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "调色参考图生成失败：{{message}}",
+  "files": [
+   "src/lib/canvas/canvas-color-grade.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "调色参考图生成失败",
+  "files": [
+   "src/lib/canvas/canvas-color-grade.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "找不到连线目标节点",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "图片生成节点不能连接参考视频",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "图片生成节点不能连接参考音频",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "文本生成节点不能连接参考音频",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色配音一次只能连接一个角色卡",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "音频生成节点只接受文本或单个角色卡输入",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已配置模型最多支持 {{maximum}} {{unit}}{{label}}",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已配置模型均不支持{{label}}",
+  "files": [
+   "src/lib/canvas/canvas-connection-policy.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{length}} 个章节",
+  "files": [
+   "src/lib/canvas/canvas-context-summary.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "[零〇○一二两三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟\\d]+",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "^(?:正文\\s*)?第\\s*{{chineseChapterNumber}}\\s*[章节卷回部篇集季幕]{{chapterTitleSuffix}}$",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "^(?:卷|篇|部|集|季|幕)\\s*{{chineseChapterNumber}}{{chapterTitleSuffix}}$",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "^(?:序|序幕|序章|序言|前言|前记|楔子|引子|引言|开篇|终章|尾声|后记){{chapterTitleSuffix}}$",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "^(?:番外(?:篇)?|附录)(?:\\s*(?:第\\s*)?{{chineseChapterNumber}}\\s*[章节回篇]?)?{{chapterTitleSuffix}}$",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "第 1 章",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "序章",
+  "files": [
+   "src/lib/canvas/canvas-document.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图“{{name}}”为空，请先完成绘图再生成",
+  "files": [
+   "src/lib/canvas/canvas-drawing-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图“{{name}}”缺少当前版本的生成图，请打开绘图并保存后重试",
+  "files": [
+   "src/lib/canvas/canvas-drawing-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图参考图上传失败：{{message}}",
+  "files": [
+   "src/lib/canvas/canvas-drawing-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图参考图上传失败",
+  "files": [
+   "src/lib/canvas/canvas-drawing-reference.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "清理失败的绘图初始化数据失败",
+  "files": [
+   "src/lib/canvas/canvas-drawing-storage.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前渠道不支持蒙版，使用脸部裁切与本地羽化融合",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "欣喜若狂",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "兴高采烈",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "惊喜",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "震惊",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "惊恐",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "开怀",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "期待",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "专注",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "警觉",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "紧张",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "温柔",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "浅然莞尔",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "中性克制",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "隐忍",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "安心",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "释然",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "疲惫",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "失落",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "悲伤",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "满足",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "冷淡",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "隐忍心伤",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绝望",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然、明亮的露齿笑，嘴角对称上扬，脸颊自然抬起，眼角有轻微笑纹",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "明显喜悦，笑意饱满",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "意外惊喜，眼睛睁大并自然张嘴",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "明显震惊，眉毛抬起，嘴部微张",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "强烈惊恐，双眼睁大，面部紧绷",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然开怀，眼角带笑",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "期待而兴奋，表情明亮",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "高度专注，目光坚定",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保持警觉，眉眼略微收紧",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "紧张不安，嘴唇轻抿",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "温柔亲近，轻微微笑",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "克制而自然的浅笑",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "完全中性、克制、放松",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "压住情绪，表情略显僵硬",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "疏离冷静，减少面部情绪",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "安心放松，柔和闭合嘴角",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "如释重负，眉眼放松",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "明显疲惫，眼睑下垂",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "情绪低落，嘴角轻微下垂",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "悲伤，内眉抬起，嘴角下垂",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "安静满足，轻微闭口笑",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "平静松弛，呼吸感自然",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "冷淡克制，目光平直",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "强忍心伤，嘴唇压紧，眼神黯淡",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "深度绝望，眉眼下沉，面部失去张力",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "仅修改第一张输入图中“{{characterName}}”脸部的表情，其他像素保持源图一致。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "目标情绪：{{label}}；表情要求：{{prompt}}。情绪强度通过眉眼、嘴角和脸颊的肌肉张力表达，不要通过夸大嘴巴或重绘整张脸表达。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "第一张输入图是唯一编辑目标，第二张输入图仅用于核对同一人物身份，不得复制第二张图的构图、背景或光线。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "如果第一张输入图中出现其他人脸，其他人脸全部视为不可编辑背景；只允许修改目标人脸框及其邻近表情区域。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "只改变眉眼开合、眼角、嘴角、脸颊和口腔内部的表情细节；保持眼睛大小与方向、嘴裂宽度、牙齿数量大小排列、嘴唇厚度、下巴轮廓和脸型自然且与原图一致。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "输入图已裁切到目标人物头部区域；只重绘目标人脸及其表情相关细节，不要生成或修改裁切图中的其他内容。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "严格保持人物身份、五官比例、肤色、发型、发丝、耳朵、配饰、服装、姿势、头部朝向、镜头、景深、光线、背景及画面其他人物不变；不要重绘眼镜、帽子或遮挡物。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "禁止夸张卡通笑、嘴巴过大或拉宽、牙齿像整齐白墙、露出不自然牙龈、眼睛变形或眯成线、脸颊鼓包、塑料磨皮、重复五官，以及任何身份漂移。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "实际可编辑范围以该人脸周围的透明椭圆蒙版为最终边界。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "最终仅将该人脸周围的椭圆区域融合回原图。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "只允许修改目标框及其透明蒙版对应的这一张脸。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "只允许修改目标人脸框及其邻近表情区域。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "输入图已裁切到目标人物头部区域；透明蒙版内允许编辑，白色蒙版区域必须保持不变，蒙版外绝对不要生成或修改任何内容。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "目标人脸框（相对于第一张裁切输入图）：x={{x}}px，y={{y}}px，width={{width}}px，height={{height}}px；人脸中心约位于裁切图的 {{centerX}}% 横向、{{centerY}}% 纵向。最终仅将该人脸周围的椭圆区域融合回原图。",
+  "files": [
+   "src/lib/canvas/canvas-emotion.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "人脸识别服务初始化失败",
+  "files": [
+   "src/lib/canvas/canvas-face-detection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "MediaPipe loader 加载失败：{{status}}",
+  "files": [
+   "src/lib/canvas/canvas-face-detector.worker.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "人脸识别失败",
+  "files": [
+   "src/lib/canvas/canvas-face-detector.worker.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "赤蓝流光",
+  "files": [
+   "src/lib/canvas/canvas-folder-theme.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "曜石银蓝",
+  "files": [
+   "src/lib/canvas/canvas-folder-theme.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "熔金赤焰",
+  "files": [
+   "src/lib/canvas/canvas-folder-theme.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "珍珠薄雾",
+  "files": [
+   "src/lib/canvas/canvas-folder-theme.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "重试请求未提交",
+  "files": [
+   "src/lib/canvas/canvas-image-batch-retry.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "画布图片",
+  "files": [
+   "src/lib/canvas/canvas-node-asset.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "画布视频",
+  "files": [
+   "src/lib/canvas/canvas-node-asset.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "画布音频",
+  "files": [
+   "src/lib/canvas/canvas-node-asset.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "画布文本",
+  "files": [
+   "src/lib/canvas/canvas-node-asset.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "人景融合",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "轻度对齐",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "轻度对齐人物与场景，仅修正明显边缘和空间关系",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然融合",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然融合人物与场景，统一边缘、色调和空间关系",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "深度融合",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "深度融合人物与场景，细致统一边缘、环境色和空间层次",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "光影融合",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "柔和补光",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "使用柔和补光，减弱生硬阴影并保留自然明暗",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然匹配",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "让人物光向、色温与场景光线自然匹配",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "氛围强化",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "强化环境光与氛围光，保持光影方向合理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "皮肤",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "清透修饰",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "清透修饰皮肤，适度均匀肤色且不过度磨皮",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然肤质",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保留自然肤质、毛孔和真实肤色过渡",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真实肌理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "强化真实皮肤肌理和细微质感，避免塑料感",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "纹理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "柔和纹理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "使用柔和细腻的整体纹理，减少粗糙噪点",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然纹理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保持服装、头发、皮肤和场景材质的自然纹理",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "颗粒质感",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "增加克制的颗粒质感和材质层次",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "锐度",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "柔焦",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "使用轻柔焦效果，保持主体轮廓可辨",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "标准清晰",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保持标准清晰度，细节自然且不过度锐化",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "高清锐化",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "提升关键细节清晰度，避免锐化光晕和噪点",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保持自然",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请基于参考图片进行人物质感调节，只优化下列视觉属性：",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "必须保持原人物身份、五官、发型、服装、姿势、构图、场景和画面比例；不得新增或删除主体，不得添加文字、水印或标志。",
+  "files": [
+   "src/lib/canvas/canvas-portrait-texture.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "读取画布工作模式失败，已使用专业模式",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保存画布工作模式失败",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正面视角",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "向右旋转 {{horizontalAngle}} 度",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "水平视角",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "俯视 {{pitchAngle}} 度",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前图片模型最多支持 {{maxImages}} 张参考图，当前已连接 {{length}} 张。请移除多余连线后重试",
+  "files": [
+   "src/lib/canvas/canvas-project-generation.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已配置的{{label}}参考图未连接或不可用，请重新选择后再生成",
+  "files": [
+   "src/lib/canvas/canvas-project-generation.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正在从任务中心恢复生成状态...",
+  "files": [
+   "src/lib/canvas/canvas-project-generation.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风 · 待选择",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "故事输入",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "题材、角色、冲突和结局方向",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "分镜脚本 · 待生成",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "输入故事",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "生成分镜",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "读取短剧导引状态失败",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保存短剧导引状态失败",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【技能：{{skill_name}}】",
+  "files": [
+   "src/lib/canvas/canvas-skill-mentions.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "执行指令：\n{{instruction}}",
+  "files": [
+   "src/lib/canvas/canvas-skill-mentions.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{success}}/{{total}} · 进行中",
+  "files": [
+   "src/lib/canvas/canvas-storyboard-progress.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{success}}/{{total}} · 失败 {{failed}}",
+  "files": [
+   "src/lib/canvas/canvas-storyboard-progress.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{success}}/{{total}} · 已创建 {{created}}",
+  "files": [
+   "src/lib/canvas/canvas-storyboard-progress.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "历史项目画风规范",
+  "files": [
+   "src/lib/canvas/canvas-style-execution.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "宗门、仙城、洞府、云海与法术规则共同构成东方修行世界。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "东方仙侠世界以宗门、境界、法器、灵兽和因果秩序为基础；奇观从中式山水、木构建筑、道家意象和修行体系演化，所有地点共享明确的时代、地理与力量规则。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "云雾白、黛青、青玉、朱砂、古铜与阵营能量色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "袍服、劲装、甲胄、宗门纹样、发冠、腰封和法器按身份与阵营建立稳定资产层级",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "山门、殿宇、楼阁、洞府、仙城、云海、古战场和凡间城镇采用中式结构与东方山水空间",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "御剑、身法、法术和衣袍运动必须有起势、蓄力、受力与落点，力量等级通过规模和环境反馈表达",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "欧洲城堡、哥特教堂、日式鸟居、西式魔法阵、随机游戏 UI、宗门与法术规则漂移",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当代都市",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "以可信中国城市、职业身份与生活关系组织现代短剧。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当代中国都市世界以职业、家庭、收入、社区和城市公共生活为基础；人物行动、空间功能、中文标识与生活设施必须符合明确城市和社会语境。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "中性白、雾灰、浅木、水泥色与克制的角色识别色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "服装按职业、收入、季节和性格建立衣橱，固定配饰承担角色识别",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "办公室、公寓、学校、医院、商场、街区、社区和公共交通保持本地尺度与使用痕迹",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "表演贴近日常重心、停顿和微表情，镜头运动服务人物关系与信息揭示",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "欧美城市替代、空洞样板间、错误中文、无职业逻辑服装、网红滤镜和广告摆拍",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "古装历史",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "先锁定单一时代，再统一礼制、服化道、器物与建筑。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "历史世界必须先依据故事锁定唯一朝代或年代子类型，人物制度、礼仪、服饰、兵器、器物、交通与建筑全部服从同一考据基线。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "米白、黛灰、木褐、土黄、靛青、竹青与有限朱砂金色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "襟形、袖型、腰带、冠帽、鞋履和纹样按时代、阶层与身份建立制度",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "木构、院落、回廊、城镇、宫署、乡野和道路遵循所选时代的结构与材料",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "人物动作考虑礼制、服装重量、兵器惯性和具体生活劳动",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "朝代混搭、现代拉链家具、日式或欧式建筑、塑料饰品和现代偶像妆",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "悬疑犯罪",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真实城市纹理、线索系统和心理压力构成可读的悬疑世界。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "现代悬疑世界以案件、秘密、身份关系和可追踪线索构成，地点布局、关键道具、伤痕与时间线必须稳定，信息隐藏不能牺牲画面可读性。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "炭灰、冷水泥、旧木、脏黄实景灯与少量危险强调色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "职业服饰、制服、便装和关键随身物按身份与时间线建立版本",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "旧居民楼、办公空间、街巷、仓储、地下空间和城郊设施保持同一城市地域",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "观察、跟随、遮挡和反应镜头服务线索揭示，避免把晃动当作悬疑",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "黑成不可读、霓虹灯海、过量烟雾、血浆猎奇、反派脸谱化和线索资产变形",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未来科幻",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "技术规则、社会结构与功能性空间共同支撑未来叙事。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未来世界必须先确定技术水平、能源、交通、通讯和社会组织规则；科技资产具有可理解的功能、接口与使用限制，奇观必须反映文明尺度而非随机堆砌发光物。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "深空黑、冷灰、银白、舱体白与单一阵营或能源强调色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "工作服、制服、航天或防护装备按功能与阵营模块化设计",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "舰船、空间站、未来城市、实验设施和居住空间遵循结构、维护与照明逻辑",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "运动体现设备重量、惯性、空间限制和技术反馈",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "无功能 HUD、随机霓虹、现实品牌、技术规则漂移、装备接口变化和无尺度参照",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然乡野",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "地域、季节、生活劳动和自然环境共同参与叙事。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然乡野世界以明确地域、季节、家庭关系和生活劳动为基础；植物、天气、住宅、工具与集市不是装饰，而是持续参与人物行动和关系变化的真实环境。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叶绿、苔藓绿、土色、旧木、天空色、米白与季节性角色点色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "棉麻、针织、旧牛仔、工作服、雨具和手作物保留褶皱与使用痕迹",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "村镇住宅、林间小屋、农场、河岸、菜园、集市和小城边缘具有地域证据",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风、雨、植物、动物和细小生活动作形成自然节奏",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "商业民宿广告感、欧美乡村替代、随机换季、无生活痕迹和过度航拍空镜",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "宏大叙事",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "用尺度、秩序与人物命运建立史诗感，不靠全程阴暗和特效堆积。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叙事气质庄重、开阔、有历史与命运重量；宏大场面负责建立空间和力量关系，人物镜头负责承接选择与代价，奇观和表演之间保持清晰主次。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "高明度空间层次、稳定阵营色与少量高亮奇观色，暗部保留细节",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "建立镜头克制而有尺度，高潮运动有明确起止，人物反应获得停顿",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "全片低照度、无休止慢动作、每镜航拍、特效盖住人物、只有规模没有情绪落点",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "暗黑诡谲",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "以未知、禁忌和心理压力形成黑暗气质，同时保持信息可读。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叙事气质危险、克制、带未知感；恐惧来自空间、规则和人物反应，不依赖血浆、全黑画面或持续尖叫。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "低调但可读的冷暖分区，危险色只用于禁忌、敌意或线索",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "更多观察、遮挡、缓慢揭示和反应停顿，爆发运动只用于关键破局",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "黑成不可读、血腥猎奇、廉价红黑滤镜、全屏烟雾、无来源闪光和持续镜头抖动",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "轻喜剧",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "宏观处境与人物一本正经的反应形成反差，画面明快但不幼稚。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叙事气质轻松、机敏、有人情味；笑点依靠人物关系、反应、停顿和处境反差，允许宏大世界承载小人物式幽默，不把喜剧等同于夸张鬼脸。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "清晰明快的中高明度色彩，角色与背景保持稳定分离，危险场面也避免恐怖化压黑",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "动作有清楚预备、落点和喜剧停顿，反应镜头与正经表演优先于炫技运镜",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "阴森恐怖基调、儿童节目式糖果色、所有角色做鬼脸、连续快切和笑点被特效淹没",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "唯美浪漫",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "以人物距离、光线和环境细节表达关系变化，避免滤镜化糖水感。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叙事气质细腻、含蓄、具有关系张力；浪漫来自视线、距离、触碰、环境变化和未说出口的情绪，不依赖随机花瓣与持续柔焦。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然肤色、柔和冷暖关系与克制的情绪点色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头靠近人物和细节，运动缓慢而有情绪动机，保留呼吸与停顿",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "全程柔焦、过曝肤色、随机花瓣、MV 式空镜、无表演的慢动作和滤镜漂移",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "温暖治愈",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "通过生活行动、环境触感和关系修复形成温暖，而不是泛化柔光。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "叙事气质温暖、松弛、具体；治愈来自可见的照料、劳动、陪伴和关系变化，环境材质与自然声音参与情绪表达。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "自然中高明度、温暖但不过黄，保留木、布、植物和肤色的真实层次",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "观察细小动作、呼吸、眼神和环境响应，节奏舒展但不空洞",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "全片奶油滤镜、过度暖黄、无剧情自然空镜、广告式精致和人物永远微笑",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真实演员、可信光学、服化道和物理环境。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "采用真人影视拍摄媒介：真实人物比例、自然皮肤与发丝、可信镜头光学和现场光源，服装、建筑、道具与特效保持真实材质响应。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "动作遵循真实重心、惯性、衣料重量和摄影机物理运动",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "动画角色、游戏 CG、塑料皮肤、过度磨皮、虚假棚拍和无物理依据的材质",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "3D 动漫",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "高品质三维动画、东方动漫造型与电影化场景。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "采用高品质 3D 动漫媒介：清晰三维体积、统一 PBR 或风格化 PBR 材质、受控次表面散射、稳定拓扑和电影级灯光；保持动画角色的设计感，不滑向真人恐怖谷或廉价游戏过场。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "动画具备明确关键姿势、预备动作、跟随、受力和停顿，特效与角色动作共享同一空间和光照",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "廉价手游 CG、塑料手办反光、僵硬待机动作、真人毛孔皮肤、角色与背景渲染体系不一致",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "3D 卡通",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格化比例、清晰剪影、柔和材质和可读表情。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "采用风格化 3D 卡通动画媒介：简练几何、清晰剪影、半哑光材质、柔和次表面散射和可读表情；场景与角色使用同一圆角、粗糙度和细节密度体系。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色运动使用适度挤压拉伸、跟随、缓入缓出和清晰停顿，夸张建立在稳定骨架与关节结构上",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "塑料公仔、所有角色同脸、过大玻璃眼、僵硬 T Pose、关节穿模和写实资产混入",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "稳定线稿、赛璐璐角色与东方绘景体系。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "采用国漫 2D 动画媒介：有粗细变化的稳定线稿、两至三阶赛璐璐明暗、清晰角色剪影和东方绘景层次；全项目保持二维绘画语言。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "使用明确关键姿势、有限但准确的二维运动，口型、发丝、衣摆与特效遵循统一帧间节奏",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "三维塑料质感、真人照片、线宽漂移、角色转面失真、背景与角色画法不一致",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "水墨动画",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "宣纸、墨阶、笔势与留白构成可识别的东方叙事。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "采用中国水墨动画媒介：宣纸纤维、干湿笔触、飞白、积墨、破墨与有限工笔勾线；留白、墨阶和固定点色共同塑造空间与人物身份。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "轮廓先行、笔势跟随、墨迹生长与消散遵循统一规则，人物结构在变化中保持可识别",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "随机泼墨、角色五官消失、西式水彩、全屏脏灰、廉价纸纹滤镜和随机文字印章",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "写实人物",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真实骨相、年龄、皮肤和身体比例。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色采用真实东亚骨相、自然年龄和真实身体比例，通过脸型、五官、发型、体型、姿态与生活痕迹建立差异；保留自然皮肤和微表情。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "网红同脸、过度磨皮、幼态大眼、年龄漂移、欧美默认脸和夸张动漫比例",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "半写实仿真人",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "东方骨相与理想化造型平衡，保留可信结构。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色采用半写实东方造型：可信骨骼、肌肉和关节结构，五官适度理想化但保留年龄与身份差异；发丝、皮肤和服装细节服从所选媒介，不进入恐怖谷。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真人扫描僵硬感、统一偶像脸、毛孔级过度写实、假睫毛模板和身体比例漂移",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "动漫角色",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "修长比例、清晰五官设计和稳定角色剪影。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色采用东方动漫造型：约 7 至 8 头身，五官、发束、眼形和服装结构高度可识别；夸张集中在设计语言和表情，不破坏身体结构与身份稳定性。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "低幼大头、过大玻璃眼、随机发色、所有角色同一脸型、五官在转面中漂移",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格化卡通",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "夸张比例与可读表情服务喜剧和轻松叙事。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色采用统一的风格化卡通比例：成人约 5 至 6 头身，儿童约 3.5 至 4.5 头身，头手可适度夸张；通过眼鼻嘴比例、发型、体型和剪影建立显著差异。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "所有角色同脸、头身随机变化、过大玻璃眼、关节结构错误、塑料玩具感和僵硬表情",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【使用边界】本规范锁定项目级题材世界、叙事气质、视觉媒介、角色造型、资产材质与影像基线。单镜头的剧情动作、构图、景别、机位、运镜、光源位置和天气由分镜按本规范创作，不得机械复制项目级描述。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【风格组合】题材世界：{{label}}；叙事气质：{{label_1}}；视觉媒介：{{label_2}}；角色造型：{{label_3}}。以下四项必须同时成立，后续角色、场景、分镜和视频不得擅自替换其中任一维度。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【项目定位】面向“{{label}}”题材的{{label_1}}{{label_2}}项目，以统一世界规则、角色资产和视觉媒介支撑连续叙事；项目规范只定义长期稳定的美术基线，不代替单镜头导演设计。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【题材世界观】{{prompt}}",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【叙事气质】{{prompt}}",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【视觉媒介】{{prompt}} 成片保持高清可读的主体轮廓、稳定材质和受控高光；高清不等于过度锐化、磨皮或无来源泛光。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【角色设计系统】{{prompt}}",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【项目色彩与光影】基础色彩来自{{palette}}；本项目采用{{palette_1}}。色彩按角色、阵营、地点和叙事功能分配，保证人物与环境具有稳定的明度和色相分离。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【服饰、材质与场景】{{wardrobe}}；{{environment}}。所有材质和细节密度遵循“{{label}}”媒介，不混入其他渲染体系。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【影像与动态基线】{{motion}}；{{motion_1}}；{{motion_2}}。分镜必须先确定镜头叙事意图，再选择景别与运镜。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【资产一致性】角色固定脸型、五官比例、发型、头身、服装、道具和阵营色；主要场景固定空间布局、建筑模块、材质与照明基线；换装、受损、升级和时间变化必须形成明确资产版本。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【全局禁用】{{forbidden}}；{{forbidden_1}}；{{forbidden_2}}；{{forbidden_3}}。",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未知项目画风选项：{{id}}",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "视频读取超时或编码不受浏览器支持",
+  "files": [
+   "src/lib/canvas/canvas-video-frame.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "无法定位到视频最后一帧",
+  "files": [
+   "src/lib/canvas/canvas-video-frame.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "视频资源请求失败（{{status}}）",
+  "files": [
+   "src/lib/canvas/canvas-video-merge.ts",
+   "src/lib/canvas/canvas-video-segment.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前所选视频模型不支持参考视频，无法使用截取重生成。请选择支持参考视频的模型，或在设置中配置 Seedance / Agent Plan / NewAPI 渠道。",
+  "files": [
+   "src/lib/canvas/canvas-video-regeneration.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前视频模型没有可用的视频生成模式",
+  "files": [
+   "src/lib/canvas/canvas-video-regeneration.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前视频模型不支持所选生成模式",
+  "files": [
+   "src/lib/canvas/canvas-video-regeneration.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "截取片段不能超过当前模型参考视频上限（{{maxSeconds}} 秒）",
+  "files": [
+   "src/lib/canvas/canvas-video-regeneration.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Seedance 参考视频单段至少 2 秒，请扩大截取范围",
+  "files": [
+   "src/lib/canvas/canvas-video-regeneration.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前视频节点",
+  "files": [
+   "src/lib/canvas/canvas-video-timeline-segments.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "时间线片段数据不完整，请先在时间线中重新分割或保存",
+  "files": [
+   "src/lib/canvas/canvas-video-timeline-segments.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "缓慢推近",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头从中景缓慢推近至主体近景，逐步压缩背景空间，强化情绪聚焦。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "缓慢后拉",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头从主体近景缓慢后拉至环境中景，逐步显露空间关系和人物处境。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "向左摇镜",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头水平向左平稳摇动，跟随主体视线或动作方向展开场景信息。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "向右摇镜",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头水平向右平稳摇动，带出主体与周围环境的关系。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "向上仰拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头由低处向上缓慢倾斜，突出主体的高度、压迫感或神圣感。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "向下俯拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头由高处向下缓慢倾斜，揭示主体位置和环境布局。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "左移跟拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头沿水平方向向左移动，与主体保持稳定距离，形成横向跟拍。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "右移跟拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头沿水平方向向右移动，与主体保持稳定距离，形成流畅侧向运动。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "前移穿入",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头向前移动穿入场景，经过前景层次后靠近主体，形成沉浸式进入感。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "后退撤离",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头向后移动远离主体，空间逐渐扩大，制造疏离或揭示全局。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "升起俯视",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头从人物高度缓慢升起，转为俯视视角，展示环境规模。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "下降贴近",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头从高位缓慢下降至主体高度，逐步进入人物情绪空间。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头围绕主体向左半环绕运动，保持主体居中，展示轮廓和空间层次。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头围绕主体向右半环绕运动，保持主体清晰，增强戏剧张力。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "手持微晃",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头带轻微手持晃动，保留真实摄影的不稳定呼吸感，但主体始终清晰。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "稳定跟随",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头以稳定器方式跟随主体移动，运动平滑连续，保持电影感节奏。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正面跟拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头在主体正前方后退跟拍，主体朝镜头方向移动，表情和动作保持稳定可见。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "背后跟拍",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头在主体背后跟随前进，观众与主体同向进入场景。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "甩镜转场",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头快速水平甩动形成运动模糊，并在动作结束时重新稳定到新构图。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "焦点转移",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头焦点从前景缓慢转移到主体，或从主体转移到关键道具，景深变化自然。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "光学变焦推进",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头进行轻微光学变焦推进，画面压缩感增强，但机位保持稳定。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "光学变焦后退",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头进行轻微光学变焦后退，逐步展现更多环境信息。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "低角度推近",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "低机位镜头缓慢推近主体，增强力量感、压迫感和戏剧性。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "俯拍揭示",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头从垂直俯拍角度缓慢移动或下降，揭示人物与场景布局。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "前景掠过",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头移动时有前景物体从画面边缘掠过，增加空间深度和电影遮挡感。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "定镜凝视",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头保持稳定不移动，只让主体动作和环境细节产生变化，形成凝视感。",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "6秒",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "9秒",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "10秒",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "15秒",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "本机运行时尚未连接",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Canvas Agent 模块未加载",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "画布状态同步失败",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Canvas Agent 事件流不可用",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Canvas Agent 事件流响应无效",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Canvas Agent 事件超过安全上限",
+  "files": [
+   "src/lib/canvas/local-runtime-connection.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "图表",
+  "files": [
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{label}}节点",
+  "files": [
+   "src/lib/canvas/node-registry/node-registry.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "分镜脚本 · {{title}}",
+  "files": [
+   "src/lib/canvas/project-chapter-storyboard.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "章节分镜",
+  "files": [
+   "src/lib/canvas/project-chapter-storyboard.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已导入 {{length}} 个镜头",
+  "files": [
+   "src/lib/canvas/project-chapter-storyboard.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已上传",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "本地",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未同步",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已上传到对象存储，并以账号资源同步",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "保存在当前浏览器本地，通常是对象存储未启用或上传失败后的降级",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "还没有可同步的资源标识",
+  "files": [
+   "src/lib/canvas/resource-storage-status.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未命名技能",
+  "files": [
+   "src/lib/canvas/skill-drafting.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【全局负面 Prompt】\n{{negativePrompt}}",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "【项目画风执行规范】",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "资产 ID 不能为空",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请填写资产名称",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请填写来源平台或适配器",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "LoRA 权重必须在 0 到 2 之间",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "单个资产最多声明 20 个兼容模型",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "单个资产最多声明 50 个触发词",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "单个参考图组最多绑定 20 个 URL 和 20 个资源",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "Steps 必须在 1 到 200 之间",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "CFG 必须在 0 到 50 之间",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已验证的 LoRA 必须填写来源资产 ID 或 URL",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已验证的模板或提示词模块必须填写提示词内容",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已验证的参考图组必须绑定参考图",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风快照缺少必要字段",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请填写风格名称",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请填写完整风格 Prompt",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格名称最多 80 个字",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格简介最多 500 个字",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格标签最多 20 个",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风辅助标注最多 20 项",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风辅助标注格式无效",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格封面地址过长",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "风格封面只支持 http(s)、站内路径或图片 Data URL",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "负面 Prompt 过大",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风最多绑定 {{MAX_STYLE_ASSETS}} 个执行资产",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风执行资产 ID 不能重复",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "资产当前不可用",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "资产尚未验证",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "追加到项目画风提示词",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前以模板触发词执行",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目参考图自动注入适配器尚未启用",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "当前协议不支持该执行资产",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "核心",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "6 款",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "添加角色卡",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "移动与选择",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": " {{selectedCount}} 个节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "框选",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "删除 {{selectedCount}} 个节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "删除选中节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "清空画布",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "角色详情",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "信息",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "移除节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "重试批次中的失败图片",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正在截取尾帧",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "截取尾帧",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "截取中",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正在提取声音为 MP3",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "提取声音为 MP3",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "提取中",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "正在截取片段",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "按段截取并重生成",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "加入我的素材",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "存素材",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "调用文本模型生成内容",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "减小字号",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "增大字号",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "编辑字幕",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "时间线编辑",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "时间线",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "解锁节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "锁定位置和尺寸",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "水平居中",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "顶对齐",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "垂直居中",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "底对齐",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "水平等距",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "垂直等距",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "横向排列",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "纵向排列",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "宫格排列",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "按连线整理",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "创建分镜组",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "创建引用组",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "批量连接",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "合并选中视频（{{selectedVideoCount}}）",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "B1"
+ },
+ {
+  "zh": "更新节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "删除节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "连接",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "选择节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "触发生成",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "图片节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "视频节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "音频节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "生成配置",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts",
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx",
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "分镜脚本",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts",
+   "src/lib/canvas/canvas-short-drama.ts",
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "背板",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts",
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "技能节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "文本节点",
+  "files": [
+   "src/lib/canvas/canvas-agent-ops.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "{{length}} 个镜头",
+  "files": [
+   "src/lib/canvas/canvas-context-summary.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "来源图片",
+  "files": [
+   "src/lib/canvas/canvas-drawing-storage.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头 {{shotNumber}} · 视频",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "镜头 {{shotNumber}} 视频",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "广角",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "标准",
+  "files": [
+   "src/lib/canvas/canvas-project-domain.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "首帧",
+  "files": [
+   "src/lib/canvas/canvas-project-generation.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "项目画风",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts",
+   "src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "待选择",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "故事梗概",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "选择画风",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "合并成片",
+  "files": [
+   "src/lib/canvas/canvas-short-drama.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "用途：{{description}}",
+  "files": [
+   "src/lib/canvas/canvas-skill-mentions.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "请严格执行该技能，只输出结果，不要输出解释性套话。",
+  "files": [
+   "src/lib/canvas/canvas-skill-mentions.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "待开始",
+  "files": [
+   "src/lib/canvas/canvas-storyboard-progress.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "已完成",
+  "files": [
+   "src/lib/canvas/canvas-storyboard-progress.ts",
+   "src/lib/generation-task-display.ts",
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "仙侠",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "真人实拍",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "国漫 2D",
+  "files": [
+   "src/lib/canvas/canvas-style-system.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "左环绕",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "右环绕",
+  "files": [
+   "src/lib/canvas/cinematic-video-tools.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "绘图",
+  "files": [
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "技能",
+  "files": [
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "全景",
+  "files": [
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未知节点",
+  "files": [
+   "src/lib/canvas/node-registry/node-registry.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "未命名资产",
+  "files": [
+   "src/lib/canvas/style-profile.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "导演台",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/add-node-menu-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "撤销",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "重做",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "添加节点",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "查看角色详情",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "查看节点信息",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "重新生成",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "重试失败项",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "提取音频",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "截取重生成",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "放大编辑",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "用文本生图",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "上传图片",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "替换视频",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "上传视频",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "替换音频",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "上传音频",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "解锁",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "锁定",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "左对齐",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ },
+ {
+  "zh": "右对齐",
+  "files": [
+   "src/lib/canvas/tool-registry/definitions/selection-toolbar-tools.tsx"
+  ],
+  "ns": "lib",
+  "bucket": "B1"
+ }
+]

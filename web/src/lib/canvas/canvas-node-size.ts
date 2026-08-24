@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -31,23 +32,18 @@ export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: n
 
 export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
     if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return node;
-    const title = node.title === "New Generation" ? "图片" : node.title === "Video" ? "视频" : node.title;
+    const title = node.title === "New Generation" ? t("canvas:images-3") : node.title === "Video" ? t("canvas:videos-4") : node.title;
     let width = node.width;
     let height = node.height;
     const emptyStage = NODE_DEFAULT_SIZE[node.type];
-    const shouldPromoteEmptyStage = !node.metadata?.content
-        && !node.metadata?.freeResize
-        && !node.metadata?.locked
-        && width * height < emptyStage.width * emptyStage.height;
+    const shouldPromoteEmptyStage = !node.metadata?.content && !node.metadata?.freeResize && !node.metadata?.locked && width * height < emptyStage.width * emptyStage.height;
     if (shouldPromoteEmptyStage) {
         width = emptyStage.width;
         height = emptyStage.height;
     }
     const naturalWidth = node.metadata?.naturalWidth || 0;
     const naturalHeight = node.metadata?.naturalHeight || 0;
-    const requestedSize = node.type === CanvasNodeType.Image && node.metadata?.generationType === "edit"
-        ? nodeSizeFromRatio(node.metadata.size || "auto", node.width, node.height)
-        : null;
+    const requestedSize = node.type === CanvasNodeType.Image && node.metadata?.generationType === "edit" ? nodeSizeFromRatio(node.metadata.size || "auto", node.width, node.height) : null;
     const naturalRatio = naturalWidth / Math.max(1, naturalHeight);
     const nodeRatio = node.width / Math.max(1, node.height);
     // 修复旧版图生图无条件继承参考节点尺寸造成的比例错误，不覆盖自由拉伸或锁定布局。

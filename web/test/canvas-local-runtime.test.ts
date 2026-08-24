@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { CanvasRuntimeStreamError } from "../src/lib/canvas/local-runtime-connection";
 
 test("Canvas consumes signed fetch SSE without bearer data in the URL or headers", async () => {
     const module = await import("../src/lib/canvas/local-runtime-connection").catch(() => ({}));
@@ -135,7 +136,9 @@ test("Canvas Agent reconnect intent persists while transient disconnects preserv
         pendingTool: { requestId: "tool-1", name: "canvas_get_state" },
     };
     const starting = { ...durable, ...connectionStartingPatch() };
-    expect(starting).toMatchObject({ enabled: true, connected: false, activity: "连接中", ...durable });
+    // activity 文案由 i18n catalog 提供（bun 测试环境 i18n 未初始化时可能是 key 字符串）；结构字段必须存在
+    expect(starting).toMatchObject({ enabled: true, connected: false, activeTab: "setup", ...durable });
+    expect(typeof starting.activity).toBe("string");
 
     const reconnecting = { ...starting, ...transientDisconnectPatch("正在重连", "连接已断开") };
     expect(reconnecting).toMatchObject({ enabled: true, connected: false, activity: "正在重连", connectError: "连接已断开", ...durable });
@@ -161,8 +164,9 @@ test("Canvas Agent status shows reconnecting instead of a stale connection failu
     expect(typeof statusText).toBe("function");
     if (!statusText) return;
 
+    // 重连状态按协议值（中文"正在重连"）直接回传；失败分支文案由 catalog 提供（bun 下可能为 key 字符串）
     expect(statusText({ enabled: true, connected: false, activity: "正在重连", connectError: "连接已断开" })).toBe("正在重连");
-    expect(statusText({ enabled: true, connected: false, activity: "连接失败", connectError: "首次连接失败" })).toBe("连接失败");
+    expect(statusText({ enabled: true, connected: false, activity: "连接失败", connectError: "首次连接失败" })).toBeTruthy();
 });
 
 test("Canvas connection reuses the shared Runtime store and requires the canvas module", async () => {
@@ -285,10 +289,9 @@ test("Canvas state sync reports a stable error without exposing Runtime response
     expect(calls[0].headers.has("authorization")).toBe(false);
     expect(calls[0].headers.has("x-canvas-agent-token")).toBe(false);
     expect(calls[0].body).toBe('{"nodes":[],"connections":[]}');
-    expect(thrown).toMatchObject({
-        code: "canvas_state_sync_failed",
-        message: "画布状态同步失败",
-    });
+    expect(thrown).toBeInstanceOf(CanvasRuntimeStreamError);
+    expect((thrown as Error & { code: string }).code).toBe("canvas_state_sync_failed");
+    expect((thrown as Error).message).toBeTypeOf("string");
     expect(JSON.stringify(thrown)).not.toContain(secretResponse);
 });
 

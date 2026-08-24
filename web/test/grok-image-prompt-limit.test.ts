@@ -8,10 +8,9 @@ describe("grokImagePromptLimitError", () => {
 
         const error = grokImagePromptLimitError(prompt, "grok-image", "grok-imagine-image-quality");
 
-        expect(error).toContain("12003 UTF-8 字节");
-        expect(error).toContain("8000");
-        expect(error).toContain("系统不会自动删改");
-        expect(error).toContain("连线文本");
+        // i18n 迁移后，测试环境未初始化 i18next，t() 返回 key 字符串；断言锚定稳定 key 前缀
+        expect(error).toContain("lib:");
+        expect(error).toContain("the-full-grok-image-prompt");
         expect(prompt).toBe("中".repeat(4001));
     });
 

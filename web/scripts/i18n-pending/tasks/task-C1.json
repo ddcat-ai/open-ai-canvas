@@ -1,0 +1,1357 @@
+[
+ {
+  "zh": "已复制",
+  "files": [
+   "src/hooks/use-copy-text.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "读取失败",
+  "files": [
+   "src/hooks/use-external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "外部素材来源读取失败",
+  "files": [
+   "src/hooks/use-external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "{{sourceName}}暂不支持导入项目资产",
+  "files": [
+   "src/hooks/use-external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前浏览器不支持语音识别，请使用 Chrome 或 Edge",
+  "files": [
+   "src/hooks/use-speech-recognition.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "麦克风权限被拒绝，请在浏览器设置中允许访问麦克风",
+  "files": [
+   "src/hooks/use-speech-recognition.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未检测到语音，请重试",
+  "files": [
+   "src/hooks/use-speech-recognition.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "语音识别服务不可用，请检查网络后重试",
+  "files": [
+   "src/hooks/use-speech-recognition.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "语音识别失败（{{error}}）",
+  "files": [
+   "src/hooks/use-speech-recognition.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "无法访问麦克风",
+  "files": [
+   "src/hooks/use-voice-recording.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "积分余额刷新失败",
+  "files": [
+   "src/hooks/use-wallet-balance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "连接失败",
+  "files": [
+   "src/stores/canvas/use-canvas-agent-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未连接",
+  "files": [
+   "src/stores/canvas/use-canvas-agent-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "就绪",
+  "files": [
+   "src/stores/canvas/use-canvas-agent-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未命名画布",
+  "files": [
+   "src/stores/canvas/use-canvas-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "导入画布",
+  "files": [
+   "src/stores/canvas/use-canvas-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "官方即梦 CLI",
+  "files": [
+   "src/stores/use-config-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "新渠道",
+  "files": [
+   "src/stores/use-config-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "系统模型",
+  "files": [
+   "src/stores/use-config-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机连接需要重新建立",
+  "files": [
+   "src/services/local-dreamina-generation.ts",
+   "src/stores/use-local-runtime-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机服务连接超时",
+  "files": [
+   "src/stores/use-local-runtime-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未发现本机服务，请确认本机服务已启用",
+  "files": [
+   "src/stores/use-local-runtime-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "音频生成失败",
+  "files": [
+   "src/services/api/audio.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "异步音频生成超时（任务 {{taskId}}）",
+  "files": [
+   "src/services/api/audio.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "异步音频生成失败",
+  "files": [
+   "src/services/api/audio.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "上游返回了非音频内容：{{mimeType}}",
+  "files": [
+   "src/services/api/audio.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "请求已取消",
+  "files": [
+   "src/services/api/audio.ts",
+   "src/services/api/image-response.ts",
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "鉴权失败，请检查 API Key、套餐权限或模型权限",
+  "files": [
+   "src/services/api/audio.ts",
+   "src/services/api/image-response.ts",
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "请求被限流或额度不足，请稍后重试",
+  "files": [
+   "src/services/api/audio.ts",
+   "src/services/api/image-response.ts",
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前模型渠道 Base URL",
+  "files": [
+   "src/services/api/custom-channel-relay.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前模型请求地址",
+  "files": [
+   "src/services/api/custom-channel-relay.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "{{label}} 无效，请填写完整地址，例如：https://api.example.com/v1",
+  "files": [
+   "src/services/api/custom-channel-relay.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "读取 Eagle 素材失败",
+  "files": [
+   "src/services/api/eagle.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "即梦本机生成失败",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "即梦图片参考素材不可用",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "即梦参考素材无效",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "参考媒体上传失败：{{message}}",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "参考媒体上传失败",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "参考图片上传失败：{{message}}",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "参考图片上传失败",
+  "files": [
+   "src/services/api/generation-task.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "读取模型失败",
+  "files": [
+   "src/services/api/image-models.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Gemini 拒绝了本次请求：{{blockReason}}",
+  "files": [
+   "src/services/api/image-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "{{fallback}}：接口没有返回有效 JSON",
+  "files": [
+   "src/services/api/image-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前图片模型最多支持 {{maxImages}} 张参考图",
+  "files": [
+   "src/services/api/image-validation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Grok 图片生成失败",
+  "files": [
+   "src/services/api/image.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Grok 图片编辑失败",
+  "files": [
+   "src/services/api/image.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "火山方舟图片生成失败",
+  "files": [
+   "src/services/api/image.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "没有返回内容",
+  "files": [
+   "src/services/api/image.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未知项目工具：{{name}}",
+  "files": [
+   "src/services/api/project-agent-tools.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "获取对象存储地址失败",
+  "files": [
+   "src/services/api/resources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "后端影视 Agent 会话失败",
+  "files": [
+   "src/services/api/task-center.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "已取消",
+  "files": [
+   "src/services/api/task-center.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务状态同步失败：{{message}}",
+  "files": [
+   "src/services/api/task-center.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务执行超时，请稍后重试",
+  "files": [
+   "src/services/api/task-center.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Gemini Veo 任务创建失败",
+  "files": [
+   "src/services/api/video-provider-gemini.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Gemini Veo 任务已完成但没有返回视频地址",
+  "files": [
+   "src/services/api/video-provider-gemini.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Gemini Veo 任务查询失败",
+  "files": [
+   "src/services/api/video-provider-gemini.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "MiniMax 视频任务创建失败",
+  "files": [
+   "src/services/api/video-provider-minimax.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "MiniMax 视频任务已完成但没有返回视频地址",
+  "files": [
+   "src/services/api/video-provider-minimax.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "MiniMax 视频生成失败",
+  "files": [
+   "src/services/api/video-provider-minimax.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "MiniMax 视频任务查询失败",
+  "files": [
+   "src/services/api/video-provider-minimax.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "MiniMax {{label}}必须是公网 URL 或本地已保存素材",
+  "files": [
+   "src/services/api/video-provider-minimax.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "NewAPI Video Generations 任务创建失败",
+  "files": [
+   "src/services/api/video-provider-newapi.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "视频任务已完成但没有返回视频地址",
+  "files": [
+   "src/services/api/video-provider-newapi.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "视频生成失败",
+  "files": [
+   "src/services/api/video-provider-newapi.ts",
+   "src/services/api/video-provider-novita.ts",
+   "src/services/api/video-provider-openai.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "NewAPI Video Generations 任务查询失败",
+  "files": [
+   "src/services/api/video-provider-newapi.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Novita 视频任务创建失败",
+  "files": [
+   "src/services/api/video-provider-novita.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Novita 视频任务已完成但没有返回视频地址",
+  "files": [
+   "src/services/api/video-provider-novita.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Novita 视频任务查询失败",
+  "files": [
+   "src/services/api/video-provider-novita.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "视频任务创建失败",
+  "files": [
+   "src/services/api/video-provider-openai.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "视频任务查询失败",
+  "files": [
+   "src/services/api/video-provider-openai.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Seedance 任务创建失败",
+  "files": [
+   "src/services/api/video-provider-seedance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Seedance 任务成功但没有返回视频 URL",
+  "files": [
+   "src/services/api/video-provider-seedance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "超时",
+  "files": [
+   "src/services/api/video-provider-seedance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Seedance 任务查询失败",
+  "files": [
+   "src/services/api/video-provider-seedance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "{{label}}必须是公网 URL、素材 ID，或本地已保存素材",
+  "files": [
+   "src/services/api/video-provider-seedance.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "接口没有返回视频任务",
+  "files": [
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Seedance 接口没有返回任务",
+  "files": [
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "视频下载失败",
+  "files": [
+   "src/services/api/video-response.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前视频模型至少需要 {{minImages}} 张参考图",
+  "files": [
+   "src/services/api/video-validation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "画布生成副作用持久化失败",
+  "files": [
+   "src/services/canvas-generation-consumer.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "生成失败",
+  "files": [
+   "src/services/creation-text-task-recovery.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "文本任务结果格式错误",
+  "files": [
+   "src/services/creation-text-task-recovery.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "已停止",
+  "files": [
+   "src/services/creation-text-task-recovery.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "文本任务已失败",
+  "files": [
+   "src/services/creation-text-task-recovery.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "插件未能加载素材来源",
+  "files": [
+   "src/services/external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前插件不支持自动写入生成结果",
+  "files": [
+   "src/services/external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "插件写入失败",
+  "files": [
+   "src/services/external-asset-sources.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 操作已取消",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 进程清理失败，请检查本机进程状态",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 命令无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 操作超时，相关进程已清理",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 环境变量无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 操作标识冲突",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 请求失败",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "无法启动 Dreamina OAuth 登录",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "请先完成 Dreamina 官方页面授权",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 需要登录",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 登录响应无法识别，请升级 CLI",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 退出失败，请重试",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未检测到 Dreamina CLI",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 返回内容超过安全上限",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 查询失败",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 查询响应无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 参考文件超过安全上限",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 参考文件清理失败",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 参考文件无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 请求参数无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "无法启动 Dreamina CLI",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 正在处理另一项操作",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 操作已失效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 本机状态无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina 提交结果未知，请先检查状态",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 版本检测失败",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "未检测到 Dreamina CLI，请先完成本机安装",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 已安装，需要登录",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "请在官方页面确认 Dreamina 登录",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 已登录",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "已找到 Dreamina CLI，但版本检测失败",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 响应无效",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "请先连接本机运行时",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机运行时暂时不可用",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "Dreamina CLI 请求超时",
+  "files": [
+   "src/services/local-dreamina-cli.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "仅停止本机等待，官方任务仍可能继续。",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "官方任务未完成；可能已在官方取消或生成失败。",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务未成功。当前 Dreamina CLI 无法可靠判断是官网取消还是生成失败。",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机任务副作用响应无效",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机任务副作用租约缺失",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机任务副作用租约已失效",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机即梦生成未完成",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机即梦任务响应无效",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机即梦生成请求失败",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机即梦生成参数无效",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "所选本机即梦模型或操作不可用",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机即梦生成响应无效",
+  "files": [
+   "src/services/local-dreamina-generation.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务已转入后台，官方状态会继续同步。",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "官方返回状态：cancelled",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "提交结果待确认",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务已取消",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "转入后台",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务已由官方接受；转入后台后仍会继续同步官方状态。",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "取消任务",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "任务尚未提交官方，可以安全取消本机任务。",
+  "files": [
+   "src/services/local-dreamina-task-projection.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "浏览器不支持本机安全连接",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机会话尚未建立",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "正常本机请求不能携带旧版凭据",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机会话挑战无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "浏览器签名格式不受支持",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机请求体格式无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机请求路径无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前页面来源无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "浏览器公钥无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "浏览器密钥无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机运行时版本不兼容",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机会话响应无效",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机运行时响应无效",
+  "files": [
+   "src/services/local-runtime-session.ts",
+   "src/services/local-runtime.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "当前页面来源未获本机授权",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机连接请求过多，请稍后重试",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "浏览器密钥尚未注册",
+  "files": [
+   "src/services/local-runtime-session.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机运行时请求失败",
+  "files": [
+   "src/services/local-runtime-session.ts",
+   "src/services/local-runtime.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机会话已失效，请重新连接",
+  "files": [
+   "src/services/local-runtime.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "本机会话权限不足",
+  "files": [
+   "src/services/local-runtime.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "生成图片",
+  "files": [
+   "src/services/project-asset-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "生成",
+  "files": [
+   "src/services/project-asset-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "生成视频",
+  "files": [
+   "src/services/project-asset-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "生成音频",
+  "files": [
+   "src/services/project-asset-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "登录后画布首次同步失败，保留本地项目等待重试",
+  "files": [
+   "src/services/user-data-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ },
+ {
+  "zh": "云端自动同步失败",
+  "files": [
+   "src/services/user-data-sync.ts"
+  ],
+  "ns": "domain",
+  "bucket": "C1"
+ }
+]

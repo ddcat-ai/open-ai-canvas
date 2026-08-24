@@ -8,6 +8,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useTranslation } from "react-i18next";
 
 type CanvasZoomControlsProps = {
     scale: number;
@@ -22,6 +23,7 @@ type CanvasZoomControlsProps = {
 const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 
 export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
@@ -69,22 +71,27 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     }
 
     const items: FloatingDockEntry[] = [
-        { id: "zoom-minimap", label: isMiniMapOpen ? "关闭小地图" : "打开小地图", icon: <Compass />, active: isMiniMapOpen, onClick: onToggleMiniMap },
-        { id: "zoom-fit", label: "适应全部内容", icon: <Focus />, onClick: onReset },
+        { id: "zoom-minimap", label: isMiniMapOpen ? t("domain:close-mini-map") : t("domain:open-mini-map"), icon: <Compass />, active: isMiniMapOpen, onClick: onToggleMiniMap },
+        { id: "zoom-fit", label: t("domain:fit-all-content"), icon: <Focus />, onClick: onReset },
         { kind: "separator", id: "zoom-separator" },
-        { id: "zoom-out", label: "缩小画布", icon: <Minus />, onClick: () => commitScale(liveScaleRef.current - 0.1) },
+        { id: "zoom-out", label: t("domain:zoom-out-canvas"), icon: <Minus />, onClick: () => commitScale(liveScaleRef.current - 0.1) },
         {
             id: "zoom-precision",
-            label: "精确缩放",
+            label: t("domain:fine-grained-zoom"),
             wide: true,
             quiet: true,
-            icon: <span className="inline-flex h-full items-center justify-center whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none tabular-nums"><span ref={dockLabelRef}>{Math.round(scale * 100)}</span><span className="ml-px text-[var(--fs-micro)] font-medium leading-none opacity-50">%</span></span>,
+            icon: (
+                <span className="inline-flex h-full items-center justify-center whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none tabular-nums">
+                    <span ref={dockLabelRef}>{Math.round(scale * 100)}</span>
+                    <span className="ml-px text-[var(--fs-micro)] font-medium leading-none opacity-50">%</span>
+                </span>
+            ),
             active: precisionOpen,
             onClick: () => setPrecisionOpen((value) => !value),
         },
-        { id: "zoom-in", label: "放大画布", icon: <Plus />, onClick: () => commitScale(liveScaleRef.current + 0.1) },
+        { id: "zoom-in", label: t("domain:zoom-in-canvas"), icon: <Plus />, onClick: () => commitScale(liveScaleRef.current + 0.1) },
         { kind: "separator", id: "help-separator" },
-        { id: "zoom-shortcuts", label: "画布快捷键", icon: <HelpCircle />, onClick: onOpenShortcuts },
+        { id: "zoom-shortcuts", label: t("domain:canvas-shortcuts"), icon: <HelpCircle />, onClick: onOpenShortcuts },
     ];
 
     return (
@@ -102,10 +109,16 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
                         <div className="flex items-center justify-between gap-3">
                             <span>
-                                <span className="block text-[var(--fs-tiny)] font-semibold">画布尺度</span>
-                                <span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>精确控制视野密度</span>
+                                <span className="block text-[var(--fs-tiny)] font-semibold">{t("domain:canvas-scale")}</span>
+                                <span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                                    {t("domain:precisely-control-viewport-density")}
+                                </span>
                             </span>
-                            <span ref={panelLabelRef} className="rounded-full border px-2 py-0.5 text-[var(--fs-tiny)] font-semibold tabular-nums" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}>
+                            <span
+                                ref={panelLabelRef}
+                                className="rounded-full border px-2 py-0.5 text-[var(--fs-tiny)] font-semibold tabular-nums"
+                                style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}
+                            >
                                 {Math.round(scale * 100)}%
                             </span>
                         </div>
@@ -119,7 +132,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                             className="aceternity-zoom-range mt-3 h-4 w-full"
                             style={{ accentColor: theme.accent.primary }}
                             onChange={(event) => commitScale(Number(event.target.value) / 100)}
-                            aria-label="精确缩放画布"
+                            aria-label={t("domain:zoom-canvas-precisely")}
                         />
                         <div className="mt-2.5 grid grid-cols-4 gap-1">
                             {QUICK_ZOOM_LEVELS.map((level) => (
@@ -141,7 +154,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                 ) : null}
             </AnimatePresence>
 
-            <FloatingDock items={items} className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="画布视图控制" />
+            <FloatingDock items={items} className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel={t("domain:canvas-view-controls")} />
         </div>
     );
 }

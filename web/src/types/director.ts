@@ -22,10 +22,59 @@ export type DirectorKeyframe = {
 };
 
 export type DirectorFingerBone =
-    | "leftThumb1" | "leftThumb2" | "leftThumb3" | "leftIndex1" | "leftIndex2" | "leftIndex3" | "leftMiddle1" | "leftMiddle2" | "leftMiddle3" | "leftRing1" | "leftRing2" | "leftRing3" | "leftPinky1" | "leftPinky2" | "leftPinky3"
-    | "rightThumb1" | "rightThumb2" | "rightThumb3" | "rightIndex1" | "rightIndex2" | "rightIndex3" | "rightMiddle1" | "rightMiddle2" | "rightMiddle3" | "rightRing1" | "rightRing2" | "rightRing3" | "rightPinky1" | "rightPinky2" | "rightPinky3";
+    | "leftThumb1"
+    | "leftThumb2"
+    | "leftThumb3"
+    | "leftIndex1"
+    | "leftIndex2"
+    | "leftIndex3"
+    | "leftMiddle1"
+    | "leftMiddle2"
+    | "leftMiddle3"
+    | "leftRing1"
+    | "leftRing2"
+    | "leftRing3"
+    | "leftPinky1"
+    | "leftPinky2"
+    | "leftPinky3"
+    | "rightThumb1"
+    | "rightThumb2"
+    | "rightThumb3"
+    | "rightIndex1"
+    | "rightIndex2"
+    | "rightIndex3"
+    | "rightMiddle1"
+    | "rightMiddle2"
+    | "rightMiddle3"
+    | "rightRing1"
+    | "rightRing2"
+    | "rightRing3"
+    | "rightPinky1"
+    | "rightPinky2"
+    | "rightPinky3";
 
-export type DirectorHumanoidBone = "root" | "hips" | "spine" | "chest" | "neck" | "head" | "leftShoulder" | "leftUpperArm" | "leftLowerArm" | "leftHand" | "rightShoulder" | "rightUpperArm" | "rightLowerArm" | "rightHand" | "leftUpperLeg" | "leftLowerLeg" | "leftFoot" | "rightUpperLeg" | "rightLowerLeg" | "rightFoot" | DirectorFingerBone;
+export type DirectorHumanoidBone =
+    | "root"
+    | "hips"
+    | "spine"
+    | "chest"
+    | "neck"
+    | "head"
+    | "leftShoulder"
+    | "leftUpperArm"
+    | "leftLowerArm"
+    | "leftHand"
+    | "rightShoulder"
+    | "rightUpperArm"
+    | "rightLowerArm"
+    | "rightHand"
+    | "leftUpperLeg"
+    | "leftLowerLeg"
+    | "leftFoot"
+    | "rightUpperLeg"
+    | "rightLowerLeg"
+    | "rightFoot"
+    | DirectorFingerBone;
 
 export type DirectorBoneKeyframe = {
     id: string;

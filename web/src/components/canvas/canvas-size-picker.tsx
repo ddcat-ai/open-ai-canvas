@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Select } from "antd";
 
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 const sizeOptions = ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"];
 
@@ -12,6 +13,7 @@ type CanvasSizePickerProps = {
 };
 
 export function CanvasSizePicker({ value, className, onChange }: CanvasSizePickerProps) {
+    const { t } = useTranslation("canvas");
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -42,7 +44,7 @@ export function CanvasSizePicker({ value, className, onChange }: CanvasSizePicke
                 className={cn("canvas-compact-control canvas-control-select h-full w-full")}
                 value={value || undefined}
                 searchValue={search}
-                placeholder="比例"
+                placeholder={t("domain:ratio-2")}
                 options={options}
                 popupMatchSelectWidth={false}
                 popupRender={(menu) => (

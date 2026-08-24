@@ -9,6 +9,7 @@ import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { DirectorScene } from "@/types/director";
 import type { TimelineProject } from "@/types/timeline";
+import { t } from "@/i18n";
 
 export type CanvasProject = {
     id: string;
@@ -79,7 +80,7 @@ function runWithBrowserCanvasStorageLock<T>(scope: string, operation: () => Prom
     const lockName = `${CANVAS_STORAGE_LOCK_PREFIX}${scope}`;
     if (locks) return locks.request(lockName, operation);
     if (options.requireCrossRealmLock && typeof window !== "undefined" && typeof document !== "undefined") {
-        throw new Error("当前浏览器不支持跨标签存储锁，已停止画布生成持久化");
+        throw new Error(t("domain:this-browser-does-not-support-cross-tab-storage-locks-canvas-generation"));
     }
     return operation();
 }
@@ -315,7 +316,7 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
-            createProject: (title = "未命名画布", projectId) => {
+            createProject: (title = t("domain:untitled-canvas"), projectId) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const project: CanvasProject = {
@@ -341,7 +342,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 const project: CanvasProject = {
                     id: nanoid(),
                     projectId: source.projectId,
-                    title: source.title || "导入画布",
+                    title: source.title || t("domain:import-canvas"),
                     createdAt: source.createdAt || now,
                     updatedAt: now,
                     nodes: source.nodes || [],

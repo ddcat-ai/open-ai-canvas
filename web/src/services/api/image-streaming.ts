@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { channelRequest } from "@/services/api/custom-channel-relay";
 import type { ChatCompletionPayload, ChatCompletionStreamState, GeminiPayload, GeminiStreamState, RequestOptions, ResponseApiPayload, ResponseStreamState, ToolResponseResult } from "@/services/api/image-contracts";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -23,7 +24,7 @@ export async function requestStreamingResponse(config: AiConfig, body: Record<st
         signal: options?.signal,
         credentials: request.credentials,
     });
-    if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
+    if (!response.ok) throw new Error(await readFetchError(response, t("domain:request-failed")));
     if (!response.body) {
         const payload = (await response.json()) as ResponseApiPayload;
         validateResponsePayload(payload);
@@ -56,10 +57,10 @@ export async function requestStreamingChatCompletion(config: AiConfig, body: Rec
         signal: options?.signal,
         credentials: request.credentials,
     });
-    if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
+    if (!response.ok) throw new Error(await readFetchError(response, t("domain:request-failed")));
     const contentType = response.headers.get("content-type") || "";
     if (!response.body || !contentType.includes("text/event-stream")) {
-        const result = parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, "请求失败"));
+        const result = parseChatCompletionPayload(await readJsonPayload<ChatCompletionPayload>(response, t("domain:request-failed")));
         if (result.reasoning) options?.onReasoning?.(result.reasoning);
         return result;
     }
@@ -157,7 +158,7 @@ export async function requestGeminiStreamingResponse(config: AiConfig, body: Rec
         signal: options?.signal,
         credentials: request.credentials,
     });
-    if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
+    if (!response.ok) throw new Error(await readFetchError(response, t("domain:request-failed")));
     if (!response.body) {
         const payload = (await response.json()) as GeminiPayload;
         const result = parseGeminiToolResponse(payload);

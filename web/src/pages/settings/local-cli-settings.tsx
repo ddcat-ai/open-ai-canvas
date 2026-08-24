@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DreaminaAgentError, getDreaminaStatus, loginDreamina, logoutDreamina, type DreaminaCliStatus } from "@/services/local-dreamina-cli";
 import { getLocalRuntimeSessionClient, useLocalRuntimeStore, type LocalRuntimeConnectionState } from "@/stores/use-local-runtime-store";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type PendingAction = "refresh" | "login" | "logout" | "";
 type PresentationAction = "refresh" | "login" | "open_verification" | "logout" | null;
@@ -17,41 +19,42 @@ type Presentation = {
 };
 
 export const LOCAL_CLI_SETTINGS_COPY = {
-    runtimeTitle: "本机连接",
-    runtimeConnected: "本机服务已连接，CLI 状态会自动同步。",
-    runtimeDetecting: "正在检测本机服务；请确认已启动当前版本。",
-    runtimeReconnect: "重新连接",
-    runtimeSafety: "官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。",
-    runtimeRefresh: "刷新状态",
-    dreaminaDescription: "直接读取当前 Windows 用户的官方即梦 CLI 登录状态。",
-    dreaminaDisconnected: "连接本机服务后自动检测",
-    dreaminaDisconnectedMessage: "重新连接本机服务后，将自动读取官方 CLI 状态。",
-    dreaminaMembership: "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
-    dreaminaConsistency: "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
-    dreaminaCancel: "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
-    dreaminaAccountSwitch: "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
-    dreaminaRefresh: "刷新状态",
+    runtimeTitle: t("settings:local-connection"),
+    runtimeConnected: t("settings:local-service-connected-cli-status-syncs-automatically"),
+    runtimeDetecting: t("settings:detecting-local-service-make-sure-the-current-version-is-running"),
+    runtimeReconnect: t("settings:reconnect"),
+    runtimeSafety: t("settings:official-cli-credentials-stay-on-this-machine-this-page-never-reads-or-u"),
+    runtimeRefresh: t("settings:refresh-status"),
+    dreaminaDescription: t("settings:reads-the-official-dreamina-cli-sign-in-status-for-the-current-windows-u"),
+    dreaminaDisconnected: t("settings:detected-automatically-once-the-local-service-connects"),
+    dreaminaDisconnectedMessage: t("settings:the-official-cli-status-is-read-automatically-after-reconnecting-the-loc"),
+    dreaminaMembership: t("settings:account-generation-permission-unknown-this-page-only-verifies-adapter-su"),
+    dreaminaConsistency: t("settings:task-states-are-synced-by-backend-polling-not-pushed-in-real-time-closin"),
+    dreaminaCancel: t("settings:the-official-dreamina-cli-offers-no-cancel-command-accepted-tasks-keep-s"),
+    dreaminaAccountSwitch: t("settings:do-not-switch-dreamina-cli-accounts-in-other-apps-while-local-tasks-run"),
+    dreaminaRefresh: t("settings:refresh-status"),
 } as const;
 
 export function localCliSettingsPresentation(input: { connection: string; moduleAvailable: boolean; dreamina?: DreaminaCliStatus; timeZone?: string }): { runtime: Presentation; dreamina: Presentation } {
+    const { t } = useTranslation("canvas");
     const runtime = runtimePresentation(input.connection as LocalRuntimeConnectionState);
     if (input.connection !== "connected") {
         return { runtime, dreamina: { label: LOCAL_CLI_SETTINGS_COPY.dreaminaDisconnected, tone: "default", action: null } };
     }
     if (!input.moduleAvailable) {
-        return { runtime, dreamina: { label: "模块未加载", tone: "error", action: "refresh" } };
+        return { runtime, dreamina: { label: t("settings:module-not-loaded"), tone: "error", action: "refresh" } };
     }
     const status = input.dreamina;
-    if (!status) return { runtime, dreamina: { label: "正在检测", tone: "processing", action: "refresh" } };
+    if (!status) return { runtime, dreamina: { label: t("settings:detecting"), tone: "processing", action: "refresh" } };
     const creditObservedAt = formatCreditObservedAt(status.creditObservedAt, input.timeZone);
     const hasScopedCredit = status.totalCredit !== undefined && Boolean(status.accountBinding) && status.sessionEpoch !== undefined && Boolean(creditObservedAt);
-    if (status.state === "missing") return { runtime, dreamina: { label: "未安装", tone: "error", action: "refresh" } };
-    if (status.state === "login_pending") return { runtime, dreamina: { label: "等待官方授权", tone: "processing", action: "open_verification" } };
+    if (status.state === "missing") return { runtime, dreamina: { label: t("settings:not-installed"), tone: "error", action: "refresh" } };
+    if (status.state === "login_pending") return { runtime, dreamina: { label: t("settings:waiting-for-authorization"), tone: "processing", action: "open_verification" } };
     if (status.authenticated)
         return {
             runtime,
             dreamina: {
-                label: "已登录",
+                label: t("settings:signed-in"),
                 tone: "success",
                 action: "logout",
                 ...(!hasScopedCredit
@@ -59,11 +62,11 @@ export function localCliSettingsPresentation(input: { connection: string; module
                     : {
                           creditLabel: `即梦积分 ${new Intl.NumberFormat("zh-CN").format(status.totalCredit!)}`,
                       }),
-                ...(creditObservedAt ? { creditObservedAtLabel: `上次刷新积分 ${creditObservedAt}` } : {}),
+                ...(creditObservedAt ? { creditObservedAtLabel: t("settings:credits-last-refreshed-param", { creditObservedAt: creditObservedAt }) } : {}),
             },
         };
-    if (status.state === "installed") return { runtime, dreamina: { label: "未登录", tone: "warning", action: "login" } };
-    return { runtime, dreamina: { label: "检测失败", tone: "error", action: "refresh" } };
+    if (status.state === "installed") return { runtime, dreamina: { label: t("settings:not-signed-in"), tone: "warning", action: "login" } };
+    return { runtime, dreamina: { label: t("settings:detection-failed"), tone: "error", action: "refresh" } };
 }
 
 export function formatCreditObservedAt(value: unknown, timeZone?: string) {
@@ -84,6 +87,7 @@ export function formatCreditObservedAt(value: unknown, timeZone?: string) {
 }
 
 export function LocalCliSettings() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const connection = useLocalRuntimeStore((state) => state.connection);
     const connecting = useLocalRuntimeStore((state) => state.connecting);
@@ -107,7 +111,7 @@ export function LocalCliSettings() {
     const runDreamina = useCallback(
         async (action: Exclude<PendingAction, "">) => {
             if (connection !== "connected" || !moduleAvailable) {
-                message.warning("请先连接已加载 Dreamina 的本机运行时");
+                message.warning(t("settings:connect-a-local-runtime-with-dreamina-loaded-first"));
                 return;
             }
             lifecycle.current.controller?.abort();
@@ -121,14 +125,14 @@ export function LocalCliSettings() {
                 const next = action === "login" ? await loginDreamina(client, options) : action === "logout" ? await logoutDreamina(client, options) : await getDreaminaStatus(client, options);
                 if (revision !== lifecycle.current.revision || controller.signal.aborted) return;
                 setStatus(next);
-                if (action === "logout") message.success("Dreamina CLI 已退出登录");
+                if (action === "logout") message.success(t("settings:dreamina-cli-signed-out"));
                 if (action === "login" && next.state === "login_pending") {
-                    message.info("请打开官方验证页完成授权，再刷新状态");
+                    message.info(t("settings:complete-authorization-on-the-official-verification-page-then-refresh-st"));
                 }
             } catch (error) {
                 if (revision !== lifecycle.current.revision || controller.signal.aborted) return;
                 setStatus(undefined);
-                message.error(error instanceof DreaminaAgentError ? error.message : "Dreamina CLI 操作失败");
+                message.error(error instanceof DreaminaAgentError ? error.message : t("settings:dreamina-cli-operation-failed"));
             } finally {
                 if (revision === lifecycle.current.revision) {
                     lifecycle.current.controller = null;
@@ -221,13 +225,11 @@ export function LocalCliSettings() {
                         <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaConsistency}</p>
                         <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaCancel}</p>
                         <p className="text-xs leading-6 text-foreground/55">{LOCAL_CLI_SETTINGS_COPY.dreaminaAccountSwitch}</p>
-                        {status?.state === "missing" ? (
-                            <p className="rounded-md bg-foreground/[0.035] p-3 text-xs leading-6 text-foreground/65">未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。</p>
-                        ) : null}
+                        {status?.state === "missing" ? <p className="rounded-md bg-foreground/[0.035] p-3 text-xs leading-6 text-foreground/65">{t("settings:official-dreamina-cli-not-detected-install-it-per-the-official-guide-mak")}</p> : null}
                         {status?.state === "login_pending" ? (
                             <div className="rounded-md border border-border/70 p-3">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-foreground/60">官方验证用户码</span>
+                                    <span className="text-xs text-foreground/60">{t("settings:verification-user-code")}</span>
                                     <Typography.Text
                                         strong
                                         copyable={{
@@ -238,7 +240,11 @@ export function LocalCliSettings() {
                                         {status.userCode}
                                     </Typography.Text>
                                 </div>
-                                {status.expiresAt ? <p className="mt-1 text-xs text-foreground/50">有效期至 {new Date(status.expiresAt).toLocaleTimeString()}</p> : null}
+                                {status.expiresAt ? (
+                                    <p className="mt-1 text-xs text-foreground/50">
+                                        {t("settings:valid-until")} {new Date(status.expiresAt).toLocaleTimeString()}
+                                    </p>
+                                ) : null}
                             </div>
                         ) : null}
                     </div>
@@ -246,18 +252,24 @@ export function LocalCliSettings() {
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                         {status?.state === "installed" ? (
                             <Button type="primary" icon={<LogIn className="size-4" />} loading={pending === "login"} disabled={Boolean(pending && pending !== "login")} onClick={() => void runDreamina("login")}>
-                                登录
+                                {t("settings:sign-in")}
                             </Button>
                         ) : null}
                         {status?.state === "login_pending" ? (
                             <Button type="primary" icon={<ExternalLink className="size-4" />} onClick={openVerification}>
-                                打开官方验证页
+                                {t("settings:open-verification-page")}
                             </Button>
                         ) : null}
                         {status?.authenticated ? (
-                            <Popconfirm title="退出 Dreamina CLI？" description="只清除当前 OS 用户的官方 CLI 登录状态。" okText="退出" cancelText="取消" onConfirm={() => void runDreamina("logout")}>
+                            <Popconfirm
+                                title={t("settings:sign-out-of-dreamina-cli")}
+                                description={t("settings:only-clears-the-official-cli-sign-in-state-for-this-os-user")}
+                                okText={t("settings:sign-out")}
+                                cancelText={t("settings:cancel")}
+                                onConfirm={() => void runDreamina("logout")}
+                            >
                                 <Button danger icon={<LogOut className="size-4" />} loading={pending === "logout"}>
-                                    退出登录
+                                    {t("settings:sign-out-2")}
                                 </Button>
                             </Popconfirm>
                         ) : null}
@@ -269,17 +281,19 @@ export function LocalCliSettings() {
 }
 
 function runtimePresentation(connection: LocalRuntimeConnectionState): Presentation {
-    if (connection === "connected") return { label: "已连接", tone: "success", action: "refresh" };
-    if (connection === "connecting") return { label: "正在检测", tone: "processing", action: null };
-    if (connection === "origin_not_trusted") return { label: "需要重新连接", tone: "error", action: "refresh", actionLabel: LOCAL_CLI_SETTINGS_COPY.runtimeReconnect };
-    if (connection === "unreachable") return { label: "未发现", tone: "error", action: "refresh" };
-    if (connection === "incompatible") return { label: "版本不兼容", tone: "error", action: "refresh" };
-    if (connection === "runtime_error") return { label: "运行时错误", tone: "error", action: "refresh" };
-    return { label: "尚未检测", tone: "default", action: "refresh" };
+    const { t } = useTranslation("canvas");
+    if (connection === "connected") return { label: t("settings:connected"), tone: "success", action: "refresh" };
+    if (connection === "connecting") return { label: t("settings:detecting"), tone: "processing", action: null };
+    if (connection === "origin_not_trusted") return { label: t("settings:reconnect-required"), tone: "error", action: "refresh", actionLabel: LOCAL_CLI_SETTINGS_COPY.runtimeReconnect };
+    if (connection === "unreachable") return { label: t("settings:not-found"), tone: "error", action: "refresh" };
+    if (connection === "incompatible") return { label: t("settings:incompatible-version"), tone: "error", action: "refresh" };
+    if (connection === "runtime_error") return { label: t("settings:runtime-error"), tone: "error", action: "refresh" };
+    return { label: t("settings:not-checked-yet"), tone: "default", action: "refresh" };
 }
 
 function dreaminaEmptyMessage(connection: LocalRuntimeConnectionState, moduleAvailable: boolean) {
+    const { t } = useTranslation("canvas");
     if (connection !== "connected") return LOCAL_CLI_SETTINGS_COPY.dreaminaDisconnectedMessage;
-    if (!moduleAvailable) return "当前 Runtime 未加载 Dreamina 模块，请更新并重启 Runtime。";
-    return "正在检测 Dreamina CLI…";
+    if (!moduleAvailable) return t("settings:the-current-runtime-has-no-dreamina-module-loaded-update-and-restart-the");
+    return t("settings:detecting-dreamina-cli");
 }

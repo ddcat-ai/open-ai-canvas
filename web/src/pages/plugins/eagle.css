@@ -21,7 +21,7 @@
     color: color-mix(in srgb, var(--foreground) 38%, transparent);
     font-size: var(--fs-tiny);
     font-weight: 650;
-    letter-spacing: .06em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
@@ -58,7 +58,9 @@
     align-items: center;
     border-radius: var(--r-md);
     padding: 6px 4px;
-    transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out;
+    transition:
+        background-color var(--motion-state) ease-out,
+        color var(--motion-state) ease-out;
 }
 
 .eagle-library-page .eagle-folder-tree-title {
@@ -95,7 +97,9 @@
     border-radius: var(--r-md);
     background: transparent;
     color: inherit;
-    transition: background-color var(--motion-state) ease-out, color var(--motion-state) ease-out;
+    transition:
+        background-color var(--motion-state) ease-out,
+        color var(--motion-state) ease-out;
 }
 
 .eagle-library-page .eagle-folder-collapse:hover {
@@ -127,10 +131,12 @@
     height: 30px;
     place-items: center;
     border-radius: var(--r-md);
-    background: rgba(10, 10, 10, .62);
+    background: rgba(10, 10, 10, 0.62);
     color: #fff;
     opacity: 0;
-    transition: background-color var(--motion-state) ease-out, opacity var(--motion-state) ease-out;
+    transition:
+        background-color var(--motion-state) ease-out,
+        opacity var(--motion-state) ease-out;
 }
 
 .eagle-library-page .asset-library-card:hover .eagle-cover-download,
@@ -140,7 +146,7 @@
 }
 
 .eagle-library-page .eagle-cover-download:hover {
-    background: rgba(10, 10, 10, .82);
+    background: rgba(10, 10, 10, 0.82);
 }
 
 .eagle-library-page .eagle-cover-download:focus-visible {
@@ -202,5 +208,4 @@
     .eagle-library-page .eagle-drawer-download {
         transition: none;
     }
-
 }

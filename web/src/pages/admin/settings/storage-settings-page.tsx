@@ -6,6 +6,8 @@ import { getAdminOSSSetting, updateAdminOSSSetting, type AdminOSSSetting } from 
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type StorageMode = "local" | "aliyun" | "tencent" | "qiniu";
 type OSSFormValues = {
@@ -21,6 +23,7 @@ type OSSFormValues = {
 };
 
 export default function StorageSettingsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const { references } = useAdminContext();
     const [setting, setSetting] = useState<AdminOSSSetting | null>(null);
@@ -42,20 +45,20 @@ export default function StorageSettingsPage() {
                 setSetting(value);
                 form.setFieldsValue(formValues(value));
             })
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取对象存储配置失败"))
+            .catch((error) => message.error(error instanceof Error ? error.message : t("admin:failed-to-read-object-storage-config")))
             .finally(() => setLoading(false));
     }, [form, message]);
 
     const save = async () => {
         await form.validateFields();
         const values = form.getFieldsValue(true);
-        if (values.mode === "local" && !values.publicBaseUrl?.trim()) return message.error("请填写服务器访问地址");
-        if (values.mode !== "local" && !values.accessKeySecret?.trim() && !hasCurrentProviderSecret) return message.error(`请填写 ${accessKeySecretLabel}`);
-        if (values.mode !== "local" && !values.bucket?.trim()) return message.error("请填写对象存储 Bucket");
-        if (values.mode !== "local" && !values.accessKeyId?.trim()) return message.error(`请填写 ${accessKeyIdLabel}`);
-        if (values.mode === "aliyun" && !values.endpoint?.trim()) return message.error("请填写阿里云 OSS Endpoint");
-        if (values.mode === "tencent" && !values.endpoint?.trim() && !values.region?.trim()) return message.error("请填写腾讯云 COS Region 或 Endpoint");
-        if (values.mode === "qiniu" && !values.endpoint?.trim()) return message.error("请填写七牛云 Kodo 上传 Endpoint");
+        if (values.mode === "local" && !values.publicBaseUrl?.trim()) return message.error(t("admin:enter-the-server-access-address"));
+        if (values.mode !== "local" && !values.accessKeySecret?.trim() && !hasCurrentProviderSecret) return message.error(t("admin:enter-param-2", { accessKeySecretLabel: accessKeySecretLabel }));
+        if (values.mode !== "local" && !values.bucket?.trim()) return message.error(t("admin:enter-the-object-storage-bucket"));
+        if (values.mode !== "local" && !values.accessKeyId?.trim()) return message.error(t("admin:enter-param-3", { accessKeyIdLabel: accessKeyIdLabel }));
+        if (values.mode === "aliyun" && !values.endpoint?.trim()) return message.error(t("admin:enter-the-aliyun-oss-endpoint"));
+        if (values.mode === "tencent" && !values.endpoint?.trim() && !values.region?.trim()) return message.error(t("admin:enter-the-tencent-cos-region-or-endpoint"));
+        if (values.mode === "qiniu" && !values.endpoint?.trim()) return message.error(t("admin:enter-the-qiniu-kodo-upload-endpoint"));
 
         setSaving(true);
         try {
@@ -73,46 +76,80 @@ export default function StorageSettingsPage() {
             });
             setSetting(result.setting);
             form.setFieldsValue(formValues(result.setting));
-            message.success("存储配置已保存");
+            message.success(t("admin:storage-config-saved"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存存储配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-storage-config"));
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
+        <AdminPageFrame title={t("admin:storage-services")} description={t("admin:set-the-default-storage-location-for-new-assets")} scroll>
             <div className="space-y-4 pt-4">
                 <SettingsSectionCard
                     layout="stacked"
                     contentClassName="px-4 pb-4"
                     icon={<Cloud className="size-4" />}
-                    title="平台存储"
+                    title={t("admin:platform-storage")}
                     status={
                         <Space size={6}>
-                            <AdminStatusBadge label={setting?.enabled ? storageProviderLabel(setting.provider) : "服务器本地"} tone="neutral" />
-                            {setting?.enabled ? <AdminStatusBadge label={setting.hasAccessKeySecret ? configuredSecretText : "未保存密钥"} tone={setting.hasAccessKeySecret ? "success" : "warning"} /> : null}
+                            <AdminStatusBadge label={setting?.enabled ? storageProviderLabel(setting.provider) : t("admin:server-local-2")} tone="neutral" />
+                            {setting?.enabled ? <AdminStatusBadge label={setting.hasAccessKeySecret ? configuredSecretText : t("admin:keys-not-saved-yet")} tone={setting.hasAccessKeySecret ? "success" : "warning"} /> : null}
                         </Space>
                     }
                     footer={
                         <>
                             <div className="text-xs text-foreground/45">
-                                {setting?.updatedAt ? `上次更新：${formatTime(setting.updatedAt)}${setting.updatedBy ? ` · ${userNameById.get(setting.updatedBy) || setting.updatedBy}` : ""}` : "尚未保存平台存储配置"}
+                                {setting?.updatedAt ? `上次更新：${formatTime(setting.updatedAt)}${setting.updatedBy ? ` · ${userNameById.get(setting.updatedBy) || setting.updatedBy}` : ""}` : t("admin:platform-storage-config-not-saved-yet")}
                             </div>
-                            <Button type="primary" loading={saving} onClick={() => void save()}>保存存储配置</Button>
+                            <Button type="primary" loading={saving} onClick={() => void save()}>
+                                {t("admin:save-storage-config")}
+                            </Button>
                         </>
                     }
                 >
                     <Form form={form} layout="vertical" requiredMark={false} disabled={loading} className="px-5 pb-2">
-                        <Form.Item name="mode" label="存储类型" rules={[{ required: true, message: "请选择存储类型" }]}>
+                        <Form.Item name="mode" label={t("admin:storage-type")} rules={[{ required: true, message: t("admin:select-a-storage-type") }]}>
                             <Segmented<StorageMode>
                                 block
                                 options={[
-                                    { label: <span className="inline-flex items-center gap-2"><HardDrive className="size-4" />服务器本地</span>, value: "local" },
-                                    { label: <span className="inline-flex items-center gap-2"><Cloud className="size-4" />阿里云 OSS</span>, value: "aliyun" },
-                                    { label: <span className="inline-flex items-center gap-2"><Cloud className="size-4" />腾讯云 COS</span>, value: "tencent" },
-                                    { label: <span className="inline-flex items-center gap-2"><Cloud className="size-4" />七牛云 Kodo</span>, value: "qiniu" },
+                                    {
+                                        label: (
+                                            <span className="inline-flex items-center gap-2">
+                                                <HardDrive className="size-4" />
+                                                {t("admin:server-local-2")}
+                                            </span>
+                                        ),
+                                        value: "local",
+                                    },
+                                    {
+                                        label: (
+                                            <span className="inline-flex items-center gap-2">
+                                                <Cloud className="size-4" />
+                                                {t("admin:aliyun-oss-2")}
+                                            </span>
+                                        ),
+                                        value: "aliyun",
+                                    },
+                                    {
+                                        label: (
+                                            <span className="inline-flex items-center gap-2">
+                                                <Cloud className="size-4" />
+                                                {t("admin:tencent-cos-2")}
+                                            </span>
+                                        ),
+                                        value: "tencent",
+                                    },
+                                    {
+                                        label: (
+                                            <span className="inline-flex items-center gap-2">
+                                                <Cloud className="size-4" />
+                                                {t("admin:qiniu-kodo-2")}
+                                            </span>
+                                        ),
+                                        value: "qiniu",
+                                    },
                                 ]}
                                 onChange={(value) => {
                                     const nextMode = value as StorageMode;
@@ -126,48 +163,53 @@ export default function StorageSettingsPage() {
                             <div className="space-y-1">
                                 <div className="grid gap-x-4 gap-y-1 md:grid-cols-2 xl:grid-cols-3">
                                     <Form.Item name="region" label="Region">
-                                        <Input autoComplete="off" placeholder={isTencentCOS ? "例如：ap-guangzhou" : isQiniuKodo ? "例如：z0 / cn-east-1" : "例如：oss-cn-hangzhou"} />
+                                        <Input autoComplete="off" placeholder={isTencentCOS ? t("admin:e-g-ap-guangzhou") : isQiniuKodo ? t("admin:e-g-z0-cn-east-1") : t("admin:e-g-oss-cn-hangzhou")} />
                                     </Form.Item>
                                     <Form.Item name="bucket" label="Bucket">
-                                        <Input autoComplete="off" placeholder={isQiniuKodo ? "七牛云存储空间名称" : "对象存储 Bucket"} />
+                                        <Input autoComplete="off" placeholder={isQiniuKodo ? t("admin:qiniu-bucket-name") : t("admin:object-storage-bucket")} />
                                     </Form.Item>
-                                    <Form.Item name="pathPrefix" label="路径前缀">
-                                        <Input autoComplete="off" placeholder="可选，例如：canvas" />
+                                    <Form.Item name="pathPrefix" label={t("admin:path-prefix")}>
+                                        <Input autoComplete="off" placeholder={t("admin:optional-e-g-canvas")} />
                                     </Form.Item>
                                 </div>
                                 <div className="grid gap-x-4 gap-y-1 md:grid-cols-2 xl:grid-cols-3">
-                                    <Form.Item className="xl:col-span-2" name="endpoint" label={isQiniuKodo ? "上传 Endpoint" : "Endpoint"}>
+                                    <Form.Item className="xl:col-span-2" name="endpoint" label={isQiniuKodo ? t("admin:upload-endpoint") : "Endpoint"}>
                                         <Input autoComplete="off" inputMode="url" placeholder={isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : isQiniuKodo ? "https://up-z0.qiniup.com" : "https://oss-cn-hangzhou.aliyuncs.com"} />
                                     </Form.Item>
                                     <Form.Item
                                         name="cdnBaseUrl"
-                                        label={isQiniuKodo ? "绑定域名（可选）" : "CDN 加速域名"}
-                                        extra={isQiniuKodo ? "可选。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。" : undefined}
-                                        rules={[{ type: "url", message: "请填写完整的 http/https 地址" }]}
+                                        label={isQiniuKodo ? t("admin:bound-domain-optional") : t("admin:cdn-domain")}
+                                        extra={isQiniuKodo ? t("admin:optional-if-set-browsers-connect-directly-to-qiniu-private-download-urls") : undefined}
+                                        rules={[{ type: "url", message: t("admin:enter-a-full-http-https-address") }]}
                                     >
                                         <Input autoComplete="off" inputMode="url" placeholder="https://media.example.com" />
                                     </Form.Item>
                                 </div>
                                 <div className="grid gap-x-4 gap-y-1 md:grid-cols-2">
                                     <Form.Item name="accessKeyId" label={accessKeyIdLabel}>
-                                        <Input autoComplete="off" placeholder={isQiniuKodo ? "七牛云 AccessKey" : accessKeyIdLabel} />
+                                        <Input autoComplete="off" placeholder={isQiniuKodo ? t("admin:qiniu-accesskey") : accessKeyIdLabel} />
                                     </Form.Item>
                                     <Form.Item name="accessKeySecret" label={hasCurrentProviderSecret ? `${accessKeySecretLabel}（${configuredSecretText}）` : accessKeySecretLabel}>
-                                        <Input.Password autoComplete="new-password" placeholder={hasCurrentProviderSecret ? "留空保留原密钥" : accessKeySecretLabel} />
+                                        <Input.Password autoComplete="new-password" placeholder={hasCurrentProviderSecret ? t("admin:leave-blank-to-keep-current-keys") : accessKeySecretLabel} />
                                     </Form.Item>
                                 </div>
                             </div>
                         ) : (
                             <Form.Item
-                                label="服务器访问地址"
+                                label={t("admin:server-access-address")}
                                 required
-                                tooltip="用于生成本地资源的短时访问链接。"
+                                tooltip={t("admin:used-to-generate-short-lived-links-for-local-resources")}
                                 name="publicBaseUrl"
-                                rules={[{ required: true, message: "请填写服务器访问地址" }, { type: "url", message: "请填写完整的 http/https 地址" }]}
+                                rules={[
+                                    { required: true, message: t("admin:enter-the-server-access-address") },
+                                    { type: "url", message: t("admin:enter-a-full-http-https-address") },
+                                ]}
                             >
                                 <Space.Compact className="w-full">
                                     <Input className="min-w-0" autoComplete="off" placeholder="https://canvas.example.com" prefix={<Globe className="size-4 text-foreground/35" />} />
-                                    <Button icon={<LocateFixed className="size-4" />} onClick={() => form.setFieldValue("publicBaseUrl", window.location.origin)}>使用当前地址</Button>
+                                    <Button icon={<LocateFixed className="size-4" />} onClick={() => form.setFieldValue("publicBaseUrl", window.location.origin)}>
+                                        {t("admin:use-current-address")}
+                                    </Button>
                                 </Space.Compact>
                             </Form.Item>
                         )}
@@ -193,7 +235,7 @@ function formValues(setting?: AdminOSSSetting | null): OSSFormValues {
 }
 
 function storageProviderLabel(provider?: AdminOSSSetting["provider"] | StorageMode) {
-    return provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
+    return provider === "tencent" ? t("admin:tencent-cos-2") : provider === "qiniu" ? t("admin:qiniu-kodo-2") : provider === "aliyun" ? t("admin:aliyun-oss-2") : t("admin:server-local-2");
 }
 
 function formatTime(value?: string) {

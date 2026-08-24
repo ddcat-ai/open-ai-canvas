@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
 import { getModelCatalog, listLogicalModels, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
@@ -39,7 +40,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
         if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
         if (!persistedAssets) useAssetStore.setState({ assets: [] });
-        if (!persistedConfig) {
+        if (!persistedConfig && payload.user?.id) {
             // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
             // 使用统一模型目录接口
             const catalog = await getModelCatalog();
@@ -58,7 +59,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
                 audioModels: undefined,
             };
             useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
-        } else {
+        } else if (persistedConfig && payload.user?.id) {
             // 已有配置时也需要合并最新的系统渠道
             const catalog = await getModelCatalog();
             if (catalog.source === "frontend" && catalog.models) {
@@ -70,7 +71,7 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         installRemoteUserDataAutoSync();
         if (payload.user?.id) {
             // 认证状态先完成，云端数据在后台合并；远端同步失败不能伪装成登录失败。
-            void syncRemoteUserData(payload.user.id).catch((error) => console.warn("登录后云端数据同步失败，保留本地数据等待重试", error));
+            void syncRemoteUserData(payload.user.id).catch((error) => console.warn(t("lib:cloud-sync-failed-after-sign-in-keeping-local-data-for-retry"), error));
         } else resetRemoteUserDataSync();
     } finally {
         useUserStore.getState().setHydrated(true);
@@ -95,16 +96,14 @@ function managedModelChannels(models: PublicLogicalModel[]) {
     if (!availableModels.length) return [];
     const managed: ModelChannel = {
         id: PUBLIC_MODEL_CATALOG_ID,
-        name: "平台模型",
+        name: t("lib:platform-models"),
         baseUrl: "/api",
         apiKey: "system",
         apiFormat: "openai",
         scope: "system",
         enabled: true,
         models: availableModels.map((item) => item.id),
-        modelAliases: Object.fromEntries(
-            availableModels.flatMap((item) => (item.legacyModelIds || []).map((legacyID) => [legacyID, item.id])),
-        ),
+        modelAliases: Object.fromEntries(availableModels.flatMap((item) => (item.legacyModelIds || []).map((legacyID) => [legacyID, item.id]))),
         modelCosts: availableModels.map((item) => ({
             model: item.id,
             displayName: item.name,
@@ -121,7 +120,7 @@ function managedModelChannels(models: PublicLogicalModel[]) {
             logicalModelId: item.id,
             logicalCapabilitySpec: item.capabilitySpec,
             logicalCapabilityProfiles: item.capabilityProfiles,
-			logicalPriceTiers: item.priceTiers,
+            logicalPriceTiers: item.priceTiers,
             defaultOptions: item.defaultOptions,
         })),
     };

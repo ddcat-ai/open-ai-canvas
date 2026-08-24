@@ -1,6 +1,9 @@
 import { Tag } from "antd";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
+import { formatLocale } from "@/lib/format-locale";
+import { t } from "@/i18n";
 import type { ProjectDetail, ProjectUnit } from "@/services/api/projects";
 
 export type ProjectDetailViewProps = {
@@ -9,79 +12,103 @@ export type ProjectDetailViewProps = {
     onCreateCanvas: () => void;
 };
 
-export const categoryLabels: Record<string, string> = {
-    character: "角色",
-    environment: "场景",
-    wardrobe: "服饰",
-    prop: "道具",
-    weapon: "武器",
-    style: "画风",
-    other: "其他",
-};
+// 领域标签表：在函数内惰性求值（模块求值时 i18n 未就绪；调用方组件订阅 useTranslation 后语言切换会重渲染）
+type LabelTable = Record<string, string>;
 
-export const mediaLabels: Record<string, string> = {
-    image: "图片",
-    video: "视频",
-    audio: "音频",
-    text: "文本",
-    model: "3D 模型",
-    entity: "角色卡",
-};
+function categoryLabels(): LabelTable {
+    return {
+        character: t("project:characters-2"),
+        environment: t("project:scenes"),
+        wardrobe: t("project:costumes"),
+        prop: t("project:props"),
+        weapon: t("project:weapons"),
+        style: t("project:styles"),
+        other: t("project:other"),
+    };
+}
 
-const statusLabels: Record<string, string> = {
-    active: "进行中",
-    archived: "已归档",
-    draft: "草稿",
-    ready: "待制作",
-    completed: "已完成",
-    review: "待审核",
-    confirmed: "已确认",
-    pending: "待处理",
-    pending_confirmation: "待确认",
-    running: "进行中",
-    failed: "失败",
-    ignored: "已忽略",
-    skipped: "已跳过",
-    cancelled: "已取消",
-    succeeded: "已完成",
-    disabled: "已停用",
-    idle: "待开始",
-    loading: "处理中",
-    queued: "排队中",
-    success: "已完成",
-    error: "异常",
-    deleted: "已删除",
-    reserved: "已冻结",
-    settled: "已结算",
-    refunded: "已退款",
-    uncertain: "待核对",
-};
+function mediaLabels(): LabelTable {
+    return {
+        image: t("project:images"),
+        video: t("project:videos"),
+        audio: t("project:audio"),
+        text: t("project:texts"),
+        model: t("project:3d-models"),
+        entity: t("project:character-card"),
+    };
+}
 
-const sourceTypeLabels: Record<string, string> = {
-    blank: "空白开始",
-    novel: "导入小说",
-    text: "粘贴文本",
-};
+function statusLabels(): LabelTable {
+    return {
+        active: t("project:in-progress"),
+        archived: t("project:archived-2"),
+        draft: t("project:draft"),
+        ready: t("project:to-produce"),
+        completed: t("project:done"),
+        review: t("project:in-review"),
+        confirmed: t("project:confirmed"),
+        pending: t("project:pending"),
+        pending_confirmation: t("project:to-confirm"),
+        running: t("project:in-progress"),
+        failed: t("project:failed"),
+        ignored: t("project:ignored"),
+        skipped: t("project:skipped"),
+        cancelled: t("project:cancelled"),
+        succeeded: t("project:done"),
+        disabled: t("project:disabled"),
+        idle: t("project:not-started"),
+        loading: t("project:processing"),
+        queued: t("project:queued"),
+        success: t("project:done"),
+        error: t("project:error"),
+        deleted: t("project:deleted"),
+        reserved: t("project:frozen"),
+        settled: t("project:settled"),
+        refunded: t("project:refunded"),
+        uncertain: t("project:to-verify"),
+    };
+}
+
+function sourceTypeLabels(): LabelTable {
+    return {
+        blank: t("project:start-blank-2"),
+        novel: t("project:import-novel-4"),
+        text: t("project:paste-text-2"),
+    };
+}
 
 export function categoryLabel(value: string) {
-    return categoryLabels[value] || "其他";
+    return categoryLabels()[value] || t("project:other");
 }
 
 export function statusLabel(value: string) {
-    return statusLabels[value] || "未知状态";
+    return statusLabels()[value] || t("project:unknown-status");
 }
 
 export function mediaLabel(value: string) {
-    return mediaLabels[value] || "其他类型";
+    return mediaLabels()[value] || t("project:other-types");
 }
 
 export function sourceTypeLabel(value: string) {
-    return sourceTypeLabels[value] || "其他来源";
+    return sourceTypeLabels()[value] || t("project:other-sources");
 }
 
 export function StatusPill({ status }: { status: string }) {
-    const color = status === "completed" || status === "confirmed" || status === "succeeded" ? "success" : status === "failed" ? "error" : status === "running" || status === "active" ? "processing" : status === "review" || status === "pending_confirmation" ? "warning" : "default";
-    return <Tag color={color} className="m-0 !rounded-full !px-2 !text-[var(--fs-label)]">{statusLabel(status)}</Tag>;
+    const color =
+        status === "completed" || status === "confirmed" || status === "succeeded"
+            ? "success"
+            : status === "failed"
+              ? "error"
+              : status === "running" || status === "active"
+                ? "processing"
+                : status === "review" || status === "pending_confirmation"
+                  ? "warning"
+                  : "default";
+    return (
+        <Tag color={color} className="m-0 !rounded-full !px-2 !text-[var(--fs-label)]">
+            {statusLabel(status)}
+        </Tag>
+    );
 }
 
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
@@ -101,23 +128,30 @@ export function MetricTile({ label, value, detail, accent = false }: { label: st
     return (
         <div className={`overflow-hidden rounded-lg border px-3 py-3 ${accent ? "border-[color-mix(in_srgb,var(--workspace-accent)_30%,transparent)] bg-[var(--workspace-accent-soft)]" : "border-border/80 bg-background/70"}`}>
             <div className="text-xs text-foreground/50">{label}</div>
-            <div className="mt-2 flex items-end gap-2"><strong className="text-2xl font-semibold tracking-normal">{value}</strong>{detail ? <span className="pb-0.5 text-xs text-foreground/45">{detail}</span> : null}</div>
+            <div className="mt-2 flex items-end gap-2">
+                <strong className="text-2xl font-semibold tracking-normal">{value}</strong>
+                {detail ? <span className="pb-0.5 text-xs text-foreground/45">{detail}</span> : null}
+            </div>
         </div>
     );
 }
 
 export function UnitProgress({ unit }: { unit: ProjectUnit }) {
     const progress = unit.status === "completed" ? 100 : unit.status === "ready" ? 66 : 24;
-    return <div className="h-1.5 w-20 overflow-hidden rounded-full bg-foreground/10"><div className="h-full rounded-full bg-[var(--workspace-accent)] transition-[width] duration-200" style={{ width: `${progress}%` }} /></div>;
+    return (
+        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-foreground/10">
+            <div className="h-full rounded-full bg-[var(--workspace-accent)] transition-[width] duration-200" style={{ width: `${progress}%` }} />
+        </div>
+    );
 }
 
 export function formatTime(value?: string) {
     if (!value) return "-";
-    return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return new Date(value).toLocaleString(formatLocale(), { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 export function formatCount(value: number) {
-    return new Intl.NumberFormat("zh-CN").format(value);
+    return new Intl.NumberFormat(formatLocale()).format(value);
 }
 
 export function textValue(value: unknown) {

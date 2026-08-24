@@ -41,18 +41,18 @@ VoiceRecordingInline 内联波形录制条
 
 ### 组件
 
-| 文件 | 说明 |
-|------|------|
+| 文件                                                 | 说明                                                       |
+| ---------------------------------------------------- | ---------------------------------------------------------- |
 | `components/conversation/voice-recording-button.tsx` | 语音输入按钮：点击后输入行内展开录制条（局部状态，不弹窗） |
-| `components/conversation/voice-recording-inline.tsx` | 内联波形录制条：波形 + 时长 + 停止/取消，停止后自动转写 |
-| `components/conversation/audio-waveform.tsx` | SVG 波形可视化组件 |
-| `components/conversation/index.ts` | 组件统一导出 |
+| `components/conversation/voice-recording-inline.tsx` | 内联波形录制条：波形 + 时长 + 停止/取消，停止后自动转写    |
+| `components/conversation/audio-waveform.tsx`         | SVG 波形可视化组件                                         |
+| `components/conversation/index.ts`                   | 组件统一导出                                               |
 
 ### Hook
 
-| 文件 | 说明 |
-|------|------|
-| `hooks/use-voice-recording.ts` | 语音录制逻辑（MediaRecorder + AnalyserNode，波形/时长/停止/取消） |
+| 文件                              | 说明                                                                |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `hooks/use-voice-recording.ts`    | 语音录制逻辑（MediaRecorder + AnalyserNode，波形/时长/停止/取消）   |
 | `hooks/use-speech-recognition.ts` | 浏览器语音识别（Web Speech API，start/stop/cancel，返回文本与错误） |
 
 ## 接入位置
@@ -66,10 +66,7 @@ VoiceRecordingInline 内联波形录制条
 ```tsx
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 
-<VoiceRecordingButton
-  disabled={isBusy}
-  onTranscribed={(text) => setPrompt((prev) => (prev.trim() ? `${prev} ${text}` : text))}
-/>
+<VoiceRecordingButton disabled={isBusy} onTranscribed={(text) => setPrompt((prev) => (prev.trim() ? `${prev} ${text}` : text))} />;
 ```
 
 ## 浏览器支持

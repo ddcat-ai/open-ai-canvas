@@ -7,13 +7,19 @@ import type { ReactNode } from "react";
 
 import { ListToolbar } from "@/components/layout/workspace-page";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
-export const configuredSecretText = "已配置 · 留空不改";
+export const configuredSecretText = t("admin:configured-leave-blank-to-keep-2");
 
 export type AdminStatusTone = "neutral" | "success" | "warning" | "error" | "info";
 
 export function AdminStatusBadge({ label, tone = "neutral", title }: { label: string; tone?: AdminStatusTone; title?: string }) {
-    return <span className="admin-status-badge" data-tone={tone} title={title}>{label}</span>;
+    return (
+        <span className="admin-status-badge" data-tone={tone} title={title}>
+            {label}
+        </span>
+    );
 }
 
 export function AdminStatTile({ label, value, detail, trend }: { label: string; value: string | number; detail?: string; trend?: { value: string; tone?: AdminStatusTone } }) {
@@ -66,12 +72,14 @@ export function AdminDataTable<RecordType extends object>({
 
     return (
         <div className="admin-data-table">
-            {toolbar ? <ListToolbar active={toolbarActive} filters={toolbarFilters} activeFilters={toolbarActiveFilters} onReset={onReset} trailing={trailing}>{toolbar}</ListToolbar> : null}
+            {toolbar ? (
+                <ListToolbar active={toolbarActive} filters={toolbarFilters} activeFilters={toolbarActiveFilters} onReset={onReset} trailing={trailing}>
+                    {toolbar}
+                </ListToolbar>
+            ) : null}
             {batchActions}
             <div className={cn("admin-table-surface", className)}>
-                <div className="admin-table-scroll">
-                    {showSkeleton ? <AdminTableSkeleton rows={skeletonRows} columns={skeletonColumns} /> : <Table {...table} locale={{ ...table.locale, emptyText: empty ?? table.locale?.emptyText }} />}
-                </div>
+                <div className="admin-table-scroll">{showSkeleton ? <AdminTableSkeleton rows={skeletonRows} columns={skeletonColumns} /> : <Table {...table} locale={{ ...table.locale, emptyText: empty ?? table.locale?.emptyText }} />}</div>
             </div>
             {footer ? <div className="admin-table-pagination">{footer}</div> : null}
         </div>
@@ -86,9 +94,9 @@ function isStatusConfig(value: ReactNode | { label: string; color?: string }): v
 export function AdminExportButton({
     exportFile,
     fileName,
-    label = "导出",
+    label = t("admin:export"),
     successMessage,
-    errorMessage = "导出失败",
+    errorMessage = t("admin:export-failed"),
     size,
     ...buttonProps
 }: Omit<ButtonProps, "children" | "icon" | "loading" | "onClick"> & {
@@ -114,26 +122,21 @@ export function AdminExportButton({
         }
     };
 
-    return <Button {...buttonProps} size={size} icon={<Download className={size === "small" ? "size-3.5" : "size-4"} />} loading={exporting} onClick={() => void runExport()}>{label}</Button>;
+    return (
+        <Button {...buttonProps} size={size} icon={<Download className={size === "small" ? "size-3.5" : "size-4"} />} loading={exporting} onClick={() => void runExport()}>
+            {label}
+        </Button>
+    );
 }
 
-export function AdminTableEmpty({
-    filtered = false,
-    title,
-    description,
-    action,
-}: {
-    filtered?: boolean;
-    title?: string;
-    description?: string;
-    action?: ReactNode;
-}) {
+export function AdminTableEmpty({ filtered = false, title, description, action }: { filtered?: boolean; title?: string; description?: string; action?: ReactNode }) {
+    const { t } = useTranslation("canvas");
     return (
         <div className="flex min-h-40 flex-col items-center justify-center px-6 py-8 text-center">
             <span className="grid size-9 place-items-center rounded-md bg-muted/35 text-foreground/45">
                 <SearchX className="size-4" />
             </span>
-            <div className="mt-3 text-sm font-medium">{title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")}</div>
+            <div className="mt-3 text-sm font-medium">{title || (filtered ? t("admin:no-data-matches-the-current-filters") : t("admin:no-data-yet"))}</div>
             {description ? <p className="mt-1 max-w-sm text-xs leading-5 text-foreground/50">{description}</p> : null}
             {action ? <div className="mt-4">{action}</div> : null}
         </div>
@@ -141,20 +144,24 @@ export function AdminTableEmpty({
 }
 
 export function AdminFilterChip({ label, onRemove }: { label: ReactNode; onRemove: () => void }) {
+    const { t } = useTranslation("canvas");
     return (
         <button type="button" className="admin-filter-chip" onClick={onRemove}>
             <span>{label}</span>
             <X className="size-3" aria-hidden="true" />
-            <span className="sr-only">移除筛选</span>
+            <span className="sr-only">{t("admin:clear-filters")}</span>
         </button>
     );
 }
 
 export function AdminTableSkeleton({ rows = 8, columns = 6 }: { rows?: number; columns?: number }) {
+    const { t } = useTranslation("canvas");
     return (
-        <div className="animate-pulse motion-reduce:animate-none" aria-label="正在加载表格" role="status">
+        <div className="animate-pulse motion-reduce:animate-none" aria-label={t("admin:loading-table")} role="status">
             <div className="grid h-11 items-center gap-4 border-b border-border bg-muted/30 px-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(72px, 1fr))` }}>
-                {Array.from({ length: columns }).map((_, index) => <span key={index} className="h-3 w-16 max-w-full rounded bg-foreground/10" />)}
+                {Array.from({ length: columns }).map((_, index) => (
+                    <span key={index} className="h-3 w-16 max-w-full rounded bg-foreground/10" />
+                ))}
             </div>
             {Array.from({ length: Math.max(8, rows) }).map((_, rowIndex) => (
                 <div key={rowIndex} className="grid min-h-14 items-center gap-4 border-b border-border/70 px-4 last:border-b-0" style={{ gridTemplateColumns: `repeat(${columns}, minmax(72px, 1fr))` }}>
@@ -168,11 +175,20 @@ export function AdminTableSkeleton({ rows = 8, columns = 6 }: { rows?: number; c
 }
 
 export function AdminBatchBar({ count, onClear, children }: { count: number; onClear: () => void; children: ReactNode }) {
+    const { t } = useTranslation("canvas");
     if (count <= 0) return null;
     return (
         <div className="sticky top-0 z-20 mt-3 flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
-            <div className="flex items-center gap-2 text-sm font-medium"><CheckSquare2 className="size-4 text-foreground/60" />已选择 {count} 项</div>
-            <div className="flex flex-wrap items-center gap-2">{children}<Button type="text" size="small" icon={<X className="size-3.5" />} onClick={onClear}>取消选择</Button></div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+                <CheckSquare2 className="size-4 text-foreground/60" />
+                {t("admin:selected-2")} {count} {t("admin:items")}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                {children}
+                <Button type="text" size="small" icon={<X className="size-3.5" />} onClick={onClear}>
+                    {t("admin:deselect-all")}
+                </Button>
+            </div>
         </div>
     );
 }
@@ -191,15 +207,8 @@ export type AdminRowAction = {
     };
 };
 
-export function AdminRowActions({
-    primary,
-    actions,
-    visibleActionCount,
-}: {
-    primary?: { label: ReactNode; icon?: ReactNode; onClick: () => void | Promise<void>; disabled?: boolean };
-    actions: AdminRowAction[];
-    visibleActionCount?: number;
-}) {
+export function AdminRowActions({ primary, actions, visibleActionCount }: { primary?: { label: ReactNode; icon?: ReactNode; onClick: () => void | Promise<void>; disabled?: boolean }; actions: AdminRowAction[]; visibleActionCount?: number }) {
+    const { t } = useTranslation("canvas");
     const { modal } = App.useApp();
     // 少量操作直接露出，只有真正过多时才收进菜单，避免“更多”成为默认操作列。
     const resolvedVisibleActionCount = visibleActionCount ?? (actions.length <= 3 ? actions.length : 2);
@@ -222,21 +231,14 @@ export function AdminRowActions({
             title: action.confirm.title,
             content: action.confirm.description,
             okText: action.confirm.okText,
-            cancelText: "取消",
+            cancelText: t("admin:cancel-4"),
             okButtonProps: { danger: action.danger },
             onOk: action.onClick,
         });
     };
 
     const renderActionButton = (action: AdminRowAction) => (
-        <Button
-            key={action.key}
-            type="text"
-            size="small"
-            className={cn("admin-row-action", action.danger && "admin-row-action-danger")}
-            disabled={action.disabled}
-            onClick={() => runAction(action)}
-        >
+        <Button key={action.key} type="text" size="small" className={cn("admin-row-action", action.danger && "admin-row-action-danger")} disabled={action.disabled} onClick={() => runAction(action)}>
             {action.label}
         </Button>
     );
@@ -260,8 +262,8 @@ export function AdminRowActions({
                         },
                     }}
                 >
-                    <Button type="text" size="small" className="admin-row-action admin-row-action-more" aria-label="更多操作">
-                        <span>更多</span>
+                    <Button type="text" size="small" className="admin-row-action admin-row-action-more" aria-label={t("admin:more-actions")}>
+                        <span>{t("admin:more")}</span>
                         <ChevronDown className="admin-row-action-chevron" aria-hidden="true" />
                     </Button>
                 </Dropdown>
@@ -302,7 +304,15 @@ export function SettingsSectionCard({
                         {description ? <p className="mt-1 text-xs leading-5 text-foreground/55">{description}</p> : null}
                     </div>
                 </div>
-                {status ? <div className={cn("shrink-0", isStacked ? "" : "lg:mt-4")}>{isStatusConfig(status) ? <AdminStatusBadge label={status.label} tone={status.color === "success" ? "success" : status.color === "warning" ? "warning" : status.color === "error" ? "error" : status.color === "blue" ? "info" : "neutral"} /> : status}</div> : null}
+                {status ? (
+                    <div className={cn("shrink-0", isStacked ? "" : "lg:mt-4")}>
+                        {isStatusConfig(status) ? (
+                            <AdminStatusBadge label={status.label} tone={status.color === "success" ? "success" : status.color === "warning" ? "warning" : status.color === "error" ? "error" : status.color === "blue" ? "info" : "neutral"} />
+                        ) : (
+                            status
+                        )}
+                    </div>
+                ) : null}
             </div>
             <div className={cn("min-w-0", isStacked ? "" : "lg:col-span-3", contentClassName)}>
                 {children}

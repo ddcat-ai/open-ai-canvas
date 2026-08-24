@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 import { App, Button, Divider, Input } from "antd";
 import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { applyUserSession } from "@/lib/user-session";
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode } from "@/services/api/auth";
@@ -10,6 +11,7 @@ import { LinuxDOIcon } from "./auth-scene";
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 
 export default function RegisterPage() {
+    const { t } = useTranslation("auth");
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const { message } = App.useApp();
@@ -27,9 +29,13 @@ export default function RegisterPage() {
 
     useEffect(() => {
         let cancelled = false;
-        void getAuthSettings().then((value) => !cancelled && setSettings(value)).catch((error) => !cancelled && message.error(error instanceof Error ? error.message : "读取注册设置失败"));
-        return () => { cancelled = true; };
-    }, [message]);
+        void getAuthSettings()
+            .then((value) => !cancelled && setSettings(value))
+            .catch((error) => !cancelled && message.error(error instanceof Error ? error.message : t("register.settings-load-failed")));
+        return () => {
+            cancelled = true;
+        };
+    }, [message, t]);
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -39,16 +45,16 @@ export default function RegisterPage() {
 
     const sendCode = async () => {
         if (!email.trim()) {
-            message.warning("请先输入邮箱");
+            message.warning(t("register.email-required-first"));
             return;
         }
         setSendingCode(true);
         try {
             await sendRegistrationEmailCode(email.trim());
             setCountdown(60);
-            message.success("验证码已发送，请检查邮箱");
+            message.success(t("register.code-sent"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "发送验证码失败");
+            message.error(error instanceof Error ? error.message : t("register.code-send-failed"));
         } finally {
             setSendingCode(false);
         }
@@ -57,7 +63,7 @@ export default function RegisterPage() {
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (password !== confirmPassword) {
-            message.error("两次输入的密码不一致");
+            message.error(t("register.password-mismatch"));
             return;
         }
         setSubmitting(true);
@@ -65,10 +71,10 @@ export default function RegisterPage() {
             await register({ username, email, emailCode, displayName, password });
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
-            message.success(settings?.firstUser ? "管理员账号已创建" : "注册成功");
+            message.success(settings?.firstUser ? t("register.success-admin") : t("register.success"));
             navigate(next, { replace: true });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "注册失败");
+            message.error(error instanceof Error ? error.message : t("register.failed-fallback"));
         } finally {
             setSubmitting(false);
         }
@@ -81,43 +87,134 @@ export default function RegisterPage() {
 
     return (
         <form onSubmit={submit} className="space-y-4">
-            {settings?.firstUser ? <Notice icon={<Info className="size-3.5" />} tone="blue">首个账号自动成为管理员，邮箱验证码暂不要求。</Notice> : null}
-            {registrationClosed ? <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">当前已关闭普通注册，请联系管理员创建账号。</Notice> : null}
-            {mailUnavailable ? <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">管理员尚未配置注册邮件，普通邮箱注册暂不可用。</Notice> : null}
+            {settings?.firstUser ? (
+                <Notice icon={<Info className="size-3.5" />} tone="blue">
+                    {t("register.first-user-notice")}
+                </Notice>
+            ) : null}
+            {registrationClosed ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    {t("register.registration-closed-notice")}
+                </Notice>
+            ) : null}
+            {mailUnavailable ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    {t("register.mail-unavailable-notice")}
+                </Notice>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-                <AuthField label="用户名"><Input size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="3-32 位字符" autoComplete="username" required disabled={disabled} /></AuthField>
-                <AuthField label="显示名称"><Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="不填则使用用户名" disabled={disabled} /></AuthField>
+                <AuthField label={t("register.username-label")}>
+                    <Input
+                        size="large"
+                        prefix={<UserRound className="size-4 text-white/35" />}
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value)}
+                        placeholder={t("register.username-placeholder")}
+                        autoComplete="username"
+                        required
+                        disabled={disabled}
+                    />
+                </AuthField>
+                <AuthField label={t("register.display-name-label")}>
+                    <Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("register.display-name-placeholder")} disabled={disabled} />
+                </AuthField>
             </div>
 
-            <AuthField label="邮箱"><Input size="large" prefix={<Mail className="size-4 text-white/35" />} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="用于登录与安全验证" autoComplete="email" required={!settings?.firstUser} disabled={disabled} /></AuthField>
+            <AuthField label={t("register.email-label")}>
+                <Input
+                    size="large"
+                    prefix={<Mail className="size-4 text-white/35" />}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder={t("register.email-placeholder")}
+                    autoComplete="email"
+                    required={!settings?.firstUser}
+                    disabled={disabled}
+                />
+            </AuthField>
 
             {requireCode ? (
-                <AuthField label="邮箱验证码">
+                <AuthField label={t("register.email-code-label")}>
                     <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
-                        <Input size="large" prefix={<ShieldCheck className="size-4 text-white/35" />} value={emailCode} onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6 位验证码" inputMode="numeric" autoComplete="one-time-code" required disabled={disabled} />
-                        <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>{countdown > 0 ? `${countdown}s` : "获取验证码"}</Button>
+                        <Input
+                            size="large"
+                            prefix={<ShieldCheck className="size-4 text-white/35" />}
+                            value={emailCode}
+                            onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                            placeholder={t("register.email-code-placeholder")}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            required
+                            disabled={disabled}
+                        />
+                        <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                            {countdown > 0 ? `${countdown}s` : t("register.get-code")}
+                        </Button>
                     </div>
                 </AuthField>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-                <AuthField label="密码"><Input.Password size="large" prefix={<LockKeyhole className="size-4 text-white/35" />} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoComplete="new-password" required disabled={disabled} /></AuthField>
-                <AuthField label="确认密码"><Input.Password size="large" prefix={<LockKeyhole className="size-4 text-white/35" />} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再次输入密码" autoComplete="new-password" required disabled={disabled} /></AuthField>
+                <AuthField label={t("register.password-label")}>
+                    <Input.Password
+                        size="large"
+                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder={t("register.password-placeholder")}
+                        autoComplete="new-password"
+                        required
+                        disabled={disabled}
+                    />
+                </AuthField>
+                <AuthField label={t("register.confirm-password-label")}>
+                    <Input.Password
+                        size="large"
+                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder={t("register.confirm-password-placeholder")}
+                        autoComplete="new-password"
+                        required
+                        disabled={disabled}
+                    />
+                </AuthField>
             </div>
 
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled} icon={<ArrowRight className="size-4" />} iconPlacement="end">创建账号</Button>
-            {settings?.linuxdoEnabled ? <><Divider plain className="!border-white/10 !text-white/30">或</Divider><Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>使用 Linux.do 注册 / 登录</Button></> : null}
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                {t("register.submit")}
+            </Button>
+            {settings?.linuxdoEnabled ? (
+                <>
+                    <Divider plain className="!border-white/10 !text-white/30">
+                        {t("register.or")}
+                    </Divider>
+                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                        {t("register.linuxdo")}
+                    </Button>
+                </>
+            ) : null}
         </form>
     );
 }
 
 function AuthField({ label, children }: { label: string; children: ReactNode }) {
-    return <label className="block space-y-2"><span className="text-xs font-medium text-white/62">{label}</span>{children}</label>;
+    return (
+        <label className="block space-y-2">
+            <span className="text-xs font-medium text-white/62">{label}</span>
+            {children}
+        </label>
+    );
 }
 
 function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amber"; children: ReactNode }) {
-    return <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tone === "blue" ? "border-blue-300/15 bg-blue-300/[0.06] text-blue-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}><span className="mt-0.5 shrink-0">{icon}</span>{children}</div>;
+    return (
+        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tone === "blue" ? "border-blue-300/15 bg-blue-300/[0.06] text-blue-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}>
+            <span className="mt-0.5 shrink-0">{icon}</span>
+            {children}
+        </div>
+    );
 }
 
 function safeNext(value: string | null) {

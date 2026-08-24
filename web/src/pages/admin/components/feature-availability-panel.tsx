@@ -5,23 +5,26 @@ import { Clapperboard, Coins, ListChecks, PlugZap, RadioTower, ToggleLeft, Spark
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { SettingsSectionCard } from "./admin-ui";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
 
 const userFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; description: string; icon: ReactNode }> = [
-    { key: "shortDramaEnabled", title: "短剧创作", menu: "/projects", description: "关闭后隐藏短剧入口，并拦截项目列表、详情和项目 API。已有项目数据不会删除。", icon: <Clapperboard className="size-4" /> },
-    { key: "taskCenterEnabled", title: "任务", menu: "/tasks", description: "关闭后仅隐藏并拦截任务中心页面；生成任务仍会创建、执行、记录和恢复。", icon: <ListChecks className="size-4" /> },
-    { key: "creditsEnabled", title: "积分中心", menu: "/wallet", description: "关闭后隐藏用户积分入口，新创建的任务和系统渠道请求不再冻结或消费积分。", icon: <Coins className="size-4" /> },
-    { key: "customChannelsEnabled", title: "自定义渠道", menu: "/settings?section=channels", description: "关闭后隐藏用户自定义渠道入口，并拦截模型目录拉取、渠道中转和新的生成任务。已有渠道配置不会删除。", icon: <RadioTower className="size-4" /> },
-    { key: "pluginCenterEnabled", title: "插件中心", menu: "/plugins", description: "关闭后普通用户无法进入插件中心或调用插件中心相关接口；管理员仍可进入后台恢复开关。已有插件不会删除。", icon: <PlugZap className="size-4" /> },
-    { key: "systemPluginsVisibleToUsers", title: "向普通用户显示系统插件（不可编辑）", menu: "/plugins", description: "仅在插件中心开启时生效。关闭后普通用户看不到系统插件，用户插件不受影响。", icon: <PlugZap className="size-4" /> },
+    { key: "shortDramaEnabled", title: t("admin:short-drama-creation"), menu: "/projects", description: t("admin:when-off-hides-the-drama-entry-and-blocks-the-project-list-details-and-p"), icon: <Clapperboard className="size-4" /> },
+    { key: "taskCenterEnabled", title: t("admin:tasks"), menu: "/tasks", description: t("admin:when-off-only-hides-and-blocks-the-task-center-page-generation-tasks-are"), icon: <ListChecks className="size-4" /> },
+    { key: "creditsEnabled", title: t("admin:credits-center"), menu: "/wallet", description: t("admin:when-off-hides-the-user-credits-entry-new-tasks-and-system-channel-reque"), icon: <Coins className="size-4" /> },
+    { key: "customChannelsEnabled", title: t("admin:custom-channels"), menu: "/settings?section=channels", description: t("admin:when-off-hides-custom-channel-entries-and-blocks-model-catalog-fetches-c"), icon: <RadioTower className="size-4" /> },
+    { key: "pluginCenterEnabled", title: t("admin:plugin-center"), menu: "/plugins", description: t("admin:plugin-center-row-description"), icon: <PlugZap className="size-4" /> },
+    { key: "systemPluginsVisibleToUsers", title: t("admin:system-plugins-visible-to-users"), menu: "/plugins", description: t("admin:system-plugins-visible-description"), icon: <PlugZap className="size-4" /> },
 ];
 
 const adminFeatureRows: Array<{ key: FeatureKey; title: string; menu: string; description: string; icon: ReactNode }> = [
-    { key: "frontendModelsEnabled", title: "前台模型", menu: "/admin/models", description: "关闭后用户直接使用系统渠道中的模型；后台仍保留前台模型配置入口，方便重新开启。已有配置不会删除。", icon: <Sparkles className="size-4" /> },
+    { key: "frontendModelsEnabled", title: t("admin:frontend-models"), menu: "/admin/models", description: t("admin:when-off-users-use-models-from-system-channels-directly-the-frontend-mod"), icon: <Sparkles className="size-4" /> },
 ];
 
 export default function FeatureAvailabilityPanel() {
+    const { t } = useTranslation("canvas");
     const { message, modal } = App.useApp();
     const setGlobalFeatures = useUserStore((state) => state.setFeatures);
     const [features, setFeatures] = useState<FeatureAvailability | null>(null);
@@ -33,7 +36,7 @@ export default function FeatureAvailabilityPanel() {
             .then(({ features: value }) => {
                 if (active) setFeatures(value);
             })
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取功能开放配置失败"));
+            .catch((error) => message.error(error instanceof Error ? error.message : t("admin:failed-to-read-feature-availability-settings")));
         return () => {
             active = false;
         };
@@ -55,9 +58,9 @@ export default function FeatureAvailabilityPanel() {
             });
             setFeatures(result.features);
             setGlobalFeatures(result.features);
-            message.success(`${allFeatureRows.find((item) => item.key === key)?.title || "功能"}已${enabled ? "开放" : "关闭"}`);
+            message.success(`${allFeatureRows.find((item) => item.key === key)?.title || t("admin:features")}已${enabled ? t("admin:available") : t("admin:close-4")}`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存功能开放配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-feature-availability-settings"));
         } finally {
             setSaving(null);
         }
@@ -67,10 +70,10 @@ export default function FeatureAvailabilityPanel() {
         // 积分关闭需要二次确认
         if (key === "creditsEnabled" && !enabled) {
             modal.confirm({
-                title: "关闭用户积分功能？",
-                content: "保存后新创建的任务和系统渠道请求将不再扣减积分；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
-                okText: "确认关闭",
-                cancelText: "取消",
+                title: t("admin:disable-user-credits"),
+                content: t("admin:after-saving-new-tasks-and-system-channel-requests-no-longer-deduct-cred"),
+                okText: t("admin:confirm-disable-2"),
+                cancelText: t("admin:cancel-4"),
                 okButtonProps: { danger: true },
                 onOk: () => save(key, false),
             });
@@ -79,10 +82,10 @@ export default function FeatureAvailabilityPanel() {
         // 前台模型关闭需要二次确认
         if (key === "frontendModelsEnabled" && !enabled) {
             modal.confirm({
-                title: "关闭前台模型功能？",
-                content: "关闭后用户将直接使用系统渠道中配置的模型；管理后台仍保留前台模型配置入口，重新开启后即可继续使用。",
-                okText: "确认关闭",
-                cancelText: "取消",
+                title: t("admin:disable-frontend-models"),
+                content: t("admin:users-will-use-models-configured-in-system-channels-directly-the-config"),
+                okText: t("admin:confirm-disable-2"),
+                cancelText: t("admin:cancel-4"),
                 okButtonProps: { danger: true },
                 onOk: () => save(key, false),
             });
@@ -99,8 +102,8 @@ export default function FeatureAvailabilityPanel() {
         <div className="space-y-6 pt-4">
             <SettingsSectionCard
                 icon={<ToggleLeft className="size-4" />}
-                title="用户功能开放"
-                status={{ label: features ? `${userEnabledCount}/${userFeatureRows.length} 已开放` : "读取中", color: userEnabledCount === userFeatureRows.length ? "success" : "default" }}
+                title={t("admin:user-feature-availability")}
+                status={{ label: features ? t("admin:param-param-available", { userEnabledCount: userEnabledCount, length: userFeatureRows.length }) : t("admin:loading-2"), color: userEnabledCount === userFeatureRows.length ? "success" : "default" }}
             >
                 <div className="divide-y divide-border/75">
                     {userFeatureRows.map((item) => (
@@ -112,7 +115,13 @@ export default function FeatureAvailabilityPanel() {
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
                             </div>
-                            <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key) || (item.key === "systemPluginsVisibleToUsers" && features?.pluginCenterEnabled !== true)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
+                            <Switch
+                                checked={features?.[item.key] === true}
+                                loading={!features || saving === item.key}
+                                disabled={Boolean(saving && saving !== item.key) || (item.key === "systemPluginsVisibleToUsers" && features?.pluginCenterEnabled !== true)}
+                                onChange={(checked) => toggle(item.key, checked)}
+                                aria-label={t("admin:enable-param", { title: item.title })}
+                            />
                         </div>
                     ))}
                 </div>
@@ -120,8 +129,11 @@ export default function FeatureAvailabilityPanel() {
 
             <SettingsSectionCard
                 icon={<Settings className="size-4" />}
-                title="管理后台功能"
-                status={{ label: features ? `${adminEnabledCount}/${adminFeatureRows.length} 已开放` : "读取中", color: adminEnabledCount === adminFeatureRows.length ? "success" : "default" }}
+                title={t("admin:admin-console-features")}
+                status={{
+                    label: features ? t("admin:param-param-available-2", { adminEnabledCount: adminEnabledCount, length: adminFeatureRows.length }) : t("admin:loading-2"),
+                    color: adminEnabledCount === adminFeatureRows.length ? "success" : "default",
+                }}
             >
                 <div className="divide-y divide-border/75">
                     {adminFeatureRows.map((item) => (
@@ -133,7 +145,13 @@ export default function FeatureAvailabilityPanel() {
                                     <span className="rounded border border-border/70 px-1.5 py-0.5 text-[var(--fs-micro)] text-foreground/45">{item.menu}</span>
                                 </div>
                             </div>
-                            <Switch checked={features?.[item.key] === true} loading={!features || saving === item.key} disabled={Boolean(saving && saving !== item.key)} onChange={(checked) => toggle(item.key, checked)} aria-label={`开放${item.title}`} />
+                            <Switch
+                                checked={features?.[item.key] === true}
+                                loading={!features || saving === item.key}
+                                disabled={Boolean(saving && saving !== item.key)}
+                                onChange={(checked) => toggle(item.key, checked)}
+                                aria-label={t("admin:enable-param", { title: item.title })}
+                            />
                         </div>
                     ))}
                 </div>

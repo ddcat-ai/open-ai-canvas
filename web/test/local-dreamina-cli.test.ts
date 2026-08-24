@@ -69,7 +69,7 @@ describe("signed Dreamina CLI lifecycle client", () => {
             authenticated: false,
             version: "1.2.3",
             code: "dreamina_login_required",
-            message: "Dreamina CLI 已安装，需要登录",
+            message: "domain:dreamina-cli-is-installed-but-requires-sign-in",
         });
         expect(JSON.stringify(result)).not.toContain(privateCanary);
         expect(JSON.stringify(result)).not.toContain("Profile");
@@ -145,7 +145,7 @@ describe("signed Dreamina CLI lifecycle client", () => {
 
         expect(pending).toMatchObject({
             state: "login_pending",
-            message: "请在官方页面确认 Dreamina 登录",
+            message: "domain:confirm-dreamina-sign-in-on-the-official-page",
             userCode: "ABCD-EFGH",
             expiresAt,
         });
@@ -173,10 +173,8 @@ describe("signed Dreamina CLI lifecycle client", () => {
             },
             { now: () => fixedNow },
         );
-        await expect(privateError).rejects.toMatchObject({
-            code: "dreamina_internal_error",
-            message: "Dreamina CLI 请求失败",
-        });
+        await expect(privateError).rejects.toMatchObject({ code: "dreamina_internal_error" });
+        await expect(privateError).rejects.toThrow(/dreamina-cli-request-failed/);
         await expect(privateError).rejects.not.toThrow(privateCanary);
 
         await expect(

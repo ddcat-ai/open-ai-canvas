@@ -1,0 +1,2199 @@
+[
+ {
+  "zh": "TLS（通常 465）",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "无加密",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 主机",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 端口",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 用户名",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "通常为完整邮箱地址",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 密码（{{configuredSecretText}}）",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 密码",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "留空保留原密码",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "SMTP 密码或授权码",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "发件邮箱",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请输入有效的发件邮箱",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "发件人名称",
+  "files": [
+   "src/pages/admin/components/email-settings-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "短剧创作",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后隐藏短剧入口，并拦截项目列表、详情和项目 API。已有项目数据不会删除。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后仅隐藏并拦截任务中心页面；生成任务仍会创建、执行、记录和恢复。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "积分中心",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后隐藏用户积分入口，新创建的任务和系统渠道请求不再冻结或消费积分。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后隐藏用户自定义渠道入口，并拦截模型目录拉取、渠道中转和新的生成任务。已有渠道配置不会删除。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后用户直接使用系统渠道中的模型；后台仍保留前台模型配置入口，方便重新开启。已有配置不会删除。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取功能开放配置失败",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "功能",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "开放",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存功能开放配置失败",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭用户积分功能？",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存后新创建的任务和系统渠道请求将不再扣减积分；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "确认关闭",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭前台模型功能？",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "关闭后用户将直接使用系统渠道中配置的模型；管理后台仍保留前台模型配置入口，重新开启后即可继续使用。",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户功能开放",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{userEnabledCount}}/{{length}} 已开放",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取中",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "开放{{title}}",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "管理后台功能",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{adminEnabledCount}}/{{length}} 已开放",
+  "files": [
+   "src/pages/admin/components/feature-availability-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取兑换码批次失败",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已生成 {{length}} 个兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成兑换码失败",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成超过 30 秒，后台可能仍已完成；请刷新批次列表确认，兑换码可从批次明细重新查看。",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单码积分",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "数量",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "核销状态",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已核销",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{expiredCount}} 已过期",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "有效期",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "永久有效",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "批次备注",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "查看明细",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用批次",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用该批次的可用兑换码？",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已核销和已过期记录不会变更。",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "确认禁用",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已禁用 {{disabledCount}} 个兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用批次失败",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成兑换码批次",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每个兑换码的积分",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写积分面额",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成数量",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写生成数量",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "过期时间",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：7 月活动赠送",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索批次备注、积分或数量",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "有效",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已过期",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "全部有效期",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "暂无兑换码批次",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "兑换码已复制",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "复制全部",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "下载 TXT",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "兑换码已加密保存，可在批次明细中再次查看；仍建议立即下载一份用于发放。",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取兑换码明细失败",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "本页兑换码已复制",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "兑换码已禁用",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用兑换码失败",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "明文不可恢复 ····{{codeSuffix}}",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "复制兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "核销用户",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "核销时间",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "核销 IP",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用这个兑换码？",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "禁用兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "兑换码明细",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "复制本页",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "可用",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx",
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已禁用",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "状态：{{status}}",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "暂无兑换码",
+  "files": [
+   "src/pages/admin/components/redemption-codes-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "无权限",
+  "files": [
+   "src/pages/admin/index.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前账号不是管理员，无法访问后台。",
+  "files": [
+   "src/pages/admin/index.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取前台模型配置失败",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请至少添加一条供应线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型已更新",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型已创建",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存前台模型失败",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型已停用",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型已启用",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "更新模型状态失败",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型已归档",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "归档前台模型失败",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "路由模拟失败",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "创作端能力",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "供应线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "条可用",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "共",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "条",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户价格",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模拟供应线路匹配",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "归档模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "归档前台模型“{{name}}”？",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "归档后模型将从公开目录中移除，不能在页面恢复；历史任务和版本记录会保留。排队中或进行中的任务仍在使用时无法归档。",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "确认归档",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台模型目录",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索模型名称、代码或能力",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "暂无模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "编辑前台模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "新增前台模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前供应线路无法覆盖全部创作端能力",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前供应线路暂不可结算",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台展示",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "显示名称",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx",
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写显示名称",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx",
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：Seedance 视频",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模型代码",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写模型代码",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：seedance-video",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模型 Logo",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "简短说明",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "说明适合的创作场景，不描述供应渠道。",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "前台排序",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "创作端可选能力",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "默认参数",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统规格价格",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "供应线路匹配模拟 - {{name}}",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "供应线路匹配模拟",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模拟匹配",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "匹配结果",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求能力通过",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求能力不匹配",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "渠道已停用",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "渠道模型已停用",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "条供应线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "添加供应线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "选择一个可承接请求的渠道模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "移除",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请选择渠道模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "选择渠道模型",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "优先级",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "权重",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未添加供应线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "能力配置需调整",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "线路价格需调整",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "暂无可用线路",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "价格、上游 SKU 和可用规格只在“系统渠道 / 模型管理”配置。前台模型只负责展示、能力范围和故障切换，不再保存第二份价格。",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "待配置系统规格价格",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "个系统规格档",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "结果",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx",
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "进入候选池",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "冷却中",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "低优先级",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "不匹配",
+  "files": [
+   "src/pages/admin/logical-models/logical-models-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "参考图片",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "张",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "参考视频",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "个",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx",
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "蒙版",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "参考音频",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "画面尺寸或比例",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成质量",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "透明背景",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输出数量",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "画面比例",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "视频时长",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输出分辨率",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "同步生成音频",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输出水印",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "音色",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "音频格式",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "语速",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "倍",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "朗读指令",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "没有可用的渠道模型能力来源",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请选择至少一种供应线路支持的生成方式",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前生成方式已不受供应线路支持",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "恢复全部可用范围",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前选择需要调整",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{sourceError}}。可重新选择，或采用全部可用范围。",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "选择创作端可用的生成方式",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "参考素材",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "线路支持",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "最少",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "最多",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成参数",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "该类型暂无额外能力参数",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "线路仍可按优先级和权重参与路由。",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前能力没有需要设置的默认参数。",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "留空时由创作端或线路默认值决定",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "实际输入数量",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求参数",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "该模型没有额外请求参数。",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "基础能力",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "最小值",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "最大值",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "调整步长",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "支持",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "不启用",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "视频续写",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "局部修改",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "元素替换",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "运镜调整",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "风格迁移",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "音频生视频",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "，步进 {{step}}",
+  "files": [
+   "src/pages/admin/logical-models/model-routing-capabilities.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取请求明细失败",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号未记录",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "调用状态",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "上游未返回错误详情",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "耗时",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输出",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "缓存",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "导出当前筛选",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已按当前筛选导出请求明细",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "导出请求明细失败",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索用户、渠道、模型、路径或请求号",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "全部结果",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求明细-已选{{length}}条.csv",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "导出已选",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已导出选中的 {{length}} 条请求明细",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "媒体预览",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "下载原文件",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{minutes}} 分 {{seconds}} 秒",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "预览不可用，素材可能已删除",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "生成结果",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "预览不可用",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已轮询",
+  "files": [
+   "src/pages/admin/logs/logs-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "正在读取兑换码批次...",
+  "files": [
+   "src/pages/admin/redemption-codes/redemption-codes-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取方舟素材库配置失败",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写 IAM SecretKey",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "方舟素材库配置已保存",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存方舟素材库配置失败",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "为 Seedance 参考图配置后端可信素材导入",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "私域虚拟人素材",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统仅在用户启用自动同步且参考图属于当前用户素材库时，才会用 IAM 凭据上传并等待审核。",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未保存方舟素材库配置",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存配置",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用可信素材同步",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写方舟 Region",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "部署方的方舟 Region",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写 Ark ProjectName",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "部署方的 Ark ProjectName",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写 IAM AccessKey",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "仅保存在服务端",
+  "files": [
+   "src/pages/admin/settings/ark-private-assets-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取绘图工具配置失败",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请先配置有效的 tldraw License Key",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "绘图工具配置已更新",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存绘图工具配置失败",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "设置新建绘图节点使用的默认编辑器",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "默认绘图引擎",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已有绘图保持原引擎，仅新建绘图使用这里的选择。",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "配置只影响之后新建的绘图节点。",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "未配置 tldraw License Key，暂不能将其设为默认引擎。",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输入 tldraw License Key",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "填入有效的 License Key 后保存，即可解锁 tldraw 选项。",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "新建默认引擎",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "切换后不会转换或覆盖已有绘图。",
+  "files": [
+   "src/pages/admin/settings/drawing-engine-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取 LibTV 配置失败",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "LibTV 配置已更新",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存 LibTV 配置失败",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "LibTV Token 已清空，导入功能已停用",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "清空 LibTV Token 失败",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ }
+]

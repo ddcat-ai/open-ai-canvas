@@ -1,0 +1,9 @@
+{
+    "address-has-no-page": "这个地址没有对应的页面，可能已经移动或被合并到其他入口。",
+    "back-to-home": "返回首页",
+    "page-did-not-load": "当前页面没有正常加载",
+    "page-error": "页面运行异常",
+    "page-not-found": "页面不存在",
+    "page-temporarily-unavailable": "页面暂时无法显示",
+    "reload": "重新加载"
+}

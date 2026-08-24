@@ -1,0 +1,2196 @@
+[
+ {
+  "zh": "请填写用于测试的 LibTV 画布 UUID",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "LibTV 连接测试成功",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "LibTV 连接测试失败",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "集中维护外部平台的服务端凭证和连接状态，后续平台可在此继续扩展。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "LibTV 配置",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "Token 仅保存在服务端加密配置中，不会回传到浏览器。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已配置",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已保存 Token；输入新值可替换，留空保存会保留现有 Token。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请先配置 Token，再启用导入功能。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "确认清空 LibTV Token？",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "清空后将同时停用 LibTV 画布导入。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "清空",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "清空 Token",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已配置（输入新 Token 可替换）",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输入 LibTV Token",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用导入",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "测试连接",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输入可访问的 LibTV 画布 UUID",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用于验证当前 Token 是否可读取指定 LibTV 画布，不会向当前画布写入节点。",
+  "files": [
+   "src/pages/admin/settings/libtv-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取模型响应拦截配置失败",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模型响应拦截配置已保存",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存模型响应拦截配置失败",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户可见错误",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用拦截规则",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "上游响应包含",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "替换为",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：余额不足、429",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：网络异常，请重试",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "添加规则",
+  "files": [
+   "src/pages/admin/settings/response-interception-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "普通资源单文件",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "素材上传和远程导入的单文件业务上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "Agent 会话附件",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单个会话附件的大小上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单个生成资源",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "上游生成响应和落库资源的单文件上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每日上传总量",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "按 UTC 自然日累计资源与附件上传。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号文件总量",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "资源文件与 Agent 会话附件合计。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "结构化数据总量",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "画布、素材和 Agent 会话结构化数据合计。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "任务数据总量",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "任务历史、结果和上游请求日志合计。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号可保存的素材记录数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号可保存的画布数量。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号可保存的 Agent 会话数量。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号保留的任务历史记录数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求日志数量",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号保留的上游请求日志数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "Worker 并发",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "集群同时执行的后台任务数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "全局渠道并发",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "渠道选择跟随系统时采用的并发上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号活动任务",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号跨项目同时排队或运行的任务总数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "图片任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "图片任务进入失败状态前的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "分钟",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "文本任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "文本任务的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "音频任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "音频任务的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "视频任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "视频任务的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "分镜任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "Agent 分镜任务的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "默认任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "未匹配专用类型时使用的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "任务创建",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟允许创建的任务数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "次/分钟",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "会话创建",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟允许创建的会话数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "资源上传",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟上传资源的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "资源导入",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟导入远程资源的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "会话附件",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟上传会话附件的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "素材写入",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟写入素材的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "画布写入",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟写入画布的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号注册",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每 IP 每小时允许注册的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "次/小时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "邮箱验证码",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每 IP 每小时允许请求验证码的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "登录 IP",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每 IP 每 10 分钟允许登录的次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "次/10分钟",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "登录账号组合",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "同一 IP 与账号组合每 10 分钟的登录次数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统渠道中转",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟使用系统渠道的请求数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道中转",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "每账号每分钟使用自定义渠道的请求数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道并发",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "单账号同时进行的自定义渠道请求数。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道请求体",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "中转到自定义上游的请求体上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道响应体",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义上游 JSON 与流式响应的读取上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自定义渠道连接与响应的最长等待时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统渠道请求体",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "中转到系统渠道的请求体上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统渠道响应体",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "系统渠道上游响应的读取上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "熔断失败次数",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "一分钟内连续失败达到该值后打开熔断。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "熔断持续时间",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "渠道熔断打开后拒绝请求的时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取资源与请求策略失败",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已填入自用模式上限，保存后生效",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取自用模式失败",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重置全部资源与请求策略？",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "将删除已保存的自定义策略并立即恢复系统默认值。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重置默认值",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已恢复系统默认策略",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重置资源与请求策略失败",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "资源与请求策略已即时生效",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存资源与请求策略失败",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号配额、任务调度与请求安全策略",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重置",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "自用模式",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "资源与账号配额",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "上传、文件容量、结构化数据和历史记录上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "任务与并发",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "后台任务消费、渠道调度和单账号活动任务上限。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "热更新",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "任务超时",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "不同生成类型的最长执行时间。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "业务频控",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号与 IP 维度的固定窗口请求限制。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "渠道中转与熔断",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请求体、响应体、并发、超时和上游故障保护。",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前使用系统默认策略",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写{{label}}",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{label}}必须是 1-{{max}} 的整数",
+  "files": [
+   "src/pages/admin/settings/runtime-policy-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取对象存储配置失败",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写服务器访问地址",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写 {{accessKeySecretLabel}}",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写对象存储 Bucket",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写 {{accessKeyIdLabel}}",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写阿里云 OSS Endpoint",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写腾讯云 COS Region 或 Endpoint",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写七牛云 Kodo 上传 Endpoint",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "存储配置已保存",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存存储配置失败",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "配置新增资源的默认存储位置",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "平台存储",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "服务器本地",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "未保存密钥",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未保存平台存储配置",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存存储配置",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "存储类型",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请选择存储类型",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "阿里云 OSS",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "腾讯云 COS",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "七牛云 Kodo",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：ap-guangzhou",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：z0 / cn-east-1",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：oss-cn-hangzhou",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "七牛云存储空间名称",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "对象存储 Bucket",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "路径前缀",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "可选，例如：canvas",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "上传 Endpoint",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "绑定域名（可选）",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "CDN 加速域名",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "可选。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写完整的 http/https 地址",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "七牛云 AccessKey",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "服务器访问地址",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用于生成本地资源的短时访问链接。",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "使用当前地址",
+  "files": [
+   "src/pages/admin/settings/storage-settings-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取提示词模板失败",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "{{name}} · 新版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写提示词模板内容",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "提示词新版本已创建",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存提示词模板失败",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "提示词版本已启用",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用提示词版本失败",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "提示词版本已删除",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "删除提示词版本失败",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模板类型",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "字符",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用中",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "历史版",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "更新时间",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "基于此版本新建",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用这个提示词版本？",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "只会替换同类型的当前版本，其他模板类型不受影响。",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "删除版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "删除这个历史版本？",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "删除后不可恢复，启用中的版本不能删除。",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "平台创作策略与版本管理",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "新建版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索模板或内容",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "历史版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "全部类型",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "基于 v{{version}} 新建版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "新建提示词版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "放弃模板修改？",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未保存的新版本内容将丢失。",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "版本名称",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请填写版本名称",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "例如：轻喜剧分镜策略 v2",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存后状态",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存为历史版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存并设为当前启用版本",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前版本有未保存修改",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "放弃并切换",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "模板内容",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "未保存",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "插入",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "提示词模板内容",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "输出契约",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "服务端只读",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请选择模板类型",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "最终结构",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "可编辑创作策略",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未填写",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "运行时强制追加",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "动态项目上下文、用户个性化要求和受保护输出契约。",
+  "files": [
+   "src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "当前积分",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "详情",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "编辑用户",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx",
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "停用用户",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重新启用",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "停用这个用户？",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "重新启用这个用户？",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "停用后会清除该用户登录态，但保留身份、任务和积分流水。",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "启用后，该用户可以重新登录并继续使用原有数据。",
+  "files": [
+   "src/pages/admin/users/users-columns.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "放弃用户修改？",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未保存的账号、角色或状态修改将丢失。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户信息已保存",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "保存用户失败",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户在产品内显示的名称",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请输入有效邮箱",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "不能在此修改当前管理员自己的角色。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "角色变更会立即影响后台访问权限。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "账号状态",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "不能停用当前登录账号。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "停用后会清除登录态，但保留身份、任务和积分流水。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "放弃添加用户？",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "尚未保存的用户信息将丢失。",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "放弃并关闭",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户已创建",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "创建用户失败",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "添加用户",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx",
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请输入用户名",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "3-32 位字母、数字、下划线或连字符",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "初始密码",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "请设置初始密码",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "至少 8 位",
+  "files": [
+   "src/pages/admin/users/users-drawer.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "读取用户失败",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户已停用并清除登录状态",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "用户已重新启用",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "更新用户状态失败",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "停用选中的 {{length}} 个用户？",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "这些用户的全部登录态会被清除，身份、任务和积分流水继续保留。操作会整体成功或整体回滚。",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "确认批量停用",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "已停用 {{disabledCount}} 个用户",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "批量停用用户失败",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索用户名、名称或邮箱",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "搜索：{{filter}}",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "全部角色",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "显示列",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "列设置",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ },
+ {
+  "zh": "批量停用",
+  "files": [
+   "src/pages/admin/users/users-panel.tsx"
+  ],
+  "ns": "admin",
+  "bucket": "A1"
+ }
+]

@@ -13,6 +13,8 @@ import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-f
 import type { AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
+import { drawingNodeTitle } from "./canvas-prompts";
 
 type UseCanvasConnectionControllerOptions = {
     projectId: string;
@@ -62,6 +64,7 @@ export function useCanvasConnectionController({
     setDialogNodeId,
     setDrawingNodeId,
 }: UseCanvasConnectionControllerOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
@@ -116,396 +119,443 @@ export function useCanvasConnectionController({
         clearBatchConnection();
     }, [clearBatchConnection, closeConnectionCreateMenu, setConnecting]);
 
-    const previewBatchConnection = useCallback((sourceNodeIds: string[], targetNodeId: string | null, targetHandleId: string | undefined, targetAnchorRatio: number | undefined, mouseWorld: Position) => {
-        const plan = targetNodeId
-            ? planBatchConnections({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, nodes: nodesRef.current, connections: connectionsRef.current, config })
-            : null;
-        const eligibleSourceCount = sourceNodeIds.filter((id) => {
-            const node = nodesRef.current.find((item) => item.id === id);
-            return Boolean(node && !batchSourceRestriction(node));
-        }).length;
-        const status = !targetNodeId || !plan ? "idle" : plan.connections.length === eligibleSourceCount ? "valid" : plan.connections.length ? "partial" : "invalid";
-        updateBatchConnectionPreview({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, mouseWorld, status });
-        return plan;
-    }, [config, connectionsRef, nodesRef, updateBatchConnectionPreview]);
-
-    const commitBatchConnection = useCallback((sourceNodeIds: string[], targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
-        const plan = planBatchConnections({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, nodes: nodesRef.current, connections: connectionsRef.current, config });
-        if (!plan.connections.length) {
-            const reason = plan.skipped[0]?.reason || "没有可建立的连接";
-            message.warning(reason);
+    const previewBatchConnection = useCallback(
+        (sourceNodeIds: string[], targetNodeId: string | null, targetHandleId: string | undefined, targetAnchorRatio: number | undefined, mouseWorld: Position) => {
+            const plan = targetNodeId ? planBatchConnections({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, nodes: nodesRef.current, connections: connectionsRef.current, config }) : null;
+            const eligibleSourceCount = sourceNodeIds.filter((id) => {
+                const node = nodesRef.current.find((item) => item.id === id);
+                return Boolean(node && !batchSourceRestriction(node));
+            }).length;
+            const status = !targetNodeId || !plan ? "idle" : plan.connections.length === eligibleSourceCount ? "valid" : plan.connections.length ? "partial" : "invalid";
+            updateBatchConnectionPreview({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, mouseWorld, status });
             return plan;
-        }
-        setNodes((currentNodes) => plan.connections.reduce((current, connection) => attachNodeToStoryboardRow(current, connection), currentNodes));
-        setConnections((currentConnections) => [...currentConnections, ...plan.connections]);
-        setContextMenu(null);
-        const skippedCount = plan.skipped.length;
-        const duplicateCount = plan.duplicates.length;
-        const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
-        if (skippedCount) message.warning(`已连接 ${plan.connected.length} 个节点${suffix}：${plan.skipped[0].reason}`);
-        else message.success(`已连接 ${plan.connected.length} 个节点${suffix}`);
-        return plan;
-    }, [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
+        },
+        [config, connectionsRef, nodesRef, updateBatchConnectionPreview],
+    );
 
-    const connectNodes = useCallback((current: ConnectionHandle, targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
-        if (current.nodeId === targetNodeId) return;
-        const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType);
-        if (!connection) {
-            message.warning("配置节点之间不能连接");
-            return;
-        }
-        const { fromNodeId, toNodeId } = connection;
-        const fromHandleId = fromNodeId === current.nodeId ? current.handleId : targetHandleId;
-        const toHandleId = toNodeId === current.nodeId ? current.handleId : targetHandleId;
-        const fromAnchorRatio = fromNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
-        const toAnchorRatio = toNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
-        const policyError = canvasConnectionError(config, nodesRef.current, connectionsRef.current, { fromNodeId, toNodeId });
-        if (policyError) {
-            message.warning(policyError);
-            return;
-        }
-        const exists = connectionsRef.current.find((item) => item.fromNodeId === fromNodeId && item.toNodeId === toNodeId && item.fromHandleId === fromHandleId && item.toHandleId === toHandleId);
-        if (exists) {
-            setConnections((currentConnections) => currentConnections.map((item) => item.id === exists.id ? { ...item, fromAnchorRatio, toAnchorRatio } : item));
-        } else {
-            setConnections((currentConnections) => [...currentConnections, { id: `conn-${Date.now()}`, fromNodeId, toNodeId, fromHandleId, toHandleId, fromAnchorRatio, toAnchorRatio }]);
-            setNodes((currentNodes) => attachNodeToStoryboardRow(currentNodes, { fromNodeId, toNodeId, fromHandleId, toHandleId }));
-        }
-        setContextMenu(null);
-    }, [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
+    const commitBatchConnection = useCallback(
+        (sourceNodeIds: string[], targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
+            const plan = planBatchConnections({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, nodes: nodesRef.current, connections: connectionsRef.current, config });
+            if (!plan.connections.length) {
+                const reason = plan.skipped[0]?.reason || t("canvas:no-connections-can-be-made");
+                message.warning(reason);
+                return plan;
+            }
+            setNodes((currentNodes) => plan.connections.reduce((current, connection) => attachNodeToStoryboardRow(current, connection), currentNodes));
+            setConnections((currentConnections) => [...currentConnections, ...plan.connections]);
+            setContextMenu(null);
+            const skippedCount = plan.skipped.length;
+            const duplicateCount = plan.duplicates.length;
+            const suffix = skippedCount || duplicateCount ? t("canvas:skipped-suffix", { count: skippedCount + duplicateCount }) : "";
+            if (skippedCount) message.warning(t("canvas:connected-param-nodes-param-param", { length: plan.connected.length, suffix: suffix, reason: plan.skipped[0].reason }));
+            else message.success(t("canvas:connected-param-nodes-param", { length: plan.connected.length, suffix: suffix }));
+            return plan;
+        },
+        [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes],
+    );
 
-    const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing, pending: PendingConnectionCreate) => {
-        if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
-            message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
-            return;
-        }
-        const batchSourceNodeIds = pending.batchSourceNodeIds?.length ? Array.from(new Set(pending.batchSourceNodeIds)) : [];
-        const batchSourceNodes = batchSourceNodeIds
-            .map((nodeId) => nodesRef.current.find((node) => node.id === nodeId))
-            .filter((node): node is CanvasNodeData => Boolean(node));
-        const storyboardRow = batchSourceNodeIds.length ? undefined : type === CanvasNodeType.Video ? storyboardRowFromHandle(nodesRef.current, pending.connection.nodeId, pending.connection.handleId) : undefined;
-        const videoPrompt = storyboardRow ? (storyboardRow.videoMotionPrompt || storyboardRow.plotDescription).trim() : "";
-        const sourceNode = pending.connection.handleType === "source" ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
-        const batchScriptPrompt = batchSourceNodes
-            .filter((node) => node.type === CanvasNodeType.Text)
-            .map((node) => (node.metadata?.content || node.metadata?.prompt || "").trim())
-            .filter(Boolean)
-            .join("\n\n");
-        const scriptPrompt = type === CanvasNodeType.Script
-            ? batchSourceNodeIds.length ? batchScriptPrompt : sourceNode?.type === CanvasNodeType.Text ? (sourceNode.metadata?.content || sourceNode.metadata?.prompt || "").trim() : ""
-            : "";
-        const metadata = type === CanvasNodeType.Drawing
-            ? { drawingEngine: defaultDrawingEngine }
-            : type === CanvasNodeType.Script && scriptPrompt
-              ? { prompt: scriptPrompt, composerContent: scriptPrompt }
-            : type === CanvasNodeType.Video && storyboardRow
-              ? { prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(storyboardRow, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, workflowKind: "shot" as const, workflowTitle: `镜头 ${storyboardRow.shotNumber} 视频`, shotIndex: storyboardRow.shotNumber, seconds: String(storyboardRow.durationSeconds), status: NODE_STATUS_IDLE }
-              : undefined;
-        const sourceNodeForQuickCreate = pending.quick ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
-        const spec = getNodeSpec(type);
-        const anchorY = sourceNodeForQuickCreate ? sourceNodeForQuickCreate.position.y + sourceNodeForQuickCreate.height * (pending.connection.anchorRatio ?? 0.5) : pending.position.y;
-        const position = sourceNodeForQuickCreate
-            ? {
-                  x: pending.connection.handleType === "source"
-                      ? sourceNodeForQuickCreate.position.x + sourceNodeForQuickCreate.width + 96 + spec.width / 2
-                      : sourceNodeForQuickCreate.position.x - 96 - spec.width / 2,
-                  y: anchorY,
-              }
-            : pending.position;
-        const newNode = createCanvasNode(type, position, metadata);
-        if (storyboardRow) newNode.title = `镜头 ${storyboardRow.shotNumber} · 视频`;
-        if (batchSourceNodeIds.length && type === CanvasNodeType.Drawing) {
-            message.error("批量连接暂不支持创建绘图，请先连接到普通节点");
-            closeConnectionCreateMenu();
-            return;
-        }
-        const batchPlan = batchSourceNodeIds.length
-            ? planBatchConnections({ sourceNodeIds: batchSourceNodeIds, targetNodeId: newNode.id, nodes: [...nodesRef.current, newNode], connections: connectionsRef.current, config, allowCapacityOverflow: true })
-            : null;
-        if (batchPlan) {
-            if (!batchPlan.connections.length) {
-                const detail = batchPlan.skipped.slice(0, 3).map((item) => item.reason).join("；");
-                message.warning(detail ? `没有可建立的连接：${detail}` : "没有可建立的连接");
+    const connectNodes = useCallback(
+        (current: ConnectionHandle, targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
+            if (current.nodeId === targetNodeId) return;
+            const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType);
+            if (!connection) {
+                message.warning(t("canvas:config-nodes-cannot-connect-to-each-other"));
+                return;
+            }
+            const { fromNodeId, toNodeId } = connection;
+            const fromHandleId = fromNodeId === current.nodeId ? current.handleId : targetHandleId;
+            const toHandleId = toNodeId === current.nodeId ? current.handleId : targetHandleId;
+            const fromAnchorRatio = fromNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
+            const toAnchorRatio = toNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
+            const policyError = canvasConnectionError(config, nodesRef.current, connectionsRef.current, { fromNodeId, toNodeId });
+            if (policyError) {
+                message.warning(policyError);
+                return;
+            }
+            const exists = connectionsRef.current.find((item) => item.fromNodeId === fromNodeId && item.toNodeId === toNodeId && item.fromHandleId === fromHandleId && item.toHandleId === toHandleId);
+            if (exists) {
+                setConnections((currentConnections) => currentConnections.map((item) => (item.id === exists.id ? { ...item, fromAnchorRatio, toAnchorRatio } : item)));
+            } else {
+                setConnections((currentConnections) => [...currentConnections, { id: `conn-${Date.now()}`, fromNodeId, toNodeId, fromHandleId, toHandleId, fromAnchorRatio, toAnchorRatio }]);
+                setNodes((currentNodes) => attachNodeToStoryboardRow(currentNodes, { fromNodeId, toNodeId, fromHandleId, toHandleId }));
+            }
+            setContextMenu(null);
+        },
+        [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes],
+    );
+
+    const createConnectedNode = useCallback(
+        async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing, pending: PendingConnectionCreate) => {
+            if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
+                message.error(t("canvas:tldraw-license-key-is-not-configured-in-this-production-build-tldraw-dra"));
+                return;
+            }
+            const batchSourceNodeIds = pending.batchSourceNodeIds?.length ? Array.from(new Set(pending.batchSourceNodeIds)) : [];
+            const batchSourceNodes = batchSourceNodeIds.map((nodeId) => nodesRef.current.find((node) => node.id === nodeId)).filter((node): node is CanvasNodeData => Boolean(node));
+            const storyboardRow = batchSourceNodeIds.length ? undefined : type === CanvasNodeType.Video ? storyboardRowFromHandle(nodesRef.current, pending.connection.nodeId, pending.connection.handleId) : undefined;
+            const videoPrompt = storyboardRow ? (storyboardRow.videoMotionPrompt || storyboardRow.plotDescription).trim() : "";
+            const sourceNode = pending.connection.handleType === "source" ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
+            const batchScriptPrompt = batchSourceNodes
+                .filter((node) => node.type === CanvasNodeType.Text)
+                .map((node) => (node.metadata?.content || node.metadata?.prompt || "").trim())
+                .filter(Boolean)
+                .join("\n\n");
+            const scriptPrompt = type === CanvasNodeType.Script ? (batchSourceNodeIds.length ? batchScriptPrompt : sourceNode?.type === CanvasNodeType.Text ? (sourceNode.metadata?.content || sourceNode.metadata?.prompt || "").trim() : "") : "";
+            const metadata =
+                type === CanvasNodeType.Drawing
+                    ? { drawingEngine: defaultDrawingEngine }
+                    : type === CanvasNodeType.Script && scriptPrompt
+                      ? { prompt: scriptPrompt, composerContent: scriptPrompt }
+                      : type === CanvasNodeType.Video && storyboardRow
+                        ? {
+                              prompt: videoPrompt,
+                              composerContent: videoPrompt,
+                              ...storyboardPromptTemplateMetadata(storyboardRow, "video"),
+                              generationMode: "video" as const,
+                              videoEditOperation: "text_to_video" as const,
+                              workflowKind: "shot" as const,
+                              workflowTitle: t("canvas:shot-param-video", { shotNumber: storyboardRow.shotNumber }),
+                              shotIndex: storyboardRow.shotNumber,
+                              seconds: String(storyboardRow.durationSeconds),
+                              status: NODE_STATUS_IDLE,
+                          }
+                        : undefined;
+            const sourceNodeForQuickCreate = pending.quick ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
+            const spec = getNodeSpec(type);
+            const anchorY = sourceNodeForQuickCreate ? sourceNodeForQuickCreate.position.y + sourceNodeForQuickCreate.height * (pending.connection.anchorRatio ?? 0.5) : pending.position.y;
+            const position = sourceNodeForQuickCreate
+                ? {
+                      x: pending.connection.handleType === "source" ? sourceNodeForQuickCreate.position.x + sourceNodeForQuickCreate.width + 96 + spec.width / 2 : sourceNodeForQuickCreate.position.x - 96 - spec.width / 2,
+                      y: anchorY,
+                  }
+                : pending.position;
+            const newNode = createCanvasNode(type, position, metadata);
+            if (storyboardRow) newNode.title = t("canvas:shot-param-video-2", { shotNumber: storyboardRow.shotNumber });
+            if (batchSourceNodeIds.length && type === CanvasNodeType.Drawing) {
+                message.error(t("canvas:batch-connect-cannot-create-drawings-yet-connect-to-regular-nodes-first"));
+                closeConnectionCreateMenu();
+                return;
+            }
+            const batchPlan = batchSourceNodeIds.length
+                ? planBatchConnections({ sourceNodeIds: batchSourceNodeIds, targetNodeId: newNode.id, nodes: [...nodesRef.current, newNode], connections: connectionsRef.current, config, allowCapacityOverflow: true })
+                : null;
+            if (batchPlan) {
+                if (!batchPlan.connections.length) {
+                    const detail = batchPlan.skipped
+                        .slice(0, 3)
+                        .map((item) => item.reason)
+                        .join("；");
+                    message.warning(detail ? t("canvas:no-connections-can-be-made-param", { detail: detail }) : t("canvas:no-connections-can-be-made"));
+                    closeConnectionCreateMenu();
+                    setConnecting(null);
+                    return;
+                }
+                const nextConnections = [...connectionsRef.current, ...batchPlan.connections];
+                const nextNodes = batchPlan.connections.reduce((currentNodes, connection) => attachNodeToStoryboardRow(currentNodes, connection), [...nodesRef.current, newNode]);
+                nodesRef.current = nextNodes;
+                connectionsRef.current = nextConnections;
+                setNodes(nextNodes);
+                setConnections(nextConnections);
+                setSelectedNodeIds(new Set([newNode.id]));
+                setSelectedConnectionId(null);
+                if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+                const skippedCount = batchPlan.skipped.length;
+                const duplicateCount = batchPlan.duplicates.length;
+                const suffix = skippedCount || duplicateCount ? t("canvas:skipped-suffix", { count: skippedCount + duplicateCount }) : "";
+                if (skippedCount) message.warning(t("canvas:created-and-connected-param-source-nodes-param-param", { length: batchPlan.connections.length, suffix: suffix, reason: batchPlan.skipped[0].reason }));
+                else message.success(t("canvas:node-created-with-param-source-nodes-connected-param", { length: batchPlan.connections.length, suffix: suffix }));
                 closeConnectionCreateMenu();
                 setConnecting(null);
                 return;
             }
-            const nextConnections = [...connectionsRef.current, ...batchPlan.connections];
-            const nextNodes = batchPlan.connections.reduce((currentNodes, connection) => attachNodeToStoryboardRow(currentNodes, connection), [...nodesRef.current, newNode]);
-            nodesRef.current = nextNodes;
-            connectionsRef.current = nextConnections;
-            setNodes(nextNodes);
-            setConnections(nextConnections);
+            const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
+            if (!connection) {
+                message.warning(t("canvas:config-nodes-cannot-connect-to-each-other"));
+                return;
+            }
+            const policyError = canvasConnectionError(config, [...nodesRef.current, newNode], connectionsRef.current, connection);
+            if (policyError) {
+                message.warning(policyError);
+                return;
+            }
+            if (type === CanvasNodeType.Drawing) {
+                const drawingSourceNode = nodesRef.current.find((node) => node.id === pending.connection.nodeId);
+                const sourceUrl = drawingSourceNode?.type === CanvasNodeType.Image ? drawingSourceNode.metadata?.content : "";
+                if (pending.connection.handleType !== "source" || !drawingSourceNode || !sourceUrl || !newNode.metadata?.drawingId) {
+                    message.error(t("canvas:only-output-connections-with-image-content-can-create-drawings"));
+                    return;
+                }
+                closeConnectionCreateMenu();
+                setConnecting(null);
+                try {
+                    const saved = await createCanvasDrawingFromImage(projectId, newNode.metadata.drawingId, defaultDrawingEngine, {
+                        url: sourceUrl,
+                        storageKey: drawingSourceNode.metadata?.storageKey,
+                        name: drawingSourceNode.title || t("canvas:source-image"),
+                        mimeType: drawingSourceNode.metadata?.mimeType,
+                    });
+                    newNode.title = drawingNodeTitle(drawingSourceNode.title || t("canvas:images"));
+                    newNode.metadata = {
+                        ...newNode.metadata,
+                        drawingEngine: saved.engine,
+                        drawingRevision: saved.revision,
+                        drawingUpdatedAt: saved.updatedAt,
+                        drawingShapeCount: saved.shapeCount,
+                        drawingPageCount: saved.pageCount,
+                    };
+                } catch (error) {
+                    message.error(error instanceof Error ? t("canvas:failed-to-create-drawing-param", { message: error.message }) : t("canvas:failed-to-create-drawing"));
+                    return;
+                }
+            }
+            const fromHandleId = connection.fromNodeId === pending.connection.nodeId ? pending.connection.handleId : undefined;
+            const toHandleId = connection.toNodeId === pending.connection.nodeId ? pending.connection.handleId : undefined;
+            const fromAnchorRatio = connection.fromNodeId === pending.connection.nodeId ? pending.connection.anchorRatio : 0.5;
+            const toAnchorRatio = connection.toNodeId === pending.connection.nodeId ? pending.connection.anchorRatio : 0.5;
+            const connected = { ...connection, fromHandleId, toHandleId, fromAnchorRatio, toAnchorRatio };
+            setNodes((currentNodes) => attachNodeToStoryboardRow([...currentNodes, newNode], connected));
+            setConnections((currentConnections) => [...currentConnections, { id: nanoid(), ...connected }]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
-            const skippedCount = batchPlan.skipped.length;
-            const duplicateCount = batchPlan.duplicates.length;
-            const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
-            if (skippedCount) message.warning(`已创建并连接 ${batchPlan.connections.length} 个源节点${suffix}：${batchPlan.skipped[0].reason}`);
-            else message.success(`已创建节点并连接 ${batchPlan.connections.length} 个源节点${suffix}`);
+            if (type === CanvasNodeType.Drawing) setDrawingNodeId(newNode.id);
+            else if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
             closeConnectionCreateMenu();
             setConnecting(null);
-            return;
-        }
-        const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
-        if (!connection) {
-            message.warning("配置节点之间不能连接");
-            return;
-        }
-        const policyError = canvasConnectionError(config, [...nodesRef.current, newNode], connectionsRef.current, connection);
-        if (policyError) {
-            message.warning(policyError);
-            return;
-        }
-        if (type === CanvasNodeType.Drawing) {
-            const drawingSourceNode = nodesRef.current.find((node) => node.id === pending.connection.nodeId);
-            const sourceUrl = drawingSourceNode?.type === CanvasNodeType.Image ? drawingSourceNode.metadata?.content : "";
-            if (pending.connection.handleType !== "source" || !drawingSourceNode || !sourceUrl || !newNode.metadata?.drawingId) {
-                message.error("只有已有图片内容的输出连线可以创建绘图");
-                return;
+        },
+        [closeConnectionCreateMenu, config, connectionsRef, defaultDrawingEngine, message, nodesRef, projectId, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, tldrawLicenseKey],
+    );
+
+    const getConnectionCreateDisabledReason = useCallback(
+        (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing, pending: PendingConnectionCreate) => {
+            if (pending.batchSourceNodeIds?.length) {
+                if (type === CanvasNodeType.Drawing) return t("canvas:batch-connect-does-not-support-drawings-yet");
+                const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type, title: "", position: pending.position, width: getNodeSpec(type).width, height: getNodeSpec(type).height };
+                const plan = planBatchConnections({ sourceNodeIds: pending.batchSourceNodeIds, targetNodeId: pendingNode.id, nodes: [...nodesRef.current, pendingNode], connections: connectionsRef.current, config, allowCapacityOverflow: true });
+                return plan.connections.length ? "" : plan.skipped[0]?.reason || t("canvas:selected-nodes-cannot-connect-to-this-type");
             }
-            closeConnectionCreateMenu();
-            setConnecting(null);
-            try {
-                const saved = await createCanvasDrawingFromImage(projectId, newNode.metadata.drawingId, defaultDrawingEngine, {
-                    url: sourceUrl,
-                    storageKey: drawingSourceNode.metadata?.storageKey,
-                    name: drawingSourceNode.title || "来源图片",
-                    mimeType: drawingSourceNode.metadata?.mimeType,
+            const spec = getNodeSpec(type);
+            const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type, title: "", position: pending.position, width: spec.width, height: spec.height };
+            const pendingNodes = [...nodesRef.current, pendingNode];
+            const connection = normalizeConnection(pending.connection.nodeId, pendingNode.id, pendingNodes, pending.connection.handleType);
+            if (!connection) return t("canvas:this-node-type-cannot-be-connected-this-way");
+            return canvasConnectionError(config, pendingNodes, connectionsRef.current, connection);
+        },
+        [config, connectionsRef, nodesRef],
+    );
+
+    const getConnectionDropTarget = useCallback(
+        (clientX: number, clientY: number, current: ConnectionHandle): ConnectionDropTarget => {
+            const world = screenToCanvas(clientX, clientY);
+            const scale = Math.max(viewportRef.current.k, 0.05);
+            const padding = CONNECTION_NODE_HIT_PADDING / scale;
+            const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
+            let isNearNode = false;
+            let bestNodeId: string | null = null;
+            let bestHandleId: string | undefined;
+            let bestAnchorRatio: number | undefined;
+            let bestPriority = Number.POSITIVE_INFINITY;
+
+            [...nodesRef.current]
+                .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
+                .reverse()
+                .forEach((node) => {
+                    const scrollTop = scriptScrollTopById[node.id] || 0;
+                    const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
+                    if (node.type === CanvasNodeType.Script && !targetHandleId) return;
+                    const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
+                    const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
+                    const dx = world.x - anchor.x;
+                    const dy = world.y - anchor.y;
+                    const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
+                    const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
+                    const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
+                    if (!hitsHandle && !hitsInside && !hitsExpanded) return;
+                    isNearNode = true;
+                    const normalized = node.id === current.nodeId ? null : normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType);
+                    if (!normalized || canvasConnectionError(config, nodesRef.current, connectionsRef.current, normalized)) return;
+                    const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
+                    if (priority < bestPriority) {
+                        bestNodeId = node.id;
+                        bestHandleId = targetHandleId;
+                        bestAnchorRatio = targetAnchorRatio;
+                        bestPriority = priority;
+                    }
                 });
-                newNode.title = `${drawingSourceNode.title || "图片"} · 绘图`;
-                newNode.metadata = {
-                    ...newNode.metadata,
-                    drawingEngine: saved.engine,
-                    drawingRevision: saved.revision,
-                    drawingUpdatedAt: saved.updatedAt,
-                    drawingShapeCount: saved.shapeCount,
-                    drawingPageCount: saved.pageCount,
-                };
-            } catch (error) {
-                message.error(error instanceof Error ? `创建绘图失败：${error.message}` : "创建绘图失败");
+            return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
+        },
+        [config, connectionsRef, nodesRef, screenToCanvas, scriptScrollTopById, viewportRef],
+    );
+
+    const getBatchConnectionDropTarget = useCallback(
+        (clientX: number, clientY: number, sourceNodeIds: string[]): BatchConnectionDropTarget => {
+            const source = sourceNodeIds.map((id) => nodesRef.current.find((node) => node.id === id)).find((node): node is CanvasNodeData => Boolean(node && !batchSourceRestriction(node)));
+            if (!source) return { nodeId: null, isNearNode: false };
+
+            const world = screenToCanvas(clientX, clientY);
+            const scale = Math.max(viewportRef.current.k, 0.05);
+            const padding = CONNECTION_NODE_HIT_PADDING / scale;
+            const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
+            let isNearNode = false;
+            let bestNodeId: string | null = null;
+            let bestHandleId: string | undefined;
+            let bestAnchorRatio: number | undefined;
+            let bestPriority = Number.POSITIVE_INFINITY;
+            const current: ConnectionHandle = { nodeId: source.id, handleType: "source" };
+
+            [...nodesRef.current]
+                .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
+                .reverse()
+                .forEach((node) => {
+                    const scrollTop = scriptScrollTopById[node.id] || 0;
+                    const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
+                    if (node.type === CanvasNodeType.Script && !targetHandleId) return;
+                    const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
+                    const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
+                    const dx = world.x - anchor.x;
+                    const dy = world.y - anchor.y;
+                    const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
+                    const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
+                    const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
+                    if (!hitsHandle && !hitsInside && !hitsExpanded) return;
+                    isNearNode = true;
+                    if (!hasBatchConnectionCandidate(sourceNodeIds, node.id, nodesRef.current)) return;
+                    const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
+                    if (priority < bestPriority) {
+                        bestNodeId = node.id;
+                        bestHandleId = targetHandleId;
+                        bestAnchorRatio = targetAnchorRatio;
+                        bestPriority = priority;
+                    }
+                });
+            return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
+        },
+        [nodesRef, screenToCanvas, scriptScrollTopById, viewportRef],
+    );
+
+    const startBatchConnection = useCallback(
+        (event: ReactPointerEvent, sourceNodeIds: string[]) => {
+            const eligible = sourceNodeIds.filter((id) => {
+                const node = nodesRef.current.find((item) => item.id === id);
+                return Boolean(node && !batchSourceRestriction(node));
+            });
+            if (!eligible.length) {
+                message.warning(t("canvas:no-node-in-the-selection-can-act-as-a-connection-source"));
                 return;
             }
-        }
-        const fromHandleId = connection.fromNodeId === pending.connection.nodeId ? pending.connection.handleId : undefined;
-        const toHandleId = connection.toNodeId === pending.connection.nodeId ? pending.connection.handleId : undefined;
-        const fromAnchorRatio = connection.fromNodeId === pending.connection.nodeId ? pending.connection.anchorRatio : 0.5;
-        const toAnchorRatio = connection.toNodeId === pending.connection.nodeId ? pending.connection.anchorRatio : 0.5;
-        const connected = { ...connection, fromHandleId, toHandleId, fromAnchorRatio, toAnchorRatio };
-        setNodes((currentNodes) => attachNodeToStoryboardRow([...currentNodes, newNode], connected));
-        setConnections((currentConnections) => [...currentConnections, { id: nanoid(), ...connected }]);
-        setSelectedNodeIds(new Set([newNode.id]));
-        setSelectedConnectionId(null);
-        if (type === CanvasNodeType.Drawing) setDrawingNodeId(newNode.id);
-        else if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
-        closeConnectionCreateMenu();
-        setConnecting(null);
-    }, [closeConnectionCreateMenu, config, connectionsRef, defaultDrawingEngine, message, nodesRef, projectId, setConnecting, setConnections, setDialogNodeId, setDrawingNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, tldrawLicenseKey]);
+            event.preventDefault();
+            event.stopPropagation();
+            batchConnectionPointerIdRef.current = event.pointerId;
+            batchConnectionPointerStartRef.current = { x: event.clientX, y: event.clientY };
+            setSelectedConnectionId(null);
+            const mouseWorld = screenToCanvas(event.clientX, event.clientY);
+            previewBatchConnection(eligible, null, undefined, undefined, mouseWorld);
+        },
+        [message, nodesRef, previewBatchConnection, screenToCanvas, setSelectedConnectionId],
+    );
 
-    const getConnectionCreateDisabledReason = useCallback((type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing, pending: PendingConnectionCreate) => {
-        if (pending.batchSourceNodeIds?.length) {
-            if (type === CanvasNodeType.Drawing) return "批量连接暂不支持绘图";
-            const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type, title: "", position: pending.position, width: getNodeSpec(type).width, height: getNodeSpec(type).height };
-            const plan = planBatchConnections({ sourceNodeIds: pending.batchSourceNodeIds, targetNodeId: pendingNode.id, nodes: [...nodesRef.current, pendingNode], connections: connectionsRef.current, config, allowCapacityOverflow: true });
-            return plan.connections.length ? "" : plan.skipped[0]?.reason || "当前选中的节点不能连接到此类型";
-        }
-        const spec = getNodeSpec(type);
-        const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type, title: "", position: pending.position, width: spec.width, height: spec.height };
-        const pendingNodes = [...nodesRef.current, pendingNode];
-        const connection = normalizeConnection(pending.connection.nodeId, pendingNode.id, pendingNodes, pending.connection.handleType);
-        if (!connection) return "当前节点类型不能这样连接";
-        return canvasConnectionError(config, pendingNodes, connectionsRef.current, connection);
-    }, [config, connectionsRef, nodesRef]);
-
-    const getConnectionDropTarget = useCallback((clientX: number, clientY: number, current: ConnectionHandle): ConnectionDropTarget => {
-        const world = screenToCanvas(clientX, clientY);
-        const scale = Math.max(viewportRef.current.k, 0.05);
-        const padding = CONNECTION_NODE_HIT_PADDING / scale;
-        const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
-        let isNearNode = false;
-        let bestNodeId: string | null = null;
-        let bestHandleId: string | undefined;
-        let bestAnchorRatio: number | undefined;
-        let bestPriority = Number.POSITIVE_INFINITY;
-
-        [...nodesRef.current]
-            .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
-            .reverse()
-            .forEach((node) => {
-                const scrollTop = scriptScrollTopById[node.id] || 0;
-                const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
-                if (node.type === CanvasNodeType.Script && !targetHandleId) return;
-                const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
-                const dx = world.x - anchor.x;
-                const dy = world.y - anchor.y;
-                const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
-                const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
-                const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
-                if (!hitsHandle && !hitsInside && !hitsExpanded) return;
-                isNearNode = true;
-                const normalized = node.id === current.nodeId ? null : normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType);
-                if (!normalized || canvasConnectionError(config, nodesRef.current, connectionsRef.current, normalized)) return;
-                const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
-                if (priority < bestPriority) {
-                    bestNodeId = node.id;
-                    bestHandleId = targetHandleId;
-                    bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = priority;
-                }
+    const beginBatchConnectionMode = useCallback(
+        (sourceNodeIds: string[]) => {
+            const eligible = sourceNodeIds.filter((id) => {
+                const node = nodesRef.current.find((item) => item.id === id);
+                return Boolean(node && !batchSourceRestriction(node));
             });
-        return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
-    }, [config, connectionsRef, nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
+            const source = eligible.map((id) => nodesRef.current.find((node) => node.id === id)).find((node): node is CanvasNodeData => Boolean(node));
+            if (!source) {
+                message.warning(t("canvas:no-node-in-the-selection-can-act-as-a-connection-source"));
+                return;
+            }
+            previewBatchConnection(eligible, null, undefined, undefined, { x: source.position.x + source.width, y: source.position.y + source.height / 2 });
+            setSelectedConnectionId(null);
+        },
+        [message, nodesRef, previewBatchConnection, setSelectedConnectionId],
+    );
 
-    const getBatchConnectionDropTarget = useCallback((clientX: number, clientY: number, sourceNodeIds: string[]): BatchConnectionDropTarget => {
-        const source = sourceNodeIds
-            .map((id) => nodesRef.current.find((node) => node.id === id))
-            .find((node): node is CanvasNodeData => Boolean(node && !batchSourceRestriction(node)));
-        if (!source) return { nodeId: null, isNearNode: false };
-
-        const world = screenToCanvas(clientX, clientY);
-        const scale = Math.max(viewportRef.current.k, 0.05);
-        const padding = CONNECTION_NODE_HIT_PADDING / scale;
-        const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
-        let isNearNode = false;
-        let bestNodeId: string | null = null;
-        let bestHandleId: string | undefined;
-        let bestAnchorRatio: number | undefined;
-        let bestPriority = Number.POSITIVE_INFINITY;
-        const current: ConnectionHandle = { nodeId: source.id, handleType: "source" };
-
-        [...nodesRef.current]
-            .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
-            .reverse()
-            .forEach((node) => {
-                const scrollTop = scriptScrollTopById[node.id] || 0;
-                const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : undefined;
-                if (node.type === CanvasNodeType.Script && !targetHandleId) return;
-                const targetAnchorRatio = node.type === CanvasNodeType.Script ? undefined : Math.min(0.94, Math.max(0.06, (world.y - node.position.y) / Math.max(node.height, 1)));
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
-                const dx = world.x - anchor.x;
-                const dy = world.y - anchor.y;
-                const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
-                const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
-                const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
-                if (!hitsHandle && !hitsInside && !hitsExpanded) return;
-                isNearNode = true;
-                if (!hasBatchConnectionCandidate(sourceNodeIds, node.id, nodesRef.current)) return;
-                const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
-                if (priority < bestPriority) {
-                    bestNodeId = node.id;
-                    bestHandleId = targetHandleId;
-                    bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = priority;
-                }
-            });
-        return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
-    }, [nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
-
-    const startBatchConnection = useCallback((event: ReactPointerEvent, sourceNodeIds: string[]) => {
-        const eligible = sourceNodeIds.filter((id) => {
-            const node = nodesRef.current.find((item) => item.id === id);
-            return Boolean(node && !batchSourceRestriction(node));
-        });
-        if (!eligible.length) {
-            message.warning("当前选区没有可作为连接源的节点");
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        batchConnectionPointerIdRef.current = event.pointerId;
-        batchConnectionPointerStartRef.current = { x: event.clientX, y: event.clientY };
-        setSelectedConnectionId(null);
-        const mouseWorld = screenToCanvas(event.clientX, event.clientY);
-        previewBatchConnection(eligible, null, undefined, undefined, mouseWorld);
-    }, [message, nodesRef, previewBatchConnection, screenToCanvas, setSelectedConnectionId]);
-
-    const beginBatchConnectionMode = useCallback((sourceNodeIds: string[]) => {
-        const eligible = sourceNodeIds.filter((id) => {
-            const node = nodesRef.current.find((item) => item.id === id);
-            return Boolean(node && !batchSourceRestriction(node));
-        });
-        const source = eligible.map((id) => nodesRef.current.find((node) => node.id === id)).find((node): node is CanvasNodeData => Boolean(node));
-        if (!source) {
-            message.warning("当前选区没有可作为连接源的节点");
-            return;
-        }
-        previewBatchConnection(eligible, null, undefined, undefined, { x: source.position.x + source.width, y: source.position.y + source.height / 2 });
-        setSelectedConnectionId(null);
-    }, [message, nodesRef, previewBatchConnection, setSelectedConnectionId]);
-
-    const finishBatchConnection = useCallback((clientX: number, clientY: number) => {
-        const batch = batchConnectionPreviewRef.current;
-        if (!batch) return false;
-        const target = getBatchConnectionDropTarget(clientX, clientY, batch.sourceNodeIds);
-        if (!target.nodeId) return false;
-        commitBatchConnection(batch.sourceNodeIds, target.nodeId, target.handleId, target.anchorRatio);
-        clearBatchConnection();
-        return true;
-    }, [clearBatchConnection, commitBatchConnection, getBatchConnectionDropTarget]);
-
-    const openBatchConnectionCreateMenu = useCallback((clientX: number, clientY: number) => {
-        const batch = batchConnectionPreviewRef.current;
-        if (!batch) return false;
-        const position = screenToCanvas(clientX, clientY);
-        const request = buildBatchConnectionCreateRequest(batch.sourceNodeIds, nodesRef.current, position);
-        if (!request) {
+    const finishBatchConnection = useCallback(
+        (clientX: number, clientY: number) => {
+            const batch = batchConnectionPreviewRef.current;
+            if (!batch) return false;
+            const target = getBatchConnectionDropTarget(clientX, clientY, batch.sourceNodeIds);
+            if (!target.nodeId) return false;
+            commitBatchConnection(batch.sourceNodeIds, target.nodeId, target.handleId, target.anchorRatio);
             clearBatchConnection();
-            message.warning("当前选区没有可作为连接源的节点");
-            return false;
-        }
-        const pending: PendingConnectionCreate = request;
-        pendingConnectionCreateRef.current = pending;
-        setPendingConnectionCreate(pending);
-        setMouseWorld(position);
-        clearBatchConnection();
-        return true;
-    }, [clearBatchConnection, message, nodesRef, screenToCanvas]);
+            return true;
+        },
+        [clearBatchConnection, commitBatchConnection, getBatchConnectionDropTarget],
+    );
 
-    const handleBatchConnectionTargetClick = useCallback((event: ReactPointerEvent | ReactMouseEvent) => {
-        if (!batchConnectionPreviewRef.current) return false;
-        const completed = finishBatchConnection(event.clientX, event.clientY);
-        if (!completed) message.warning("请点击目标节点的输入端");
-        return true;
-    }, [finishBatchConnection, message]);
-
-    const finishConnection = useCallback((clientX: number, clientY: number) => {
-        if (pendingConnectionCreateRef.current) return;
-        const currentConnection = connectingParamsRef.current;
-        if (!currentConnection) return;
-        const dropTarget = getConnectionDropTarget(clientX, clientY, currentConnection);
-        if (dropTarget.nodeId) {
-            connectNodes(currentConnection, dropTarget.nodeId, dropTarget.handleId, dropTarget.anchorRatio);
-            setConnecting(null);
-        } else if (dropTarget.isNearNode) {
-            setConnecting(null);
-        } else {
+    const openBatchConnectionCreateMenu = useCallback(
+        (clientX: number, clientY: number) => {
+            const batch = batchConnectionPreviewRef.current;
+            if (!batch) return false;
             const position = screenToCanvas(clientX, clientY);
-            setMouseWorld(position);
-            const pending = { connection: currentConnection, position };
+            const request = buildBatchConnectionCreateRequest(batch.sourceNodeIds, nodesRef.current, position);
+            if (!request) {
+                clearBatchConnection();
+                message.warning(t("canvas:no-node-in-the-selection-can-act-as-a-connection-source"));
+                return false;
+            }
+            const pending: PendingConnectionCreate = request;
             pendingConnectionCreateRef.current = pending;
             setPendingConnectionCreate(pending);
-        }
-    }, [connectNodes, getConnectionDropTarget, screenToCanvas, setConnecting]);
-
-    const handleConnectStart = useCallback((event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (batchConnectionPreviewRef.current && handleType === "target") {
-            commitBatchConnection(batchConnectionPreviewRef.current.sourceNodeIds, nodeId, handleId, anchorRatio);
+            setMouseWorld(position);
             clearBatchConnection();
-            return;
-        }
-        if (batchConnectionPreviewRef.current) clearBatchConnection();
-        connectingPointerIdRef.current = event.pointerId;
-        connectingPointerStartRef.current = { x: event.clientX, y: event.clientY };
-        setMouseWorld(screenToCanvas(event.clientX, event.clientY));
-        setConnecting({ nodeId, handleType, handleId, anchorRatio });
-        setConnectionTargetNodeId(null);
-        setConnectionTargetAnchorRatio(undefined);
-        setSelectedConnectionId(null);
-    }, [clearBatchConnection, commitBatchConnection, screenToCanvas, setConnecting, setSelectedConnectionId]);
+            return true;
+        },
+        [clearBatchConnection, message, nodesRef, screenToCanvas],
+    );
+
+    const handleBatchConnectionTargetClick = useCallback(
+        (event: ReactPointerEvent | ReactMouseEvent) => {
+            if (!batchConnectionPreviewRef.current) return false;
+            const completed = finishBatchConnection(event.clientX, event.clientY);
+            if (!completed) message.warning(t("canvas:click-the-target-node-s-input-port"));
+            return true;
+        },
+        [finishBatchConnection, message],
+    );
+
+    const finishConnection = useCallback(
+        (clientX: number, clientY: number) => {
+            if (pendingConnectionCreateRef.current) return;
+            const currentConnection = connectingParamsRef.current;
+            if (!currentConnection) return;
+            const dropTarget = getConnectionDropTarget(clientX, clientY, currentConnection);
+            if (dropTarget.nodeId) {
+                connectNodes(currentConnection, dropTarget.nodeId, dropTarget.handleId, dropTarget.anchorRatio);
+                setConnecting(null);
+            } else if (dropTarget.isNearNode) {
+                setConnecting(null);
+            } else {
+                const position = screenToCanvas(clientX, clientY);
+                setMouseWorld(position);
+                const pending = { connection: currentConnection, position };
+                pendingConnectionCreateRef.current = pending;
+                setPendingConnectionCreate(pending);
+            }
+        },
+        [connectNodes, getConnectionDropTarget, screenToCanvas, setConnecting],
+    );
+
+    const handleConnectStart = useCallback(
+        (event: ReactPointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (batchConnectionPreviewRef.current && handleType === "target") {
+                commitBatchConnection(batchConnectionPreviewRef.current.sourceNodeIds, nodeId, handleId, anchorRatio);
+                clearBatchConnection();
+                return;
+            }
+            if (batchConnectionPreviewRef.current) clearBatchConnection();
+            connectingPointerIdRef.current = event.pointerId;
+            connectingPointerStartRef.current = { x: event.clientX, y: event.clientY };
+            setMouseWorld(screenToCanvas(event.clientX, event.clientY));
+            setConnecting({ nodeId, handleType, handleId, anchorRatio });
+            setConnectionTargetNodeId(null);
+            setConnectionTargetAnchorRatio(undefined);
+            setSelectedConnectionId(null);
+        },
+        [clearBatchConnection, commitBatchConnection, screenToCanvas, setConnecting, setSelectedConnectionId],
+    );
 
     useEffect(() => {
         const handlePointerMove = (event: PointerEvent) => {

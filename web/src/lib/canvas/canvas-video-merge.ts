@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import ffmpegCoreURL from "@ffmpeg/core?url";
 import ffmpegWasmURL from "@ffmpeg/core/wasm?url";
@@ -20,7 +21,7 @@ export async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => 
                 await ffmpeg.load({ coreURL: ffmpegCoreURL, wasmURL: ffmpegWasmURL });
             } catch (cause) {
                 ffmpeg.terminate();
-                throw new Error("视频合并工具加载失败，请刷新页面后重试", { cause });
+                throw new Error(t("canvas:failed-to-load-the-video-merge-tool-refresh-the-page-and-retry"), { cause });
             }
             return ffmpeg;
         })();
@@ -34,17 +35,20 @@ export async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => 
 }
 
 export async function mergeVideos(inputs: MergeVideoInput[], onProgress?: (progress: MergeVideoProgress) => void) {
-    if (inputs.length < 2) throw new Error("至少选择 2 个视频才能合并");
+    if (inputs.length < 2) throw new Error(t("canvas:select-at-least-2-videos-to-merge"));
     const ffmpeg = await loadFFmpeg(onProgress);
     const files: string[] = [];
     try {
         for (let index = 0; index < inputs.length; index += 1) {
             const input = inputs[index];
             const storedBlob = input.storageKey ? await getMediaBlob(input.storageKey) : null;
-            const remoteBlob = !storedBlob && input.url ? await fetch(input.url).then((response) => {
-                if (!response.ok) throw new Error(`视频资源请求失败（${response.status}）`);
-                return response.blob();
-            }) : null;
+            const remoteBlob =
+                !storedBlob && input.url
+                    ? await fetch(input.url).then((response) => {
+                          if (!response.ok) throw new Error(t("canvas:video-resource-request-failed-param", { status: response.status }));
+                          return response.blob();
+                      })
+                    : null;
             const blob = storedBlob || remoteBlob;
             if (!blob) throw new Error(`无法读取第 ${index + 1} 个视频`);
             const name = `input-${index}.mp4`;
@@ -60,7 +64,7 @@ export async function mergeVideos(inputs: MergeVideoInput[], onProgress?: (progr
         if (exitCode !== 0) {
             exitCode = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", "merged.mp4"]);
         }
-        if (exitCode !== 0) throw new Error("视频编码失败，请确认视频编码格式兼容");
+        if (exitCode !== 0) throw new Error(t("canvas:video-encoding-failed-make-sure-the-codec-format-is-compatible"));
         const output = await ffmpeg.readFile("merged.mp4");
         onProgress?.({ phase: "encoding", progress: 100 });
         return new Blob([output as BlobPart], { type: "video/mp4" });

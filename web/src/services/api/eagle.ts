@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { apiBaseURL, apiClient, request } from "@/services/api/request";
 
 export type EagleFolder = {
@@ -28,7 +29,7 @@ export type EagleItem = {
 };
 
 export type EagleAddItemInput = {
-	url: string;
+    url: string;
     name: string;
     folderId?: string;
     tags?: string[];
@@ -42,15 +43,17 @@ export async function getEagleLibrary(baseUrl: string) {
 }
 
 export async function listEagleItems(input: { baseUrl: string; folderId?: string; keyword?: string; limit?: number; offset?: number }) {
-    return request<{ items: EagleItem[] }>(apiClient.get("/plugins/eagle/items", {
-        params: {
-            baseUrl: input.baseUrl,
-            folderId: input.folderId || undefined,
-            keyword: input.keyword || undefined,
-            limit: input.limit,
-            offset: input.offset,
-        },
-    }));
+    return request<{ items: EagleItem[] }>(
+        apiClient.get("/plugins/eagle/items", {
+            params: {
+                baseUrl: input.baseUrl,
+                folderId: input.folderId || undefined,
+                keyword: input.keyword || undefined,
+                limit: input.limit,
+                offset: input.offset,
+            },
+        }),
+    );
 }
 
 export function eagleItemThumbnailUrl(itemId: string, baseUrl: string) {
@@ -64,9 +67,9 @@ export function eagleItemFileUrl(itemId: string, baseUrl: string) {
 export async function downloadEagleItem(itemId: string, baseUrl: string, signal?: AbortSignal) {
     const response = await fetch(`${String(apiBaseURL).replace(/\/+$/, "")}/plugins/eagle/items/${encodeURIComponent(itemId)}/file?baseUrl=${encodeURIComponent(baseUrl)}`, { credentials: "include", signal });
     if (!response.ok) {
-        let message = "读取 Eagle 素材失败";
+        let message = t("domain:failed-to-read-eagle-assets");
         try {
-            const body = await response.json() as { msg?: string };
+            const body = (await response.json()) as { msg?: string };
             message = body.msg || message;
         } catch {
             // 保留通用错误，避免把 HTML 或服务器内部信息展示给用户。

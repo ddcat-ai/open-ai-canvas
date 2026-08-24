@@ -33,12 +33,13 @@ describe("image resolution tiers", () => {
         expect(formatImageResolutionSize("1536x2752", options)).toBe("9:16 · 2K");
     });
 
-    test("保留自动尺寸并在摘要中显示中文标签", () => {
+    test("保留自动尺寸并在摘要中显示稳定标签", () => {
         const values = ["auto", ...sizes];
 
         expect(imageResolutionChoices(values)).toEqual(["auto", "1k", "2k", "4k"]);
         expect(buildImageResolutionOptions(values)).toHaveLength(30);
-        expect(formatImageResolutionSize("auto", [])).toBe("自动");
+        // i18n 迁移后测试环境 t() 返回 key 字符串
+        expect(formatImageResolutionSize("auto", [])).toBe("lib:auto");
     });
 
     test("允许自定义尺寸时仍保留自动与分辨率预设", () => {

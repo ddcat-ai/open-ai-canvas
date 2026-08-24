@@ -53,28 +53,21 @@ import { normalizeCharacterName } from "@/lib/canvas/canvas-character-reference"
 import { decodeNovelText, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
 import { upsertProjectChapterStoryboard } from "@/lib/canvas/project-chapter-storyboard";
 import { navigateToSettings } from "@/lib/settings-navigation";
-import {
-    createProjectAssetCandidates,
-    createProjectUnit,
-    deleteProjectUnit,
-    getProjectUnit,
-    importProjectUnits,
-    linkCanvasUnit,
-    reorderProjectUnits,
-    updateProjectUnit,
-    type ProjectUnit,
-} from "@/services/api/projects";
+import { createProjectAssetCandidates, createProjectUnit, deleteProjectUnit, getProjectUnit, importProjectUnits, linkCanvasUnit, reorderProjectUnits, updateProjectUnit, type ProjectUnit } from "@/services/api/projects";
 import { createCanvasProjectWithRemoteSync, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 
 import { formatCount, formatTime, statusLabel, type ProjectDetailViewProps } from "./shared";
 import { extractChapterCharacters } from "./project-chapter-ai";
+import { useTranslation } from "react-i18next";
+import { formatLocale } from "@/lib/format-locale";
 
 const CHAPTER_ROW_HEIGHT = 52;
 const MAX_NOVEL_IMPORT_CHAPTERS = 2500;
 
 export default function ProjectChaptersView({ detail, refreshProject, onCreateCanvas }: ProjectDetailViewProps) {
+    const { t } = useTranslation("project");
     const { message } = App.useApp();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -97,7 +90,7 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const localCanvases = useCanvasStore((state) => state.projects);
     const listRef = useRef<HTMLDivElement>(null);
-    const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLocaleLowerCase("zh-CN"));
+    const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLocaleLowerCase(formatLocale()));
     const orderedUnits = useMemo(() => {
         const byId = new Map(detail.units.map((unit) => [unit.id, unit]));
         return orderedIds.map((id) => byId.get(id)).filter((unit): unit is ProjectUnit => Boolean(unit));
@@ -119,7 +112,7 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     const visibleUnits = useMemo(() => {
         if (!deferredSearchQuery) return orderedUnits;
         const numericQuery = /^\d+$/.test(deferredSearchQuery) ? deferredSearchQuery.replace(/^0+/, "") || "0" : "";
-        return orderedUnits.filter((unit, index) => (numericQuery && String(index + 1).startsWith(numericQuery)) || unit.title.toLocaleLowerCase("zh-CN").includes(deferredSearchQuery));
+        return orderedUnits.filter((unit, index) => (numericQuery && String(index + 1).startsWith(numericQuery)) || unit.title.toLocaleLowerCase(formatLocale()).includes(deferredSearchQuery));
     }, [deferredSearchQuery, orderedUnits]);
     const chapterVirtualizer = useVirtualizer({
         count: visibleUnits.length,
@@ -134,7 +127,12 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     });
 
     useEffect(() => {
-        setOrderedIds(detail.units.slice().sort((left, right) => left.position - right.position).map((unit) => unit.id));
+        setOrderedIds(
+            detail.units
+                .slice()
+                .sort((left, right) => left.position - right.position)
+                .map((unit) => unit.id),
+        );
         if (!detail.units.some((unit) => unit.id === selectedId)) setSelectedId(detail.units[0]?.id || "");
     }, [detail.units, selectedId]);
 
@@ -154,30 +152,60 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     }, [detail.project.id, selectedId]);
 
     const saveMutation = useMutation({
-        mutationFn: () => selectedUnitQuery.data?.unit
-            ? updateProjectUnit(detail.project.id, selectedUnitQuery.data.unit.id, {
-                title: draftTitle.trim(),
-                sourceText: draftHtml,
-                status: stripHtml(draftHtml) ? "ready" : "draft",
-            })
-            : Promise.reject(new Error("请选择章节")),
-        onSuccess: ({ unit }) => { queryClient.setQueryData(["project-unit", detail.project.id, unit.id], { unit }); setDirty(false); refreshProject(); message.success("章节已保存"); },
-        onError: (error) => message.error(error instanceof Error ? error.message : "章节保存失败"),
+        mutationFn: () =>
+            selectedUnitQuery.data?.unit
+                ? updateProjectUnit(detail.project.id, selectedUnitQuery.data.unit.id, {
+                      title: draftTitle.trim(),
+                      sourceText: draftHtml,
+                      status: stripHtml(draftHtml) ? "ready" : "draft",
+                  })
+                : Promise.reject(new Error(t("project:select-a-chapter"))),
+        onSuccess: ({ unit }) => {
+            queryClient.setQueryData(["project-unit", detail.project.id, unit.id], { unit });
+            setDirty(false);
+            refreshProject();
+            message.success(t("project:chapter-saved"));
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : t("project:failed-to-save-chapter")),
     });
     const createMutation = useMutation({
         mutationFn: (values: { title: string; sourceText?: string }) => createProjectUnit(detail.project.id, { kind: "chapter", title: values.title, sourceText: plainTextToHtml(values.sourceText || ""), position: detail.units.length }),
-        onSuccess: ({ unit }) => { setCreateOpen(false); setSelectedId(unit.id); refreshProject(); navigate(`/projects/${detail.project.id}/chapters/${unit.id}`); message.success("章节已创建"); },
-        onError: (error) => message.error(error instanceof Error ? error.message : "章节创建失败"),
+        onSuccess: ({ unit }) => {
+            setCreateOpen(false);
+            setSelectedId(unit.id);
+            refreshProject();
+            navigate(`/projects/${detail.project.id}/chapters/${unit.id}`);
+            message.success(t("project:chapter-created"));
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : t("project:failed-to-create-chapter")),
     });
     const importMutation = useMutation({
-        mutationFn: (chapters: Array<{ title: string; plainText: string }>) => importProjectUnits(detail.project.id, chapters.map((chapter) => ({ kind: "chapter", title: chapter.title, sourceText: plainTextToHtml(chapter.plainText) }))),
-        onSuccess: ({ units }) => { setImportOpen(false); if (units[0]) { setSelectedId(units[0].id); navigate(`/projects/${detail.project.id}/chapters/${units[0].id}`); } refreshProject(); message.success(`已导入 ${units.length} 章`); },
-        onError: (error) => message.error(error instanceof Error ? error.message : "小说导入失败"),
+        mutationFn: (chapters: Array<{ title: string; plainText: string }>) =>
+            importProjectUnits(
+                detail.project.id,
+                chapters.map((chapter) => ({ kind: "chapter", title: chapter.title, sourceText: plainTextToHtml(chapter.plainText) })),
+            ),
+        onSuccess: ({ units }) => {
+            setImportOpen(false);
+            if (units[0]) {
+                setSelectedId(units[0].id);
+                navigate(`/projects/${detail.project.id}/chapters/${units[0].id}`);
+            }
+            refreshProject();
+            message.success(t("project:imported-param-chapters", { length: units.length }));
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : t("project:novel-import-failed")),
     });
     const reorderMutation = useMutation({
         mutationFn: (unitIds: string[]) => reorderProjectUnits(detail.project.id, unitIds),
-        onSuccess: () => { refreshProject(); message.success("章节顺序已更新"); },
-        onError: (error) => { refreshProject(); message.error(error instanceof Error ? error.message : "章节排序失败"); },
+        onSuccess: () => {
+            refreshProject();
+            message.success(t("project:chapter-order-updated"));
+        },
+        onError: (error) => {
+            refreshProject();
+            message.error(error instanceof Error ? error.message : t("project:failed-to-reorder-chapters"));
+        },
     });
     const deleteMutation = useMutation({
         mutationFn: (unitId: string) => deleteProjectUnit(detail.project.id, unitId),
@@ -191,9 +219,9 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
                 navigate(nextId ? `/projects/${detail.project.id}/chapters/${nextId}` : `/projects/${detail.project.id}/chapters`, { replace: true });
             }
             refreshProject();
-            message.success("章节已删除");
+            message.success(t("project:chapter-deleted"));
         },
-        onError: (error) => message.error(error instanceof Error ? error.message : "章节删除失败"),
+        onError: (error) => message.error(error instanceof Error ? error.message : t("project:failed-to-delete-chapter")),
     });
 
     const editor = useEditor({
@@ -205,11 +233,14 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
             Color.configure({ types: ["textStyle"] }),
             Highlight.configure({ multicolor: true }),
             CharacterCount,
-            Placeholder.configure({ placeholder: "从这一章开始写下故事……" }),
+            Placeholder.configure({ placeholder: t("project:start-writing-this-chapter") }),
         ],
         content: selectedUnitQuery.data?.unit.sourceText || "",
         editorProps: { attributes: { class: "project-chapter-editor focus:outline-none" } },
-        onUpdate: ({ editor: nextEditor }) => { setDraftHtml(nextEditor.getHTML()); setDirty(true); },
+        onUpdate: ({ editor: nextEditor }) => {
+            setDraftHtml(nextEditor.getHTML());
+            setDirty(true);
+        },
     });
 
     useEffect(() => {
@@ -234,10 +265,10 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
     const chapterShotCount = (unitId: string) => detail.shots.filter((shot) => shot.unitId === unitId).length;
     const chapterAnalysisInput = () => {
         const unit = selectedUnitQuery.data?.unit;
-        if (!unit) throw new Error("章节正文尚未加载完成");
-        if (dirty) throw new Error("请先保存当前章节，再运行 AI 分析");
+        if (!unit) throw new Error(t("project:chapter-content-has-not-finished-loading"));
+        if (dirty) throw new Error(t("project:save-the-current-chapter-before-running-ai-analysis"));
         const sourceText = editor?.getText().trim() || stripHtml(unit.sourceText);
-        if (!sourceText) throw new Error("当前章节没有可分析的正文");
+        if (!sourceText) throw new Error(t("project:the-current-chapter-has-no-content-to-analyze"));
         const textModel = effectiveConfig.textModel || effectiveConfig.model;
         if (!isAiConfigReady(effectiveConfig, textModel)) {
             navigateToSettings({ continueCreation: true });
@@ -260,19 +291,20 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
             setExtractingCharacters(true);
             const characters = await extractChapterCharacters(input);
             // 已确认角色允许再次提取并作为候选归并，只有尚待处理的同名候选需要去重。
-            const knownNames = new Set(detail.assetCandidates
-                .filter((candidate) => candidate.category === "character" && candidate.status === "pending_confirmation")
-                .map((candidate) => normalizeCharacterName(candidate.name)));
+            const knownNames = new Set(detail.assetCandidates.filter((candidate) => candidate.category === "character" && candidate.status === "pending_confirmation").map((candidate) => normalizeCharacterName(candidate.name)));
             const fresh = characters.filter((character) => ![character.name, ...character.aliases].map(normalizeCharacterName).some((name) => knownNames.has(name)));
             if (!fresh.length) {
-                message.info("本章角色已存在于待确认列表中");
+                message.info(t("project:characters-from-this-chapter-are-already-in-the-confirmation-list"));
                 return;
             }
-            await createProjectAssetCandidates(detail.project.id, fresh.map((character) => ({ unitId: input.chapterId, name: character.name, category: "character", details: { ...character } })));
+            await createProjectAssetCandidates(
+                detail.project.id,
+                fresh.map((character) => ({ unitId: input.chapterId, name: character.name, category: "character", details: { ...character } })),
+            );
             refreshProject();
-            message.success(`已提取 ${fresh.length} 个角色，请到项目资产确认`);
+            message.success(t("project:extracted-param-characters-confirm-them-under-project-assets", { length: fresh.length }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "角色提取失败");
+            message.error(error instanceof Error ? error.message : t("project:character-extraction-failed"));
         } finally {
             setExtractingCharacters(false);
         }
@@ -281,7 +313,7 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
         if (!selectedUnit) return;
         const shots = detail.shots.filter((shot) => shot.unitId === selectedUnit.id);
         if (!shots.length) {
-            message.warning("本章没有可导入的历史分镜");
+            message.warning(t("project:no-previous-storyboards-to-import-from-this-chapter"));
             return;
         }
         setImportingCanvasId(targetCanvasId || "new");
@@ -289,34 +321,41 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
             let canvasId = targetCanvasId || "";
             if (canvasId) {
                 const canvas = useCanvasStore.getState().openProject(canvasId);
-                if (!canvas) throw new Error("目标画布尚未同步到本地，请刷新后重试");
+                if (!canvas) throw new Error(t("project:target-canvas-has-not-synced-locally-yet-refresh-and-retry"));
                 const merged = upsertProjectChapterStoryboard(canvas.nodes, canvas.connections, { unit: selectedUnit, shots });
                 useCanvasStore.getState().updateProject(canvasId, { nodes: merged.nodes, connections: merged.connections, projectId: detail.project.id });
                 await saveRemoteUserDataNow();
             } else {
                 const seed = upsertProjectChapterStoryboard([], [], { unit: selectedUnit, shots });
-                const created = await createCanvasProjectWithRemoteSync(`${selectedUnit.title} · 分镜画布`, detail.project.id, { nodes: seed.nodes, connections: seed.connections });
+                const created = await createCanvasProjectWithRemoteSync(t("project:param-storyboard-canvas", { title: selectedUnit.title }), detail.project.id, { nodes: seed.nodes, connections: seed.connections });
                 canvasId = created.id;
                 if (created.syncError) {
-                    message.warning(created.syncError instanceof Error ? `分镜画布已保存在本地，章节关联稍后重试：${created.syncError.message}` : "分镜画布已保存在本地，章节关联稍后重试");
+                    message.warning(
+                        created.syncError instanceof Error
+                            ? t("project:storyboard-canvas-saved-locally-chapter-linking-will-retry-later-param", { message: created.syncError.message })
+                            : t("project:storyboard-canvas-saved-locally-chapter-linking-will-retry-later"),
+                    );
                     navigate(`/canvas/${canvasId}`);
                     return;
                 }
             }
             await linkCanvasUnit(detail.project.id, { canvasId, unitId: selectedUnit.id, role: "storyboard" });
             refreshProject();
-            message.success(`已将 ${shots.length} 个分镜导入画布并关联本章`);
+            message.success(t("project:imported-param-storyboard-shots-into-the-canvas-and-linked-this-chapter", { length: shots.length }));
             navigate(`/canvas/${canvasId}`);
         } catch (error) {
             refreshProject();
-            message.error(error instanceof Error ? `分镜导入失败：${error.message}` : "分镜导入失败");
+            message.error(error instanceof Error ? t("project:storyboard-import-failed-param", { message: error.message }) : t("project:storyboard-import-failed"));
         } finally {
             setImportingCanvasId("");
         }
     };
     const selectChapter = (unitId: string) => {
         if (unitId === selectedId) return;
-        if (dirty) { message.warning("请先保存当前章节，再切换章节"); return; }
+        if (dirty) {
+            message.warning(t("project:save-the-current-chapter-before-switching"));
+            return;
+        }
         setSelectedId(unitId);
         sessionStorage.setItem(`project-active-chapter:${detail.project.id}`, unitId);
         navigate(`/projects/${detail.project.id}/chapters/${unitId}`);
@@ -366,49 +405,162 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
         <div className="grid h-full min-h-0 min-w-0 w-full grid-rows-[minmax(180px,34vh)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[232px_minmax(0,1fr)] lg:grid-rows-1">
             <aside className="flex min-h-0 min-w-0 w-full flex-col border-b border-border/70 bg-background/28 lg:border-b-0 lg:border-r">
                 <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/70 px-2.5">
-                    <div className="text-xs font-medium text-foreground/55">章节 <span className="ml-1 tabular-nums text-foreground/35">{detail.units.length.toLocaleString("zh-CN")}</span></div>
+                    <div className="text-xs font-medium text-foreground/55">
+                        {t("project:chapters-2")} <span className="ml-1 tabular-nums text-foreground/35">{detail.units.length.toLocaleString(formatLocale())}</span>
+                    </div>
                     <div className="flex items-center gap-0.5">
-                        {selectedId ? <Tooltip title="回到当前章节"><Button type="text" size="small" icon={<Crosshair className="size-3.5" />} aria-label="回到当前章节" onClick={revealSelectedChapter} /></Tooltip> : null}
-                        <Tooltip title="导入小说"><Button type="text" size="small" icon={<FileUp className="size-3.5" />} aria-label="导入小说" onClick={() => setImportOpen(true)} /></Tooltip>
-                        <Tooltip title="添加章节"><Button type="text" size="small" icon={<Plus className="size-4" />} aria-label="添加章节" onClick={() => setCreateOpen(true)} /></Tooltip>
+                        {selectedId ? (
+                            <Tooltip title={t("project:back-to-current-chapter")}>
+                                <Button type="text" size="small" icon={<Crosshair className="size-3.5" />} aria-label={t("project:back-to-current-chapter")} onClick={revealSelectedChapter} />
+                            </Tooltip>
+                        ) : null}
+                        <Tooltip title={t("project:import-novel-4")}>
+                            <Button type="text" size="small" icon={<FileUp className="size-3.5" />} aria-label={t("project:import-novel-4")} onClick={() => setImportOpen(true)} />
+                        </Tooltip>
+                        <Tooltip title={t("project:add-chapter-2")}>
+                            <Button type="text" size="small" icon={<Plus className="size-4" />} aria-label={t("project:add-chapter-2")} onClick={() => setCreateOpen(true)} />
+                        </Tooltip>
                     </div>
                 </div>
                 <div className="shrink-0 border-b border-border/60 p-2">
                     <label className="flex h-8 items-center gap-1.5 rounded-md border border-border/75 bg-background/55 px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
                         <Search className="size-3.5 shrink-0 text-foreground/32" />
-                        <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && visibleUnits[0]) selectChapter(visibleUnits[0].id); }} className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-foreground/28" placeholder="搜索标题或章节序号" aria-label="搜索章节" />
-                        {searchQuery ? <button type="button" onClick={() => setSearchQuery("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover" aria-label="清空章节搜索"><X className="size-3" /></button> : null}
+                        <input
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" && visibleUnits[0]) selectChapter(visibleUnits[0].id);
+                            }}
+                            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-foreground/28"
+                            placeholder={t("project:search-title-or-chapter-number")}
+                            aria-label={t("project:search-chapters")}
+                        />
+                        {searchQuery ? (
+                            <button type="button" onClick={() => setSearchQuery("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover" aria-label={t("project:clear-chapter-search")}>
+                                <X className="size-3" />
+                            </button>
+                        ) : null}
                     </label>
-                    {deferredSearchQuery ? <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">找到 {visibleUnits.length.toLocaleString("zh-CN")} 章 · 搜索时使用“移动到”调整顺序</div> : null}
+                    {deferredSearchQuery ? (
+                        <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">
+                            {t("project:found")} {visibleUnits.length.toLocaleString(formatLocale())} {t("project:chapters-use-move-to-reorder-while-searching")}
+                        </div>
+                    ) : null}
                 </div>
                 {orderedUnits.length ? (
                     <div ref={listRef} onDragOver={handleListDragOver} className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1.5">
-                        {visibleUnits.length ? <div className="relative w-full" style={{ height: chapterVirtualizer.getTotalSize() }}>
-                            {chapterVirtualizer.getVirtualItems().map((virtualItem) => {
-                                const unit = visibleUnits[virtualItem.index];
-                                if (!unit) return null;
-                                const chapterNumber = chapterNumberById.get(unit.id) || virtualItem.index + 1;
-                                return (
-                                    <div key={unit.id} className="absolute left-0 top-0 w-full" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}>
-                                        <div draggable={!dirty && !reorderMutation.isPending && !deferredSearchQuery} onDragStart={(event) => { setDraggedId(unit.id); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event) => { if (deferredSearchQuery) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={() => moveChapter(unit.id)} onDragEnd={() => setDraggedId("")} className={`group flex h-[50px] items-start rounded-md transition-colors duration-100 ${unit.id === selectedUnit?.id ? "bg-surface-active" : "hover:bg-surface-hover"} ${draggedId === unit.id ? "opacity-45" : ""}`}>
-                                            <button type="button" disabled={Boolean(deferredSearchQuery)} className="mt-2 grid size-6 shrink-0 cursor-grab place-items-center text-foreground/25 active:cursor-grabbing disabled:cursor-default disabled:opacity-35" aria-label={`拖动第 ${chapterNumber} 章排序`}><GripVertical className="size-3.5" /></button>
-                                            <button type="button" onClick={() => selectChapter(unit.id)} className="flex min-w-0 flex-1 items-start gap-2 px-0 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]">
-                                                <span className={`w-8 shrink-0 pt-0.5 text-[var(--fs-tiny)] tabular-nums ${unit.id === selectedUnit?.id ? "font-semibold text-[var(--workspace-accent)]" : "text-foreground/35"}`}>{String(chapterNumber).padStart(Math.max(2, String(orderedUnits.length).length), "0")}</span>
-                                                <span className="min-w-0 flex-1"><span className={`block truncate text-[var(--fs-body)] ${unit.id === selectedUnit?.id ? "font-medium text-foreground" : "text-foreground/65"}`}>{unit.title}</span><span className="mt-0.5 flex items-center gap-1 text-[var(--fs-tiny)] text-foreground/38"><span>{statusLabel(unit.status)}</span>{chapterCanvasCount(unit.id) ? <><span>·</span><span>{chapterCanvasCount(unit.id)} 画布</span></> : null}</span></span>
-                                            </button>
-                                            <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "move", icon: <MoveVertical className="size-3.5" />, label: "移动到…" }], onClick: () => { setMoveTargetId(unit.id); setMovePosition(chapterNumber); } }}>
-                                                <button type="button" className="mt-2 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100" aria-label={`${unit.title}更多操作`}><MoreHorizontal className="size-3.5" /></button>
-                                            </Dropdown>
-                                            <Popconfirm title="删除此章节？" description="章节内容及关联制作记录将被删除，已关联的画布不会删除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true, loading: deleteMutation.isPending }} onConfirm={() => deleteMutation.mutate(unit.id)}>
-                                                <button type="button" className="mr-1 mt-2 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`删除${unit.title}`}><Trash2 className="size-3.5" /></button>
-                                            </Popconfirm>
+                        {visibleUnits.length ? (
+                            <div className="relative w-full" style={{ height: chapterVirtualizer.getTotalSize() }}>
+                                {chapterVirtualizer.getVirtualItems().map((virtualItem) => {
+                                    const unit = visibleUnits[virtualItem.index];
+                                    if (!unit) return null;
+                                    const chapterNumber = chapterNumberById.get(unit.id) || virtualItem.index + 1;
+                                    return (
+                                        <div key={unit.id} className="absolute left-0 top-0 w-full" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}>
+                                            <div
+                                                draggable={!dirty && !reorderMutation.isPending && !deferredSearchQuery}
+                                                onDragStart={(event) => {
+                                                    setDraggedId(unit.id);
+                                                    event.dataTransfer.effectAllowed = "move";
+                                                }}
+                                                onDragOver={(event) => {
+                                                    if (deferredSearchQuery) return;
+                                                    event.preventDefault();
+                                                    event.dataTransfer.dropEffect = "move";
+                                                }}
+                                                onDrop={() => moveChapter(unit.id)}
+                                                onDragEnd={() => setDraggedId("")}
+                                                className={`group flex h-[50px] items-start rounded-md transition-colors duration-100 ${unit.id === selectedUnit?.id ? "bg-surface-active" : "hover:bg-surface-hover"} ${draggedId === unit.id ? "opacity-45" : ""}`}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    disabled={Boolean(deferredSearchQuery)}
+                                                    className="mt-2 grid size-6 shrink-0 cursor-grab place-items-center text-foreground/25 active:cursor-grabbing disabled:cursor-default disabled:opacity-35"
+                                                    aria-label={t("project:drag-chapter-param-to-reorder", { chapterNumber: chapterNumber })}
+                                                >
+                                                    <GripVertical className="size-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => selectChapter(unit.id)}
+                                                    className="flex min-w-0 flex-1 items-start gap-2 px-0 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]"
+                                                >
+                                                    <span className={`w-8 shrink-0 pt-0.5 text-[var(--fs-tiny)] tabular-nums ${unit.id === selectedUnit?.id ? "font-semibold text-[var(--workspace-accent)]" : "text-foreground/35"}`}>
+                                                        {String(chapterNumber).padStart(Math.max(2, String(orderedUnits.length).length), "0")}
+                                                    </span>
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className={`block truncate text-[var(--fs-body)] ${unit.id === selectedUnit?.id ? "font-medium text-foreground" : "text-foreground/65"}`}>{unit.title}</span>
+                                                        <span className="mt-0.5 flex items-center gap-1 text-[var(--fs-tiny)] text-foreground/38">
+                                                            <span>{statusLabel(unit.status)}</span>
+                                                            {chapterCanvasCount(unit.id) ? (
+                                                                <>
+                                                                    <span>·</span>
+                                                                    <span>
+                                                                        {chapterCanvasCount(unit.id)} {t("project:canvas-2")}
+                                                                    </span>
+                                                                </>
+                                                            ) : null}
+                                                        </span>
+                                                    </span>
+                                                </button>
+                                                <Dropdown
+                                                    trigger={["click"]}
+                                                    placement="bottomRight"
+                                                    menu={{
+                                                        items: [{ key: "move", icon: <MoveVertical className="size-3.5" />, label: t("project:move-to-2") }],
+                                                        onClick: () => {
+                                                            setMoveTargetId(unit.id);
+                                                            setMovePosition(chapterNumber);
+                                                        },
+                                                    }}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="mt-2 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-surface-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                                        aria-label={t("project:more-actions-for-param", { title: unit.title })}
+                                                    >
+                                                        <MoreHorizontal className="size-3.5" />
+                                                    </button>
+                                                </Dropdown>
+                                                <Popconfirm
+                                                    title={t("project:delete-this-chapter")}
+                                                    description={t("project:chapter-content-and-related-production-records-will-be-deleted-linked-ca")}
+                                                    okText={t("project:delete")}
+                                                    cancelText={t("project:cancel-4")}
+                                                    okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+                                                    onConfirm={() => deleteMutation.mutate(unit.id)}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="mr-1 mt-2 grid size-6 shrink-0 place-items-center rounded text-foreground/28 opacity-0 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100"
+                                                        aria-label={t("project:delete-param", { title: unit.title })}
+                                                    >
+                                                        <Trash2 className="size-3.5" />
+                                                    </button>
+                                                </Popconfirm>
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div> : <div className="px-3 py-8 text-center text-xs text-foreground/40">没有匹配的章节</div>}
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="px-3 py-8 text-center text-xs text-foreground/40">{t("project:no-matching-chapters")}</div>
+                        )}
                     </div>
-                ) : <WorkspaceState icon="projects" compact className="flex-1 px-4" title="还没有章节" description="添加章节后可继续编写正文和关联画布。" action={<Button size="small" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>添加章节</Button>} />}
+                ) : (
+                    <WorkspaceState
+                        icon="projects"
+                        compact
+                        className="flex-1 px-4"
+                        title={t("project:no-chapters-yet")}
+                        description={t("project:add-a-chapter-to-start-writing-content-and-linking-canvases")}
+                        action={
+                            <Button size="small" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                {t("project:add-chapter-2")}
+                            </Button>
+                        }
+                    />
+                )}
             </aside>
 
             <section className="min-h-0 min-w-0 w-full bg-background/18 p-2.5 sm:p-3.5">
@@ -416,82 +568,251 @@ export default function ProjectChaptersView({ detail, refreshProject, onCreateCa
                     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-background">
                         <header className="flex shrink-0 flex-wrap items-start gap-3 border-b border-border/70 px-4 py-3">
                             <div className="min-w-0 flex-1">
-                                <div className="mb-1 text-[var(--fs-tiny)] font-medium tabular-nums text-foreground/38">第 {String(orderedUnits.findIndex((unit) => unit.id === selectedUnit.id) + 1).padStart(2, "0")} 章</div>
-                                <Input variant="borderless" value={draftTitle} disabled={!selectedUnitQuery.data?.unit} onChange={(event) => { setDraftTitle(event.target.value); setDirty(true); }} className="!h-auto !px-0 !py-0 !text-xl !font-semibold !leading-tight disabled:!cursor-wait disabled:!text-foreground" placeholder="章节标题" />
-                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38"><span>{dirty ? "有未保存修改" : `保存于 ${formatTime(selectedUnit.updatedAt)}`}</span><span>·</span><span>{formatCount(wordCount)} 字</span><span>·</span><span>{chapterCanvasCount(selectedUnit.id)} 个画布</span></div>
+                                <div className="mb-1 text-[var(--fs-tiny)] font-medium tabular-nums text-foreground/38">
+                                    {t("project:chapter")} {String(orderedUnits.findIndex((unit) => unit.id === selectedUnit.id) + 1).padStart(2, "0")} {t("project:item-7")}
+                                </div>
+                                <Input
+                                    variant="borderless"
+                                    value={draftTitle}
+                                    disabled={!selectedUnitQuery.data?.unit}
+                                    onChange={(event) => {
+                                        setDraftTitle(event.target.value);
+                                        setDirty(true);
+                                    }}
+                                    className="!h-auto !px-0 !py-0 !text-xl !font-semibold !leading-tight disabled:!cursor-wait disabled:!text-foreground"
+                                    placeholder={t("project:chapter-title")}
+                                />
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38">
+                                    <span>{dirty ? t("project:unsaved-changes") : t("project:saved-at", { time: formatTime(selectedUnit.updatedAt) })}</span>
+                                    <span>·</span>
+                                    <span>
+                                        {formatCount(wordCount)} {t("project:item-6")}
+                                    </span>
+                                    <span>·</span>
+                                    <span>
+                                        {chapterCanvasCount(selectedUnit.id)} {t("project:canvases")}
+                                    </span>
+                                </div>
                             </div>
                             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} loading={extractingCharacters} onClick={() => void extractCharacters()}>提取角色</Button>
-                                {chapterShotCount(selectedUnit.id) ? <Dropdown trigger={["click"]} menu={{ items: [{ key: "new", icon: <Plus className="size-3.5" />, label: "新建章节画布并导入" }, ...(projectCanvasTargets.length ? [{ type: "divider" as const }, ...projectCanvasTargets.map((canvas) => ({ key: canvas.id, icon: <LayoutGrid className="size-3.5" />, label: `导入到：${canvas.title}${detail.canvasUnitLinks.some((link) => link.canvasId === canvas.id && link.unitId === selectedUnit.id) ? " · 已关联本章" : ""}` }))] : [])], onClick: ({ key }) => void importStoryboardToCanvas(key === "new" ? undefined : key) }}><Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} loading={Boolean(importingCanvasId)} disabled={extractingCharacters}>导入分镜</Button></Dropdown> : <Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} onClick={onCreateCanvas}>在画布中分镜</Button>}
-                                <Button size="small" type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || !dirty || !draftTitle.trim() || saveMutation.isPending} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存" : "已保存"}</Button>
+                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} loading={extractingCharacters} onClick={() => void extractCharacters()}>
+                                    {t("project:extract-characters")}
+                                </Button>
+                                {chapterShotCount(selectedUnit.id) ? (
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                { key: "new", icon: <Plus className="size-3.5" />, label: t("project:new-chapter-canvas-and-import") },
+                                                ...(projectCanvasTargets.length
+                                                    ? [
+                                                          { type: "divider" as const },
+                                                          ...projectCanvasTargets.map((canvas) => ({
+                                                              key: canvas.id,
+                                                              icon: <LayoutGrid className="size-3.5" />,
+                                                              label: t("project:import-into-canvas", {
+                                                                  title: canvas.title,
+                                                                  linked: detail.canvasUnitLinks.some((link) => link.canvasId === canvas.id && link.unitId === selectedUnit.id) ? t("project:linked-to-this-chapter") : "",
+                                                              }),
+                                                          })),
+                                                      ]
+                                                    : []),
+                                            ],
+                                            onClick: ({ key }) => void importStoryboardToCanvas(key === "new" ? undefined : key),
+                                        }}
+                                    >
+                                        <Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} loading={Boolean(importingCanvasId)} disabled={extractingCharacters}>
+                                            {t("project:import-storyboards")}
+                                        </Button>
+                                    </Dropdown>
+                                ) : (
+                                    <Button size="small" type="primary" icon={<LayoutGrid className="size-3.5" />} disabled={!selectedUnitQuery.data?.unit || dirty || extractingCharacters} onClick={onCreateCanvas}>
+                                        {t("project:storyboard-on-canvas")}
+                                    </Button>
+                                )}
+                                <Button
+                                    size="small"
+                                    type={dirty ? "primary" : "default"}
+                                    icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />}
+                                    disabled={!selectedUnitQuery.data?.unit || !dirty || !draftTitle.trim() || saveMutation.isPending}
+                                    loading={saveMutation.isPending}
+                                    onClick={() => saveMutation.mutate()}
+                                >
+                                    {dirty ? t("project:save") : t("project:saved")}
+                                </Button>
                             </div>
                         </header>
                         <EditorToolbar editor={editor} />
                         <div className="project-chapter-editor-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-foreground/[.012]">
-                            {selectedUnitQuery.isLoading ? <WorkspaceState icon="loading" compact className="h-full" title="正在读取章节正文" description="正文准备完成后会自动显示。" /> : selectedUnitQuery.isError ? <WorkspaceErrorState compact title="章节正文读取失败" description={selectedUnitQuery.error instanceof Error ? selectedUnitQuery.error.message : "请检查网络连接后重试。"} onRetry={() => void selectedUnitQuery.refetch()} /> : <div className="project-chapter-editor-wrap min-h-full"><EditorContent editor={editor} /></div>}
+                            {selectedUnitQuery.isLoading ? (
+                                <WorkspaceState icon="loading" compact className="h-full" title={t("project:loading-chapter-content")} description={t("project:content-will-appear-automatically-once-ready")} />
+                            ) : selectedUnitQuery.isError ? (
+                                <WorkspaceErrorState
+                                    compact
+                                    title={t("project:failed-to-load-chapter-content")}
+                                    description={selectedUnitQuery.error instanceof Error ? selectedUnitQuery.error.message : t("project:check-your-network-connection-and-try-again")}
+                                    onRetry={() => void selectedUnitQuery.refetch()}
+                                />
+                            ) : (
+                                <div className="project-chapter-editor-wrap min-h-full">
+                                    <EditorContent editor={editor} />
+                                </div>
+                            )}
                         </div>
                     </div>
-                ) : <WorkspaceState icon="projects" compact className="h-full" title="请选择章节" description="从左侧章节列表选择一章开始编辑。" />}
+                ) : (
+                    <WorkspaceState icon="projects" compact className="h-full" title={t("project:select-a-chapter")} description={t("project:pick-a-chapter-from-the-list-on-the-left-to-start-editing")} />
+                )}
             </section>
             <CreateChapterModal open={createOpen} onClose={() => setCreateOpen(false)} loading={createMutation.isPending} onSubmit={(values) => createMutation.mutate(values)} />
             <ImportNovelModal open={importOpen} loading={importMutation.isPending} onClose={() => setImportOpen(false)} onImport={(chapters) => importMutation.mutate(chapters)} />
-            <Modal title="移动章节" open={Boolean(moveTargetId)} width={400} okText="移动" cancelText="取消" okButtonProps={{ disabled: !movePosition || movePosition < 1 || movePosition > orderedUnits.length, loading: reorderMutation.isPending }} onCancel={() => { setMoveTargetId(""); setMovePosition(null); }} onOk={moveChapterToPosition} styles={{ body: { paddingTop: 12 } }}>
-                <div className="text-xs leading-5 text-foreground/50">输入目标章节位置。适合上千章项目的长距离调整，移动后其他章节会自动顺延。</div>
-                <label className="mt-3 flex items-center gap-2 text-sm"><span className="shrink-0">移动到第</span><InputNumber min={1} max={orderedUnits.length} precision={0} value={movePosition} onChange={setMovePosition} className="min-w-0 flex-1" /><span className="shrink-0">章</span></label>
+            <Modal
+                title={t("project:move-chapter")}
+                open={Boolean(moveTargetId)}
+                width={400}
+                okText={t("project:move")}
+                cancelText={t("project:cancel-4")}
+                okButtonProps={{ disabled: !movePosition || movePosition < 1 || movePosition > orderedUnits.length, loading: reorderMutation.isPending }}
+                onCancel={() => {
+                    setMoveTargetId("");
+                    setMovePosition(null);
+                }}
+                onOk={moveChapterToPosition}
+                styles={{ body: { paddingTop: 12 } }}
+            >
+                <div className="text-xs leading-5 text-foreground/50">{t("project:enter-the-target-position-ideal-for-long-range-moves-in-thousand-chapter")}</div>
+                <label className="mt-3 flex items-center gap-2 text-sm">
+                    <span className="shrink-0">{t("project:move-to-chapter")}</span>
+                    <InputNumber min={1} max={orderedUnits.length} precision={0} value={movePosition} onChange={setMovePosition} className="min-w-0 flex-1" />
+                    <span className="shrink-0">{t("project:item-7")}</span>
+                </label>
             </Modal>
         </div>
     );
 }
 
 function EditorToolbar({ editor }: { editor: Editor | null }) {
+    const { t } = useTranslation("project");
     const setLink = () => {
         if (!editor) return;
         const current = String(editor.getAttributes("link").href || "");
-        const href = window.prompt("输入链接地址", current);
+        const href = window.prompt(t("project:enter-link-url"), current);
         if (href === null) return;
         if (!href.trim()) editor.chain().focus().unsetLink().run();
         else editor.chain().focus().extendMarkRange("link").setLink({ href: href.trim() }).run();
     };
     const setColor = () => {
-        const color = window.prompt("输入文字颜色，例如 #d97706", String(editor?.getAttributes("textStyle").color || "#d97706"));
+        const color = window.prompt(t("project:text-color-e-g-d97706"), String(editor?.getAttributes("textStyle").color || "#d97706"));
         if (color?.trim()) editor?.chain().focus().setColor(color.trim()).run();
     };
     const setHighlight = () => {
-        const color = window.prompt("输入高亮颜色，例如 #fef3c7", String(editor?.getAttributes("highlight").color || "#fef3c7"));
+        const color = window.prompt(t("project:highlight-color-e-g-fef3c7"), String(editor?.getAttributes("highlight").color || "#fef3c7"));
         if (color?.trim()) editor?.chain().focus().toggleHighlight({ color: color.trim() }).run();
     };
-    const blockLabel = editor?.isActive("heading", { level: 1 }) ? "标题 1" : editor?.isActive("heading", { level: 2 }) ? "标题 2" : editor?.isActive("heading", { level: 3 }) ? "标题 3" : "正文";
+    // 菜单 key 用稳定标识（不拿译文当 key），显示文案经 t() 现取
+    const blockKey = editor?.isActive("heading", { level: 1 }) ? "heading-1" : editor?.isActive("heading", { level: 2 }) ? "heading-2" : editor?.isActive("heading", { level: 3 }) ? "heading-3" : "paragraph";
+    const blockLabel = blockKey === "paragraph" ? t("project:body") : t(`project:${blockKey}`);
     const alignment = editor?.isActive({ textAlign: "center" }) ? "center" : editor?.isActive({ textAlign: "right" }) ? "right" : editor?.isActive({ textAlign: "justify" }) ? "justify" : "left";
     const alignmentIcon = alignment === "center" ? <AlignCenter className="size-3.5" /> : alignment === "right" ? <AlignRight className="size-3.5" /> : alignment === "justify" ? <AlignJustify className="size-3.5" /> : <AlignLeft className="size-3.5" />;
     return (
         <div className="hide-scrollbar flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/70 px-2">
-            <EditorTool editor={editor} label="撤销" icon={<Undo2 className="size-3.5" />} onClick={() => editor?.chain().focus().undo().run()} />
-            <EditorTool editor={editor} label="重做" icon={<Redo2 className="size-3.5" />} onClick={() => editor?.chain().focus().redo().run()} />
+            <EditorTool editor={editor} label={t("project:undo")} icon={<Undo2 className="size-3.5" />} onClick={() => editor?.chain().focus().undo().run()} />
+            <EditorTool editor={editor} label={t("project:redo")} icon={<Redo2 className="size-3.5" />} onClick={() => editor?.chain().focus().redo().run()} />
             <ToolbarDivider />
-            <Dropdown trigger={["click"]} menu={{ selectedKeys: [blockLabel], items: ["正文", "标题 1", "标题 2", "标题 3"].map((key) => ({ key, label: key })), onClick: ({ key }) => key === "正文" ? editor?.chain().focus().setParagraph().run() : editor?.chain().focus().toggleHeading({ level: Number(key.slice(-1)) as 1 | 2 | 3 }).run() }}>
-                <button type="button" className="flex h-7 items-center gap-1 rounded px-2 text-xs text-foreground/60 hover:bg-surface-hover" aria-label="段落格式">{blockLabel}<ChevronDown className="size-3" /></button>
+            <Dropdown
+                trigger={["click"]}
+                menu={{
+                    selectedKeys: [blockKey],
+                    items: [
+                        { key: "paragraph", label: t("project:body") },
+                        { key: "heading-1", label: t("project:heading-1") },
+                        { key: "heading-2", label: t("project:heading-2") },
+                        { key: "heading-3", label: t("project:heading-3") },
+                    ],
+                    onClick: ({ key }) =>
+                        key === "paragraph"
+                            ? editor?.chain().focus().setParagraph().run()
+                            : editor
+                                  ?.chain()
+                                  .focus()
+                                  .toggleHeading({ level: Number(key.slice(-1)) as 1 | 2 | 3 })
+                                  .run(),
+                }}
+            >
+                <button type="button" className="flex h-7 items-center gap-1 rounded px-2 text-xs text-foreground/60 hover:bg-surface-hover" aria-label={t("project:paragraph-format")}>
+                    {blockLabel}
+                    <ChevronDown className="size-3" />
+                </button>
             </Dropdown>
-            <EditorTool editor={editor} label="粗体" icon={<Bold className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBold().run()} active={Boolean(editor?.isActive("bold"))} />
-            <EditorTool editor={editor} label="斜体" icon={<Italic className="size-3.5" />} onClick={() => editor?.chain().focus().toggleItalic().run()} active={Boolean(editor?.isActive("italic"))} />
-            <EditorTool editor={editor} label="下划线" icon={<Underline className="size-3.5" />} onClick={() => editor?.chain().focus().toggleUnderline().run()} active={Boolean(editor?.isActive("underline"))} />
-            <EditorTool editor={editor} label="删除线" icon={<Strikethrough className="size-3.5" />} onClick={() => editor?.chain().focus().toggleStrike().run()} active={Boolean(editor?.isActive("strike"))} />
+            <EditorTool editor={editor} label={t("project:bold")} icon={<Bold className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBold().run()} active={Boolean(editor?.isActive("bold"))} />
+            <EditorTool editor={editor} label={t("project:italic")} icon={<Italic className="size-3.5" />} onClick={() => editor?.chain().focus().toggleItalic().run()} active={Boolean(editor?.isActive("italic"))} />
+            <EditorTool editor={editor} label={t("project:underline")} icon={<Underline className="size-3.5" />} onClick={() => editor?.chain().focus().toggleUnderline().run()} active={Boolean(editor?.isActive("underline"))} />
+            <EditorTool editor={editor} label={t("project:strikethrough")} icon={<Strikethrough className="size-3.5" />} onClick={() => editor?.chain().focus().toggleStrike().run()} active={Boolean(editor?.isActive("strike"))} />
             <ToolbarDivider />
-            <Dropdown trigger={["click"]} menu={{ selectedKeys: [alignment], items: [{ key: "left", icon: <AlignLeft className="size-3.5" />, label: "左对齐" }, { key: "center", icon: <AlignCenter className="size-3.5" />, label: "居中" }, { key: "right", icon: <AlignRight className="size-3.5" />, label: "右对齐" }, { key: "justify", icon: <AlignJustify className="size-3.5" />, label: "两端对齐" }], onClick: ({ key }) => editor?.chain().focus().setTextAlign(key).run() }}>
-                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label="文字对齐">{alignmentIcon}</button>
+            <Dropdown
+                trigger={["click"]}
+                menu={{
+                    selectedKeys: [alignment],
+                    items: [
+                        { key: "left", icon: <AlignLeft className="size-3.5" />, label: t("project:align-left") },
+                        { key: "center", icon: <AlignCenter className="size-3.5" />, label: t("project:center") },
+                        { key: "right", icon: <AlignRight className="size-3.5" />, label: t("project:align-right") },
+                        { key: "justify", icon: <AlignJustify className="size-3.5" />, label: t("project:justify") },
+                    ],
+                    onClick: ({ key }) => editor?.chain().focus().setTextAlign(key).run(),
+                }}
+            >
+                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label={t("project:text-alignment")}>
+                    {alignmentIcon}
+                </button>
             </Dropdown>
-            <EditorTool editor={editor} label="项目符号" icon={<List className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBulletList().run()} active={Boolean(editor?.isActive("bulletList"))} />
-            <EditorTool editor={editor} label="编号列表" icon={<ListOrdered className="size-3.5" />} onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={Boolean(editor?.isActive("orderedList"))} />
-            <EditorTool editor={editor} label="引用" icon={<Quote className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={Boolean(editor?.isActive("blockquote"))} />
-            <EditorTool editor={editor} label="链接" icon={<Link2 className="size-3.5" />} onClick={setLink} active={Boolean(editor?.isActive("link"))} />
-            <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "color", icon: <span className="text-[var(--fs-label)] font-bold text-amber-600">A</span>, label: "文字颜色" }, { key: "highlight", icon: <Highlighter className="size-3.5" />, label: "高亮颜色" }, { type: "divider" }, { key: "code", icon: <Code2 className="size-3.5" />, label: "行内代码" }, { key: "rule", icon: <Minus className="size-3.5" />, label: "分隔线" }, { key: "clear", icon: <Eraser className="size-3.5" />, label: "清除格式" }], onClick: ({ key }) => { if (key === "color") setColor(); else if (key === "highlight") setHighlight(); else if (key === "code") editor?.chain().focus().toggleCode().run(); else if (key === "rule") editor?.chain().focus().setHorizontalRule().run(); else if (key === "clear") editor?.chain().focus().clearNodes().unsetAllMarks().run(); } }}>
-                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label="更多格式"><MoreHorizontal className="size-4" /></button>
+            <EditorTool editor={editor} label={t("project:bullets")} icon={<List className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBulletList().run()} active={Boolean(editor?.isActive("bulletList"))} />
+            <EditorTool editor={editor} label={t("project:numbered-list")} icon={<ListOrdered className="size-3.5" />} onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={Boolean(editor?.isActive("orderedList"))} />
+            <EditorTool editor={editor} label={t("project:quote")} icon={<Quote className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={Boolean(editor?.isActive("blockquote"))} />
+            <EditorTool editor={editor} label={t("project:link")} icon={<Link2 className="size-3.5" />} onClick={setLink} active={Boolean(editor?.isActive("link"))} />
+            <Dropdown
+                trigger={["click"]}
+                placement="bottomRight"
+                menu={{
+                    items: [
+                        { key: "color", icon: <span className="text-[var(--fs-label)] font-bold text-amber-600">A</span>, label: t("project:text-color") },
+                        { key: "highlight", icon: <Highlighter className="size-3.5" />, label: t("project:highlight-color") },
+                        { type: "divider" },
+                        { key: "code", icon: <Code2 className="size-3.5" />, label: t("project:inline-code") },
+                        { key: "rule", icon: <Minus className="size-3.5" />, label: t("project:divider") },
+                        { key: "clear", icon: <Eraser className="size-3.5" />, label: t("project:clear-formatting") },
+                    ],
+                    onClick: ({ key }) => {
+                        if (key === "color") setColor();
+                        else if (key === "highlight") setHighlight();
+                        else if (key === "code") editor?.chain().focus().toggleCode().run();
+                        else if (key === "rule") editor?.chain().focus().setHorizontalRule().run();
+                        else if (key === "clear") editor?.chain().focus().clearNodes().unsetAllMarks().run();
+                    },
+                }}
+            >
+                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label={t("project:more-formatting")}>
+                    <MoreHorizontal className="size-4" />
+                </button>
             </Dropdown>
         </div>
     );
 }
 
 function EditorTool({ editor, label, icon, active = false, onClick }: { editor: Editor | null; label: string; icon: ReactNode; active?: boolean; onClick: () => void }) {
-    return <Tooltip title={label}><button type="button" aria-label={label} className={`grid size-7 shrink-0 place-items-center rounded ${active ? "bg-surface-active text-[var(--workspace-accent)]" : "text-foreground/55 hover:bg-surface-hover hover:text-foreground"}`} disabled={!editor} onClick={onClick}>{icon}</button></Tooltip>;
+    return (
+        <Tooltip title={label}>
+            <button
+                type="button"
+                aria-label={label}
+                className={`grid size-7 shrink-0 place-items-center rounded ${active ? "bg-surface-active text-[var(--workspace-accent)]" : "text-foreground/55 hover:bg-surface-hover hover:text-foreground"}`}
+                disabled={!editor}
+                onClick={onClick}
+            >
+                {icon}
+            </button>
+        </Tooltip>
+    );
 }
 
 function ToolbarDivider() {
@@ -499,16 +820,40 @@ function ToolbarDivider() {
 }
 
 function CreateChapterModal({ open, onClose, loading, onSubmit }: { open: boolean; onClose: () => void; loading: boolean; onSubmit: (values: { title: string; sourceText?: string }) => void }) {
-    return <Modal title="添加章节" open={open} footer={null} destroyOnHidden onCancel={onClose} width={480} styles={{ body: { paddingTop: 12 } }}><Form layout="vertical" onFinish={onSubmit}><Form.Item name="title" label="章节标题" rules={[{ required: true, whitespace: true, message: "请输入章节标题" }]}><Input autoFocus placeholder="例如：雨夜归城" /></Form.Item><Form.Item name="sourceText" label="正文（可选）"><Input.TextArea rows={4} placeholder="创建后仍可继续编辑和排版" /></Form.Item><div className="flex justify-end gap-2"><Button onClick={onClose}>取消</Button><Button type="primary" htmlType="submit" loading={loading}>创建章节</Button></div></Form></Modal>;
+    const { t } = useTranslation("project");
+    return (
+        <Modal title={t("project:add-chapter-2")} open={open} footer={null} destroyOnHidden onCancel={onClose} width={480} styles={{ body: { paddingTop: 12 } }}>
+            <Form layout="vertical" onFinish={onSubmit}>
+                <Form.Item name="title" label={t("project:chapter-title")} rules={[{ required: true, whitespace: true, message: t("project:enter-chapter-title") }]}>
+                    <Input autoFocus placeholder={t("project:e-g-rainy-night-homecoming")} />
+                </Form.Item>
+                <Form.Item name="sourceText" label={t("project:content-optional")}>
+                    <Input.TextArea rows={4} placeholder={t("project:you-can-keep-editing-and-formatting-after-creation")} />
+                </Form.Item>
+                <div className="flex justify-end gap-2">
+                    <Button onClick={onClose}>{t("project:cancel-4")}</Button>
+                    <Button type="primary" htmlType="submit" loading={loading}>
+                        {t("project:create-chapter")}
+                    </Button>
+                </div>
+            </Form>
+        </Modal>
+    );
 }
 
 function ImportNovelModal({ open, loading, onClose, onImport }: { open: boolean; loading: boolean; onClose: () => void; onImport: (chapters: Array<{ title: string; plainText: string }>) => void }) {
+    const { t } = useTranslation("project");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [text, setText] = useState("");
     const [fileName, setFileName] = useState("");
     const deferredText = useDeferredValue(text);
-    const chapters = useMemo(() => deferredText.trim() ? splitTextIntoChapters(deferredText).map((chapter) => ({ title: chapter.title, plainText: chapter.plainText })) : [], [deferredText]);
-    useEffect(() => { if (!open) { setText(""); setFileName(""); } }, [open]);
+    const chapters = useMemo(() => (deferredText.trim() ? splitTextIntoChapters(deferredText).map((chapter) => ({ title: chapter.title, plainText: chapter.plainText })) : []), [deferredText]);
+    useEffect(() => {
+        if (!open) {
+            setText("");
+            setFileName("");
+        }
+    }, [open]);
     const readFile = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         event.target.value = "";
@@ -519,18 +864,50 @@ function ImportNovelModal({ open, loading, onClose, onImport }: { open: boolean;
     return (
         <Modal title={null} open={open} footer={null} destroyOnHidden onCancel={onClose} width={760} styles={{ container: { padding: 0, overflow: "hidden" }, body: { padding: 0 } }}>
             <div className="flex min-h-[478px] flex-col">
-                <header className="flex h-12 shrink-0 items-center border-b border-border px-4"><div><h2 className="text-sm font-semibold">导入小说</h2><p className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">自动识别章节标题，确认后追加到当前项目</p></div></header>
+                <header className="flex h-12 shrink-0 items-center border-b border-border px-4">
+                    <div>
+                        <h2 className="text-sm font-semibold">{t("project:import-novel-4")}</h2>
+                        <p className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">{t("project:chapter-titles-are-detected-automatically-and-appended-after-confirmatio")}</p>
+                    </div>
+                </header>
                 <div className="grid min-h-[430px] flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px]">
-                <div className="border-b border-border p-3 md:border-b-0 md:border-r">
-                    <div className="mb-2 flex items-center justify-between gap-2"><div><div className="text-sm font-medium">小说正文</div><div className="mt-0.5 text-[var(--fs-label)] text-foreground/45">识别章节标题后追加到现有章节</div></div><Button size="small" icon={<FileUp className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>{fileName || "选择 TXT"}</Button></div>
-                    <input ref={fileInputRef} type="file" accept=".txt,.md,text/plain,text/markdown" className="hidden" onChange={(event) => void readFile(event)} />
-                    <Input.TextArea value={text} onChange={(event) => setText(event.target.value)} rows={16} placeholder={'也可以直接粘贴小说正文，例如：\n\n第一章 雨夜来信\n正文……\n\n第二章 灯塔以北\n正文……'} className="!resize-none" />
-                </div>
-                <div className="flex min-h-0 flex-col">
-                    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3 text-xs"><span className="font-medium">拆分预览</span><span className="tabular-nums text-foreground/45">{chapters.length} 章</span></div>
-                    <ImportChapterPreview chapters={chapters} />
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-3"><span className={`text-[var(--fs-tiny)] ${chapters.length > MAX_NOVEL_IMPORT_CHAPTERS ? "text-red-500" : "text-foreground/38"}`}>{chapters.length > MAX_NOVEL_IMPORT_CHAPTERS ? `最多一次导入 ${MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString("zh-CN")} 章` : `支持最多 ${MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString("zh-CN")} 章`}</span><div className="flex gap-2"><Button size="small" onClick={onClose}>取消</Button><Button size="small" type="primary" disabled={!chapters.length || chapters.length > MAX_NOVEL_IMPORT_CHAPTERS} loading={loading} onClick={() => onImport(chapters)}>导入 {chapters.length || ""} 章</Button></div></div>
-                </div>
+                    <div className="border-b border-border p-3 md:border-b-0 md:border-r">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <div>
+                                <div className="text-sm font-medium">{t("project:novel-text")}</div>
+                                <div className="mt-0.5 text-[var(--fs-label)] text-foreground/45">{t("project:appended-to-existing-chapters-once-titles-are-detected")}</div>
+                            </div>
+                            <Button size="small" icon={<FileUp className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>
+                                {fileName || t("project:choose-txt")}
+                            </Button>
+                        </div>
+                        <input ref={fileInputRef} type="file" accept=".txt,.md,text/plain,text/markdown" className="hidden" onChange={(event) => void readFile(event)} />
+                        <Input.TextArea value={text} onChange={(event) => setText(event.target.value)} rows={16} placeholder={t("project:or-paste-novel-text-directly-e-g-chapter-1-letter-in-the-rain-text-chapt")} className="!resize-none" />
+                    </div>
+                    <div className="flex min-h-0 flex-col">
+                        <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3 text-xs">
+                            <span className="font-medium">{t("project:split-preview")}</span>
+                            <span className="tabular-nums text-foreground/45">
+                                {chapters.length} {t("project:item-7")}
+                            </span>
+                        </div>
+                        <ImportChapterPreview chapters={chapters} />
+                        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-3">
+                            <span className={`text-[var(--fs-tiny)] ${chapters.length > MAX_NOVEL_IMPORT_CHAPTERS ? "text-red-500" : "text-foreground/38"}`}>
+                                {chapters.length > MAX_NOVEL_IMPORT_CHAPTERS
+                                    ? t("project:import-chapters-max", { count: MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString(formatLocale()) })
+                                    : t("project:support-chapters-max", { count: MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString(formatLocale()) })}
+                            </span>
+                            <div className="flex gap-2">
+                                <Button size="small" onClick={onClose}>
+                                    {t("project:cancel-4")}
+                                </Button>
+                                <Button size="small" type="primary" disabled={!chapters.length || chapters.length > MAX_NOVEL_IMPORT_CHAPTERS} loading={loading} onClick={() => onImport(chapters)}>
+                                    {t("project:import")} {chapters.length || ""} {t("project:item-7")}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </Modal>
@@ -538,6 +915,7 @@ function ImportNovelModal({ open, loading, onClose, onImport }: { open: boolean;
 }
 
 function ImportChapterPreview({ chapters }: { chapters: Array<{ title: string; plainText: string }> }) {
+    const { t } = useTranslation("project");
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
         count: chapters.length,
@@ -547,23 +925,43 @@ function ImportChapterPreview({ chapters }: { chapters: Array<{ title: string; p
     });
     return (
         <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
-            {chapters.length ? <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-                {virtualizer.getVirtualItems().map((virtualItem) => {
-                    const chapter = chapters[virtualItem.index];
-                    return <div key={`${chapter.title}-${virtualItem.index}`} className="absolute left-0 top-0 flex w-full gap-2 border-b border-border/60 px-1.5 py-2" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}><span className="w-8 shrink-0 pt-0.5 text-[var(--fs-tiny)] tabular-nums text-foreground/35">{String(virtualItem.index + 1).padStart(Math.max(2, String(chapters.length).length), "0")}</span><div className="min-w-0"><div className="truncate text-xs font-medium">{chapter.title}</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/40">{formatCount(chapter.plainText.length)} 字</div></div></div>;
-                })}
-            </div> : <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-foreground/40">选择 TXT 文件或粘贴正文后，这里会显示拆分结果</div>}
+            {chapters.length ? (
+                <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+                    {virtualizer.getVirtualItems().map((virtualItem) => {
+                        const chapter = chapters[virtualItem.index];
+                        return (
+                            <div key={`${chapter.title}-${virtualItem.index}`} className="absolute left-0 top-0 flex w-full gap-2 border-b border-border/60 px-1.5 py-2" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}>
+                                <span className="w-8 shrink-0 pt-0.5 text-[var(--fs-tiny)] tabular-nums text-foreground/35">{String(virtualItem.index + 1).padStart(Math.max(2, String(chapters.length).length), "0")}</span>
+                                <div className="min-w-0">
+                                    <div className="truncate text-xs font-medium">{chapter.title}</div>
+                                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/40">
+                                        {formatCount(chapter.plainText.length)} {t("project:item-6")}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-foreground/40">{t("project:once-you-choose-a-txt-file-or-paste-text-the-split-result-appears-here")}</div>
+            )}
         </div>
     );
 }
 
 function plainTextToHtml(value: string) {
     const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    return escaped.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`).join("");
+    return escaped
+        .split(/\n{2,}/)
+        .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
+        .join("");
 }
 
 function stripHtml(value: string) {
-    return value.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
+    return value
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim();
 }
 
 function readStoredScroll(key: string) {

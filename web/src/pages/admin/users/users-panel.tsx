@@ -11,11 +11,13 @@ import { useTableUrlState } from "../lib/use-table-url-state";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
 import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
+import { useTranslation } from "react-i18next";
 
 const columnStorageKey = "admin-users-visible-columns";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
 
 export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: LocalUser) => void }) {
+    const { t } = useTranslation("canvas");
     const actor = useUserStore((state) => state.user);
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
@@ -66,57 +68,73 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                 if (result.total > 0 && result.users.length === 0 && state.page > 1) update({ page: 1 }, true);
             })
             .catch((error) => {
-                if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : "读取用户失败");
+                if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : t("admin:failed-to-read-users"));
             })
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
     }, [debouncedFilter, message, state.page, state.pageSize, state.role, state.status, update]);
 
-    const replaceUser = useCallback((nextUser: LocalUser) => {
-        setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
-        onUserChanged?.(nextUser);
-    }, [onUserChanged]);
+    const replaceUser = useCallback(
+        (nextUser: LocalUser) => {
+            setUsers((items) => items.map((item) => (item.id === nextUser.id ? { ...item, ...nextUser } : item)));
+            onUserChanged?.(nextUser);
+        },
+        [onUserChanged],
+    );
 
-    const addUser = useCallback((user: AdminUser) => {
-        setUsers((items) => [user, ...items].slice(0, state.pageSize));
-        setTotal((value) => value + 1);
-        onUserChanged?.(user);
-        setCreateUserOpen(false);
-    }, [onUserChanged, state.pageSize]);
+    const addUser = useCallback(
+        (user: AdminUser) => {
+            setUsers((items) => [user, ...items].slice(0, state.pageSize));
+            setTotal((value) => value + 1);
+            onUserChanged?.(user);
+            setCreateUserOpen(false);
+        },
+        [onUserChanged, state.pageSize],
+    );
 
-    const toggleStatus = useCallback(async (user: AdminUser) => {
-        try {
-            if (user.status === "active") {
-                await deleteAdminUser(user.id);
-                replaceUser({ ...user, status: "disabled" });
-                message.success("用户已停用并清除登录状态");
-                return;
+    const toggleStatus = useCallback(
+        async (user: AdminUser) => {
+            try {
+                if (user.status === "active") {
+                    await deleteAdminUser(user.id);
+                    replaceUser({ ...user, status: "disabled" });
+                    message.success(t("admin:user-disabled-and-sessions-cleared"));
+                    return;
+                }
+                const result = await updateAdminUser(user.id, { status: "active" });
+                replaceUser(result.user);
+                message.success(t("admin:user-re-enabled"));
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : t("admin:failed-to-update-user-status"));
             }
-            const result = await updateAdminUser(user.id, { status: "active" });
-            replaceUser(result.user);
-            message.success("用户已重新启用");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新用户状态失败");
-        }
-    }, [message, replaceUser]);
+        },
+        [message, replaceUser],
+    );
 
-    const columns = useMemo(() => createUserColumns({
-        actorId: actor?.id,
-        visibleColumns,
-        onView: (user) => setDetailUserId(user.id),
-        onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
-        onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+    const columns = useMemo(
+        () =>
+            createUserColumns({
+                actorId: actor?.id,
+                visibleColumns,
+                onView: (user) => setDetailUserId(user.id),
+                onEdit: (user) => {
+                    setCreateUserOpen(false);
+                    setEditingUser(user);
+                },
+                onToggleStatus: toggleStatus,
+            }),
+        [actor?.id, toggleStatus, visibleColumns],
+    );
 
     const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
 
     const bulkDisable = () => {
         modal.confirm({
-            title: `停用选中的 ${selectedUserIds.length} 个用户？`,
-            content: "这些用户的全部登录态会被清除，身份、任务和积分流水继续保留。操作会整体成功或整体回滚。",
-            okText: "确认批量停用",
-            cancelText: "取消",
+            title: t("admin:disable-param-selected-users", { length: selectedUserIds.length }),
+            content: t("admin:all-their-sessions-are-cleared-identity-tasks-and-credit-transactions-ar"),
+            okText: t("admin:confirm-batch-disable"),
+            cancelText: t("admin:cancel-4"),
             okButtonProps: { danger: true },
             onOk: async () => {
                 setBulkDisabling(true);
@@ -124,9 +142,9 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                     const result = await bulkDisableAdminUsers(selectedUserIds);
                     result.users.forEach(replaceUser);
                     setSelectedUserIds([]);
-                    message.success(`已停用 ${result.disabledCount} 个用户`);
+                    message.success(t("admin:disabled-param-users", { disabledCount: result.disabledCount }));
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "批量停用用户失败");
+                    message.error(error instanceof Error ? error.message : t("admin:failed-to-batch-disable-users"));
                 } finally {
                     setBulkDisabling(false);
                 }
@@ -144,56 +162,74 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={state.filter}
-                            placeholder="搜索用户名、名称或邮箱"
+                            placeholder={t("admin:search-usernames-names-or-emails")}
                             onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
                         />
                     </>
                 }
-                toolbarActiveFilters={(
+                toolbarActiveFilters={
                     <>
-                        {state.filter ? <AdminFilterChip label={`搜索：${state.filter}`} onRemove={() => update({ filter: "", page: 1 })} /> : null}
-                        {state.role !== "all" ? <AdminFilterChip label={`角色：${state.role === "admin" ? "管理员" : "普通用户"}`} onRemove={() => update({ role: "all", page: 1 })} /> : null}
-                        {state.status !== "all" ? <AdminFilterChip label={`状态：${state.status === "active" ? "已启用" : "已停用"}`} onRemove={() => update({ status: "all", page: 1 })} /> : null}
+                        {state.filter ? <AdminFilterChip label={t("admin:search-param-2", { filter: state.filter })} onRemove={() => update({ filter: "", page: 1 })} /> : null}
+                        {state.role !== "all" ? <AdminFilterChip label={`角色：${state.role === "admin" ? t("admin:admin") : t("admin:user")}`} onRemove={() => update({ role: "all", page: 1 })} /> : null}
+                        {state.status !== "all" ? <AdminFilterChip label={`状态：${state.status === "active" ? t("admin:enabled") : t("admin:disabled")}`} onRemove={() => update({ status: "all", page: 1 })} /> : null}
                     </>
-                )}
+                }
                 toolbarActive={hasFilters}
                 onReset={resetFilters}
                 toolbarFilters={
                     <>
                         <FilterMenu
-                            label="角色"
+                            label={t("admin:role")}
                             value={state.role}
-                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
+                            options={[
+                                { value: "all", label: t("admin:all-roles") },
+                                { value: "admin", label: t("admin:admin") },
+                                { value: "user", label: t("admin:user") },
+                            ]}
                             onChange={(role) => update({ role, page: 1 })}
                         />
                         <FilterMenu
-                            label="状态"
+                            label={t("admin:status")}
                             value={state.status}
-                            options={[{ value: "all", label: "全部状态" }, { value: "active", label: "已启用" }, { value: "disabled", label: "已停用" }]}
+                            options={[
+                                { value: "all", label: t("admin:all-statuses") },
+                                { value: "active", label: t("admin:enabled") },
+                                { value: "disabled", label: t("admin:disabled") },
+                            ]}
                             onChange={(status) => update({ status, page: 1 })}
                         />
                     </>
                 }
                 trailing={
                     <div className="flex items-center gap-2">
-                        <Button icon={<UserPlus className="size-4" />} onClick={() => { setEditingUser(null); setCreateUserOpen(true); }}>{"\u6dfb\u52a0\u7528\u6237"}</Button>
+                        <Button
+                            icon={<UserPlus className="size-4" />}
+                            onClick={() => {
+                                setEditingUser(null);
+                                setCreateUserOpen(true);
+                            }}
+                        >
+                            {t("admin:add-user")}
+                        </Button>
                         <Dropdown
                             trigger={["click"]}
                             dropdownRender={() => (
                                 <div className="w-48 rounded-md border border-border bg-popover p-2 shadow-lg">
-                                    <div className="px-2 pb-2 text-xs font-medium text-foreground/55">显示列</div>
+                                    <div className="px-2 pb-2 text-xs font-medium text-foreground/55">{t("admin:visible-columns")}</div>
                                     <div className="space-y-0.5">
                                         {userColumnOptions.map((option) => (
                                             <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
                                                 <Checkbox
                                                     checked={visibleColumns.has(option.key)}
                                                     disabled={option.locked}
-                                                    onChange={(event) => setVisibleColumns((current) => {
-                                                        const next = new Set(current);
-                                                        if (event.target.checked) next.add(option.key);
-                                                        else next.delete(option.key);
-                                                        return next;
-                                                    })}
+                                                    onChange={(event) =>
+                                                        setVisibleColumns((current) => {
+                                                            const next = new Set(current);
+                                                            if (event.target.checked) next.add(option.key);
+                                                            else next.delete(option.key);
+                                                            return next;
+                                                        })
+                                                    }
                                                 />
                                                 {option.label}
                                             </label>
@@ -202,11 +238,17 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                                 </div>
                             )}
                         >
-                            <Button icon={<Settings2 className="size-4" />}>列设置</Button>
+                            <Button icon={<Settings2 className="size-4" />}>{t("admin:column-settings")}</Button>
                         </Dropdown>
                     </div>
                 }
-                batchActions={<AdminBatchBar count={selectedUserIds.length} onClear={() => setSelectedUserIds([])}><Button danger size="small" icon={<Ban className="size-3.5" />} loading={bulkDisabling} onClick={bulkDisable}>批量停用</Button></AdminBatchBar>}
+                batchActions={
+                    <AdminBatchBar count={selectedUserIds.length} onClear={() => setSelectedUserIds([])}>
+                        <Button danger size="small" icon={<Ban className="size-3.5" />} loading={bulkDisabling} onClick={bulkDisable}>
+                            {t("admin:batch-disable")}
+                        </Button>
+                    </AdminBatchBar>
+                }
                 skeletonColumns={Math.max(4, columns.length)}
                 table={{
                     className: "app-data-table",
@@ -247,7 +289,10 @@ function FilterMenu({ label, value, options, onChange }: { label: string; value:
                 onClick: ({ key }) => onChange(key),
             }}
         >
-            <Button>{value === "all" ? label : selected}<ChevronDown className="ml-1 size-3.5" /></Button>
+            <Button>
+                {value === "all" ? label : selected}
+                <ChevronDown className="ml-1 size-3.5" />
+            </Button>
         </Dropdown>
     );
 }

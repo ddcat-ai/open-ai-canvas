@@ -20,7 +20,9 @@ import { useAssetStore, type Asset, type AssetCategory, type AssetKind, type Ima
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
 import { deleteAssetWithRemoteSync } from "@/services/user-data-sync";
-
+import { useTranslation } from "react-i18next";
+import { t as translate } from "@/i18n";
+import { t } from "@/i18n";
 
 type LibraryAsset = Exclude<Asset, { kind: "entity" }>;
 
@@ -38,23 +40,23 @@ type AssetFormValues = {
 type ImageDraft = ImageAsset["data"] | null;
 
 const kindOptions = [
-    { label: "全部", value: "all" },
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-    { label: "3D 模型", value: "model" },
+    { label: t("assets:all"), value: "all" },
+    { label: t("assets:text"), value: "text" },
+    { label: t("assets:image"), value: "image" },
+    { label: t("assets:video"), value: "video" },
+    { label: t("assets:audio"), value: "audio" },
+    { label: t("assets:3d-models"), value: "model" },
 ];
 
 const categoryOptions = [
-    { label: "全部分类", value: "all" },
-    { label: "角色", value: "character" },
-    { label: "场景", value: "environment" },
-    { label: "服饰", value: "wardrobe" },
-    { label: "道具", value: "prop" },
-    { label: "武器", value: "weapon" },
-    { label: "画风", value: "style" },
-    { label: "其他", value: "other" },
+    { label: t("assets:all-categories"), value: "all" },
+    { label: t("assets:role"), value: "character" },
+    { label: t("assets:scenes"), value: "environment" },
+    { label: t("assets:costumes"), value: "wardrobe" },
+    { label: t("assets:props"), value: "prop" },
+    { label: t("assets:weapons"), value: "weapon" },
+    { label: t("assets:styles"), value: "style" },
+    { label: t("assets:other"), value: "other" },
 ];
 
 const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
@@ -66,6 +68,7 @@ const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
 };
 
 export default function AssetsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -134,7 +137,7 @@ export default function AssetsPage() {
         setEditingAsset(null);
         setImageDraft(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", category: "other", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
+        form.setFieldsValue({ kind: "text", category: "other", title: "", coverUrl: "", tags: [], source: t("assets:added-manually"), note: "", content: "" });
         setIsAssetOpen(true);
     };
 
@@ -160,7 +163,7 @@ export default function AssetsPage() {
         const base = {
             title: values.title.trim(),
             category: values.category,
-            status: editingAsset?.status || "confirmed" as const,
+            status: editingAsset?.status || ("confirmed" as const),
             primaryVersionId: editingAsset?.primaryVersionId,
             coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageDraft ? imageDraft.dataUrl : ""),
             tags: values.tags || [],
@@ -174,14 +177,14 @@ export default function AssetsPage() {
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         } else {
             if (!imageDraft) {
-                message.error("请选择图片文件");
+                message.error(t("assets:choose-an-image-file"));
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         }
 
-        message.success(editingAsset ? "素材已更新" : "素材已保存");
+        message.success(editingAsset ? t("assets:asset-updated") : t("assets:asset-saved"));
         setIsAssetOpen(false);
     };
 
@@ -205,13 +208,21 @@ export default function AssetsPage() {
         if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
         const uploaded = await uploadMediaFile(file, "model");
         void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
-        addAsset({ kind: "model", title: file.name.replace(/\.(glb|gltf)$/i, ""), coverUrl: "", tags: ["3D模型"], source: "手动上传", data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: file.name }, metadata: { source: "manual" } });
-        message.success("3D 模型已保存");
+        addAsset({
+            kind: "model",
+            title: file.name.replace(/\.(glb|gltf)$/i, ""),
+            coverUrl: "",
+            tags: [t("assets:3d-models-2")],
+            source: t("assets:manual-upload"),
+            data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: file.name },
+            metadata: { source: "manual" },
+        });
+        message.success(t("assets:3d-model-saved"));
     };
 
     const copyAssetText = async (asset: LibraryAsset) => {
         if (asset.kind !== "text") return;
-        copyText(asset.data.content, "文本已复制");
+        copyText(asset.data.content, t("assets:text-copied"));
     };
 
     const downloadImage = (asset: LibraryAsset) => {
@@ -223,7 +234,7 @@ export default function AssetsPage() {
 
     const exportAllAssets = async () => {
         if (!validAssets.length) {
-            message.warning("暂无素材可导出");
+            message.warning(t("assets:no-assets-to-export"));
             return;
         }
         await exportAssets(validAssets);
@@ -240,9 +251,9 @@ export default function AssetsPage() {
                 delete payload.updatedAt;
                 addAsset(payload as Parameters<typeof addAsset>[0]);
             });
-            message.success(`已导入 ${importedAssets.length} 个素材`);
+            message.success(t("assets:imported-param-assets", { length: importedAssets.length }));
         } catch {
-            message.error("导入失败，请选择有效的素材压缩包");
+            message.error(t("assets:import-failed-choose-a-valid-asset-archive"));
         } finally {
             if (assetInputRef.current) assetInputRef.current.value = "";
         }
@@ -252,10 +263,10 @@ export default function AssetsPage() {
         if (!deletingAsset) return;
         try {
             await deleteAssetWithRemoteSync(deletingAsset.id);
-            message.success("素材已删除");
+            message.success(t("assets:asset-deleted"));
             setDeletingAsset(null);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材删除失败");
+            message.error(error instanceof Error ? error.message : t("assets:failed-to-delete-asset"));
         }
     };
 
@@ -268,124 +279,216 @@ export default function AssetsPage() {
         if (!selectedAssets.length) return;
         try {
             for (const asset of selectedAssets) await deleteAssetWithRemoteSync(asset.id);
-            message.success(`已删除 ${selectedAssets.length} 个素材`);
+            message.success(t("assets:deleted-param-assets", { length: selectedAssets.length }));
             setSelectedIds([]);
             setBatchDeleteOpen(false);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "批量删除失败");
+            message.error(error instanceof Error ? error.message : t("assets:batch-delete-failed"));
         }
     };
-
 
     return (
         <>
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page">
-            <div className="studio-band">
-                <PageHeader
-                    title="素材库"
-                    description="管理文本、图片、视频、音频和 3D 模型素材。"
-                    meta={<span className="app-projects-header-meta assets-header-meta">{validAssets.length} 个素材</span>}
-                    actions={(
-                        <div className="assets-header-actions">
-                            <div className="assets-header-action-buttons">
-                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>新增素材</Button>
-                                <Button icon={<FolderOpen className="size-3.5" />} onClick={() => navigate("/plugins/eagle")}>Eagle 素材库</Button>
-                                <Button title="导出全部素材" aria-label="导出全部素材" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()} />
-                                <Dropdown trigger={["click"]} menu={{ items: [{ key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() }, { key: "model", icon: <Upload className="size-4" />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() }] }}>
-                                    <Button title="导入素材" aria-label="导入素材" icon={<FileUp className="size-4" />} />
-                                </Dropdown>
+                <div className="studio-band">
+                    <PageHeader
+                        title={t("assets:asset-library")}
+                        description={t("assets:manage-text-image-video-audio-and-3d-model-assets")}
+                        meta={
+                            <span className="app-projects-header-meta assets-header-meta">
+                                {validAssets.length} {t("assets:assets-2")}
+                            </span>
+                        }
+                        actions={
+                            <div className="assets-header-actions">
+                                <div className="assets-header-action-buttons">
+                                    <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>
+                                        {t("assets:new-asset-3")}
+                                    </Button>
+                                    <Button icon={<FolderOpen className="size-3.5" />} onClick={() => navigate("/plugins/eagle")}>
+                                        {t("assets:eagle-library")}
+                                    </Button>
+                                    <Button title={t("assets:export-all-assets")} aria-label={t("assets:export-all-assets")} icon={<Download className="size-4" />} onClick={() => void exportAllAssets()} />
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                { key: "package", icon: <FileUp className="size-4" />, label: t("assets:import-asset-archive-2"), onClick: () => assetInputRef.current?.click() },
+                                                { key: "model", icon: <Upload className="size-4" />, label: t("assets:upload-3d-model"), onClick: () => modelInputRef.current?.click() },
+                                            ],
+                                        }}
+                                    >
+                                        <Button title={t("assets:import-assets")} aria-label={t("assets:import-assets")} icon={<FileUp className="size-4" />} />
+                                    </Dropdown>
+                                </div>
+                                <AssetStorageUsage />
                             </div>
-                            <AssetStorageUsage />
-                        </div>
-                    )}
-                />
-                <ListToolbar className="library-toolbar" active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")} onReset={() => { setKeyword(""); setKindFilter("all"); setCategoryFilter("all"); setPage(1); }}>
-                    <Input allowClear className="w-full sm:w-80" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索标题、内容、标签或来源" onChange={(event) => { setPage(1); setKeyword(event.target.value); }} />
-                </ListToolbar>
-            </div>
-
-            <div className="canvas-library-frame assets-library-frame">
-                <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
-                    <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:pr-3">
-                        <AssetFilterGroup title="素材类型" options={kindOptions} value={kindFilter} counts={kindCounts} onChange={(value) => { setKindFilter(value as AssetKind | "all"); setPage(1); }} />
-                        <AssetFilterGroup title="业务分类" options={categoryOptions} value={categoryFilter} counts={categoryCounts} onChange={(value) => { setCategoryFilter(value as AssetCategory | "all"); setPage(1); }} className="lg:mt-5" />
-                    </aside>
-                    <section className="min-w-0">
-                        {selectedAssets.length ? (
-                            <AssetsBatchBar count={selectedAssets.length} allSelected={allFilteredSelected} onSelectAll={() => setSelectedIds((current) => Array.from(new Set([...current, ...filteredAssetIds])))} onClear={() => setSelectedIds([])} onExport={() => void exportSelectedAssets()} onDelete={() => setBatchDeleteOpen(true)} />
-                        ) : null}
-                        {validAssets.length === 0 ? (
-                            <AssetsEmptyState onNew={openCreate} onImport={() => assetInputRef.current?.click()} onGoCanvas={() => navigate("/canvas")} />
-                        ) : (
-                            <>
-                                {filteredAssets.length === 0 ? (
-                                    <WorkspaceState icon="assets" compact title="没有匹配的素材" description="调整关键词或左侧分类后再试。" />
-                                ) : (
-                                    <CollectionGrid className="library-grid assets-library-grid">
-                                        {canCreateAsset ? <button type="button" className="library-create-card" onClick={openCreate}>
-                                            <span className="library-create-cover"><Plus className="size-8" /></span>
-                                            <span className="library-create-title">新增素材</span>
-                                            <span className="library-create-meta">文本、图片、音视频或模型</span>
-                                        </button> : null}
-                                        {visibleAssets.map((asset) => (
-                                            <AssetCard key={asset.id} asset={asset} selected={selectedIds.includes(asset.id)} onSelect={(selected) => setSelectedIds((current) => selected ? [...new Set([...current, asset.id])] : current.filter((id) => id !== asset.id))} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
-                                        ))}
-                                    </CollectionGrid>
-                                )}
-                                <PaginationBar current={page} pageSize={pageSize} total={filteredAssets.length} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} />
-                            </>
-                        )}
-                    </section>
+                        }
+                    />
+                    <ListToolbar
+                        className="library-toolbar"
+                        active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")}
+                        onReset={() => {
+                            setKeyword("");
+                            setKindFilter("all");
+                            setCategoryFilter("all");
+                            setPage(1);
+                        }}
+                    >
+                        <Input
+                            allowClear
+                            className="w-full sm:w-80"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder={t("assets:search-titles-content-tags-or-source")}
+                            onChange={(event) => {
+                                setPage(1);
+                                setKeyword(event.target.value);
+                            }}
+                        />
+                    </ListToolbar>
                 </div>
-            </div>
+
+                <div className="canvas-library-frame assets-library-frame">
+                    <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
+                        <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:pr-3">
+                            <AssetFilterGroup
+                                title={t("assets:asset-type")}
+                                options={kindOptions}
+                                value={kindFilter}
+                                counts={kindCounts}
+                                onChange={(value) => {
+                                    setKindFilter(value as AssetKind | "all");
+                                    setPage(1);
+                                }}
+                            />
+                            <AssetFilterGroup
+                                title={t("assets:category")}
+                                options={categoryOptions}
+                                value={categoryFilter}
+                                counts={categoryCounts}
+                                onChange={(value) => {
+                                    setCategoryFilter(value as AssetCategory | "all");
+                                    setPage(1);
+                                }}
+                                className="lg:mt-5"
+                            />
+                        </aside>
+                        <section className="min-w-0">
+                            {selectedAssets.length ? (
+                                <AssetsBatchBar
+                                    count={selectedAssets.length}
+                                    allSelected={allFilteredSelected}
+                                    onSelectAll={() => setSelectedIds((current) => Array.from(new Set([...current, ...filteredAssetIds])))}
+                                    onClear={() => setSelectedIds([])}
+                                    onExport={() => void exportSelectedAssets()}
+                                    onDelete={() => setBatchDeleteOpen(true)}
+                                />
+                            ) : null}
+                            {validAssets.length === 0 ? (
+                                <AssetsEmptyState onNew={openCreate} onImport={() => assetInputRef.current?.click()} onGoCanvas={() => navigate("/canvas")} />
+                            ) : (
+                                <>
+                                    {filteredAssets.length === 0 ? (
+                                        <WorkspaceState icon="assets" compact title={t("assets:no-matching-assets")} description={t("assets:adjust-the-keywords-or-category-on-the-left-and-try-again")} />
+                                    ) : (
+                                        <CollectionGrid className="library-grid assets-library-grid">
+                                            {canCreateAsset ? (
+                                                <button type="button" className="library-create-card" onClick={openCreate}>
+                                                    <span className="library-create-cover">
+                                                        <Plus className="size-8" />
+                                                    </span>
+                                                    <span className="library-create-title">{t("assets:new-asset-3")}</span>
+                                                    <span className="library-create-meta">{t("assets:text-image-audio-video-or-model")}</span>
+                                                </button>
+                                            ) : null}
+                                            {visibleAssets.map((asset) => (
+                                                <AssetCard
+                                                    key={asset.id}
+                                                    asset={asset}
+                                                    selected={selectedIds.includes(asset.id)}
+                                                    onSelect={(selected) => setSelectedIds((current) => (selected ? [...new Set([...current, asset.id])] : current.filter((id) => id !== asset.id)))}
+                                                    onOpen={() => setPreviewAsset(asset)}
+                                                    onEdit={() => openEdit(asset)}
+                                                    onCopy={copyAssetText}
+                                                    onDownload={downloadImage}
+                                                    onDelete={() => setDeletingAsset(asset)}
+                                                />
+                                            ))}
+                                        </CollectionGrid>
+                                    )}
+                                    <PaginationBar
+                                        current={page}
+                                        pageSize={pageSize}
+                                        total={filteredAssets.length}
+                                        pageSizeOptions={[20, 40, 80]}
+                                        onChange={(nextPage, nextPageSize) => {
+                                            setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                                            setPageSize(nextPageSize);
+                                        }}
+                                    />
+                                </>
+                            )}
+                        </section>
+                    </div>
+                </div>
             </WorkspacePage>
 
-            <Modal className="workspace-modal workspace-modal-wide library-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal
+                className="workspace-modal workspace-modal-wide library-modal"
+                title={editingAsset ? t("assets:edit-asset") : t("assets:new-asset-3")}
+                open={isAssetOpen}
+                onCancel={() => setIsAssetOpen(false)}
+                onOk={() => void saveAsset()}
+                okText={t("assets:save")}
+                cancelText={t("assets:cancel")}
+                destroyOnHidden
+            >
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
-                        <Form.Item name="kind" label="类型">
+                        <Form.Item name="kind" label={t("assets:type")}>
                             <Select
                                 options={[
-                                    { label: "文本", value: "text" },
-                                    { label: "图片", value: "image" },
+                                    { label: t("assets:text"), value: "text" },
+                                    { label: t("assets:image"), value: "image" },
                                 ]}
                                 onChange={(value) => setFormKind(value)}
                             />
                         </Form.Item>
-                        <Form.Item name="category" label="业务分类">
+                        <Form.Item name="category" label={t("assets:category")}>
                             <Select options={categoryOptions.slice(1)} />
                         </Form.Item>
-                        <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                                <Input placeholder="给素材起一个容易检索的名字" />
+                        <Form.Item name="title" label={t("assets:title")} rules={[{ required: true, message: t("assets:enter-a-title") }]}>
+                            <Input placeholder={t("assets:give-the-asset-an-easily-searchable-name")} />
                         </Form.Item>
-                        <Form.Item name="coverUrl" label="封面 URL">
+                        <Form.Item name="coverUrl" label={t("assets:cover-url")}>
                             <Space.Compact className="w-full">
-                                <Input placeholder="可粘贴图片 URL，也可以上传本地封面" />
+                                <Input placeholder={t("assets:paste-an-image-url-or-upload-a-local-cover")} />
                                 <Button icon={<Upload className="size-3.5" />} onClick={() => coverInputRef.current?.click()}>
-                                    上传
+                                    {t("assets:upload")}
                                 </Button>
                             </Space.Compact>
                         </Form.Item>
-                        <Form.Item name="tags" label="标签">
-                            <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
+                        <Form.Item name="tags" label={t("assets:tags")}>
+                            <Select mode="tags" tokenSeparators={[",", "，"]} placeholder={t("assets:type-a-tag-and-press-enter")} />
                         </Form.Item>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="source" label="来源">
-                                <Input placeholder="手动添加 / 画布 / 任务中心" />
+                            <Form.Item name="source" label={t("assets:source")}>
+                                <Input placeholder={t("assets:manual-canvas-task-center")} />
                             </Form.Item>
-                            <Form.Item name="note" label="备注">
-                                <Input placeholder="可选" />
+                            <Form.Item name="note" label={t("assets:notes-2")}>
+                                <Input placeholder={t("assets:optional")} />
                             </Form.Item>
                         </div>
                         {formKind === "text" ? (
-                            <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                                <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
+                            <Form.Item name="content" label={t("assets:text-content")} rules={[{ required: true, message: t("assets:enter-text-content") }]}>
+                                <Input.TextArea rows={8} placeholder={t("assets:save-prompts-notes-reference-descriptions-and-other-text-assets")} />
                             </Form.Item>
                         ) : (
-                            <Form.Item label="图片内容" required>
+                            <Form.Item label={t("assets:image-content")} required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
                                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
-                                        选择图片文件
+                                        {t("assets:choose-an-image-file-2")}
                                     </Button>
                                     {imageDraft ? (
                                         <Typography.Text type="secondary" className="ml-3 text-xs" title={resourceStorageTitle(imageDraft.storageKey)}>
@@ -393,7 +496,7 @@ export default function AssetsPage() {
                                         </Typography.Text>
                                     ) : (
                                         <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            未选择图片
+                                            {t("assets:no-image-selected")}
                                         </Typography.Text>
                                     )}
                                 </div>
@@ -401,16 +504,18 @@ export default function AssetsPage() {
                         )}
                     </Form>
                     <div className="lg:pl-4">
-                        <Typography.Text strong className="text-xs">预览</Typography.Text>
+                        <Typography.Text strong className="text-xs">
+                            {t("assets:preview")}
+                        </Typography.Text>
                         <div className="mt-2 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">
                             {coverUrl || imageDraft?.dataUrl ? (
                                 <img src={coverUrl || imageDraft?.dataUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
                             ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
+                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || t("assets:no-cover-yet")}</div>
                             )}
                             <div className="bg-background p-3">
                                 <Typography.Text strong ellipsis className="block">
-                                    {title || "未命名素材"}
+                                    {title || t("assets:untitled-asset")}
                                 </Typography.Text>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                     {tags.length ? (
@@ -420,7 +525,7 @@ export default function AssetsPage() {
                                             </Tag>
                                         ))
                                     ) : (
-                                        <Tag className="m-0">未打标签</Tag>
+                                        <Tag className="m-0">{t("assets:untagged")}</Tag>
                                     )}
                                 </div>
                             </div>
@@ -452,38 +557,90 @@ export default function AssetsPage() {
             <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onCopy={copyAssetText} onDownload={downloadImage} />
 
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
-            <input ref={modelInputRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" className="hidden" onChange={(event) => { void readModelFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+            <input
+                ref={modelInputRef}
+                type="file"
+                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+                className="hidden"
+                onChange={(event) => {
+                    void readModelFile(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                }}
+            />
 
-            <Modal className="library-modal library-confirm-modal" title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={() => void confirmDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除「{deletingAsset?.title}」吗？未被其他内容引用的服务器本地或对象存储文件也会同步删除；若仍被画布、任务或其他素材占用，本次删除将被阻止。
+            <Modal
+                className="library-modal library-confirm-modal"
+                title={t("assets:delete-asset")}
+                open={Boolean(deletingAsset)}
+                onCancel={() => setDeletingAsset(null)}
+                onOk={() => void confirmDelete()}
+                okText={t("assets:delete-2")}
+                okButtonProps={{ danger: true }}
+                cancelText={t("assets:cancel")}
+            >
+                {t("assets:confirm-deleting")}
+                {deletingAsset?.title}
+                {t("assets:server-side-or-object-storage-files-not-referenced-by-other-content-will")}
             </Modal>
-            <Modal className="library-modal library-confirm-modal" title="批量删除素材" open={batchDeleteOpen} onCancel={() => setBatchDeleteOpen(false)} onOk={() => void confirmBatchDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除已选择的 {selectedAssets.length} 个素材吗？未被复用的服务器文件会同步删除；仍被画布、任务或其他素材占用的素材会保留并提示具体来源。
+            <Modal
+                className="library-modal library-confirm-modal"
+                title={t("assets:batch-delete-assets")}
+                open={batchDeleteOpen}
+                onCancel={() => setBatchDeleteOpen(false)}
+                onOk={() => void confirmBatchDelete()}
+                okText={t("assets:delete-2")}
+                okButtonProps={{ danger: true }}
+                cancelText={t("assets:cancel")}
+            >
+                {t("assets:confirm-deleting-the-selected")} {selectedAssets.length} {t("assets:assets-unused-server-files-are-deleted-too-assets-still-used-by-canvases")}
             </Modal>
         </>
     );
 }
 
-function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: LibraryAsset; selected: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; onEdit: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void; onDelete: () => void }) {
+function AssetCard({
+    asset,
+    selected,
+    onSelect,
+    onOpen,
+    onEdit,
+    onCopy,
+    onDownload,
+    onDelete,
+}: {
+    asset: LibraryAsset;
+    selected: boolean;
+    onSelect: (selected: boolean) => void;
+    onOpen: () => void;
+    onEdit: () => void;
+    onCopy: (asset: LibraryAsset) => void;
+    onDownload: (asset: LibraryAsset) => void;
+    onDelete: () => void;
+}) {
+    const { t } = useTranslation("canvas");
     const summary = assetSummary(asset);
     const menuItems: MenuProps["items"] = [
-        ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
-        ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
-        ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
+        ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: t("assets:edit"), onClick: onEdit }] : []),
+        ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: t("assets:copy-text-2"), onClick: () => void onCopy(asset) }] : []),
+        ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: t("assets:download"), onClick: () => onDownload(asset) }] : []),
         { type: "divider" as const },
-        { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: onDelete },
+        { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: t("assets:delete-2"), onClick: onDelete },
     ];
     return (
         <AssetLibraryCard selected={selected}>
             <AssetCover asset={asset} selected={selected} onSelect={onSelect} onOpen={onOpen} menuItems={menuItems} />
             <button type="button" className="block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
                 <div className="flex min-w-0 items-center justify-between gap-2">
-                    <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>{asset.title}</h2>
+                    <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>
+                        {asset.title}
+                    </h2>
                     <span className="shrink-0 text-[var(--fs-tiny)] tabular-nums text-foreground/38">{formatAssetTime(asset.updatedAt)}</span>
                 </div>
-                <div className="mt-1 truncate text-[var(--fs-label)] text-foreground/52" title={summary}>{summary}</div>
+                <div className="mt-1 truncate text-[var(--fs-label)] text-foreground/52" title={summary}>
+                    {summary}
+                </div>
                 <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38">
-                    <span className="truncate">{asset.source || "未标注来源"}</span>
+                    <span className="truncate">{asset.source || t("assets:no-source-recorded")}</span>
                     <span aria-hidden="true">·</span>
                     <span className="truncate">{assetProjectLabel(asset)}</span>
                 </div>
@@ -493,13 +650,14 @@ function AssetCard({ asset, selected, onSelect, onOpen, onEdit, onCopy, onDownlo
 }
 
 function AssetCover({ asset, selected, onSelect, onOpen, menuItems }: { asset: LibraryAsset; selected: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; menuItems: MenuProps["items"] }) {
+    const { t } = useTranslation("canvas");
     const KindIcon = assetKindIcons[asset.kind];
     const clock = asset.kind === "video" || asset.kind === "audio" ? formatAssetClock(asset.data.durationMs) : null;
     const showPlay = asset.kind === "video";
     const isLight = asset.kind === "audio" || asset.kind === "text" || asset.kind === "model";
     return (
         <AssetLibraryCardMedia className={isLight ? "assets-cover is-light" : "assets-cover"}>
-            <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
+            <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={t("assets:view-asset-param", { title: asset.title })}>
                 {asset.kind === "audio" ? (
                     <AudioWaveCover asset={asset} />
                 ) : asset.kind === "text" ? (
@@ -507,22 +665,35 @@ function AssetCover({ asset, selected, onSelect, onOpen, menuItems }: { asset: L
                 ) : asset.kind === "model" ? (
                     <ModelCover asset={asset} />
                 ) : (
-                    <AssetMediaPreview asset={asset} alt={asset.title} className="assets-cover-media" fallback={<div className="assets-cover-fallback"><KindIcon className="size-7" /></div>} />
+                    <AssetMediaPreview
+                        asset={asset}
+                        alt={asset.title}
+                        className="assets-cover-media"
+                        fallback={
+                            <div className="assets-cover-fallback">
+                                <KindIcon className="size-7" />
+                            </div>
+                        }
+                    />
                 )}
                 <span className="assets-cover-vignette" aria-hidden="true" />
-                {showPlay ? <span className="assets-cover-play"><Play className="size-4" /></span> : null}
+                {showPlay ? (
+                    <span className="assets-cover-play">
+                        <Play className="size-4" />
+                    </span>
+                ) : null}
             </button>
             <span className="assets-cover-badges">
-                <span className="assets-cover-badge is-kind"><KindIcon />{assetKindLabel(asset.kind)}</span>
+                <span className="assets-cover-badge is-kind">
+                    <KindIcon />
+                    {assetKindLabel(asset.kind)}
+                </span>
                 <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
-            <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className="assets-select-check" aria-label={`选择 ${asset.title}`} />
-            <Dropdown
-                trigger={["click"]}
-                menu={{ items: menuItems }}
-            >
-                <button type="button" className="assets-cover-more" aria-label="更多素材操作" title="更多操作">
+            <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className="assets-select-check" aria-label={t("assets:select-param", { title: asset.title })} />
+            <Dropdown trigger={["click"]} menu={{ items: menuItems }}>
+                <button type="button" className="assets-cover-more" aria-label={t("assets:more-asset-actions")} title={t("assets:more-actions")}>
                     <MoreHorizontal className="size-4" />
                 </button>
             </Dropdown>
@@ -534,16 +705,19 @@ function AudioWaveCover({ asset }: { asset: LibraryAsset & { kind: "audio" } }) 
     const bars = audioWaveBars(asset.id);
     return (
         <div className="assets-cover-wave" aria-hidden="true">
-            {bars.map((height, index) => <span key={index} style={{ height: `${height}%` }} />)}
+            {bars.map((height, index) => (
+                <span key={index} style={{ height: `${height}%` }} />
+            ))}
             <AudioLines className="assets-cover-wave-glyph" />
         </div>
     );
 }
 
 function TextCover({ asset }: { asset: LibraryAsset & { kind: "text" } }) {
+    const { t } = useTranslation("canvas");
     return (
         <div className="assets-cover-text">
-            <p>{asset.data.content || "空白文本素材"}</p>
+            <p>{asset.data.content || t("assets:blank-text-asset")}</p>
         </div>
     );
 }
@@ -558,26 +732,38 @@ function ModelCover({ asset }: { asset: LibraryAsset & { kind: "model" } }) {
 }
 
 function AssetsBatchBar({ count, allSelected, onSelectAll, onClear, onExport, onDelete }: { count: number; allSelected: boolean; onSelectAll: () => void; onClear: () => void; onExport: () => void; onDelete: () => void }) {
+    const { t } = useTranslation("canvas");
     return (
-        <div className="assets-batch-bar" role="toolbar" aria-label="批量操作">
-            <span className="assets-batch-count">已选择 <strong>{count}</strong> 个素材</span>
+        <div className="assets-batch-bar" role="toolbar" aria-label={t("assets:batch-actions")}>
+            <span className="assets-batch-count">
+                {t("assets:selected")} <strong>{count}</strong> {t("assets:assets-2")}
+            </span>
             <div className="assets-batch-actions">
-                <Button size="small" icon={<CheckCheck className="size-3.5" />} disabled={allSelected} onClick={onSelectAll}>全选</Button>
-                <Button size="small" onClick={onClear}>取消选择</Button>
-                <Button size="small" icon={<Download className="size-3.5" />} onClick={onExport}>导出</Button>
-                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>删除</Button>
+                <Button size="small" icon={<CheckCheck className="size-3.5" />} disabled={allSelected} onClick={onSelectAll}>
+                    {t("assets:select-all")}
+                </Button>
+                <Button size="small" onClick={onClear}>
+                    {t("assets:deselect-all")}
+                </Button>
+                <Button size="small" icon={<Download className="size-3.5" />} onClick={onExport}>
+                    {t("assets:export")}
+                </Button>
+                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
+                    {t("assets:delete-2")}
+                </Button>
             </div>
         </div>
     );
 }
 
 const assetsEmptyBannerFrames = [
-    { src: "/short-drama-styles/retro-hong-kong.jpg", caption: "ASSET.01 · 天台重逢" },
-    { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: "ASSET.02 · 雨夜霓虹" },
-    { src: "/short-drama-styles/suspense-noir.jpg", caption: "ASSET.03 · 暗巷追逐" },
+    { src: "/short-drama-styles/retro-hong-kong.jpg", caption: t("assets:asset-01-rooftop-reunion") },
+    { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: t("assets:asset-02-neon-rain-night") },
+    { src: "/short-drama-styles/suspense-noir.jpg", caption: t("assets:asset-03-alley-chase") },
 ];
 
 function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; onImport: () => void; onGoCanvas: () => void }) {
+    const { t } = useTranslation("canvas");
     return (
         <div className="assets-empty">
             <div className="assets-empty-banner" aria-hidden="true">
@@ -587,30 +773,53 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                         <span>{frame.caption}</span>
                     </figure>
                 ))}
-                <span className="assets-empty-banner-caption"><span>影策素材库</span>把每次创作的结果，留档成可复用的资产</span>
+                <span className="assets-empty-banner-caption">
+                    <span>{t("assets:yingce-asset-library")}</span>
+                    {t("assets:archive-every-generation-into-reusable-assets")}
+                </span>
             </div>
             <div className="assets-empty-cards">
                 <button type="button" className="assets-empty-card" onClick={onNew}>
-                    <span className="assets-empty-card-icon"><Plus /></span>
-                    <strong>新建素材</strong>
-                    <span>录入提示词、说明文案，或上传图片资产。</span>
+                    <span className="assets-empty-card-icon">
+                        <Plus />
+                    </span>
+                    <strong>{t("assets:new-asset-4")}</strong>
+                    <span>{t("assets:enter-prompts-and-notes-or-upload-image-assets")}</span>
                 </button>
                 <button type="button" className="assets-empty-card" onClick={onImport}>
-                    <span className="assets-empty-card-icon"><FileUp /></span>
-                    <strong>导入素材包</strong>
-                    <span>从素材压缩包一键恢复旧资产，继续创作。</span>
+                    <span className="assets-empty-card-icon">
+                        <FileUp />
+                    </span>
+                    <strong>{t("assets:import-asset-archive-2")}</strong>
+                    <span>{t("assets:restore-old-assets-from-an-archive-in-one-click-and-keep-creating")}</span>
                 </button>
                 <button type="button" className="assets-empty-card" onClick={onGoCanvas}>
-                    <span className="assets-empty-card-icon"><Clapperboard /></span>
-                    <strong>去画布保存</strong>
-                    <span>把画布上满意的镜头与画面留档进素材库。</span>
+                    <span className="assets-empty-card-icon">
+                        <Clapperboard />
+                    </span>
+                    <strong>{t("assets:save-from-canvas")}</strong>
+                    <span>{t("assets:archive-shots-and-frames-you-like-from-the-canvas-into-the-asset-library")}</span>
                 </button>
             </div>
         </div>
     );
 }
 
-function AssetFilterGroup({ title, options, value, counts, onChange, className = "" }: { title: string; options: Array<{ label: string; value: string }>; value: string; counts: Map<string, number>; onChange: (value: string) => void; className?: string }) {
+function AssetFilterGroup({
+    title,
+    options,
+    value,
+    counts,
+    onChange,
+    className = "",
+}: {
+    title: string;
+    options: Array<{ label: string; value: string }>;
+    value: string;
+    counts: Map<string, number>;
+    onChange: (value: string) => void;
+    className?: string;
+}) {
     return (
         <div className={className}>
             <div className="mb-1.5 px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">{title}</div>
@@ -630,26 +839,38 @@ function AssetFilterGroup({ title, options, value, counts, onChange, className =
 }
 
 function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAsset | null; onClose: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void }) {
+    const { t } = useTranslation("canvas");
     const facts = asset ? assetArchiveFacts(asset) : [];
     const KindIcon = asset ? assetKindIcons[asset.kind] : Clapperboard;
     return (
-        <Drawer className="library-drawer" title="素材档案" open={Boolean(asset)} size="large" onClose={onClose}>
+        <Drawer className="library-drawer" title={t("assets:asset-archive")} open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
                 <div className="space-y-4">
                     <div className="asset-archive-header">
-                        <span className="asset-archive-header-icon"><KindIcon /></span>
+                        <span className="asset-archive-header-icon">
+                            <KindIcon />
+                        </span>
                         <div className="min-w-0">
                             <h2 className="asset-archive-title">{asset.title}</h2>
-                            <p className="asset-archive-subtitle">{assetCategoryLabel(asset.category)} · {formatAssetDateTime(asset.createdAt)} 创建</p>
+                            <p className="asset-archive-subtitle">
+                                {assetCategoryLabel(asset.category)} · {formatAssetDateTime(asset.createdAt)} {t("assets:create-2")}
+                            </p>
                         </div>
                     </div>
                     <div className="asset-archive-preview">
                         {asset.kind === "text" ? (
                             <div className="asset-archive-preview-note">{asset.data.content}</div>
                         ) : asset.kind === "audio" ? (
-                            <div className="asset-archive-audio"><audio src={asset.data.url} controls /></div>
+                            <div className="asset-archive-audio">
+                                <audio src={asset.data.url} controls />
+                            </div>
                         ) : asset.kind === "model" ? (
-                            <div className="asset-archive-preview-model"><Box /><span>{asset.data.fileName} · {formatBytes(asset.data.bytes)}</span></div>
+                            <div className="asset-archive-preview-model">
+                                <Box />
+                                <span>
+                                    {asset.data.fileName} · {formatBytes(asset.data.bytes)}
+                                </span>
+                            </div>
                         ) : asset.kind === "video" ? (
                             <video src={asset.data.url} controls className="asset-archive-preview-media" />
                         ) : (
@@ -658,7 +879,9 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAss
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                         {(asset.tags || []).map((tag) => (
-                            <Tag key={tag} className="m-0">{tag}</Tag>
+                            <Tag key={tag} className="m-0">
+                                {tag}
+                            </Tag>
                         ))}
                         <StorageTag asset={asset} />
                     </div>
@@ -666,23 +889,33 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAss
                         {facts.map((fact) => (
                             <div key={fact.label} className="asset-archive-fact">
                                 <span className="asset-archive-fact-label">{fact.label}</span>
-                                <span className="asset-archive-fact-value" title={fact.value}>{fact.value}</span>
+                                <span className="asset-archive-fact-value" title={fact.value}>
+                                    {fact.value}
+                                </span>
                             </div>
                         ))}
                     </div>
-                    <div className="asset-archive-link"><Link2 /><span>所属项目</span><strong>{assetProjectLabel(asset)}</strong></div>
+                    <div className="asset-archive-link">
+                        <Link2 />
+                        <span>{t("assets:project")}</span>
+                        <strong>{assetProjectLabel(asset)}</strong>
+                    </div>
                     {asset.note ? (
                         <div className="asset-archive-section">
-                            <span className="asset-archive-section-title">备注</span>
+                            <span className="asset-archive-section-title">{t("assets:notes-2")}</span>
                             <p className="asset-archive-section-body">{asset.note}</p>
                         </div>
                     ) : null}
                     <div className="asset-archive-actions">
                         {asset.kind === "text" ? (
-                            <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>复制文本</Button>
+                            <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
+                                {t("assets:copy-text-2")}
+                            </Button>
                         ) : null}
                         {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? (
-                            <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>{assetDownloadLabel(asset)}</Button>
+                            <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>
+                                {assetDownloadLabel(asset)}
+                            </Button>
                         ) : null}
                     </div>
                 </div>
@@ -693,23 +926,23 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAss
 
 function assetArchiveFacts(asset: LibraryAsset) {
     const facts: Array<{ label: string; value: string }> = [
-        { label: "类型", value: assetKindLabel(asset.kind) },
-        { label: "分类", value: assetCategoryLabel(asset.category) },
+        { label: translate("assets:type"), value: assetKindLabel(asset.kind) },
+        { label: translate("assets:category-2"), value: assetCategoryLabel(asset.category) },
     ];
     if (asset.kind === "image" || asset.kind === "video") {
-        facts.push({ label: "尺寸", value: `${asset.data.width}x${asset.data.height}` });
+        facts.push({ label: t("assets:size"), value: `${asset.data.width}x${asset.data.height}` });
     }
     if (asset.kind === "video" || asset.kind === "audio") {
-        facts.push({ label: "时长", value: formatAssetClock(asset.data.durationMs) || "未知" });
+        facts.push({ label: translate("assets:duration"), value: formatAssetClock(asset.data.durationMs) || translate("assets:unknown") });
     }
     if (asset.kind !== "text") {
-        facts.push({ label: "大小", value: formatBytes(asset.data.bytes) });
-        facts.push({ label: "格式", value: asset.data.mimeType });
-        facts.push({ label: "存储", value: resourceStorageLabel(asset.data.storageKey) });
+        facts.push({ label: translate("assets:file-size"), value: formatBytes(asset.data.bytes) });
+        facts.push({ label: translate("assets:format"), value: asset.data.mimeType });
+        facts.push({ label: translate("assets:storage"), value: resourceStorageLabel(asset.data.storageKey) });
     }
-    facts.push({ label: "来源", value: asset.source || "未标注" });
-    facts.push({ label: "创建", value: formatAssetDateTime(asset.createdAt) });
-    facts.push({ label: "更新", value: formatAssetDateTime(asset.updatedAt) });
+    facts.push({ label: translate("assets:source"), value: asset.source || translate("assets:not-labeled") });
+    facts.push({ label: translate("assets:create-2"), value: formatAssetDateTime(asset.createdAt) });
+    facts.push({ label: translate("assets:update"), value: formatAssetDateTime(asset.updatedAt) });
     return facts;
 }
 
@@ -736,28 +969,28 @@ function assetSearchText(asset: LibraryAsset) {
 }
 
 function assetCategoryLabel(category?: AssetCategory) {
-    return categoryOptions.find((item) => item.value === (category || "other"))?.label || "其他";
+    return categoryOptions.find((item) => item.value === (category || "other"))?.label || translate("assets:other");
 }
 
 function assetProjectLabel(asset: LibraryAsset) {
     const projectName = asset.metadata?.projectName;
     if (typeof projectName === "string" && projectName.trim()) return projectName;
-    return Array.isArray(asset.metadata?.projectIds) && asset.metadata.projectIds.length ? "已关联项目" : "未关联项目";
+    return Array.isArray(asset.metadata?.projectIds) && asset.metadata.projectIds.length ? translate("assets:linked-to-project") : translate("assets:not-linked-to-a-project");
 }
 
 function assetKindLabel(kind: AssetKind) {
-    return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "model" ? "3D 模型" : "文本";
+    return kind === "image" ? translate("assets:image") : kind === "video" ? translate("assets:video") : kind === "audio" ? translate("assets:audio") : kind === "model" ? translate("assets:3d-models") : translate("assets:text");
 }
 
 function assetDownloadLabel(asset: LibraryAsset) {
-    if (asset.kind === "video") return "下载视频";
-    if (asset.kind === "audio") return "下载音频";
-    if (asset.kind === "model") return "下载模型";
-    return "下载图片";
+    if (asset.kind === "video") return translate("assets:download-video");
+    if (asset.kind === "audio") return translate("assets:download-audio");
+    if (asset.kind === "model") return translate("assets:download-model");
+    return translate("assets:download-image");
 }
 
 function formatAssetDuration(durationMs?: number) {
-    if (!durationMs) return "时长未知";
+    if (!durationMs) return translate("assets:unknown-duration");
     return `${Math.round(durationMs / 100) / 10} 秒`;
 }
 

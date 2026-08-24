@@ -9,9 +9,11 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useTranslation } from "react-i18next";
 
 // 顶栏是绝对定位浮层，面板必须按调用方传入的 topInset 避让；专注模式隐藏顶栏时传小间距。
 export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(--canvas-topbar-offset)" }: { tasks: GenerationTask[]; align?: "left" | "right"; topInset?: string }) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const reducedMotion = useReducedMotion();
@@ -50,7 +52,7 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                         layout
                         className="pointer-events-auto overflow-hidden rounded-[var(--panel-radius)] border backdrop-blur-2xl"
                         style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
-                        aria-label="当前画布生成任务"
+                        aria-label={t("domain:generation-tasks-on-this-canvas")}
                     >
                         <motion.button
                             type="button"
@@ -65,9 +67,9 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                     <ListTodo className="size-4" />
                                 </span>
                                 <span className="min-w-0">
-                                    <span className="block text-sm font-semibold leading-5">生成任务</span>
+                                    <span className="block text-sm font-semibold leading-5">{t("domain:generation-tasks-2")}</span>
                                     <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} aria-live="polite">
-                                        当前画布 · {tasks.length} 个进行中
+                                        {t("domain:current-canvas")} {tasks.length} {t("domain:in-progress")}
                                     </span>
                                 </span>
                             </span>
@@ -127,12 +129,13 @@ function ActiveTaskCard({
     reducedMotion: boolean;
     creditsEnabled: boolean;
 }) {
+    const { t } = useTranslation("canvas");
     const showsProgress = generationTaskShowsProgress(task);
     const progress = showsProgress && typeof task.progress === "number" ? Math.max(0, Math.min(100, Math.round(task.progress))) : showsProgress && task.status === "queued" ? 0 : undefined;
     const startedAt = task.startedAt || task.createdAt;
     const elapsedMs = Math.max(0, now - parseTime(startedAt));
-    const durationLabel = `${task.status === "queued" ? "已等待" : "已运行"} ${formatDuration(elapsedMs)}`;
-    const billingLabel = task.billing ? `冻结 ${formatCredits(task.billing.amountMicrocredits)} 积分` : "未计费";
+    const durationLabel = `${task.status === "queued" ? t("domain:waited") : t("domain:running-for")} ${formatDuration(elapsedMs)}`;
+    const billingLabel = task.billing ? `${t("admin:frozen")} ${formatCredits(task.billing.amountMicrocredits)} ${t("domain:credits-3")}` : t("domain:not-billed");
     const statusTone = task.status === "running" ? theme.accent.primary : theme.node.muted;
     const transition = reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel;
 
@@ -216,7 +219,7 @@ function ActiveTaskCard({
                         style={{ borderColor: theme.toolbar.border, color: theme.node.muted }}
                     >
                         <div className="flex items-center justify-between gap-2">
-                            <span>当前阶段</span>
+                            <span>{t("canvas:current-stage-2")}</span>
                             <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>
                                 {generationTaskStageLabel(task)}
                             </span>

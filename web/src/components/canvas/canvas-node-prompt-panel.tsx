@@ -21,6 +21,7 @@ import { CanvasPresetPicker, type CanvasPromptPreset } from "./canvas-preset-pic
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { useTranslation } from "react-i18next";
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -47,6 +48,7 @@ const PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING = 20;
 const PROMPT_EDITOR_MAX_LINES = 8;
 
 export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+    const { t } = useTranslation("canvas");
     const globalConfig = useEffectiveConfig();
     const themeName = useThemeStore((state) => state.theme);
     const theme = canvasThemes[themeName];
@@ -64,7 +66,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [expandedPromptContentHeight, setExpandedPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, true));
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
     const [manualExpandedPromptHeight, setManualExpandedPromptHeight] = useState<number | null>(null);
-    const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
+    // #98 决策2：B区参数区折叠状态（手风琴）
+    const [paramsExpanded, setParamsExpanded] = useState(false);
     const activeReferences = mentionReferences.filter((item) => item.active && item.kind !== "skill");
     const requirements: ModelRequirements = {
         capability: mode,
@@ -77,19 +80,22 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         },
         videoOperation: node.metadata?.videoEditOperation,
         videoSeconds: mode === "video" ? node.metadata?.seconds || globalConfig.videoSeconds : undefined,
-        options: modelRequestOptions({
-            ...globalConfig,
-            size: node.metadata?.size || globalConfig.size,
-            quality: node.metadata?.quality || globalConfig.quality,
-            count: String(node.metadata?.count || globalConfig.count),
-            videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
-            vquality: node.metadata?.vquality || globalConfig.vquality,
-            videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio,
-            videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark,
-            audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice,
-            audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat,
-            audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed,
-        }, mode),
+        options: modelRequestOptions(
+            {
+                ...globalConfig,
+                size: node.metadata?.size || globalConfig.size,
+                quality: node.metadata?.quality || globalConfig.quality,
+                count: String(node.metadata?.count || globalConfig.count),
+                videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds,
+                vquality: node.metadata?.vquality || globalConfig.vquality,
+                videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio,
+                videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark,
+                audioVoice: node.metadata?.audioVoice || globalConfig.audioVoice,
+                audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat,
+                audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed,
+            },
+            mode,
+        ),
     };
     const config = buildNodeConfig(globalConfig, node, mode, requirements);
     const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
@@ -191,20 +197,23 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     <span className="grid size-3.5 shrink-0 place-items-center" style={{ color: monochromeAccent }}>
                         <GenerationModeIcon mode={mode} />
                     </span>
-                    <span className="truncate text-[var(--fs-tiny)] font-medium">{modeDisplayName(mode)}创作</span>
+                    <span className="truncate text-[var(--fs-tiny)] font-medium">
+                        {modeDisplayName(mode)}
+                        {t("canvas:create-2")}
+                    </span>
                 </div>
             )}
             {!simpleMode ? <CanvasPresetPicker mode={mode} skillReferences={skillReferences} open={expanded ? expandedPresetOpen : presetOpen} onOpenChange={expanded ? setExpandedPresetOpen : setPresetOpen} onSelect={applyPreset} dense /> : null}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-                {activeReferenceCount ? <ComposerPill theme={theme} icon={<Boxes className="size-2.5" />} label={`参考 ${activeReferenceCount}`} /> : null}
+                {activeReferenceCount ? <ComposerPill theme={theme} icon={<Boxes className="size-2.5" />} label={t("canvas:references-param", { activeReferenceCount: activeReferenceCount })} /> : null}
                 {!expanded && canExpandPrompt ? (
-                    <Tooltip title="放大编辑">
+                    <Tooltip title={t("canvas:zoom-edit-3")}>
                         <button
                             type="button"
                             className="canvas-node-composer-icon-button grid size-6 shrink-0 place-items-center rounded-md transition-[background-color,filter] hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 motion-reduce:hover:translate-y-0"
                             style={{ background: controlSurface, color: theme.node.text, outlineColor: monochromeAccent }}
                             onClick={() => setExpandedPromptOpen(true)}
-                            aria-label="放大编辑提示词"
+                            aria-label={t("canvas:zoom-edit-prompt")}
                         >
                             <Maximize2 className="size-3" />
                         </button>
@@ -217,7 +226,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const renderSubmitButton = (expanded: boolean) => {
         const showCost = creditsEnabled && credits !== null;
         const formattedCredits = credits?.toLocaleString();
-        const actionLabel = isRunning ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，生成` : "生成";
+        const actionLabel = isRunning ? t("canvas:generating-3") : showCost ? t("canvas:estimated-cost-param-credits-generate", { formattedCredits: formattedCredits }) : t("canvas:generate-5");
         return (
             <Button
                 type="text"
@@ -251,7 +260,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         simpleMode ? (
             <div className="canvas-node-composer-footer">
                 <span className="min-w-0 truncate px-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
-                    {activeReferenceCount ? `已连接 ${activeReferenceCount} 个素材` : "将使用默认模型与参数"}
+                    {activeReferenceCount ? t("canvas:param-assets-connected", { activeReferenceCount: activeReferenceCount }) : t("canvas:default-model-and-parameters-will-be-used")}
                 </span>
                 {renderSubmitButton(expanded)}
             </div>
@@ -274,14 +283,14 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 </div>
                 <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
                     {mode === "text" ? (
-                        <Tooltip title={`文本生成份数（默认 1，可在生成配置中调整）`}>
+                        <Tooltip title={t("canvas:text-output-count-tooltip")}>
                             <InputNumber
                                 size="small"
                                 min={1}
                                 max={15}
                                 value={Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.textCount) || 1))))}
                                 onChange={(value) => onConfigChange(node.id, { textCount: Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 1))) })}
-                                aria-label="文本生成份数"
+                                aria-label={t("canvas:text-output-count")}
                                 className="!w-14 !h-7 [&_.ant-input-number-input]:!text-[var(--fs-tiny)]"
                             />
                         </Tooltip>
@@ -295,17 +304,9 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                             onOpenChange={expanded ? undefined : onImageSettingsOpenChange}
                         />
                     ) : mode === "video" ? (
-                        <CanvasVideoSettingsPopover
-                            config={config}
-                            buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
-                            onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
-                        />
+                        <CanvasVideoSettingsPopover config={config} buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                     ) : mode === "audio" ? (
-                        <CanvasAudioSettingsPopover
-                            config={config}
-                            buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
-                            onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))}
-                        />
+                        <CanvasAudioSettingsPopover config={config} buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                     ) : null}
                     {renderSubmitButton(expanded)}
                 </div>
@@ -326,37 +327,28 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         onChange={updatePrompt}
                         onContentSizeChange={expanded ? setExpandedPromptContentHeight : setPromptContentHeight}
                         containerClassName="min-h-0 flex-1"
-                        className={expanded
-                            ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
-                            : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-1.5 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"}
+                        className={
+                            expanded
+                                ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2.5 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                                : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2.5 py-1.5 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                        }
                         style={{ color: theme.node.text, outline: "none", boxShadow: "none" }}
                         placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
-                        aria-label={`${modeDisplayName(mode)}提示词`}
+                        aria-label={t("canvas:mode-prompt-aria", { mode: modeDisplayName(mode) })}
                     />
                 </div>
-                <PromptResizeHandle
-                    height={height}
-                    min={bounds.min}
-                    max={bounds.max}
-                    onResize={expanded ? setManualExpandedPromptHeight : setManualPromptHeight}
-                />
+                <PromptResizeHandle height={height} min={bounds.min} max={bounds.max} onResize={expanded ? setManualExpandedPromptHeight : setManualPromptHeight} />
             </>
         );
     };
 
     return (
-        <div
-            className="canvas-node-composer"
-            style={composerSurfaceStyle}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            onWheel={(event) => event.stopPropagation()}
-        >
+        <div className="canvas-node-composer" style={composerSurfaceStyle} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             {renderComposerHeader(false)}
 
             {renderPromptEditor(false)}
 
-            {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
+            {/* Zone B: parameters (decision #98-2, accordion, collapsed by default) */}
             {hasVideoPromptTools ? (
                 <div className="canvas-node-composer-parameters overflow-hidden">
                     <button
@@ -365,10 +357,10 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         style={{ color: theme.node.muted }}
                         onClick={() => setParamsExpanded(!paramsExpanded)}
                         aria-expanded={paramsExpanded}
-                        aria-label={paramsExpanded ? "收起参数" : "展开参数"}
+                        aria-label={paramsExpanded ? t("canvas:collapse-parameters") : t("canvas:expand-parameters")}
                     >
                         <SlidersHorizontal className="size-3" strokeWidth={1.8} />
-                        <span className="flex-1 text-left">参数</span>
+                        <span className="flex-1 text-left">{t("canvas:parameters-2")}</span>
                         <ChevronDown className={`size-3 transition-transform duration-200 ${paramsExpanded ? "rotate-180" : ""}`} strokeWidth={1.8} />
                     </button>
                     {paramsExpanded ? (
@@ -430,20 +422,22 @@ function GenerationModeIcon({ mode }: { mode: CanvasNodeGenerationMode }) {
 }
 
 function modeDisplayName(mode: CanvasNodeGenerationMode) {
-    if (mode === "image") return "图片";
-    if (mode === "video") return "视频";
-    if (mode === "audio") return "音频";
-    return "文本";
+    const { t } = useTranslation("canvas");
+    if (mode === "image") return t("canvas:images-3");
+    if (mode === "video") return t("canvas:videos-4");
+    if (mode === "audio") return t("canvas:audio-3");
+    return t("canvas:texts-2");
 }
 
 function ConnectedReferenceShelf({ references, theme, onInsert }: { references: CanvasResourceReference[]; theme: CanvasTheme; onInsert: (reference: CanvasResourceReference) => void }) {
+    const { t } = useTranslation("canvas");
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill");
     const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
     if (!activeReferences.length) return null;
 
     return (
         <>
-            <div className="canvas-node-composer-references thin-scrollbar" role="group" aria-label="已连接素材">
+            <div className="canvas-node-composer-references thin-scrollbar" role="group" aria-label={t("canvas:connected-assets")}>
                 {activeReferences.map((reference) => {
                     const canPreview = (reference.kind === "image" || reference.kind === "character") && Boolean(reference.previewUrl);
                     return (
@@ -452,13 +446,13 @@ function ConnectedReferenceShelf({ references, theme, onInsert }: { references: 
                                 type="button"
                                 className="canvas-node-reference-preview"
                                 style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
-                                title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
-                                aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
+                                title={canPreview ? t("canvas:preview-param", { title: reference.title }) : t("canvas:insert-param", { label: reference.label })}
+                                aria-label={canPreview ? t("canvas:preview-param", { title: reference.title }) : t("canvas:insert-param", { label: reference.label })}
                                 onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
                             >
                                 <ReferenceThumbnail reference={reference} />
                             </button>
-                            <button type="button" className="canvas-node-reference-label" title={`插入 @${reference.label}`} onClick={() => onInsert(reference)}>
+                            <button type="button" className="canvas-node-reference-label" title={t("canvas:insert-param", { label: reference.label })} onClick={() => onInsert(reference)}>
                                 <AtSign className="size-2.5" />
                                 <span>{reference.label}</span>
                             </button>
@@ -499,6 +493,7 @@ function ReferenceThumbnail({ reference }: { reference: CanvasResourceReference 
 }
 
 function PromptResizeHandle({ height, min, max, onResize }: { height: number; min: number; max: number; onResize: (height: number) => void }) {
+    const { t } = useTranslation("canvas");
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -528,7 +523,7 @@ function PromptResizeHandle({ height, min, max, onResize }: { height: number; mi
             type="button"
             className="canvas-node-composer-resize-handle"
             role="separator"
-            aria-label="调整提示词输入高度"
+            aria-label={t("canvas:adjust-prompt-input-height")}
             aria-orientation="horizontal"
             aria-valuemin={min}
             aria-valuemax={max}
@@ -642,10 +637,11 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
 }
 
 function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean) {
-    if (mode === "video") return "描述要生成的视频内容";
-    if (mode === "audio") return "描述要生成的音频内容";
-    if (mode === "image") return hasImageContent ? "输入新提示词，重新生成当前图片" : "描述要生成的图片内容";
-    return hasTextContent ? "请输入你想要将本段文本修改成什么" : "请输入你想要生成的文本内容";
+    const { t } = useTranslation("canvas");
+    if (mode === "video") return t("canvas:describe-the-video-to-generate");
+    if (mode === "audio") return t("canvas:describe-the-audio-to-generate");
+    if (mode === "image") return hasImageContent ? t("canvas:enter-a-new-prompt-to-regenerate-this-image") : t("canvas:describe-the-image-to-generate");
+    return hasTextContent ? t("canvas:describe-what-this-text-should-be-changed-into") : t("canvas:enter-the-text-you-want-to-generate");
 }
 
 function videoConfigPatch(key: keyof AiConfig, value: string) {

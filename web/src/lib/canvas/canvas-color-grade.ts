@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import type { ReferenceImage } from "@/types/image";
 
@@ -36,7 +37,7 @@ async function renderGradedBlob(url: string, grade: CanvasColorGrade) {
     image.crossOrigin = "anonymous";
     await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
-        image.onerror = () => reject(new Error("源图无法读取（可能不允许跨域）"));
+        image.onerror = () => reject(new Error(t("canvas:source-image-could-not-be-read-cross-origin-access-may-be-blocked")));
         image.src = url;
     });
 
@@ -44,15 +45,15 @@ async function renderGradedBlob(url: string, grade: CanvasColorGrade) {
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("无法创建画布上下文");
+    if (!ctx) throw new Error(t("canvas:unable-to-create-the-canvas-context"));
     // ctx.filter 在少数浏览器上不存在——那会静默导出一张未调色的图，
     // 与用户看到的预览不一致。宁可明确失败。
-    if (!("filter" in ctx)) throw new Error("当前浏览器不支持导出调色结果，请换用 Chrome / Edge");
+    if (!("filter" in ctx)) throw new Error(t("canvas:this-browser-cannot-export-color-grade-results-use-chrome-or-edge"));
     ctx.filter = colorGradeCssFilter(grade);
     ctx.drawImage(image, 0, 0);
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (!blob) throw new Error("调色结果导出失败");
+    if (!blob) throw new Error(t("canvas:failed-to-export-the-color-grade-result"));
     return { blob, width: canvas.width, height: canvas.height };
 }
 
@@ -82,6 +83,6 @@ export async function resolveCanvasColorGradeReference(image: ReferenceImage): P
         publishedCache.set(cacheKey(source.url, source.grade), { url, storageKey, type });
         return { ...image, dataUrl: "", url, storageKey, type };
     } catch (error) {
-        throw new Error(error instanceof Error ? `调色参考图生成失败：${error.message}` : "调色参考图生成失败");
+        throw new Error(error instanceof Error ? t("canvas:failed-to-generate-color-grade-reference-image-param", { message: error.message }) : t("canvas:failed-to-generate-color-grade-reference-image"));
     }
 }

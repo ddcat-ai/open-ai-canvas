@@ -1,0 +1,162 @@
+0	系统渠道由管理员维护	src/pages/settings/channel-settings-pane.tsx
+1	当前渠道	src/pages/settings/channel-settings-pane.tsx
+2	没有可拉取的自定义渠道，请先填写有效 Base URL 和 API Key	src/pages/settings/channel-settings-pane.tsx
+3	已更新 {{length}} 个渠道的模型	src/pages/settings/channel-settings-pane.tsx
+4	未返回模型	src/pages/settings/channel-settings-pane.tsx
+5	批量读取模型失败，原有模型列表未改动	src/pages/settings/channel-settings-pane.tsx
+6	渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。	src/pages/settings/channel-settings-pane.tsx
+7	拉取全部	src/pages/settings/channel-settings-pane.tsx
+8	新增渠道	src/pages/settings/channel-settings-pane.tsx
+9	· 已保存	src/pages/settings/channel-settings-pane.tsx
+10	个模型	src/pages/settings/channel-settings-pane.tsx
+11	展开渠道配置	src/pages/settings/channel-settings-pane.tsx
+12	收起渠道配置	src/pages/settings/channel-settings-pane.tsx
+13	展开	src/pages/settings/channel-settings-pane.tsx
+14	收起	src/pages/settings/channel-settings-pane.tsx
+15	删除自定义渠道？	src/pages/settings/channel-settings-pane.tsx
+16	该渠道关联的模型选择会同时移除。	src/pages/settings/channel-settings-pane.tsx
+17	连接信息	src/pages/settings/channel-settings-pane.tsx
+18	例如：我的 NewAPI	src/pages/settings/channel-settings-pane.tsx
+19	渠道连接类型	src/pages/settings/channel-settings-pane.tsx
+20	仅用于拉取模型目录；模型能力和请求协议在下方统一配置。	src/pages/settings/channel-settings-pane.tsx
+21	OpenAI 兼容	src/pages/settings/channel-settings-pane.tsx
+22	Gemini 原生	src/pages/settings/channel-settings-pane.tsx
+23	填写 Gemini API Key	src/pages/settings/channel-settings-pane.tsx
+24	填写当前渠道 API Key	src/pages/settings/channel-settings-pane.tsx
+25	即梦等 AK/SK 协议需要；其他协议留空。	src/pages/settings/channel-settings-pane.tsx
+26	填写 Secret Key	src/pages/settings/channel-settings-pane.tsx
+27	模型与能力	src/pages/settings/channel-settings-pane.tsx
+28	模型列表	src/pages/settings/channel-settings-pane.tsx
+29	输入模型名，或点击拉取模型	src/pages/settings/channel-settings-pane.tsx
+30	当前没有自定义渠道	src/pages/settings/channel-settings-pane.tsx
+31	管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。	src/pages/settings/channel-settings-pane.tsx
+32	新增自定义渠道	src/pages/settings/channel-settings-pane.tsx
+33	请添加至少一个模型	src/pages/settings/channel-settings-pane.tsx
+34	不允许访问本机	src/pages/settings/channel-settings-pane.tsx
+35	不允许访问保留地址	src/pages/settings/channel-settings-pane.tsx
+36	{{detail}}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS	src/pages/settings/channel-settings-pane.tsx
+37	{{detail}}；也可以直接在模型列表中手动输入模型名	src/pages/settings/channel-settings-pane.tsx
+38	Base URL 只支持 HTTP 或 HTTPS	src/pages/settings/channel-settings-pane.tsx
+39	Base URL 格式不正确	src/pages/settings/channel-settings-pane.tsx
+40	请填写 API Key / Access Key	src/pages/settings/channel-settings-pane.tsx
+41	当前协议需要填写 Secret Key	src/pages/settings/channel-settings-pane.tsx
+42	模型测试通过：{{detail}}	src/pages/settings/channel-video-pricing.tsx
+43	模型能力与请求协议	src/pages/settings/channel-video-pricing.tsx
+44	与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用	src/pages/settings/channel-video-pricing.tsx
+45	待配置请求协议	src/pages/settings/channel-video-pricing.tsx
+46	配置使用	src/pages/settings/channel-video-pricing.tsx
+47	{{activeModel}} · 使用配置	src/pages/settings/channel-video-pricing.tsx
+48	模型使用配置	src/pages/settings/channel-video-pricing.tsx
+49	这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。	src/pages/settings/channel-video-pricing.tsx
+50	每百万视频 Token 价格	src/pages/settings/channel-video-pricing.tsx
+51	每秒价格	src/pages/settings/channel-video-pricing.tsx
+52	每次价格	src/pages/settings/channel-video-pricing.tsx
+53	百万 Token	src/pages/settings/channel-video-pricing.tsx, src/pages/settings/model-default-grid.tsx
+54	按火山方舟任务查询响应的 usage.completion_tokens 结算。	src/pages/settings/channel-video-pricing.tsx
+55	系统模型刷新失败：{{message}}	src/pages/settings/index.tsx
+56	系统模型刷新失败，继续使用本地缓存	src/pages/settings/index.tsx
+57	请先完成至少一个渠道的 Base URL、API Key 和模型配置	src/pages/settings/index.tsx
+58	当前没有可用渠道，请先完成连接信息和模型配置	src/pages/settings/index.tsx
+59	当前没有可用的系统模型，请联系管理员配置系统渠道	src/pages/settings/index.tsx
+60	配置已保存，正在返回创作页面	src/pages/settings/index.tsx
+61	按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。	src/pages/settings/index.tsx
+62	画布、视频与音频默认值，节点内仍可单独覆盖。	src/pages/settings/index.tsx
+63	画布生成	src/pages/settings/index.tsx
+64	设置新建生成任务时使用的初始值，节点内仍可单独覆盖。	src/pages/settings/index.tsx
+65	默认生图张数	src/pages/settings/index.tsx
+66	音频默认值	src/pages/settings/index.tsx
+67	用于新建音频节点和未单独设置参数的生成任务。	src/pages/settings/index.tsx
+68	默认声音	src/pages/settings/index.tsx
+69	文件格式	src/pages/settings/index.tsx
+70	音频指令	src/pages/settings/index.tsx
+71	在音频节点没有单独填写时使用。	src/pages/settings/index.tsx
+72	默认音频指令	src/pages/settings/index.tsx
+73	本机连接	src/pages/settings/local-cli-settings.tsx
+74	本机服务已连接，CLI 状态会自动同步。	src/pages/settings/local-cli-settings.tsx
+75	正在检测本机服务；请确认已启动当前版本。	src/pages/settings/local-cli-settings.tsx
+76	重新连接	src/pages/settings/local-cli-settings.tsx
+77	官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。	src/pages/settings/local-cli-settings.tsx
+78	刷新状态	src/pages/settings/local-cli-settings.tsx
+79	直接读取当前 Windows 用户的官方即梦 CLI 登录状态。	src/pages/settings/local-cli-settings.tsx
+80	连接本机服务后自动检测	src/pages/settings/local-cli-settings.tsx
+81	重新连接本机服务后，将自动读取官方 CLI 状态。	src/pages/settings/local-cli-settings.tsx
+82	账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。	src/pages/settings/local-cli-settings.tsx
+83	任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。	src/pages/settings/local-cli-settings.tsx
+84	官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。	src/pages/settings/local-cli-settings.tsx
+85	本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。	src/pages/settings/local-cli-settings.tsx
+86	模块未加载	src/pages/settings/local-cli-settings.tsx
+87	正在检测	src/pages/settings/local-cli-settings.tsx
+88	未安装	src/pages/settings/local-cli-settings.tsx
+89	等待官方授权	src/pages/settings/local-cli-settings.tsx
+90	已登录	src/pages/settings/local-cli-settings.tsx
+91	上次刷新积分 {{creditObservedAt}}	src/pages/settings/local-cli-settings.tsx
+92	未登录	src/pages/settings/local-cli-settings.tsx
+93	检测失败	src/pages/settings/local-cli-settings.tsx
+94	请先连接已加载 Dreamina 的本机运行时	src/pages/settings/local-cli-settings.tsx
+95	Dreamina CLI 已退出登录	src/pages/settings/local-cli-settings.tsx
+96	请打开官方验证页完成授权，再刷新状态	src/pages/settings/local-cli-settings.tsx
+97	Dreamina CLI 操作失败	src/pages/settings/local-cli-settings.tsx
+98	未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。	src/pages/settings/local-cli-settings.tsx
+99	官方验证用户码	src/pages/settings/local-cli-settings.tsx
+100	有效期至	src/pages/settings/local-cli-settings.tsx
+101	打开官方验证页	src/pages/settings/local-cli-settings.tsx
+102	退出 Dreamina CLI？	src/pages/settings/local-cli-settings.tsx
+103	只清除当前 OS 用户的官方 CLI 登录状态。	src/pages/settings/local-cli-settings.tsx
+104	退出	src/pages/settings/local-cli-settings.tsx
+105	需要重新连接	src/pages/settings/local-cli-settings.tsx
+106	未发现	src/pages/settings/local-cli-settings.tsx
+107	版本不兼容	src/pages/settings/local-cli-settings.tsx
+108	运行时错误	src/pages/settings/local-cli-settings.tsx
+109	尚未检测	src/pages/settings/local-cli-settings.tsx
+110	当前 Runtime 未加载 Dreamina 模块，请更新并重启 Runtime。	src/pages/settings/local-cli-settings.tsx
+111	正在检测 Dreamina CLI…	src/pages/settings/local-cli-settings.tsx
+112	默认生图模型	src/pages/settings/model-default-grid.tsx
+113	图片生成、图像编辑与视觉探索	src/pages/settings/model-default-grid.tsx
+114	默认视频模型	src/pages/settings/model-default-grid.tsx
+115	文生视频、图生视频与镜头延展	src/pages/settings/model-default-grid.tsx
+116	默认文本模型	src/pages/settings/model-default-grid.tsx
+117	提示词改写、脚本与结构化文本	src/pages/settings/model-default-grid.tsx
+118	默认音频模型	src/pages/settings/model-default-grid.tsx
+119	个可用	src/pages/settings/model-default-grid.tsx
+120	系统	src/pages/settings/model-default-grid.tsx
+121	当前渠道中没有可用的	src/pages/settings/model-default-grid.tsx
+122	跟随平台	src/pages/settings/prompt-preferences-pane.tsx
+123	追加要求	src/pages/settings/prompt-preferences-pane.tsx
+124	高级改写	src/pages/settings/prompt-preferences-pane.tsx
+125	读取提示词偏好失败	src/pages/settings/prompt-preferences-pane.tsx
+126	切换模板并放弃修改？	src/pages/settings/prompt-preferences-pane.tsx
+127	当前模板还有未保存内容。切换后这些修改将丢失。	src/pages/settings/prompt-preferences-pane.tsx
+128	请填写个人提示词内容	src/pages/settings/prompt-preferences-pane.tsx
+129	提示词偏好已保存	src/pages/settings/prompt-preferences-pane.tsx
+130	保存提示词偏好失败	src/pages/settings/prompt-preferences-pane.tsx
+131	恢复平台模板？	src/pages/settings/prompt-preferences-pane.tsx
+132	将删除“{{label}}”的个人定制，后续自动跟随平台版本。	src/pages/settings/prompt-preferences-pane.tsx
+133	恢复平台模板	src/pages/settings/prompt-preferences-pane.tsx
+134	已恢复平台模板	src/pages/settings/prompt-preferences-pane.tsx
+135	恢复平台模板失败	src/pages/settings/prompt-preferences-pane.tsx
+136	加载提示词偏好失败	src/pages/settings/prompt-preferences-pane.tsx
+137	暂无可配置的提示词模板	src/pages/settings/prompt-preferences-pane.tsx
+138	当前没有启用的平台模板	src/pages/settings/prompt-preferences-pane.tsx
+139	{{templateContent}}
+
+【用户个性化创作要求】
+{{appendContent}}	src/pages/settings/prompt-preferences-pane.tsx
+140	 · 已定制	src/pages/settings/prompt-preferences-pane.tsx
+141	撤销修改	src/pages/settings/prompt-preferences-pane.tsx
+142	恢复平台	src/pages/settings/prompt-preferences-pane.tsx
+143	保存更改	src/pages/settings/prompt-preferences-pane.tsx
+144	平台 v	src/pages/settings/prompt-preferences-pane.tsx
+145	平台模板已更新	src/pages/settings/prompt-preferences-pane.tsx
+146	当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。	src/pages/settings/prompt-preferences-pane.tsx
+147	当前平台模板	src/pages/settings/prompt-preferences-pane.tsx
+148	追加个人要求	src/pages/settings/prompt-preferences-pane.tsx
+149	改写创作策略	src/pages/settings/prompt-preferences-pane.tsx
+150	平台升级后自动使用新版本。	src/pages/settings/prompt-preferences-pane.tsx
+151	内容追加在平台策略之后，仍会自动继承平台升级。	src/pages/settings/prompt-preferences-pane.tsx
+152	只替换创作策略；动态项目数据和输出契约仍由服务端强制注入。	src/pages/settings/prompt-preferences-pane.tsx
+153	例如：仙侠项目采用明亮、宏大、高清的休闲剧质感；避免阴森恐怖色调，人物表演自然、轻松。	src/pages/settings/prompt-preferences-pane.tsx
+154	平台提示词模板	src/pages/settings/prompt-preferences-pane.tsx
+155	个人提示词改写	src/pages/settings/prompt-preferences-pane.tsx
+156	平台基线	src/pages/settings/prompt-preferences-pane.tsx
+157	创作策略	src/pages/settings/prompt-preferences-pane.tsx
+158	当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。	src/pages/settings/prompt-preferences-pane.tsx

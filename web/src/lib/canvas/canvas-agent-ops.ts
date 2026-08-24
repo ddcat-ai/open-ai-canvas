@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { nanoid } from "nanoid";
 
 import { getNodeSpec } from "@/constant/canvas";
@@ -68,7 +69,7 @@ export function previewCanvasAgentOps(ops?: CanvasAgentOp[], snapshot?: CanvasAg
             ids.forEach((id) => affectedNodeIds.add(id));
             destructiveCount += Math.max(1, ids.length);
             const names = ids.slice(0, 3).map((id) => nodeById.get(id)?.title || id);
-            items.push(ids.length ? `删除 ${ids.length} 个节点${names.length ? `：${names.join("、")}${ids.length > names.length ? "等" : ""}` : ""}` : `删除全部${canvasNodeTypeLabel(op.nodeType)}`);
+            items.push(ids.length ? `删除 ${ids.length} 个节点${names.length ? `：${names.join("、")}${ids.length > names.length ? t("canvas:etc") : ""}` : ""}` : `删除全部${canvasNodeTypeLabel(op.nodeType)}`);
             return;
         }
         if (op.type === "connect_nodes") {
@@ -80,7 +81,7 @@ export function previewCanvasAgentOps(ops?: CanvasAgentOp[], snapshot?: CanvasAg
         if (op.type === "delete_connections") {
             const count = op.all ? snapshot?.connections.length || 0 : op.ids?.length || (op.id ? 1 : 0);
             destructiveCount += Math.max(1, count);
-            items.push(op.all ? `删除全部 ${count} 条连线` : `删除 ${count || 1} 条连线`);
+            items.push(op.all ? t("canvas:delete-all-param-connections", { count: count }) : `删除 ${count || 1} 条连线`);
             return;
         }
         if (op.type === "run_generation") {
@@ -91,15 +92,15 @@ export function previewCanvasAgentOps(ops?: CanvasAgentOp[], snapshot?: CanvasAg
         }
         if (op.type === "select_nodes") {
             op.ids.forEach((id) => affectedNodeIds.add(id));
-            items.push(`选择 ${op.ids.length} 个节点`);
+            items.push(t("canvas:select-param-nodes", { length: op.ids.length }));
             return;
         }
-        if (op.type === "set_viewport") items.push("调整当前画布视图");
+        if (op.type === "set_viewport") items.push(t("canvas:adjust-the-current-canvas-view"));
     });
 
     const warnings = [];
-    if (destructiveCount) warnings.push("包含删除操作，批准后可从最近 Agent 批次逐步撤销。");
-    if (generationCount) warnings.push("生成任务可能产生模型费用，画布撤销不会取消已提交任务。");
+    if (destructiveCount) warnings.push(t("canvas:includes-delete-operations-after-approval-you-can-undo-step-by-step-from"));
+    if (generationCount) warnings.push(t("canvas:generation-tasks-may-incur-model-costs-undoing-on-canvas-does-not-cancel"));
     return {
         operationCount: safeOps.length,
         affectedNodeCount: affectedNodeIds.size + addedNodeCount,
@@ -171,32 +172,32 @@ export function applyCanvasAgentOps(snapshot: CanvasAgentSnapshot, ops?: CanvasA
 }
 
 function opLabel(type: string) {
-    if (type === "add_node") return "新增节点";
-    if (type === "update_node") return "更新节点";
-    if (type === "delete_node") return "删除节点";
-    if (type === "delete_connections") return "删除连线";
-    if (type === "connect_nodes") return "连接";
-    if (type === "set_viewport") return "调整视图";
-    if (type === "select_nodes") return "选择节点";
-    if (type === "run_generation") return "触发生成";
+    if (type === "add_node") return t("canvas:add-nodes");
+    if (type === "update_node") return t("canvas:update-node");
+    if (type === "delete_node") return t("canvas:delete-node");
+    if (type === "delete_connections") return t("canvas:delete-connections");
+    if (type === "connect_nodes") return t("canvas:connect-2");
+    if (type === "set_viewport") return t("canvas:adjust-view");
+    if (type === "select_nodes") return t("canvas:select-nodes");
+    if (type === "run_generation") return t("canvas:trigger-generation");
     return type;
 }
 
 function canvasNodeTypeLabel(type?: CanvasNodeType) {
-    if (type === CanvasNodeType.Image) return "图片节点";
-    if (type === CanvasNodeType.Video) return "视频节点";
-    if (type === CanvasNodeType.Audio) return "音频节点";
-    if (type === CanvasNodeType.Config) return "生成配置";
-    if (type === CanvasNodeType.Script) return "分镜脚本";
-    if (type === CanvasNodeType.Frame) return "背板";
-    if (type === CanvasNodeType.Drawing) return "绘图节点";
-    if (type === CanvasNodeType.Skill) return "技能节点";
-    return "文本节点";
+    if (type === CanvasNodeType.Image) return t("canvas:image-node");
+    if (type === CanvasNodeType.Video) return t("canvas:video-node");
+    if (type === CanvasNodeType.Audio) return t("canvas:audio-node");
+    if (type === CanvasNodeType.Config) return t("canvas:generation-config");
+    if (type === CanvasNodeType.Script) return t("canvas:storyboard-script");
+    if (type === CanvasNodeType.Frame) return t("canvas:backplate");
+    if (type === CanvasNodeType.Drawing) return t("canvas:drawing-node");
+    if (type === CanvasNodeType.Skill) return t("canvas:skill-node");
+    return t("canvas:text-node");
 }
 
 function generationModeLabel(mode?: "text" | "image" | "video" | "audio") {
-    if (mode === "text") return "文本";
-    if (mode === "video") return "视频";
-    if (mode === "audio") return "音频";
-    return "图片";
+    if (mode === "text") return t("canvas:texts-2");
+    if (mode === "video") return t("canvas:videos-4");
+    if (mode === "audio") return t("canvas:audio-3");
+    return t("canvas:images-3");
 }

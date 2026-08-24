@@ -9,17 +9,7 @@ import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType, CanvasToolMode
 export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
-export type ToolCategory =
-    | "navigation"
-    | "history"
-    | "create"
-    | "appearance"
-    | "selection"
-    | "layout"
-    | "arrange"
-    | "danger"
-    | "node-state"
-    | "resource";
+export type ToolCategory = "navigation" | "history" | "create" | "appearance" | "selection" | "layout" | "arrange" | "danger" | "node-state" | "resource";
 
 /** 所有工具栏回调的聚合类型。工具定义通过 ctx.handlers.onXxx 访问 */
 export type ToolbarHandlers = {
@@ -131,21 +121,9 @@ export type ToolContext = {
 export type AddNodeMenuContext = {
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;
-    handlers: Pick<ToolbarHandlers,
-        | "onAddText"
-        | "onAddImage"
-        | "onAddVideo"
-        | "onAddAudio"
-        | "onAddScript"
-        | "onAddFrame"
-        | "onAddFolder"
-        | "onAddDrawing"
-        | "onAddExtensionNode"
-        | "onChooseStyle"
-        | "onOpenDirector"
-        | "onUpload"
-        | "onOpenMyAssets"
-        | "onOpenProjectCharacters"
+    handlers: Pick<
+        ToolbarHandlers,
+        "onAddText" | "onAddImage" | "onAddVideo" | "onAddAudio" | "onAddScript" | "onAddFrame" | "onAddFolder" | "onAddDrawing" | "onAddExtensionNode" | "onChooseStyle" | "onOpenDirector" | "onUpload" | "onOpenMyAssets" | "onOpenProjectCharacters"
     >;
 };
 

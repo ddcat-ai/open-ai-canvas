@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export type VoiceRecordingState = "idle" | "recording" | "paused";
 
@@ -23,6 +24,7 @@ export type UseVoiceRecordingReturn = {
  * 使用 MediaRecorder API 录制音频，AnalyserNode 获取实时波形数据
  */
 export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVoiceRecordingReturn {
+    const { t } = useTranslation("canvas");
     const { maxDuration = 60 } = options;
     const [state, setState] = useState<VoiceRecordingState>("idle");
     const [waveform, setWaveform] = useState<number[]>([]);
@@ -130,12 +132,11 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVo
                 }
             }, 100);
         } catch (err) {
-            const message = err instanceof Error ? err.message : "无法访问麦克风";
+            const message = err instanceof Error ? err.message : t("domain:unable-to-access-the-microphone");
             setError(message);
             setState("idle");
             cleanup();
         }
-
     }, [cleanup, maxDuration, updateWaveform]);
 
     // 停止录制

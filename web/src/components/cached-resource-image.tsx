@@ -31,12 +31,15 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, eag
             setNearViewport(true);
             return;
         }
-        const observer = new IntersectionObserver((entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) {
-                setNearViewport(true);
-                observer.disconnect();
-            }
-        }, { rootMargin: "240px" });
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    setNearViewport(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: "240px" },
+        );
         observer.observe(image);
         return () => observer.disconnect();
     }, [eager, remoteResource]);
@@ -46,24 +49,32 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, eag
         setCacheFailed(false);
         if (!remoteResource || !storageKey) {
             setCachedSrc(src);
-            return () => { cancelled = true; };
+            return () => {
+                cancelled = true;
+            };
         }
         if (!nearViewport) {
             setCachedSrc("");
-            return () => { cancelled = true; };
+            return () => {
+                cancelled = true;
+            };
         }
 
         setCachedSrc("");
         const resolve = cacheResourceObjectUrl(storageKey);
-        void resolve.then((url) => {
-            if (!cancelled) setCachedSrc(url || src);
-        }).catch(() => {
-            if (!cancelled) {
-                setCacheFailed(true);
-                setCachedSrc(src);
-            }
-        });
-        return () => { cancelled = true; };
+        void resolve
+            .then((url) => {
+                if (!cancelled) setCachedSrc(url || src);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setCacheFailed(true);
+                    setCachedSrc(src);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [nearViewport, remoteResource, src, storageKey]);
 
     if (!remoteResource) return <img {...props} src={cachedSrc} onError={onError} />;

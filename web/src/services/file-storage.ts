@@ -19,7 +19,15 @@ export async function uploadMediaFile(input: string | Blob, prefix = "file"): Pr
         const resource = await uploadResourceFile(blob, kind, { ...meta, fileName: input instanceof File ? input.name : undefined });
         await primeResourceBlobCache(resourceStorageKey(resource.id), blob).catch(() => "");
         URL.revokeObjectURL(previewUrl);
-        return { url: resource.publicUrl || resourceFileUrl(resource.id), storageKey: resourceStorageKey(resource.id), bytes: resource.size || blob.size, mimeType: resource.mimeType || blob.type || "application/octet-stream", width: resource.width || meta.width, height: resource.height || meta.height, durationMs: resource.durationMs || meta.durationMs };
+        return {
+            url: resource.publicUrl || resourceFileUrl(resource.id),
+            storageKey: resourceStorageKey(resource.id),
+            bytes: resource.size || blob.size,
+            mimeType: resource.mimeType || blob.type || "application/octet-stream",
+            width: resource.width || meta.width,
+            height: resource.height || meta.height,
+            durationMs: resource.durationMs || meta.durationMs,
+        };
     } catch {
         // OSS is optional during local/self-hosted setup. Keep the existing local fallback.
     }

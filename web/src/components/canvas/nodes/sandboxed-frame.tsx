@@ -1,4 +1,5 @@
 import type { CanvasTheme } from "@/lib/canvas-theme";
+import { useTranslation } from "react-i18next";
 
 type SandboxedFrameProps = {
     /** 完整的 HTML 文档字符串，作为 iframe 的 srcDoc */
@@ -21,9 +22,10 @@ type SandboxedFrameProps = {
  * 所以两种节点都不走 innerHTML，统一塞进沙箱 iframe 渲染。
  */
 export function SandboxedFrame({ srcDoc, theme, allowScripts = false }: SandboxedFrameProps) {
+    const { t } = useTranslation("canvas");
     return (
         <iframe
-            title="节点预览"
+            title={t("domain:node-preview")}
             className="h-full w-full border-0"
             sandbox={allowScripts ? "allow-scripts" : ""}
             srcDoc={srcDoc}

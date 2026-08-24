@@ -12,6 +12,9 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ModelLogo } from "@/components/model-logo";
 import { quoteLogicalModel, type LogicalModelQuote, type ModelRequestIntent } from "@/services/api/logical-models";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
+import { formatLocale } from "@/lib/format-locale";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -28,7 +31,21 @@ type ModelPickerProps = {
     showConfiguredModelName?: boolean;
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements, showConfiguredModelName = false }: ModelPickerProps) {
+export function ModelPicker({
+    config,
+    value,
+    onChange,
+    capability,
+    className,
+    fullWidth = false,
+    placeholder = t("domain:select-model-2"),
+    onMissingConfig,
+    showSelectedPrice = true,
+    variant = "default",
+    requirements,
+    showConfiguredModelName = false,
+}: ModelPickerProps) {
+    const { t } = useTranslation("canvas");
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
@@ -42,8 +59,8 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         const channelGroups = config.channels
             .map((channel) => ({
                 key: channel.id,
-                label: channel.name || "未命名渠道",
-                scope: channel.id === PUBLIC_MODEL_CATALOG_ID ? "" : channel.scope === "system" ? "平台服务" : "我的模型",
+                label: channel.name || t("domain:untitled-channel"),
+                scope: channel.id === PUBLIC_MODEL_CATALOG_ID ? "" : channel.scope === "system" ? t("domain:platform-services") : t("domain:my-models"),
                 models: groupModelsByDisplayName(
                     config,
                     options.filter((model) => resolveModelChannel(config, model).id === channel.id),
@@ -60,7 +77,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const resolvedCurrent = resolveCompatibleModel(config, storedCurrent, selectionRequirements) || storedCurrent;
     // 旧画布可能保存过已下架或前端历史内置模型；它们不能重新进入当前可选目录。
     const current = options.includes(resolvedCurrent) ? resolvedCurrent : "";
-	const currentPrice = modelMenuPrice(config, current, capability, false, requirements);
+    const currentPrice = modelMenuPrice(config, current, capability, false, requirements);
     const quoteRequest = useMemo(() => modelQuoteRequest(config, current, capability, requirements), [capability, config, current, requirements]);
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | undefined>();
     const creationVariant = variant === "creation";
@@ -148,7 +165,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         >
             {creationVariant ? (
                 <div className="creation-model-picker-heading">
-                    <span>选择模型</span>
+                    <span>{t("domain:select-model-2")}</span>
                     {current ? <strong>{pickerModelDisplayName(config, current, showConfiguredModelName)}</strong> : null}
                 </div>
             ) : null}
@@ -157,14 +174,18 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                     <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
                         <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
                             <span className="truncate">{group.label}</span>
-                            {group.scope ? <span className="shrink-0" style={{ color: theme.node.muted }}>{group.scope}</span> : null}
+                            {group.scope ? (
+                                <span className="shrink-0" style={{ color: theme.node.muted }}>
+                                    {group.scope}
+                                </span>
+                            ) : null}
                         </div>
                         <div className="grid min-w-0 gap-1">
                             {group.models.map((modelGroup) => {
                                 const selected = modelGroup.models.includes(current);
                                 const model = compatibleModelInGroup(config, modelGroup.models, selectionRequirements, selected ? current : undefined);
                                 const displayModel = model || (selected ? current : modelGroup.models[0]);
-                                const disabledReason = model ? "" : modelCompatibilityError(config, modelGroup.models[0], selectionRequirements) || "当前输入不符合该模型能力";
+                                const disabledReason = model ? "" : modelCompatibilityError(config, modelGroup.models[0], selectionRequirements) || t("domain:current-input-does-not-match-this-model-s-capabilities");
                                 return (
                                     <button
                                         key={modelGroup.key}
@@ -183,7 +204,16 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                                             window.requestAnimationFrame(() => triggerRef.current?.focus());
                                         }}
                                     >
-                                        <ModelLabel config={config} model={displayModel} capability={capability} theme={theme} creationVariant={creationVariant} showConfiguredModelName={showConfiguredModelName} showPrice={creditsEnabled} disabledReason={disabledReason} />
+                                        <ModelLabel
+                                            config={config}
+                                            model={displayModel}
+                                            capability={capability}
+                                            theme={theme}
+                                            creationVariant={creationVariant}
+                                            showConfiguredModelName={showConfiguredModelName}
+                                            showPrice={creditsEnabled}
+                                            disabledReason={disabledReason}
+                                        />
                                         {selected ? <Check className="canvas-model-picker-option-check" style={{ color: theme.node.activeStroke }} /> : null}
                                     </button>
                                 );
@@ -239,9 +269,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
 }
 
 function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
-    const label = capability === "image" ? "生图" : capability === "video" ? "视频" : capability === "text" ? "文本" : capability === "audio" ? "音频" : "";
-    if (capability && config.models.length) return `暂无支持当前输入的${label}模型`;
-    return config.models.length ? `暂无匹配的${label}模型` : "当前没有可用模型，请联系管理员或检查模型配置";
+    const { t } = useTranslation("canvas");
+    const label = capability === "image" ? t("domain:image-gen") : capability === "video" ? t("domain:video") : capability === "text" ? t("domain:text") : capability === "audio" ? t("domain:audio") : "";
+    if (capability && config.models.length) return t("domain:no-param-models-support-the-current-input", { label: label });
+    return config.models.length ? t("domain:no-matching-param-models", { label: label }) : t("domain:no-models-available-contact-an-admin-or-check-model-configuration");
 }
 
 function ModelLabel({
@@ -268,7 +299,10 @@ function ModelLabel({
     const logicalCost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
     const logicalSpec = logicalCost?.logicalCapabilitySpec;
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
-    const capabilitySummary = disabledReason || logicalCost?.description?.trim() || (logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
+    const capabilitySummary =
+        disabledReason ||
+        logicalCost?.description?.trim() ||
+        (logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
             <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>
@@ -291,34 +325,35 @@ function ModelLabel({
 }
 
 function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>) {
+    const { t } = useTranslation("canvas");
     const operationLabels: Record<string, string> = {
-        text_to_video: "文生视频",
-        image_to_video: "图生视频",
-        audio_to_video: "音频生视频",
-        extend: "视频续写",
-        inpaint: "局部修改",
-        replace_element: "元素替换",
-        camera_motion: "运镜调整",
-        style_transfer: "风格迁移",
+        text_to_video: t("domain:text-to-video"),
+        image_to_video: t("domain:image-to-video"),
+        audio_to_video: t("domain:audio-to-video"),
+        extend: t("domain:video-extend"),
+        inpaint: t("domain:inpaint-edit-2"),
+        replace_element: t("domain:element-replace"),
+        camera_motion: t("domain:camera-adjust"),
+        style_transfer: t("domain:style-transfer"),
     };
     const inputLabels: Record<string, { label: string; unit: string }> = {
-        image: { label: spec.capability === "text" ? "图片理解" : "参考图片", unit: "张" },
-        video: { label: spec.capability === "text" ? "视频理解" : "参考视频", unit: "个" },
-        audio: { label: "参考音频", unit: "个" },
-        mask: { label: "蒙版", unit: "张" },
+        image: { label: spec.capability === "text" ? t("domain:image-understanding") : t("domain:reference-images"), unit: t("domain:item") },
+        video: { label: spec.capability === "text" ? t("domain:video-understanding") : t("domain:reference-videos"), unit: t("domain:item-2") },
+        audio: { label: t("domain:reference-audio"), unit: t("domain:item-2") },
+        mask: { label: t("domain:mask"), unit: t("domain:item") },
     };
     const optionLabels: Record<string, string> = {
-        size: "画面比例",
-        aspectRatio: "画面比例",
-        quality: "生成质量",
-        count: "输出数量",
-        videoSeconds: "视频时长",
-        duration: "视频时长",
-        vquality: "输出分辨率",
-        resolution: "输出分辨率",
-        audioVoice: "音色",
-        audioFormat: "音频格式",
-        audioSpeed: "语速",
+        size: t("domain:aspect-ratio"),
+        aspectRatio: t("domain:aspect-ratio"),
+        quality: t("domain:generation-quality"),
+        count: t("domain:output-count-2"),
+        videoSeconds: t("domain:video-duration"),
+        duration: t("domain:video-duration"),
+        vquality: t("domain:output-resolution"),
+        resolution: t("domain:output-resolution"),
+        audioVoice: t("domain:voice-2"),
+        audioFormat: t("domain:audio-format"),
+        audioSpeed: t("domain:speech-rate"),
     };
     const values: string[] = [];
     values.push(...(spec.operations || []).map((operation) => operationLabels[operation] || operation));
@@ -326,7 +361,7 @@ function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channe
         if (constraint.max <= 0) continue;
         const definition = inputLabels[name];
         if (!definition) continue;
-        values.push(spec.capability === "text" ? `支持${definition.label}` : `${definition.label}最多 ${constraint.max}${definition.unit}`);
+        values.push(spec.capability === "text" ? t("domain:supports-param", { label: definition.label }) : t("domain:param-up-to-param-param", { label: definition.label, max: constraint.max, unit: definition.unit }));
     }
     for (const [name, constraint] of Object.entries(spec.options || {})) {
         const label = optionLabels[name];
@@ -334,12 +369,13 @@ function logicalCapabilitySummary(spec: NonNullable<NonNullable<AiConfig["channe
         if (constraint.values?.length) values.push(`${label} ${constraint.values.map(publicScalarLabel).join("/")}`);
         else if (constraint.min !== undefined && constraint.max !== undefined) values.push(`${label} ${constraint.min}-${constraint.max}`);
     }
-    return values.slice(0, 2).join(" · ") || "智能匹配当前输入";
+    return values.slice(0, 2).join(" · ") || t("domain:smart-match-the-current-input");
 }
 
 function publicScalarLabel(value: unknown) {
-    if (value === true) return "支持";
-    if (value === false) return "关闭";
+    const { t } = useTranslation("canvas");
+    if (value === true) return t("domain:supported");
+    if (value === false) return t("domain:close");
     return String(value);
 }
 
@@ -349,12 +385,10 @@ function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapab
     return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
 }
 
-type ModelMenuPrice =
-    | { kind: "tiers"; label: string; compactLabel: string; title: string }
-    | { kind: "estimate" }
-    | { kind: "fixed"; value: number; unit: "次" | "秒" | "百万 Token" };
+type ModelMenuPrice = { kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate" } | { kind: "fixed"; value: number; unit: string };
 
 function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapability, summary = false, requirements?: ModelRequirements): ModelMenuPrice | null | undefined {
+    const { t } = useTranslation("canvas");
     if (!model) return undefined;
     const channel = resolveModelChannel(config, model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
@@ -362,11 +396,11 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
     if (cost.pricePolicy === "channel") {
         const tiers = cost.logicalPriceTiers || [];
         if (!tiers.length) return null;
-		const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config, requirements);
+        const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config, requirements);
         return channelTierPriceSummary(matched.length ? matched : tiers, tiers);
     }
     if (cost.billingMode === "token") return { kind: "estimate" };
-    return { kind: "fixed", value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
+    return { kind: "fixed", value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? t("domain:s-2") : t("domain:requests") };
 }
 
 function pickerModelDisplayName(config: AiConfig, model: string, showConfiguredModelName: boolean) {
@@ -379,17 +413,12 @@ function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredM
     return channel.scope === "system" ? displayName : `${displayName}（${channel.name}）`;
 }
 
-function priceTiersForCurrentSelection(
-    tiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>,
-	capability: ModelCapability | undefined,
-	config: AiConfig,
-	requirements?: ModelRequirements,
-) {
+function priceTiersForCurrentSelection(tiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>, capability: ModelCapability | undefined, config: AiConfig, requirements?: ModelRequirements) {
     const requested: Record<string, string> = {};
-	if (capability === "video") {
-		const imageCount = (requirements?.input?.imageCount || 0) + (requirements?.input?.characterCount || 0);
-		if (imageCount > 0) requested.imageCount = String(imageCount);
-		const resolution = normalizeTierResolution(config.vquality);
+    if (capability === "video") {
+        const imageCount = (requirements?.input?.imageCount || 0) + (requirements?.input?.characterCount || 0);
+        if (imageCount > 0) requested.imageCount = String(imageCount);
+        const resolution = normalizeTierResolution(config.vquality);
         if (resolution !== "*") requested.vquality = resolution;
         const seconds = Math.max(0, Math.floor(Number(config.videoSeconds) || 0));
         if (seconds > 0) requested.videoSeconds = String(seconds);
@@ -401,10 +430,10 @@ function priceTiersForCurrentSelection(
     let bestScore = -1;
     let matched: typeof tiers = [];
     for (const tier of tiers) {
-		const selector = tier.selector || {};
-		const conditions = Object.entries(selector).filter(([, value]) => value && value !== "*");
-		if (conditions.some(([key, value]) => requested[key] !== value)) continue;
-		const score = conditions.length;
+        const selector = tier.selector || {};
+        const conditions = Object.entries(selector).filter(([, value]) => value && value !== "*");
+        if (conditions.some(([key, value]) => requested[key] !== value)) continue;
+        const score = conditions.length;
         if (score > bestScore) {
             bestScore = score;
             matched = [tier];
@@ -425,6 +454,7 @@ function channelTierPriceSummary(
     visibleTiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>,
     allTiers: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>,
 ): Extract<ModelMenuPrice, { kind: "tiers" }> {
+    const { t } = useTranslation("canvas");
     const fixedRequestValues = visibleTiers
         .filter((tier) => tier.billingMode === "fixed_request")
         .map((tier) => tier.unitPriceMicrocredits / 1_000_000)
@@ -435,68 +465,79 @@ function channelTierPriceSummary(
         .filter((value) => value > 0);
     const hasTokenTier = visibleTiers.some((tier) => tier.billingMode === "token");
     const label = fixedRequestValues.length
-        ? formatPriceRange(fixedRequestValues, "积分")
+        ? formatPriceRange(fixedRequestValues, t("domain:credits-3"))
         : perSecondValues.length
-            ? formatPriceRange(perSecondValues, "积分/秒")
-            : hasTokenTier
-                ? "按量预估"
-                : "未配置";
+          ? formatPriceRange(perSecondValues, t("domain:credits-sec"))
+          : hasTokenTier
+            ? t("domain:usage-based-estimate-2")
+            : t("domain:not-configured-2");
     return {
         kind: "tiers",
         label,
         compactLabel: label,
-        title: `系统规格价格：${allTiers.map((tier) => `${tierSpecificationLabel(tier)} ${tierPriceLabel(tier)}`).join("；")}`,
+        title: `${t("admin:system-spec-pricing")}：${allTiers.map((tier) => `${tierSpecificationLabel(tier)} ${tierPriceLabel(tier)}`).join("；")}`,
     };
 }
 
 function formatPriceRange(values: number[], suffix: string) {
     const unique = Array.from(new Set(values)).sort((left, right) => left - right);
-    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+    const format = (value: number) => value.toLocaleString(formatLocale(), { maximumFractionDigits: 3 });
     return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
 }
 
 function tierResolutionLabel(value: string) {
+    const { t } = useTranslation("canvas");
     const normalized = normalizeTierResolution(value);
-    return normalized === "*" ? "全部分辨率" : normalized.toUpperCase();
+    return normalized === "*" ? t("domain:all-resolutions") : normalized.toUpperCase();
 }
 
 function tierDurationLabel(seconds: number) {
-    return seconds > 0 ? `${seconds} 秒` : "全部时长";
+    const { t } = useTranslation("canvas");
+    return seconds > 0 ? t("domain:params", { seconds: seconds }) : t("domain:all-durations");
 }
 
 function tierSpecificationLabel(tier: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number]) {
+    const { t } = useTranslation("canvas");
     const selector = tier.selector || {};
-	const operationLabels: Record<string, string> = { text_to_image: "文生图", image_to_image: "图生图", text_to_video: "文生视频", image_to_video: "图生视频", video_to_video: "视频生视频" };
-	const operation = selector.operation && selector.operation !== "*" ? (operationLabels[selector.operation] || selector.operation) : "";
-	const details = [
-		operation,
-		selector.quality && selector.quality !== "*" ? selector.quality.toUpperCase() : "",
-		selector.size && selector.size !== "*" ? selector.size : "",
-		tier.resolution !== "*" ? tierResolutionLabel(tier.resolution) : "",
-		tier.videoSeconds ? tierDurationLabel(tier.videoSeconds) : "",
-		selector.imageCount && selector.imageCount !== "*" ? `${selector.imageCount} 张参考图` : "",
-	].filter(Boolean);
-	return details.length ? details.join(" / ") : "默认规格";
+    const operationLabels: Record<string, string> = {
+        text_to_image: t("domain:text-to-image"),
+        image_to_image: t("domain:image-to-image"),
+        text_to_video: t("domain:text-to-video"),
+        image_to_video: t("domain:image-to-video"),
+        video_to_video: t("domain:video-to-video"),
+    };
+    const operation = selector.operation && selector.operation !== "*" ? operationLabels[selector.operation] || selector.operation : "";
+    const details = [
+        operation,
+        selector.quality && selector.quality !== "*" ? selector.quality.toUpperCase() : "",
+        selector.size && selector.size !== "*" ? selector.size : "",
+        tier.resolution !== "*" ? tierResolutionLabel(tier.resolution) : "",
+        tier.videoSeconds ? tierDurationLabel(tier.videoSeconds) : "",
+        selector.imageCount && selector.imageCount !== "*" ? t("domain:param-reference-images", { imageCount: selector.imageCount }) : "",
+    ].filter(Boolean);
+    return details.length ? details.join(" / ") : t("domain:default-spec");
 }
 
 function tierPriceLabel(tier: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number]) {
-    if (tier.billingMode === "token") return "按量预估";
-    return `${formatPriceRange([tier.unitPriceMicrocredits / 1_000_000], tier.billingMode === "per_second" ? "积分/秒" : "积分")}`;
+    const { t } = useTranslation("canvas");
+    if (tier.billingMode === "token") return t("domain:usage-based-estimate-2");
+    return `${formatPriceRange([tier.unitPriceMicrocredits / 1_000_000], tier.billingMode === "per_second" ? t("domain:credits-sec") : t("domain:credits-3"))}`;
 }
 
 function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice | null | undefined; quote?: LogicalModelQuote; compact?: boolean }) {
+    const { t } = useTranslation("canvas");
     if (quote) {
-        const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
-        const label = quote.estimated ? `预计 ${amount}` : `${amount}`;
+        const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString(formatLocale(), { maximumFractionDigits: 3 });
+        const label = quote.estimated ? t("domain:est-param", { amount: amount }) : `${amount}`;
         return (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`}>
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={t("domain:cost-title", { label: quote.estimated ? t("domain:est") : t("domain:this-run"), amount })}>
                 <Coins className="size-3" />
-                {compact ? label : `${label} 积分`}
+                {compact ? label : t("domain:param-credits", { label: label })}
             </span>
         );
     }
     if (price === undefined) return null;
-    if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">未配置</span>;
+    if (price === null) return compact ? null : <span className="shrink-0 text-[var(--fs-tiny)] text-foreground/40">{t("domain:not-configured-2")}</span>;
     if (price.kind === "tiers") {
         return (
             <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={price.title}>
@@ -506,12 +547,15 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
         );
     }
     if (price.kind === "estimate") {
-        return <span className="shrink-0 text-[var(--fs-tiny)] font-medium text-amber-600 dark:text-amber-300">按量预估</span>;
+        return <span className="shrink-0 text-[var(--fs-tiny)] font-medium text-amber-600 dark:text-amber-300">{t("domain:usage-based-estimate-2")}</span>;
     }
     return (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300" title={`每${price.unit}消耗 ${price.value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分`}>
+        <span
+            className="inline-flex shrink-0 items-center gap-0.5 text-[var(--fs-tiny)] font-bold tabular-nums text-amber-600 dark:text-amber-300"
+            title={t("domain:per-unit-cost-title", { unit: price.unit, value: price.value.toLocaleString(formatLocale(), { maximumFractionDigits: 6 }) })}
+        >
             <Coins className="size-3" />
-            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
+            {price.value.toLocaleString(formatLocale(), { maximumFractionDigits: compact ? 3 : 6 })}/{price.unit}
         </span>
     );
 }
@@ -542,24 +586,25 @@ function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCa
 }
 
 function modelMenuMeta(model: string, capability?: ModelCapability): { description: string; time?: string } {
+    const { t } = useTranslation("canvas");
     const name = modelOptionName(model).toLowerCase();
     if (capability === "image") {
-        if (name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen")) return { description: "Gemini 高质量图片生成，适合角色和商业成片" };
-        if (name.includes("nano") || name.includes("pro")) return { description: "高质量图片生成，适合角色和商业成片" };
-        if (name.includes("seedream")) return { description: "快速出图，适合批量探索风格" };
-        if (name.includes("gpt") || name.includes("image")) return { description: "通用图片模型，提示词理解稳定" };
-        return { description: "图片生成模型" };
+        if (name.includes("nano banana") || name.includes("nanobanana") || name.includes("imagen")) return { description: t("domain:gemini-high-quality-image-generation-for-characters-and-commercial-final") };
+        if (name.includes("nano") || name.includes("pro")) return { description: t("domain:high-quality-image-generation-for-characters-and-commercial-finals") };
+        if (name.includes("seedream")) return { description: t("domain:fast-image-generation-for-batch-style-exploration") };
+        if (name.includes("gpt") || name.includes("image")) return { description: t("domain:general-purpose-image-model-with-reliable-prompt-understanding") };
+        return { description: t("domain:image-generation-model") };
     }
     if (capability === "video") {
-        if (name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) return { description: "Gemini 镜头生成与图生视频，适合成片流程", time: "3m" };
-        if (name.includes("seedance") || name.includes("sora")) return { description: "镜头生成与图生视频，适合成片流程", time: "3m" };
-        return { description: "视频生成模型", time: "3m" };
+        if (name.includes("veo") || name.includes("omni flash") || name.includes("omni-flash")) return { description: t("domain:gemini-shot-generation-and-image-to-video-for-final-cut-workflows"), time: "3m" };
+        if (name.includes("seedance") || name.includes("sora")) return { description: t("domain:shot-generation-and-image-to-video-for-final-cut-workflows"), time: "3m" };
+        return { description: t("domain:video-generation-model"), time: "3m" };
     }
-    if (capability === "audio") return { description: "语音、音效或音乐生成", time: "20s" };
-    if (name.includes("claude")) return { description: "长文本、推理与创意写作", time: "10s" };
-    if (name.includes("gemini")) return { description: "多模态理解与快速文本生成", time: "10s" };
-    if (name.includes("deepseek")) return { description: "推理、代码和结构化文本", time: "10s" };
-    return { description: capability === "text" ? "文本生成模型" : "当前模型", time: "10s" };
+    if (capability === "audio") return { description: t("domain:voice-sound-effects-or-music-generation"), time: "20s" };
+    if (name.includes("claude")) return { description: t("domain:long-form-text-reasoning-and-creative-writing"), time: "10s" };
+    if (name.includes("gemini")) return { description: t("domain:multimodal-understanding-and-fast-text-generation"), time: "10s" };
+    if (name.includes("deepseek")) return { description: t("domain:reasoning-code-and-structured-text"), time: "10s" };
+    return { description: capability === "text" ? t("domain:text-generation-model") : t("domain:current-model"), time: "10s" };
 }
 
 export function ModelIcon({ config, model, icon }: { config?: AiConfig; model?: string; icon?: string }) {

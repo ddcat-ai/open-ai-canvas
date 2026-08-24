@@ -5,9 +5,11 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
+import { formatLocale } from "@/lib/format-locale";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
+import { useTranslation } from "react-i18next";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -26,60 +28,57 @@ type WorkspaceNavGroup = {
 };
 
 /** 设置页分区子项，沿用 /settings?section=<key> 路由合同。 */
-const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
-    { key: "local-cli", label: "本机工具" },
-    { key: "channels", label: "自定义渠道" },
-    { key: "models", label: "模型选择" },
-    { key: "preferences", label: "生成偏好" },
-    { key: "prompts", label: "提示词偏好" },
-    { key: "storage", label: "我的对象存储" },
+const SETTINGS_SECTIONS: Array<{ key: string; labelKey: string }> = [
+    { key: "local-cli", labelKey: "domain:local-tools" },
+    { key: "channels", labelKey: "domain:custom-channels" },
+    { key: "models", labelKey: "domain:models" },
+    { key: "preferences", labelKey: "domain:generation-preferences" },
+    { key: "prompts", labelKey: "domain:prompt-preferences" },
+    { key: "storage", labelKey: "domain:my-object-storage-2" },
 ];
 
-function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
+function toolItem(slug: NavigationToolSlug, to: string, translate: (key: string) => string): WorkspaceNavItem {
     const tool = navigationTools.find((item) => item.slug === slug);
-    return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
+    return { id: slug, title: tool ? translate(tool.labelKey) : slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, balance: string, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(translate: (key: string) => string, features: FeatureAvailability, balance: string, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { id: "home", title: "首页", icon: Home, to: "/home" },
-                toolItem("create", "/create"),
-                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
-                toolItem("canvas", "/canvas"),
-                ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
-                toolItem("assets", "/assets"),
+                { id: "home", title: translate("domain:home"), icon: Home, to: "/home" },
+                toolItem("create", "/create", translate),
+                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects", translate)] : []),
+                toolItem("canvas", "/canvas", translate),
+                ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks", translate)] : []),
+                toolItem("assets", "/assets", translate),
             ],
         },
         {
-            heading: "工作台管理",
-            items: [
-                toolItem("skills", "/skills"),
-                ...(features.pluginCenterEnabled || isAdmin ? [toolItem("plugins", "/plugins")] : []),
-                ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet"), badge: balance }] : []),
-            ],
+            heading: translate("domain:workspace-management"),
+            items: [toolItem("skills", "/skills", translate), ...(features.pluginCenterEnabled || isAdmin ? [toolItem("plugins", "/plugins", translate)] : []), ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet", translate), badge: balance }] : [])],
         },
     ];
 
     const settingsSections = SETTINGS_SECTIONS.filter((section) => section.key !== "channels" || features.customChannelsEnabled);
     const footer: WorkspaceNavItem[] = [
-        ...(isAdmin ? [{ id: "admin", title: "管理员后台", icon: ShieldCheck, to: "/admin" }] : []),
+        ...(isAdmin ? [{ id: "admin", title: translate("domain:admin-console"), icon: ShieldCheck, to: "/admin" }] : []),
         {
-            ...toolItem("settings", "/settings"),
+            ...toolItem("settings", "/settings", translate),
             children: settingsSections.map((section) => ({
                 id: `settings:${section.key}`,
-                title: section.label,
+                title: translate(section.labelKey),
                 to: `/settings?section=${section.key}`,
             })),
         },
-        { id: "logout", title: "退出登录", icon: LogOut, action: "logout" },
+        { id: "logout", title: translate("domain:sign-out-2"), icon: LogOut, action: "logout" },
     ];
 
     return { groups, footer };
 }
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void }) {
+    const { t } = useTranslation(["canvas", "domain"]);
     const [isOpen, setIsOpen] = useState(false);
     const navigate = useNavigate();
 
@@ -92,13 +91,7 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boo
     if (collapsed) {
         return (
             <div className="app-workspace-sidebar-rail-header shrink-0">
-                <button
-                    type="button"
-                    className="app-workspace-sidebar-rail-button"
-                    aria-label="展开侧栏菜单"
-                    title="展开侧栏菜单"
-                    onClick={onExpand}
-                >
+                <button type="button" className="app-workspace-sidebar-rail-button" aria-label={t("domain:expand-sidebar-menu")} title={t("domain:expand-sidebar-menu")} onClick={onExpand}>
                     <PanelLeftOpen className="size-4" strokeWidth={1.7} />
                 </button>
             </div>
@@ -119,8 +112,8 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boo
                         <InfinityIcon className="size-4" strokeWidth={2} />
                     </span>
                     <span className="flex min-w-0 flex-col">
-                        <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-medium">影策</span>
-                        <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/42">创作工作台</span>
+                        <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-medium">{t("domain:yingce-4")}</span>
+                        <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/42">{t("domain:creation-studio-2")}</span>
                     </span>
                 </span>
                 <ChevronDown className="size-4 shrink-0 text-foreground/40 transition-colors group-hover:text-foreground/70" strokeWidth={1.5} />
@@ -131,31 +124,22 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boo
                     <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
                     <div className="app-workspace-nav-popover absolute left-3 right-3 top-full z-50 mt-1 overflow-hidden rounded-lg border border-[var(--workspace-border)] bg-[var(--workspace-surface-strong)] py-1 animate-in fade-in zoom-in-95 duration-100">
                         <div className="px-3 py-2.5">
-                            <div className="truncate text-[var(--fs-body)] font-semibold">影策</div>
-                            <div className="mt-0.5 truncate text-[var(--fs-label)] text-foreground/45">创作工作台</div>
+                            <div className="truncate text-[var(--fs-body)] font-semibold">{t("domain:yingce-4")}</div>
+                            <div className="mt-0.5 truncate text-[var(--fs-label)] text-foreground/45">{t("domain:creation-studio-2")}</div>
                         </div>
                         <div className="mx-2 my-1 h-px bg-[var(--workspace-border)]" />
                         {[
-                            { label: "首页", to: "/home" },
-                            { label: "画布", to: "/canvas" },
-                            { label: "设置", to: "/settings" },
+                            { label: t("domain:home"), to: "/home" },
+                            { label: t("domain:canvas"), to: "/canvas" },
+                            { label: t("domain:settings"), to: "/settings" },
                         ].map((entry) => (
-                            <button
-                                key={entry.to}
-                                type="button"
-                                onClick={() => go(entry.to)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-[var(--fs-body)] text-foreground/80 transition-colors hover:bg-surface-hover hover:text-foreground"
-                            >
+                            <button key={entry.to} type="button" onClick={() => go(entry.to)} className="flex w-full items-center gap-2 px-3 py-2 text-[var(--fs-body)] text-foreground/80 transition-colors hover:bg-surface-hover hover:text-foreground">
                                 {entry.label}
                             </button>
                         ))}
                         <div className="mx-2 my-1 h-px bg-[var(--workspace-border)]" />
-                        <button
-                            type="button"
-                            onClick={() => go("/canvas?mode=new")}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-[var(--fs-body)] text-foreground/45 transition-colors hover:bg-surface-hover hover:text-foreground"
-                        >
-                            <Plus className="size-3.5" /> 新建画布
+                        <button type="button" onClick={() => go("/canvas?mode=new")} className="flex w-full items-center gap-2 px-3 py-2 text-[var(--fs-body)] text-foreground/45 transition-colors hover:bg-surface-hover hover:text-foreground">
+                            <Plus className="size-3.5" /> {t("domain:new-canvas")}
                         </button>
                     </div>
                 </>
@@ -164,7 +148,15 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand }: { collapsed: boo
     );
 }
 
-function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0, collapsed = false }: {
+function NavItem({
+    item,
+    activeId,
+    onSelect,
+    onOpenSearch,
+    onLogout,
+    level = 0,
+    collapsed = false,
+}: {
     item: WorkspaceNavItem;
     activeId: string;
     onSelect: (id: string) => void;
@@ -201,14 +193,8 @@ function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0, 
                         {item.shortcut}
                     </kbd>
                 ) : null}
-                {item.badge !== undefined ? (
-                    <span className="flex min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium tabular-nums text-primary">
-                        {item.badge}
-                    </span>
-                ) : null}
-                {hasChildren ? (
-                    <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/40 transition-transform duration-200", isOpen && "rotate-90")} strokeWidth={2} />
-                ) : null}
+                {item.badge !== undefined ? <span className="flex min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[var(--fs-tiny)] font-medium tabular-nums text-primary">{item.badge}</span> : null}
+                {hasChildren ? <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/40 transition-transform duration-200", isOpen && "rotate-90")} strokeWidth={2} /> : null}
             </span>
         </>
     );
@@ -255,15 +241,7 @@ function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0, 
                     {rowContent}
                 </Link>
             ) : (
-                <button
-                    type="button"
-                    className={rowClassName}
-                    style={rowStyle}
-                    aria-label={collapsed ? item.title : undefined}
-                    title={collapsed ? item.title : undefined}
-                    onClick={handleClick}
-                    aria-expanded={hasChildren ? isOpen : undefined}
-                >
+                <button type="button" className={rowClassName} style={rowStyle} aria-label={collapsed ? item.title : undefined} title={collapsed ? item.title : undefined} onClick={handleClick} aria-expanded={hasChildren ? isOpen : undefined}>
                     {rowContent}
                 </button>
             )}
@@ -273,16 +251,7 @@ function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0, 
                     <div className="relative flex min-h-0 flex-col gap-0.5 overflow-hidden pt-0.5">
                         <span className="app-workspace-nav-guide-line" style={{ left: `${(level + 1) * 12 + 12.5}px` }} />
                         {item.children!.map((child) => (
-                            <NavItem
-                                key={child.id}
-                                item={child}
-                                activeId={activeId}
-                                onSelect={onSelect}
-                                onOpenSearch={onOpenSearch}
-                                onLogout={onLogout}
-                                level={level + 1}
-                                collapsed={false}
-                            />
+                            <NavItem key={child.id} item={child} activeId={activeId} onSelect={onSelect} onOpenSearch={onOpenSearch} onLogout={onLogout} level={level + 1} collapsed={false} />
                         ))}
                     </div>
                 </div>
@@ -291,14 +260,7 @@ function NavItem({ item, activeId, onSelect, onOpenSearch, onLogout, level = 0, 
     );
 }
 
-function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: {
-    group: WorkspaceNavGroup;
-    activeId: string;
-    onNavigate: () => void;
-    onOpenSearch: () => void;
-    onLogout: () => void;
-    collapsed: boolean;
-}) {
+function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: { group: WorkspaceNavGroup; activeId: string; onNavigate: () => void; onOpenSearch: () => void; onLogout: () => void; collapsed: boolean }) {
     const [isOpen, setIsOpen] = useState(true);
     const hasActive = group.items.some((item) => item.id === activeId || (item.id === "settings" && activeId.startsWith("settings:")));
 
@@ -310,15 +272,7 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
     const content = (
         <div className="flex flex-col gap-0.5">
             {group.items.map((item) => (
-                <NavItem
-                    key={item.id}
-                    item={item}
-                    activeId={activeId}
-                    onSelect={onNavigate}
-                    onOpenSearch={onOpenSearch}
-                    onLogout={onLogout}
-                    collapsed={collapsed}
-                />
+                <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={onLogout} collapsed={collapsed} />
             ))}
         </div>
     );
@@ -330,17 +284,9 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
 
     return (
         <div className="flex shrink-0 flex-col">
-            <button
-                type="button"
-                onClick={() => setIsOpen((open) => !open)}
-                aria-expanded={isOpen}
-                className="app-workspace-nav-group-toggle select-none"
-            >
+            <button type="button" onClick={() => setIsOpen((open) => !open)} aria-expanded={isOpen} className="app-workspace-nav-group-toggle select-none">
                 <span className="app-workspace-nav-group-label">{group.heading}</span>
-                <ChevronRight
-                    className={cn("size-3.5 shrink-0 text-foreground/35 transition-transform duration-200", isOpen && "rotate-90")}
-                    strokeWidth={2}
-                />
+                <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/35 transition-transform duration-200", isOpen && "rotate-90")} strokeWidth={2} />
             </button>
             <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-in-out", isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
                 <div className="min-h-0 overflow-hidden pt-0.5">{content}</div>
@@ -350,6 +296,7 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
 }
 
 export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExpand }: { collapsed: boolean; onNavigate: () => void; onOpenSearch: () => void; onExpand: () => void }) {
+    const { t } = useTranslation(["canvas", "domain"]);
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
@@ -358,11 +305,9 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { handleLogout } = useWorkspaceLogout();
 
-    const balance = availableMicrocredits === null
-        ? "--"
-        : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+    const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString(formatLocale(), { maximumFractionDigits: 2 });
 
-    const { groups, footer } = useMemo(() => buildNav(features, balance, user?.role === "admin"), [features, balance, user?.role]);
+    const { groups, footer } = useMemo(() => buildNav(t, features, balance, user?.role === "admin"), [t, features, balance, user?.role]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "create";
     const section = searchParams.get("section");
@@ -392,11 +337,11 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                     type="button"
                     onClick={onOpenSearch}
                     className="group flex h-9 w-full items-center gap-2 rounded-[var(--r-lg)] bg-foreground/5 px-3 text-left text-[var(--fs-caption)] text-muted-foreground transition-colors hover:bg-foreground/[.07] hover:text-foreground/70"
-                    aria-label={collapsed ? "快速搜索" : undefined}
-                    title={collapsed ? "快速搜索" : undefined}
+                    aria-label={collapsed ? t("domain:quick-search-2") : undefined}
+                    title={collapsed ? t("domain:quick-search-2") : undefined}
                 >
                     <Search className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground/70" strokeWidth={1.6} />
-                    <span className="app-workspace-sidebar-search-label flex-1 truncate">快速搜索</span>
+                    <span className="app-workspace-sidebar-search-label flex-1 truncate">{t("domain:quick-search-2")}</span>
                     <kbd className="app-workspace-sidebar-search-shortcut flex h-5 shrink-0 items-center justify-center rounded-sm border border-[var(--workspace-border)] bg-background/50 px-1.5 font-mono text-[var(--fs-tiny)] font-medium text-foreground/55">
                         ⌘K
                     </kbd>
@@ -406,38 +351,17 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className={cn(
-                    "app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3 pt-2",
-                    collapsed && "is-collapsed",
-                    scrollState.hasTopFade && "has-top-fade",
-                    scrollState.hasBottomFade && "has-bottom-fade",
-                )}
+                className={cn("app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3 pt-2", collapsed && "is-collapsed", scrollState.hasTopFade && "has-top-fade", scrollState.hasBottomFade && "has-bottom-fade")}
             >
                 {groups.map((group, index) => (
-                    <NavGroup
-                        key={index}
-                        group={group}
-                        activeId={activeId}
-                        onNavigate={onNavigate}
-                        onOpenSearch={onOpenSearch}
-                        onLogout={() => void handleLogout()}
-                        collapsed={collapsed}
-                    />
+                    <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                 ))}
             </div>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
                 <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
-                        <NavItem
-                            key={item.id}
-                            item={item}
-                            activeId={activeId}
-                            onSelect={onNavigate}
-                            onOpenSearch={onOpenSearch}
-                            onLogout={() => void handleLogout()}
-                            collapsed={collapsed}
-                        />
+                        <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
                 </div>
             </div>

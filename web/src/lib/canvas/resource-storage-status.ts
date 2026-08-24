@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 export type ResourceStorageLocation = "oss" | "local" | "none";
 
 export function resourceStorageLocation(storageKey?: string): ResourceStorageLocation {
@@ -7,14 +8,14 @@ export function resourceStorageLocation(storageKey?: string): ResourceStorageLoc
 
 export function resourceStorageLabel(storageKey?: string) {
     const location = resourceStorageLocation(storageKey);
-    if (location === "oss") return "已上传";
-    if (location === "local") return "本地";
-    return "未同步";
+    if (location === "oss") return t("canvas:uploaded");
+    if (location === "local") return t("canvas:local-only");
+    return t("canvas:not-synced");
 }
 
 export function resourceStorageTitle(storageKey?: string) {
     const location = resourceStorageLocation(storageKey);
-    if (location === "oss") return "已上传到对象存储，并以账号资源同步";
-    if (location === "local") return "保存在当前浏览器本地，通常是对象存储未启用或上传失败后的降级";
-    return "还没有可同步的资源标识";
+    if (location === "oss") return t("canvas:uploaded-to-object-storage-and-synced-as-an-account-resource");
+    if (location === "local") return t("canvas:stored-locally-in-this-browser-usually-because-object-storage-is-disable");
+    return t("canvas:no-resource-identifier-to-sync-yet");
 }

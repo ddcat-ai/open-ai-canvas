@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask } from "@/services/api/task-center";
 
@@ -29,15 +30,15 @@ export function recoverCreationTextTask(message: RecoverableCreationTextMessage,
     if (succeeded) {
         try {
             const text = parseBackendGenerationResult(succeeded).text;
-            if (!text?.trim()) throw new Error("后端任务没有返回文本");
+            if (!text?.trim()) throw new Error(t("domain:backend-task-returned-no-text"));
             return { status: "done", content: text, error: undefined, taskIds: nextTaskIds };
         } catch (error) {
-            return { status: "error", content: "生成失败", error: error instanceof Error ? error.message : "文本任务结果格式错误", taskIds: nextTaskIds };
+            return { status: "error", content: t("domain:generation-failed"), error: error instanceof Error ? error.message : t("domain:invalid-text-task-result-format"), taskIds: nextTaskIds };
         }
     }
     if (matches.every((task) => task.status === "cancelled")) {
-        return { status: "cancelled", content: "已停止", error: undefined, taskIds: nextTaskIds };
+        return { status: "cancelled", content: t("domain:stopped"), error: undefined, taskIds: nextTaskIds };
     }
     const failed = matches.find((task) => task.status === "failed");
-    return { status: "error", content: "生成失败", error: failed?.error || "文本任务已失败", taskIds: nextTaskIds };
+    return { status: "error", content: t("domain:generation-failed"), error: failed?.error || t("domain:text-task-failed"), taskIds: nextTaskIds };
 }

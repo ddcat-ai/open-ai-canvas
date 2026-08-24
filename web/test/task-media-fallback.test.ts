@@ -12,7 +12,7 @@ describe("media fallback", () => {
 
         expect(preview).toContain("failedSrc === src");
         expect(preview).toContain("onError={handleUnavailable}");
-        expect(preview).toContain("预览不可用，素材可能已删除");
+        expect(preview).toContain('t("domain:preview-unavailable-the-asset-may-have-been-deleted")');
         expect(preview).toContain("<ImageOff");
     });
 
@@ -49,7 +49,7 @@ describe("task cancellation policy", () => {
         expect(page).not.toContain("cancelGenerationTask");
         expect(page).not.toContain('runAction(detailTask.id, "cancel")');
         expect(page).toContain('if (task.status === "queued" || task.status === "running")');
-        expect(page).toContain("任务正在执行，不能删除本机记录");
+        expect(page).toContain('t("tasks:task-is-running-its-local-record-cannot-be-deleted-wait-for-it-to-finish")');
     });
 
     test("batch stop only applies to items still waiting locally", () => {

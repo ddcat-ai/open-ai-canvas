@@ -5,6 +5,7 @@ import { Mic } from "lucide-react";
 import { VoiceRecordingInline } from "./voice-recording-inline";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useTranslation } from "react-i18next";
 
 type VoiceRecordingButtonProps = {
     /** 转写完成回调，返回转写文本 */
@@ -18,22 +19,14 @@ type VoiceRecordingButtonProps = {
  * 使用局部状态，多个输入行可独立使用
  */
 export function VoiceRecordingButton({ onTranscribed, disabled }: VoiceRecordingButtonProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [open, setOpen] = useState(false);
 
     return (
         <>
-            <Tooltip title="实时对话">
-                <Button
-                    type="text"
-                    shape="circle"
-                    className="!h-8 !w-8 !min-w-8"
-                    disabled={disabled}
-                    style={{ color: theme.node.muted }}
-                    icon={<Mic className="size-4" />}
-                    onClick={() => setOpen(true)}
-                    aria-label="实时对话"
-                />
+            <Tooltip title={t("domain:live-conversation")}>
+                <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" disabled={disabled} style={{ color: theme.node.muted }} icon={<Mic className="size-4" />} onClick={() => setOpen(true)} aria-label={t("domain:live-conversation")} />
             </Tooltip>
             {open ? (
                 <VoiceRecordingInline

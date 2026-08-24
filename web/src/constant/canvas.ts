@@ -1,31 +1,36 @@
 import { CanvasNodeType } from "@/types/canvas";
 import type { CanvasNodeMetadata } from "@/types/canvas";
+import { t } from "@/i18n";
 
 type CanvasNodeSpec = {
     width: number;
     height: number;
-    title: string;
+    titleKey: string;
     metadata?: CanvasNodeMetadata;
 };
 
+type ResolvedCanvasNodeSpec = Omit<CanvasNodeSpec, "titleKey"> & {
+    title: string;
+};
+
 export const NODE_DEFAULT_SIZE = {
-    [CanvasNodeType.Image]: { width: 720, height: 405, title: "图片" },
-    [CanvasNodeType.Text]: { width: 340, height: 240, title: "Note" },
-    [CanvasNodeType.Drawing]: { width: 440, height: 300, title: "绘图" },
-    [CanvasNodeType.Script]: { width: 920, height: 360, title: "分镜脚本" },
-    [CanvasNodeType.Skill]: { width: 360, height: 220, title: "技能" },
-    [CanvasNodeType.Config]: { width: 340, height: 300, title: "生成配置" },
-    [CanvasNodeType.Video]: { width: 720, height: 405, title: "视频" },
-    [CanvasNodeType.Audio]: { width: 340, height: 120, title: "Audio" },
-    [CanvasNodeType.Frame]: { width: 760, height: 520, title: "未命名背板" },
-    [CanvasNodeType.Markdown]: { width: 420, height: 320, title: "Markdown" },
-    [CanvasNodeType.Svg]: { width: 420, height: 320, title: "SVG" },
-    [CanvasNodeType.Html]: { width: 520, height: 380, title: "HTML" },
-    [CanvasNodeType.Panorama]: { width: 520, height: 300, title: "全景" },
-    [CanvasNodeType.Compare]: { width: 520, height: 320, title: "对比" },
-    [CanvasNodeType.Chart]: { width: 480, height: 320, title: "图表" },
-    [CanvasNodeType.ColorGrade]: { width: 420, height: 360, title: "调色" },
-} satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
+    [CanvasNodeType.Image]: { width: 720, height: 405, titleKey: "canvas:image-node" },
+    [CanvasNodeType.Text]: { width: 340, height: 240, titleKey: "canvas:text-node" },
+    [CanvasNodeType.Drawing]: { width: 440, height: 300, titleKey: "canvas:drawing-node" },
+    [CanvasNodeType.Script]: { width: 920, height: 360, titleKey: "canvas:storyboard-script-node" },
+    [CanvasNodeType.Skill]: { width: 360, height: 220, titleKey: "canvas:skill-node" },
+    [CanvasNodeType.Config]: { width: 340, height: 300, titleKey: "canvas:generation-config-node" },
+    [CanvasNodeType.Video]: { width: 720, height: 405, titleKey: "canvas:video-node" },
+    [CanvasNodeType.Audio]: { width: 340, height: 120, titleKey: "canvas:audio-node" },
+    [CanvasNodeType.Frame]: { width: 760, height: 520, titleKey: "domain:untitled-frame" },
+    [CanvasNodeType.Markdown]: { width: 420, height: 320, titleKey: "canvas:markdown" },
+    [CanvasNodeType.Svg]: { width: 420, height: 320, titleKey: "canvas:svg" },
+    [CanvasNodeType.Html]: { width: 520, height: 380, titleKey: "canvas:html" },
+    [CanvasNodeType.Panorama]: { width: 520, height: 300, titleKey: "domain:360-panorama" },
+    [CanvasNodeType.Compare]: { width: 520, height: 320, titleKey: "canvas:contrast" },
+    [CanvasNodeType.Chart]: { width: 480, height: 320, titleKey: "canvas:chart" },
+    [CanvasNodeType.ColorGrade]: { width: 420, height: 360, titleKey: "canvas:color-grade" },
+} satisfies Record<CanvasNodeType, { width: number; height: number; titleKey: string }>;
 
 export const NODE_SPECS = {
     [CanvasNodeType.Image]: {
@@ -102,6 +107,7 @@ export const NODE_SPECS = {
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;
 
-export function getNodeSpec(type: CanvasNodeType) {
-    return NODE_SPECS[type];
+export function getNodeSpec(type: CanvasNodeType): ResolvedCanvasNodeSpec {
+    const spec = NODE_SPECS[type];
+    return { ...spec, title: t(spec.titleKey) };
 }

@@ -1,0 +1,477 @@
+{
+    "ns": "dev",
+    "entries": {
+        "t:流光玻璃": {
+            "type": "ui",
+            "zh": "流光玻璃",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 13
+                }
+            ],
+            "key": "glass-sheen",
+            "en": "Glass sheen"
+        },
+        "t:复刻参考 · 加号入口": {
+            "type": "ui",
+            "zh": "复刻参考 · 加号入口",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 13
+                }
+            ],
+            "key": "reference-replica-plus-entry",
+            "en": "Reference replica · Plus entry"
+        },
+        "t:内容陈列": {
+            "type": "ui",
+            "zh": "内容陈列",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 14
+                }
+            ],
+            "key": "showcase",
+            "en": "Showcase"
+        },
+        "t:复刻参考 · 文件预览": {
+            "type": "ui",
+            "zh": "复刻参考 · 文件预览",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 14
+                }
+            ],
+            "key": "reference-replica-file-preview",
+            "en": "Reference replica · File preview"
+        },
+        "t:午夜封面": {
+            "type": "ui",
+            "zh": "午夜封面",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 15
+                }
+            ],
+            "key": "midnight-cover",
+            "en": "Midnight cover"
+        },
+        "t:复刻参考 · 深色标签": {
+            "type": "ui",
+            "zh": "复刻参考 · 深色标签",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 15
+                }
+            ],
+            "key": "reference-replica-dark-tags",
+            "en": "Reference replica · Dark tags"
+        },
+        "t:纸感收藏": {
+            "type": "ui",
+            "zh": "纸感收藏",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 16
+                }
+            ],
+            "key": "paper-collection",
+            "en": "Paper collection"
+        },
+        "t:衍生 · 轻量资料": {
+            "type": "ui",
+            "zh": "衍生 · 轻量资料",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 16
+                }
+            ],
+            "key": "derivative-light-dossier",
+            "en": "Derivative · Light dossier"
+        },
+        "t:电影胶片": {
+            "type": "ui",
+            "zh": "电影胶片",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "film-strip",
+            "en": "Film strip"
+        },
+        "t:衍生 · 影像项目": {
+            "type": "ui",
+            "zh": "衍生 · 影像项目",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "derivative-video-project",
+            "en": "Derivative · Video project"
+        },
+        "t:紧凑资料": {
+            "type": "ui",
+            "zh": "紧凑资料",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "compact-dossier",
+            "en": "Compact dossier"
+        },
+        "t:衍生 · 高频调用": {
+            "type": "ui",
+            "zh": "衍生 · 高频调用",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "derivative-frequent-access",
+            "en": "Derivative · Frequent access"
+        },
+        "t:原图复刻": {
+            "type": "ui",
+            "zh": "原图复刻",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "faithful-replica",
+            "en": "Faithful replica"
+        },
+        "t:三种参考结构：玻璃加号、内容陈列、午夜封面。": {
+            "type": "ui",
+            "zh": "三种参考结构：玻璃加号、内容陈列、午夜封面。",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 25
+                }
+            ],
+            "key": "three-reference-structures-glass-plus-entry-showcase-and-midnight-cover",
+            "en": "Three reference structures: glass plus entry, showcase, and midnight cover."
+        },
+        "t:风格衍生": {
+            "type": "ui",
+            "zh": "风格衍生",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 30
+                }
+            ],
+            "key": "style-derivatives",
+            "en": "Style derivatives"
+        },
+        "t:外形与主题正交组合，六种结构都可切换四套皮肤。": {
+            "type": "ui",
+            "zh": "外形与主题正交组合，六种结构都可切换四套皮肤。",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "shape-and-theme-combine-orthogonally-all-six-structures-switch-between-f",
+            "en": "Shape and theme combine orthogonally; all six structures switch between four skins."
+        },
+        "t:灵感收藏": {
+            "type": "ui",
+            "zh": "灵感收藏",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 56
+                }
+            ],
+            "key": "inspiration-collection",
+            "en": "Inspiration collection"
+        },
+        "t:影像资产": {
+            "type": "ui",
+            "zh": "影像资产",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 56
+                }
+            ],
+            "key": "video-assets",
+            "en": "Video assets"
+        },
+        "t:快速调用": {
+            "type": "ui",
+            "zh": "快速调用",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 56
+                }
+            ],
+            "key": "quick-access",
+            "en": "Quick access"
+        },
+        "t:主视觉": {
+            "type": "ui",
+            "zh": "主视觉",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "key-visual",
+            "en": "Key visual"
+        },
+        "t:氛围参考": {
+            "type": "ui",
+            "zh": "氛围参考",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "mood-references",
+            "en": "Mood references"
+        },
+        "t:场景草图": {
+            "type": "ui",
+            "zh": "场景草图",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "scene-sketches",
+            "en": "Scene sketches"
+        },
+        "t:色彩方案": {
+            "type": "ui",
+            "zh": "色彩方案",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "color-palettes",
+            "en": "Color palettes"
+        },
+        "t:镜头灵感": {
+            "type": "ui",
+            "zh": "镜头灵感",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "shot-inspiration",
+            "en": "Shot inspiration"
+        },
+        "cx:src/pages/dev/folder-preview-lab.tsx:4230": {
+            "type": "skipped",
+            "zh": "`新素材 ${index + 1}`",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 95
+                }
+            ]
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:通用素材文件夹:4663": {
+            "type": "jsxtext",
+            "zh": "通用素材文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 105
+                }
+            ],
+            "key": "general-asset-folder",
+            "en": "General asset folder"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:文件夹外形与主题皮肤独立：四套主题都不是内部素材。打开后，真实内容以独立卡片展示；悬停、单击、双击与菜单均可交互。:4700": {
+            "type": "jsxtext",
+            "zh": "文件夹外形与主题皮肤独立：四套主题都不是内部素材。打开后，真实内容以独立卡片展示；悬停、单击、双击与菜单均可交互。",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 106
+                }
+            ],
+            "key": "folder-shape-and-theme-skin-are-independent-none-of-the-four-themes-repr",
+            "en": "Folder shape and theme skin are independent: none of the four themes represent inner assets. Opened folders show real content as separate cards; hover, click, double-click, and menus all work."
+        },
+        "t:预览主题": {
+            "type": "ui",
+            "zh": "预览主题",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 109
+                }
+            ],
+            "key": "preview-theme",
+            "en": "Preview theme"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:浅色:5094": {
+            "type": "jsxtext",
+            "zh": "浅色",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 111
+                }
+            ],
+            "key": "light",
+            "en": "Light"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:深色:5295": {
+            "type": "jsxtext",
+            "zh": "深色",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 114
+                }
+            ],
+            "key": "dark",
+            "en": "Dark"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:试试 hover、双击、样式与主题切换:5512": {
+            "type": "jsxtext",
+            "zh": "试试 hover、双击、样式与主题切换",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "try-hover-double-click-style-switching-and-theme-switching",
+            "en": "Try hover, double-click, style switching, and theme switching"
+        },
+        "tpl:打开 {{title}}": {
+            "type": "template",
+            "zh": "打开 {{title}}",
+            "params": {
+                "title": "folder.title"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 144
+                }
+            ],
+            "key": "open-param",
+            "en": "Open {{{title}}}"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:打开文件夹:9860": {
+            "type": "jsxtext",
+            "zh": "打开文件夹",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 183
+                }
+            ],
+            "key": "open-folder",
+            "en": "Open folder"
+        },
+        "t:可用文件夹主题": {
+            "type": "ui",
+            "zh": "可用文件夹主题",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 192
+                }
+            ],
+            "key": "available-folder-themes",
+            "en": "Available folder themes"
+        },
+        "tpl:{{title}} 内容": {
+            "type": "template",
+            "zh": "{{title}} 内容",
+            "params": {
+                "title": "openedFolder.title"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 202
+                }
+            ],
+            "key": "param-contents",
+            "en": "{{{title}}} contents"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:返回:10816": {
+            "type": "jsxtext",
+            "zh": "返回",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 205
+                }
+            ],
+            "key": "back",
+            "en": "Back"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:已打开:10921": {
+            "type": "jsxtext",
+            "zh": "已打开",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 208
+                }
+            ],
+            "key": "opened",
+            "en": "Opened"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:添加示例内容:11152": {
+            "type": "jsxtext",
+            "zh": "添加示例内容",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 212
+                }
+            ],
+            "key": "add-sample-content",
+            "en": "Add sample content"
+        },
+        "jsx:src/pages/dev/folder-preview-lab.tsx:图片素材:11679": {
+            "type": "jsxtext",
+            "zh": "图片素材",
+            "locations": [
+                {
+                    "file": "src/pages/dev/folder-preview-lab.tsx",
+                    "line": 221
+                }
+            ],
+            "key": "image-assets",
+            "en": "Image assets"
+        }
+    }
+}

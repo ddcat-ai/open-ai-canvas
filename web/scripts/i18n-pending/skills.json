@@ -1,0 +1,1535 @@
+{
+    "ns": "skills",
+    "entries": {
+        "t:技能广场": {
+            "type": "ui",
+            "zh": "技能广场",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 15
+                }
+            ],
+            "key": "skill-gallery",
+            "en": "Skill gallery"
+        },
+        "t:我的技能": {
+            "type": "ui",
+            "zh": "我的技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 16
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "my-skills",
+            "en": "My skills"
+        },
+        "t:我创建的": {
+            "type": "ui",
+            "zh": "我创建的",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "created-by-me",
+            "en": "Created by me"
+        },
+        "t:我的收藏": {
+            "type": "ui",
+            "zh": "我的收藏",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "my-favorites",
+            "en": "My favorites"
+        },
+        "t:最多加入": {
+            "type": "ui",
+            "zh": "最多加入",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 32
+                }
+            ],
+            "key": "up-to",
+            "en": "Up to"
+        },
+        "t:最新发布": {
+            "type": "ui",
+            "zh": "最新发布",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 33
+                }
+            ],
+            "key": "newest",
+            "en": "Newest"
+        },
+        "t:最近更新": {
+            "type": "ui",
+            "zh": "最近更新",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 34
+                }
+            ],
+            "key": "recently-updated",
+            "en": "Recently updated"
+        },
+        "t:技能加载失败": {
+            "type": "ui",
+            "zh": "技能加载失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 87
+                }
+            ],
+            "key": "failed-to-load-skills",
+            "en": "Failed to load skills"
+        },
+        "t:技能详情加载失败": {
+            "type": "ui",
+            "zh": "技能详情加载失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 109
+                }
+            ],
+            "key": "failed-to-load-skill-details",
+            "en": "Failed to load skill details"
+        },
+        "t:技能读取失败": {
+            "type": "ui",
+            "zh": "技能读取失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 128
+                }
+            ],
+            "key": "failed-to-read-skill",
+            "en": "Failed to read skill"
+        },
+        "t:已加入我的技能": {
+            "type": "ui",
+            "zh": "已加入我的技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "added-to-my-skills",
+            "en": "Added to My skills"
+        },
+        "t:已从我的技能移除": {
+            "type": "ui",
+            "zh": "已从我的技能移除",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "removed-from-my-skills",
+            "en": "Removed from My skills"
+        },
+        "t:技能状态更新失败": {
+            "type": "ui",
+            "zh": "技能状态更新失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 146
+                }
+            ],
+            "key": "failed-to-update-skill-status",
+            "en": "Failed to update skill status"
+        },
+        "t:已收藏": {
+            "type": "ui",
+            "zh": "已收藏",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 157
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 19
+                }
+            ],
+            "key": "favorited",
+            "en": "Favorited"
+        },
+        "t:已取消收藏": {
+            "type": "ui",
+            "zh": "已取消收藏",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 157
+                }
+            ],
+            "key": "favorite-removed",
+            "en": "Favorite removed"
+        },
+        "t:收藏状态更新失败": {
+            "type": "ui",
+            "zh": "收藏状态更新失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "failed-to-update-favorite-status",
+            "en": "Failed to update favorite status"
+        },
+        "tpl:删除“{{skill_name}}”？": {
+            "type": "template",
+            "zh": "删除“{{skill_name}}”？",
+            "params": {
+                "skill_name": "skill.skill_name"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 168
+                }
+            ],
+            "key": "delete-param",
+            "en": "Delete “{{{skill_name}}}”?"
+        },
+        "t:删除后，其他用户将无法继续使用该技能，已有加入和收藏关系也会一并移除。": {
+            "type": "ui",
+            "zh": "删除后，其他用户将无法继续使用该技能，已有加入和收藏关系也会一并移除。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 169
+                }
+            ],
+            "key": "once-deleted-other-users-can-no-longer-use-this-skill-existing-adoptions",
+            "en": "Once deleted, other users can no longer use this skill; existing adoptions and favorites are removed as well."
+        },
+        "t:删除技能": {
+            "type": "ui",
+            "zh": "删除技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 170
+                },
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 288
+                }
+            ],
+            "key": "delete-skill",
+            "en": "Delete skill"
+        },
+        "t:取消": {
+            "type": "ui",
+            "zh": "取消",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 172
+                }
+            ],
+            "key": "cancel",
+            "en": "Cancel"
+        },
+        "t:技能已删除": {
+            "type": "ui",
+            "zh": "技能已删除",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 177
+                }
+            ],
+            "key": "skill-deleted",
+            "en": "Skill deleted"
+        },
+        "t:技能删除失败": {
+            "type": "ui",
+            "zh": "技能删除失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 180
+                }
+            ],
+            "key": "failed-to-delete-skill",
+            "en": "Failed to delete skill"
+        },
+        "jsx:src/pages/skills/index.tsx:技能广场:8746": {
+            "type": "jsxtext",
+            "zh": "技能广场",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 192
+                }
+            ],
+            "key": "skill-gallery-2",
+            "en": "Skill gallery"
+        },
+        "jsx:src/pages/skills/index.tsx:技能库:8840": {
+            "type": "jsxtext",
+            "zh": "技能库",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "skill-library",
+            "en": "Skill library"
+        },
+        "jsx:src/pages/skills/index.tsx:把常用的提示词、角色设定和创作方法收进自己的工具架。:8913": {
+            "type": "jsxtext",
+            "zh": "把常用的提示词、角色设定和创作方法收进自己的工具架。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 194
+                }
+            ],
+            "key": "keep-your-favorite-prompts-character-profiles-and-creative-methods-on-yo",
+            "en": "Keep your favorite prompts, character profiles, and creative methods on your own shelf."
+        },
+        "jsx:src/pages/skills/index.tsx:个技能:9011": {
+            "type": "jsxtext",
+            "zh": "个技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 195
+                }
+            ],
+            "key": "skills",
+            "en": "skills"
+        },
+        "t:技能库范围": {
+            "type": "ui",
+            "zh": "技能库范围",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 200
+                }
+            ],
+            "key": "skill-library-scope",
+            "en": "Skill library scope"
+        },
+        "t:搜索技能或作者": {
+            "type": "ui",
+            "zh": "搜索技能或作者",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 223
+                }
+            ],
+            "key": "search-skills-or-authors",
+            "en": "Search skills or authors"
+        },
+        "t:全部分类": {
+            "type": "ui",
+            "zh": "全部分类",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 224
+                }
+            ],
+            "key": "all-categories",
+            "en": "All categories"
+        },
+        "jsx:src/pages/skills/index.tsx:个:12321": {
+            "type": "jsxtext",
+            "zh": "个",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 239
+                }
+            ],
+            "key": "item",
+            "en": ""
+        },
+        "jsx:src/pages/skills/index.tsx:创建技能:12733": {
+            "type": "jsxtext",
+            "zh": "创建技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 242
+                }
+            ],
+            "key": "create-skill",
+            "en": "Create skill"
+        },
+        "jsx:src/pages/skills/index.tsx:把一套方法变成可复用能力:12782": {
+            "type": "jsxtext",
+            "zh": "把一套方法变成可复用能力",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 242
+                }
+            ],
+            "key": "turn-a-workflow-into-a-reusable-capability",
+            "en": "Turn a workflow into a reusable capability"
+        },
+        "t:没有找到匹配技能": {
+            "type": "ui",
+            "zh": "没有找到匹配技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 254
+                }
+            ],
+            "key": "no-matching-skills",
+            "en": "No matching skills"
+        },
+        "t:还没有创建技能": {
+            "type": "ui",
+            "zh": "还没有创建技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 254
+                }
+            ],
+            "key": "no-skills-created-yet",
+            "en": "No skills created yet"
+        },
+        "t:技能广场还是空的": {
+            "type": "ui",
+            "zh": "技能广场还是空的",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 254
+                }
+            ],
+            "key": "the-gallery-is-still-empty",
+            "en": "The gallery is still empty"
+        },
+        "t:这里还没有技能": {
+            "type": "ui",
+            "zh": "这里还没有技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 254
+                }
+            ],
+            "key": "nothing-here-yet",
+            "en": "Nothing here yet"
+        },
+        "t:换个关键词或分类试试。": {
+            "type": "ui",
+            "zh": "换个关键词或分类试试。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "try-a-different-keyword-or-category",
+            "en": "Try a different keyword or category."
+        },
+        "t:收藏的公开技能会显示在这里。": {
+            "type": "ui",
+            "zh": "收藏的公开技能会显示在这里。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "public-skills-you-favorite-appear-here",
+            "en": "Public skills you favorite appear here."
+        },
+        "t:从技能广场加入后会显示在这里。": {
+            "type": "ui",
+            "zh": "从技能广场加入后会显示在这里。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "skills-you-adopt-from-the-gallery-appear-here",
+            "en": "Skills you adopt from the gallery appear here."
+        },
+        "t:创建并公开第一个技能，其他用户就能直接加入使用。": {
+            "type": "ui",
+            "zh": "创建并公开第一个技能，其他用户就能直接加入使用。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 255
+                }
+            ],
+            "key": "publish-the-first-skill-and-others-can-adopt-it-right-away",
+            "en": "Publish the first skill and others can adopt it right away."
+        },
+        "jsx:src/pages/skills/index.tsx:清除筛选:14109": {
+            "type": "jsxtext",
+            "zh": "清除筛选",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 257
+                }
+            ],
+            "key": "clear-filters",
+            "en": "Clear filters"
+        },
+        "jsx:src/pages/skills/index.tsx:创建技能:14323": {
+            "type": "jsxtext",
+            "zh": "创建技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 259
+                }
+            ],
+            "key": "create-skill-2",
+            "en": "Create skill"
+        },
+        "t:编辑技能": {
+            "type": "ui",
+            "zh": "编辑技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 287
+                },
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 99
+                }
+            ],
+            "key": "edit-skill",
+            "en": "Edit skill"
+        },
+        "t:技能操作": {
+            "type": "ui",
+            "zh": "技能操作",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 293
+                }
+            ],
+            "key": "skill-actions",
+            "en": "Skill actions"
+        },
+        "t:暂无技能简介": {
+            "type": "ui",
+            "zh": "暂无技能简介",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 300
+                }
+            ],
+            "key": "no-description-yet",
+            "en": "No description yet"
+        },
+        "t:取消收藏": {
+            "type": "ui",
+            "zh": "取消收藏",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 303
+                }
+            ],
+            "key": "unfavorite",
+            "en": "Unfavorite"
+        },
+        "t:收藏": {
+            "type": "ui",
+            "zh": "收藏",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 303
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 19
+                }
+            ],
+            "key": "favorite",
+            "en": "Favorite"
+        },
+        "t:未知用户": {
+            "type": "ui",
+            "zh": "未知用户",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 307
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 35
+                }
+            ],
+            "key": "unknown-user",
+            "en": "Unknown user"
+        },
+        "jsx:src/pages/skills/index.tsx:仅自己:17729": {
+            "type": "jsxtext",
+            "zh": "仅自己",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 309
+                }
+            ],
+            "key": "private",
+            "en": "Private"
+        },
+        "jsx:src/pages/skills/index.tsx:我创建的:17957": {
+            "type": "jsxtext",
+            "zh": "我创建的",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 313
+                }
+            ],
+            "key": "created-by-me-2",
+            "en": "Created by me"
+        },
+        "jsx:src/pages/skills/index.tsx:人已加入:18046": {
+            "type": "jsxtext",
+            "zh": "人已加入",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 313
+                }
+            ],
+            "key": "users-joined",
+            "en": " users joined"
+        },
+        "t:已加入": {
+            "type": "ui",
+            "zh": "已加入",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 318
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "joined",
+            "en": "Joined"
+        },
+        "t:加入我的技能库": {
+            "type": "ui",
+            "zh": "加入我的技能库",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 318
+                }
+            ],
+            "key": "add-to-my-library",
+            "en": "Add to my library"
+        },
+        "cx:src/pages/skills/index.tsx:18651": {
+            "type": "skipped",
+            "zh": "`${formatSkillCount(skill.added_count)} 人已加入`",
+            "locations": [
+                {
+                    "file": "src/pages/skills/index.tsx",
+                    "line": 320
+                }
+            ]
+        },
+        "t:短剧影视": {
+            "type": "ui",
+            "zh": "短剧影视",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 4
+                }
+            ],
+            "key": "short-drama-and-film",
+            "en": "Short drama & film"
+        },
+        "t:电商营销": {
+            "type": "ui",
+            "zh": "电商营销",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 5
+                }
+            ],
+            "key": "e-commerce-marketing",
+            "en": "E-commerce marketing"
+        },
+        "t:创意设计": {
+            "type": "ui",
+            "zh": "创意设计",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 6
+                }
+            ],
+            "key": "creative-design",
+            "en": "Creative design"
+        },
+        "t:社媒内容": {
+            "type": "ui",
+            "zh": "社媒内容",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 7
+                }
+            ],
+            "key": "social-media-content",
+            "en": "Social media content"
+        },
+        "t:其他": {
+            "type": "ui",
+            "zh": "其他",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 8
+                },
+                {
+                    "file": "src/pages/skills/skill-catalog.ts",
+                    "line": 12
+                }
+            ],
+            "key": "other",
+            "en": "Other"
+        },
+        "t:技能详情": {
+            "type": "ui",
+            "zh": "技能详情",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 9
+                }
+            ],
+            "key": "skill-details",
+            "en": "Skill details"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:编辑:893": {
+            "type": "jsxtext",
+            "zh": "编辑",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 9
+                }
+            ],
+            "key": "edit",
+            "en": "Edit"
+        },
+        "t:仅自己可见": {
+            "type": "ui",
+            "zh": "仅自己可见",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 14
+                }
+            ],
+            "key": "only-me",
+            "en": "Only me"
+        },
+        "t:公开技能": {
+            "type": "ui",
+            "zh": "公开技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 14
+                }
+            ],
+            "key": "public-skill",
+            "en": "Public skill"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:更新于:1329": {
+            "type": "jsxtext",
+            "zh": "更新于",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 14
+                }
+            ],
+            "key": "updated",
+            "en": "Updated"
+        },
+        "t:加入技能": {
+            "type": "ui",
+            "zh": "加入技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "adopt-skill",
+            "en": "Adopt skill"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:人加入:2305": {
+            "type": "jsxtext",
+            "zh": "人加入",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 20
+                }
+            ],
+            "key": "users-joined-2",
+            "en": " users joined"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:技能指令:2737": {
+            "type": "jsxtext",
+            "zh": "技能指令",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 28
+                }
+            ],
+            "key": "skill-instructions",
+            "en": "Skill instructions"
+        },
+        "t:打开 Markdown 原文": {
+            "type": "ui",
+            "zh": "打开 Markdown 原文",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 29
+                },
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 29
+                }
+            ],
+            "key": "open-markdown-source",
+            "en": "Open Markdown source"
+        },
+        "t:暂无技能指令": {
+            "type": "ui",
+            "zh": "暂无技能指令",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "no-instructions-yet",
+            "en": "No instructions yet"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:作者：:3639": {
+            "type": "jsxtext",
+            "zh": "作者：",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 35
+                }
+            ],
+            "key": "author",
+            "en": "Author:"
+        },
+        "jsx:src/pages/skills/skill-detail-drawer.tsx:展示案例:4130": {
+            "type": "jsxtext",
+            "zh": "展示案例",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 47
+                }
+            ],
+            "key": "showcase",
+            "en": "Showcase"
+        },
+        "cx:src/pages/skills/skill-detail-drawer.tsx:4727": {
+            "type": "skipped",
+            "zh": "`${skill.skill_name} 展示案例 ${index + 1}`",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-detail-drawer.tsx",
+                    "line": 51
+                }
+            ]
+        },
+        "t:放弃未保存的修改？": {
+            "type": "ui",
+            "zh": "放弃未保存的修改？",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 42
+                }
+            ],
+            "key": "discard-unsaved-changes",
+            "en": "Discard unsaved changes?"
+        },
+        "t:当前填写内容不会保留。": {
+            "type": "ui",
+            "zh": "当前填写内容不会保留。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 42
+                }
+            ],
+            "key": "what-you-have-entered-will-not-be-kept",
+            "en": "What you have entered will not be kept."
+        },
+        "t:放弃修改": {
+            "type": "ui",
+            "zh": "放弃修改",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 42
+                }
+            ],
+            "key": "discard-changes",
+            "en": "Discard changes"
+        },
+        "t:继续编辑": {
+            "type": "ui",
+            "zh": "继续编辑",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 42
+                }
+            ],
+            "key": "keep-editing",
+            "en": "Keep editing"
+        },
+        "t:技能已更新": {
+            "type": "ui",
+            "zh": "技能已更新",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 60
+                }
+            ],
+            "key": "skill-updated",
+            "en": "Skill updated"
+        },
+        "t:技能已创建": {
+            "type": "ui",
+            "zh": "技能已创建",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 60
+                }
+            ],
+            "key": "skill-created",
+            "en": "Skill created"
+        },
+        "t:技能保存失败": {
+            "type": "ui",
+            "zh": "技能保存失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 63
+                }
+            ],
+            "key": "failed-to-save-skill",
+            "en": "Failed to save skill"
+        },
+        "t:请先描述你想沉淀的技能": {
+            "type": "ui",
+            "zh": "请先描述你想沉淀的技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "describe-the-skill-you-want-to-capture-first",
+            "en": "Describe the skill you want to capture first"
+        },
+        "t:尚未配置可用的文本模型，请先到设置页配置": {
+            "type": "ui",
+            "zh": "尚未配置可用的文本模型，请先到设置页配置",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 76
+                }
+            ],
+            "key": "no-text-model-configured-set-one-up-in-settings-first",
+            "en": "No text model configured. Set one up in Settings first"
+        },
+        "t:草稿已生成，请检查并调整后保存": {
+            "type": "ui",
+            "zh": "草稿已生成，请检查并调整后保存",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 90
+                }
+            ],
+            "key": "draft-generated-review-adjust-then-save",
+            "en": "Draft generated. Review, adjust, then save"
+        },
+        "tpl:起草失败：{{message}}": {
+            "type": "template",
+            "zh": "起草失败：{{message}}",
+            "params": {
+                "message": "error.message"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 92
+                }
+            ],
+            "key": "drafting-failed-param",
+            "en": "Drafting failed: {{{message}}}"
+        },
+        "t:起草失败": {
+            "type": "ui",
+            "zh": "起草失败",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 92
+                }
+            ],
+            "key": "drafting-failed",
+            "en": "Drafting failed"
+        },
+        "t:创建技能": {
+            "type": "ui",
+            "zh": "创建技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 99
+                }
+            ],
+            "key": "create-skill-3",
+            "en": "Create skill"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:保存技能:4492": {
+            "type": "jsxtext",
+            "zh": "保存技能",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 99
+                }
+            ],
+            "key": "save-skill",
+            "en": "Save skill"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:AI 起草:4721": {
+            "type": "jsxtext",
+            "zh": "AI 起草",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 102
+                }
+            ],
+            "key": "ai-draft",
+            "en": "AI draft"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:描述想法，一键生成名称、简介与指令草稿（可再编辑）:4819": {
+            "type": "jsxtext",
+            "zh": "描述想法，一键生成名称、简介与指令草稿（可再编辑）",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 104
+                }
+            ],
+            "key": "describe-your-idea-and-generate-a-name-summary-and-instruction-draft-in",
+            "en": "Describe your idea and generate a name, summary, and instruction draft in one click (editable afterwards)"
+        },
+        "t:例如：我要一个竖屏短剧分镜技能——输入剧本段落，输出按景别排列的分镜表，每个镜头包含画面、台词、时长与转场…": {
+            "type": "ui",
+            "zh": "例如：我要一个竖屏短剧分镜技能——输入剧本段落，输出按景别排列的分镜表，每个镜头包含画面、台词、时长与转场…",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 113
+                }
+            ],
+            "key": "e-g-i-want-a-vertical-drama-storyboarding-skill-paste-a-script-and-get-a",
+            "en": "e.g. I want a vertical-drama storyboarding skill — paste a script and get a shot list ordered by shot size, with visuals, dialogue, duration, and transitions per shot…"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:将使用你的文本模型生成一次草稿:5449": {
+            "type": "jsxtext",
+            "zh": "将使用你的文本模型生成一次草稿",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 116
+                }
+            ],
+            "key": "your-text-model-will-generate-one-draft",
+            "en": "Your text model will generate one draft"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:生成草稿:5637": {
+            "type": "jsxtext",
+            "zh": "生成草稿",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 117
+                }
+            ],
+            "key": "generate-draft",
+            "en": "Generate draft"
+        },
+        "t:技能名称": {
+            "type": "ui",
+            "zh": "技能名称",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 122
+                }
+            ],
+            "key": "skill-name",
+            "en": "Skill name"
+        },
+        "t:请填写技能名称": {
+            "type": "ui",
+            "zh": "请填写技能名称",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 122
+                }
+            ],
+            "key": "enter-a-skill-name",
+            "en": "Enter a skill name"
+        },
+        "t:最多 80 个字符": {
+            "type": "ui",
+            "zh": "最多 80 个字符",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 122
+                }
+            ],
+            "key": "up-to-80-characters",
+            "en": "Up to 80 characters"
+        },
+        "t:例如：短剧导演分镜": {
+            "type": "ui",
+            "zh": "例如：短剧导演分镜",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 123
+                }
+            ],
+            "key": "e-g-drama-director-storyboards",
+            "en": "e.g. Drama director storyboards"
+        },
+        "t:技能分类": {
+            "type": "ui",
+            "zh": "技能分类",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 125
+                }
+            ],
+            "key": "skill-category",
+            "en": "Skill category"
+        },
+        "t:请选择技能分类": {
+            "type": "ui",
+            "zh": "请选择技能分类",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 125
+                }
+            ],
+            "key": "choose-a-skill-category",
+            "en": "Choose a skill category"
+        },
+        "t:技能简介": {
+            "type": "ui",
+            "zh": "技能简介",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 130
+                }
+            ],
+            "key": "skill-summary",
+            "en": "Skill summary"
+        },
+        "t:请填写技能简介": {
+            "type": "ui",
+            "zh": "请填写技能简介",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 130
+                }
+            ],
+            "key": "enter-a-skill-summary",
+            "en": "Enter a skill summary"
+        },
+        "t:最多 500 个字符": {
+            "type": "ui",
+            "zh": "最多 500 个字符",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 130
+                }
+            ],
+            "key": "up-to-500-characters",
+            "en": "Up to 500 characters"
+        },
+        "t:说明适用场景、输入条件和最终产出": {
+            "type": "ui",
+            "zh": "说明适用场景、输入条件和最终产出",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 131
+                }
+            ],
+            "key": "explain-use-cases-input-requirements-and-final-output",
+            "en": "Explain use cases, input requirements, and final output"
+        },
+        "t:技能指令": {
+            "type": "ui",
+            "zh": "技能指令",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 134
+                }
+            ],
+            "key": "skill-instructions-2",
+            "en": "Skill instructions"
+        },
+        "t:请填写技能指令": {
+            "type": "ui",
+            "zh": "请填写技能指令",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 134
+                }
+            ],
+            "key": "enter-the-skill-instructions",
+            "en": "Enter the skill instructions"
+        },
+        "t:最多 100000 个字符": {
+            "type": "ui",
+            "zh": "最多 100000 个字符",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 134
+                }
+            ],
+            "key": "up-to-100000-characters",
+            "en": "Up to 100000 characters"
+        },
+        "t:画布引用该技能时会把这段指令发送给模型。": {
+            "type": "ui",
+            "zh": "画布引用该技能时会把这段指令发送给模型。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 134
+                }
+            ],
+            "key": "when-the-canvas-uses-this-skill-these-instructions-are-sent-to-the-model",
+            "en": "When the canvas uses this skill, these instructions are sent to the model."
+        },
+        "t:使用 Markdown 编写角色、约束、流程、检查清单和输出格式": {
+            "type": "ui",
+            "zh": "使用 Markdown 编写角色、约束、流程、检查清单和输出格式",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 135
+                }
+            ],
+            "key": "use-markdown-for-roles-constraints-workflows-checklists-and-output-forma",
+            "en": "Use Markdown for roles, constraints, workflows, checklists, and output formats"
+        },
+        "t:Markdown 地址": {
+            "type": "ui",
+            "zh": "Markdown 地址",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 139
+                }
+            ],
+            "key": "markdown-url",
+            "en": "Markdown URL"
+        },
+        "t:请输入有效的 HTTP(S) 链接": {
+            "type": "ui",
+            "zh": "请输入有效的 HTTP(S) 链接",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 139
+                }
+            ],
+            "key": "enter-a-valid-http-s-link",
+            "en": "Enter a valid HTTP(S) link"
+        },
+        "t:公开状态": {
+            "type": "ui",
+            "zh": "公开状态",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 142
+                }
+            ],
+            "key": "visibility",
+            "en": "Visibility"
+        },
+        "t:公开后其他用户可以加入使用。": {
+            "type": "ui",
+            "zh": "公开后其他用户可以加入使用。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 142
+                }
+            ],
+            "key": "once-public-other-users-can-adopt-it",
+            "en": "Once public, other users can adopt it."
+        },
+        "t:公开": {
+            "type": "ui",
+            "zh": "公开",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "public",
+            "en": "Public"
+        },
+        "t:私有": {
+            "type": "ui",
+            "zh": "私有",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "private-2",
+            "en": "Private"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:展示媒体:8157": {
+            "type": "jsxtext",
+            "zh": "展示媒体",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 151
+                }
+            ],
+            "key": "showcase-media",
+            "en": "Showcase media"
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:可选，最多 8 个公开图片或视频链接。:8213": {
+            "type": "jsxtext",
+            "zh": "可选，最多 8 个公开图片或视频链接。",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 151
+                }
+            ],
+            "key": "optional-up-to-8-public-image-or-video-links",
+            "en": "Optional. Up to 8 public image or video links."
+        },
+        "jsx:src/pages/skills/skill-editor-drawer.tsx:添加媒体:8383": {
+            "type": "jsxtext",
+            "zh": "添加媒体",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 152
+                }
+            ],
+            "key": "add-media",
+            "en": "Add media"
+        },
+        "t:选择类型": {
+            "type": "ui",
+            "zh": "选择类型",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 157
+                }
+            ],
+            "key": "choose-type",
+            "en": "Choose type"
+        },
+        "t:图片": {
+            "type": "ui",
+            "zh": "图片",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 158
+                }
+            ],
+            "key": "image",
+            "en": "Image"
+        },
+        "t:视频": {
+            "type": "ui",
+            "zh": "视频",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 158
+                }
+            ],
+            "key": "video",
+            "en": "Video"
+        },
+        "t:请填写媒体链接": {
+            "type": "ui",
+            "zh": "请填写媒体链接",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "enter-a-media-link",
+            "en": "Enter a media link"
+        },
+        "t:链接格式无效": {
+            "type": "ui",
+            "zh": "链接格式无效",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 160
+                }
+            ],
+            "key": "invalid-link-format",
+            "en": "Invalid link format"
+        },
+        "t:移除媒体": {
+            "type": "ui",
+            "zh": "移除媒体",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 163
+                },
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 163
+                }
+            ],
+            "key": "remove-media",
+            "en": "Remove media"
+        },
+        "t:补充信息": {
+            "type": "ui",
+            "zh": "补充信息",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 172
+                }
+            ],
+            "key": "additional-info",
+            "en": "Additional info"
+        },
+        "t:最多 2000 个字符": {
+            "type": "ui",
+            "zh": "最多 2000 个字符",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 172
+                }
+            ],
+            "key": "up-to-2000-characters",
+            "en": "Up to 2000 characters"
+        },
+        "t:版本说明、依赖工具或使用注意事项": {
+            "type": "ui",
+            "zh": "版本说明、依赖工具或使用注意事项",
+            "locations": [
+                {
+                    "file": "src/pages/skills/skill-editor-drawer.tsx",
+                    "line": 173
+                }
+            ],
+            "key": "release-notes-dependencies-or-usage-caveats",
+            "en": "Release notes, dependencies, or usage caveats"
+        }
+    }
+}

@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 const VIDEO_FRAME_TIMEOUT_MS = 20_000;
 const LAST_FRAME_EPSILON_SECONDS = 0.001;
 
@@ -10,25 +11,25 @@ export async function captureVideoLastFrame(source: Blob | string) {
     video.preload = "auto";
 
     try {
-        const loaded = waitForVideoEvent(video, "loadeddata", "视频读取超时或编码不受浏览器支持");
+        const loaded = waitForVideoEvent(video, "loadeddata", t("canvas:video-read-timed-out-or-its-codec-is-unsupported-by-this-browser"));
         video.src = objectUrl;
         video.load();
         await loaded;
 
-        if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error("无法确定视频时长");
+        if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error(t("canvas:unable-to-determine-the-video-duration"));
         const targetTime = Math.max(0, video.duration - LAST_FRAME_EPSILON_SECONDS);
         if (targetTime > 0) {
-            const seeked = waitForVideoEvent(video, "seeked", "无法定位到视频最后一帧");
+            const seeked = waitForVideoEvent(video, "seeked", t("canvas:unable-to-locate-the-last-video-frame"));
             video.currentTime = targetTime;
             await seeked;
         }
 
-        if (!video.videoWidth || !video.videoHeight) throw new Error("无法读取视频画面尺寸");
+        if (!video.videoWidth || !video.videoHeight) throw new Error(t("canvas:unable-to-read-the-video-frame-size"));
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const context = canvas.getContext("2d");
-        if (!context) throw new Error("浏览器无法创建图片画布");
+        if (!context) throw new Error(t("canvas:the-browser-failed-to-create-the-image-canvas"));
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         return canvasToPngBlob(canvas);
     } finally {
@@ -46,7 +47,7 @@ async function readVideoBlob(source: Blob | string) {
         if (!response.ok) throw new Error(String(response.status));
         return await response.blob();
     } catch {
-        throw new Error("无法读取视频文件，请重新上传视频后再截取尾帧");
+        throw new Error(t("canvas:unable-to-read-the-video-file-re-upload-the-video-before-grabbing-the-la"));
     }
 }
 
@@ -73,5 +74,5 @@ function waitForVideoEvent(video: HTMLVideoElement, eventName: "loadeddata" | "s
 }
 
 function canvasToPngBlob(canvas: HTMLCanvasElement) {
-    return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("尾帧图片编码失败"))), "image/png"));
+    return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(t("canvas:failed-to-encode-the-last-frame-image")))), "image/png"));
 }

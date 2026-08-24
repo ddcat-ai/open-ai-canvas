@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import type { CapabilitySpec, OptionConstraint } from "@/services/api/logical-models";
 import type { ChannelModel } from "@/services/api/wallet";
 import { STANDARD_IMAGE_SIZE_VALUES } from "@/lib/model-capabilities";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 export type CapabilityKind = CapabilitySpec["capability"];
 export type Scalar = string | number | boolean;
@@ -19,17 +21,17 @@ type CapabilityScopeEditorProps = {
 
 const inputDefinitions: Record<CapabilityKind, Array<{ name: string; label: string; unit: string }>> = {
     text: [
-        { name: "image", label: "参考图片", unit: "张" },
-        { name: "video", label: "参考视频", unit: "个" },
+        { name: "image", label: t("admin:reference-images"), unit: t("admin:item-2") },
+        { name: "video", label: t("admin:reference-videos"), unit: t("admin:item-3") },
     ],
     image: [
-        { name: "image", label: "参考图片", unit: "张" },
-        { name: "mask", label: "蒙版", unit: "张" },
+        { name: "image", label: t("admin:reference-images"), unit: t("admin:item-2") },
+        { name: "mask", label: t("admin:mask"), unit: t("admin:item-2") },
     ],
     video: [
-        { name: "image", label: "参考图片", unit: "张" },
-        { name: "video", label: "参考视频", unit: "个" },
-        { name: "audio", label: "参考音频", unit: "个" },
+        { name: "image", label: t("admin:reference-images"), unit: t("admin:item-2") },
+        { name: "video", label: t("admin:reference-videos"), unit: t("admin:item-3") },
+        { name: "audio", label: t("admin:reference-audio"), unit: t("admin:item-3") },
     ],
     audio: [],
 };
@@ -37,28 +39,28 @@ const inputDefinitions: Record<CapabilityKind, Array<{ name: string; label: stri
 const optionDefinitions: Record<CapabilityKind, Array<{ name: string; label: string; unit?: string }>> = {
     text: [],
     image: [
-        { name: "size", label: "画面尺寸或比例" },
-        { name: "quality", label: "生成质量" },
-        { name: "transparentBackground", label: "透明背景" },
-        { name: "count", label: "输出数量", unit: "张" },
+        { name: "size", label: t("admin:image-size-or-ratio") },
+        { name: "quality", label: t("admin:generation-quality") },
+        { name: "transparentBackground", label: t("admin:transparent-background") },
+        { name: "count", label: t("admin:output-count"), unit: t("admin:item-2") },
     ],
     video: [
-        { name: "size", label: "画面比例" },
-        { name: "videoSeconds", label: "视频时长", unit: "秒" },
-        { name: "vquality", label: "输出分辨率" },
-        { name: "videoGenerateAudio", label: "同步生成音频" },
-        { name: "videoWatermark", label: "输出水印" },
+        { name: "size", label: t("admin:aspect-ratio") },
+        { name: "videoSeconds", label: t("admin:video-duration"), unit: t("admin:s") },
+        { name: "vquality", label: t("admin:output-resolution") },
+        { name: "videoGenerateAudio", label: t("admin:generate-audio-alongside") },
+        { name: "videoWatermark", label: t("admin:output-watermark") },
     ],
     audio: [
-        { name: "audioVoice", label: "音色" },
-        { name: "audioFormat", label: "音频格式" },
-        { name: "audioSpeed", label: "语速", unit: "倍" },
-        { name: "audioInstructions", label: "朗读指令" },
+        { name: "audioVoice", label: t("admin:voice") },
+        { name: "audioFormat", label: t("admin:audio-format") },
+        { name: "audioSpeed", label: t("admin:speech-rate"), unit: t("admin:item-4") },
+        { name: "audioInstructions", label: t("admin:narration-instructions") },
     ],
 };
 
 export function capabilityLabel(value: CapabilityKind) {
-    return { text: "文本", image: "图片", video: "视频", audio: "音频" }[value];
+    return { text: t("admin:text"), image: t("admin:image"), video: t("admin:video"), audio: t("admin:audio") }[value];
 }
 
 export function emptyCapabilitySpec(capability: CapabilityKind): CapabilitySpec {
@@ -196,12 +198,12 @@ export function capabilitySourceError(capability: CapabilityKind, sourceSpecs: C
     const matching = sourceSpecs.filter((item) => item.capability === capability);
     const current = value?.capability === capability ? value : emptyCapabilitySpec(capability);
     const currentOperations = current.operations || [];
-    if (!matching.length) return "没有可用的渠道模型能力来源";
+    if (!matching.length) return t("admin:no-channel-model-capability-sources-available");
     if (!currentOperations.length && matching.every((item) => (item.operations || []).length > 0)) {
-        return "请选择至少一种供应线路支持的生成方式";
+        return t("admin:select-at-least-one-generation-mode-supported-by-supply-routes");
     }
     if (currentOperations.some((operation) => !matching.some((item) => !(item.operations || []).length || item.operations?.includes(operation)))) {
-        return "当前生成方式已不受供应线路支持";
+        return t("admin:the-current-generation-mode-is-no-longer-supported-by-supply-routes");
     }
     for (const [name, constraint] of Object.entries(current.inputs || {})) {
         if (!inputConstraintCovered(constraint, name, matching)) return `当前${inputLabel(capability, name)}范围存在供应线路无法覆盖的数量`;
@@ -213,6 +215,7 @@ export function capabilitySourceError(capability: CapabilityKind, sourceSpecs: C
 }
 
 export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange }: CapabilityScopeEditorProps) {
+    const { t } = useTranslation("canvas");
     const source = mergeCapabilitySpecs(capability, sourceSpecs);
     const current = value?.capability === capability ? normalizeCapabilitySpecForSources(value, sourceSpecs)! : emptyCapabilitySpec(capability);
     const hasSource = sourceSpecs.some((item) => item.capability === capability);
@@ -229,27 +232,27 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
         <div className="space-y-5">
             <div className="flex justify-end">
                 <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} onClick={reset}>
-                    恢复全部可用范围
+                    {t("admin:restore-full-available-scope")}
                 </Button>
             </div>
 
-            {sourceError ? <Alert type="warning" showIcon message="当前选择需要调整" description={`${sourceError}。可重新选择，或采用全部可用范围。`} /> : null}
+            {sourceError ? <Alert type="warning" showIcon message={t("admin:current-selection-needs-adjustment")} description={t("admin:param-you-can-reselect-or-adopt-the-full-available-scope", { sourceError: sourceError })} /> : null}
 
             {source.operations?.length ? (
-                <CapabilityBlock title="生成方式">
+                <CapabilityBlock title={t("admin:generation-method-2")}>
                     <Select
                         className="w-full"
                         mode="multiple"
                         value={current.operations || []}
                         options={source.operations.map((operation) => ({ value: operation, label: operationLabel(operation) }))}
-                        placeholder="选择创作端可用的生成方式"
+                        placeholder={t("admin:choose-generation-modes-available-on-the-creation-side")}
                         onChange={(operations) => update({ operations })}
                     />
                 </CapabilityBlock>
             ) : null}
 
             {sourceInputs.length ? (
-                <CapabilityBlock title="参考素材">
+                <CapabilityBlock title={t("admin:reference-media")}>
                     <div className="divide-y divide-border">
                         {sourceInputs.map((definition) => {
                             const limit = source.inputs![definition.name];
@@ -259,7 +262,7 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                                     <div className="col-span-12 sm:col-span-5">
                                         <div className="text-sm font-medium">{definition.label}</div>
                                         <div className="text-xs text-foreground/45">
-                                            线路支持 {limit.min}-{limit.max} {definition.unit}
+                                            {t("admin:route-support")} {limit.min}-{limit.max} {definition.unit}
                                         </div>
                                     </div>
                                     <div className="col-span-12 sm:col-span-1">
@@ -267,7 +270,7 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                                     </div>
                                     <div className="col-span-6 sm:col-span-3">
                                         <NumberInput
-                                            label="最少"
+                                            label={t("admin:min")}
                                             unit={definition.unit}
                                             value={selected?.min}
                                             min={limit.min}
@@ -278,7 +281,7 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                                     </div>
                                     <div className="col-span-6 sm:col-span-3">
                                         <NumberInput
-                                            label="最多"
+                                            label={t("admin:max")}
                                             unit={definition.unit}
                                             value={selected?.max}
                                             min={selected?.min ?? limit.min}
@@ -295,7 +298,7 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
             ) : null}
 
             {sourceOptions.length ? (
-                <CapabilityBlock title="生成参数">
+                <CapabilityBlock title={t("admin:generation-parameters")}>
                     <div className="divide-y divide-border">
                         {sourceOptions.map((definition) => (
                             <OptionRuleEditor
@@ -310,14 +313,17 @@ export function CapabilityScopeEditor({ capability, sourceSpecs, value, onChange
                 </CapabilityBlock>
             ) : null}
 
-            {!sourceInputs.length && !sourceOptions.length && !source.operations?.length ? <Alert type="info" showIcon message="该类型暂无额外能力参数" description="线路仍可按优先级和权重参与路由。" /> : null}
+            {!sourceInputs.length && !sourceOptions.length && !source.operations?.length ? (
+                <Alert type="info" showIcon message={t("admin:this-type-has-no-extra-capability-parameters-yet")} description={t("admin:routes-can-still-participate-in-routing-by-priority-and-weight")} />
+            ) : null}
         </div>
     );
 }
 
 export function DefaultOptionsEditor({ spec, value, onChange }: { spec?: CapabilitySpec; value?: Record<string, unknown>; onChange?: (value: Record<string, Scalar>) => void }) {
+    const { t } = useTranslation("canvas");
     const options = optionDefinitions[spec?.capability || "text"].filter((item) => spec?.options?.[item.name]);
-    if (!options.length) return <div className="rounded-md bg-muted/20 px-3 py-2 text-xs text-foreground/50">当前能力没有需要设置的默认参数。</div>;
+    if (!options.length) return <div className="rounded-md bg-muted/20 px-3 py-2 text-xs text-foreground/50">{t("admin:this-capability-has-no-default-parameters-to-set")}</div>;
     return (
         <div className="divide-y divide-border">
             {options.map((definition) => {
@@ -327,7 +333,7 @@ export function DefaultOptionsEditor({ spec, value, onChange }: { spec?: Capabil
                     <div key={definition.name} className="grid grid-cols-12 items-center gap-2 py-3 first:pt-0 last:pb-0">
                         <div className="col-span-12 sm:col-span-5">
                             <div className="text-sm font-medium">{definition.label}</div>
-                            <div className="text-xs text-foreground/45">留空时由创作端或线路默认值决定</div>
+                            <div className="text-xs text-foreground/45">{t("admin:leave-blank-to-use-creation-side-or-route-defaults")}</div>
                         </div>
                         <div className="col-span-12 sm:col-span-7">
                             <ConstraintValueInput
@@ -362,12 +368,13 @@ export function CapabilityRequestEditor({
     onInputsChange: (value: Record<string, number>) => void;
     onOptionsChange: (value: Record<string, unknown>) => void;
 }) {
+    const { t } = useTranslation("canvas");
     const inputItems = inputDefinitions[spec.capability].filter((item) => spec.inputs?.[item.name]);
     const optionItems = optionDefinitions[spec.capability].filter((item) => spec.options?.[item.name]);
     return (
         <div className="space-y-4">
             {inputItems.length ? (
-                <CapabilityBlock title="实际输入数量">
+                <CapabilityBlock title={t("admin:actual-input-count")}>
                     <div className="grid gap-2 sm:grid-cols-2">
                         {inputItems.map((definition) => {
                             const constraint = spec.inputs![definition.name];
@@ -387,7 +394,7 @@ export function CapabilityRequestEditor({
                 </CapabilityBlock>
             ) : null}
             {optionItems.length ? (
-                <CapabilityBlock title="请求参数">
+                <CapabilityBlock title={t("admin:request-parameters")}>
                     <div className="grid gap-2 sm:grid-cols-2">
                         {optionItems.map((definition) => {
                             const constraint = spec.options![definition.name];
@@ -414,12 +421,13 @@ export function CapabilityRequestEditor({
                     </div>
                 </CapabilityBlock>
             ) : null}
-            {!inputItems.length && !optionItems.length ? <div className="rounded-md bg-muted/20 px-3 py-2 text-xs text-foreground/50">该模型没有额外请求参数。</div> : null}
+            {!inputItems.length && !optionItems.length ? <div className="rounded-md bg-muted/20 px-3 py-2 text-xs text-foreground/50">{t("admin:this-model-has-no-extra-request-parameters")}</div> : null}
         </div>
     );
 }
 
 export function CapabilitySummary({ spec }: { spec: CapabilitySpec }) {
+    const { t } = useTranslation("canvas");
     const labels: string[] = [];
     for (const definition of inputDefinitions[spec.capability]) {
         const input = spec.inputs?.[definition.name];
@@ -435,7 +443,7 @@ export function CapabilitySummary({ spec }: { spec: CapabilitySpec }) {
         labels.push(option.values ? `${definition.label} ${option.values.map(scalarLabel).join("/")}` : `${definition.label} ${option.min}-${option.max}${definition.unit || ""}`);
     }
     if (spec.operations?.length) labels.unshift(spec.operations.map(operationLabel).join("/"));
-    if (!labels.length) return <span className="text-xs text-foreground/45">基础能力</span>;
+    if (!labels.length) return <span className="text-xs text-foreground/45">{t("admin:base-capabilities")}</span>;
     return (
         <div className="flex min-w-0 max-w-full flex-wrap gap-1">
             {labels.slice(0, 4).map((label) => (
@@ -474,6 +482,7 @@ function CapabilityBlock({ title, children }: { title: string; children: ReactNo
 }
 
 function OptionRuleEditor({ definition, source, value, onChange }: { definition: { name: string; label: string; unit?: string }; source: OptionConstraint; value?: OptionConstraint; onChange: (value?: OptionConstraint) => void }) {
+    const { t } = useTranslation("canvas");
     return (
         <div className="grid grid-cols-12 items-center gap-2 py-3 first:pt-0 last:pb-0">
             <div className="col-span-12 sm:col-span-5">
@@ -496,7 +505,7 @@ function OptionRuleEditor({ definition, source, value, onChange }: { definition:
                 ) : (
                     <div className="grid grid-cols-3 gap-2">
                         <label>
-                            <span className="mb-1 block text-xs text-foreground/45">最小值</span>
+                            <span className="mb-1 block text-xs text-foreground/45">{t("admin:minimum")}</span>
                             <InputNumber
                                 className="w-full"
                                 disabled={!value}
@@ -507,7 +516,7 @@ function OptionRuleEditor({ definition, source, value, onChange }: { definition:
                             />
                         </label>
                         <label>
-                            <span className="mb-1 block text-xs text-foreground/45">最大值</span>
+                            <span className="mb-1 block text-xs text-foreground/45">{t("admin:maximum")}</span>
                             <InputNumber
                                 className="w-full"
                                 disabled={!value}
@@ -518,7 +527,7 @@ function OptionRuleEditor({ definition, source, value, onChange }: { definition:
                             />
                         </label>
                         <label>
-                            <span className="mb-1 block text-xs text-foreground/45">调整步长</span>
+                            <span className="mb-1 block text-xs text-foreground/45">{t("admin:step-increment")}</span>
                             <InputNumber
                                 className="w-full"
                                 disabled={!value}
@@ -621,9 +630,9 @@ function scalarKey(value: unknown) {
 
 function scalarLabel(value: unknown) {
     const normalized = normalizeScalar(value);
-    if (normalized === true) return "支持";
-    if (normalized === false) return "不启用";
-    if (normalized === "*") return "自定义";
+    if (normalized === true) return t("admin:supported");
+    if (normalized === false) return t("admin:not-enabled-2");
+    if (normalized === "*") return t("admin:custom");
     return String(normalized);
 }
 
@@ -635,14 +644,14 @@ function normalizeScalar(value: unknown) {
 export function operationLabel(value: string) {
     return (
         {
-            text_to_video: "文生视频",
-            image_to_video: "图生视频",
-            extend: "视频续写",
-            inpaint: "局部修改",
-            replace_element: "元素替换",
-            camera_motion: "运镜调整",
-            style_transfer: "风格迁移",
-            audio_to_video: "音频生视频",
+            text_to_video: t("admin:text-to-video"),
+            image_to_video: t("admin:image-to-video"),
+            extend: t("admin:video-extend"),
+            inpaint: t("admin:inpaint-edit"),
+            replace_element: t("admin:element-replace"),
+            camera_motion: t("admin:camera-adjust"),
+            style_transfer: t("admin:style-transfer"),
+            audio_to_video: t("admin:audio-to-video"),
         }[value] || value
     );
 }
@@ -657,7 +666,7 @@ function optionLabel(capability: CapabilityKind, name: string) {
 
 function constraintSummary(constraint: OptionConstraint, unit = "") {
     if (constraint.values) return `线路支持 ${constraint.values.map(scalarLabel).join("、")}`;
-    return `线路支持 ${constraint.min}-${constraint.max}${unit}${constraint.step ? `，步进 ${constraint.step}` : ""}`;
+    return `线路支持 ${constraint.min}-${constraint.max}${unit}${constraint.step ? t("admin:step-param", { step: constraint.step }) : ""}`;
 }
 
 function constraintIncludes(constraint: OptionConstraint, value: unknown) {

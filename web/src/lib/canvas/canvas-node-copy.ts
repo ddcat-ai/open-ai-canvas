@@ -49,9 +49,7 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     metadata.copiedFromNodeId = node.id;
     metadata.frame = node.metadata?.frame ? { ...node.metadata.frame } : undefined;
     metadata.referenceSetId = remapOwnedNodeId(node.metadata?.referenceSetId, idMap);
-    metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds
-        ?.map((nodeId) => remapOwnedNodeId(nodeId, idMap))
-        .filter((nodeId): nodeId is string => Boolean(nodeId));
+    metadata.referenceAssetNodeIds = node.metadata?.referenceAssetNodeIds?.map((nodeId) => remapOwnedNodeId(nodeId, idMap)).filter((nodeId): nodeId is string => Boolean(nodeId));
     metadata.videoStartFrameNodeId = remapReferenceId(node.metadata?.videoStartFrameNodeId, idMap);
     metadata.videoEndFrameNodeId = remapReferenceId(node.metadata?.videoEndFrameNodeId, idMap);
     metadata.directorPreviewNodeId = remapOwnedNodeId(node.metadata?.directorPreviewNodeId, idMap);
@@ -59,24 +57,28 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     metadata.directorNormalNodeId = remapOwnedNodeId(node.metadata?.directorNormalNodeId, idMap);
 
     const characterViewNodeIds = node.metadata?.characterViewNodeIds;
-    const copiedCharacterViewNodeIds = characterViewNodeIds ? {
-        front: remapOwnedNodeId(characterViewNodeIds.front, idMap),
-        side: remapOwnedNodeId(characterViewNodeIds.side, idMap),
-        back: remapOwnedNodeId(characterViewNodeIds.back, idMap),
-    } : undefined;
-    metadata.characterViewNodeIds = copiedCharacterViewNodeIds && Object.values(copiedCharacterViewNodeIds).some(Boolean)
-        ? copiedCharacterViewNodeIds
+    const copiedCharacterViewNodeIds = characterViewNodeIds
+        ? {
+              front: remapOwnedNodeId(characterViewNodeIds.front, idMap),
+              side: remapOwnedNodeId(characterViewNodeIds.side, idMap),
+              back: remapOwnedNodeId(characterViewNodeIds.back, idMap),
+          }
         : undefined;
-    metadata.emotionEdit = node.metadata?.emotionEdit ? {
-        ...node.metadata.emotionEdit,
-        sourceNodeId: remapReferenceId(node.metadata.emotionEdit.sourceNodeId, idMap)!,
-        faceBox: { ...node.metadata.emotionEdit.faceBox },
-        editRegion: node.metadata.emotionEdit.editRegion ? { ...node.metadata.emotionEdit.editRegion } : undefined,
-    } : undefined;
-    metadata.storyboard = node.metadata?.storyboard ? {
-        rows: node.metadata.storyboard.rows.map((row) => copyStoryboardRow(row, idMap)),
-        visibleColumns: [...node.metadata.storyboard.visibleColumns],
-        referenceNodeIds: remapReferenceIds(node.metadata.storyboard.referenceNodeIds, idMap) || [],
-    } : undefined;
+    metadata.characterViewNodeIds = copiedCharacterViewNodeIds && Object.values(copiedCharacterViewNodeIds).some(Boolean) ? copiedCharacterViewNodeIds : undefined;
+    metadata.emotionEdit = node.metadata?.emotionEdit
+        ? {
+              ...node.metadata.emotionEdit,
+              sourceNodeId: remapReferenceId(node.metadata.emotionEdit.sourceNodeId, idMap)!,
+              faceBox: { ...node.metadata.emotionEdit.faceBox },
+              editRegion: node.metadata.emotionEdit.editRegion ? { ...node.metadata.emotionEdit.editRegion } : undefined,
+          }
+        : undefined;
+    metadata.storyboard = node.metadata?.storyboard
+        ? {
+              rows: node.metadata.storyboard.rows.map((row) => copyStoryboardRow(row, idMap)),
+              visibleColumns: [...node.metadata.storyboard.visibleColumns],
+              referenceNodeIds: remapReferenceIds(node.metadata.storyboard.referenceNodeIds, idMap) || [],
+          }
+        : undefined;
     return metadata;
 }

@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { ProjectDetail, ProjectSummary, ProjectUnit } from "@/services/api/projects";
 
 export type ProjectActionTone = "default" | "attention" | "danger";
@@ -36,27 +37,27 @@ export function projectSummaryCompletion(summary: ProjectSummary) {
 }
 
 export function projectSummaryStage(summary: ProjectSummary) {
-    if (summary.project.status === "archived") return { label: "已归档", detail: "可在项目设置中恢复" };
-    if (!summary.unitCount) return { label: "准备故事", detail: "还没有剧情章节" };
-    if (summary.completedUnitCount === summary.unitCount) return { label: "章节已完成", detail: "可继续检查镜头与交付结果" };
-    if (!summary.canvasCount) return { label: "组织章节", detail: "下一步可建立项目画布" };
-    if (!summary.assetCount) return { label: "准备资产", detail: "补充角色、场景或画风" };
-    return { label: "制作中", detail: `${summary.completedUnitCount}/${summary.unitCount} 章已完成` };
+    if (summary.project.status === "archived") return { label: t("lib:archived"), detail: t("lib:restore-in-project-settings") };
+    if (!summary.unitCount) return { label: t("lib:prepare-story"), detail: t("lib:no-story-chapters-yet") };
+    if (summary.completedUnitCount === summary.unitCount) return { label: t("lib:chapters-finished"), detail: t("lib:review-shots-and-deliverables-next") };
+    if (!summary.canvasCount) return { label: t("lib:organize-chapters"), detail: t("lib:next-build-the-project-canvas") };
+    if (!summary.assetCount) return { label: t("lib:prepare-assets"), detail: t("lib:add-characters-scenes-or-styles") };
+    return { label: t("lib:in-production"), detail: t("lib:param-param-chapters-done", { completedUnitCount: summary.completedUnitCount, unitCount: summary.unitCount }) };
 }
 
 export function projectDetailStage(detail: ProjectDetail) {
-    if (detail.project.status === "archived") return { label: "已归档", detail: "恢复项目后可继续制作" };
+    if (detail.project.status === "archived") return { label: t("lib:archived"), detail: t("lib:restore-the-project-to-continue-production") };
     const failedSteps = detail.workflows.flatMap((workflow) => workflow.steps).filter((step) => step.status === "failed").length;
-    if (failedSteps) return { label: "需要处理", detail: `${failedSteps} 个流程步骤失败` };
+    if (failedSteps) return { label: t("lib:needs-attention"), detail: t("lib:param-pipeline-steps-failed", { failedSteps: failedSteps }) };
     const pendingCandidates = detail.assetCandidates.filter((candidate) => candidate.status === "pending_confirmation").length;
-    if (pendingCandidates) return { label: "资产确认", detail: `${pendingCandidates} 个候选待确认` };
-    if (!detail.units.length) return { label: "准备故事", detail: "添加或导入剧情章节" };
-    if (!detail.shots.length) return { label: "分镜准备", detail: "选择章节生成镜头" };
+    if (pendingCandidates) return { label: t("lib:asset-confirmation"), detail: t("lib:param-candidates-awaiting-confirmation", { pendingCandidates: pendingCandidates }) };
+    if (!detail.units.length) return { label: t("lib:prepare-story"), detail: t("lib:add-or-import-story-chapters") };
+    if (!detail.shots.length) return { label: t("lib:storyboard-prep"), detail: t("lib:pick-chapters-to-generate-shots") };
     const runningSteps = detail.workflows.flatMap((workflow) => workflow.steps).filter((step) => step.status === "running" || step.status === "review").length;
-    if (runningSteps) return { label: "制作中", detail: `${runningSteps} 个流程步骤正在推进` };
+    if (runningSteps) return { label: t("lib:in-production"), detail: t("lib:param-pipeline-steps-in-progress", { runningSteps: runningSteps }) };
     const completedUnits = detail.units.filter((unit) => unit.status === "completed").length;
-    if (completedUnits === detail.units.length) return { label: "检查交付", detail: "章节已完成，可检查镜头与结果" };
-    return { label: "镜头制作", detail: `${detail.shots.length} 个镜头已建立` };
+    if (completedUnits === detail.units.length) return { label: t("lib:review-deliverables"), detail: t("lib:chapters-finished-review-shots-and-results") };
+    return { label: t("lib:shot-production"), detail: t("lib:param-shots-created", { length: detail.shots.length }) };
 }
 
 export function projectAttentionCount(detail: ProjectDetail) {
@@ -72,7 +73,7 @@ export function projectContinueTarget(detail: ProjectDetail): ProjectContinueTar
         return {
             href: `/canvas/${latestCanvas.id}`,
             title: latestCanvas.title,
-            context: "继续编辑项目画布",
+            context: t("lib:continue-editing-project-canvas"),
             updatedAt: latestCanvas.updatedAt,
         };
     }
@@ -80,14 +81,14 @@ export function projectContinueTarget(detail: ProjectDetail): ProjectContinueTar
         return {
             href: `/projects/${detail.project.id}/chapters/${latestUnit.id}`,
             title: latestUnit.title,
-            context: "继续处理剧情章节",
+            context: t("lib:continue-working-on-chapters"),
             updatedAt: latestUnit.updatedAt,
         };
     }
     return {
         href: `/projects/${detail.project.id}/chapters`,
         title: detail.project.name,
-        context: "从剧情章节开始",
+        context: t("lib:start-from-story-chapters"),
         updatedAt: detail.project.updatedAt,
     };
 }
@@ -97,24 +98,26 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
     const actions: ProjectWorkbenchAction[] = [];
     const projectRoot = `/projects/${detail.project.id}`;
     if (detail.project.status === "archived") {
-        return [{
-            id: "restore-project",
-            title: "项目已归档",
-            description: "恢复后才能创建画布和提交生成任务。",
-            href: `${projectRoot}/settings`,
-            actionLabel: "前往恢复",
-            tone: "attention",
-        }];
+        return [
+            {
+                id: "restore-project",
+                title: t("lib:project-archived"),
+                description: t("lib:restore-before-creating-canvases-or-submitting-generation-tasks"),
+                href: `${projectRoot}/settings`,
+                actionLabel: t("lib:restore-now"),
+                tone: "attention",
+            },
+        ];
     }
 
     const failedSteps = detail.workflows.flatMap((workflow) => workflow.steps).filter((step) => step.status === "failed");
     if (failedSteps.length) {
         actions.push({
             id: "failed-steps",
-            title: `处理 ${failedSteps.length} 个失败步骤`,
-            description: failedSteps[0].error?.trim() || "查看失败原因和输入后，仅重试受影响的任务。",
+            title: t("lib:handle-param-failed-steps", { length: failedSteps.length }),
+            description: failedSteps[0].error?.trim() || t("lib:review-failure-causes-and-inputs-then-retry-only-affected-tasks"),
             href: "/tasks?status=failed",
-            actionLabel: "查看失败任务",
+            actionLabel: t("lib:view-failed-tasks"),
             tone: "danger",
         });
     }
@@ -124,10 +127,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
         const categories = new Set(pendingCandidates.map((candidate) => candidate.category));
         actions.push({
             id: "pending-assets",
-            title: `确认 ${pendingCandidates.length} 个资产候选`,
-            description: `${categories.size} 类角色、场景或制作资产需要确认后才能稳定复用。`,
+            title: t("lib:confirm-param-asset-candidates", { length: pendingCandidates.length }),
+            description: t("lib:param-kinds-of-character-scene-or-production-assets-need-confirmation-be", { size: categories.size }),
             href: `${projectRoot}/assets`,
-            actionLabel: "去确认",
+            actionLabel: t("lib:confirm-now"),
             tone: "attention",
         });
     }
@@ -135,10 +138,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
     if (!detail.units.length) {
         actions.push({
             id: "add-story",
-            title: "添加第一个剧情章节",
-            description: "导入小说、粘贴文本，或从空白章节开始。",
+            title: t("lib:add-the-first-story-chapter"),
+            description: t("lib:import-a-novel-paste-text-or-start-from-a-blank-chapter"),
             href: `${projectRoot}/chapters`,
-            actionLabel: "添加章节",
+            actionLabel: t("lib:add-chapter"),
             tone: "default",
         });
     } else {
@@ -146,10 +149,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
         if (firstDraft) {
             actions.push({
                 id: `review-unit-${firstDraft.id}`,
-                title: `确认第 ${firstDraft.position + 1} 章内容`,
+                title: t("lib:review-chapter-content-param", { index: firstDraft.position + 1 }),
                 description: firstDraft.title,
                 href: `${projectRoot}/chapters/${firstDraft.id}`,
-                actionLabel: "继续处理",
+                actionLabel: t("lib:continue"),
                 tone: "default",
             });
         }
@@ -159,10 +162,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
         if (firstUnitWithoutShots) {
             actions.push({
                 id: `storyboard-unit-${firstUnitWithoutShots.id}`,
-                title: `为第 ${firstUnitWithoutShots.position + 1} 章建立分镜`,
-                description: `${firstUnitWithoutShots.title}还没有镜头，可先生成分镜草稿再逐项调整。`,
+                title: t("lib:create-storyboard-for-chapter-param", { index: firstUnitWithoutShots.position + 1 }),
+                description: t("lib:param-has-no-shots-yet-generate-a-storyboard-draft-first-then-adjust-eac", { title: firstUnitWithoutShots.title }),
                 href: `${projectRoot}/chapters/${firstUnitWithoutShots.id}`,
-                actionLabel: "建立分镜",
+                actionLabel: t("lib:create-storyboard"),
                 tone: "default",
             });
         }
@@ -171,10 +174,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
     if (!detail.canvases.length && detail.units.length) {
         actions.push({
             id: "create-canvas",
-            title: "建立第一张项目画布",
-            description: "把章节、分镜和参考资产放进同一个制作空间。",
+            title: t("lib:build-the-first-project-canvas"),
+            description: t("lib:bring-chapters-storyboards-and-reference-assets-into-one-production-spac"),
             href: `${projectRoot}/canvases`,
-            actionLabel: "查看项目画布",
+            actionLabel: t("lib:view-project-canvas"),
             tone: "default",
         });
     }
@@ -183,10 +186,10 @@ export function projectNextActions(detail: ProjectDetail, limit = 4): ProjectWor
         const target = projectContinueTarget(detail);
         actions.push({
             id: "continue-project",
-            title: "继续最近的制作内容",
+            title: t("lib:resume-recent-work"),
             description: `${target.context}：${target.title}`,
             href: target.href,
-            actionLabel: "继续创作",
+            actionLabel: t("lib:continue-creating"),
             tone: "default",
         });
     }
@@ -205,24 +208,20 @@ export function projectUnitStages(detail: ProjectDetail, limit = 8): ProjectUnit
             unit,
             content: contentStage(unit),
             assets: pendingCandidates
-                ? { label: `${pendingCandidates} 待确认`, state: "attention" }
+                ? { label: t("lib:param-to-confirm", { pendingCandidates: pendingCandidates }), state: "attention" }
                 : confirmedCandidates
-                  ? { label: `${confirmedCandidates} 已确认`, state: "completed" }
-                  : { label: "未识别", state: "idle" },
-            storyboard: shots.length
-                ? { label: `${shots.length} 镜头`, state: shots.every((shot) => shot.status === "completed") ? "completed" : "active" }
-                : { label: "未开始", state: "idle" },
-            canvas: canvasCount
-                ? { label: `${canvasCount} 张`, state: "active" }
-                : { label: "未关联", state: "idle" },
+                  ? { label: t("lib:param-confirmed", { confirmedCandidates: confirmedCandidates }), state: "completed" }
+                  : { label: t("lib:unrecognized"), state: "idle" },
+            storyboard: shots.length ? { label: t("lib:param-shots-2", { length: shots.length }), state: shots.every((shot) => shot.status === "completed") ? "completed" : "active" } : { label: t("lib:not-started-2"), state: "idle" },
+            canvas: canvasCount ? { label: t("lib:param", { canvasCount: canvasCount }), state: "active" } : { label: t("lib:not-linked"), state: "idle" },
         };
     });
 }
 
 function contentStage(unit: ProjectUnit): ProjectStageCell {
-    if (unit.status === "completed") return { label: "已完成", state: "completed" };
-    if (unit.status === "ready") return { label: "待制作", state: "active" };
-    return { label: "草稿", state: "attention" };
+    if (unit.status === "completed") return { label: t("lib:done"), state: "completed" };
+    if (unit.status === "ready") return { label: t("lib:to-produce"), state: "active" };
+    return { label: t("lib:draft"), state: "attention" };
 }
 
 function byPosition(left: ProjectUnit, right: ProjectUnit) {

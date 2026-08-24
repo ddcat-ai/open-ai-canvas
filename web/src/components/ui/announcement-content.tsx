@@ -61,7 +61,13 @@ function renderNode(node: ChildNode, key: string): ReactNode {
         const href = safeHref(element.getAttribute("href"));
         if (!href) return <Fragment key={key}>{children}</Fragment>;
         return (
-            <a key={key} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition hover:text-blue-700 dark:text-blue-400 dark:decoration-blue-400/50 dark:hover:text-blue-300">
+            <a
+                key={key}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition hover:text-blue-700 dark:text-blue-400 dark:decoration-blue-400/50 dark:hover:text-blue-300"
+            >
                 {children}
             </a>
         );

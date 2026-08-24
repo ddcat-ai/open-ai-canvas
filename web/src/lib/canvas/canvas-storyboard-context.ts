@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { CanvasNodeData } from "@/types/canvas";
 
 export type StoryboardGenerationContext = {
@@ -20,11 +21,11 @@ export function resolveStoryboardGenerationContext(nodes: CanvasNodeData[]): Sto
     const styleNode = nodes.find((node) => node.metadata?.workflowKind === "styleboard");
     const stylePrompt = String(styleNode?.metadata?.content || styleNode?.metadata?.prompt || "").trim();
     const stylePresetId = String(styleNode?.metadata?.stylePresetId || "").trim();
-    if (!styleNode || !stylePrompt || !stylePresetId) throw new Error("请先设置项目画风，再生成分镜");
+    if (!styleNode || !stylePrompt || !stylePresetId) throw new Error(t("canvas:set-a-project-style-before-generating-storyboards"));
 
     const characterNodes = nodes.filter((node) => node.metadata?.workflowKind === "character");
     const invalidCharacter = characterNodes.find((node) => !node.metadata?.characterAssetId?.trim() || !node.metadata?.characterVersionId?.trim() || !(node.metadata?.characterName || node.title).trim());
-    if (invalidCharacter) throw new Error(`角色卡“${invalidCharacter.metadata?.characterName || invalidCharacter.title || "未命名角色"}”版本未同步，请刷新角色资产后再生成分镜`);
+    if (invalidCharacter) throw new Error(`角色卡“${invalidCharacter.metadata?.characterName || invalidCharacter.title || t("canvas:unnamed-character")}”版本未同步，请刷新角色资产后再生成分镜`);
 
     return {
         projectStyle: {

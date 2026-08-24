@@ -13,6 +13,8 @@ import { generationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { generationFailureMetadata } from "@/lib/generation-error";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { consumeCanvasAgentGenerationContinuation } from "./use-canvas-agent-operations";
+import { useTranslation } from "react-i18next";
+import { LEGACY_PERSISTED_INTERRUPTED_ERROR } from "./canvas-prompts";
 
 type CanvasGenerationRequest = {
     targetNodeId: string;
@@ -96,15 +98,16 @@ export async function recoverCanvasGenerationTaskNode(input: {
     isCurrentProject?: () => boolean;
     consumeContinuation?: typeof consumeCanvasAgentGenerationContinuation;
 }) {
+    const { t } = useTranslation("canvas");
     const isCurrentProject = () => !input.signal.aborted && (input.isCurrentProject?.() ?? true);
     if (!isCurrentProject()) return;
     const consumeContinuation = input.consumeContinuation ?? consumeCanvasAgentGenerationContinuation;
     const recoveryBaseNodes = useCanvasStore.getState().projects.find((project) => project.id === input.projectId)?.nodes ?? input.nodesRef.current;
     try {
-        if (input.completed.projectId && input.completed.projectId !== input.projectId) throw new Error("生成任务不属于当前画布");
+        if (input.completed.projectId && input.completed.projectId !== input.projectId) throw new Error(t("canvas:task-does-not-belong-to-this-canvas"));
         if (!isCurrentProject()) return;
         if (input.completed.status === "failed" || input.completed.status === "cancelled") {
-            throw new Error(input.completed.error || (input.completed.status === "cancelled" ? "任务已取消" : "任务失败"));
+            throw new Error(input.completed.error || (input.completed.status === "cancelled" ? t("canvas:task-cancelled") : t("canvas:task-failed")));
         }
         if (!input.continuationOnly) {
             if (input.node.type === CanvasNodeType.Script && input.completed.type === "agent_storyboard_rows") {
@@ -192,6 +195,7 @@ export async function recoverCanvasGenerationTaskNode(input: {
 }
 
 export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded, nodes, nodesRef, setNodes }: UseCanvasGenerationOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const queryClient = useQueryClient();
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
@@ -239,7 +243,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 setTaskDetail(task);
                 setTaskDetailLogs(logs);
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "任务详情加载失败");
+                message.error(error instanceof Error ? error.message : t("canvas:failed-to-load-task-details"));
             } finally {
                 setTaskDetailLoading(false);
             }
@@ -254,7 +258,9 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                     if (node.id !== targetNodeId) return node;
                     const failed = task.status === "failed" || task.status === "cancelled";
                     const hasCompletedContent = task.status === "succeeded" && Boolean(node.metadata?.content);
-                    const failure = failed ? generationFailureMetadata(task.error || (task.status === "cancelled" ? "任务已取消" : "任务失败"), node.metadata?.composerContent || node.metadata?.prompt || task.prompt || "") : undefined;
+                    const failure = failed
+                        ? generationFailureMetadata(task.error || (task.status === "cancelled" ? t("canvas:task-cancelled") : t("canvas:task-failed")), node.metadata?.composerContent || node.metadata?.prompt || task.prompt || "")
+                        : undefined;
                     return {
                         ...node,
                         metadata: {
@@ -283,7 +289,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         async (nodeId: string, task: GenerationTask) => {
             if (!task.outputs?.length && task.type === "canvas_text") {
                 const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
-                if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
+                if (!applied.updated || !applied.node) throw new Error(t("canvas:matching-task-node-not-found-on-canvas"));
                 setNodes((current) => current.map((node) => (node.id === applied.nodeId ? applied.node! : node)));
                 return;
             }
@@ -347,7 +353,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 const pendingAgentContinuation = node.metadata?.agentGenerationContinuation?.status === "pending";
                 const aggregateBatchRoot = node.metadata?.isBatchRoot && node.metadata.batchChildIds?.length && !node.metadata.taskId;
                 if (aggregateBatchRoot && !pendingAgentContinuation) return false;
-                return pendingAgentContinuation || node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.errorDetails === "页面刷新后生成已中断，请重新生成。" || Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS);
+                return pendingAgentContinuation || node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.errorDetails === LEGACY_PERSISTED_INTERRUPTED_ERROR || Boolean(node.metadata?.taskId && node.metadata.status !== NODE_STATUS_SUCCESS);
             });
             const needsDiscovery = recoveryNodes.some((node) => !node.metadata?.taskId && !node.metadata?.agentGenerationContinuation?.taskId);
             const projectTasks = needsDiscovery
@@ -366,7 +372,9 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                     if (!taskId) {
                         if (!isCurrentProject()) return;
                         setNodes((current) =>
-                            isCurrentProject() ? current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: "页面刷新后找不到对应任务，请重新生成。" } } : item)) : current,
+                            isCurrentProject()
+                                ? current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: t("canvas:task-not-found-after-page-refresh-please-generate-again") } } : item))
+                                : current,
                         );
                         return;
                     }
@@ -443,7 +451,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                                         }
                                       : {}),
                                   status: primary ? NODE_STATUS_SUCCESS : loading ? NODE_STATUS_LOADING : NODE_STATUS_ERROR,
-                                  errorDetails: primary ? undefined : failed?.metadata?.errorDetails || "全部图片生成失败",
+                                  errorDetails: primary ? undefined : failed?.metadata?.errorDetails || t("canvas:all-images-failed-to-generate"),
                               },
                           };
                       })
@@ -496,7 +504,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             }).catch((error) => {
                 autoSavedTaskIdsRef.current.delete(saveKey);
                 if (error instanceof Error && error.name === "AbortError") return;
-                message.warning(error instanceof Error ? `生成结果已保留，但项目资产同步失败：${error.message}` : "生成结果已保留，但项目资产同步失败");
+                message.warning(error instanceof Error ? t("canvas:results-kept-but-project-asset-sync-failed-param", { message: error.message }) : t("canvas:results-kept-but-project-asset-sync-failed"));
             });
         });
     }, [domainProjectId, message, nodes, projectLoaded, saveGeneratedAsset]);

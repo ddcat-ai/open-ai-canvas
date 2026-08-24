@@ -16,13 +16,7 @@ type AudioWaveformProps = {
  * 音频波形可视化组件
  * 使用 SVG 绘制实时波形
  */
-export function AudioWaveform({
-    waveform,
-    color = "var(--cn-accent, #3b82f6)",
-    height = 48,
-    width = 200,
-    animated = true,
-}: AudioWaveformProps) {
+export function AudioWaveform({ waveform, color = "var(--cn-accent, #3b82f6)", height = 48, width = 200, animated = true }: AudioWaveformProps) {
     // 如果没有波形数据，显示占位波形
     const displayWaveform = useMemo(() => {
         if (waveform.length === 0) {
@@ -40,29 +34,12 @@ export function AudioWaveform({
     const actualBarWidth = barWidth - gap;
 
     return (
-        <svg
-            width={width}
-            height={height}
-            viewBox={`0 0 ${width} ${height}`}
-            className={animated ? "animate-pulse" : ""}
-            style={{ overflow: "visible" }}
-        >
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={animated ? "animate-pulse" : ""} style={{ overflow: "visible" }}>
             {displayWaveform.map((value, index) => {
                 const barHeight = Math.max(2, value * height * 0.8);
                 const x = index * barWidth + gap / 2;
                 const y = (height - barHeight) / 2;
-                return (
-                    <rect
-                        key={index}
-                        x={x}
-                        y={y}
-                        width={actualBarWidth}
-                        height={barHeight}
-                        fill={color}
-                        rx={actualBarWidth / 2}
-                        opacity={0.6 + value * 0.4}
-                    />
-                );
+                return <rect key={index} x={x} y={y} width={actualBarWidth} height={barHeight} fill={color} rx={actualBarWidth / 2} opacity={0.6 + value * 0.4} />;
             })}
         </svg>
     );

@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { openDB } from "idb";
 import { canonicalize } from "json-canonicalize";
 
@@ -96,7 +97,7 @@ export class LocalRuntimeSessionClient {
         this.cryptoImpl = options.crypto ?? globalThis.crypto;
         this.now = options.now ?? Date.now;
         if (!this.cryptoImpl?.subtle || typeof this.cryptoImpl.getRandomValues !== "function") {
-            throw new LocalRuntimeClientError("webcrypto_unavailable", "浏览器不支持本机安全连接");
+            throw new LocalRuntimeClientError("webcrypto_unavailable", t("domain:this-browser-does-not-support-secure-local-connections"));
         }
     }
 
@@ -122,14 +123,14 @@ export class LocalRuntimeSessionClient {
         const session = this.session;
         if (!session || Date.parse(session.expiresAt) <= this.now()) {
             this.session = undefined;
-            throw new LocalRuntimeClientError("session_required", "本机会话尚未建立", 401);
+            throw new LocalRuntimeClientError("session_required", t("domain:the-local-session-has-not-been-established-yet"), 401);
         }
         const url = exactRuntimeUrl(pathAndQuery);
         const method = String(init.method ?? "GET").toUpperCase();
         const bodyBytes = requestBodyBytes(init.body);
         const headers = new Headers(init.headers);
         if (headers.has("authorization") || headers.has("x-canvas-agent-token")) {
-            throw new LocalRuntimeClientError("legacy_bearer_rejected", "正常本机请求不能携带旧版凭据");
+            throw new LocalRuntimeClientError("legacy_bearer_rejected", t("domain:regular-local-requests-must-not-carry-legacy-credentials"));
         }
         const timestamp = this.now();
         const requestNonce = randomBase64Url(this.cryptoImpl, 16);
@@ -192,7 +193,7 @@ export class LocalRuntimeSessionClient {
         }
         if (challenge.runtimeInstanceId !== info.runtimeInstanceId || challenge.keyId !== key.keyId) {
             this.pending = undefined;
-            throw new LocalRuntimeClientError("challenge_invalid", "本机会话挑战无效");
+            throw new LocalRuntimeClientError("challenge_invalid", t("domain:invalid-local-session-challenge"));
         }
         const signature = await signP1363(
             this.cryptoImpl,
@@ -319,7 +320,7 @@ async function browserKeyId(cryptoImpl: Crypto, jwk: JsonWebKey) {
 async function signP1363(cryptoImpl: Crypto, privateKey: CryptoKey, payload: string) {
     const signature = new Uint8Array(await cryptoImpl.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, new TextEncoder().encode(payload)));
     if (signature.byteLength !== 64) {
-        throw new LocalRuntimeClientError("signature_invalid", "浏览器签名格式不受支持");
+        throw new LocalRuntimeClientError("signature_invalid", t("domain:unsupported-browser-signature-format"));
     }
     return base64Url(signature);
 }
@@ -344,16 +345,16 @@ function requestBodyBytes(body: BodyInit | null | undefined) {
     if (body === undefined || body === null) return new Uint8Array();
     if (typeof body === "string") return new TextEncoder().encode(body);
     if (body instanceof Uint8Array) return body;
-    throw new LocalRuntimeClientError("request_body_invalid", "本机请求体格式无效");
+    throw new LocalRuntimeClientError("request_body_invalid", t("domain:invalid-local-request-body-format"));
 }
 
 function exactRuntimeUrl(pathAndQuery: string) {
     if (!pathAndQuery.startsWith("/") || pathAndQuery.includes("#")) {
-        throw new LocalRuntimeClientError("request_target_invalid", "本机请求路径无效");
+        throw new LocalRuntimeClientError("request_target_invalid", t("domain:invalid-local-request-path"));
     }
     const url = new URL(pathAndQuery, LOCAL_RUNTIME_ENDPOINT);
     if (url.origin !== LOCAL_RUNTIME_ENDPOINT || `${url.pathname}${url.search}` !== pathAndQuery) {
-        throw new LocalRuntimeClientError("request_target_invalid", "本机请求路径无效");
+        throw new LocalRuntimeClientError("request_target_invalid", t("domain:invalid-local-request-path"));
     }
     return url;
 }
@@ -364,7 +365,7 @@ function exactOrigin(value: string) {
         if (!["http:", "https:"].includes(url.protocol) || url.pathname !== "/" || url.search || url.hash || url.origin !== value) throw new Error();
         return url.origin;
     } catch {
-        throw new LocalRuntimeClientError("origin_invalid", "当前页面来源无效");
+        throw new LocalRuntimeClientError("origin_invalid", t("domain:invalid-current-page-origin"));
     }
 }
 
@@ -380,7 +381,7 @@ function validatePublicJwk(jwk: JsonWebKey) {
         jwk.key_ops.length !== 1 ||
         jwk.key_ops[0] !== "verify"
     ) {
-        throw new LocalRuntimeClientError("browser_key_invalid", "浏览器公钥无效");
+        throw new LocalRuntimeClientError("browser_key_invalid", t("domain:invalid-browser-public-key"));
     }
 }
 
@@ -395,7 +396,7 @@ function validateKeyRecord(record: RuntimeBrowserKeyRecord) {
         record.privateKey.usages[0] !== "sign" ||
         !/^[A-Za-z0-9_-]{43}$/.test(record.keyId)
     ) {
-        throw new LocalRuntimeClientError("browser_key_invalid", "浏览器密钥无效");
+        throw new LocalRuntimeClientError("browser_key_invalid", t("domain:invalid-browser-secret-key"));
     }
 }
 
@@ -409,7 +410,7 @@ function parseInfo(value: Record<string, unknown>): RuntimeInfo {
         !/^[A-Za-z0-9_-]{8,160}$/.test(value.runtimeInstanceId) ||
         typeof value.originTrusted !== "boolean"
     ) {
-        throw new LocalRuntimeClientError("runtime_incompatible", "本机运行时版本不兼容");
+        throw new LocalRuntimeClientError("runtime_incompatible", t("domain:incompatible-local-runtime-version"));
     }
     return value as RuntimeInfo;
 }
@@ -417,7 +418,7 @@ function parseInfo(value: Record<string, unknown>): RuntimeInfo {
 function parseChallenge(value: Record<string, unknown>, keyId: string): RuntimeChallenge {
     assertExactKeys(value, ["state", "challengeId", "nonce", "runtimeInstanceId", "expiresAt", "keyId"]);
     if (value.state !== "challenge" || typeof value.challengeId !== "string" || typeof value.nonce !== "string" || typeof value.runtimeInstanceId !== "string" || typeof value.expiresAt !== "string" || value.keyId !== keyId) {
-        throw new LocalRuntimeClientError("challenge_invalid", "本机会话挑战无效");
+        throw new LocalRuntimeClientError("challenge_invalid", t("domain:invalid-local-session-challenge"));
     }
     return value as RuntimeChallenge;
 }
@@ -425,7 +426,7 @@ function parseChallenge(value: Record<string, unknown>, keyId: string): RuntimeC
 function parseSession(value: Record<string, unknown>, keyId: string): RuntimePublicSession {
     assertExactKeys(value, ["sessionId", "keyId", "scopes", "expiresAt"]);
     if (typeof value.sessionId !== "string" || value.sessionId.length < 16 || value.keyId !== keyId || !Array.isArray(value.scopes) || value.scopes.some((scope) => typeof scope !== "string") || typeof value.expiresAt !== "string") {
-        throw new LocalRuntimeClientError("session_invalid", "本机会话响应无效");
+        throw new LocalRuntimeClientError("session_invalid", t("domain:invalid-local-session-response"));
     }
     return value as RuntimePublicSession;
 }
@@ -433,7 +434,7 @@ function parseSession(value: Record<string, unknown>, keyId: string): RuntimePub
 function assertExactKeys(value: Record<string, unknown>, keys: readonly string[]) {
     const allowed = new Set(keys);
     if (Object.keys(value).some((key) => !allowed.has(key))) {
-        throw new LocalRuntimeClientError("runtime_response_invalid", "本机运行时响应无效");
+        throw new LocalRuntimeClientError("runtime_response_invalid", t("domain:invalid-local-runtime-response"));
     }
 }
 
@@ -443,7 +444,7 @@ async function safeJson(response: Response) {
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
         return value as Record<string, unknown>;
     } catch {
-        throw new LocalRuntimeClientError("runtime_response_invalid", "本机运行时响应无效", response.status);
+        throw new LocalRuntimeClientError("runtime_response_invalid", t("domain:invalid-local-runtime-response"), response.status);
     }
 }
 
@@ -453,11 +454,11 @@ function responseError(response: Response, body: Record<string, unknown>) {
 }
 
 const PUBLIC_RUNTIME_ERROR_MESSAGES: Record<string, string> = {
-    challenge_invalid: "本机会话挑战无效",
-    invalid_public_key: "浏览器公钥无效",
-    origin_not_trusted: "当前页面来源未获本机授权",
-    rate_limited: "本机连接请求过多，请稍后重试",
-    registration_not_found: "浏览器密钥尚未注册",
-    runtime_internal_error: "本机运行时请求失败",
-    runtime_request_failed: "本机运行时请求失败",
+    challenge_invalid: t("domain:invalid-local-session-challenge"),
+    invalid_public_key: t("domain:invalid-browser-public-key"),
+    origin_not_trusted: t("domain:the-current-page-origin-is-not-authorized-by-the-local-runtime"),
+    rate_limited: t("domain:too-many-local-connection-attempts-try-again-later"),
+    registration_not_found: t("domain:browser-key-not-registered-yet"),
+    runtime_internal_error: t("domain:local-runtime-request-failed"),
+    runtime_request_failed: t("domain:local-runtime-request-failed"),
 };

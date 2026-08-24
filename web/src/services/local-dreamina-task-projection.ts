@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { GenerationTask } from "@/services/api/task-center";
 import { DREAMINA_SUBMIT_ERROR_MESSAGES } from "@/lib/generation-error";
 import {
@@ -12,7 +13,7 @@ import {
 export type LocalDreaminaTaskContext = Pick<GenerationTask, "prompt" | "type" | "attempts"> & Partial<Pick<GenerationTask, "projectId" | "startedAt">>;
 export type LocalDreaminaActionTarget = Pick<GenerationTask, "id" | "status"> & Partial<Pick<GenerationTask, "provider" | "stage" | "receiptRecorded" | "errorCode" | "error">>;
 
-export const LOCAL_DREAMINA_BACKGROUND_MESSAGE = "任务已转入后台，官方状态会继续同步。";
+export const LOCAL_DREAMINA_BACKGROUND_MESSAGE = t("domain:the-task-moved-to-the-background-official-status-will-keep-syncing");
 
 export type LocalDreaminaDiagnosticLog = {
     level: "info" | "warn" | "error";
@@ -91,7 +92,7 @@ export function projectLocalDreaminaTask(task: LocalDreaminaGenerationTask, cont
               : task.officialStatus === "failed"
                 ? { error: LOCAL_DREAMINA_FAILED_OR_CANCELLED_MESSAGE }
                 : task.officialStatus === "cancelled"
-                  ? { error: "官方返回状态：cancelled" }
+                  ? { error: t("domain:official-status-cancelled") }
                   : officialIncomplete
                     ? { error: LOCAL_DREAMINA_OFFICIAL_INCOMPLETE_MESSAGE }
                     : submitFailure
@@ -137,9 +138,9 @@ export function isLocalDreaminaBackgroundTask(task: LocalDreaminaActionTarget) {
 }
 
 export function localDreaminaCancellationMessage(task: LocalDreaminaActionTarget) {
-    if (isLocalDreaminaSubmissionUncertain(task)) return task.error || "提交结果待确认";
+    if (isLocalDreaminaSubmissionUncertain(task)) return task.error || t("domain:submission-result-pending-confirmation");
     if (isLocalDreaminaBackgroundTask(task)) return LOCAL_DREAMINA_BACKGROUND_MESSAGE;
-    return isLocalDreaminaWaitStopped(task) ? LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE : task.error || "任务已取消";
+    return isLocalDreaminaWaitStopped(task) ? LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE : task.error || t("domain:task-cancelled");
 }
 
 export function localDreaminaCancellationCopy(task: LocalDreaminaActionTarget) {
@@ -147,14 +148,14 @@ export function localDreaminaCancellationCopy(task: LocalDreaminaActionTarget) {
     if (isLocalDreaminaBackgroundTask(task)) {
         return {
             kind: "background",
-            action: "转入后台",
-            confirmation: "任务已由官方接受；转入后台后仍会继续同步官方状态。",
+            action: t("domain:moved-to-background"),
+            confirmation: t("domain:the-task-was-accepted-by-the-official-service-official-status-will-keep"),
         } as const;
     }
     return {
         kind: "cancel",
-        action: "取消任务",
-        confirmation: "任务尚未提交官方，可以安全取消本机任务。",
+        action: t("domain:cancel-task"),
+        confirmation: t("domain:the-task-has-not-been-submitted-officially-yet-it-is-safe-to-cancel-loca"),
     } as const;
 }
 
@@ -172,7 +173,7 @@ export function localDreaminaDetachOutcome(task: LocalDreaminaActionTarget) {
     }
     return {
         kind: "cancel",
-        message: isLocalDreaminaWaitStopped(task) ? LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE : task.error || "任务已取消",
+        message: isLocalDreaminaWaitStopped(task) ? LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE : task.error || t("domain:task-cancelled"),
         taskStatus: task.status,
         creationStatus: "cancelled",
         canvasNodeStatus: "error",

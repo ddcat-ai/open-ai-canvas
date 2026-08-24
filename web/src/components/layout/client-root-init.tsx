@@ -6,8 +6,10 @@ import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-model-store";
 import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
+import { useTranslation } from "react-i18next";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
+    const { t } = useTranslation("canvas");
     const config = useConfigStore((state) => state.config);
     const localRuntimeConfigured = config.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false);
     useLocalRuntimeBootstrap(localRuntimeConfigured);
@@ -55,12 +57,12 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                             }
                           : channel,
                   )
-                : [createModelChannel({ id: "default", name: "默认渠道", baseUrl: baseUrl || undefined })],
+                : [createModelChannel({ id: "default", name: t("domain:default-channel"), baseUrl: baseUrl || undefined })],
         );
         if (baseUrl) updateConfig("baseUrl", baseUrl);
         navigateToSettings({ section: "channels" });
-        if (ignoredApiKey) message.warning("出于安全考虑，链接中的 API Key 已忽略，请在配置中手动填写");
-        else message.success("已导入本地直连地址");
+        if (ignoredApiKey) message.warning(t("domain:for-security-the-api-key-in-the-link-was-ignored-enter-it-manually-in-se"));
+        else message.success(t("domain:local-direct-connect-url-imported"));
     }, [config.channels, message, updateConfig]);
 
     return <>{children}</>;

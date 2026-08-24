@@ -8,8 +8,9 @@ describe("Gemini Images request helpers", () => {
     });
 
     test("拒绝空图和非图片 data URL，避免把错误参考图发给 Gemini", () => {
-        expect(() => parseGeminiImageDataUrl("")).toThrow("未得到有效的 image data URL");
-        expect(() => parseGeminiImageDataUrl("data:text/plain;base64,aGVsbG8=")).toThrow("MIME 类型无效");
+        // i18n 迁移后测试环境 t() 返回 key 字符串，锚定稳定 key 前缀
+        expect(() => parseGeminiImageDataUrl("")).toThrow(/lib:failed-to-read-the-reference-image/);
+        expect(() => parseGeminiImageDataUrl("data:text/plain;base64,aGVsbG8=")).toThrow(/lib:invalid-reference-image-mime-type/);
     });
 
     test("把统一图片选项映射到 Gemini imageConfig", () => {

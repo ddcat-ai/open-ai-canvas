@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import { runBackendGenerationTask } from "@/services/api/generation-task";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -36,8 +37,12 @@ export function parseSkillDraft(text: string): Partial<SkillDraft> {
             const raw = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
             if (raw && typeof raw === "object") {
                 return {
-                    skill_name: String(raw.skill_name ?? "").trim().slice(0, MAX_NAME_LENGTH),
-                    description: String(raw.description ?? "").trim().slice(0, MAX_DESCRIPTION_LENGTH),
+                    skill_name: String(raw.skill_name ?? "")
+                        .trim()
+                        .slice(0, MAX_NAME_LENGTH),
+                    description: String(raw.description ?? "")
+                        .trim()
+                        .slice(0, MAX_DESCRIPTION_LENGTH),
                     instruction: String(raw.instruction ?? raw.instructions ?? "").trim(),
                     tag: typeof raw.tag === "string" && raw.tag.trim() ? raw.tag.trim() : undefined,
                 };
@@ -47,7 +52,7 @@ export function parseSkillDraft(text: string): Partial<SkillDraft> {
         }
     }
     // 回退：首行作为名称，正文作为简介与指令，用户随后可自由编辑
-    const firstLine = trimmed.split(/\r?\n/)[0]?.trim().slice(0, 30) || "未命名技能";
+    const firstLine = trimmed.split(/\r?\n/)[0]?.trim().slice(0, 30) || t("canvas:untitled-skill");
     return {
         skill_name: firstLine,
         description: trimmed.slice(0, MAX_DESCRIPTION_LENGTH),

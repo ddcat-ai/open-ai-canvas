@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { WorkspaceSignalIcon, type WorkspaceSignalIconVariant } from "@/components/ui/aceternity/workspace-signal-icon";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 export function WorkspaceState({ icon = "empty", title, description, action, compact = false, className }: { icon?: WorkspaceSignalIconVariant; title: string; description?: string; action?: ReactNode; compact?: boolean; className?: string }) {
     return (
@@ -15,19 +17,47 @@ export function WorkspaceState({ icon = "empty", title, description, action, com
     );
 }
 
-export function WorkspaceErrorState({ title = "暂时无法加载", description, actionLabel = "重新加载", onRetry, compact = false }: { title?: string; description?: string; actionLabel?: string; onRetry?: () => void; compact?: boolean }) {
-    return <WorkspaceState icon="error" title={title} description={description || "请检查网络连接后重试，当前内容不会被覆盖。"} compact={compact} action={onRetry ? <Button onClick={onRetry}>{actionLabel}</Button> : undefined} />;
+export function WorkspaceErrorState({
+    title = t("domain:unable-to-load-right-now"),
+    description,
+    actionLabel = t("domain:reload-2"),
+    onRetry,
+    compact = false,
+}: {
+    title?: string;
+    description?: string;
+    actionLabel?: string;
+    onRetry?: () => void;
+    compact?: boolean;
+}) {
+    const { t } = useTranslation("canvas");
+    return (
+        <WorkspaceState
+            icon="error"
+            title={title}
+            description={description || t("domain:check-your-network-connection-and-retry-current-content-will-not-be-over")}
+            compact={compact}
+            action={onRetry ? <Button onClick={onRetry}>{actionLabel}</Button> : undefined}
+        />
+    );
 }
 
-export function WorkspaceLoadingState({ label = "正在加载内容", detail, rows = 3, className }: { label?: string; detail?: string; rows?: number; className?: string }) {
+export function WorkspaceLoadingState({ label = t("domain:loading-content"), detail, rows = 3, className }: { label?: string; detail?: string; rows?: number; className?: string }) {
     return (
         <section className={cn("workspace-loading-state py-8", className)} aria-busy="true" aria-live="polite">
             <div className="mb-5 flex items-center gap-3">
                 <WorkspaceSignalIcon variant="loading" size="sm" />
-                <div><div className="text-sm font-medium">{label}</div>{detail ? <div className="mt-0.5 text-xs text-foreground/50">{detail}</div> : null}</div>
+                <div>
+                    <div className="text-sm font-medium">{label}</div>
+                    {detail ? <div className="mt-0.5 text-xs text-foreground/50">{detail}</div> : null}
+                </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: rows }, (_, index) => <div key={index} className="rounded-md bg-surface-active p-4"><Skeleton active title={{ width: `${48 + index * 8}%` }} paragraph={{ rows: 3 }} /></div>)}
+                {Array.from({ length: rows }, (_, index) => (
+                    <div key={index} className="rounded-md bg-surface-active p-4">
+                        <Skeleton active title={{ width: `${48 + index * 8}%` }} paragraph={{ rows: 3 }} />
+                    </div>
+                ))}
             </div>
         </section>
     );

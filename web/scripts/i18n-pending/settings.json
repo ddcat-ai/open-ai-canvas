@@ -1,0 +1,2776 @@
+{
+    "ns": "settings",
+    "entries": {
+        "cx:src/pages/settings/channel-settings-pane.tsx:3114": {
+            "type": "skipped",
+            "zh": "`渠道 ${userChannels.length + 1}`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 59
+                }
+            ]
+        },
+        "t:系统渠道由管理员维护": {
+            "type": "ui",
+            "zh": "系统渠道由管理员维护",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 67
+                }
+            ],
+            "key": "system-channels-are-maintained-by-admins",
+            "en": "System channels are maintained by admins"
+        },
+        "t:当前渠道": {
+            "type": "ui",
+            "zh": "当前渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 89
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 97
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 104
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 111
+                }
+            ],
+            "key": "current-channel",
+            "en": "Current channel"
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:4808": {
+            "type": "skipped",
+            "zh": "`${channel.name || \"当前渠道\"}未返回模型，已保留现有手工模型`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 97
+                }
+            ]
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:5234": {
+            "type": "skipped",
+            "zh": "`${latestChannel.name || \"当前渠道\"}的连接配置已改变，已忽略旧的拉取结果`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 104
+                }
+            ]
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:5622": {
+            "type": "skipped",
+            "zh": "`${latestChannel.name || \"当前渠道\"}模型列表已更新`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 111
+                }
+            ]
+        },
+        "t:未命名渠道": {
+            "type": "ui",
+            "zh": "未命名渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 123
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 162
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 163
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 164
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 203
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 206
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 213
+                },
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 85
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 72
+                }
+            ],
+            "key": "untitled-channel",
+            "en": "Untitled channel"
+        },
+        "t:没有可拉取的自定义渠道，请先填写有效 Base URL 和 API Key": {
+            "type": "ui",
+            "zh": "没有可拉取的自定义渠道，请先填写有效 Base URL 和 API Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 124
+                }
+            ],
+            "key": "no-custom-channels-to-fetch-from-fill-in-a-valid-base-url-and-api-key-fi",
+            "en": "No custom channels to fetch from. Fill in a valid base URL and API key first"
+        },
+        "t:读取失败": {
+            "type": "ui",
+            "zh": "读取失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 136
+                }
+            ],
+            "key": "failed-to-read",
+            "en": "Failed to read"
+        },
+        "tpl:已更新 {{length}} 个渠道的模型": {
+            "type": "template",
+            "zh": "已更新 {{length}} 个渠道的模型",
+            "params": {
+                "length": "successful.length"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 159
+                }
+            ],
+            "key": "updated-models-for-param-channels",
+            "en": "Updated models for {{{length}}} channels"
+        },
+        "t:未返回模型": {
+            "type": "ui",
+            "zh": "未返回模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 162
+                }
+            ],
+            "key": "no-models-returned",
+            "en": "No models returned"
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:8806": {
+            "type": "skipped",
+            "zh": "`${item.channel.name || \"未命名渠道\"}：连接配置已改变，已忽略旧结果`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 163
+                }
+            ]
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:9034": {
+            "type": "skipped",
+            "zh": "`${warnings.join(\"；\")}。未更新的渠道已保留原有模型列表`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 166
+                }
+            ]
+        },
+        "t:批量读取模型失败，原有模型列表未改动": {
+            "type": "ui",
+            "zh": "批量读取模型失败，原有模型列表未改动",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 168
+                }
+            ],
+            "key": "batch-model-fetch-failed-the-existing-model-list-is-unchanged",
+            "en": "Batch model fetch failed. The existing model list is unchanged"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:自定义渠道:9471": {
+            "type": "jsxtext",
+            "zh": "自定义渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 178
+                }
+            ],
+            "key": "custom-channels",
+            "en": "Custom channels"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。:9506": {
+            "type": "jsxtext",
+            "zh": "渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 179
+                }
+            ],
+            "key": "channels-only-store-the-connection-type-after-fetching-models-configure",
+            "en": "Channels only store the connection type. After fetching models, configure protocols under Models & capabilities."
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:打开模型选择:9638": {
+            "type": "jsxtext",
+            "zh": "打开模型选择",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 179
+                }
+            ],
+            "key": "open-model-selection",
+            "en": "Open model selection"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:拉取全部:10010": {
+            "type": "jsxtext",
+            "zh": "拉取全部",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 182
+                }
+            ],
+            "key": "fetch-all",
+            "en": "Fetch all"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:新增渠道:10168": {
+            "type": "jsxtext",
+            "zh": "新增渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 183
+                }
+            ],
+            "key": "add-channel",
+            "en": "Add channel"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:· 已保存:11188": {
+            "type": "jsxtext",
+            "zh": "· 已保存",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 196
+                }
+            ],
+            "key": "saved",
+            "en": " · saved"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:个模型:11218": {
+            "type": "jsxtext",
+            "zh": "个模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 196
+                }
+            ],
+            "key": "models",
+            "en": "models"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:拉取模型:11776": {
+            "type": "jsxtext",
+            "zh": "拉取模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 201
+                }
+            ],
+            "key": "fetch-models",
+            "en": "Fetch models"
+        },
+        "t:展开渠道配置": {
+            "type": "ui",
+            "zh": "展开渠道配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 202
+                }
+            ],
+            "key": "expand-channel-config",
+            "en": "Expand channel config"
+        },
+        "t:收起渠道配置": {
+            "type": "ui",
+            "zh": "收起渠道配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 202
+                }
+            ],
+            "key": "collapse-channel-config",
+            "en": "Collapse channel config"
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:12005": {
+            "type": "skipped",
+            "zh": "`${collapsed ? \"展开\" : \"收起\"}渠道配置 ${channel.name || \"未命名渠道\"}`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 203
+                }
+            ]
+        },
+        "t:展开": {
+            "type": "ui",
+            "zh": "展开",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 203
+                }
+            ],
+            "key": "expand",
+            "en": "Expand"
+        },
+        "t:收起": {
+            "type": "ui",
+            "zh": "收起",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 203
+                }
+            ],
+            "key": "collapse",
+            "en": "Collapse"
+        },
+        "t:删除自定义渠道？": {
+            "type": "ui",
+            "zh": "删除自定义渠道？",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 205
+                }
+            ],
+            "key": "delete-this-custom-channel",
+            "en": "Delete this custom channel?"
+        },
+        "t:该渠道关联的模型选择会同时移除。": {
+            "type": "ui",
+            "zh": "该渠道关联的模型选择会同时移除。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 205
+                }
+            ],
+            "key": "model-selections-linked-to-this-channel-will-be-removed-too",
+            "en": "Model selections linked to this channel will be removed too."
+        },
+        "t:删除": {
+            "type": "ui",
+            "zh": "删除",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 205
+                }
+            ],
+            "key": "delete",
+            "en": "Delete"
+        },
+        "t:取消": {
+            "type": "ui",
+            "zh": "取消",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 205
+                },
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 258
+                },
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 122
+                }
+            ],
+            "key": "cancel",
+            "en": "Cancel"
+        },
+        "t:删除渠道": {
+            "type": "ui",
+            "zh": "删除渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 206
+                }
+            ],
+            "key": "delete-channel",
+            "en": "Delete channel"
+        },
+        "cx:src/pages/settings/channel-settings-pane.tsx:12668": {
+            "type": "skipped",
+            "zh": "`删除渠道 ${channel.name || \"未命名渠道\"}`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 206
+                }
+            ]
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:连接信息:13300": {
+            "type": "jsxtext",
+            "zh": "连接信息",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 212
+                }
+            ],
+            "key": "connection-details",
+            "en": "Connection details"
+        },
+        "t:渠道名称": {
+            "type": "ui",
+            "zh": "渠道名称",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 213
+                }
+            ],
+            "key": "channel-name",
+            "en": "Channel name"
+        },
+        "t:例如：我的 NewAPI": {
+            "type": "ui",
+            "zh": "例如：我的 NewAPI",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 213
+                }
+            ],
+            "key": "e-g-my-newapi",
+            "en": "e.g. My NewAPI"
+        },
+        "t:渠道连接类型": {
+            "type": "ui",
+            "zh": "渠道连接类型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 214
+                }
+            ],
+            "key": "channel-connection-type",
+            "en": "Channel connection type"
+        },
+        "t:仅用于拉取模型目录；模型能力和请求协议在下方统一配置。": {
+            "type": "ui",
+            "zh": "仅用于拉取模型目录；模型能力和请求协议在下方统一配置。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 214
+                }
+            ],
+            "key": "only-used-to-fetch-the-model-catalog-model-capabilities-and-request-prot",
+            "en": "Only used to fetch the model catalog. Model capabilities and request protocols are configured below."
+        },
+        "t:OpenAI 兼容": {
+            "type": "ui",
+            "zh": "OpenAI 兼容",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 214
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 343
+                }
+            ],
+            "key": "openai-compatible",
+            "en": "OpenAI compatible"
+        },
+        "t:Gemini 原生": {
+            "type": "ui",
+            "zh": "Gemini 原生",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 214
+                },
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 343
+                }
+            ],
+            "key": "gemini-native",
+            "en": "Gemini native"
+        },
+        "t:填写 Gemini API Key": {
+            "type": "ui",
+            "zh": "填写 Gemini API Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 223
+                }
+            ],
+            "key": "enter-your-gemini-api-key",
+            "en": "Enter your Gemini API key"
+        },
+        "t:填写当前渠道 API Key": {
+            "type": "ui",
+            "zh": "填写当前渠道 API Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 223
+                }
+            ],
+            "key": "enter-the-api-key-for-this-channel",
+            "en": "Enter the API key for this channel"
+        },
+        "t:Secret Key（可选）": {
+            "type": "ui",
+            "zh": "Secret Key（可选）",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 224
+                }
+            ],
+            "key": "secret-key-optional",
+            "en": "Secret Key (optional)"
+        },
+        "t:即梦等 AK/SK 协议需要；其他协议留空。": {
+            "type": "ui",
+            "zh": "即梦等 AK/SK 协议需要；其他协议留空。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 224
+                }
+            ],
+            "key": "required-for-ak-sk-protocols-like-dreamina-leave-empty-for-others",
+            "en": "Required for AK/SK protocols like Dreamina; leave empty for others."
+        },
+        "t:填写 Secret Key": {
+            "type": "ui",
+            "zh": "填写 Secret Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 224
+                }
+            ],
+            "key": "enter-your-secret-key",
+            "en": "Enter your secret key"
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:模型与能力:16010": {
+            "type": "jsxtext",
+            "zh": "模型与能力",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 225
+                }
+            ],
+            "key": "models-and-capabilities",
+            "en": "Models & capabilities"
+        },
+        "t:模型列表": {
+            "type": "ui",
+            "zh": "模型列表",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 226
+                }
+            ],
+            "key": "model-list",
+            "en": "Model list"
+        },
+        "t:输入模型名，或点击拉取模型": {
+            "type": "ui",
+            "zh": "输入模型名，或点击拉取模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 226
+                }
+            ],
+            "key": "type-a-model-name-or-fetch-models",
+            "en": "Type a model name, or fetch models"
+        },
+        "t:当前没有自定义渠道": {
+            "type": "ui",
+            "zh": "当前没有自定义渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 235
+                }
+            ],
+            "key": "no-custom-channels-yet",
+            "en": "No custom channels yet"
+        },
+        "t:管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。": {
+            "type": "ui",
+            "zh": "管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 235
+                }
+            ],
+            "key": "admin-configured-system-channels-appear-in-model-selection-you-can-also",
+            "en": "Admin-configured system channels appear in model selection; you can also add your own model services."
+        },
+        "jsx:src/pages/settings/channel-settings-pane.tsx:新增自定义渠道:17177": {
+            "type": "jsxtext",
+            "zh": "新增自定义渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 235
+                }
+            ],
+            "key": "add-custom-channel",
+            "en": "Add custom channel"
+        },
+        "t:允许本机渠道": {
+            "type": "ui",
+            "zh": "允许本机渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 248
+                }
+            ],
+            "key": "allow-local-channels",
+            "en": "Allow local channels"
+        },
+        "tpl:仅放行精确 localhost 或 127.0.0.1；示例：{{DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}}": {
+            "type": "template",
+            "zh": "仅放行精确 localhost 或 127.0.0.1；示例：{{DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}}",
+            "params": {
+                "DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL": "DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 248
+                }
+            ],
+            "key": "only-exact-localhost-or-127-0-0-1-is-allowed-example-param",
+            "en": "Only exact localhost or 127.0.0.1 is allowed; example: {{{DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}}}"
+        },
+        "t:填写渠道 Base URL": {
+            "type": "ui",
+            "zh": "填写渠道 Base URL",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "enter-the-channel-base-url",
+            "en": "Enter the channel Base URL"
+        },
+        "t:请添加至少一个模型": {
+            "type": "ui",
+            "zh": "请添加至少一个模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 270
+                }
+            ],
+            "key": "add-at-least-one-model",
+            "en": "Add at least one model"
+        },
+        "t:可用": {
+            "type": "ui",
+            "zh": "可用",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 292
+                }
+            ],
+            "key": "available",
+            "en": "Available"
+        },
+        "t:读取模型失败": {
+            "type": "ui",
+            "zh": "读取模型失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 315
+                }
+            ],
+            "key": "failed-to-load-models",
+            "en": "Failed to load models"
+        },
+        "t:不允许访问本机": {
+            "type": "ui",
+            "zh": "不允许访问本机",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 316
+                }
+            ],
+            "key": "local-access-blocked",
+            "en": "Local access blocked"
+        },
+        "t:不允许访问保留地址": {
+            "type": "ui",
+            "zh": "不允许访问保留地址",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 316
+                }
+            ],
+            "key": "reserved-addresses-blocked",
+            "en": "Reserved addresses blocked"
+        },
+        "tpl:{{detail}}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS": {
+            "type": "template",
+            "zh": "{{detail}}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS",
+            "params": {
+                "detail": "detail"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 316
+                }
+            ],
+            "key": "param-trusted-private-network-services-must-be-allowlisted-by-your-admin",
+            "en": "{{{detail}}}. Trusted private-network services must be allowlisted by your admin via CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS"
+        },
+        "tpl:{{detail}}；也可以直接在模型列表中手动输入模型名": {
+            "type": "template",
+            "zh": "{{detail}}；也可以直接在模型列表中手动输入模型名",
+            "params": {
+                "detail": "detail"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 317
+                }
+            ],
+            "key": "param-you-can-also-type-model-names-directly-into-the-model-list",
+            "en": "{{{detail}}}. You can also type model names directly into the model list"
+        },
+        "t:请填写 Base URL": {
+            "type": "ui",
+            "zh": "请填写 Base URL",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 326
+                }
+            ],
+            "key": "enter-a-base-url",
+            "en": "Enter a Base URL"
+        },
+        "t:Base URL 只支持 HTTP 或 HTTPS": {
+            "type": "ui",
+            "zh": "Base URL 只支持 HTTP 或 HTTPS",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 329
+                }
+            ],
+            "key": "base-url-supports-http-or-https-only",
+            "en": "Base URL supports HTTP or HTTPS only"
+        },
+        "t:Base URL 格式不正确": {
+            "type": "ui",
+            "zh": "Base URL 格式不正确",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 331
+                }
+            ],
+            "key": "base-url-format-is-invalid",
+            "en": "Base URL format is invalid"
+        },
+        "t:请填写 API Key / Access Key": {
+            "type": "ui",
+            "zh": "请填写 API Key / Access Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 333
+                }
+            ],
+            "key": "enter-an-api-key-access-key",
+            "en": "Enter an API key / access key"
+        },
+        "t:当前协议需要填写 Secret Key": {
+            "type": "ui",
+            "zh": "当前协议需要填写 Secret Key",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-settings-pane.tsx",
+                    "line": 334
+                }
+            ],
+            "key": "this-protocol-requires-a-secret-key",
+            "en": "This protocol requires a secret key"
+        },
+        "tpl:模型测试通过：{{detail}}": {
+            "type": "template",
+            "zh": "模型测试通过：{{detail}}",
+            "params": {
+                "detail": "detail"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 37
+                }
+            ],
+            "key": "model-test-passed-param",
+            "en": "Model test passed: {{{detail}}}"
+        },
+        "t:模型测试失败": {
+            "type": "ui",
+            "zh": "模型测试失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 39
+                }
+            ],
+            "key": "model-test-failed",
+            "en": "Model test failed"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:模型能力与请求协议:3240": {
+            "type": "jsxtext",
+            "zh": "模型能力与请求协议",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 55
+                }
+            ],
+            "key": "model-capabilities-and-request-protocols",
+            "en": "Model capabilities & request protocols"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用:3342": {
+            "type": "jsxtext",
+            "zh": "与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 56
+                }
+            ],
+            "key": "uses-the-same-capability-catalog-as-the-admin-console-tests-send-real-re",
+            "en": "Uses the same capability catalog as the admin console. Tests send real requests and may incur provider costs"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:个模型:3505": {
+            "type": "jsxtext",
+            "zh": "个模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 58
+                }
+            ],
+            "key": "models-2",
+            "en": "models"
+        },
+        "t:待配置请求协议": {
+            "type": "ui",
+            "zh": "待配置请求协议",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 82
+                }
+            ],
+            "key": "request-protocol-not-configured-yet",
+            "en": "Request protocol not configured yet"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:配置使用:5746": {
+            "type": "jsxtext",
+            "zh": "配置使用",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 86
+                }
+            ],
+            "key": "configure-usage",
+            "en": "Configure usage"
+        },
+        "tpl:{{activeModel}} · 使用配置": {
+            "type": "template",
+            "zh": "{{activeModel}} · 使用配置",
+            "params": {
+                "activeModel": "activeModel"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 94
+                }
+            ],
+            "key": "param-usage-settings",
+            "en": "{{{activeModel}}} · Usage settings"
+        },
+        "t:模型使用配置": {
+            "type": "ui",
+            "zh": "模型使用配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 94
+                }
+            ],
+            "key": "model-usage-settings",
+            "en": "Model usage settings"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:测试模型:6734": {
+            "type": "jsxtext",
+            "zh": "测试模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 107
+                }
+            ],
+            "key": "test-model",
+            "en": "Test model"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:模型能力与请求协议:7139": {
+            "type": "jsxtext",
+            "zh": "模型能力与请求协议",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 116
+                }
+            ],
+            "key": "model-capabilities-and-request-protocols-2",
+            "en": "Model capabilities & request protocols"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。:7247": {
+            "type": "jsxtext",
+            "zh": "这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 117
+                }
+            ],
+            "key": "these-settings-apply-only-to-this-model-on-this-channel-and-sync-to-gene",
+            "en": "These settings apply only to this model on this channel and sync to generation validation after saving."
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:模型能力:7438": {
+            "type": "jsxtext",
+            "zh": "模型能力",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "model-capabilities",
+            "en": "Model capabilities"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:请求协议:8844": {
+            "type": "jsxtext",
+            "zh": "请求协议",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 136
+                }
+            ],
+            "key": "request-protocol",
+            "en": "Request protocol"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:计费方式:9693": {
+            "type": "jsxtext",
+            "zh": "计费方式",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 145
+                }
+            ],
+            "key": "billing-basis",
+            "en": "Billing basis"
+        },
+        "t:按次": {
+            "type": "ui",
+            "zh": "按次",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 152
+                }
+            ],
+            "key": "per-request",
+            "en": "Per request"
+        },
+        "t:按秒": {
+            "type": "ui",
+            "zh": "按秒",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 153
+                }
+            ],
+            "key": "per-second",
+            "en": "Per second"
+        },
+        "t:每百万视频 Token 价格": {
+            "type": "ui",
+            "zh": "每百万视频 Token 价格",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 165
+                }
+            ],
+            "key": "price-per-million-video-tokens",
+            "en": "Price per million video tokens"
+        },
+        "t:每秒价格": {
+            "type": "ui",
+            "zh": "每秒价格",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 165
+                }
+            ],
+            "key": "price-per-second",
+            "en": "Price per second"
+        },
+        "t:每次价格": {
+            "type": "ui",
+            "zh": "每次价格",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 165
+                }
+            ],
+            "key": "price-per-request",
+            "en": "Price per request"
+        },
+        "cx:src/pages/settings/channel-video-pricing.tsx:11161": {
+            "type": "skipped",
+            "zh": "`积分/${activeBillingMode === \"token\" ? \"百万 Token\" : activeBillingMode === \"per_second\" ? \"秒\" : \"次\"}`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 166
+                }
+            ]
+        },
+        "t:百万 Token": {
+            "type": "ui",
+            "zh": "百万 Token",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 166
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 74
+                }
+            ],
+            "key": "million-tokens",
+            "en": "million tokens"
+        },
+        "t:秒": {
+            "type": "ui",
+            "zh": "秒",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 166
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 74
+                }
+            ],
+            "key": "s",
+            "en": "s"
+        },
+        "t:次": {
+            "type": "ui",
+            "zh": "次",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 166
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 74
+                }
+            ],
+            "key": "requests",
+            "en": "requests"
+        },
+        "jsx:src/pages/settings/channel-video-pricing.tsx:按火山方舟任务查询响应的 usage.completion_tokens 结算。:11947": {
+            "type": "jsxtext",
+            "zh": "按火山方舟任务查询响应的 usage.completion_tokens 结算。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 171
+                }
+            ],
+            "key": "billed-by-usage-completion-tokens-in-the-volcano-ark-task-query-response",
+            "en": "Billed by usage.completion_tokens in the Volcano Ark task query response."
+        },
+        "t:文本": {
+            "type": "ui",
+            "zh": "文本",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 96
+                },
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 148
+                }
+            ],
+            "key": "text",
+            "en": "Text"
+        },
+        "t:图片": {
+            "type": "ui",
+            "zh": "图片",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 96
+                }
+            ],
+            "key": "image",
+            "en": "Image"
+        },
+        "t:视频": {
+            "type": "ui",
+            "zh": "视频",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 96
+                }
+            ],
+            "key": "video",
+            "en": "Video"
+        },
+        "t:音频": {
+            "type": "ui",
+            "zh": "音频",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 96
+                }
+            ],
+            "key": "audio",
+            "en": "Audio"
+        },
+        "t:待配置": {
+            "type": "ui",
+            "zh": "待配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                },
+                {
+                    "file": "src/pages/settings/channel-video-pricing.tsx",
+                    "line": 194
+                }
+            ],
+            "key": "pending-config",
+            "en": "Pending config"
+        },
+        "tpl:系统模型刷新失败：{{message}}": {
+            "type": "template",
+            "zh": "系统模型刷新失败：{{message}}",
+            "params": {
+                "message": "error.message"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 67
+                }
+            ],
+            "key": "system-model-refresh-failed-param",
+            "en": "System model refresh failed: {{{message}}}"
+        },
+        "t:系统模型刷新失败，继续使用本地缓存": {
+            "type": "ui",
+            "zh": "系统模型刷新失败，继续使用本地缓存",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 67
+                }
+            ],
+            "key": "system-model-refresh-failed-using-local-cache",
+            "en": "System model refresh failed; using local cache"
+        },
+        "t:请先完成至少一个渠道的 Base URL、API Key 和模型配置": {
+            "type": "ui",
+            "zh": "请先完成至少一个渠道的 Base URL、API Key 和模型配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 92
+                }
+            ],
+            "key": "finish-the-base-url-api-key-and-model-setup-for-at-least-one-channel-fir",
+            "en": "Finish the base URL, API key, and model setup for at least one channel first"
+        },
+        "t:当前没有可用渠道，请先完成连接信息和模型配置": {
+            "type": "ui",
+            "zh": "当前没有可用渠道，请先完成连接信息和模型配置",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 92
+                }
+            ],
+            "key": "no-usable-channels-yet-complete-connection-details-and-model-setup-first",
+            "en": "No usable channels yet. Complete connection details and model setup first"
+        },
+        "t:当前没有可用的系统模型，请联系管理员配置系统渠道": {
+            "type": "ui",
+            "zh": "当前没有可用的系统模型，请联系管理员配置系统渠道",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 92
+                }
+            ],
+            "key": "no-system-models-available-ask-an-admin-to-set-up-system-channels",
+            "en": "No system models available. Ask an admin to set up system channels"
+        },
+        "t:配置已保存，正在返回创作页面": {
+            "type": "ui",
+            "zh": "配置已保存，正在返回创作页面",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 95
+                }
+            ],
+            "key": "settings-saved-returning-to-the-creation-page",
+            "en": "Settings saved. Returning to the creation page"
+        },
+        "jsx:src/pages/settings/index.tsx:模型选择:6775": {
+            "type": "jsxtext",
+            "zh": "模型选择",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 106
+                }
+            ],
+            "key": "models-3",
+            "en": "Models"
+        },
+        "jsx:src/pages/settings/index.tsx:按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。:6813": {
+            "type": "jsxtext",
+            "zh": "按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 107
+                }
+            ],
+            "key": "pick-default-models-per-domain-capabilities-and-protocols-are-configured",
+            "en": "Pick default models per domain; capabilities and protocols are configured under a channel's Models & capabilities."
+        },
+        "jsx:src/pages/settings/index.tsx:生成偏好:7323": {
+            "type": "jsxtext",
+            "zh": "生成偏好",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "generation-preferences",
+            "en": "Generation preferences"
+        },
+        "jsx:src/pages/settings/index.tsx:画布、视频与音频默认值，节点内仍可单独覆盖。:7361": {
+            "type": "jsxtext",
+            "zh": "画布、视频与音频默认值，节点内仍可单独覆盖。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "defaults-for-canvas-video-and-audio-each-node-can-still-override-them",
+            "en": "Defaults for canvas, video, and audio — each node can still override them."
+        },
+        "jsx:src/pages/settings/index.tsx:画布生成:7760": {
+            "type": "jsxtext",
+            "zh": "画布生成",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 127
+                }
+            ],
+            "key": "canvas-generation",
+            "en": "Canvas generation"
+        },
+        "jsx:src/pages/settings/index.tsx:设置新建生成任务时使用的初始值，节点内仍可单独覆盖。:7850": {
+            "type": "jsxtext",
+            "zh": "设置新建生成任务时使用的初始值，节点内仍可单独覆盖。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 128
+                }
+            ],
+            "key": "initial-values-for-new-generation-tasks-each-node-can-still-override-the",
+            "en": "Initial values for new generation tasks; each node can still override them."
+        },
+        "t:默认生图张数": {
+            "type": "ui",
+            "zh": "默认生图张数",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 130
+                }
+            ],
+            "key": "default-image-count",
+            "en": "Default image count"
+        },
+        "jsx:src/pages/settings/index.tsx:音频默认值:8797": {
+            "type": "jsxtext",
+            "zh": "音频默认值",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 143
+                }
+            ],
+            "key": "audio-defaults",
+            "en": "Audio defaults"
+        },
+        "jsx:src/pages/settings/index.tsx:用于新建音频节点和未单独设置参数的生成任务。:8888": {
+            "type": "jsxtext",
+            "zh": "用于新建音频节点和未单独设置参数的生成任务。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 144
+                }
+            ],
+            "key": "used-for-new-audio-nodes-and-tasks-without-explicit-parameters",
+            "en": "Used for new audio nodes and tasks without explicit parameters."
+        },
+        "t:默认声音": {
+            "type": "ui",
+            "zh": "默认声音",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 147
+                }
+            ],
+            "key": "default-voice",
+            "en": "Default voice"
+        },
+        "t:文件格式": {
+            "type": "ui",
+            "zh": "文件格式",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 150
+                }
+            ],
+            "key": "file-format",
+            "en": "File format"
+        },
+        "t:语速": {
+            "type": "ui",
+            "zh": "语速",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 153
+                }
+            ],
+            "key": "speech-rate",
+            "en": "Speech rate"
+        },
+        "jsx:src/pages/settings/index.tsx:音频指令:10570": {
+            "type": "jsxtext",
+            "zh": "音频指令",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 168
+                }
+            ],
+            "key": "audio-instructions",
+            "en": "Audio instructions"
+        },
+        "jsx:src/pages/settings/index.tsx:在音频节点没有单独填写时使用。:10660": {
+            "type": "jsxtext",
+            "zh": "在音频节点没有单独填写时使用。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 169
+                }
+            ],
+            "key": "used-when-an-audio-node-has-no-instructions-of-its-own",
+            "en": "Used when an audio node has no instructions of its own."
+        },
+        "t:默认音频指令": {
+            "type": "ui",
+            "zh": "默认音频指令",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 172
+                }
+            ],
+            "key": "default-audio-instructions",
+            "en": "Default audio instructions"
+        },
+        "t:例如：自然、温暖、适合旁白。": {
+            "type": "ui",
+            "zh": "例如：自然、温暖、适合旁白。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/index.tsx",
+                    "line": 173
+                }
+            ],
+            "key": "e-g-natural-warm-suited-to-voice-over",
+            "en": "e.g. natural, warm, suited to voice-over."
+        },
+        "t:本机连接": {
+            "type": "ui",
+            "zh": "本机连接",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 20
+                }
+            ],
+            "key": "local-connection",
+            "en": "Local connection"
+        },
+        "t:本机服务已连接，CLI 状态会自动同步。": {
+            "type": "ui",
+            "zh": "本机服务已连接，CLI 状态会自动同步。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 21
+                }
+            ],
+            "key": "local-service-connected-cli-status-syncs-automatically",
+            "en": "Local service connected; CLI status syncs automatically."
+        },
+        "t:正在检测本机服务；请确认已启动当前版本。": {
+            "type": "ui",
+            "zh": "正在检测本机服务；请确认已启动当前版本。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 22
+                }
+            ],
+            "key": "detecting-local-service-make-sure-the-current-version-is-running",
+            "en": "Detecting local service. Make sure the current version is running."
+        },
+        "t:重新连接": {
+            "type": "ui",
+            "zh": "重新连接",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 23
+                }
+            ],
+            "key": "reconnect",
+            "en": "Reconnect"
+        },
+        "t:官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。": {
+            "type": "ui",
+            "zh": "官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "official-cli-credentials-stay-on-this-machine-this-page-never-reads-or-u",
+            "en": "Official CLI credentials stay on this machine. This page never reads or uploads cookies, browser profiles, or login tokens."
+        },
+        "t:刷新状态": {
+            "type": "ui",
+            "zh": "刷新状态",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 25
+                },
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 33
+                }
+            ],
+            "key": "refresh-status",
+            "en": "Refresh status"
+        },
+        "t:直接读取当前 Windows 用户的官方即梦 CLI 登录状态。": {
+            "type": "ui",
+            "zh": "直接读取当前 Windows 用户的官方即梦 CLI 登录状态。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 26
+                }
+            ],
+            "key": "reads-the-official-dreamina-cli-sign-in-status-for-the-current-windows-u",
+            "en": "Reads the official Dreamina CLI sign-in status for the current Windows user directly."
+        },
+        "t:连接本机服务后自动检测": {
+            "type": "ui",
+            "zh": "连接本机服务后自动检测",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 27
+                }
+            ],
+            "key": "detected-automatically-once-the-local-service-connects",
+            "en": "Detected automatically once the local service connects"
+        },
+        "t:重新连接本机服务后，将自动读取官方 CLI 状态。": {
+            "type": "ui",
+            "zh": "重新连接本机服务后，将自动读取官方 CLI 状态。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 28
+                }
+            ],
+            "key": "the-official-cli-status-is-read-automatically-after-reconnecting-the-loc",
+            "en": "The official CLI status is read automatically after reconnecting the local service."
+        },
+        "t:账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。": {
+            "type": "ui",
+            "zh": "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 29
+                }
+            ],
+            "key": "account-generation-permission-unknown-this-page-only-verifies-adapter-su",
+            "en": "Account generation permission: unknown. This page only verifies adapter support and sign-in state; whether the account can generate is decided by the official service."
+        },
+        "t:任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。": {
+            "type": "ui",
+            "zh": "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 30
+                }
+            ],
+            "key": "task-states-are-synced-by-backend-polling-not-pushed-in-real-time-closin",
+            "en": "Task states are synced by backend polling, not pushed in real time. Closing the page does not stop officially submitted tasks."
+        },
+        "t:官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。": {
+            "type": "ui",
+            "zh": "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "the-official-dreamina-cli-offers-no-cancel-command-accepted-tasks-keep-s",
+            "en": "The official Dreamina CLI offers no cancel command. Accepted tasks keep syncing in the background instead of being faked as cancelled."
+        },
+        "t:本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。": {
+            "type": "ui",
+            "zh": "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 32
+                }
+            ],
+            "key": "do-not-switch-dreamina-cli-accounts-in-other-apps-while-local-tasks-run",
+            "en": "Do not switch Dreamina CLI accounts in other apps while local tasks run; account switches elsewhere cannot be detected here in real time."
+        },
+        "t:模块未加载": {
+            "type": "ui",
+            "zh": "模块未加载",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 42
+                }
+            ],
+            "key": "module-not-loaded",
+            "en": "Module not loaded"
+        },
+        "t:正在检测": {
+            "type": "ui",
+            "zh": "正在检测",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 45
+                },
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 273
+                }
+            ],
+            "key": "detecting",
+            "en": "Detecting"
+        },
+        "t:未安装": {
+            "type": "ui",
+            "zh": "未安装",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 48
+                }
+            ],
+            "key": "not-installed",
+            "en": "Not installed"
+        },
+        "t:等待官方授权": {
+            "type": "ui",
+            "zh": "等待官方授权",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 49
+                }
+            ],
+            "key": "waiting-for-authorization",
+            "en": "Waiting for authorization"
+        },
+        "t:已登录": {
+            "type": "ui",
+            "zh": "已登录",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 54
+                }
+            ],
+            "key": "signed-in",
+            "en": "Signed in"
+        },
+        "cx:src/pages/settings/local-cli-settings.tsx:3344": {
+            "type": "skipped",
+            "zh": "`即梦积分 ${new Intl.NumberFormat(\"zh-CN\").format(status.totalCredit!)}`",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 60
+                }
+            ]
+        },
+        "tpl:上次刷新积分 {{creditObservedAt}}": {
+            "type": "template",
+            "zh": "上次刷新积分 {{creditObservedAt}}",
+            "params": {
+                "creditObservedAt": "creditObservedAt"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 62
+                }
+            ],
+            "key": "credits-last-refreshed-param",
+            "en": "Credits last refreshed {{{creditObservedAt}}}"
+        },
+        "t:未登录": {
+            "type": "ui",
+            "zh": "未登录",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 65
+                }
+            ],
+            "key": "not-signed-in",
+            "en": "Not signed in"
+        },
+        "t:检测失败": {
+            "type": "ui",
+            "zh": "检测失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 66
+                }
+            ],
+            "key": "detection-failed",
+            "en": "Detection failed"
+        },
+        "t:请先连接已加载 Dreamina 的本机运行时": {
+            "type": "ui",
+            "zh": "请先连接已加载 Dreamina 的本机运行时",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 110
+                }
+            ],
+            "key": "connect-a-local-runtime-with-dreamina-loaded-first",
+            "en": "Connect a local runtime with Dreamina loaded first"
+        },
+        "t:Dreamina CLI 已退出登录": {
+            "type": "ui",
+            "zh": "Dreamina CLI 已退出登录",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 124
+                }
+            ],
+            "key": "dreamina-cli-signed-out",
+            "en": "Dreamina CLI signed out"
+        },
+        "t:请打开官方验证页完成授权，再刷新状态": {
+            "type": "ui",
+            "zh": "请打开官方验证页完成授权，再刷新状态",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 126
+                }
+            ],
+            "key": "complete-authorization-on-the-official-verification-page-then-refresh-st",
+            "en": "Complete authorization on the official verification page, then refresh status"
+        },
+        "t:Dreamina CLI 操作失败": {
+            "type": "ui",
+            "zh": "Dreamina CLI 操作失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 131
+                }
+            ],
+            "key": "dreamina-cli-operation-failed",
+            "en": "Dreamina CLI operation failed"
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。:12872": {
+            "type": "jsxtext",
+            "zh": "未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 225
+                }
+            ],
+            "key": "official-dreamina-cli-not-detected-install-it-per-the-official-guide-mak",
+            "en": "Official Dreamina CLI not detected. Install it per the official guide, make sure it is on PATH, then click Refresh status. No unverified installers ship with this version."
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:官方验证用户码:13301": {
+            "type": "jsxtext",
+            "zh": "官方验证用户码",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 230
+                }
+            ],
+            "key": "verification-user-code",
+            "en": "Verification user code"
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:有效期至:14022": {
+            "type": "jsxtext",
+            "zh": "有效期至",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 241
+                }
+            ],
+            "key": "valid-until",
+            "en": "Valid until"
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:登录:14536": {
+            "type": "jsxtext",
+            "zh": "登录",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 248
+                }
+            ],
+            "key": "sign-in",
+            "en": "Sign in"
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:打开官方验证页:14833": {
+            "type": "jsxtext",
+            "zh": "打开官方验证页",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 253
+                }
+            ],
+            "key": "open-verification-page",
+            "en": "Open verification page"
+        },
+        "t:退出 Dreamina CLI？": {
+            "type": "ui",
+            "zh": "退出 Dreamina CLI？",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "sign-out-of-dreamina-cli",
+            "en": "Sign out of Dreamina CLI?"
+        },
+        "t:只清除当前 OS 用户的官方 CLI 登录状态。": {
+            "type": "ui",
+            "zh": "只清除当前 OS 用户的官方 CLI 登录状态。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "only-clears-the-official-cli-sign-in-state-for-this-os-user",
+            "en": "Only clears the official CLI sign-in state for this OS user."
+        },
+        "t:退出": {
+            "type": "ui",
+            "zh": "退出",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 258
+                }
+            ],
+            "key": "sign-out",
+            "en": "Sign out"
+        },
+        "jsx:src/pages/settings/local-cli-settings.tsx:退出登录:15296": {
+            "type": "jsxtext",
+            "zh": "退出登录",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 259
+                }
+            ],
+            "key": "sign-out-2",
+            "en": "Sign out"
+        },
+        "t:已连接": {
+            "type": "ui",
+            "zh": "已连接",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 272
+                }
+            ],
+            "key": "connected",
+            "en": "Connected"
+        },
+        "t:需要重新连接": {
+            "type": "ui",
+            "zh": "需要重新连接",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 274
+                }
+            ],
+            "key": "reconnect-required",
+            "en": "Reconnect required"
+        },
+        "t:未发现": {
+            "type": "ui",
+            "zh": "未发现",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 275
+                }
+            ],
+            "key": "not-found",
+            "en": "Not found"
+        },
+        "t:版本不兼容": {
+            "type": "ui",
+            "zh": "版本不兼容",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 276
+                }
+            ],
+            "key": "incompatible-version",
+            "en": "Incompatible version"
+        },
+        "t:运行时错误": {
+            "type": "ui",
+            "zh": "运行时错误",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 277
+                }
+            ],
+            "key": "runtime-error",
+            "en": "Runtime error"
+        },
+        "t:尚未检测": {
+            "type": "ui",
+            "zh": "尚未检测",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 278
+                }
+            ],
+            "key": "not-checked-yet",
+            "en": "Not checked yet"
+        },
+        "t:当前 Runtime 未加载 Dreamina 模块，请更新并重启 Runtime。": {
+            "type": "ui",
+            "zh": "当前 Runtime 未加载 Dreamina 模块，请更新并重启 Runtime。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 283
+                }
+            ],
+            "key": "the-current-runtime-has-no-dreamina-module-loaded-update-and-restart-the",
+            "en": "The current runtime has no Dreamina module loaded. Update and restart the runtime."
+        },
+        "t:正在检测 Dreamina CLI…": {
+            "type": "ui",
+            "zh": "正在检测 Dreamina CLI…",
+            "locations": [
+                {
+                    "file": "src/pages/settings/local-cli-settings.tsx",
+                    "line": 284
+                }
+            ],
+            "key": "detecting-dreamina-cli",
+            "en": "Detecting Dreamina CLI…"
+        },
+        "t:默认生图模型": {
+            "type": "ui",
+            "zh": "默认生图模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "default-image-model",
+            "en": "Default image model"
+        },
+        "t:图片生成、图像编辑与视觉探索": {
+            "type": "ui",
+            "zh": "图片生成、图像编辑与视觉探索",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "image-generation-editing-and-visual-exploration",
+            "en": "Image generation, editing, and visual exploration"
+        },
+        "t:默认视频模型": {
+            "type": "ui",
+            "zh": "默认视频模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 25
+                }
+            ],
+            "key": "default-video-model",
+            "en": "Default video model"
+        },
+        "t:文生视频、图生视频与镜头延展": {
+            "type": "ui",
+            "zh": "文生视频、图生视频与镜头延展",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 25
+                }
+            ],
+            "key": "text-to-video-image-to-video-and-shot-extension",
+            "en": "Text-to-video, image-to-video, and shot extension"
+        },
+        "t:默认文本模型": {
+            "type": "ui",
+            "zh": "默认文本模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 26
+                }
+            ],
+            "key": "default-text-model",
+            "en": "Default text model"
+        },
+        "t:提示词改写、脚本与结构化文本": {
+            "type": "ui",
+            "zh": "提示词改写、脚本与结构化文本",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 26
+                }
+            ],
+            "key": "prompt-rewriting-scripts-and-structured-text",
+            "en": "Prompt rewriting, scripts, and structured text"
+        },
+        "t:默认音频模型": {
+            "type": "ui",
+            "zh": "默认音频模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 27
+                }
+            ],
+            "key": "default-audio-model",
+            "en": "Default audio model"
+        },
+        "t:语音、音效与音乐生成": {
+            "type": "ui",
+            "zh": "语音、音效与音乐生成",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 27
+                }
+            ],
+            "key": "speech-sound-effects-and-music-generation",
+            "en": "Speech, sound effects, and music generation"
+        },
+        "jsx:src/pages/settings/model-default-grid.tsx:个可用:2478": {
+            "type": "jsxtext",
+            "zh": "个可用",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 45
+                }
+            ],
+            "key": "available-2",
+            "en": "available"
+        },
+        "t:系统": {
+            "type": "ui",
+            "zh": "系统",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 73
+                }
+            ],
+            "key": "system",
+            "en": "System"
+        },
+        "t:自定义": {
+            "type": "ui",
+            "zh": "自定义",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 73
+                }
+            ],
+            "key": "custom",
+            "en": "Custom"
+        },
+        "jsx:src/pages/settings/model-default-grid.tsx:当前渠道中没有可用的:6259": {
+            "type": "jsxtext",
+            "zh": "当前渠道中没有可用的",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 86
+                }
+            ],
+            "key": "none-available-on-the-current-channel",
+            "en": "None available on the current channel:"
+        },
+        "jsx:src/pages/settings/model-default-grid.tsx:模型:6304": {
+            "type": "jsxtext",
+            "zh": "模型",
+            "locations": [
+                {
+                    "file": "src/pages/settings/model-default-grid.tsx",
+                    "line": 86
+                }
+            ],
+            "key": "models-4",
+            "en": "Models"
+        },
+        "t:跟随平台": {
+            "type": "ui",
+            "zh": "跟随平台",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "follow-platform",
+            "en": "Follow platform"
+        },
+        "t:追加要求": {
+            "type": "ui",
+            "zh": "追加要求",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 18
+                }
+            ],
+            "key": "appended-requirements",
+            "en": "Appended requirements"
+        },
+        "t:高级改写": {
+            "type": "ui",
+            "zh": "高级改写",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 19
+                }
+            ],
+            "key": "advanced-rewrite",
+            "en": "Advanced rewrite"
+        },
+        "t:读取提示词偏好失败": {
+            "type": "ui",
+            "zh": "读取提示词偏好失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 45
+                }
+            ],
+            "key": "failed-to-load-prompt-preferences",
+            "en": "Failed to load prompt preferences"
+        },
+        "t:切换模板并放弃修改？": {
+            "type": "ui",
+            "zh": "切换模板并放弃修改？",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 88
+                }
+            ],
+            "key": "switch-template-and-discard-changes",
+            "en": "Switch template and discard changes?"
+        },
+        "t:当前模板还有未保存内容。切换后这些修改将丢失。": {
+            "type": "ui",
+            "zh": "当前模板还有未保存内容。切换后这些修改将丢失。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 89
+                }
+            ],
+            "key": "this-template-has-unsaved-changes-switching-will-discard-them",
+            "en": "This template has unsaved changes. Switching will discard them."
+        },
+        "t:放弃并切换": {
+            "type": "ui",
+            "zh": "放弃并切换",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 90
+                }
+            ],
+            "key": "discard-and-switch",
+            "en": "Discard & switch"
+        },
+        "t:继续编辑": {
+            "type": "ui",
+            "zh": "继续编辑",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 91
+                }
+            ],
+            "key": "keep-editing",
+            "en": "Keep editing"
+        },
+        "t:请填写个人提示词内容": {
+            "type": "ui",
+            "zh": "请填写个人提示词内容",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 101
+                }
+            ],
+            "key": "enter-your-personal-prompt-content",
+            "en": "Enter your personal prompt content"
+        },
+        "t:提示词偏好已保存": {
+            "type": "ui",
+            "zh": "提示词偏好已保存",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 108
+                }
+            ],
+            "key": "prompt-preferences-saved",
+            "en": "Prompt preferences saved"
+        },
+        "t:保存提示词偏好失败": {
+            "type": "ui",
+            "zh": "保存提示词偏好失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 110
+                }
+            ],
+            "key": "failed-to-save-prompt-preferences",
+            "en": "Failed to save prompt preferences"
+        },
+        "t:恢复平台模板？": {
+            "type": "ui",
+            "zh": "恢复平台模板？",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "restore-the-platform-template",
+            "en": "Restore the platform template?"
+        },
+        "tpl:将删除“{{label}}”的个人定制，后续自动跟随平台版本。": {
+            "type": "template",
+            "zh": "将删除“{{label}}”的个人定制，后续自动跟随平台版本。",
+            "params": {
+                "label": "selected.definition.label"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "this-removes-your-customization-of-param-it-will-follow-the-platform-ver",
+            "en": "This removes your customization of “{{{label}}}”; it will follow the platform version automatically afterwards."
+        },
+        "t:恢复平台模板": {
+            "type": "ui",
+            "zh": "恢复平台模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 121
+                }
+            ],
+            "key": "restore-platform-template",
+            "en": "Restore platform template"
+        },
+        "t:已恢复平台模板": {
+            "type": "ui",
+            "zh": "已恢复平台模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 127
+                }
+            ],
+            "key": "platform-template-restored",
+            "en": "Platform template restored"
+        },
+        "t:恢复平台模板失败": {
+            "type": "ui",
+            "zh": "恢复平台模板失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 129
+                }
+            ],
+            "key": "failed-to-restore-platform-template",
+            "en": "Failed to restore platform template"
+        },
+        "t:加载提示词偏好失败": {
+            "type": "ui",
+            "zh": "加载提示词偏好失败",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 139
+                }
+            ],
+            "key": "failed-to-load-prompt-preferences-2",
+            "en": "Failed to load prompt preferences"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:重试:6148": {
+            "type": "jsxtext",
+            "zh": "重试",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 140
+                }
+            ],
+            "key": "retry",
+            "en": "Retry"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:暂无可配置的提示词模板:6288": {
+            "type": "jsxtext",
+            "zh": "暂无可配置的提示词模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 144
+                }
+            ],
+            "key": "no-configurable-prompt-templates-yet",
+            "en": "No configurable prompt templates yet"
+        },
+        "t:当前没有启用的平台模板": {
+            "type": "ui",
+            "zh": "当前没有启用的平台模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 146
+                }
+            ],
+            "key": "no-platform-templates-enabled",
+            "en": "No platform templates enabled"
+        },
+        "tpl:{{templateContent}}\n\n【用户个性化创作要求】\n{{appendContent}}": {
+            "type": "template",
+            "zh": "{{templateContent}}\n\n【用户个性化创作要求】\n{{appendContent}}",
+            "params": {
+                "templateContent": "templateContent",
+                "appendContent": "appendContent"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 147
+                }
+            ],
+            "key": "param-user-s-personal-creation-requirements-param",
+            "en": "{{{templateContent}}}\n\n[User's personal creation requirements]\n{{{appendContent}}}"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:提示词模板:7039": {
+            "type": "jsxtext",
+            "zh": "提示词模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 155
+                }
+            ],
+            "key": "prompt-templates",
+            "en": "Prompt templates"
+        },
+        "t: · 已定制": {
+            "type": "ui",
+            "zh": " · 已定制",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 163
+                }
+            ],
+            "key": "customized",
+            "en": " · customized"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:撤销修改:7908": {
+            "type": "jsxtext",
+            "zh": "撤销修改",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 168
+                }
+            ],
+            "key": "revert-changes",
+            "en": "Revert changes"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:恢复平台:8056": {
+            "type": "jsxtext",
+            "zh": "恢复平台",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 169
+                }
+            ],
+            "key": "restore-platform",
+            "en": "Restore platform"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:保存更改:8216": {
+            "type": "jsxtext",
+            "zh": "保存更改",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 170
+                }
+            ],
+            "key": "save-changes",
+            "en": "Save changes"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:平台 v:8650": {
+            "type": "jsxtext",
+            "zh": "平台 v",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 178
+                }
+            ],
+            "key": "platform-v",
+            "en": "Platform v"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:未保存:8844": {
+            "type": "jsxtext",
+            "zh": "未保存",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 180
+                }
+            ],
+            "key": "unsaved",
+            "en": "Unsaved"
+        },
+        "t:平台模板已更新": {
+            "type": "ui",
+            "zh": "平台模板已更新",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 188
+                }
+            ],
+            "key": "platform-template-updated",
+            "en": "Platform template updated"
+        },
+        "t:当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。": {
+            "type": "ui",
+            "zh": "当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 188
+                }
+            ],
+            "key": "your-advanced-rewrite-is-based-on-an-older-version-keep-the-current-rewr",
+            "en": "Your advanced rewrite is based on an older version. Keep the current rewrite, or restore the platform template and adjust from the new one."
+        },
+        "t:当前平台模板": {
+            "type": "ui",
+            "zh": "当前平台模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "current-platform-template",
+            "en": "Current platform template"
+        },
+        "t:追加个人要求": {
+            "type": "ui",
+            "zh": "追加个人要求",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "append-personal-requirements",
+            "en": "Append personal requirements"
+        },
+        "t:改写创作策略": {
+            "type": "ui",
+            "zh": "改写创作策略",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 193
+                }
+            ],
+            "key": "rewrite-creation-strategy",
+            "en": "Rewrite creation strategy"
+        },
+        "t:平台升级后自动使用新版本。": {
+            "type": "ui",
+            "zh": "平台升级后自动使用新版本。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 195
+                }
+            ],
+            "key": "automatically-adopts-new-versions-after-platform-upgrades",
+            "en": "Automatically adopts new versions after platform upgrades."
+        },
+        "t:内容追加在平台策略之后，仍会自动继承平台升级。": {
+            "type": "ui",
+            "zh": "内容追加在平台策略之后，仍会自动继承平台升级。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 195
+                }
+            ],
+            "key": "content-is-appended-after-the-platform-strategy-and-still-inherits-platf",
+            "en": "Content is appended after the platform strategy and still inherits platform upgrades automatically."
+        },
+        "t:只替换创作策略；动态项目数据和输出契约仍由服务端强制注入。": {
+            "type": "ui",
+            "zh": "只替换创作策略；动态项目数据和输出契约仍由服务端强制注入。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 195
+                }
+            ],
+            "key": "only-replaces-the-creation-strategy-dynamic-project-data-and-output-cont",
+            "en": "Only replaces the creation strategy; dynamic project data and output contracts are still injected server-side."
+        },
+        "t:例如：仙侠项目采用明亮、宏大、高清的休闲剧质感；避免阴森恐怖色调，人物表演自然、轻松。": {
+            "type": "ui",
+            "zh": "例如：仙侠项目采用明亮、宏大、高清的休闲剧质感；避免阴森恐怖色调，人物表演自然、轻松。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 204
+                }
+            ],
+            "key": "e-g-for-a-xianxia-project-use-a-bright-grand-high-definition-casual-dram",
+            "en": "e.g. For a xianxia project, use a bright, grand, high-definition casual-drama look; avoid grim horror tones and keep acting natural and relaxed."
+        },
+        "t:平台提示词模板": {
+            "type": "ui",
+            "zh": "平台提示词模板",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 212
+                }
+            ],
+            "key": "platform-prompt-templates",
+            "en": "Platform prompt templates"
+        },
+        "t:个人提示词改写": {
+            "type": "ui",
+            "zh": "个人提示词改写",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 212
+                }
+            ],
+            "key": "personal-prompt-rewrites",
+            "en": "Personal prompt rewrites"
+        },
+        "t:平台基线": {
+            "type": "ui",
+            "zh": "平台基线",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 225
+                }
+            ],
+            "key": "platform-baseline",
+            "en": "Platform baseline"
+        },
+        "t:输出契约": {
+            "type": "ui",
+            "zh": "输出契约",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 230
+                }
+            ],
+            "key": "output-contract",
+            "en": "Output contract"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:服务端只读:11926": {
+            "type": "jsxtext",
+            "zh": "服务端只读",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 231
+                }
+            ],
+            "key": "server-read-only",
+            "en": "Server read-only"
+        },
+        "t:最终结构": {
+            "type": "ui",
+            "zh": "最终结构",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 235
+                }
+            ],
+            "key": "final-structure",
+            "en": "Final structure"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:创作策略:12409": {
+            "type": "jsxtext",
+            "zh": "创作策略",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 236
+                }
+            ],
+            "key": "creation-strategy",
+            "en": "Creation strategy"
+        },
+        "t:尚未填写": {
+            "type": "ui",
+            "zh": "尚未填写",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 236
+                }
+            ],
+            "key": "not-filled-in-yet",
+            "en": "Not filled in yet"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:运行时强制追加:12618": {
+            "type": "jsxtext",
+            "zh": "运行时强制追加",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 236
+                }
+            ],
+            "key": "force-appended-at-runtime",
+            "en": "Force-appended at runtime"
+        },
+        "jsx:src/pages/settings/prompt-preferences-pane.tsx:当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。:12665": {
+            "type": "jsxtext",
+            "zh": "当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。",
+            "locations": [
+                {
+                    "file": "src/pages/settings/prompt-preferences-pane.tsx",
+                    "line": 236
+                }
+            ],
+            "key": "current-plot-project-style-active-character-versions-canvas-assets-and-p",
+            "en": "Current plot, project style, active character versions, canvas assets, and protected output contracts."
+        }
+    }
+}

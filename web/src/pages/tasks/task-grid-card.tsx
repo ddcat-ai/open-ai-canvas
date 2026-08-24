@@ -6,8 +6,10 @@ import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/g
 import { statusLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import { isTaskFailed, statusDotClassName, TaskDate } from "./task-shared";
+import { useTranslation } from "react-i18next";
 
 export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: GenerationTask; actingId: string; onOpen: () => void; onRetry: () => void }) {
+    const { t } = useTranslation("canvas");
     const isActive = task.status === "queued" || task.status === "running";
     const isFailed = isTaskFailed(task);
     const isVideo = task.previewKind === "video";
@@ -16,22 +18,18 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
     return (
         <article className={`task-grid-card${isFailed ? " is-attention" : ""}`}>
             <div className="task-grid-thumb">
-                {task.previewUrl ? (
-                    <MediaPreview src={task.previewUrl} kind={isVideo ? "video" : "image"} loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                    <Icon />
-                )}
+                {task.previewUrl ? <MediaPreview src={task.previewUrl} kind={isVideo ? "video" : "image"} loading="lazy" className="h-full w-full object-cover" /> : <Icon />}
                 <div className="task-grid-overlay">
-                    <Tooltip title="查看详情">
-                        <Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label="查看详情" onClick={onOpen} />
+                    <Tooltip title={t("tasks:view-details")}>
+                        <Button type="text" size="small" icon={<Eye className="size-3.5" />} aria-label={t("tasks:view-details")} onClick={onOpen} />
                     </Tooltip>
                     {isFailed ? (
-                        <Tooltip title="重试任务">
+                        <Tooltip title={t("tasks:retry-task")}>
                             <Button
                                 type="text"
                                 size="small"
                                 icon={<RotateCcw className="size-3.5" />}
-                                aria-label="重试任务"
+                                aria-label={t("tasks:retry-task")}
                                 loading={actingId === task.id}
                                 disabled={task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error)}
                                 onClick={onRetry}
@@ -42,7 +40,7 @@ export function TaskGridCard({ task, actingId, onOpen, onRetry }: { task: Genera
             </div>
             <div className="task-grid-body">
                 <button type="button" className="task-grid-title" title={task.prompt} onClick={onOpen}>
-                    {task.prompt || "未命名任务"}
+                    {task.prompt || t("tasks:untitled-task")}
                 </button>
                 <div className="task-grid-meta">
                     <span className={`task-grid-status ${isFailed ? "is-failed" : isActive ? "is-active" : task.status === "succeeded" ? "is-success" : ""}`}>

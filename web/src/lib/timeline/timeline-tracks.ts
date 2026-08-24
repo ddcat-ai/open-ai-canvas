@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 // 时间线轨道管理（移植自 lingji-cut 的 timeline-tracks.ts，按本项目类型精简）。
 // 默认三轨：视频轨、音频轨、字幕轨；提供轨道查询与规范化。
 
@@ -9,9 +10,9 @@ export const DEFAULT_SUBTITLE_TRACK_ID = "subtitle-1";
 
 export function createDefaultTracks(): TimelineTrack[] {
     return [
-        { id: DEFAULT_VIDEO_TRACK_ID, kind: "video", label: "视频 1", order: 0 },
-        { id: DEFAULT_AUDIO_TRACK_ID, kind: "audio", label: "音频 1", order: 1 },
-        { id: DEFAULT_SUBTITLE_TRACK_ID, kind: "subtitle", label: "字幕 1", order: 2 },
+        { id: DEFAULT_VIDEO_TRACK_ID, kind: "video", label: t("lib:video-1"), order: 0 },
+        { id: DEFAULT_AUDIO_TRACK_ID, kind: "audio", label: t("lib:audio-1"), order: 1 },
+        { id: DEFAULT_SUBTITLE_TRACK_ID, kind: "subtitle", label: t("lib:subtitles-1"), order: 2 },
     ];
 }
 

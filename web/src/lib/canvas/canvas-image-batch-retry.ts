@@ -1,11 +1,10 @@
+import { t } from "@/i18n";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export function failedImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[]) {
     if (root.type !== CanvasNodeType.Image || !root.metadata?.isBatchRoot) return [];
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    return (root.metadata.batchChildIds || [])
-        .map((id) => nodeById.get(id))
-        .filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id && node.metadata.status === "error"));
+    return (root.metadata.batchChildIds || []).map((id) => nodeById.get(id)).filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id && node.metadata.status === "error"));
 }
 
 export function markImageBatchRetrying(rootId: string, childIds: string[], nodes: CanvasNodeData[]): CanvasNodeData[] {
@@ -33,7 +32,7 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
         metadata: {
             ...current.metadata,
             status: "error",
-            errorDetails: original.metadata?.errorDetails || "重试请求未提交",
+            errorDetails: original.metadata?.errorDetails || t("canvas:retry-request-not-submitted"),
             generationErrorCode: original.metadata?.generationErrorCode,
             failedPromptFingerprint: original.metadata?.failedPromptFingerprint,
         },
@@ -43,9 +42,7 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
 export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeData[]) {
     if (root.type !== CanvasNodeType.Image || !root.metadata?.isBatchRoot) return root;
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    const children = (root.metadata.batchChildIds || [])
-        .map((id) => nodeById.get(id))
-        .filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id));
+    const children = (root.metadata.batchChildIds || []).map((id) => nodeById.get(id)).filter((node): node is CanvasNodeData => Boolean(node && node.type === CanvasNodeType.Image && node.metadata?.batchRootId === root.id));
     if (!children.length) return root;
 
     const primary = children.find((node) => node.id === root.metadata?.primaryImageId && node.metadata?.content) || children.find((node) => node.metadata?.content);

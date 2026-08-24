@@ -33,6 +33,8 @@ describe("backend API request error semantics", () => {
     test("converts Axios cancellation to AbortError", async () => {
         const thrown = await request(Promise.reject({ __CANCEL__: true, code: "ERR_CANCELED" })).catch((error) => error);
 
-        expect(thrown).toMatchObject({ name: "AbortError", message: "请求已取消" });
+        // message 是 i18n 译文（domain:request-cancelled-3），断言稳定契约 name；i18n 未初始化时回落为 key，不作为锚点
+        expect(thrown).toMatchObject({ name: "AbortError" });
+        expect(thrown).toBeInstanceOf(DOMException);
     });
 });

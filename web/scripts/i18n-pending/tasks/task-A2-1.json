@@ -1,0 +1,2243 @@
+[
+ {
+  "zh": "账号文件容量",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "包含素材文件和 Agent 会话附件",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "账号容量",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "账号文件容量使用进度",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "容量统计暂时不可用。",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "重试",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "正在统计已用容量…",
+  "files": [
+   "src/pages/assets/asset-storage-usage.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "我的素材.zip",
+  "files": [
+   "src/pages/assets/asset-transfer.ts"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "3D 模型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全部分类",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "场景",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "服饰",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "道具",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "武器",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画风",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "其他",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "手动添加",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请选择图片文件",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材已更新",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材已保存",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "3D模型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "手动上传",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "3D 模型已保存",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文本已复制",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无素材可导出",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已导入 {{length}} 个素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导入失败，请选择有效的素材压缩包",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材已删除",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材删除失败",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已删除 {{length}} 个素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "批量删除失败",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材库",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "管理文本、图片、视频、音频和 3D 模型素材。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "个素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新增素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 素材库",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导出全部素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导入素材包",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上传 3D 模型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导入素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "搜索标题、内容、标签或来源",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材类型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "业务分类",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有匹配的素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "调整关键词或左侧分类后再试。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文本、图片、音视频或模型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "编辑素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "标题",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请输入标题",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "给素材起一个容易检索的名字",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "封面 URL",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可粘贴图片 URL，也可以上传本地封面",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上传",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "标签",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "输入标签后回车",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "来源",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "手动添加 / 画布 / 任务中心",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "备注",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可选",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文本内容",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请输入文本内容",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "保存提示词、说明文案、参考描述等文本素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "图片内容",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "选择图片文件",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未选择图片",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "预览",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无封面",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未命名素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未打标签",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "确定删除「",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "」吗？未被其他内容引用的服务器本地或对象存储文件也会同步删除；若仍被画布、任务或其他素材占用，本次删除将被阻止。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "批量删除素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "确定删除已选择的",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "个素材吗？未被复用的服务器文件会同步删除；仍被画布、任务或其他素材占用的素材会保留并提示具体来源。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "复制文本",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未标注来源",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "查看素材：{{title}}",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "选择 {{title}}",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "更多素材操作",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "空白文本素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "批量操作",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全选",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "ASSET.01 · 天台重逢",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "ASSET.02 · 雨夜霓虹",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "ASSET.03 · 暗巷追逐",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "影策素材库",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把每次创作的结果，留档成可复用的资产",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新建素材",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "录入提示词、说明文案，或上传图片资产。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从素材压缩包一键恢复旧资产，继续创作。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "去画布保存",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把画布上满意的镜头与画面留档进素材库。",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材档案",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "所属项目",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "分类",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "尺寸",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "大小",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "格式",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "存储",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未标注",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "更新",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已关联项目",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未关联项目",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载视频",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载音频",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载模型",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载图片",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "时长未知",
+  "files": [
+   "src/pages/assets/index.tsx"
+  ],
+  "ns": "assets",
+  "bucket": "A2"
+ },
+ {
+  "zh": "流光玻璃",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "复刻参考 · 加号入口",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "内容陈列",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "复刻参考 · 文件预览",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "午夜封面",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "复刻参考 · 深色标签",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "纸感收藏",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "衍生 · 轻量资料",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "电影胶片",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "衍生 · 影像项目",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "紧凑资料",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "衍生 · 高频调用",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "原图复刻",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "三种参考结构：玻璃加号、内容陈列、午夜封面。",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "风格衍生",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "外形与主题正交组合，六种结构都可切换四套皮肤。",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "灵感收藏",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "影像资产",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "快速调用",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "主视觉",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "氛围参考",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "场景草图",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "色彩方案",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "镜头灵感",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "通用素材文件夹",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文件夹外形与主题皮肤独立：四套主题都不是内部素材。打开后，真实内容以独立卡片展示；悬停、单击、双击与菜单均可交互。",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "预览主题",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "试试 hover、双击、样式与主题切换",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开 {{title}}",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开文件夹",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可用文件夹主题",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "{{title}} 内容",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "返回",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已打开",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "添加示例内容",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "图片素材",
+  "files": [
+   "src/pages/dev/folder-preview-lab.tsx"
+  ],
+  "ns": "dev",
+  "bucket": "A2"
+ },
+ {
+  "zh": "整理故事",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导入小说、粘贴文本或创建章节",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "确认设定",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "整理角色、场景、画风和参考资料",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "制作镜头",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成分镜、图片和视频候选",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "检查结果",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "比较版本、处理失败并整理导出",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布已在本地创建，云端同步失败：{{message}}",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布已在本地创建，云端同步失败",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "正在恢复工作台",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取项目、章节和最近画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项目工作台加载失败",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂时无法读取项目列表。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "进行中",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取项目进度",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "继续创作",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "回到最近工作，或先处理阻塞制作的事项。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建项目",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "快捷创建",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建短剧项目",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从空白、小说或文本开始建立章节流程。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开自由画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "适合快速试图、提示词实验和自由创作。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "进入素材库",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "整理角色、场景、画风和媒体资产。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "进入",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最近项目",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "按最近更新时间排列",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "查看全部",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最近自由画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "不属于项目的自由创作空间",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "管理画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开第一张画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "工作流入口",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从工作流开始",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "整理故事 → 确认设定 → 制作镜头 → 检查结果。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把一个故事推进到可交付的镜头",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从章节、角色和参考图开始，逐步生成分镜、视频和可复用资产。需要自由探索时，也可以先打开一张自由画布。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从故事到结果",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "每一步都保留输入、版本和生成记录，可以随时返回调整。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "两种开始方式",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项目",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "适合短剧、故事板和多章节制作。集中管理章节、资产、画布与进度。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "自由画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "适合快速试图、提示词实验和不需要章节流程的自由创作。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创作过程中",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "图片、视频和音频结果可以继续生成变体或接入下一步。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Agent 读取你选择的章节、节点和参考资料，再执行画布操作。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务、失败原因和用量记录会保留，便于恢复和重试。",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "继续自由画布",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "章 ·",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "张项目画布 ·",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项资产",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "更新于",
+  "files": [
+   "src/pages/home/index.tsx"
+  ],
+  "ns": "home",
+  "bucket": "A2"
+ },
+ {
+  "zh": "连接 Eagle 失败，请确认 Eagle 已启动",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已在",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "中新建文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新建 Eagle 文件夹失败",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "正在写入 ",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已写入 Eagle ",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": " 个文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "写入 Eagle 失败",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已写入 ",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": " 个文件，剩余文件未完成",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把 Eagle 作为影策的外部素材来源，直接浏览和管理 Eagle 原始文件。",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "返回影策素材库",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "先启用 Eagle 素材来源",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "启用后，这里会直接显示 Eagle 原本的文件夹和文件，不会把素材复制成影策本地素材。",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "去插件中心启用",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 是影策的外部素材来源；这里复用影策素材库的浏览方式，直接读取和写入 Eagle 原始文件。",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle · 连接异常",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle · 已连接",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "写入素材",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "插件设置",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "搜索 Eagle 素材标题、标签或文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "刷新 Eagle 文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全部素材",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "收起文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "展开文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 中还没有文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新建文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 文件夹路径",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "当前文件夹由 Eagle 管理，影策只负责展示和调用。",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "当前展示 Eagle 素材库中的全部文件。",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载当前文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "输入文件夹名称",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新文件夹名称",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取 Eagle 文件…",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "当前 Eagle 文件夹没有文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "查看 Eagle 素材：",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载原文件：",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 根目录",
+  "files": [
+   "src/pages/plugins/eagle.tsx",
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 原文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 原文件 ·",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "根目录",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文件大小",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "所在文件夹",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材库总大小",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "下载 Eagle 原文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "文件",
+  "files": [
+   "src/pages/plugins/eagle.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "素材来源",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布节点",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "工作流",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "AI 能力",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "导入导出",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全屏工作台",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "混合接入",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取画布",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "修改画布",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上传素材",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "调用生成",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开外部详情",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取 Eagle 文件夹失败",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 地址必须以 http:// 或 https:// 开头",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 插件配置已保存",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "插件筛选",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "搜索插件名称、描述或作者",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "按分类筛选",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "按状态筛选",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全部来源",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可信插件",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "按来源筛选",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "发布",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项能力",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有匹配的插件",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "试试清空搜索词，或放宽筛选条件。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "清除筛选",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "{{name}} 设置",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ }
+]

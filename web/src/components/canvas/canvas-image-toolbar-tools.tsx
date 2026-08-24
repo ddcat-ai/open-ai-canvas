@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Scissors, SlidersHorizontal, Smile, Sparkles, Upload, ZoomIn } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
+import { t } from "@/i18n";
 
 type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
 
@@ -32,85 +33,85 @@ type ImageToolDefinition = {
 const imageToolDefinitions: ImageToolDefinition[] = [
     {
         id: "copyPrompt",
-        label: "复制提示词",
+        label: t("canvas:copy-prompt"),
         icon: () => <Copy className="size-3.5" />,
         run: (node, handlers) => handlers.onCopyPrompt(node),
     },
     {
         id: "reversePrompt",
-        label: "反推提示词",
+        label: t("canvas:reverse-prompt"),
         icon: () => <FileText className="size-3.5" />,
         run: (node, handlers) => handlers.onReversePrompt(node),
     },
     {
         id: "replace",
-        label: "替换图片",
+        label: t("canvas:replace-image"),
         icon: () => <Upload className="size-3.5" />,
         run: (node, handlers) => handlers.onUpload(node),
     },
     {
         id: "resize",
-        label: (node) => (node.metadata?.freeResize ? "自由比例" : "锁比例"),
+        label: (node) => (node.metadata?.freeResize ? t("domain:free-ratio") : t("domain:lock-ratio")),
         icon: (node) => (node.metadata?.freeResize ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />),
         run: (node, handlers) => handlers.onToggleFreeResize(node),
     },
     {
         id: "annotation",
-        label: "标注",
+        label: t("domain:annotate-2"),
         icon: () => <PencilLine className="size-3.5" />,
         run: (node, handlers) => handlers.onAnnotate(node),
     },
     {
         id: "maskEdit",
-        label: "局部编辑",
+        label: t("domain:inpaint-edit"),
         icon: () => <Brush className="size-3.5" />,
         run: (node, handlers) => handlers.onMaskEdit(node),
     },
     {
         id: "emotion",
-        label: "情绪",
+        label: t("canvas:emotion"),
         icon: () => <Smile className="size-3.5" />,
         run: (node, handlers) => handlers.onEmotion(node),
     },
     {
         id: "portraitTexture",
-        label: "人物质感",
+        label: t("domain:skin-texture"),
         icon: () => <SlidersHorizontal className="size-3.5" />,
         run: (node, handlers) => handlers.onPortraitTexture(node),
     },
     {
         id: "crop",
-        label: "剪裁",
+        label: t("domain:crop"),
         icon: () => <Scissors className="size-3.5" />,
         run: (node, handlers) => handlers.onCrop(node),
     },
     {
         id: "split",
-        label: "切图",
+        label: t("domain:slice"),
         icon: () => <Grid2x2 className="size-3.5" />,
         run: (node, handlers) => handlers.onSplit(node),
     },
     {
         id: "upscale",
-        label: "放大",
+        label: t("domain:zoom-in"),
         icon: () => <ZoomIn className="size-3.5" />,
         run: (node, handlers) => handlers.onUpscale(node),
     },
     {
         id: "superResolve",
-        label: "超分",
+        label: t("domain:upscale"),
         icon: () => <Sparkles className="size-3.5" />,
         run: (node, handlers) => handlers.onSuperResolve(node),
     },
     {
         id: "angle",
-        label: "多视角",
+        label: t("canvas:multi-perspective"),
         icon: () => <Camera className="size-3.5" />,
         run: (node, handlers) => handlers.onAngle(node),
     },
     {
         id: "view",
-        label: "查看大图",
+        label: t("domain:view-full-size"),
         icon: () => <Maximize2 className="size-3.5" />,
         run: (node, handlers) => handlers.onViewImage(node),
     },

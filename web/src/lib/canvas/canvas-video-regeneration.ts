@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import type { CanvasVideoEditOperation } from "@/types/canvas";
@@ -15,15 +16,15 @@ export function listVideoReferenceModels(config: AiConfig): string[] {
 export function videoReferenceRegenerationError(config: AiConfig): string {
     const videoProfile = modelCapabilityConfigFor(config, config.model).video;
     if (!videoProfile || videoProfile.references.maxVideos < 1) {
-        return "当前所选视频模型不支持参考视频，无法使用截取重生成。请选择支持参考视频的模型，或在设置中配置 Seedance / Agent Plan / NewAPI 渠道。";
+        return t("canvas:the-selected-video-model-does-not-support-reference-videos-trim-and-rege");
     }
-    if (!videoProfile.operations.length) return "当前视频模型没有可用的视频生成模式";
+    if (!videoProfile.operations.length) return t("canvas:the-current-video-model-has-no-available-generation-modes");
     return "";
 }
 
 export function videoReferenceOperationError(config: AiConfig, operation: CanvasVideoEditOperation): string {
     const videoProfile = modelCapabilityConfigFor(config, config.model).video;
-    if (!videoProfile?.operations.includes(operation)) return "当前视频模型不支持所选生成模式";
+    if (!videoProfile?.operations.includes(operation)) return t("canvas:the-current-video-model-does-not-support-the-selected-mode");
     return "";
 }
 
@@ -45,10 +46,10 @@ export function videoReferenceSegmentError(config: AiConfig, durationMs: number)
     const videoProfile = modelCapabilityConfigFor(config, config.model).video;
     const maxSeconds = videoProfile?.references.maxVideoDurationSeconds || 0;
     if (maxSeconds > 0 && durationMs > maxSeconds * 1000) {
-        return `截取片段不能超过当前模型参考视频上限（${maxSeconds} 秒）`;
+        return t("canvas:segments-cannot-exceed-the-model-s-reference-video-limit-params", { maxSeconds: maxSeconds });
     }
     if (isSeedanceVideoConfig(config) && durationMs < 2000) {
-        return "Seedance 参考视频单段至少 2 秒，请扩大截取范围";
+        return t("canvas:seedance-reference-segments-need-at-least-2-seconds-extend-the-trim-rang");
     }
     return "";
 }

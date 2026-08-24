@@ -1,0 +1,23 @@
+{
+    "workspace-title-home": "首页",
+    "workspace-title-create": "创作",
+    "workspace-title-projects": "短剧创作",
+    "workspace-title-canvas": "画布",
+    "workspace-title-tasks": "任务中心",
+    "workspace-title-assets": "素材",
+    "workspace-title-skills": "技能库",
+    "workspace-title-wallet": "积分中心",
+    "workspace-title-settings": "设置",
+    "account-menu": {
+        "trigger-aria": "账户菜单",
+        "sign-in-aria": "登录",
+        "dark-mode": "深色模式",
+        "credits-available": "可用 {{balance}} 积分"
+    },
+    "language": {
+        "label": "Interface language",
+        "zh-cn": "中文（简体）",
+        "en": "English",
+        "toggle-to": "切换到 {{language}}"
+    }
+}

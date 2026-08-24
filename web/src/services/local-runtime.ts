@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
 export type LocalRuntimeModuleId = "canvas-agent" | "dreamina";
@@ -139,11 +140,11 @@ function isModuleId(value: unknown): value is LocalRuntimeModuleId {
 }
 
 function invalidResponse(status: number) {
-    return new LocalRuntimeClientError("runtime_response_invalid", "本机运行时响应无效", status);
+    return new LocalRuntimeClientError("runtime_response_invalid", t("domain:invalid-local-runtime-response"), status);
 }
 
 function publicRequestError(code: string) {
-    if (code === "session_required") return "本机会话已失效，请重新连接";
-    if (code === "scope_denied") return "本机会话权限不足";
-    return "本机运行时请求失败";
+    if (code === "session_required") return t("domain:the-local-session-has-expired-reconnect");
+    if (code === "scope_denied") return t("domain:insufficient-local-session-permissions");
+    return t("domain:local-runtime-request-failed");
 }

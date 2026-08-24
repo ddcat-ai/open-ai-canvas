@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import axios from "axios";
 
 import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
@@ -44,7 +45,7 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
         await assertAudioBlob(response.data);
         return response.data.type.startsWith("audio/") ? response.data : new Blob([response.data], { type: audioMimeType(format) });
     } catch (error) {
-        throw new Error(readAxiosError(error, "音频生成失败"));
+        throw new Error(readAxiosError(error, t("domain:audio-generation-failed")));
     }
 }
 
@@ -53,7 +54,7 @@ async function requestAsyncAudioGeneration(config: AiConfig, payload: Record<str
     const created = await axios.post<Record<string, unknown>>(createRequest.url, payload, { headers: createRequest.headers, withCredentials: createRequest.credentials === "include", signal: options?.signal });
     let state = asyncAudioPayload(created.data);
     const taskId = asyncAudioTaskId(state);
-    if (!taskId) throw new Error("异步音频接口没有返回任务 ID");
+    if (!taskId) throw new Error(t("domain:the-async-audio-api-did-not-return-a-task-id"));
     for (let attempt = 0; attempt < 120; attempt += 1) {
         if (asyncAudioSucceeded(state)) return downloadAsyncAudio(config, taskId, state, format, options);
         const status = String(state.status || "").toLowerCase();
@@ -65,7 +66,7 @@ async function requestAsyncAudioGeneration(config: AiConfig, payload: Record<str
         const polled = await axios.get<Record<string, unknown>>(pollRequest.url, { headers: pollRequest.headers, withCredentials: pollRequest.credentials === "include", signal: options?.signal });
         state = asyncAudioPayload(polled.data);
     }
-    throw new Error(`异步音频生成超时（任务 ${taskId}）`);
+    throw new Error(t("domain:async-audio-generation-timed-out-task-param", { taskId: taskId }));
 }
 
 function asyncAudioPayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -125,7 +126,7 @@ function asyncAudioError(payload: Record<string, unknown>) {
         const message = (error as Record<string, unknown>).message;
         if (typeof message === "string" && message.trim()) return message;
     }
-    return typeof payload.message === "string" && payload.message.trim() ? payload.message : "异步音频生成失败";
+    return typeof payload.message === "string" && payload.message.trim() ? payload.message : t("domain:async-audio-generation-failed");
 }
 
 function waitForAudioPoll(signal?: AbortSignal) {
@@ -152,15 +153,15 @@ export async function storeGeneratedAudio(blob: Blob, format = "mp3"): Promise<U
 }
 
 function assertAudioConfig(config: AiConfig, model: string) {
-    if (!model) throw new Error("请先配置音频模型");
-    if (!config.baseUrl.trim()) throw new Error("请先配置 Base URL");
-    if (!config.apiKey.trim()) throw new Error("请先配置 API Key");
-    if (config.apiFormat === "gemini") throw new Error("Gemini 调用格式暂不支持音频生成，请使用 OpenAI 格式渠道");
+    if (!model) throw new Error(t("domain:configure-an-audio-model-first"));
+    if (!config.baseUrl.trim()) throw new Error(t("domain:configure-the-base-url-first-2"));
+    if (!config.apiKey.trim()) throw new Error(t("domain:configure-the-api-key-first-2"));
+    if (config.apiFormat === "gemini") throw new Error(t("domain:the-gemini-call-format-does-not-support-audio-generation-yet-use-an-open"));
 }
 
 async function assertAudioBlob(blob: Blob) {
     const mimeType = blob.type.toLowerCase();
-    if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("text/")) throw new Error(`上游返回了非音频内容：${mimeType}`);
+    if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("text/")) throw new Error(t("domain:the-upstream-returned-non-audio-content-param", { mimeType: mimeType }));
     if (!mimeType.includes("json")) return;
     let payload: { code?: number; msg?: string; error?: { message?: string } };
     try {
@@ -168,12 +169,12 @@ async function assertAudioBlob(blob: Blob) {
     } catch {
         return;
     }
-    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "音频生成失败");
+    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || t("domain:audio-generation-failed"));
     if (payload.error?.message) throw new Error(payload.error.message);
 }
 
 function readAxiosError(error: unknown, fallback: string) {
-    if (axios.isCancel(error)) return "请求已取消";
+    if (axios.isCancel(error)) return t("domain:request-cancelled-3");
     if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number }>(error)) {
         const responseData = error.response?.data;
         return responseData?.msg || responseData?.error?.message || statusMessage(error.response?.status, fallback);
@@ -182,7 +183,7 @@ function readAxiosError(error: unknown, fallback: string) {
 }
 
 function statusMessage(status: number | undefined, fallback: string) {
-    if (status === 401 || status === 403) return "鉴权失败，请检查 API Key、套餐权限或模型权限";
-    if (status === 429) return "请求被限流或额度不足，请稍后重试";
+    if (status === 401 || status === 403) return t("domain:authentication-failed-check-your-api-key-plan-permissions-or-model-acces");
+    if (status === 429) return t("domain:rate-limited-or-out-of-quota-try-again-later");
     return status ? `${fallback}（${status}）` : fallback;
 }

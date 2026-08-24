@@ -6,7 +6,21 @@ import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewpor
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
 
-export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onViewportPreviewChange, onViewportChange }: { nodes: CanvasNodeData[]; viewport: ViewportTransform; viewportSize: { width: number; height: number }; canvasContainerRef?: RefObject<HTMLDivElement | null>; onViewportPreviewChange?: (viewport: ViewportTransform) => void; onViewportChange: (viewport: ViewportTransform) => void }) {
+export function Minimap({
+    nodes,
+    viewport,
+    viewportSize,
+    canvasContainerRef,
+    onViewportPreviewChange,
+    onViewportChange,
+}: {
+    nodes: CanvasNodeData[];
+    viewport: ViewportTransform;
+    viewportSize: { width: number; height: number };
+    canvasContainerRef?: RefObject<HTMLDivElement | null>;
+    onViewportPreviewChange?: (viewport: ViewportTransform) => void;
+    onViewportChange: (viewport: ViewportTransform) => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const containerRef = useRef<HTMLDivElement>(null);
     const viewportRectRef = useRef<HTMLDivElement>(null);
@@ -87,19 +101,22 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
         };
     }, [toMinimap, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
 
-    const updateViewportRect = useCallback((nextViewport: ViewportTransform) => {
-        liveViewportRef.current = nextViewport;
-        const element = viewportRectRef.current;
-        if (!element) return;
-        const vx = -nextViewport.x / nextViewport.k;
-        const vy = -nextViewport.y / nextViewport.k;
-        const p1 = toMinimap(vx, vy);
-        const p2 = toMinimap(vx + viewportSize.width / nextViewport.k, vy + viewportSize.height / nextViewport.k);
-        element.style.left = `${p1.x}px`;
-        element.style.top = `${p1.y}px`;
-        element.style.width = `${Math.max(p2.x - p1.x, 4)}px`;
-        element.style.height = `${Math.max(p2.y - p1.y, 4)}px`;
-    }, [toMinimap, viewportSize.height, viewportSize.width]);
+    const updateViewportRect = useCallback(
+        (nextViewport: ViewportTransform) => {
+            liveViewportRef.current = nextViewport;
+            const element = viewportRectRef.current;
+            if (!element) return;
+            const vx = -nextViewport.x / nextViewport.k;
+            const vy = -nextViewport.y / nextViewport.k;
+            const p1 = toMinimap(vx, vy);
+            const p2 = toMinimap(vx + viewportSize.width / nextViewport.k, vy + viewportSize.height / nextViewport.k);
+            element.style.left = `${p1.x}px`;
+            element.style.top = `${p1.y}px`;
+            element.style.width = `${Math.max(p2.x - p1.x, 4)}px`;
+            element.style.height = `${Math.max(p2.y - p1.y, 4)}px`;
+        },
+        [toMinimap, viewportSize.height, viewportSize.width],
+    );
 
     useEffect(() => updateViewportRect(viewport), [updateViewportRect, viewport]);
 
@@ -125,7 +142,10 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     };
 
     return (
-        <div className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-10))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]" style={{ width, height, background: theme.toolbar.panel }}>
+        <div
+            className="absolute bottom-[calc(var(--canvas-inset-y)+var(--space-16)+var(--space-10))] left-6 z-[var(--z-panel)] overflow-hidden rounded-lg shadow-2xl backdrop-blur-sm lg:bottom-[calc(var(--canvas-inset-y)+var(--space-12))]"
+            style={{ width, height, background: theme.toolbar.panel }}
+        >
             <div
                 ref={containerRef}
                 className="relative h-full w-full cursor-crosshair"
@@ -150,7 +170,20 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                 {displayNodes.map((node) => {
                     const pos = toMinimap(node.position.x, node.position.y);
                     const frame = isFrameNode(node);
-                    const color = node.type === CanvasNodeType.Image ? "#10b981" : node.type === CanvasNodeType.Video ? "#f97316" : node.type === CanvasNodeType.Audio ? "#a855f7" : node.type === CanvasNodeType.Config ? "#60a5fa" : node.type === CanvasNodeType.Skill ? "#818cf8" : frame ? theme.frame.stroke : theme.node.muted;
+                    const color =
+                        node.type === CanvasNodeType.Image
+                            ? "#10b981"
+                            : node.type === CanvasNodeType.Video
+                              ? "#f97316"
+                              : node.type === CanvasNodeType.Audio
+                                ? "#a855f7"
+                                : node.type === CanvasNodeType.Config
+                                  ? "#60a5fa"
+                                  : node.type === CanvasNodeType.Skill
+                                    ? "#818cf8"
+                                    : frame
+                                      ? theme.frame.stroke
+                                      : theme.node.muted;
                     return (
                         <div
                             key={node.id}
@@ -167,7 +200,11 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                         />
                     );
                 })}
-                <div ref={viewportRectRef} className="pointer-events-none absolute rounded-[var(--r-xs)]" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }} />
+                <div
+                    ref={viewportRectRef}
+                    className="pointer-events-none absolute rounded-[var(--r-xs)]"
+                    style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }}
+                />
             </div>
         </div>
     );

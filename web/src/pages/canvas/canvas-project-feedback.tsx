@@ -6,6 +6,9 @@ import type { MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasAgentChange } from "./use-canvas-agent-operations";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { useTranslation } from "react-i18next";
+// 组件外的纯函数（taskStatusText）不能用 useTranslation，只能走这个非 React 出口
+import { t } from "@/i18n";
 
 export type CanvasUploadStatus = {
     id: number;
@@ -84,7 +87,8 @@ export function TaskDetailItem({ label, value }: { label: string; value: string 
 }
 
 export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVideoProgress; theme: CanvasTheme }) {
-    const detail = progress.phase === "loading" ? "加载视频工具" : progress.phase === "reading" ? "读取选中视频" : "正在编码合并成片";
+    const { t } = useTranslation("canvas");
+    const detail = progress.phase === "loading" ? t("canvas:loading-video-tools") : progress.phase === "reading" ? t("canvas:reading-selected-video") : t("canvas:encoding-merged-video");
     const percent = Math.max(0, Math.min(100, Math.round(progress.progress)));
     return (
         <div
@@ -98,7 +102,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
                     <LoaderCircle className="size-4 animate-spin" />
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold">合并成片</span>
+                    <span className="block truncate text-xs font-semibold">{t("canvas:merge-videos-2")}</span>
                     <span className="mt-0.5 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
                         {detail}
                     </span>
@@ -115,6 +119,7 @@ export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVid
 }
 
 export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose }: { change: CanvasAgentChange; theme: CanvasTheme; onView: () => void; onUndo: () => void; onClose: () => void }) {
+    const { t } = useTranslation("canvas");
     return (
         <div
             data-canvas-no-zoom
@@ -127,12 +132,12 @@ export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose 
                     <span className="size-2 rounded-full bg-current" />
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold">Agent 已写回画布</span>
+                    <span className="block text-xs font-semibold">{t("canvas:agent-wrote-back-to-canvas")}</span>
                     <span className="mt-0.5 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                        {change.summary} · 可撤销最近 {change.undoCount} 批
+                        {change.summary} {t("canvas:undo-last")} {change.undoCount} {t("canvas:batches")}
                     </span>
                 </span>
-                <button type="button" className="grid size-7 place-items-center rounded-md opacity-55 transition hover:opacity-100" onClick={onClose} aria-label="关闭">
+                <button type="button" className="grid size-7 place-items-center rounded-md opacity-55 transition hover:opacity-100" onClick={onClose} aria-label={t("canvas:close-3")}>
                     <X className="size-3.5" />
                 </button>
             </div>
@@ -140,12 +145,12 @@ export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose 
                 {change.nodeIds.length ? (
                     <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onView}>
                         <Eye className="size-3.5" />
-                        查看本次改动
+                        {t("canvas:view-changes")}
                     </button>
                 ) : null}
                 <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onUndo}>
                     <RotateCcw className="size-3.5" />
-                    撤销本次操作
+                    {t("canvas:undo-this-operation")}
                 </button>
             </div>
         </div>
@@ -153,9 +158,9 @@ export function CanvasAgentChangeToast({ change, theme, onView, onUndo, onClose 
 }
 
 export function taskStatusText(status: GenerationTask["status"]) {
-    if (status === "queued") return "排队中";
-    if (status === "running") return "生成中";
-    if (status === "succeeded") return "任务完成";
-    if (status === "failed") return "任务失败";
-    return "任务已取消";
+    if (status === "queued") return t("canvas:queued");
+    if (status === "running") return t("canvas:generating");
+    if (status === "succeeded") return t("canvas:task-completed");
+    if (status === "failed") return t("canvas:task-failed");
+    return t("canvas:task-cancelled");
 }

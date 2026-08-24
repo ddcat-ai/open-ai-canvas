@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { modelCapabilityConfigFor, videoResolutionRequest } from "@/lib/model-capabilities";
 import { imageToDataUrl } from "@/services/image-storage";
@@ -25,10 +26,10 @@ export async function createOpenAIVideoTask(deps: VideoProviderDeps, config: Res
             const createPath = config.interfaceType === "xai-video" ? "/videos/generations" : "/videos";
             const created = deps.response.unwrapVideoResponse(await deps.transport.post<ApiVideoResponse>(deps.transport.apiUrl(createPath), payload, options));
             const id = deps.response.videoTaskId(created);
-            if (!id) throw new Error("视频接口没有返回任务 ID");
+            if (!id) throw new Error(t("domain:the-video-api-did-not-return-a-task-id-2"));
             return { id, provider: "openai", model };
         } catch (error) {
-            throw new Error(deps.response.readAxiosError(error, "视频任务创建失败"));
+            throw new Error(deps.response.readAxiosError(error, t("domain:video-task-creation-failed")));
         }
     }
     const body = new FormData();
@@ -43,10 +44,10 @@ export async function createOpenAIVideoTask(deps: VideoProviderDeps, config: Res
     files.forEach((file) => body.append("input_reference[]", file));
     try {
         const created = deps.response.unwrapVideoResponse(await deps.transport.postForm<ApiVideoResponse>(deps.transport.apiUrl("/videos"), body, options));
-        if (!created.id) throw new Error("视频接口没有返回任务 ID");
+        if (!created.id) throw new Error(t("domain:the-video-api-did-not-return-a-task-id-2"));
         return { id: created.id, provider: "openai", model };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "视频任务创建失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:video-task-creation-failed")));
     }
 }
 
@@ -60,9 +61,9 @@ export async function pollOpenAIVideoTask(deps: VideoProviderDeps, task: VideoGe
             await deps.response.assertVideoBlob(content);
             return { status: "completed", result: { blob: content } };
         }
-        if (video.status === "failed" || video.status === "cancelled") return { status: "failed", error: video.error?.message || "视频生成失败" };
+        if (video.status === "failed" || video.status === "cancelled") return { status: "failed", error: video.error?.message || t("domain:video-generation-failed") };
         return { status: "pending" };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "视频任务查询失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:video-task-query-failed")));
     }
 }

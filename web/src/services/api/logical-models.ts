@@ -31,7 +31,7 @@ export type PublicLogicalModel = {
     inputPriceMicrocredits: number;
     outputPriceMicrocredits: number;
     cachedPriceMicrocredits: number;
-	priceTiers: PublicLogicalModelPriceTier[];
+    priceTiers: PublicLogicalModelPriceTier[];
     legacyModelIds: string[];
     capabilitySpec: CapabilitySpec;
     capabilityProfiles: CapabilitySpec[];
@@ -40,14 +40,14 @@ export type PublicLogicalModel = {
 };
 
 export type PublicLogicalModelPriceTier = {
-	selector: Record<string, string>;
-	resolution: string;
-	videoSeconds: number;
-	billingMode: "fixed_request" | "per_second" | "token";
-	unitPriceMicrocredits: number;
-	inputTokenPriceMicrocredits: number;
-	outputTokenPriceMicrocredits: number;
-	cachedTokenPriceMicrocredits: number;
+    selector: Record<string, string>;
+    resolution: string;
+    videoSeconds: number;
+    billingMode: "fixed_request" | "per_second" | "token";
+    unitPriceMicrocredits: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
 };
 
 export type AdminLogicalRoute = {

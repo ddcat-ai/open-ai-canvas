@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { type GenerationTask } from "@/services/api/task-center";
 import { backendProviderConfig, logicalModelIDForConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
 import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
@@ -77,7 +78,7 @@ export async function runBackendCanvasGenerationTask(
 export function canvasImageReferenceLimitError(config: AiConfig, referenceImages: ReferenceImage[]) {
     const maxImages = modelCapabilityConfigFor(config, config.model).image?.references.maxImages;
     if (maxImages === undefined || referenceImages.length <= maxImages) return "";
-    return `当前图片模型最多支持 ${maxImages} 张参考图，当前已连接 ${referenceImages.length} 张。请移除多余连线后重试`;
+    return t("canvas:the-image-model-supports-at-most-param-references-param-connected-remove", { maxImages: maxImages, length: referenceImages.length });
 }
 
 export function assertCanvasImageReferenceLimit(config: AiConfig, referenceImages: ReferenceImage[]) {
@@ -118,7 +119,7 @@ export async function runCanvasGenerationTaskToConsumer(
                 if (task.status === "succeeded") completedTask = task;
             },
         });
-        if (!completedTask) throw new Error("生成任务缺少成功终态");
+        if (!completedTask) throw new Error(t("canvas:the-generation-task-lacks-a-successful-terminal-state"));
         await dependencies.consumeTask(completedTask);
         return result;
     });
@@ -314,8 +315,8 @@ export function buildVideoGenerationMetadata(
 ): CanvasNodeMetadata {
     const metadata = node?.metadata;
     const referenceImageIds = new Set((context?.referenceImages || []).map((image) => image.id));
-    const startFrame = requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds);
-    const endFrame = requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds);
+    const startFrame = requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, t("canvas:first-frame"), referenceImageIds);
+    const endFrame = requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, t("canvas:last-frame"), referenceImageIds);
     return {
         videoEditOperation: resolveVideoEditOperation(node, context),
         videoCameraMoveId: metadata?.videoCameraMoveId,
@@ -328,7 +329,7 @@ export function buildVideoGenerationMetadata(
 function requireConnectedVideoFrame(frameNodeId: string | undefined, label: string, referenceImageIds: Set<string>) {
     if (!frameNodeId) return undefined;
     if (referenceImageIds.has(frameNodeId)) return frameNodeId;
-    throw new Error(`已配置的${label}参考图未连接或不可用，请重新选择后再生成`);
+    throw new Error(t("canvas:the-configured-param-reference-is-not-connected-or-unavailable-re-select", { label: label }));
 }
 
 export async function resolveMetadataReferences(metadata: CanvasNodeMetadata) {
@@ -401,10 +402,8 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const imageSize = mode === "image" ? requestedConfig.size : undefined;
     // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
     // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
-	const liveOptions = modelRequestOptions(requestedConfig, mode);
-	const baseRequirements = requirements?.capability
-		? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } }
-		: { capability: mode, options: liveOptions };
+    const liveOptions = modelRequestOptions(requestedConfig, mode);
+    const baseRequirements = requirements?.capability ? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } } : { capability: mode, options: liveOptions };
     const model = resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel;
     const generationDefaults = resolveModelGenerationDefaults(
         config,
@@ -471,7 +470,7 @@ export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
                 : mediaNode.type === CanvasNodeType.Script && mediaNode.height < NODE_DEFAULT_SIZE[CanvasNodeType.Script].height
                   ? { ...mediaNode, height: NODE_DEFAULT_SIZE[CanvasNodeType.Script].height }
                   : mediaNode;
-        return resizedNode.metadata?.status === "loading" ? { ...resizedNode, metadata: { ...resizedNode.metadata, errorDetails: "正在从任务中心恢复生成状态..." } } : resizedNode;
+        return resizedNode.metadata?.status === "loading" ? { ...resizedNode, metadata: { ...resizedNode.metadata, errorDetails: t("canvas:restoring-generation-state-from-task-center") } } : resizedNode;
     });
 }
 

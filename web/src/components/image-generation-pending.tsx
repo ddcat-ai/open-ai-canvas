@@ -3,8 +3,9 @@ import { LoaderCircle } from "lucide-react";
 
 import { formatDuration } from "@/lib/image-utils";
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
-const pendingMessages = ["正在创建图片", "马上就好了", "再等等", "正在整理细节"];
+const pendingMessages = [t("domain:creating-image"), t("domain:almost-there"), t("domain:hang-tight"), t("domain:polishing-details")];
 
 export function ImageGenerationPending({ className, label, compact = false }: { className?: string; label?: string; compact?: boolean }) {
     const [tick, setTick] = useState(0);

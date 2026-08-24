@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { collectUpstreamVideoNodes } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
 import type { TimelineClip, TimelineProject } from "@/types/timeline";
@@ -29,7 +30,7 @@ export function buildTimelineImportSegments(node: CanvasNodeData, nodes: CanvasN
     };
     const clips = (timeline?.clips || []).filter((clip) => clip.kind === "video" && candidateNodes.some((candidate) => matchesCandidate(clip, candidate)));
     if (!clips.length) {
-        return { ok: false, error: `未找到「${node.title || "当前视频节点"}」或其上游视频节点在时间线中的片段，请先在时间线中加入对应视频节点` };
+        return { ok: false, error: `未找到「${node.title || t("canvas:current-video-node")}」或其上游视频节点在时间线中的片段，请先在时间线中加入对应视频节点` };
     }
     const segments = clips.flatMap((clip) => {
         const matchedNode = candidateNodes.find((candidate) => matchesCandidate(clip, candidate));
@@ -49,6 +50,6 @@ export function buildTimelineImportSegments(node: CanvasNodeData, nodes: CanvasN
             },
         ];
     });
-    if (!segments.length) return { ok: false, error: "时间线片段数据不完整，请先在时间线中重新分割或保存" };
+    if (!segments.length) return { ok: false, error: t("canvas:timeline-segment-data-incomplete-re-split-or-re-save-in-the-timeline-fir") };
     return { ok: true, segments };
 }

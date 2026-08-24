@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { createCanvasNode, createStoryboardRow } from "@/lib/canvas/canvas-project-domain";
 import type { ProjectShot, ProjectUnit } from "@/services/api/projects";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardData, type StoryboardRow } from "@/types/canvas";
@@ -7,11 +8,7 @@ type ProjectChapterStoryboardInput = {
     shots: ProjectShot[];
 };
 
-export function upsertProjectChapterStoryboard(
-    nodes: CanvasNodeData[],
-    connections: CanvasConnection[],
-    { unit, shots }: ProjectChapterStoryboardInput,
-) {
+export function upsertProjectChapterStoryboard(nodes: CanvasNodeData[], connections: CanvasConnection[], { unit, shots }: ProjectChapterStoryboardInput) {
     const existing = nodes.find((node) => node.type === CanvasNodeType.Script && node.metadata?.chapterId === unit.id);
     const currentRows = new Map((existing?.metadata?.storyboard?.rows || []).map((row) => [row.id, row]));
     const rows = shots
@@ -28,20 +25,20 @@ export function upsertProjectChapterStoryboard(
     const scriptNode: CanvasNodeData = existing
         ? {
               ...existing,
-              title: `分镜脚本 · ${unit.title}`,
+              title: t("canvas:storyboard-param", { title: unit.title }),
               metadata: {
                   ...existing.metadata,
                   status: "idle" as const,
                   workflowKind: "storyboard" as const,
-                  workflowTitle: "章节分镜",
-                  workflowDescription: `已导入 ${rows.length} 个镜头`,
+                  workflowTitle: t("canvas:chapter-storyboards"),
+                  workflowDescription: t("canvas:imported-param-shots", { length: rows.length }),
                   chapterId: unit.id,
                   chapterTitle: unit.title,
                   storyboard,
               },
           }
         : createChapterStoryboardNode(nodes, unit, rows);
-    const nextNodes = existing ? nodes.map((node) => node.id === existing.id ? scriptNode : node) : [...nodes, scriptNode];
+    const nextNodes = existing ? nodes.map((node) => (node.id === existing.id ? scriptNode : node)) : [...nodes, scriptNode];
     const validRowHandles = new Set(rows.map((row) => `row:${row.id}`));
     const nextConnections = existing
         ? connections
@@ -66,20 +63,24 @@ function projectShotRow(shot: ProjectShot, index: number, currentRows: Map<strin
 
 function createChapterStoryboardNode(nodes: CanvasNodeData[], unit: Pick<ProjectUnit, "id" | "title">, rows: StoryboardRow[]) {
     const rightEdge = nodes.reduce((value, node) => Math.max(value, node.position.x + node.width), 0);
-    const node = createCanvasNode(CanvasNodeType.Script, { x: rightEdge + 540, y: 340 }, {
-        status: "idle",
-        workflowKind: "storyboard",
-        workflowTitle: "章节分镜",
-        workflowDescription: `已导入 ${rows.length} 个镜头`,
-        chapterId: unit.id,
-        chapterTitle: unit.title,
-        storyboard: {
-            rows,
-            visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
-            referenceNodeIds: [],
+    const node = createCanvasNode(
+        CanvasNodeType.Script,
+        { x: rightEdge + 540, y: 340 },
+        {
+            status: "idle",
+            workflowKind: "storyboard",
+            workflowTitle: t("canvas:chapter-storyboards"),
+            workflowDescription: t("canvas:imported-param-shots", { length: rows.length }),
+            chapterId: unit.id,
+            chapterTitle: unit.title,
+            storyboard: {
+                rows,
+                visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
+                referenceNodeIds: [],
+            },
         },
-    });
-    node.title = `分镜脚本 · ${unit.title}`;
+    );
+    node.title = t("canvas:storyboard-param", { title: unit.title });
     return node;
 }
 

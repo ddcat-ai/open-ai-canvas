@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnnouncementTimelineModal } from "@/components/ui/aceternity/announcement-timeline-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAnnouncementFeed, markAnnouncementsRead } from "@/services/api/announcements";
+import { useTranslation } from "react-i18next";
 
 const ANNOUNCEMENT_REFRESH_INTERVAL_MS = 5 * 60_000;
 const ANNOUNCEMENT_CACHE_TTL_MS = 60_000;
@@ -23,6 +24,7 @@ type SystemAnnouncementCenterProps = {
 };
 
 export function SystemAnnouncementCenter({ userId, className, style, showLabel = false, labelClassName, staticMotion = false }: SystemAnnouncementCenterProps) {
+    const { t } = useTranslation("canvas");
     const reducedMotion = useReducedMotion();
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
@@ -38,7 +40,7 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
     });
     const announcements = feedQuery.data?.announcements || [];
     const unreadCount = Math.max(0, feedQuery.data?.unreadCount || 0);
-    const error = feedQuery.error instanceof Error ? feedQuery.error.message : feedQuery.error ? "读取公告失败" : "";
+    const error = feedQuery.error instanceof Error ? feedQuery.error.message : feedQuery.error ? t("domain:failed-to-load-announcements") : "";
 
     const openAnnouncements = async () => {
         setOpen(true);
@@ -47,7 +49,7 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
         try {
             const result = await markAnnouncementsRead(feed.announcements.map((announcement) => announcement.id));
             const nextUnreadCount = Math.max(0, result.unreadCount || 0);
-            queryClient.setQueryData<AnnouncementFeed>(queryKey, (current) => current ? { ...current, unreadCount: nextUnreadCount } : current);
+            queryClient.setQueryData<AnnouncementFeed>(queryKey, (current) => (current ? { ...current, unreadCount: nextUnreadCount } : current));
             if (nextUnreadCount > 0) void queryClient.invalidateQueries({ queryKey });
         } catch {
             // 已读状态是辅助读路径，失败时保留角标，下一次打开或轮询会继续尝试同步。
@@ -64,8 +66,8 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
                 whileTap={reducedMotion || staticMotion ? undefined : { scale: 0.94 }}
                 transition={aceternityMotion.spring.dock}
                 onClick={() => void openAnnouncements()}
-                aria-label={unreadCount ? `系统公告，${unreadCount} 条未读` : "系统公告"}
-                title="系统公告"
+                aria-label={unreadCount ? t("domain:system-announcements-param-unread", { unreadCount: unreadCount }) : t("domain:system-announcements-3")}
+                title={t("domain:system-announcements-3")}
             >
                 <span className="relative shrink-0">
                     <Bell className="size-4" />
@@ -85,8 +87,10 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
                 </span>
                 {showLabel ? (
                     <span className={`min-w-0 flex-1 items-center justify-between gap-2 whitespace-nowrap ${labelClassName || ""}`}>
-                        <span>系统公告</span>
-                        <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-1.5 !text-center !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{announcements.length}</Tag>
+                        <span>{t("domain:system-announcements-3")}</span>
+                        <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-1.5 !text-center !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">
+                            {announcements.length}
+                        </Tag>
                     </span>
                 ) : null}
             </motion.button>

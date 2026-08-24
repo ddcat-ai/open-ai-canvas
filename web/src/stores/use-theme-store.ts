@@ -23,9 +23,7 @@ export const useThemeStore = create<ThemeStore>()(
             // 避免 canvasThemes[非法值] = undefined 触发 "reading 'node'" 崩溃
             merge: (persisted, current) => {
                 const stored = (persisted || {}) as Partial<ThemeStore>;
-                const theme = VALID_THEMES.includes(stored.theme as ThemeName)
-                    ? (stored.theme as ThemeName)
-                    : "dark";
+                const theme = VALID_THEMES.includes(stored.theme as ThemeName) ? (stored.theme as ThemeName) : "dark";
                 return { ...current, theme };
             },
         },

@@ -14,14 +14,14 @@ export type CanvasNodeInputKind = "image" | "video" | "audio" | "text";
  */
 export type CanvasNodeDefinition = {
     type: CanvasNodeType;
-    /** UI 短标签——创建菜单等处显示，如「文本」 */
-    label: string;
-    /** 列表/搜索标签，缺省派生为 `${label}节点` */
-    listLabel?: string;
+    /** UI 短标签的 i18n key——创建菜单等处显示，如「文本」 */
+    labelKey: string;
+    /** 列表/搜索标签的 i18n key，缺省由 UI 短标签派生 */
+    listLabelKey?: string;
     /** 不带 className——由渲染处用 [&_svg]:size-* 统一控制尺寸 */
     icon: ReactNode;
-    /** 新建节点的默认标题（与 label 分开：菜单叫「文本」，新建出来的节点名是「Note」） */
-    defaultTitle: string;
+    /** 新建节点默认标题的 i18n key，创建时再翻译，避免模块加载期锁死语言 */
+    defaultTitleKey: string;
     defaultSize: { width: number; height: number };
     defaultMetadata?: CanvasNodeMetadata;
     /** 手动拉伸的最小尺寸 */

@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { LocalRuntimeTransport } from "@/services/local-runtime";
 
 export type LocalRuntimeEvent = {
@@ -44,10 +45,10 @@ export async function prepareCanvasRuntimeConnection(store: CanvasRuntimeStore, 
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const state = store.getState();
     if (state.connection !== "connected" || state.error) {
-        throw new CanvasRuntimeStreamError("canvas_runtime_unavailable", "本机运行时尚未连接");
+        throw new CanvasRuntimeStreamError("canvas_runtime_unavailable", t("canvas:local-runtime-not-connected-yet"));
     }
     if (!state.modules.some((module) => module.id === "canvas-agent")) {
-        throw new CanvasRuntimeStreamError("canvas_module_unavailable", "Canvas Agent 模块未加载");
+        throw new CanvasRuntimeStreamError("canvas_module_unavailable", t("canvas:canvas-agent-module-not-loaded"));
     }
 }
 
@@ -76,7 +77,7 @@ export async function postCanvasRuntimeState(client: LocalRuntimeTransport, clie
         });
         if (!response.ok) throw new Error("state rejected");
     } catch {
-        throw new CanvasRuntimeStreamError("canvas_state_sync_failed", "画布状态同步失败");
+        throw new CanvasRuntimeStreamError("canvas_state_sync_failed", t("canvas:canvas-state-sync-failed"));
     }
 }
 
@@ -89,9 +90,9 @@ export async function consumeLocalRuntimeEventStream(client: LocalRuntimeTranspo
         headers,
         signal: options.signal,
     });
-    if (!response.ok) throw new CanvasRuntimeStreamError("canvas_stream_unavailable", "Canvas Agent 事件流不可用");
+    if (!response.ok) throw new CanvasRuntimeStreamError("canvas_stream_unavailable", t("canvas:canvas-agent-event-stream-unavailable"));
     if (!response.headers.get("content-type")?.toLowerCase().startsWith("text/event-stream") || !response.body) {
-        throw new CanvasRuntimeStreamError("canvas_stream_invalid", "Canvas Agent 事件流响应无效");
+        throw new CanvasRuntimeStreamError("canvas_stream_invalid", t("canvas:canvas-agent-event-stream-response-invalid"));
     }
 
     const reader = response.body.getReader();
@@ -117,7 +118,7 @@ export async function consumeLocalRuntimeEventStream(client: LocalRuntimeTranspo
     const consumeLine = (line: string) => {
         eventBytes += new TextEncoder().encode(line).byteLength + 1;
         if (eventBytes > MAX_EVENT_BYTES) {
-            throw new CanvasRuntimeStreamError("canvas_event_too_large", "Canvas Agent 事件超过安全上限");
+            throw new CanvasRuntimeStreamError("canvas_event_too_large", t("canvas:canvas-agent-events-exceed-the-safety-cap"));
         }
         if (!line) {
             dispatch();
@@ -145,7 +146,7 @@ export async function consumeLocalRuntimeEventStream(client: LocalRuntimeTranspo
                 newline = buffer.indexOf("\n");
             }
             if (eventBytes + new TextEncoder().encode(buffer).byteLength > MAX_EVENT_BYTES) {
-                throw new CanvasRuntimeStreamError("canvas_event_too_large", "Canvas Agent 事件超过安全上限");
+                throw new CanvasRuntimeStreamError("canvas_event_too_large", t("canvas:canvas-agent-events-exceed-the-safety-cap"));
             }
         }
         buffer += decoder.decode();
@@ -154,7 +155,7 @@ export async function consumeLocalRuntimeEventStream(client: LocalRuntimeTranspo
     } catch (error) {
         if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
         if (error instanceof CanvasRuntimeStreamError) throw error;
-        throw new CanvasRuntimeStreamError("canvas_stream_invalid", "Canvas Agent 事件流响应无效");
+        throw new CanvasRuntimeStreamError("canvas_stream_invalid", t("canvas:canvas-agent-event-stream-response-invalid"));
     } finally {
         await reader.cancel().catch(() => undefined);
         reader.releaseLock();

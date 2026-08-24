@@ -1,0 +1,2062 @@
+{
+    "ns": "tasks",
+    "entries": {
+        "t:读取任务中心偏好失败": {
+            "type": "ui",
+            "zh": "读取任务中心偏好失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 37
+                }
+            ],
+            "key": "failed-to-read-task-center-preferences",
+            "en": "Failed to read task center preferences"
+        },
+        "t:保存任务中心偏好失败": {
+            "type": "ui",
+            "zh": "保存任务中心偏好失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 46
+                }
+            ],
+            "key": "failed-to-save-task-center-preferences",
+            "en": "Failed to save task center preferences"
+        },
+        "t:未命名画布": {
+            "type": "ui",
+            "zh": "未命名画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 96
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 96
+                },
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 11
+                }
+            ],
+            "key": "untitled-canvas",
+            "en": "Untitled canvas"
+        },
+        "t:任务加载失败": {
+            "type": "ui",
+            "zh": "任务加载失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 234
+                }
+            ],
+            "key": "failed-to-load-tasks",
+            "en": "Failed to load tasks"
+        },
+        "t:已同步到画布": {
+            "type": "ui",
+            "zh": "已同步到画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 251
+                }
+            ],
+            "key": "synced-to-canvas",
+            "en": "Synced to canvas"
+        },
+        "t:任务详情加载失败": {
+            "type": "ui",
+            "zh": "任务详情加载失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 253
+                }
+            ],
+            "key": "failed-to-load-task-details",
+            "en": "Failed to load task details"
+        },
+        "t:提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。": {
+            "type": "ui",
+            "zh": "提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 293
+                }
+            ],
+            "key": "submission-result-is-unconfirmed-so-auto-retry-is-unavailable-verify-the",
+            "en": "Submission result is unconfirmed, so auto-retry is unavailable. Verify the official status first to avoid duplicate generation."
+        },
+        "t:任务已重新入队": {
+            "type": "ui",
+            "zh": "任务已重新入队",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 303
+                }
+            ],
+            "key": "task-re-queued",
+            "en": "Task re-queued"
+        },
+        "t:操作失败": {
+            "type": "ui",
+            "zh": "操作失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 305
+                }
+            ],
+            "key": "operation-failed",
+            "en": "Operation failed"
+        },
+        "t:任务正在执行，不能删除本机记录；请等待任务完成": {
+            "type": "ui",
+            "zh": "任务正在执行，不能删除本机记录；请等待任务完成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 313
+                }
+            ],
+            "key": "task-is-running-its-local-record-cannot-be-deleted-wait-for-it-to-finish",
+            "en": "Task is running; its local record cannot be deleted. Wait for it to finish"
+        },
+        "t:删除本机任务记录？": {
+            "type": "ui",
+            "zh": "删除本机任务记录？",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 317
+                }
+            ],
+            "key": "delete-local-task-record",
+            "en": "Delete local task record?"
+        },
+        "t:这只会删除本机任务记录，不会删除已生成的素材。": {
+            "type": "ui",
+            "zh": "这只会删除本机任务记录，不会删除已生成的素材。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 318
+                }
+            ],
+            "key": "this-removes-only-the-local-task-record-generated-assets-are-kept",
+            "en": "This removes only the local task record; generated assets are kept."
+        },
+        "t:删除本机记录": {
+            "type": "ui",
+            "zh": "删除本机记录",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 319
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 546
+                }
+            ],
+            "key": "delete-local-record",
+            "en": "Delete local record"
+        },
+        "t:保留": {
+            "type": "ui",
+            "zh": "保留",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 321
+                }
+            ],
+            "key": "keep",
+            "en": "Keep"
+        },
+        "t:本机任务记录已删除": {
+            "type": "ui",
+            "zh": "本机任务记录已删除",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 328
+                }
+            ],
+            "key": "local-task-record-deleted",
+            "en": "Local task record deleted"
+        },
+        "t:删除失败": {
+            "type": "ui",
+            "zh": "删除失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 330
+                }
+            ],
+            "key": "deletion-failed",
+            "en": "Deletion failed"
+        },
+        "tpl:官方返回状态：{{officialStatus}}": {
+            "type": "template",
+            "zh": "官方返回状态：{{officialStatus}}",
+            "params": {
+                "officialStatus": "next.officialStatus"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 344
+                }
+            ],
+            "key": "provider-status-param",
+            "en": "Provider status: {{{officialStatus}}}"
+        },
+        "t:状态已更新": {
+            "type": "ui",
+            "zh": "状态已更新",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 344
+                }
+            ],
+            "key": "status-updated",
+            "en": "Status updated"
+        },
+        "t:更新状态失败": {
+            "type": "ui",
+            "zh": "更新状态失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 346
+                }
+            ],
+            "key": "failed-to-update-status",
+            "en": "Failed to update status"
+        },
+        "cx:src/pages/tasks/index.tsx:17636": {
+            "type": "skipped",
+            "zh": "`上游任务仍在处理中${result.providerStatus ? `（${result.providerStatus}）` : \"\"}`",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 358
+                }
+            ]
+        },
+        "t:已获取上游视频，任务已恢复并完成结算": {
+            "type": "ui",
+            "zh": "已获取上游视频，任务已恢复并完成结算",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 367
+                }
+            ],
+            "key": "upstream-video-retrieved-task-recovered-and-settled",
+            "en": "Upstream video retrieved; task recovered and settled"
+        },
+        "t:已获取上游视频，任务已恢复，计费状态待管理员核对": {
+            "type": "ui",
+            "zh": "已获取上游视频，任务已恢复，计费状态待管理员核对",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 368
+                }
+            ],
+            "key": "upstream-video-retrieved-and-task-restored-billing-pending-admin-review",
+            "en": "Upstream video retrieved and task restored; billing pending admin review"
+        },
+        "t:查询上游任务失败": {
+            "type": "ui",
+            "zh": "查询上游任务失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 370
+                }
+            ],
+            "key": "failed-to-query-upstream-task",
+            "en": "Failed to query upstream task"
+        },
+        "t:请先在设置里配置可用的文本模型、Base URL 和 API Key": {
+            "type": "ui",
+            "zh": "请先在设置里配置可用的文本模型、Base URL 和 API Key",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 383
+                }
+            ],
+            "key": "configure-a-working-text-model-base-url-and-api-key-in-settings-first",
+            "en": "Configure a working text model, base URL, and API key in Settings first"
+        },
+        "t:请先在设置里配置可用的视频模型、Base URL 和 API Key": {
+            "type": "ui",
+            "zh": "请先在设置里配置可用的视频模型、Base URL 和 API Key",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 392
+                }
+            ],
+            "key": "configure-a-working-video-model-base-url-and-api-key-in-settings-first",
+            "en": "Configure a working video model, base URL, and API key in Settings first"
+        },
+        "t:任务已创建": {
+            "type": "ui",
+            "zh": "任务已创建",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 418
+                }
+            ],
+            "key": "task-created",
+            "en": "Task created"
+        },
+        "t:任务创建失败": {
+            "type": "ui",
+            "zh": "任务创建失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 420
+                }
+            ],
+            "key": "failed-to-create-task",
+            "en": "Failed to create task"
+        },
+        "t:任务中心": {
+            "type": "ui",
+            "zh": "任务中心",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 431
+                }
+            ],
+            "key": "task-center",
+            "en": "Task center"
+        },
+        "t:跟踪生成任务的排队、进度与失败原因。": {
+            "type": "ui",
+            "zh": "跟踪生成任务的排队、进度与失败原因。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 432
+                }
+            ],
+            "key": "track-queueing-progress-and-failure-reasons-for-generation-tasks",
+            "en": "Track queueing, progress, and failure reasons for generation tasks."
+        },
+        "jsx:src/pages/tasks/index.tsx:个任务:21797": {
+            "type": "jsxtext",
+            "zh": "个任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 433
+                }
+            ],
+            "key": "tasks",
+            "en": "tasks"
+        },
+        "t: · 同步中": {
+            "type": "ui",
+            "zh": " · 同步中",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 433
+                }
+            ],
+            "key": "syncing",
+            "en": " · syncing"
+        },
+        "jsx:src/pages/tasks/index.tsx:刷新:22066": {
+            "type": "jsxtext",
+            "zh": "刷新",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 436
+                }
+            ],
+            "key": "refresh",
+            "en": "Refresh"
+        },
+        "jsx:src/pages/tasks/index.tsx:新建任务:22242": {
+            "type": "jsxtext",
+            "zh": "新建任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 437
+                }
+            ],
+            "key": "new-task",
+            "en": "New task"
+        },
+        "jsx:src/pages/tasks/index.tsx:按画布分组:23250": {
+            "type": "jsxtext",
+            "zh": "按画布分组",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 450
+                }
+            ],
+            "key": "group-by-canvas",
+            "en": "Group by canvas"
+        },
+        "t:任务视图": {
+            "type": "ui",
+            "zh": "任务视图",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 453
+                }
+            ],
+            "key": "task-view",
+            "en": "Task view"
+        },
+        "t:列表视图": {
+            "type": "ui",
+            "zh": "列表视图",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 454
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 455
+                }
+            ],
+            "key": "list-view",
+            "en": "List view"
+        },
+        "t:网格视图": {
+            "type": "ui",
+            "zh": "网格视图",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 457
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 458
+                }
+            ],
+            "key": "grid-view",
+            "en": "Grid view"
+        },
+        "t:搜索任务、模型或画布": {
+            "type": "ui",
+            "zh": "搜索任务、模型或画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 465
+                }
+            ],
+            "key": "search-tasks-models-or-canvases",
+            "en": "Search tasks, models, or canvases"
+        },
+        "t:全部画布": {
+            "type": "ui",
+            "zh": "全部画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 466
+                }
+            ],
+            "key": "all-canvases",
+            "en": "All canvases"
+        },
+        "t:全部类型": {
+            "type": "ui",
+            "zh": "全部类型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 467
+                }
+            ],
+            "key": "all-types",
+            "en": "All types"
+        },
+        "t:文本": {
+            "type": "ui",
+            "zh": "文本",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 467
+                }
+            ],
+            "key": "text",
+            "en": "Text"
+        },
+        "t:图片": {
+            "type": "ui",
+            "zh": "图片",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 467
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 762
+                },
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 49
+                }
+            ],
+            "key": "image",
+            "en": "Image"
+        },
+        "t:视频": {
+            "type": "ui",
+            "zh": "视频",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 467
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 763
+                },
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 48
+                }
+            ],
+            "key": "video",
+            "en": "Video"
+        },
+        "t:全部模型": {
+            "type": "ui",
+            "zh": "全部模型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 468
+                }
+            ],
+            "key": "all-models",
+            "en": "All models"
+        },
+        "t:正在加载任务": {
+            "type": "ui",
+            "zh": "正在加载任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 473
+                }
+            ],
+            "key": "loading-tasks",
+            "en": "Loading tasks"
+        },
+        "jsx:src/pages/tasks/index.tsx:新建任务:27604": {
+            "type": "jsxtext",
+            "zh": "新建任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 499
+                }
+            ],
+            "key": "new-task-2",
+            "en": "New task"
+        },
+        "t:新建异步生成任务": {
+            "type": "ui",
+            "zh": "新建异步生成任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 506
+                }
+            ],
+            "key": "create-an-async-generation-task",
+            "en": "Create an async generation task"
+        },
+        "t:创建任务": {
+            "type": "ui",
+            "zh": "创建任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 506
+                }
+            ],
+            "key": "create-task",
+            "en": "Create task"
+        },
+        "t:任务类型": {
+            "type": "ui",
+            "zh": "任务类型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 508
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 528
+                }
+            ],
+            "key": "task-type",
+            "en": "Task type"
+        },
+        "t:请选择任务类型": {
+            "type": "ui",
+            "zh": "请选择任务类型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 508
+                }
+            ],
+            "key": "choose-a-task-type",
+            "en": "Choose a task type"
+        },
+        "t:创作指令": {
+            "type": "ui",
+            "zh": "创作指令",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 511
+                }
+            ],
+            "key": "creative-brief",
+            "en": "Creative brief"
+        },
+        "t:请输入创作指令": {
+            "type": "ui",
+            "zh": "请输入创作指令",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 511
+                }
+            ],
+            "key": "enter-a-creative-brief",
+            "en": "Enter a creative brief"
+        },
+        "t:描述短剧、MV、TVC 或要执行的视频编辑操作": {
+            "type": "ui",
+            "zh": "描述短剧、MV、TVC 或要执行的视频编辑操作",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 512
+                }
+            ],
+            "key": "describe-a-short-drama-music-video-tvc-or-a-video-editing-operation",
+            "en": "Describe a short drama, music video, TVC, or a video editing operation"
+        },
+        "t:绑定画布": {
+            "type": "ui",
+            "zh": "绑定画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 514
+                }
+            ],
+            "key": "linked-canvas",
+            "en": "Linked canvas"
+        },
+        "t:可选，选择要绑定的画布": {
+            "type": "ui",
+            "zh": "可选，选择要绑定的画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 515
+                }
+            ],
+            "key": "optional-choose-a-canvas-to-link",
+            "en": "Optional. Choose a canvas to link"
+        },
+        "t:暂无本地画布": {
+            "type": "ui",
+            "zh": "暂无本地画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 515
+                }
+            ],
+            "key": "no-local-canvases",
+            "en": "No local canvases"
+        },
+        "t:目标模型": {
+            "type": "ui",
+            "zh": "目标模型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 517
+                }
+            ],
+            "key": "target-model",
+            "en": "Target model"
+        },
+        "t:可选，例如 seedance、kling、wan、nano-banana": {
+            "type": "ui",
+            "zh": "可选，例如 seedance、kling、wan、nano-banana",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 518
+                }
+            ],
+            "key": "optional-e-g-seedance-kling-wan-nano-banana",
+            "en": "Optional, e.g. seedance, kling, wan, nano-banana"
+        },
+        "t:任务详情": {
+            "type": "ui",
+            "zh": "任务详情",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 522
+                }
+            ],
+            "key": "task-details",
+            "en": "Task details"
+        },
+        "t:状态": {
+            "type": "ui",
+            "zh": "状态",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 526
+                }
+            ],
+            "key": "status",
+            "en": "Status"
+        },
+        "t:画布名称": {
+            "type": "ui",
+            "zh": "画布名称",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 527
+                }
+            ],
+            "key": "canvas-name",
+            "en": "Canvas name"
+        },
+        "t:模型": {
+            "type": "ui",
+            "zh": "模型",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 529
+                }
+            ],
+            "key": "models",
+            "en": "Models"
+        },
+        "t:尝试次数": {
+            "type": "ui",
+            "zh": "尝试次数",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 530
+                }
+            ],
+            "key": "attempts",
+            "en": "Attempts"
+        },
+        "cx:src/pages/tasks/index.tsx:30076": {
+            "type": "skipped",
+            "zh": "`第 ${detailTask.attempts || 1} 次`",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 530
+                }
+            ]
+        },
+        "t:创建时间": {
+            "type": "ui",
+            "zh": "创建时间",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 531
+                }
+            ],
+            "key": "created-at",
+            "en": "Created at"
+        },
+        "t:开始时间": {
+            "type": "ui",
+            "zh": "开始时间",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 532
+                }
+            ],
+            "key": "started-at",
+            "en": "Started at"
+        },
+        "t:完成时间": {
+            "type": "ui",
+            "zh": "完成时间",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 533
+                }
+            ],
+            "key": "finished-at",
+            "en": "Finished at"
+        },
+        "t:耗时": {
+            "type": "ui",
+            "zh": "耗时",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 534
+                }
+            ],
+            "key": "duration",
+            "en": "Duration"
+        },
+        "t:上游取消": {
+            "type": "ui",
+            "zh": "上游取消",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 535
+                }
+            ],
+            "key": "upstream-cancellation",
+            "en": "Upstream cancellation"
+        },
+        "t:请求取消时间": {
+            "type": "ui",
+            "zh": "请求取消时间",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 536
+                }
+            ],
+            "key": "cancellation-requested-at",
+            "en": "Cancellation requested at"
+        },
+        "jsx:src/pages/tasks/index.tsx:官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。:30953": {
+            "type": "jsxtext",
+            "zh": "官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 538
+                }
+            ],
+            "key": "official-status-is-eventually-consistent-via-polling-background-waits-co",
+            "en": "Official status is eventually consistent via polling; background waits continue syncing it. The official JiMeng CLI currently has no reliable cancellation."
+        },
+        "t:更新官方状态": {
+            "type": "ui",
+            "zh": "更新官方状态",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 541
+                }
+            ],
+            "key": "refresh-official-status",
+            "en": "Refresh official status"
+        },
+        "jsx:src/pages/tasks/index.tsx:更新官方状态:31428": {
+            "type": "jsxtext",
+            "zh": "更新官方状态",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 541
+                }
+            ],
+            "key": "refresh-official-status-2",
+            "en": "Refresh official status"
+        },
+        "jsx:src/pages/tasks/index.tsx:删除本机记录:31814": {
+            "type": "jsxtext",
+            "zh": "删除本机记录",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 546
+                }
+            ],
+            "key": "delete-local-record-2",
+            "en": "Delete local record"
+        },
+        "jsx:src/pages/tasks/index.tsx:手动查询任务:32142": {
+            "type": "jsxtext",
+            "zh": "手动查询任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 550
+                }
+            ],
+            "key": "query-task-manually",
+            "en": "Query task manually"
+        },
+        "t:提示词": {
+            "type": "ui",
+            "zh": "提示词",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 554
+                }
+            ],
+            "key": "prompt",
+            "en": "Prompt"
+        },
+        "t:详情加载中...": {
+            "type": "ui",
+            "zh": "详情加载中...",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 554
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 556
+                }
+            ],
+            "key": "loading-details",
+            "en": "Loading details…"
+        },
+        "t:无": {
+            "type": "ui",
+            "zh": "无",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 554
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 797
+                },
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 809
+                }
+            ],
+            "key": "none",
+            "en": "None"
+        },
+        "t:结果": {
+            "type": "ui",
+            "zh": "结果",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 556
+                }
+            ],
+            "key": "result",
+            "en": "Result"
+        },
+        "jsx:src/pages/tasks/index.tsx:日志:32934": {
+            "type": "jsxtext",
+            "zh": "日志",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 558
+                }
+            ],
+            "key": "logs",
+            "en": "Logs"
+        },
+        "t:日志加载中...": {
+            "type": "ui",
+            "zh": "日志加载中...",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 560
+                }
+            ],
+            "key": "loading-logs",
+            "en": "Loading logs…"
+        },
+        "t:暂无日志": {
+            "type": "ui",
+            "zh": "暂无日志",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 560
+                }
+            ],
+            "key": "no-logs-yet",
+            "en": "No logs yet"
+        },
+        "t:生成结果预览": {
+            "type": "ui",
+            "zh": "生成结果预览",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 567
+                }
+            ],
+            "key": "result-preview",
+            "en": "Result preview"
+        },
+        "jsx:src/pages/tasks/index.tsx:生成结果:35560": {
+            "type": "jsxtext",
+            "zh": "生成结果",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 613
+                }
+            ],
+            "key": "generation-result",
+            "en": "Generation result"
+        },
+        "cx:src/pages/tasks/index.tsx:36084": {
+            "type": "skipped",
+            "zh": "`生成结果 ${index + 1}`",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 622
+                }
+            ]
+        },
+        "t:还没有任务": {
+            "type": "ui",
+            "zh": "还没有任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 680
+                }
+            ],
+            "key": "no-tasks-yet",
+            "en": "No tasks yet"
+        },
+        "t:新提交的生成会在这里显示状态和实时进度。": {
+            "type": "ui",
+            "zh": "新提交的生成会在这里显示状态和实时进度。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 680
+                }
+            ],
+            "key": "new-submissions-show-their-status-and-live-progress-here",
+            "en": "New submissions show their status and live progress here."
+        },
+        "t:没有运行中的任务": {
+            "type": "ui",
+            "zh": "没有运行中的任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 681
+                }
+            ],
+            "key": "no-running-tasks",
+            "en": "No running tasks"
+        },
+        "t:新提交的生成会在这里显示排队状态和实时进度。": {
+            "type": "ui",
+            "zh": "新提交的生成会在这里显示排队状态和实时进度。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 681
+                }
+            ],
+            "key": "new-submissions-show-their-queue-position-and-live-progress-here",
+            "en": "New submissions show their queue position and live progress here."
+        },
+        "t:还没有已完成任务": {
+            "type": "ui",
+            "zh": "还没有已完成任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 682
+                }
+            ],
+            "key": "no-finished-tasks-yet",
+            "en": "No finished tasks yet"
+        },
+        "t:生成成功后，结果预览和执行记录会保留在这里。": {
+            "type": "ui",
+            "zh": "生成成功后，结果预览和执行记录会保留在这里。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 682
+                }
+            ],
+            "key": "after-success-result-previews-and-execution-records-stay-here",
+            "en": "After success, result previews and execution records stay here."
+        },
+        "t:没有失败或取消的任务": {
+            "type": "ui",
+            "zh": "没有失败或取消的任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 683
+                }
+            ],
+            "key": "no-failed-or-cancelled-tasks",
+            "en": "No failed or cancelled tasks"
+        },
+        "t:失败或取消的生成会出现在这里，并提供原因和可用操作。": {
+            "type": "ui",
+            "zh": "失败或取消的生成会出现在这里，并提供原因和可用操作。",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 683
+                }
+            ],
+            "key": "failed-or-cancelled-generations-appear-here-with-reasons-and-available-a",
+            "en": "Failed or cancelled generations appear here with reasons and available actions."
+        },
+        "tpl:{{minutes}}分 {{seconds}}秒": {
+            "type": "template",
+            "zh": "{{minutes}}分 {{seconds}}秒",
+            "params": {
+                "minutes": "minutes",
+                "seconds": "seconds"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 700
+                }
+            ],
+            "key": "paramm-params",
+            "en": "{{{minutes}}}m {{{seconds}}}s"
+        },
+        "tpl:{{seconds}}秒": {
+            "type": "template",
+            "zh": "{{seconds}}秒",
+            "params": {
+                "seconds": "seconds"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 700
+                }
+            ],
+            "key": "params",
+            "en": "{{{seconds}}}s"
+        },
+        "jsx:src/pages/tasks/index.tsx:参数:40821": {
+            "type": "jsxtext",
+            "zh": "参数",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 729
+                }
+            ],
+            "key": "parameters",
+            "en": "Parameters"
+        },
+        "jsx:src/pages/tasks/index.tsx:暂无参数记录:41232": {
+            "type": "jsxtext",
+            "zh": "暂无参数记录",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 735
+                }
+            ],
+            "key": "no-parameters-recorded",
+            "en": "No parameters recorded"
+        },
+        "t:模式": {
+            "type": "ui",
+            "zh": "模式",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 751
+                }
+            ],
+            "key": "mode",
+            "en": "Mode"
+        },
+        "t:尺寸 / 比例": {
+            "type": "ui",
+            "zh": "尺寸 / 比例",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 752
+                }
+            ],
+            "key": "size-ratio",
+            "en": "Size / ratio"
+        },
+        "t:分辨率": {
+            "type": "ui",
+            "zh": "分辨率",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 753
+                }
+            ],
+            "key": "resolution",
+            "en": "Resolution"
+        },
+        "t:时长": {
+            "type": "ui",
+            "zh": "时长",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 754
+                }
+            ],
+            "key": "duration-2",
+            "en": "Duration"
+        },
+        "tpl:{{videoSeconds}} 秒": {
+            "type": "template",
+            "zh": "{{videoSeconds}} 秒",
+            "params": {
+                "videoSeconds": "config.videoSeconds"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 754
+                }
+            ],
+            "key": "params-2",
+            "en": "{{{videoSeconds}}}s"
+        },
+        "t:生成数量": {
+            "type": "ui",
+            "zh": "生成数量",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 755
+                }
+            ],
+            "key": "generation-count",
+            "en": "Generation count"
+        },
+        "t:生成声音": {
+            "type": "ui",
+            "zh": "生成声音",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 756
+                }
+            ],
+            "key": "generate-audio",
+            "en": "Generate audio"
+        },
+        "t:水印": {
+            "type": "ui",
+            "zh": "水印",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 757
+                }
+            ],
+            "key": "watermark",
+            "en": "Watermark"
+        },
+        "t:音色": {
+            "type": "ui",
+            "zh": "音色",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 758
+                }
+            ],
+            "key": "voice",
+            "en": "Voice"
+        },
+        "t:音频格式": {
+            "type": "ui",
+            "zh": "音频格式",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 759
+                }
+            ],
+            "key": "audio-format",
+            "en": "Audio format"
+        },
+        "t:音频速度": {
+            "type": "ui",
+            "zh": "音频速度",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 760
+                }
+            ],
+            "key": "audio-speed",
+            "en": "Audio speed"
+        },
+        "t:参考图片": {
+            "type": "ui",
+            "zh": "参考图片",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 762
+                }
+            ],
+            "key": "reference-images",
+            "en": "Reference images"
+        },
+        "t:参考视频": {
+            "type": "ui",
+            "zh": "参考视频",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 763
+                }
+            ],
+            "key": "reference-videos",
+            "en": "Reference videos"
+        },
+        "t:参考音频": {
+            "type": "ui",
+            "zh": "参考音频",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 764
+                }
+            ],
+            "key": "reference-audio",
+            "en": "Reference audio"
+        },
+        "t:音频": {
+            "type": "ui",
+            "zh": "音频",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 764
+                }
+            ],
+            "key": "audio",
+            "en": "Audio"
+        },
+        "t:遮罩图片": {
+            "type": "ui",
+            "zh": "遮罩图片",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 765
+                }
+            ],
+            "key": "mask-image",
+            "en": "Mask image"
+        },
+        "t:遮罩": {
+            "type": "ui",
+            "zh": "遮罩",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 765
+                }
+            ],
+            "key": "mask",
+            "en": "Mask"
+        },
+        "t:是": {
+            "type": "ui",
+            "zh": "是",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 791
+                }
+            ],
+            "key": "yes",
+            "en": "Yes"
+        },
+        "t:否": {
+            "type": "ui",
+            "zh": "否",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 792
+                }
+            ],
+            "key": "no",
+            "en": "No"
+        },
+        "t:其他视频操作": {
+            "type": "ui",
+            "zh": "其他视频操作",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 818
+                }
+            ],
+            "key": "other-video-operations",
+            "en": "Other video operations"
+        },
+        "tpl:请对以下视频结果版本做对比分析，输出推荐版本、差异点和修改建议：\n{{prompt}}": {
+            "type": "template",
+            "zh": "请对以下视频结果版本做对比分析，输出推荐版本、差异点和修改建议：\n{{prompt}}",
+            "params": {
+                "prompt": "prompt"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 819
+                }
+            ],
+            "key": "compare-the-video-versions-below-and-give-a-recommendation-key-differenc",
+            "en": "Compare the video versions below and give a recommendation, key differences, and suggested changes:\n{{{prompt}}}"
+        },
+        "tpl:视频编辑任务：{{operationLabel}}\n创作要求：{{prompt}}": {
+            "type": "template",
+            "zh": "视频编辑任务：{{operationLabel}}\n创作要求：{{prompt}}",
+            "params": {
+                "operationLabel": "operationLabel",
+                "prompt": "prompt"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/index.tsx",
+                    "line": 820
+                }
+            ],
+            "key": "video-editing-task-param-creative-brief-param",
+            "en": "Video editing task: {{{operationLabel}}}\nCreative brief: {{{prompt}}}"
+        },
+        "t:查看详情": {
+            "type": "ui",
+            "zh": "查看详情",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-grid-card.tsx",
+                    "line": 25
+                },
+                {
+                    "file": "src/pages/tasks/task-grid-card.tsx",
+                    "line": 26
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 79
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 80
+                }
+            ],
+            "key": "view-details",
+            "en": "View details"
+        },
+        "t:重试任务": {
+            "type": "ui",
+            "zh": "重试任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-grid-card.tsx",
+                    "line": 29
+                },
+                {
+                    "file": "src/pages/tasks/task-grid-card.tsx",
+                    "line": 34
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 83
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 88
+                }
+            ],
+            "key": "retry-task",
+            "en": "Retry task"
+        },
+        "t:未命名任务": {
+            "type": "ui",
+            "zh": "未命名任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-grid-card.tsx",
+                    "line": 45
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 46
+                }
+            ],
+            "key": "untitled-task",
+            "en": "Untitled task"
+        },
+        "jsx:src/pages/tasks/task-group-header.tsx:共:1337": {
+            "type": "jsxtext",
+            "zh": "共",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 22
+                }
+            ],
+            "key": "total",
+            "en": "Total"
+        },
+        "jsx:src/pages/tasks/task-group-header.tsx:项 · 完成:1385": {
+            "type": "jsxtext",
+            "zh": "项 · 完成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 23
+                }
+            ],
+            "key": "items-done",
+            "en": "items · done"
+        },
+        "jsx:src/pages/tasks/task-group-header.tsx:运行中:1554": {
+            "type": "jsxtext",
+            "zh": "运行中",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 27
+                }
+            ],
+            "key": "running",
+            "en": "Running"
+        },
+        "jsx:src/pages/tasks/task-group-header.tsx:失败:1720": {
+            "type": "jsxtext",
+            "zh": "失败",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 29
+                }
+            ],
+            "key": "failed",
+            "en": "Failed"
+        },
+        "jsx:src/pages/tasks/task-group-header.tsx:已完成:1887": {
+            "type": "jsxtext",
+            "zh": "已完成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "done",
+            "en": "Done"
+        },
+        "t:暂无进行中的任务": {
+            "type": "ui",
+            "zh": "暂无进行中的任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 32
+                }
+            ],
+            "key": "no-running-tasks-2",
+            "en": "No running tasks"
+        },
+        "t:重试中...": {
+            "type": "ui",
+            "zh": "重试中...",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 38
+                }
+            ],
+            "key": "retrying",
+            "en": "Retrying…"
+        },
+        "t:重试失败任务": {
+            "type": "ui",
+            "zh": "重试失败任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-group-header.tsx",
+                    "line": 38
+                }
+            ],
+            "key": "retry-failed-tasks",
+            "en": "Retry failed tasks"
+        },
+        "t:正在生成": {
+            "type": "ui",
+            "zh": "正在生成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 61
+                }
+            ],
+            "key": "generating",
+            "en": "Generating"
+        },
+        "t:预览不可用，素材可能已删除": {
+            "type": "ui",
+            "zh": "预览不可用，素材可能已删除",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 119
+                },
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 120
+                }
+            ],
+            "key": "preview-unavailable-the-asset-may-have-been-deleted",
+            "en": "Preview unavailable; the asset may have been deleted"
+        },
+        "t:放大预览生成视频": {
+            "type": "ui",
+            "zh": "放大预览生成视频",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "enlarge-generated-video-preview",
+            "en": "Enlarge generated video preview"
+        },
+        "t:放大预览生成图片": {
+            "type": "ui",
+            "zh": "放大预览生成图片",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 119
+                }
+            ],
+            "key": "enlarge-generated-image-preview",
+            "en": "Enlarge generated image preview"
+        },
+        "t:预览不可用": {
+            "type": "ui",
+            "zh": "预览不可用",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-list-row.tsx",
+                    "line": 122
+                }
+            ],
+            "key": "preview-unavailable",
+            "en": "Preview unavailable"
+        },
+        "t:未绑定画布": {
+            "type": "ui",
+            "zh": "未绑定画布",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 9
+                }
+            ],
+            "key": "no-linked-canvas",
+            "en": "No linked canvas"
+        },
+        "t:项目级任务": {
+            "type": "ui",
+            "zh": "项目级任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 13
+                }
+            ],
+            "key": "project-level-task",
+            "en": "Project-level task"
+        },
+        "t:画布已移除": {
+            "type": "ui",
+            "zh": "画布已移除",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 13
+                }
+            ],
+            "key": "canvas-removed",
+            "en": "Canvas removed"
+        },
+        "t:内容审核未通过，请修改输入后新建任务": {
+            "type": "ui",
+            "zh": "内容审核未通过，请修改输入后新建任务",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 22
+                }
+            ],
+            "key": "content-moderation-failed-revise-the-input-and-submit-a-new-task",
+            "en": "Content moderation failed. Revise the input and submit a new task"
+        },
+        "t:生成失败，打开详情查看原因": {
+            "type": "ui",
+            "zh": "生成失败，打开详情查看原因",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 24
+                }
+            ],
+            "key": "generation-failed-open-details-for-the-reason",
+            "en": "Generation failed. Open details for the reason"
+        },
+        "t:已请求上游取消，正在等待确认": {
+            "type": "ui",
+            "zh": "已请求上游取消，正在等待确认",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 28
+                }
+            ],
+            "key": "upstream-cancellation-requested-awaiting-confirmation",
+            "en": "Upstream cancellation requested; awaiting confirmation"
+        },
+        "t:上游已确认取消，积分已退回": {
+            "type": "ui",
+            "zh": "上游已确认取消，积分已退回",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 29
+                }
+            ],
+            "key": "upstream-confirmed-cancellation-credits-refunded",
+            "en": "Upstream confirmed cancellation; credits refunded"
+        },
+        "t:上游未能取消，费用已结算": {
+            "type": "ui",
+            "zh": "上游未能取消，费用已结算",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 31
+                }
+            ],
+            "key": "upstream-could-not-cancel-cost-already-settled",
+            "en": "Upstream could not cancel; cost already settled"
+        },
+        "t:上游取消结果未确认，积分已退回": {
+            "type": "ui",
+            "zh": "上游取消结果未确认，积分已退回",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 32
+                }
+            ],
+            "key": "upstream-cancellation-unconfirmed-credits-refunded",
+            "en": "Upstream cancellation unconfirmed; credits refunded"
+        },
+        "t:上游无法确认取消，费用待核对": {
+            "type": "ui",
+            "zh": "上游无法确认取消，费用待核对",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 33
+                }
+            ],
+            "key": "upstream-cancellation-could-not-be-confirmed-billing-under-review",
+            "en": "Upstream cancellation could not be confirmed; billing under review"
+        },
+        "t:任务在调用上游前取消，积分已退回": {
+            "type": "ui",
+            "zh": "任务在调用上游前取消，积分已退回",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 35
+                }
+            ],
+            "key": "cancelled-before-calling-upstream-credits-refunded",
+            "en": "Cancelled before calling upstream; credits refunded"
+        },
+        "t:任务已取消，可按原输入重新提交": {
+            "type": "ui",
+            "zh": "任务已取消，可按原输入重新提交",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 35
+                }
+            ],
+            "key": "task-cancelled-you-can-resubmit-with-the-original-input",
+            "en": "Task cancelled. You can resubmit with the original input"
+        },
+        "t:画面": {
+            "type": "ui",
+            "zh": "画面",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 49
+                }
+            ],
+            "key": "visuals",
+            "en": "Visuals"
+        },
+        "t:已结算": {
+            "type": "ui",
+            "zh": "已结算",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 68
+                }
+            ],
+            "key": "settled",
+            "en": "Settled"
+        },
+        "t:已退回": {
+            "type": "ui",
+            "zh": "已退回",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 68
+                }
+            ],
+            "key": "refunded",
+            "en": "Refunded"
+        },
+        "t:待核对": {
+            "type": "ui",
+            "zh": "待核对",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 68
+                }
+            ],
+            "key": "to-verify",
+            "en": "To verify"
+        },
+        "t:预计": {
+            "type": "ui",
+            "zh": "预计",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 68
+                }
+            ],
+            "key": "est",
+            "en": "Est."
+        },
+        "tpl:积分{{note}}": {
+            "type": "template",
+            "zh": "积分{{note}}",
+            "params": {
+                "note": "note"
+            },
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 70
+                }
+            ],
+            "key": "credits-param",
+            "en": "Credits {{{note}}}"
+        },
+        "t:工作流": {
+            "type": "ui",
+            "zh": "工作流",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 84
+                }
+            ],
+            "key": "workflows",
+            "en": "Workflows"
+        },
+        "t:版本对比工作流": {
+            "type": "ui",
+            "zh": "版本对比工作流",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 85
+                }
+            ],
+            "key": "version-comparison-workflow",
+            "en": "Version comparison workflow"
+        },
+        "t:工作流路由": {
+            "type": "ui",
+            "zh": "工作流路由",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 86
+                }
+            ],
+            "key": "workflow-routing",
+            "en": "Workflow routing"
+        },
+        "t:内置工作流": {
+            "type": "ui",
+            "zh": "内置工作流",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 87
+                }
+            ],
+            "key": "built-in-workflow",
+            "en": "Built-in workflow"
+        },
+        "t:OpenAI 兼容接口": {
+            "type": "ui",
+            "zh": "OpenAI 兼容接口",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-shared.tsx",
+                    "line": 88
+                }
+            ],
+            "key": "openai-compatible-api",
+            "en": "OpenAI-compatible API"
+        },
+        "t:全部": {
+            "type": "ui",
+            "zh": "全部",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-status-filter.tsx",
+                    "line": 9
+                }
+            ],
+            "key": "all",
+            "en": "All"
+        },
+        "t:运行中": {
+            "type": "ui",
+            "zh": "运行中",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-status-filter.tsx",
+                    "line": 10
+                }
+            ],
+            "key": "running-2",
+            "en": "Running"
+        },
+        "t:已完成": {
+            "type": "ui",
+            "zh": "已完成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-status-filter.tsx",
+                    "line": 11
+                }
+            ],
+            "key": "done-2",
+            "en": "Done"
+        },
+        "t:失败/取消": {
+            "type": "ui",
+            "zh": "失败/取消",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-status-filter.tsx",
+                    "line": 12
+                }
+            ],
+            "key": "failed-cancelled",
+            "en": "Failed / cancelled"
+        },
+        "jsx:src/pages/tasks/task-status-filter.tsx:今日生成:864": {
+            "type": "jsxtext",
+            "zh": "今日生成",
+            "locations": [
+                {
+                    "file": "src/pages/tasks/task-status-filter.tsx",
+                    "line": 17
+                }
+            ],
+            "key": "generated-today",
+            "en": "Generated today"
+        }
+    }
+}

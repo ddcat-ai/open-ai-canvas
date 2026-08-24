@@ -7,8 +7,10 @@ import { getAdminDrawingEngineSetting, updateAdminDrawingEngineSetting } from "@
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import { useTranslation } from "react-i18next";
 
 export default function DrawingEngineSettingsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const current = useUserStore((state) => state.drawingEngine);
     const setDrawingEngine = useUserStore((state) => state.setDrawingEngine);
@@ -19,23 +21,28 @@ export default function DrawingEngineSettingsPage() {
 
     useEffect(() => {
         let cancelled = false;
-        void getAdminDrawingEngineSetting().then(({ setting }) => {
-            if (cancelled) return;
-            setDrawingEngine(setting);
-            setEngine(setting.defaultEngine);
-            setTldrawLicenseKey(setting.tldrawLicenseKey || "");
-        }).catch((error) => {
-            if (!cancelled) message.error(error instanceof Error ? error.message : "读取绘图工具配置失败");
-        }).finally(() => {
-            if (!cancelled) setLoading(false);
-        });
-        return () => { cancelled = true; };
+        void getAdminDrawingEngineSetting()
+            .then(({ setting }) => {
+                if (cancelled) return;
+                setDrawingEngine(setting);
+                setEngine(setting.defaultEngine);
+                setTldrawLicenseKey(setting.tldrawLicenseKey || "");
+            })
+            .catch((error) => {
+                if (!cancelled) message.error(error instanceof Error ? error.message : t("admin:failed-to-read-drawing-tool-config"));
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [message, setDrawingEngine]);
 
     const tldrawAvailable = isDrawingEngineAvailable("tldraw", tldrawLicenseKey);
     const save = async () => {
         if (!isDrawingEngineAvailable(engine, tldrawLicenseKey)) {
-            message.error("请先配置有效的 tldraw License Key");
+            message.error(t("admin:configure-a-valid-tldraw-license-key-first"));
             return;
         }
         setSaving(true);
@@ -44,9 +51,9 @@ export default function DrawingEngineSettingsPage() {
             setDrawingEngine(setting);
             setEngine(setting.defaultEngine);
             setTldrawLicenseKey(setting.tldrawLicenseKey || "");
-            message.success("绘图工具配置已更新");
+            message.success(t("admin:drawing-tool-config-updated"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存绘图工具配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-drawing-tool-config"));
         } finally {
             setSaving(false);
         }
@@ -54,30 +61,32 @@ export default function DrawingEngineSettingsPage() {
 
     const dirty = engine !== current.defaultEngine || tldrawLicenseKey !== (current.tldrawLicenseKey || "");
     return (
-        <AdminPageFrame title="绘图工具" description="设置新建绘图节点使用的默认编辑器" scroll>
+        <AdminPageFrame title={t("admin:drawing-tools")} description={t("admin:set-the-default-editor-for-new-drawing-nodes")} scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     icon={<Brush className="size-4" />}
-                    title="默认绘图引擎"
-                    description="已有绘图保持原引擎，仅新建绘图使用这里的选择。"
+                    title={t("admin:default-drawing-engine")}
+                    description={t("admin:existing-drawings-keep-their-engine-this-choice-applies-to-new-drawings")}
                     status={<AdminStatusBadge label={drawingEngineLabel(current.defaultEngine)} tone="info" />}
-                    footer={(
+                    footer={
                         <>
                             <span className={`text-xs ${tldrawAvailable ? "text-foreground/45" : "text-amber-600 dark:text-amber-400"}`}>
-                                {tldrawAvailable ? "配置只影响之后新建的绘图节点。" : "未配置 tldraw License Key，暂不能将其设为默认引擎。"}
+                                {tldrawAvailable ? t("admin:this-config-affects-only-drawing-nodes-created-afterwards") : t("admin:no-tldraw-license-key-configured-so-it-cannot-be-set-as-default-yet")}
                             </span>
-                            <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={loading || !dirty} onClick={() => void save()}>保存配置</Button>
+                            <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={loading || !dirty} onClick={() => void save()}>
+                                {t("admin:save-config-5")}
+                            </Button>
                         </>
-                    )}
+                    }
                 >
                     <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
                         <div className="min-w-0">
-                            <label className="mb-2 block text-sm font-medium">tldraw License Key</label>
-                            <Input.Password value={tldrawLicenseKey} onChange={(event) => setTldrawLicenseKey(event.target.value)} placeholder="输入 tldraw License Key" disabled={loading || saving} autoComplete="off" />
-                            <p className="mt-2 text-xs text-foreground/55">填入有效的 License Key 后保存，即可解锁 tldraw 选项。</p>
+                            <label className="mb-2 block text-sm font-medium">{t("admin:tldraw-license-key")}</label>
+                            <Input.Password value={tldrawLicenseKey} onChange={(event) => setTldrawLicenseKey(event.target.value)} placeholder={t("admin:enter-tldraw-license-key")} disabled={loading || saving} autoComplete="off" />
+                            <p className="mt-2 text-xs text-foreground/55">{t("admin:save-a-valid-license-key-to-unlock-the-tldraw-option")}</p>
                         </div>
                         <div className="min-w-0">
-                            <label className="mb-2 block text-sm font-medium">新建默认引擎</label>
+                            <label className="mb-2 block text-sm font-medium">{t("admin:default-engine-for-new-drawings")}</label>
                             <Segmented<CanvasDrawingEngine>
                                 block
                                 className="w-full"
@@ -89,7 +98,7 @@ export default function DrawingEngineSettingsPage() {
                                     { label: "tldraw", value: "tldraw", disabled: !tldrawAvailable },
                                 ]}
                             />
-                            <p className="mt-2 text-xs text-foreground/55">切换后不会转换或覆盖已有绘图。</p>
+                            <p className="mt-2 text-xs text-foreground/55">{t("admin:switching-does-not-convert-or-overwrite-existing-drawings")}</p>
                         </div>
                     </div>
                 </SettingsSectionCard>

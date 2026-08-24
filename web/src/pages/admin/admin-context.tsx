@@ -2,6 +2,8 @@ import { App } from "antd";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { getAdminReferences, type AdminReferenceData, type LocalUser } from "@/services/api/auth";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type AdminContextValue = {
     references: AdminReferenceData;
@@ -14,6 +16,7 @@ const emptyReferences: AdminReferenceData = { users: [], channels: [] };
 const AdminContext = createContext<AdminContextValue | null>(null);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [references, setReferences] = useState<AdminReferenceData>(emptyReferences);
     const [referencesLoading, setReferencesLoading] = useState(true);
@@ -23,7 +26,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         try {
             setReferences(await getAdminReferences());
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取后台基础数据失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-load-admin-base-data"));
         } finally {
             setReferencesLoading(false);
         }
@@ -36,7 +39,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const updateUserReference = useCallback((user: LocalUser) => {
         setReferences((current) => ({
             ...current,
-            users: current.users.map((item) => item.id === user.id ? { id: user.id, username: user.username, displayName: user.displayName } : item),
+            users: current.users.map((item) => (item.id === user.id ? { id: user.id, username: user.username, displayName: user.displayName } : item)),
         }));
     }, []);
 
@@ -46,6 +49,6 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
 export function useAdminContext() {
     const value = useContext(AdminContext);
-    if (!value) throw new Error("useAdminContext 必须在 AdminProvider 内使用");
+    if (!value) throw new Error(t("admin:useadmincontext-must-be-used-within-adminprovider"));
     return value;
 }

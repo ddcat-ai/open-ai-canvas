@@ -1,0 +1,1338 @@
+[
+ {
+  "zh": "文本创作",
+  "files": [
+   "src/lib/creation-text-replay.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "参考图片 MIME 类型无效：{{mimeType}}",
+  "files": [
+   "src/lib/gemini-image.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "排队中",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "生成中",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "正在提交",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "官方排队中",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "官方已完成",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "状态待更新",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "为避免重复扣费，未自动重试",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "正在提交，等待官方确认",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "官方返回状态：{{officialStatus}}",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "已提交，等待状态更新",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Agent 会话：拆解影视工作流",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频局部修改",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "镜头/运镜调整",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "参考音频生成视频",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "结果版本对比",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Agent 会话",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Agent 分镜",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "画布生图",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频任务",
+  "files": [
+   "src/lib/generation-task-display.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Grok 图片完整提示词为 {{promptBytes}} UTF-8 字节，超过上游 {{GROK_IMAGE_PROMPT_MAX_BYTES}} 字节限制。完整提示词包含当前输入及自动展开的连线文本、角色卡、画风和模板；系统不会自动删改，请回到相应节点精简后重试。",
+  "files": [
+   "src/lib/grok-image-prompt-limit.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{seconds}}秒",
+  "files": [
+   "src/lib/image-utils.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本响应正常",
+  "files": [
+   "src/lib/model-connection-test.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "图片生成正常",
+  "files": [
+   "src/lib/model-connection-test.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "音频生成正常",
+  "files": [
+   "src/lib/model-connection-test.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频任务已创建（{{id}}）",
+  "files": [
+   "src/lib/model-connection-test.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本与多模态消息",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本与多模态输入",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "生成、编辑与参考图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文生图与单张 URL 参考图，不支持蒙版",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "火山方舟图片",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文生图与 image 参考图，不支持蒙版",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "即梦官方图片",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "application/json + AK/SK 签名",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "0-14 张参考图，模型标识填写 req_key",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文生图、图片编辑与多张内嵌参考图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本转语音",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "异步音频任务",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "语音、音效与音乐生成",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "input_reference[] 参考图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "NewAPI 媒体任务",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "图片、视频、音频公网 URL",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "image_urls（首帧、尾帧、其他参考图） / video_urls / audio_urls",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "xAI 官方视频",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "单张起始图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "火山方舟视频",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "图片、视频、音频参考素材",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "即梦官方视频",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本或一张首帧图，模型标识填写 req_key",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本与单张起始图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Novita 视频",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本或单张起始图",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "MiniMax 视频",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本、图片、视频、音频参考素材",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "自动识别",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "保存模型时选择协议后，将在这里显示实际请求方式。",
+  "files": [
+   "src/lib/model-protocols.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "当前输入不受支持",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "不支持当前尺寸",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "图片模型不支持参考视频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "图片模型不支持参考音频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "最多支持 {{maxImages}} 张参考图",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "不支持当前视频时长",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "最多支持 {{maxVideos}} 个参考视频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "最多支持 {{maxAudios}} 个参考音频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "文本模型不支持参考音频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "角色配音一次只能引用一个角色卡",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "音频模型只接受文本或单个角色卡输入",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "不支持当前生成类型",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "不支持{{kind}}输入",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{kind}}输入需为 {{min}}-{{max}} 个",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "不支持当前生成模式",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "水印设置",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "参考素材生视频",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "当前生成模式",
+  "files": [
+   "src/lib/model-selection.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "把 Eagle 作为影策的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
+  "files": [
+   "src/lib/plugins/builtin/eagle.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "影策社区",
+  "files": [
+   "src/lib/plugins/builtin/eagle.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "插件 {{id}} 已注册其他版本",
+  "files": [
+   "src/lib/plugins/plugin-registry.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "已归档",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "可在项目设置中恢复",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "准备故事",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "还没有剧情章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "章节已完成",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "可继续检查镜头与交付结果",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "组织章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "下一步可建立项目画布",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "准备资产",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "补充角色、场景或画风",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "制作中",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{completedUnitCount}}/{{unitCount}} 章已完成",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "恢复项目后可继续制作",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "需要处理",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{failedSteps}} 个流程步骤失败",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "资产确认",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{pendingCandidates}} 个候选待确认",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "添加或导入剧情章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "分镜准备",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "选择章节生成镜头",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{runningSteps}} 个流程步骤正在推进",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "检查交付",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "章节已完成，可检查镜头与结果",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "镜头制作",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{length}} 个镜头已建立",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "继续编辑项目画布",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "继续处理剧情章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "从剧情章节开始",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "项目已归档",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "恢复后才能创建画布和提交生成任务。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "前往恢复",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "处理 {{length}} 个失败步骤",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "查看失败原因和输入后，仅重试受影响的任务。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "查看失败任务",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "确认 {{length}} 个资产候选",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{size}} 类角色、场景或制作资产需要确认后才能稳定复用。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "去确认",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "添加第一个剧情章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "导入小说、粘贴文本，或从空白章节开始。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "添加章节",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "继续处理",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{title}}还没有镜头，可先生成分镜草稿再逐项调整。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "建立分镜",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "建立第一张项目画布",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "把章节、分镜和参考资产放进同一个制作空间。",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "查看项目画布",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "继续最近的制作内容",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{pendingCandidates}} 待确认",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{confirmedCandidates}} 已确认",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "未识别",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{length}} 镜头",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "未开始",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{canvasCount}} 张",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "未关联",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "待制作",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "草稿",
+  "files": [
+   "src/lib/project-workbench.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "标准横屏",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "标准竖屏",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "宽银幕",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "自动匹配",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{label}} 超过 50MB，请压缩后再上传",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{label}} 时长需要在 2-15 秒之间",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{label}} 宽高需要在 300-6000px 之间",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{label}} 宽高比需要在 0.4-2.5 之间",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "{{label}} 像素总量不符合 Seedance 要求，请转成 480p/720p/1080p 后再上传",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "Seedance 参考视频总时长不能超过 15 秒",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "参考视频需为 mp4/mov，H.264/H.265，FPS 24-60；含真人人脸素材请使用火山授权 asset:// 素材。",
+  "files": [
+   "src/lib/seedance-video.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "未知错误",
+  "files": [
+   "src/lib/timeline/subtitle-highlight-runner.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "字幕关键词高亮生成失败：{{message}}",
+  "files": [
+   "src/lib/timeline/subtitle-highlight-runner.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频片段",
+  "files": [
+   "src/lib/timeline/timeline-build.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "音频片段",
+  "files": [
+   "src/lib/timeline/timeline-build.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频资源请求失败（",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "找不到素材 ",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": " 的媒体文件",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "加载 FFmpeg",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "读取素材",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "读取素材 ",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "字幕烧录不可用，回退为无字幕导出",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "导出失败：",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "导出完成",
+  "files": [
+   "src/lib/timeline/timeline-export.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "拼接视频轨",
+  "files": [
+   "src/lib/timeline/timeline-to-ffmpeg.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "生成字幕 SRT",
+  "files": [
+   "src/lib/timeline/timeline-to-ffmpeg.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "烧录字幕并输出",
+  "files": [
+   "src/lib/timeline/timeline-to-ffmpeg.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "输出成片（无字幕）",
+  "files": [
+   "src/lib/timeline/timeline-to-ffmpeg.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "视频 1",
+  "files": [
+   "src/lib/timeline/timeline-tracks.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "音频 1",
+  "files": [
+   "src/lib/timeline/timeline-tracks.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "字幕 1",
+  "files": [
+   "src/lib/timeline/timeline-tracks.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "登录后云端数据同步失败，保留本地数据等待重试",
+  "files": [
+   "src/lib/user-session.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ },
+ {
+  "zh": "平台模型",
+  "files": [
+   "src/lib/user-session.ts"
+  ],
+  "ns": "lib",
+  "bucket": "B2"
+ }
+]

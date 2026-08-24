@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { applyStyleExecutionPlan, createStyleProfileSnapshot, parseStyleProfile, resolveStyleExecutionPlan, serializeStyleProfile, type StyleExecutionPlan, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
 import { logicalModelIDForConfig, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -28,7 +29,7 @@ function legacyStyleNodeProfile(node: CanvasNodeData) {
     return createStyleProfileSnapshot({
         presetId,
         title: node.title.replace(/^(?:项目)?画风\s*[·：:]?\s*/, "").trim() || node.title,
-        description: node.metadata?.workflowDescription || "历史项目画风规范",
+        description: node.metadata?.workflowDescription || t("canvas:historical-project-style-specs"),
         tags: [],
         prompt,
         assets: [],

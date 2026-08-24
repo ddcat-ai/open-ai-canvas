@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { CanvasNodeData, CanvasNodeType } from "@/types/canvas";
 
 import type { CanvasNodeDefinition } from "./node-definition";
@@ -49,14 +50,15 @@ export function listCreatableNodeDefinitions() {
 
 /** UI 短标签 */
 export function getNodeLabel(type: CanvasNodeType) {
-    return definitions.get(type)?.label || "未知节点";
+    const def = definitions.get(type);
+    return def ? t(def.labelKey) : t("canvas:unknown-node-3");
 }
 
 /** 列表/搜索标签，缺省派生自 label */
 export function getNodeListLabel(type: CanvasNodeType) {
     const def = definitions.get(type);
-    if (!def) return "未知节点";
-    return def.listLabel || `${def.label}节点`;
+    if (!def) return t("canvas:unknown-node-3");
+    return def.listLabelKey ? t(def.listLabelKey) : t("canvas:param-node", { label: getNodeLabel(type) });
 }
 
 export function getNodeIcon(type: CanvasNodeType) {

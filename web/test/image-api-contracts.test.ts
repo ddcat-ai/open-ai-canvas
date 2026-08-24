@@ -10,9 +10,9 @@ describe("image api contracts", () => {
         expect(normalizeQuality("4k")).toBe("high");
         expect(resolveRequestSize("medium", "16:9")).toMatch(/^\d+x\d+$/);
         expect(resolveRequestSize("medium", "9:16")).toMatch(/^\d+x\d+$/);
-        expect(() => validateImageSize(1025, 1024)).toThrow("16 的倍数");
-        expect(() => validateImageSize(3072, 1008)).toThrow("宽高比");
-        expect(() => validateImageSize(3840, 2176)).toThrow("总像素");
+        expect(() => validateImageSize(1025, 1024)).toThrow(/domain:image-width-and-height-must-be-multiples-of-16/);
+        expect(() => validateImageSize(3072, 1008)).toThrow(/domain:image-aspect-ratio-cannot-exceed-3-1/);
+        expect(() => validateImageSize(3840, 2176)).toThrow(/domain:total-image-pixels-must-be-between/);
     });
 
     test("解包 b64_json、url 和业务错误", () => {
@@ -20,7 +20,7 @@ describe("image api contracts", () => {
             { id: expect.any(String), dataUrl: "data:image/png;base64,abc" },
             { id: expect.any(String), dataUrl: "https://example.com/image.png" },
         ]);
-        expect(() => parseImagePayload({ data: [] })).toThrow("接口没有返回图片");
+        expect(() => parseImagePayload({ data: [] })).toThrow(/domain:the-api-returned-no-image/);
         expect(() => parseImagePayload({ code: 1001, msg: "额度不足" })).toThrow("额度不足");
     });
 

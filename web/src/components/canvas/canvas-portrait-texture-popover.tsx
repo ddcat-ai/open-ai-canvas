@@ -2,13 +2,9 @@ import { Popover } from "antd";
 import { SlidersHorizontal } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import {
-    PORTRAIT_TEXTURE_GROUPS,
-    normalizePortraitTextureSettings,
-    type PortraitTextureSettingKey,
-    type PortraitTextureSettings,
-} from "@/lib/canvas/canvas-portrait-texture";
+import { PORTRAIT_TEXTURE_GROUPS, normalizePortraitTextureSettings, type PortraitTextureSettingKey, type PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-texture";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useTranslation } from "react-i18next";
 
 type CanvasPortraitTexturePopoverProps = {
     value: unknown;
@@ -17,6 +13,7 @@ type CanvasPortraitTexturePopoverProps = {
 };
 
 export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onChange }: CanvasPortraitTexturePopoverProps) {
+    const { t } = useTranslation("canvas");
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const settings = normalizePortraitTextureSettings(value);
 
@@ -28,12 +25,14 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
         <div className="w-[min(350px,calc(100vw-32px))] p-2.5" style={{ color: theme.node.text }}>
             <div className="mb-2 flex items-center gap-1.5 px-0.5">
                 <SlidersHorizontal className="size-3.5" style={{ color: theme.accent.primary }} />
-                <span className="text-xs font-medium">人物质感调节</span>
+                <span className="text-xs font-medium">{t("canvas:skin-texture-adjustment-3")}</span>
             </div>
             <div className="space-y-1">
                 {PORTRAIT_TEXTURE_GROUPS.map((group) => (
                     <div key={group.key} className="grid grid-cols-[60px_minmax(0,1fr)] items-center gap-2 py-1">
-                        <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{group.label}</span>
+                        <span className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
+                            {group.label}
+                        </span>
                         <div className="grid min-w-0 grid-cols-3 gap-1" role="radiogroup" aria-label={group.label}>
                             {group.options.map((option) => {
                                 const selected = settings[group.key] === option.value;
@@ -75,10 +74,10 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
                 type="button"
                 className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 motion-reduce:transition-none"
                 style={{ background: theme.accent.primarySoft, color: theme.accent.primary, outlineColor: theme.accent.primary }}
-                aria-label="打开人物质感调节面板"
+                aria-label={t("domain:open-skin-texture-controls")}
             >
                 <SlidersHorizontal className="size-3 shrink-0" />
-                <span className="truncate text-[var(--fs-tiny)] font-medium">人物质感调节</span>
+                <span className="truncate text-[var(--fs-tiny)] font-medium">{t("canvas:skin-texture-adjustment-3")}</span>
             </button>
         </Popover>
     );

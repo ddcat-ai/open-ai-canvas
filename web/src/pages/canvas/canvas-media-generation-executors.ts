@@ -74,7 +74,16 @@ export async function executeVideoGeneration({
         return [
             ...current.map((node) => {
                 if ((node.metadata?.versionOfNodeId || node.id) !== rootId) return node;
-                return { ...node, metadata: { ...node.metadata, versionOfNodeId: rootId, versionLabel: node.metadata?.versionLabel || "A", versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id), status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status } };
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        versionOfNodeId: rootId,
+                        versionLabel: node.metadata?.versionLabel || "A",
+                        versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id),
+                        status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status,
+                    },
+                };
             }),
             { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: false } },
         ];

@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 import { getAdminResponseInterceptionSetting, updateAdminResponseInterceptionSetting, type ResponseInterceptionRule } from "@/services/api/response-interception";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import { useTranslation } from "react-i18next";
 
 const emptyRule = (): ResponseInterceptionRule => ({ contains: "", replace: "" });
 
 export default function ResponseInterceptionSettingsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [enabled, setEnabled] = useState(false);
     const [rules, setRules] = useState<ResponseInterceptionRule[]>([]);
@@ -24,7 +26,7 @@ export default function ResponseInterceptionSettingsPage() {
                 setRules(setting.rules || []);
             })
             .catch((error) => {
-                if (!cancelled) message.error(error instanceof Error ? error.message : "读取模型响应拦截配置失败");
+                if (!cancelled) message.error(error instanceof Error ? error.message : t("admin:failed-to-read-response-interception-config"));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -50,45 +52,59 @@ export default function ResponseInterceptionSettingsPage() {
             const { setting } = await updateAdminResponseInterceptionSetting({ enabled, rules: normalizedRules });
             setEnabled(setting.enabled);
             setRules(setting.rules || []);
-            message.success("模型响应拦截配置已保存");
+            message.success(t("admin:response-interception-config-saved"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存模型响应拦截配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-response-interception-config"));
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <AdminPageFrame title="模型响应拦截" scroll>
+        <AdminPageFrame title={t("admin:model-response-interception")} scroll>
             <div className="pt-4">
                 <SettingsSectionCard
                     layout="stacked"
                     contentClassName="px-4 pb-4"
                     icon={<ShieldAlert className="size-4" />}
-                    title="用户可见错误"
-                    status={<AdminStatusBadge label={enabled ? "已启用" : "未启用"} tone={enabled ? "success" : "neutral"} />}
+                    title={t("admin:user-visible-error")}
+                    status={<AdminStatusBadge label={enabled ? t("admin:enabled") : t("admin:not-enabled")} tone={enabled ? "success" : "neutral"} />}
                     footer={
                         <>
                             <div className="flex items-center gap-2 text-xs text-foreground/55">
                                 <Switch size="small" checked={enabled} disabled={loading || saving} onChange={setEnabled} />
-                                启用拦截规则
+                                {t("admin:enable-rule")}
                             </div>
                             <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={loading} onClick={() => void save()}>
-                                保存配置
+                                {t("admin:save-config-5")}
                             </Button>
                         </>
                     }
                 >
                     <div className="space-y-2">
                         <div className="flex items-center gap-2 px-1 text-xs font-medium text-foreground/48">
-                            <span className="min-w-0 flex-1">上游响应包含</span>
-                            <span className="min-w-0 flex-1">替换为</span>
+                            <span className="min-w-0 flex-1">{t("admin:upstream-response-contains")}</span>
+                            <span className="min-w-0 flex-1">{t("admin:replace-with")}</span>
                             <span className="size-6 shrink-0" aria-hidden="true" />
                         </div>
                         {rules.map((rule, index) => (
                             <div key={index} className="flex flex-col gap-2 rounded-md border border-border/50 bg-muted/5 p-2 sm:flex-row sm:items-center">
-                                <Input className="min-w-0 flex-1" size="small" value={rule.contains} disabled={loading || saving} onChange={(event) => updateRule(index, "contains", event.target.value)} placeholder="例如：余额不足、429" />
-                                <Input className="min-w-0 flex-1" size="small" value={rule.replace} disabled={loading || saving} onChange={(event) => updateRule(index, "replace", event.target.value)} placeholder="例如：网络异常，请重试" />
+                                <Input
+                                    className="min-w-0 flex-1"
+                                    size="small"
+                                    value={rule.contains}
+                                    disabled={loading || saving}
+                                    onChange={(event) => updateRule(index, "contains", event.target.value)}
+                                    placeholder={t("admin:e-g-insufficient-balance-429")}
+                                />
+                                <Input
+                                    className="min-w-0 flex-1"
+                                    size="small"
+                                    value={rule.replace}
+                                    disabled={loading || saving}
+                                    onChange={(event) => updateRule(index, "replace", event.target.value)}
+                                    placeholder={t("admin:e-g-network-error-please-retry")}
+                                />
                                 <Button
                                     className="shrink-0 self-end sm:self-auto"
                                     type="text"
@@ -102,7 +118,7 @@ export default function ResponseInterceptionSettingsPage() {
                             </div>
                         ))}
                         <Button type="text" size="small" icon={<Plus className="size-3.5" />} disabled={loading || saving} onClick={() => setRules((current) => [...current, emptyRule()])}>
-                            添加规则
+                            {t("admin:add-rule")}
                         </Button>
                     </div>
                 </SettingsSectionCard>

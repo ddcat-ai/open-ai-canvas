@@ -9,7 +9,9 @@ export function normalizeVideoDuration(value: string | number | undefined) {
 }
 
 export function normalizeVideoResolution(value: string | number | undefined) {
-    const token = String(value || "").trim().toLowerCase();
+    const token = String(value || "")
+        .trim()
+        .toLowerCase();
     if (token === "low") return "480";
     if (token === "auto" || token === "medium" || token === "high") return "720";
     if (token === "2k") return "1440";

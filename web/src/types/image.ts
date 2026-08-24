@@ -15,15 +15,15 @@ export type ReferenceImage = {
     // 漏了会静默按普通图片处理（dataUrl 为空 → 参考图丢失）。
     source?:
         | {
-            kind: "drawing";
-            drawingId: string;
-            revision: number;
-            shapeCount: number;
-        }
+              kind: "drawing";
+              drawingId: string;
+              revision: number;
+              shapeCount: number;
+          }
         | {
-            kind: "colorgrade";
-            /** 上游源图地址 */
-            url: string;
-            grade: CanvasColorGrade;
-        };
+              kind: "colorgrade";
+              /** 上游源图地址 */
+              url: string;
+              grade: CanvasColorGrade;
+          };
 };

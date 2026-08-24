@@ -41,7 +41,7 @@ type CanvasProjectContextMenuProps = {
 
 export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
     if (!menu) return null;
-    const menuPosition = () => menu.type === "canvas" ? menu.position : screenToCanvas(menu.x, menu.y);
+    const menuPosition = () => (menu.type === "canvas" ? menu.position : screenToCanvas(menu.x, menu.y));
     return (
         <CanvasNodeContextMenu
             menu={menu}

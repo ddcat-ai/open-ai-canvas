@@ -1,0 +1,2250 @@
+[
+ {
+  "zh": "只展示这个插件实际支持的配置项。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "第三方插件",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 本地 API 地址",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Eagle 必须在本机运行；影策通过插件直接读取和写入 Eagle 原始文件。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "自动归档生成结果",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "自动归档生成结果到 Eagle",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "图片、视频和音频生成成功后，自动写入 Eagle；影策本地素材仍会保留。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成结果写入文件夹",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取文件夹",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "默认写入 Eagle 根目录；选择文件夹后按 Eagle 原始目录归档。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开 Eagle 素材库",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "查看 API",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "该插件暂无可编辑设置项。当前接入位置和权限会根据插件清单自动生效。",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "接入位置",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "插件能力",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未记录",
+  "files": [
+   "src/pages/plugins/index.tsx"
+  ],
+  "ns": "plugins",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能广场",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "我的技能",
+  "files": [
+   "src/pages/skills/index.tsx",
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "我创建的",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "我的收藏",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最多加入",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最新发布",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最近更新",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能加载失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能详情加载失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能读取失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已加入我的技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已从我的技能移除",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能状态更新失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已收藏",
+  "files": [
+   "src/pages/skills/index.tsx",
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已取消收藏",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "收藏状态更新失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除“{{skill_name}}”？",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除后，其他用户将无法继续使用该技能，已有加入和收藏关系也会一并移除。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能已删除",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能删除失败",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把常用的提示词、角色设定和创作方法收进自己的工具架。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "个技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能库范围",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "搜索技能或作者",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "把一套方法变成可复用能力",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有找到匹配技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "还没有创建技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能广场还是空的",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "这里还没有技能",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "换个关键词或分类试试。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "收藏的公开技能会显示在这里。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "从技能广场加入后会显示在这里。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建并公开第一个技能，其他用户就能直接加入使用。",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "编辑技能",
+  "files": [
+   "src/pages/skills/index.tsx",
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能操作",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无技能简介",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "取消收藏",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "收藏",
+  "files": [
+   "src/pages/skills/index.tsx",
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "仅自己",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "人已加入",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已加入",
+  "files": [
+   "src/pages/skills/index.tsx",
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "加入我的技能库",
+  "files": [
+   "src/pages/skills/index.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "短剧影视",
+  "files": [
+   "src/pages/skills/skill-catalog.ts"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "电商营销",
+  "files": [
+   "src/pages/skills/skill-catalog.ts"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创意设计",
+  "files": [
+   "src/pages/skills/skill-catalog.ts"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "社媒内容",
+  "files": [
+   "src/pages/skills/skill-catalog.ts"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能详情",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "仅自己可见",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "公开技能",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "加入技能",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "人加入",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能指令",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "打开 Markdown 原文",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无技能指令",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "作者：",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "展示案例",
+  "files": [
+   "src/pages/skills/skill-detail-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "放弃未保存的修改？",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "当前填写内容不会保留。",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能已更新",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能已创建",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能保存失败",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请先描述你想沉淀的技能",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "尚未配置可用的文本模型，请先到设置页配置",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "草稿已生成，请检查并调整后保存",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "起草失败：{{message}}",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "起草失败",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "保存技能",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "AI 起草",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "描述想法，一键生成名称、简介与指令草稿（可再编辑）",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "例如：我要一个竖屏短剧分镜技能——输入剧本段落，输出按景别排列的分镜表，每个镜头包含画面、台词、时长与转场…",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "将使用你的文本模型生成一次草稿",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成草稿",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能名称",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请填写技能名称",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最多 80 个字符",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "例如：短剧导演分镜",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能分类",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请选择技能分类",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "技能简介",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请填写技能简介",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最多 500 个字符",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "说明适用场景、输入条件和最终产出",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请填写技能指令",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最多 100000 个字符",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布引用该技能时会把这段指令发送给模型。",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "使用 Markdown 编写角色、约束、流程、检查清单和输出格式",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "Markdown 地址",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请输入有效的 HTTP(S) 链接",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "公开状态",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "公开后其他用户可以加入使用。",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "公开",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "私有",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "展示媒体",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可选，最多 8 个公开图片或视频链接。",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "添加媒体",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "选择类型",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请填写媒体链接",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "链接格式无效",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "移除媒体",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "补充信息",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "最多 2000 个字符",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "版本说明、依赖工具或使用注意事项",
+  "files": [
+   "src/pages/skills/skill-editor-drawer.tsx"
+  ],
+  "ns": "skills",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取任务中心偏好失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "保存任务中心偏好失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务加载失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已同步到画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务详情加载失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "提交结果尚未确认，不能自动重试；请先核对官方状态，避免重复生成。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务已重新入队",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务正在执行，不能删除本机记录；请等待任务完成",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除本机任务记录？",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "这只会删除本机任务记录，不会删除已生成的素材。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除本机记录",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "保留",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "本机任务记录已删除",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "删除失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "状态已更新",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "更新状态失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已获取上游视频，任务已恢复，计费状态待管理员核对",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请先在设置里配置可用的文本模型、Base URL 和 API Key",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请先在设置里配置可用的视频模型、Base URL 和 API Key",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务已创建",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务创建失败",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "跟踪生成任务的排队、进度与失败原因。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "个任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": " · 同步中",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新建任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "按画布分组",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务视图",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "列表视图",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "网格视图",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "搜索任务、模型或画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全部画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "全部模型",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "正在加载任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新建异步生成任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创建任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务类型",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请选择任务类型",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "创作指令",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请输入创作指令",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "描述短剧、MV、TVC 或要执行的视频编辑操作",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "绑定画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可选，选择要绑定的画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无本地画布",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "目标模型",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可选，例如 seedance、kling、wan、nano-banana",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务详情",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布名称",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "尝试次数",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "开始时间",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "完成时间",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上游取消",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请求取消时间",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "官方状态采用最终一致轮询；转入后台后仍会继续等待并同步官方状态。官方即梦 CLI 当前不支持可靠的官方取消。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "更新官方状态",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "提示词",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "详情加载中...",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "无",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "日志",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "日志加载中...",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无日志",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成结果预览",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "还没有任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新提交的生成会在这里显示状态和实时进度。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有运行中的任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新提交的生成会在这里显示排队状态和实时进度。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "还没有已完成任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成成功后，结果预览和执行记录会保留在这里。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有失败或取消的任务",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "失败或取消的生成会出现在这里，并提供原因和可用操作。",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "{{minutes}}分 {{seconds}}秒",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "参数",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无参数记录",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "模式",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "尺寸 / 比例",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "音频速度",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "遮罩图片",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "遮罩",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "是",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "否",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "其他视频操作",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请对以下视频结果版本做对比分析，输出推荐版本、差异点和修改建议：\n{{prompt}}",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "视频编辑任务：{{operationLabel}}\n创作要求：{{prompt}}",
+  "files": [
+   "src/pages/tasks/index.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "查看详情",
+  "files": [
+   "src/pages/tasks/task-grid-card.tsx",
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "重试任务",
+  "files": [
+   "src/pages/tasks/task-grid-card.tsx",
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未命名任务",
+  "files": [
+   "src/pages/tasks/task-grid-card.tsx",
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项 · 完成",
+  "files": [
+   "src/pages/tasks/task-group-header.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "暂无进行中的任务",
+  "files": [
+   "src/pages/tasks/task-group-header.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "重试中...",
+  "files": [
+   "src/pages/tasks/task-group-header.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "重试失败任务",
+  "files": [
+   "src/pages/tasks/task-group-header.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "正在生成",
+  "files": [
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "放大预览生成视频",
+  "files": [
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "放大预览生成图片",
+  "files": [
+   "src/pages/tasks/task-list-row.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "未绑定画布",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "项目级任务",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画布已移除",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "内容审核未通过，请修改输入后新建任务",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "生成失败，打开详情查看原因",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已请求上游取消，正在等待确认",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上游已确认取消，积分已退回",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上游未能取消，费用已结算",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上游取消结果未确认，积分已退回",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "上游无法确认取消，费用待核对",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务在调用上游前取消，积分已退回",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "任务已取消，可按原输入重新提交",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "画面",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "已退回",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "积分{{note}}",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "版本对比工作流",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "工作流路由",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "内置工作流",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "OpenAI 兼容接口",
+  "files": [
+   "src/pages/tasks/task-shared.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "失败/取消",
+  "files": [
+   "src/pages/tasks/task-status-filter.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "今日生成",
+  "files": [
+   "src/pages/tasks/task-status-filter.tsx"
+  ],
+  "ns": "tasks",
+  "bucket": "A2"
+ },
+ {
+  "zh": "充值与调整",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "模型消费",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "退款",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "读取积分记录失败",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "请输入完整的 32 位兑换码",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换成功，积分已到账",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换失败",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "签到成功，积分已到账",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "签到失败",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "发生时间",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "明细",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "无补充说明",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "变更后余额",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "模型调用、冻结与退款都在同一条可追溯流水中。",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "今日已签到",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "刷新余额",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可用创作积分",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "账户正常",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "调用中或待核对",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "账户总额",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "可用与冻结合计",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换积分",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "输入管理员发放的 32 位兑换码。",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换成功后立即到账",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "积分流水",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "当前展示最近",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "条记录。",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "没有匹配的积分记录",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "切换流水类型，或完成一次生成后再回来查看。",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换充值",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "管理员充值",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "积分冻结",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "消费退款",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "管理员调账",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "注册奖励",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "签到奖励",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "其他积分变动",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "兑换码充值",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "模型消费退款",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "模型调用",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "新用户注册奖励",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "每日签到奖励",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "积分调整",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "图片生成",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "视频生成",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "分镜生成",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ },
+ {
+  "zh": "其他场景",
+  "files": [
+   "src/pages/wallet/index.tsx"
+  ],
+  "ns": "wallet",
+  "bucket": "A2"
+ }
+]

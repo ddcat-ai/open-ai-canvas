@@ -3,10 +3,12 @@ import { HardDrive } from "lucide-react";
 
 import { formatBytes } from "@/lib/image-utils";
 import { getAccountFileStorageUsage } from "@/services/api/resources";
+import { useTranslation } from "react-i18next";
 
 export const assetStorageUsageQueryKey = ["account-file-storage-usage"] as const;
 
 export function AssetStorageUsage() {
+    const { t } = useTranslation("canvas");
     const query = useQuery({
         queryKey: assetStorageUsageQueryKey,
         queryFn: getAccountFileStorageUsage,
@@ -18,11 +20,16 @@ export function AssetStorageUsage() {
     const full = Boolean(usage && usage.usedBytes >= usage.totalBytes);
 
     return (
-        <section className={`assets-storage-usage${full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`} aria-label="账号文件容量" aria-busy={query.isPending} title="包含素材文件和 Agent 会话附件">
+        <section
+            className={`assets-storage-usage${full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`}
+            aria-label={t("assets:account-file-storage")}
+            aria-busy={query.isPending}
+            title={t("assets:includes-asset-files-and-agent-session-attachments")}
+        >
             <span className="assets-storage-usage-icon" aria-hidden="true">
                 <HardDrive />
             </span>
-            <span className="assets-storage-usage-title">账号容量</span>
+            <span className="assets-storage-usage-title">{t("assets:account-storage")}</span>
             {usage ? (
                 <>
                     <span className="assets-storage-usage-value">
@@ -31,7 +38,7 @@ export function AssetStorageUsage() {
                     <span
                         className="assets-storage-usage-track"
                         role="progressbar"
-                        aria-label="账号文件容量使用进度"
+                        aria-label={t("assets:account-file-storage-usage")}
                         aria-valuemin={0}
                         aria-valuemax={usage.totalBytes}
                         aria-valuenow={Math.min(usage.usedBytes, usage.totalBytes)}
@@ -43,13 +50,13 @@ export function AssetStorageUsage() {
                 </>
             ) : query.isError ? (
                 <span className="assets-storage-usage-status">
-                    容量统计暂时不可用。
+                    {t("assets:storage-stats-are-temporarily-unavailable")}
                     <button type="button" onClick={() => void query.refetch()}>
-                        重试
+                        {t("assets:retry")}
                     </button>
                 </span>
             ) : (
-                <span className="assets-storage-usage-status">正在统计已用容量…</span>
+                <span className="assets-storage-usage-status">{t("assets:calculating-used-storage")}</span>
             )}
         </section>
     );

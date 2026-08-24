@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 const TAPNOW_SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const TAPNOW_SHARE_HOST = "app.tapnow.media";
 
@@ -19,7 +20,7 @@ export function parseTapNowShareID(value: string) {
 
 export function formatTapNowBatchTime(value: string) {
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "未知";
+    if (Number.isNaN(date.getTime())) return t("canvas:unknown");
     const pad = (part: number) => String(part).padStart(2, "0");
     return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}`;
 }

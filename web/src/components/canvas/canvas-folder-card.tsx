@@ -6,7 +6,9 @@ import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
+import { formatLocale } from "@/lib/format-locale";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 type CanvasFolderCardProps = {
     project: CanvasProject;
@@ -16,6 +18,7 @@ type CanvasFolderCardProps = {
 
 /** 画布库中的文件夹封面：单一卡片表面承载预览和信息，避免相邻卡片互相侵入。 */
 export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolderCardProps) {
+    const { t } = useTranslation("canvas");
     const renameProject = useCanvasStore((state) => state.renameProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const editingId = useCanvasUiStore((state) => state.editingProjectId);
@@ -43,7 +46,7 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
 
     return (
         <article className={cn("canvas-folder-card", selected && "is-selected", editing && "is-editing")}>
-            <div className="canvas-folder-open" role="button" tabIndex={0} aria-label={`打开画布 ${project.title}`} onClick={() => !editing && onClick()} onKeyDown={handleOpenKeyDown}>
+            <div className="canvas-folder-open" role="button" tabIndex={0} aria-label={t("domain:open-canvas-param", { title: project.title })} onClick={() => !editing && onClick()} onKeyDown={handleOpenKeyDown}>
                 <div className="canvas-folder-preview" aria-hidden="true">
                     <ProjectPreview project={project} preferLatestImage />
                 </div>
@@ -67,24 +70,29 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
                         )}
                     </div>
                     <div className="canvas-folder-meta">
-                        <span className="canvas-folder-meta-item">{projectName ? `所属项目：${projectName}` : "自由画布"}</span>
-                        <span className="canvas-folder-meta-separator" aria-hidden="true">·</span>
-                        <span className="canvas-folder-meta-item">{project.nodes.length} 节点</span>
+                        <span className="canvas-folder-meta-item">{projectName ? t("domain:project-param", { projectName: projectName }) : t("canvas:standalone-canvases")}</span>
+                        <span className="canvas-folder-meta-separator" aria-hidden="true">
+                            ·
+                        </span>
+                        <span className="canvas-folder-meta-item">
+                            {project.nodes.length} {t("canvas:nodes-6")}
+                        </span>
                     </div>
                     <div className="canvas-folder-dates">
-                        <span><small>创建时间</small><time dateTime={project.createdAt}>{formatCanvasDate(project.createdAt)}</time></span>
-                        <span><small>最后更新</small><time dateTime={project.updatedAt}>{formatCanvasDate(project.updatedAt)}</time></span>
+                        <span>
+                            <small>{t("canvas:created-at-2")}</small>
+                            <time dateTime={project.createdAt}>{formatCanvasDate(project.createdAt)}</time>
+                        </span>
+                        <span>
+                            <small>{t("domain:updated")}</small>
+                            <time dateTime={project.updatedAt}>{formatCanvasDate(project.updatedAt)}</time>
+                        </span>
                     </div>
                 </div>
             </div>
 
             <span className={cn("canvas-folder-select", selected && "is-visible")} onClick={(event) => event.stopPropagation()}>
-                <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    aria-label={`选择 ${project.title}`}
-                />
+                <input type="checkbox" checked={selected} onChange={(event) => toggleSelected(project.id, event.target.checked)} aria-label={t("domain:select-param-2", { title: project.title })} />
             </span>
 
             <div className="canvas-folder-actions" onClick={(event) => event.stopPropagation()}>
@@ -92,8 +100,8 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
                     <button
                         type="button"
                         className="canvas-folder-rename"
-                        aria-label={`重命名 ${project.title}`}
-                        title="重命名"
+                        aria-label={t("domain:rename-param", { title: project.title })}
+                        title={t("canvas:rename")}
                         onClick={(event) => {
                             event.stopPropagation();
                             startEditing(project.id, project.title);
@@ -109,13 +117,13 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
                     menu={{
                         onClick: ({ domEvent }) => domEvent.stopPropagation(),
                         items: [
-                            { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportCanvasProjects([project], project.title || "影策画布") },
+                            { key: "export", icon: <Download className="size-3.5" />, label: t("domain:export-canvas"), onClick: () => void exportCanvasProjects([project], project.title || t("domain:yingce-canvas")) },
                             { type: "divider" },
-                            { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => setDeleteIds([project.id]) },
+                            { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: t("canvas:delete-5"), onClick: () => setDeleteIds([project.id]) },
                         ],
                     }}
                 >
-                    <button type="button" className="canvas-folder-more" aria-label={`${project.title} 画布操作`} title="更多操作" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="canvas-folder-more" aria-label={t("domain:param-canvas-actions", { title: project.title })} title={t("canvas:more-actions")} onClick={(event) => event.stopPropagation()}>
                         <MoreHorizontal />
                     </button>
                 </Dropdown>
@@ -125,14 +133,15 @@ export function CanvasFolderCard({ project, projectName, onClick }: CanvasFolder
 }
 
 function formatCanvasDate(value: string) {
+    const { t } = useTranslation("canvas");
     const timestamp = Date.parse(value);
     return Number.isFinite(timestamp)
-        ? new Date(timestamp).toLocaleString("zh-CN", {
+        ? new Date(timestamp).toLocaleString(formatLocale(), {
               year: "numeric",
               month: "2-digit",
               day: "2-digit",
               hour: "2-digit",
               minute: "2-digit",
           })
-        : "时间不可用";
+        : t("domain:time-unavailable");
 }

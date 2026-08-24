@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export function WorkspacePage({ children, className, grid = false, fluid = false, scroll = true }: { children: ReactNode; className?: string; grid?: boolean; fluid?: boolean; scroll?: boolean }) {
     return (
@@ -30,7 +31,24 @@ export function PageHeader({ title, description, meta, actions }: { title: strin
     );
 }
 
-export function ListToolbar({ children, filters, activeFilters, trailing, active, onReset, className }: { children: ReactNode; filters?: ReactNode; activeFilters?: ReactNode; trailing?: ReactNode; active?: boolean; onReset?: () => void; className?: string }) {
+export function ListToolbar({
+    children,
+    filters,
+    activeFilters,
+    trailing,
+    active,
+    onReset,
+    className,
+}: {
+    children: ReactNode;
+    filters?: ReactNode;
+    activeFilters?: ReactNode;
+    trailing?: ReactNode;
+    active?: boolean;
+    onReset?: () => void;
+    className?: string;
+}) {
+    const { t } = useTranslation("canvas");
     const [filtersOpen, setFiltersOpen] = useState(false);
 
     useEffect(() => {
@@ -44,7 +62,8 @@ export function ListToolbar({ children, filters, activeFilters, trailing, active
                 {filters ? (
                     <>
                         <Button type="default" className="admin-filter-toggle" aria-expanded={filtersOpen} icon={<ListFilter className="size-3.5" />} onClick={() => setFiltersOpen((open) => !open)}>
-                            筛选{active ? <span className="admin-filter-active-dot" aria-label="有已应用筛选" /> : null}
+                            {t("domain:filter")}
+                            {active ? <span className="admin-filter-active-dot" aria-label={t("domain:filters-applied")} /> : null}
                         </Button>
                         <div className={cn("admin-list-toolbar-filters flex flex-wrap items-center gap-2", filtersOpen && "is-open")}>{filters}</div>
                     </>
@@ -52,7 +71,11 @@ export function ListToolbar({ children, filters, activeFilters, trailing, active
                 {activeFilters ? <div className="admin-list-toolbar-chips">{activeFilters}</div> : null}
             </div>
             <div className="admin-list-toolbar-actions flex shrink-0 flex-wrap items-center gap-2">
-                {active && onReset ? <Button type="text" icon={<RotateCcw className="size-3.5" />} onClick={onReset}>重置</Button> : null}
+                {active && onReset ? (
+                    <Button type="text" icon={<RotateCcw className="size-3.5" />} onClick={onReset}>
+                        {t("domain:reset-3")}
+                    </Button>
+                ) : null}
                 {trailing}
             </div>
         </div>
@@ -75,7 +98,22 @@ function pageItems(current: number, pages: number): (number | "…")[] {
     return [1, "…", current - 1, current, current + 1, "…", pages];
 }
 
-export function PaginationBar({ current, pageSize, total, onChange, pageSizeOptions = [20, 50, 100], alwaysShow = false }: { current: number; pageSize: number; total: number; onChange: (page: number, pageSize: number) => void; pageSizeOptions?: number[]; alwaysShow?: boolean }) {
+export function PaginationBar({
+    current,
+    pageSize,
+    total,
+    onChange,
+    pageSizeOptions = [20, 50, 100],
+    alwaysShow = false,
+}: {
+    current: number;
+    pageSize: number;
+    total: number;
+    onChange: (page: number, pageSize: number) => void;
+    pageSizeOptions?: number[];
+    alwaysShow?: boolean;
+}) {
+    const { t } = useTranslation("canvas");
     if (!alwaysShow && total <= pageSize && current === 1) return null;
     const pages = Math.max(1, Math.ceil(total / pageSize));
     const start = total === 0 ? 0 : (current - 1) * pageSize + 1;
@@ -83,22 +121,26 @@ export function PaginationBar({ current, pageSize, total, onChange, pageSizeOpti
     const items = pageItems(current, pages);
     return (
         <div className="app-pagination-bar admin-pagination-bar mt-4 flex min-h-10 min-w-0 items-center justify-end gap-2 px-2 py-1.5">
-            <span className="admin-pagination-total">{total === 0 ? "共 0 条" : `${start}-${end} / 共 ${total} 条`}</span>
-            <Select
-                size="small"
-                value={pageSize}
-                className="app-pagination-size"
-                options={pageSizeOptions.map((size) => ({ value: size, label: `${size} 条/页` }))}
-                onChange={(value) => onChange(1, Number(value))}
-            />
-            <div className="app-pagination-pages" role="navigation" aria-label="分页">
-                <button type="button" className="app-pagination-btn app-pagination-prev" disabled={current <= 1} aria-label="上一页" onClick={() => onChange(current - 1, pageSize)}><ChevronLeft className="size-4" /></button>
-                {items.map((item) => item === "…" ? (
-                    <span key={`ellipsis-${items.indexOf(item)}`} className="app-pagination-ellipsis">…</span>
-                ) : (
-                    <button key={item} type="button" className={`app-pagination-btn${item === current ? " is-active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => onChange(item, pageSize)}>{item}</button>
-                ))}
-                <button type="button" className="app-pagination-btn app-pagination-next" disabled={current >= pages} aria-label="下一页" onClick={() => onChange(current + 1, pageSize)}><ChevronRight className="size-4" /></button>
+            <span className="admin-pagination-total">{total === 0 ? t("domain:0-items") : t("domain:param-param-of-param", { start: start, end: end, total: total })}</span>
+            <Select size="small" value={pageSize} className="app-pagination-size" options={pageSizeOptions.map((size) => ({ value: size, label: t("domain:param-page", { size: size }) }))} onChange={(value) => onChange(1, Number(value))} />
+            <div className="app-pagination-pages" role="navigation" aria-label={t("domain:pagination")}>
+                <button type="button" className="app-pagination-btn app-pagination-prev" disabled={current <= 1} aria-label={t("domain:previous-page")} onClick={() => onChange(current - 1, pageSize)}>
+                    <ChevronLeft className="size-4" />
+                </button>
+                {items.map((item) =>
+                    item === "…" ? (
+                        <span key={`ellipsis-${items.indexOf(item)}`} className="app-pagination-ellipsis">
+                            …
+                        </span>
+                    ) : (
+                        <button key={item} type="button" className={`app-pagination-btn${item === current ? " is-active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => onChange(item, pageSize)}>
+                            {item}
+                        </button>
+                    ),
+                )}
+                <button type="button" className="app-pagination-btn app-pagination-next" disabled={current >= pages} aria-label={t("domain:next-page")} onClick={() => onChange(current + 1, pageSize)}>
+                    <ChevronRight className="size-4" />
+                </button>
             </div>
         </div>
     );

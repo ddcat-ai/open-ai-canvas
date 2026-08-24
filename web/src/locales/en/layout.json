@@ -1,0 +1,23 @@
+{
+    "workspace-title-home": "Home",
+    "workspace-title-create": "Create",
+    "workspace-title-projects": "Short-drama creation",
+    "workspace-title-canvas": "Canvas",
+    "workspace-title-tasks": "Task center",
+    "workspace-title-assets": "Assets",
+    "workspace-title-skills": "Skill library",
+    "workspace-title-wallet": "Credits center",
+    "workspace-title-settings": "Settings",
+    "account-menu": {
+        "trigger-aria": "Account menu",
+        "sign-in-aria": "Sign in",
+        "dark-mode": "Dark mode",
+        "credits-available": "{{balance}} credits available"
+    },
+    "language": {
+        "label": "Interface language",
+        "zh-cn": "中文（简体）",
+        "en": "English",
+        "toggle-to": "Switch to {{language}}"
+    }
+}

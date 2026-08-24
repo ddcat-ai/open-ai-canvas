@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { LocalRuntimeTransport } from "@/services/local-runtime";
 import { LocalRuntimeClientError } from "@/services/local-runtime-session";
 
@@ -47,32 +48,32 @@ export function dreaminaRequestTimeout(action: DreaminaLifecycleAction, override
 }
 const LIFECYCLE_CODES = new Set<DreaminaLifecycleStatusCode>(["dreamina_missing", "dreamina_version_failed", "dreamina_login_required", "dreamina_login_pending"]);
 const STABLE_ERROR_MESSAGES: Record<string, string> = {
-    dreamina_cancelled: "Dreamina 操作已取消",
-    dreamina_cleanup_failed: "Dreamina 进程清理失败，请检查本机进程状态",
-    dreamina_command_invalid: "Dreamina CLI 命令无效",
-    dreamina_command_timeout: "Dreamina 操作超时，相关进程已清理",
-    dreamina_environment_invalid: "Dreamina 环境变量无效",
-    dreamina_idempotency_conflict: "Dreamina 操作标识冲突",
-    dreamina_internal_error: "Dreamina CLI 请求失败",
-    dreamina_login_failed: "无法启动 Dreamina OAuth 登录",
-    dreamina_login_pending: "请先完成 Dreamina 官方页面授权",
-    dreamina_login_required: "Dreamina CLI 需要登录",
-    dreamina_login_response_invalid: "Dreamina 登录响应无法识别，请升级 CLI",
-    dreamina_logout_failed: "Dreamina 退出失败，请重试",
-    dreamina_missing: "未检测到 Dreamina CLI",
-    dreamina_output_too_large: "Dreamina 返回内容超过安全上限",
-    dreamina_query_failed: "Dreamina 查询失败",
-    dreamina_query_response_invalid: "Dreamina 查询响应无效",
-    dreamina_reference_budget_exceeded: "Dreamina 参考文件超过安全上限",
-    dreamina_reference_cleanup_failed: "Dreamina 参考文件清理失败",
-    dreamina_reference_invalid: "Dreamina 参考文件无效",
-    dreamina_request_invalid: "Dreamina 请求参数无效",
-    dreamina_spawn_failed: "无法启动 Dreamina CLI",
-    dreamina_state_busy: "Dreamina 正在处理另一项操作",
-    dreamina_state_fenced: "Dreamina 操作已失效",
-    dreamina_state_invalid: "Dreamina 本机状态无效",
-    dreamina_submission_unknown: "Dreamina 提交结果未知，请先检查状态",
-    dreamina_version_failed: "Dreamina CLI 版本检测失败",
+    dreamina_cancelled: t("domain:dreamina-operation-cancelled"),
+    dreamina_cleanup_failed: t("domain:failed-to-clean-up-the-dreamina-process-check-local-process-status"),
+    dreamina_command_invalid: t("domain:invalid-dreamina-cli-command"),
+    dreamina_command_timeout: t("domain:dreamina-operation-timed-out-related-processes-have-been-cleaned-up"),
+    dreamina_environment_invalid: t("domain:invalid-dreamina-environment-variables"),
+    dreamina_idempotency_conflict: t("domain:dreamina-operation-identifier-conflict"),
+    dreamina_internal_error: t("domain:dreamina-cli-request-failed"),
+    dreamina_login_failed: t("domain:unable-to-start-dreamina-oauth-sign-in"),
+    dreamina_login_pending: t("domain:complete-authorization-on-the-official-dreamina-page-first"),
+    dreamina_login_required: t("domain:dreamina-cli-requires-sign-in"),
+    dreamina_login_response_invalid: t("domain:unrecognized-dreamina-login-response-upgrade-the-cli"),
+    dreamina_logout_failed: t("domain:dreamina-sign-out-failed-try-again"),
+    dreamina_missing: t("domain:dreamina-cli-not-found"),
+    dreamina_output_too_large: t("domain:the-dreamina-response-exceeds-the-safety-size-limit"),
+    dreamina_query_failed: t("domain:dreamina-query-failed"),
+    dreamina_query_response_invalid: t("domain:invalid-dreamina-query-response"),
+    dreamina_reference_budget_exceeded: t("domain:the-dreamina-reference-file-exceeds-the-safety-size-limit"),
+    dreamina_reference_cleanup_failed: t("domain:failed-to-clean-up-dreamina-reference-files"),
+    dreamina_reference_invalid: t("domain:invalid-dreamina-reference-file"),
+    dreamina_request_invalid: t("domain:invalid-dreamina-request-parameters"),
+    dreamina_spawn_failed: t("domain:unable-to-start-the-dreamina-cli"),
+    dreamina_state_busy: t("domain:dreamina-is-processing-another-operation"),
+    dreamina_state_fenced: t("domain:dreamina-operation-expired"),
+    dreamina_state_invalid: t("domain:invalid-dreamina-local-state"),
+    dreamina_submission_unknown: t("domain:unknown-dreamina-submission-result-check-its-status-first"),
+    dreamina_version_failed: t("domain:dreamina-cli-version-check-failed"),
 };
 
 export function getDreaminaStatus(client: LocalRuntimeTransport, options: DreaminaRequestOptions = {}) {
@@ -274,23 +275,23 @@ function isOfficialVerificationUri(value: unknown): value is string {
 }
 
 function publicStatusMessage(state: DreaminaCliState) {
-    if (state === "missing") return "未检测到 Dreamina CLI，请先完成本机安装";
-    if (state === "installed") return "Dreamina CLI 已安装，需要登录";
-    if (state === "login_pending") return "请在官方页面确认 Dreamina 登录";
-    if (state === "authenticated") return "Dreamina CLI 已登录";
-    return "已找到 Dreamina CLI，但版本检测失败";
+    if (state === "missing") return t("domain:dreamina-cli-not-found-install-it-locally-first");
+    if (state === "installed") return t("domain:dreamina-cli-is-installed-but-requires-sign-in");
+    if (state === "login_pending") return t("domain:confirm-dreamina-sign-in-on-the-official-page");
+    if (state === "authenticated") return t("domain:dreamina-cli-is-signed-in");
+    return t("domain:dreamina-cli-found-but-version-check-failed");
 }
 
 function publicError(code: string, status: number) {
     const messages: Record<string, string> = {
         ...STABLE_ERROR_MESSAGES,
-        dreamina_cancelled: "Dreamina 操作已取消",
-        dreamina_response_invalid: "Dreamina CLI 响应无效",
-        dreamina_runtime_required: "请先连接本机运行时",
-        dreamina_runtime_unreachable: "本机运行时暂时不可用",
-        dreamina_timeout: "Dreamina CLI 请求超时",
+        dreamina_cancelled: t("domain:dreamina-operation-cancelled"),
+        dreamina_response_invalid: t("domain:invalid-dreamina-cli-response"),
+        dreamina_runtime_required: t("domain:connect-to-the-local-runtime-first"),
+        dreamina_runtime_unreachable: t("domain:the-local-runtime-is-temporarily-unavailable"),
+        dreamina_timeout: t("domain:dreamina-cli-request-timed-out"),
     };
-    return new DreaminaAgentError(code, status, messages[code] ?? "Dreamina CLI 请求失败");
+    return new DreaminaAgentError(code, status, messages[code] ?? t("domain:dreamina-cli-request-failed"));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

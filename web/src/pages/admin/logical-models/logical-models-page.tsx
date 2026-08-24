@@ -11,6 +11,8 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
 import { listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import {
     createAdminLogicalModel,
     deleteAdminLogicalModel,
@@ -59,6 +61,7 @@ type LogicalModelFormValues = {
     routes: RouteRuleRow[];
 };
 export default function LogicalModelsPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
     const [page, setPage] = useState(1);
@@ -93,7 +96,7 @@ export default function LogicalModelsPage() {
             setChannelNames(Object.fromEntries(channels.map((channel) => [channel.id, channel.name])));
             setChannelEnabled(Object.fromEntries(channels.map((channel) => [channel.id, channel.enabled !== false])));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取前台模型配置失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-read-frontend-model-config"));
         } finally {
             setLoading(false);
         }
@@ -147,7 +150,7 @@ export default function LogicalModelsPage() {
     const saveModel = async () => {
         const values = await modelForm.validateFields();
         if (values.enabled && !values.routes.length) {
-            message.error("请至少添加一条供应线路");
+            message.error(t("admin:add-at-least-one-supply-route"));
             return;
         }
         const sourceError = capabilitySourceError(values.capability, modelSourceSpecs, values.capabilitySpec);
@@ -161,9 +164,9 @@ export default function LogicalModelsPage() {
             await (editingModel ? updateAdminLogicalModel(editingModel.id, payload) : createAdminLogicalModel(payload));
             setEditingModel(undefined);
             await reload();
-            message.success(editingModel ? "前台模型已更新" : "前台模型已创建");
+            message.success(editingModel ? t("admin:frontend-model-updated") : t("admin:frontend-model-created"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存前台模型失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-frontend-model"));
         } finally {
             setSaving(false);
         }
@@ -173,9 +176,9 @@ export default function LogicalModelsPage() {
         try {
             await updateAdminLogicalModel(item.id, logicalModelPayload({ ...logicalModelToForm(item), enabled: !item.enabled }));
             await reload();
-            message.success(item.enabled ? "前台模型已停用" : "前台模型已启用");
+            message.success(item.enabled ? t("admin:frontend-model-disabled") : t("admin:frontend-model-enabled"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新模型状态失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-update-model-status"));
         }
     };
 
@@ -185,9 +188,9 @@ export default function LogicalModelsPage() {
             await deleteAdminLogicalModel(item.id);
             setModels((current) => current.filter((model) => model.id !== item.id));
             if (paginatedModels.length === 1 && page > 1) setPage(page - 1);
-            message.success("前台模型已归档");
+            message.success(t("admin:frontend-model-archived"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "归档前台模型失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-archive-frontend-model"));
             throw error;
         } finally {
             setDeletingModelId(undefined);
@@ -211,7 +214,7 @@ export default function LogicalModelsPage() {
         try {
             setSimulationResult(await simulateAdminLogicalModel(simulatingModel.id, simulationIntent));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "路由模拟失败");
+            message.error(error instanceof Error ? error.message : t("admin:routing-simulation-failed"));
         } finally {
             setSimulating(false);
         }
@@ -219,7 +222,7 @@ export default function LogicalModelsPage() {
 
     const modelColumns: ColumnsType<AdminLogicalModel> = [
         {
-            title: "前台模型",
+            title: t("admin:frontend-models"),
             dataIndex: "name",
             render: (_, item) => (
                 <div className="flex min-w-0 items-center gap-2">
@@ -231,41 +234,45 @@ export default function LogicalModelsPage() {
                 </div>
             ),
         },
-        { title: "类型", dataIndex: "capability", width: 90, render: (value: CapabilityKind) => capabilityLabel(value) },
-        { title: "创作端能力", width: 360, render: (_, item) => <CapabilitySummary spec={item.capabilitySpec} /> },
+        { title: t("admin:type"), dataIndex: "capability", width: 90, render: (value: CapabilityKind) => capabilityLabel(value) },
+        { title: t("admin:creator-capabilities"), width: 360, render: (_, item) => <CapabilitySummary spec={item.capabilitySpec} /> },
         {
-            title: "供应线路",
+            title: t("admin:supply-routes-3"),
             width: 110,
             render: (_, item) => (
                 <div className="text-xs">
-                    <div>{(item.routes || []).filter((route) => route.enabled && route.available).length} 条可用</div>
-                    <div className="text-foreground/45">共 {(item.routes || []).length} 条</div>
+                    <div>
+                        {(item.routes || []).filter((route) => route.enabled && route.available).length} {t("admin:available-3")}
+                    </div>
+                    <div className="text-foreground/45">
+                        {t("admin:total-2")} {(item.routes || []).length} {t("admin:item-5")}
+                    </div>
                 </div>
             ),
         },
-        { title: "用户价格", width: 160, render: (_, item) => logicalPriceLabel(item) },
-        { title: "状态", width: 130, render: (_, item) => logicalModelStatusTag(item) },
+        { title: t("admin:user-price"), width: 160, render: (_, item) => logicalPriceLabel(item) },
+        { title: t("admin:status"), width: 130, render: (_, item) => logicalModelStatusTag(item) },
         {
-            title: "操作",
+            title: t("admin:actions"),
             width: 230,
             align: "right",
             render: (_, item) => (
                 <AdminRowActions
-                    primary={{ label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openModel(item) }}
+                    primary={{ label: t("admin:edit-2"), icon: <Pencil className="size-3.5" />, onClick: () => openModel(item) }}
                     visibleActionCount={1}
                     actions={[
-                        { key: "simulate", label: "模拟供应线路匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
-                        { key: "toggle", label: item.enabled ? "停用" : "启用", onClick: () => void toggleModel(item) },
+                        { key: "simulate", label: t("admin:simulate-route-matching"), icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
+                        { key: "toggle", label: item.enabled ? t("admin:disabled-2") : t("admin:enabled-2"), onClick: () => void toggleModel(item) },
                         {
                             key: "archive",
-                            label: "归档模型",
+                            label: t("admin:archive-model"),
                             icon: <Archive className="size-3.5" />,
                             danger: true,
                             disabled: deletingModelId === item.id,
                             confirm: {
-                                title: `归档前台模型“${item.name}”？`,
-                                description: "归档后模型将从公开目录中移除，不能在页面恢复；历史任务和版本记录会保留。排队中或进行中的任务仍在使用时无法归档。",
-                                okText: "确认归档",
+                                title: t("admin:archive-frontend-model-param", { name: item.name }),
+                                description: t("admin:archiving-removes-the-model-from-the-public-catalog-and-it-cannot-be-res"),
+                                okText: t("admin:confirm-archive"),
                             },
                             onClick: () => removeModel(item),
                         },
@@ -276,9 +283,7 @@ export default function LogicalModelsPage() {
     ];
 
     return (
-        <AdminPageFrame
-            title="前台模型目录"
-        >
+        <AdminPageFrame title={t("admin:frontend-model-catalog")}>
             <AdminDataTable
                 toolbar={
                     <Input
@@ -289,14 +294,14 @@ export default function LogicalModelsPage() {
                             setKeyword(event.target.value);
                             setPage(1);
                         }}
-                        placeholder="搜索模型名称、代码或能力"
+                        placeholder={t("admin:search-by-model-name-code-or-capability")}
                         className="app-list-search"
                     />
                 }
                 toolbarActiveFilters={
                     keyword ? (
                         <AdminFilterChip
-                            label={`搜索：${keyword}`}
+                            label={t("admin:search-param", { keyword: keyword })}
                             onRemove={() => {
                                 setKeyword("");
                                 setPage(1);
@@ -310,7 +315,7 @@ export default function LogicalModelsPage() {
                     setPage(1);
                 }}
                 table={{ className: "admin-logical-model-table", rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 980 } }}
-                empty={<AdminTableEmpty filtered={Boolean(deferredKeyword)} title="暂无模型" />}
+                empty={<AdminTableEmpty filtered={Boolean(deferredKeyword)} title={t("admin:no-models-yet")} />}
                 footer={
                     <PaginationBar
                         alwaysShow
@@ -326,7 +331,7 @@ export default function LogicalModelsPage() {
             />
 
             <Drawer
-                title={editingModel ? "编辑前台模型" : "新增前台模型"}
+                title={editingModel ? t("admin:edit-frontend-model") : t("admin:new-frontend-model")}
                 open={editingModel !== undefined}
                 size="min(1120px, 100vw)"
                 destroyOnHidden
@@ -336,10 +341,10 @@ export default function LogicalModelsPage() {
                 footer={
                     <div className="flex justify-end gap-2">
                         <Button disabled={saving} onClick={() => setEditingModel(undefined)}>
-                            取消
+                            {t("admin:cancel-4")}
                         </Button>
                         <Button type="primary" loading={saving} onClick={() => void saveModel()}>
-                            保存
+                            {t("admin:save-4")}
                         </Button>
                     </div>
                 }
@@ -366,58 +371,58 @@ export default function LogicalModelsPage() {
                             className="mb-4"
                             type="warning"
                             showIcon
-                            message={editingModel.configurationError ? "当前供应线路无法覆盖全部创作端能力" : "当前供应线路暂不可结算"}
+                            message={editingModel.configurationError ? t("admin:current-supply-routes-do-not-cover-all-creator-capabilities") : t("admin:current-supply-routes-cannot-settle-yet")}
                             description={editingModel.configurationError || editingModel.availabilityError}
                         />
                     ) : null}
-                    <DrawerSection icon={<Layers3 className="size-4" />} title="前台展示">
+                    <DrawerSection icon={<Layers3 className="size-4" />} title={t("admin:frontend-display")}>
                         <div className="grid gap-3 sm:grid-cols-3">
-                            <Form.Item name="name" label="显示名称" rules={[{ required: true, message: "请填写显示名称" }]}>
-                                <Input placeholder="例如：Seedance 视频" />
+                            <Form.Item name="name" label={t("admin:display-name")} rules={[{ required: true, message: t("admin:enter-a-display-name") }]}>
+                                <Input placeholder={t("admin:e-g-seedance-video")} />
                             </Form.Item>
-                            <Form.Item name="code" label="模型代码" rules={[{ required: true, message: "请填写模型代码" }]}>
-                                <Input placeholder="例如：seedance-video" />
+                            <Form.Item name="code" label={t("admin:model-code")} rules={[{ required: true, message: t("admin:enter-a-model-code") }]}>
+                                <Input placeholder={t("admin:e-g-seedance-video-2")} />
                             </Form.Item>
-                            <Form.Item name="icon" label="模型 Logo">
+                            <Form.Item name="icon" label={t("admin:model-logo")}>
                                 <ModelIconPicker />
                             </Form.Item>
                         </div>
-                        <Form.Item name="description" label="简短说明">
-                            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="说明适合的创作场景，不描述供应渠道。" />
+                        <Form.Item name="description" label={t("admin:short-description")}>
+                            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder={t("admin:describe-suitable-creation-scenarios-not-supply-channels")} />
                         </Form.Item>
-                        <Form.Item name="capability" label="类型">
+                        <Form.Item name="capability" label={t("admin:type")}>
                             <CapabilityCardPicker density="compact" />
                         </Form.Item>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <Form.Item name="sortOrder" label="前台排序">
+                            <Form.Item name="sortOrder" label={t("admin:frontend-sort-order")}>
                                 <InputNumber className="w-full" precision={0} />
                             </Form.Item>
-                            <Form.Item name="enabled" label="启用" valuePropName="checked">
+                            <Form.Item name="enabled" label={t("admin:enabled-2")} valuePropName="checked">
                                 <Switch />
                             </Form.Item>
                         </div>
                     </DrawerSection>
-                    <DrawerSection icon={<GitBranch className="size-4" />} title="供应线路">
+                    <DrawerSection icon={<GitBranch className="size-4" />} title={t("admin:supply-routes-3")}>
                         <RouteFields channelModels={modelChannelModels} channelNames={channelNames} channelEnabled={channelEnabled} form={modelForm} capability={modelCapability} />
                     </DrawerSection>
-                    <DrawerSection title="创作端可选能力">
+                    <DrawerSection title={t("admin:selectable-creator-capabilities")}>
                         <Form.Item name="capabilitySpec" noStyle>
                             <CapabilityScopeEditor capability={modelCapability} sourceSpecs={modelSourceSpecs} mode="front" />
                         </Form.Item>
                     </DrawerSection>
-                    <DrawerSection title="默认参数">
+                    <DrawerSection title={t("admin:default-parameters")}>
                         <Form.Item name="defaultOptions" noStyle>
                             <DefaultOptionsEditor spec={modelCapabilitySpec} />
                         </Form.Item>
                     </DrawerSection>
-                    <DrawerSection title="系统规格价格">
+                    <DrawerSection title={t("admin:system-spec-pricing")}>
                         <PricingFields />
                     </DrawerSection>
                 </Form>
             </Drawer>
 
             <Modal
-                title={simulatingModel ? `供应线路匹配模拟 - ${simulatingModel.name}` : "供应线路匹配模拟"}
+                title={simulatingModel ? t("admin:route-matching-simulation-param", { name: simulatingModel.name }) : t("admin:route-matching-simulation")}
                 open={Boolean(simulatingModel)}
                 className="workspace-modal workspace-modal-wide admin-simulation-modal"
                 rootClassName="admin-modal-root"
@@ -427,10 +432,10 @@ export default function LogicalModelsPage() {
                 styles={{ body: { maxHeight: "min(72vh, 720px)", overflowY: "auto" } }}
                 footer={[
                     <Button key="cancel" onClick={() => setSimulatingModel(undefined)}>
-                        关闭
+                        {t("admin:close-4")}
                     </Button>,
                     <Button key="submit" type="primary" icon={<FlaskConical className="size-4" />} loading={simulating} onClick={() => void runSimulation()}>
-                        模拟匹配
+                        {t("admin:simulate-match")}
                     </Button>,
                 ]}
             >
@@ -438,7 +443,7 @@ export default function LogicalModelsPage() {
                     <div className="space-y-5">
                         {simulatingModel.capabilitySpec.operations?.length ? (
                             <label className="block">
-                                <span className="mb-1 block text-xs text-foreground/55">生成方式</span>
+                                <span className="mb-1 block text-xs text-foreground/55">{t("admin:generation-method-2")}</span>
                                 <Select
                                     className="w-full"
                                     value={simulationIntent.operation}
@@ -457,9 +462,9 @@ export default function LogicalModelsPage() {
                         {simulationResult ? (
                             <section className="pt-1">
                                 <div className="mb-3 flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold">匹配结果</h2>
+                                    <h2 className="text-sm font-semibold">{t("admin:match-result")}</h2>
                                     <Tag variant="filled" color={simulationResult.productMatch.matched ? "success" : "error"}>
-                                        {simulationResult.productMatch.matched ? "请求能力通过" : "请求能力不匹配"}
+                                        {simulationResult.productMatch.matched ? t("admin:request-capabilities-pass") : t("admin:request-capabilities-mismatch")}
                                     </Tag>
                                 </div>
                                 {simulationResult.productMatch.reasons?.length ? <p className="mb-4 text-sm text-error">{simulationResult.productMatch.reasons.join("；")}</p> : null}
@@ -501,8 +506,9 @@ function RouteFields({
     form: FormInstance<LogicalModelFormValues>;
     capability: CapabilityKind;
 }) {
+    const { t } = useTranslation("canvas");
     const selectOptions = channelModels.map((item) => {
-        const unavailableReason = channelEnabled[item.channelId] === false ? "渠道已停用" : !item.enabled ? "渠道模型已停用" : "";
+        const unavailableReason = channelEnabled[item.channelId] === false ? t("admin:channel-disabled") : !item.enabled ? t("admin:channel-model-disabled") : "";
         return {
             value: item.id,
             label: `${channelNames[item.channelId]} / ${item.displayName || item.modelKey}${unavailableReason ? `（${unavailableReason}）` : ""}`,
@@ -519,9 +525,11 @@ function RouteFields({
                 return (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-foreground/50">共 {fields.length} 条供应线路</span>
+                            <span className="text-xs text-foreground/50">
+                                {t("admin:total-2")} {fields.length} {t("admin:supply-routes-2")}
+                            </span>
                             <Button size="small" icon={<Plus className="size-3.5" />} disabled={!canAdd} onClick={() => add({ channelModelId: "", enabled: true, priority: 100, weight: 100 })}>
-                                添加供应线路
+                                {t("admin:add-supply-route")}
                             </Button>
                         </div>
                         {fields.length ? (
@@ -535,19 +543,23 @@ function RouteFields({
                                         <div key={field.key} className="rounded-lg border border-border bg-muted/5 p-4">
                                             <div className="mb-2 flex items-center justify-between gap-2">
                                                 <div className="min-w-0">
-                                                    <div className="text-xs font-semibold">供应线路 {fields.indexOf(field) + 1}</div>
-                                                    <div className="mt-0.5 truncate text-xs text-foreground/50">{selected ? `${channelNames[selected.channelId]} / ${selected.displayName || selected.modelKey}` : "选择一个可承接请求的渠道模型"}</div>
+                                                    <div className="text-xs font-semibold">
+                                                        {t("admin:supply-routes-3")} {fields.indexOf(field) + 1}
+                                                    </div>
+                                                    <div className="mt-0.5 truncate text-xs text-foreground/50">
+                                                        {selected ? `${channelNames[selected.channelId]} / ${selected.displayName || selected.modelKey}` : t("admin:choose-a-channel-model-that-can-serve-this-request")}
+                                                    </div>
                                                 </div>
                                                 <Button type="text" size="small" danger onClick={() => remove(field.name)}>
-                                                    移除
+                                                    {t("admin:remove")}
                                                 </Button>
                                             </div>
-                                            <Form.Item name={[field.name, "channelModelId"]} rules={[{ required: true, message: "请选择渠道模型" }]} className="mb-3">
+                                            <Form.Item name={[field.name, "channelModelId"]} rules={[{ required: true, message: t("admin:select-a-channel-model") }]} className="mb-3">
                                                 <Select
                                                     aria-label={`供应线路 ${fields.indexOf(field) + 1}`}
                                                     showSearch
                                                     optionFilterProp="label"
-                                                    placeholder="选择渠道模型"
+                                                    placeholder={t("admin:select-channel-model")}
                                                     options={options}
                                                     onChange={(channelModelId) => {
                                                         const nextRoutes = [...(form.getFieldValue("routes") || [])];
@@ -563,13 +575,13 @@ function RouteFields({
                                                 />
                                             </Form.Item>
                                             <div className="flex items-end gap-2">
-                                                <Form.Item name={[field.name, "priority"]} label="优先级" className="mb-0 min-w-0 flex-1">
+                                                <Form.Item name={[field.name, "priority"]} label={t("admin:priority")} className="mb-0 min-w-0 flex-1">
                                                     <InputNumber className="w-full" precision={0} />
                                                 </Form.Item>
-                                                <Form.Item name={[field.name, "weight"]} label="权重" className="mb-0 min-w-0 flex-1">
+                                                <Form.Item name={[field.name, "weight"]} label={t("admin:weight")} className="mb-0 min-w-0 flex-1">
                                                     <InputNumber className="w-full" min={0} precision={0} />
                                                 </Form.Item>
-                                                <Form.Item name={[field.name, "enabled"]} label="启用" valuePropName="checked" className="mb-0 shrink-0">
+                                                <Form.Item name={[field.name, "enabled"]} label={t("admin:enabled-2")} valuePropName="checked" className="mb-0 shrink-0">
                                                     <Switch />
                                                 </Form.Item>
                                             </div>
@@ -578,7 +590,7 @@ function RouteFields({
                                 })}
                             </div>
                         ) : null}
-                        {!fields.length ? <div className="rounded-md bg-muted/20 px-3 py-4 text-center text-xs text-foreground/50">尚未添加供应线路</div> : null}
+                        {!fields.length ? <div className="rounded-md bg-muted/20 px-3 py-4 text-center text-xs text-foreground/50">{t("admin:no-supply-routes-added-yet")}</div> : null}
                     </div>
                 );
             }}
@@ -587,14 +599,15 @@ function RouteFields({
 }
 
 function logicalModelStatusTag(item: AdminLogicalModel) {
-    if (!item.enabled) return <AdminStatusBadge label="已停用" tone="neutral" />;
-    if (item.configurationError) return <AdminStatusBadge label="能力配置需调整" tone="warning" title={item.configurationError} />;
-    if (item.availabilityError) return <AdminStatusBadge label="线路价格需调整" tone="warning" title={item.availabilityError} />;
-    if (!item.available) return <AdminStatusBadge label="暂无可用线路" tone="warning" />;
-    return <AdminStatusBadge label="可用" tone="success" />;
+    if (!item.enabled) return <AdminStatusBadge label={t("admin:disabled")} tone="neutral" />;
+    if (item.configurationError) return <AdminStatusBadge label={t("admin:capability-config-needs-adjustment")} tone="warning" title={item.configurationError} />;
+    if (item.availabilityError) return <AdminStatusBadge label={t("admin:route-pricing-needs-adjustment")} tone="warning" title={item.availabilityError} />;
+    if (!item.available) return <AdminStatusBadge label={t("admin:no-routes-available")} tone="warning" />;
+    return <AdminStatusBadge label={t("admin:available-2")} tone="success" />;
 }
 
 function PricingFields() {
+    const { t } = useTranslation("canvas");
     const form = Form.useFormInstance<LogicalModelFormValues>();
     useEffect(() => {
         form.setFieldsValue({
@@ -606,13 +619,17 @@ function PricingFields() {
             cachedPriceMicrocredits: 0,
         });
     }, [form]);
-    return <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">价格、上游 SKU 和可用规格只在“系统渠道 / 模型管理”配置。前台模型只负责展示、能力范围和故障切换，不再保存第二份价格。</div>;
+    return <div className="rounded-md bg-muted/20 px-3 py-3 text-xs leading-5 text-foreground/55">{t("admin:prices-upstream-skus-and-available-specs-are-configured-only-in-system-c")}</div>;
 }
 
 function logicalPriceLabel(item: AdminLogicalModel) {
     const priceTiers = item.priceTiers || [];
-    if (!priceTiers.length) return <span className="text-xs text-foreground/45">待配置系统规格价格</span>;
-    return <span className="text-xs">{priceTiers.length} 个系统规格档</span>;
+    if (!priceTiers.length) return <span className="text-xs text-foreground/45">{t("admin:system-spec-pricing-not-configured-yet")}</span>;
+    return (
+        <span className="text-xs">
+            {priceTiers.length} {t("admin:system-spec-tiers")}
+        </span>
+    );
 }
 
 function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
@@ -665,20 +682,20 @@ function hasCapabilityRules(spec?: CapabilitySpec) {
 function simulationColumns(): ColumnsType<RouteSimulationResult["candidates"][number]> {
     return [
         {
-            title: "供应线路",
+            title: t("admin:supply-routes-3"),
             render: (_, candidate) => `${candidate.channelModelName}（${candidate.channelModelKey}）`,
         },
-        { title: "优先级", dataIndex: "priority", width: 80 },
-        { title: "权重", dataIndex: "weight", width: 70 },
+        { title: t("admin:priority"), dataIndex: "priority", width: 80 },
+        { title: t("admin:weight"), dataIndex: "weight", width: 70 },
         {
-            title: "结果",
+            title: t("admin:result"),
             width: 110,
             render: (_, candidate) => (
                 <Tag variant="filled" color={candidate.inPool ? "success" : candidate.blocked ? "warning" : "default"}>
-                    {candidate.inPool ? "进入候选池" : candidate.blocked ? "冷却中" : candidate.matched ? "低优先级" : "不匹配"}
+                    {candidate.inPool ? t("admin:entered-candidate-pool") : candidate.blocked ? t("admin:cooling-down") : candidate.matched ? t("admin:low-priority") : t("admin:mismatched")}
                 </Tag>
             ),
         },
-        { title: "原因", render: (_, candidate) => candidate.reasons?.join("；") || "-" },
+        { title: t("admin:reason"), render: (_, candidate) => candidate.reasons?.join("；") || "-" },
     ];
 }

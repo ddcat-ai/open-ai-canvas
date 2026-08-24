@@ -1,0 +1,782 @@
+[
+ {
+  "zh": "useAdminContext 必须在 AdminProvider 内使用",
+  "file": "admin-context.tsx"
+ },
+ {
+  "zh": "请至少配置一个价格档",
+  "file": "channel-model-manager.tsx"
+ },
+ {
+  "zh": "模型没有返回任何内容，画布未发生改动。",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "工具参数必须是 JSON 对象",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "工具参数不是合法 JSON 对象",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "ops 必须是数组",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "不支持的画布操作类型",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "节点类型必须是 text、image、config、video 或 audio",
+  "file": "canvas-assistant-panel.tsx"
+ },
+ {
+  "zh": "Excalidraw 编辑器尚未准备完成",
+  "file": "canvas-drawing-excalidraw-editor.tsx"
+ },
+ {
+  "zh": "tldraw 编辑器尚未准备完成",
+  "file": "canvas-drawing-tldraw-editor.tsx"
+ },
+ {
+  "zh": "无法读取 tldraw 绘图边界",
+  "file": "canvas-drawing-tldraw-editor.tsx"
+ },
+ {
+  "zh": "所选资产已不存在，请重新选择",
+  "file": "canvas-project-asset-modal.tsx"
+ },
+ {
+  "zh": "项目资产不可用",
+  "file": "canvas-project-asset-modal.tsx"
+ },
+ {
+  "zh": "当前项目资产不能直接插入画布",
+  "file": "canvas-project-asset-modal.tsx"
+ },
+ {
+  "zh": "项目角色信息不完整",
+  "file": "canvas-project-asset-modal.tsx"
+ },
+ {
+  "zh": "3D 视口尚未就绪",
+  "file": "director-viewport.tsx"
+ },
+ {
+  "zh": "当前浏览器不支持视频录制，请导出帧序列",
+  "file": "director-viewport.tsx"
+ },
+ {
+  "zh": "白膜视频录制失败",
+  "file": "director-viewport.tsx"
+ },
+ {
+  "zh": "3D 预览图导出失败",
+  "file": "director-viewport.tsx"
+ },
+ {
+  "zh": "当前插件不支持写入文件",
+  "file": "use-external-asset-sources.ts"
+ },
+ {
+  "zh": "请先选择一个插件文件夹，再写入素材",
+  "file": "use-external-asset-sources.ts"
+ },
+ {
+  "zh": "积分账户与当前用户不一致",
+  "file": "use-wallet-balance.ts"
+ },
+ {
+  "zh": "当前浏览器不支持跨标签存储锁，已停止画布生成持久化",
+  "file": "use-canvas-store.ts"
+ },
+ {
+  "zh": "即梦本机模型目录尚未就绪",
+  "file": "use-local-dreamina-model-store.ts"
+ },
+ {
+  "zh": "异步音频接口没有返回任务 ID",
+  "file": "audio.ts"
+ },
+ {
+  "zh": "请先配置音频模型",
+  "file": "audio.ts"
+ },
+ {
+  "zh": "请先配置 Base URL",
+  "file": "audio.ts"
+ },
+ {
+  "zh": "请先配置 API Key",
+  "file": "audio.ts"
+ },
+ {
+  "zh": "Gemini 调用格式暂不支持音频生成，请使用 OpenAI 格式渠道",
+  "file": "audio.ts"
+ },
+ {
+  "zh": "当前模型不是平台系统模型",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "生成重试批次任务数量不匹配",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "即梦 CLI 仅支持图片或视频生成",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "参考媒体尚未保存，请重新上传后再生成",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "参考图片尚未保存，请重新上传后再生成",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "后端任务没有返回结果",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "后端任务结果格式错误",
+  "file": "generation-task.ts"
+ },
+ {
+  "zh": "接口没有返回图片",
+  "file": "image-response.ts"
+ },
+ {
+  "zh": "后端代理返回了前端网页，请检查 VITE_CANVAS_BACKEND_URL 和反向代理配置",
+  "file": "image-response.ts"
+ },
+ {
+  "zh": "Gemini 接口没有返回图片",
+  "file": "image-response.ts"
+ },
+ {
+  "zh": "图像尺寸格式不支持，请使用 auto、9:16 或 1024x1024",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像比例必须是正数，例如 9:16",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像宽高比不能超过 3:1，请调整尺寸",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像尺寸必须是正整数，例如 1024x1024",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像尺寸的宽高必须是 16 的倍数，请调整尺寸",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像尺寸最长边不能超过 3840px，请调整尺寸",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像总像素需在 655360 到 8294400 之间，请调整尺寸",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "图像比例格式不支持，请使用 3:4 或 1024x1360",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "当前图片模型不支持蒙版编辑",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "参考图片文件超过当前模型大小限制",
+  "file": "image-validation.ts"
+ },
+ {
+  "zh": "Gemini 调用格式暂不支持蒙版编辑",
+  "file": "image.ts"
+ },
+ {
+  "zh": "Grok 图片协议不支持蒙版编辑，请移除蒙版后重试",
+  "file": "image.ts"
+ },
+ {
+  "zh": "Grok 图片编辑必须提供且仅支持 1 张参考图",
+  "file": "image.ts"
+ },
+ {
+  "zh": "火山方舟图片协议不支持蒙版编辑，请移除蒙版后重试",
+  "file": "image.ts"
+ },
+ {
+  "zh": "当前画布没有关联短剧项目",
+  "file": "project-agent-tools.ts"
+ },
+ {
+  "zh": "资源不存在或已被删除",
+  "file": "resources.ts"
+ },
+ {
+  "zh": "当前媒体尚未上传到后端资源存储",
+  "file": "resources.ts"
+ },
+ {
+  "zh": "后端未返回对象存储地址",
+  "file": "resources.ts"
+ },
+ {
+  "zh": "当前任务不是本机即梦任务",
+  "file": "task-center.ts"
+ },
+ {
+  "zh": "当前任务不支持手动更新官方状态",
+  "file": "task-center.ts"
+ },
+ {
+  "zh": "当前任务不支持删除",
+  "file": "task-center.ts"
+ },
+ {
+  "zh": "本机即梦任务等待提前结束",
+  "file": "task-center.ts"
+ },
+ {
+  "zh": "Gemini Veo 当前只支持 1 张起始图，不支持参考视频或音频",
+  "file": "video-provider-gemini.ts"
+ },
+ {
+  "zh": "Gemini Veo 起始图读取失败",
+  "file": "video-provider-gemini.ts"
+ },
+ {
+  "zh": "Gemini Veo 没有返回 operation name",
+  "file": "video-provider-gemini.ts"
+ },
+ {
+  "zh": "MiniMax 视频接口没有返回任务 ID",
+  "file": "video-provider-minimax.ts"
+ },
+ {
+  "zh": "MiniMax 参考图读取失败，请换一张图片或重新上传",
+  "file": "video-provider-minimax.ts"
+ },
+ {
+  "zh": "NewAPI Video Generations 最多支持 9 张参考图、3 个参考视频和 3 个参考音频",
+  "file": "video-provider-newapi.ts"
+ },
+ {
+  "zh": "NewAPI Video Generations 的参考音频必须同时提供至少 1 个参考视频；纯音频生视频请切换到支持该模式的渠道",
+  "file": "video-provider-newapi.ts"
+ },
+ {
+  "zh": "NewAPI Video Generations 没有返回任务 ID",
+  "file": "video-provider-newapi.ts"
+ },
+ {
+  "zh": "NewAPI Video Generations 的参考素材需要公网 URL；请先把素材保存到对象存储",
+  "file": "video-provider-newapi.ts"
+ },
+ {
+  "zh": "Novita 视频当前只支持 1 张起始图，不支持参考视频或音频",
+  "file": "video-provider-novita.ts"
+ },
+ {
+  "zh": "Novita 视频接口没有返回任务 ID",
+  "file": "video-provider-novita.ts"
+ },
+ {
+  "zh": "视频接口没有返回任务 ID",
+  "file": "video-provider-openai.ts"
+ },
+ {
+  "zh": "Seedance 接口没有返回任务 ID",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance 参考视频单个时长需要在 2-15 秒之间",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance 参考音频单个时长需要在 2-15 秒之间",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance 参考音频总时长不能超过 15 秒",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance 参考音频不能单独使用，请同时添加参考图或参考视频",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "请输入视频提示词，或连接参考图片/视频/音频",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "火山方舟视频参考素材需要公网 URL 或 asset:// 素材 ID；请先将本地素材保存到对象存储",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance 参考视频或参考音频需要同时连接至少 1 张主参考图",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "参考图读取失败，请换一张图片或重新上传",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "Seedance /videos 参考素材必须是公网 URL、data URL，或本地已保存素材",
+  "file": "video-provider-seedance.ts"
+ },
+ {
+  "zh": "读取本地素材失败",
+  "file": "video-response.ts"
+ },
+ {
+  "zh": "参考素材数量超过当前模型限制",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "视频时长不在当前模型支持范围内",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "参考视频文件超过当前模型大小限制",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "参考视频时长超过当前模型限制",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "参考音频文件超过当前模型大小限制",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "参考音频时长超过当前模型限制",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "请先配置视频模型",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "当前 Gemini 文本协议不支持视频生成，请为该模型选择 Gemini Veo 协议",
+  "file": "video-validation.ts"
+ },
+ {
+  "zh": "视频生成超时，请稍后重试",
+  "file": "video.ts"
+ },
+ {
+  "zh": "当前视频接口不支持参考视频或参考音频，请切换到 Seedance 2.0 / 火山 Agent Plan 模型，或移除参考素材",
+  "file": "video.ts"
+ },
+ {
+  "zh": "视频接口没有返回可播放的视频",
+  "file": "video.ts"
+ },
+ {
+  "zh": "画布中找不到 Agent continuation 节点",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "生成副作用缺少连接前置快照",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "画布项目不存在，无法持久化生成副作用",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "生成副作用缺少持久幂等标记",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "画布生成副作用与并发修改冲突",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "画布生成副作用与已删除内容冲突",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "画布项目不存在，无法确认生成副作用",
+  "file": "canvas-generation-consumer.ts"
+ },
+ {
+  "zh": "缺少要删除的创作对话 ID",
+  "file": "creation-conversation-store.ts"
+ },
+ {
+  "zh": "要删除的创作对话不存在",
+  "file": "creation-conversation-store.ts"
+ },
+ {
+  "zh": "创作对话持久状态无效",
+  "file": "creation-conversation-store.ts"
+ },
+ {
+  "zh": "当前浏览器不支持跨标签存储锁，已停止生成素材持久化",
+  "file": "generation-asset-repository.ts"
+ },
+ {
+  "zh": "当前浏览器不支持跨标签存储锁，已停止生成文件提交",
+  "file": "generation-asset-repository.ts"
+ },
+ {
+  "zh": "生成素材已被用户删除",
+  "file": "generation-asset-repository.ts"
+ },
+ {
+  "zh": "生成素材幂等键冲突",
+  "file": "generation-asset-repository.ts"
+ },
+ {
+  "zh": "读取图片失败",
+  "file": "image-storage.ts"
+ },
+ {
+  "zh": "无法识别参考图片格式，请重新上传 PNG、JPEG、WebP 或 GIF 图片",
+  "file": "image-storage.ts"
+ },
+ {
+  "zh": "当前节点没有可保存的素材内容",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "素材写入本地失败",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "生成任务缺少图片输出",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "生成任务缺少视频输出",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "生成任务缺少音频输出",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "音频结果资源不可用",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "生成任务输出尚未物化",
+  "file": "project-asset-sync.ts"
+ },
+ {
+  "zh": "当前浏览器不支持跨页面生成副作用互斥",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "生成副作用持久状态无效",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "生成副作用租约时长无效",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "生成副作用租约缺失",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "生成副作用租约已失效",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "生成副作用结果无效",
+  "file": "provider-neutral-generation-effects.ts"
+ },
+ {
+  "zh": "游客不能读取远程媒体缓存",
+  "file": "resource-blob-cache.ts"
+ },
+ {
+  "zh": "尚未建立云端同步会话",
+  "file": "user-data-sync.ts"
+ },
+ {
+  "zh": "素材持久状态无效",
+  "file": "asset-storage-revision.ts"
+ },
+ {
+  "zh": "后端影视 Agent 会话尚未完成",
+  "file": "canvas-agent-session.ts"
+ },
+ {
+  "zh": "后端影视 Agent 没有返回画布操作",
+  "file": "canvas-agent-session.ts"
+ },
+ {
+  "zh": "后端影视 Agent 会话超时",
+  "file": "canvas-agent-session.ts"
+ },
+ {
+  "zh": "角色拆解没有返回符合契约的 JSON",
+  "file": "canvas-character-reference.ts"
+ },
+ {
+  "zh": "角色拆解结果缺少 characters 数组",
+  "file": "canvas-character-reference.ts"
+ },
+ {
+  "zh": "没有从章节正文中识别到可用角色",
+  "file": "canvas-character-reference.ts"
+ },
+ {
+  "zh": "源图无法读取（可能不允许跨域）",
+  "file": "canvas-color-grade.ts"
+ },
+ {
+  "zh": "无法创建画布上下文",
+  "file": "canvas-color-grade.ts"
+ },
+ {
+  "zh": "当前浏览器不支持导出调色结果，请换用 Chrome / Edge",
+  "file": "canvas-color-grade.ts"
+ },
+ {
+  "zh": "调色结果导出失败",
+  "file": "canvas-color-grade.ts"
+ },
+ {
+  "zh": "绘图在上传期间发生了修改，请重新生成",
+  "file": "canvas-drawing-reference.ts"
+ },
+ {
+  "zh": "无法读取来源图片",
+  "file": "canvas-drawing-storage.ts"
+ },
+ {
+  "zh": "绘图文档版本或引擎无效",
+  "file": "canvas-drawing-storage.ts"
+ },
+ {
+  "zh": "浏览器无法创建绘图预览",
+  "file": "canvas-drawing-storage.ts"
+ },
+ {
+  "zh": "来源图片无法载入绘图",
+  "file": "canvas-drawing-storage.ts"
+ },
+ {
+  "zh": "无法生成绘图预览",
+  "file": "canvas-drawing-storage.ts"
+ },
+ {
+  "zh": "无法初始化 tldraw 绘图页面",
+  "file": "canvas-drawing-tldraw-document.ts"
+ },
+ {
+  "zh": "浏览器无法合成表情编辑结果",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "浏览器无法读取表情生成结果",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "浏览器无法裁切头部编辑区域",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "浏览器无法创建人脸编辑蒙版",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "浏览器无法创建人物参考图",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "无法读取源图片，请重新上传后再试",
+  "file": "canvas-emotion.ts"
+ },
+ {
+  "zh": "人脸识别已取消",
+  "file": "canvas-face-detection.ts"
+ },
+ {
+  "zh": "情绪编辑任务缺少局部合成区域，已拒绝使用整图重绘结果",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "情绪编辑源图片已删除，无法恢复局部合成结果",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "无法读取情绪编辑源图片，未使用整图重绘结果",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "后端任务没有返回音频",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "生成任务输出素材不存在",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "生成任务输出素材类型不支持画布节点",
+  "file": "canvas-generation-task-sync.ts"
+ },
+ {
+  "zh": "分镜任务没有返回镜头行",
+  "file": "canvas-project-domain.ts"
+ },
+ {
+  "zh": "生成任务缺少成功终态",
+  "file": "canvas-project-generation.ts"
+ },
+ {
+  "zh": "画布持久状态无效",
+  "file": "canvas-storage-revision.ts"
+ },
+ {
+  "zh": "请先设置项目画风，再生成分镜",
+  "file": "canvas-storyboard-context.ts"
+ },
+ {
+  "zh": "无法确定视频时长",
+  "file": "canvas-video-frame.ts"
+ },
+ {
+  "zh": "无法读取视频画面尺寸",
+  "file": "canvas-video-frame.ts"
+ },
+ {
+  "zh": "浏览器无法创建图片画布",
+  "file": "canvas-video-frame.ts"
+ },
+ {
+  "zh": "无法读取视频文件，请重新上传视频后再截取尾帧",
+  "file": "canvas-video-frame.ts"
+ },
+ {
+  "zh": "尾帧图片编码失败",
+  "file": "canvas-video-frame.ts"
+ },
+ {
+  "zh": "视频合并工具加载失败，请刷新页面后重试",
+  "file": "canvas-video-merge.ts"
+ },
+ {
+  "zh": "至少选择 2 个视频才能合并",
+  "file": "canvas-video-merge.ts"
+ },
+ {
+  "zh": "视频编码失败，请确认视频编码格式兼容",
+  "file": "canvas-video-merge.ts"
+ },
+ {
+  "zh": "片段结束时间必须晚于开始时间",
+  "file": "canvas-video-segment.ts"
+ },
+ {
+  "zh": "片段结束时间超过视频时长",
+  "file": "canvas-video-segment.ts"
+ },
+ {
+  "zh": "找不到视频素材，请重新上传后再操作",
+  "file": "canvas-video-segment.ts"
+ },
+ {
+  "zh": "媒体处理失败，请确认视频编码格式兼容",
+  "file": "canvas-video-segment.ts"
+ },
+ {
+  "zh": "音频提取失败：当前 FFmpeg 内核不支持 MP3 编码",
+  "file": "canvas-video-segment.ts"
+ },
+ {
+  "zh": "项目画风资产配置过大",
+  "file": "style-profile.ts"
+ },
+ {
+  "zh": "参考图片读取失败：未得到有效的 image data URL",
+  "file": "gemini-image.ts"
+ },
+ {
+  "zh": "参考图片读取失败：图片数据为空",
+  "file": "gemini-image.ts"
+ },
+ {
+  "zh": "请先填写 Base URL",
+  "file": "model-connection-test.ts"
+ },
+ {
+  "zh": "请先填写 API Key",
+  "file": "model-connection-test.ts"
+ },
+ {
+  "zh": "当前 Eagle 导入暂不支持文本或实体素材",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "当前仅支持将图片、视频或音频写回 Eagle",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "生成结果没有可写入 Eagle 的媒体地址",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "读取生成媒体失败，无法写入 Eagle",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "单个文件不能超过 96 MB",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "Eagle 写入目前支持图片、视频和音频文件",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "无法读取待写入的文件",
+  "file": "eagle.ts"
+ },
+ {
+  "zh": "插件 ID 必须使用 kebab-case",
+  "file": "plugin-registry.ts"
+ },
+ {
+  "zh": "插件清单缺少名称、版本或 API 版本",
+  "file": "plugin-registry.ts"
+ },
+ {
+  "zh": "插件至少需要声明一种界面形态",
+  "file": "plugin-registry.ts"
+ },
+ {
+  "zh": "插件权限不能重复",
+  "file": "plugin-registry.ts"
+ },
+ {
+  "zh": "导出失败：字幕烧录与回退均失败",
+  "file": "timeline-export.ts"
+ },
+ {
+  "zh": "Canvas Agent 工具结果写回失败",
+  "file": "canvas-local-agent-panel.tsx"
+ },
+ {
+  "zh": "本地 Agent 请求失败",
+  "file": "canvas-local-agent-panel.tsx"
+ },
+ {
+  "zh": "时间线没有视频片段，无法导出",
+  "file": "canvas-timeline-dialog.tsx"
+ },
+ {
+  "zh": "找不到可导出的视频素材，请确认视频节点包含媒体",
+  "file": "canvas-timeline-dialog.tsx"
+ }
+]

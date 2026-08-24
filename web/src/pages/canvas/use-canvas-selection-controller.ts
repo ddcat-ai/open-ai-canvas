@@ -103,203 +103,225 @@ export function useCanvasSelectionController({
         onDeselect();
     }, [cancelPendingConnectionCreate, cancelSelectionBox, onDeselect, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const handleCanvasMouseDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        cancelPendingConnectionCreate();
-        onCanvasSelectionStart();
-        if (event.button !== 0) return;
-        const world = screenToCanvas(event.clientX, event.clientY);
-        const subtractive = event.altKey;
-        const additive = !subtractive && (event.shiftKey || event.ctrlKey || event.metaKey);
-        const nextSelectionBox: SelectionBox = {
-            startWorldX: world.x,
-            startWorldY: world.y,
-            currentWorldX: world.x,
-            currentWorldY: world.y,
-            additive,
-            subtractive,
-            initialSelectedNodeIds: additive || subtractive ? Array.from(selectedNodeIdsRef.current) : [],
-        };
-        selectionBoxRef.current = nextSelectionBox;
-        selectionActivatedRef.current = false;
-        selectionCandidatesRef.current = nodesRef.current
-            .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current))
-            .map((node) => ({ id: node.id, left: node.position.x, top: node.position.y, right: node.position.x + node.width, bottom: node.position.y + node.height }));
-        setSelectedConnectionId(null);
-    }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId]);
+    const handleCanvasMouseDown = useCallback(
+        (event: ReactPointerEvent<HTMLDivElement>) => {
+            cancelPendingConnectionCreate();
+            onCanvasSelectionStart();
+            if (event.button !== 0) return;
+            const world = screenToCanvas(event.clientX, event.clientY);
+            const subtractive = event.altKey;
+            const additive = !subtractive && (event.shiftKey || event.ctrlKey || event.metaKey);
+            const nextSelectionBox: SelectionBox = {
+                startWorldX: world.x,
+                startWorldY: world.y,
+                currentWorldX: world.x,
+                currentWorldY: world.y,
+                additive,
+                subtractive,
+                initialSelectedNodeIds: additive || subtractive ? Array.from(selectedNodeIdsRef.current) : [],
+            };
+            selectionBoxRef.current = nextSelectionBox;
+            selectionActivatedRef.current = false;
+            selectionCandidatesRef.current = nodesRef.current
+                .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current))
+                .map((node) => ({ id: node.id, left: node.position.x, top: node.position.y, right: node.position.x + node.width, bottom: node.position.y + node.height }));
+            setSelectedConnectionId(null);
+        },
+        [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId],
+    );
 
-    const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
-        event.stopPropagation();
-        if (event.button !== 0) return;
-        if (onBatchConnectionTarget?.(event, nodeId)) return;
-        setSelectedConnectionId(null);
-        const currentNodes = nodesRef.current;
-        const nextSelected = new Set(selectedNodeIdsRef.current);
-        const isSubtractClick = event.altKey;
-        const isMultiSelectClick = !isSubtractClick && (event.shiftKey || event.metaKey || event.ctrlKey);
-        const isSelectionModifier = isSubtractClick || isMultiSelectClick;
-        onNodeInteractionStart(isSelectionModifier);
+    const handleNodeMouseDown = useCallback(
+        (event: ReactMouseEvent, nodeId: string) => {
+            event.stopPropagation();
+            if (event.button !== 0) return;
+            if (onBatchConnectionTarget?.(event, nodeId)) return;
+            setSelectedConnectionId(null);
+            const currentNodes = nodesRef.current;
+            const nextSelected = new Set(selectedNodeIdsRef.current);
+            const isSubtractClick = event.altKey;
+            const isMultiSelectClick = !isSubtractClick && (event.shiftKey || event.metaKey || event.ctrlKey);
+            const isSelectionModifier = isSubtractClick || isMultiSelectClick;
+            onNodeInteractionStart(isSelectionModifier);
 
-        if (isSubtractClick) nextSelected.delete(nodeId);
-        else if (isMultiSelectClick) {
-            if (nextSelected.has(nodeId)) nextSelected.delete(nodeId);
-            else nextSelected.add(nodeId);
-        } else if (!nextSelected.has(nodeId)) {
-            nextSelected.clear();
-            nextSelected.add(nodeId);
-        }
-
-        selectedNodeIdsRef.current = nextSelected;
-        setSelectedNodeIds(nextSelected);
-        if (isSelectionModifier && !nextSelected.has(nodeId)) {
-            dragRef.current = { ...EMPTY_DRAG_STATE, openPanelOnClick: false };
-            return;
-        }
-
-        const clickedNode = currentNodes.find((node) => node.id === nodeId);
-        if (clickedNode?.metadata?.locked) {
-            dragRef.current = { ...EMPTY_DRAG_STATE };
-            onNodeClick(clickedNode);
-            return;
-        }
-
-        const draggedNodeIds = currentNodes.filter((node) => nextSelected.has(node.id) && !node.metadata?.locked && !(node.parentId && nextSelected.has(node.parentId))).map((node) => node.id);
-        const dragIds = new Set(nextSelected);
-        currentNodes.forEach((node) => {
-            if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
-            if (nextSelected.has(node.id) && isFrameNode(node)) getFrameChildIds(node.id, currentNodes).forEach((childId) => dragIds.add(childId));
-        });
-        currentNodes.forEach((node) => {
-            if (dragIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
-        });
-        const initialSelectedNodes = currentNodes.filter((node) => dragIds.has(node.id) && !node.metadata?.locked).map((node) => ({ id: node.id, x: node.position.x, y: node.position.y }));
-        if (!initialSelectedNodes.length) return;
-
-        dragRef.current = { isDraggingNode: true, hasMoved: false, openPanelOnClick: !isMultiSelectClick, startX: event.clientX, startY: event.clientY, draggedNodeIds, initialSelectedNodes };
-        historyPausedRef.current = true;
-        nodeDraggingRef.current = true;
-        pendingNodeDragRef.current = { x: 0, y: 0 };
-        alignmentContextRef.current = createNodeAlignmentContext(currentNodes, initialSelectedNodes);
-        lastFrameDropCheckRef.current = 0;
-        setIsNodeDragging(true);
-        setAlignmentGuides({});
-        setDragPreview({ x: 0, y: 0, nodeIds: new Set(initialSelectedNodes.map((item) => item.id)) });
-    }, [historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeClick, onNodeInteractionStart, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
-
-    const finishNodeDrag = useCallback((clientX?: number, clientY?: number) => {
-        if (dragFrameRef.current) {
-            cancelAnimationFrame(dragFrameRef.current);
-            dragFrameRef.current = null;
-        }
-        if (!dragRef.current.isDraggingNode) return;
-        const shouldOpenPanelOnClick = dragRef.current.openPanelOnClick;
-        const wasClick = shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.draggedNodeIds.length === 1;
-        const clickedNodeId = dragRef.current.draggedNodeIds[0];
-        const currentViewport = viewportRef.current;
-        const rawOffset = { x: clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k, y: clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k };
-        const initialPositions = dragRef.current.initialSelectedNodes;
-        const initialById = new Map(initialPositions.map((item) => [item.id, item]));
-        const { x: dx, y: dy } = calculateNodeAlignment(alignmentContextRef.current, rawOffset, 7 / currentViewport.k).offset;
-
-        historyPausedRef.current = false;
-        nodeDraggingRef.current = false;
-        setIsNodeDragging(false);
-        setDragPreview(null);
-        setAlignmentGuides({});
-        if (dragRef.current.hasMoved) {
-            const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-            const positioned = clientX == null || clientY == null ? nodesRef.current : nodesRef.current.map((node) => {
-                const initial = initialById.get(node.id);
-                return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
-            });
-            const targetId = findFrameDropTarget(positioned, draggedNodeIds);
-            const target = targetId ? positioned.find((node) => node.id === targetId) : undefined;
-            const linkedFolder = target?.metadata?.folder?.assetFolderId ? target : undefined;
-            // 素材库文件夹只建立归档关系，不把画布节点变成其本地子节点。
-            setNodes(linkedFolder ? positioned : applyFrameDrop(positioned, draggedNodeIds, targetId));
-            if (linkedFolder) onLinkedFolderDrop?.(linkedFolder, positioned.filter((node) => draggedNodeIds.has(node.id)));
-        }
-        setFrameDropTargetId(null);
-        alignmentContextRef.current = null;
-        dragRef.current = { ...EMPTY_DRAG_STATE };
-        if (wasClick && clickedNodeId) {
-            const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
-            if (clickedNode) onNodeClick(clickedNode);
-        }
-    }, [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, setNodes, viewportRef]);
-
-    const handleMouseMove = useCallback((event: MouseEvent) => {
-        if (!dragRef.current.isDraggingNode) return;
-        const currentViewport = viewportRef.current;
-        pendingNodeDragRef.current = { x: (event.clientX - dragRef.current.startX) / currentViewport.k, y: (event.clientY - dragRef.current.startY) / currentViewport.k };
-        if (Math.abs(event.clientX - dragRef.current.startX) > 3 || Math.abs(event.clientY - dragRef.current.startY) > 3) dragRef.current.hasMoved = true;
-        if (dragFrameRef.current) return;
-        dragFrameRef.current = requestAnimationFrame(() => {
-            const aligned = calculateNodeAlignment(alignmentContextRef.current, pendingNodeDragRef.current, 7 / viewportRef.current.k);
-            const latest = aligned.offset;
-            pendingAlignmentGuidesRef.current = aligned.guides;
-            const initialById = new Map(dragRef.current.initialSelectedNodes.map((item) => [item.id, item]));
-            const now = performance.now();
-            if (now - lastFrameDropCheckRef.current >= 100) {
-                lastFrameDropCheckRef.current = now;
-                const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-                const positioned = nodesRef.current.map((node) => {
-                    const initial = initialById.get(node.id);
-                    return initial ? { ...node, position: { x: initial.x + latest.x, y: initial.y + latest.y } } : node;
-                });
-                setFrameDropTargetId(findFrameDropTarget(positioned, draggedNodeIds));
+            if (isSubtractClick) nextSelected.delete(nodeId);
+            else if (isMultiSelectClick) {
+                if (nextSelected.has(nodeId)) nextSelected.delete(nodeId);
+                else nextSelected.add(nodeId);
+            } else if (!nextSelected.has(nodeId)) {
+                nextSelected.clear();
+                nextSelected.add(nodeId);
             }
-            setDragPreview((current) => current ? { ...current, x: latest.x, y: latest.y } : current);
-            const nextGuides = dragRef.current.hasMoved ? pendingAlignmentGuidesRef.current : {};
-            setAlignmentGuides((current) => current.vertical === nextGuides.vertical && current.horizontal === nextGuides.horizontal ? current : nextGuides);
-            dragFrameRef.current = null;
-        });
-    }, [nodesRef, viewportRef]);
 
-    const handlePointerMove = useCallback((event: PointerEvent) => {
-        const currentSelection = selectionBoxRef.current;
-        if (!currentSelection) return;
-        if (event.buttons === 0) {
-            cancelSelectionBox();
-            return;
-        }
-        pendingSelectionPointRef.current = screenToCanvas(event.clientX, event.clientY);
-        if (selectionFrameRef.current) return;
-        selectionFrameRef.current = requestAnimationFrame(() => {
-            selectionFrameRef.current = null;
-            let selection = selectionBoxRef.current;
-            const world = pendingSelectionPointRef.current;
-            if (!selection || !world) return;
-            if (!selectionActivatedRef.current) {
-                const threshold = 4 / viewportRef.current.k;
-                if (Math.hypot(world.x - selection.startWorldX, world.y - selection.startWorldY) < threshold) return;
-                selectionActivatedRef.current = true;
-                selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
-                selectionBoxRef.current = selection;
-                setSelectionBox(selection);
-                if (!selection.additive) {
-                    const emptySelection = new Set<string>();
-                    selectedNodeIdsRef.current = emptySelection;
-                    setSelectedNodeIds(emptySelection);
-                }
-            }
-            const rectX = Math.min(selection.startWorldX, world.x);
-            const rectY = Math.min(selection.startWorldY, world.y);
-            const rectW = Math.abs(world.x - selection.startWorldX);
-            const rectH = Math.abs(world.y - selection.startWorldY);
-            selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
-            selectionBoxRef.current = selection;
-            applyCanvasSelectionPreview(containerRef.current, selection);
-            const nextSelected = new Set<string>(selection.additive || selection.subtractive ? selection.initialSelectedNodeIds : []);
-            selectionCandidatesRef.current.forEach((node) => {
-                if (rectX >= node.right || rectX + rectW <= node.left || rectY >= node.bottom || rectY + rectH <= node.top) return;
-                if (selection.subtractive) nextSelected.delete(node.id);
-                else nextSelected.add(node.id);
-            });
-            if (sameStringSet(nextSelected, selectedNodeIdsRef.current)) return;
             selectedNodeIdsRef.current = nextSelected;
             setSelectedNodeIds(nextSelected);
-        });
-    }, [cancelSelectionBox, containerRef, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+            if (isSelectionModifier && !nextSelected.has(nodeId)) {
+                dragRef.current = { ...EMPTY_DRAG_STATE, openPanelOnClick: false };
+                return;
+            }
+
+            const clickedNode = currentNodes.find((node) => node.id === nodeId);
+            if (clickedNode?.metadata?.locked) {
+                dragRef.current = { ...EMPTY_DRAG_STATE };
+                onNodeClick(clickedNode);
+                return;
+            }
+
+            const draggedNodeIds = currentNodes.filter((node) => nextSelected.has(node.id) && !node.metadata?.locked && !(node.parentId && nextSelected.has(node.parentId))).map((node) => node.id);
+            const dragIds = new Set(nextSelected);
+            currentNodes.forEach((node) => {
+                if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
+                if (nextSelected.has(node.id) && isFrameNode(node)) getFrameChildIds(node.id, currentNodes).forEach((childId) => dragIds.add(childId));
+            });
+            currentNodes.forEach((node) => {
+                if (dragIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
+            });
+            const initialSelectedNodes = currentNodes.filter((node) => dragIds.has(node.id) && !node.metadata?.locked).map((node) => ({ id: node.id, x: node.position.x, y: node.position.y }));
+            if (!initialSelectedNodes.length) return;
+
+            dragRef.current = { isDraggingNode: true, hasMoved: false, openPanelOnClick: !isMultiSelectClick, startX: event.clientX, startY: event.clientY, draggedNodeIds, initialSelectedNodes };
+            historyPausedRef.current = true;
+            nodeDraggingRef.current = true;
+            pendingNodeDragRef.current = { x: 0, y: 0 };
+            alignmentContextRef.current = createNodeAlignmentContext(currentNodes, initialSelectedNodes);
+            lastFrameDropCheckRef.current = 0;
+            setIsNodeDragging(true);
+            setAlignmentGuides({});
+            setDragPreview({ x: 0, y: 0, nodeIds: new Set(initialSelectedNodes.map((item) => item.id)) });
+        },
+        [historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeClick, onNodeInteractionStart, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds],
+    );
+
+    const finishNodeDrag = useCallback(
+        (clientX?: number, clientY?: number) => {
+            if (dragFrameRef.current) {
+                cancelAnimationFrame(dragFrameRef.current);
+                dragFrameRef.current = null;
+            }
+            if (!dragRef.current.isDraggingNode) return;
+            const shouldOpenPanelOnClick = dragRef.current.openPanelOnClick;
+            const wasClick = shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.draggedNodeIds.length === 1;
+            const clickedNodeId = dragRef.current.draggedNodeIds[0];
+            const currentViewport = viewportRef.current;
+            const rawOffset = { x: clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k, y: clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k };
+            const initialPositions = dragRef.current.initialSelectedNodes;
+            const initialById = new Map(initialPositions.map((item) => [item.id, item]));
+            const { x: dx, y: dy } = calculateNodeAlignment(alignmentContextRef.current, rawOffset, 7 / currentViewport.k).offset;
+
+            historyPausedRef.current = false;
+            nodeDraggingRef.current = false;
+            setIsNodeDragging(false);
+            setDragPreview(null);
+            setAlignmentGuides({});
+            if (dragRef.current.hasMoved) {
+                const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
+                const positioned =
+                    clientX == null || clientY == null
+                        ? nodesRef.current
+                        : nodesRef.current.map((node) => {
+                              const initial = initialById.get(node.id);
+                              return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
+                          });
+                const targetId = findFrameDropTarget(positioned, draggedNodeIds);
+                const target = targetId ? positioned.find((node) => node.id === targetId) : undefined;
+                const linkedFolder = target?.metadata?.folder?.assetFolderId ? target : undefined;
+                // 素材库文件夹只建立归档关系，不把画布节点变成其本地子节点。
+                setNodes(linkedFolder ? positioned : applyFrameDrop(positioned, draggedNodeIds, targetId));
+                if (linkedFolder)
+                    onLinkedFolderDrop?.(
+                        linkedFolder,
+                        positioned.filter((node) => draggedNodeIds.has(node.id)),
+                    );
+            }
+            setFrameDropTargetId(null);
+            alignmentContextRef.current = null;
+            dragRef.current = { ...EMPTY_DRAG_STATE };
+            if (wasClick && clickedNodeId) {
+                const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
+                if (clickedNode) onNodeClick(clickedNode);
+            }
+        },
+        [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, setNodes, viewportRef],
+    );
+
+    const handleMouseMove = useCallback(
+        (event: MouseEvent) => {
+            if (!dragRef.current.isDraggingNode) return;
+            const currentViewport = viewportRef.current;
+            pendingNodeDragRef.current = { x: (event.clientX - dragRef.current.startX) / currentViewport.k, y: (event.clientY - dragRef.current.startY) / currentViewport.k };
+            if (Math.abs(event.clientX - dragRef.current.startX) > 3 || Math.abs(event.clientY - dragRef.current.startY) > 3) dragRef.current.hasMoved = true;
+            if (dragFrameRef.current) return;
+            dragFrameRef.current = requestAnimationFrame(() => {
+                const aligned = calculateNodeAlignment(alignmentContextRef.current, pendingNodeDragRef.current, 7 / viewportRef.current.k);
+                const latest = aligned.offset;
+                pendingAlignmentGuidesRef.current = aligned.guides;
+                const initialById = new Map(dragRef.current.initialSelectedNodes.map((item) => [item.id, item]));
+                const now = performance.now();
+                if (now - lastFrameDropCheckRef.current >= 100) {
+                    lastFrameDropCheckRef.current = now;
+                    const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
+                    const positioned = nodesRef.current.map((node) => {
+                        const initial = initialById.get(node.id);
+                        return initial ? { ...node, position: { x: initial.x + latest.x, y: initial.y + latest.y } } : node;
+                    });
+                    setFrameDropTargetId(findFrameDropTarget(positioned, draggedNodeIds));
+                }
+                setDragPreview((current) => (current ? { ...current, x: latest.x, y: latest.y } : current));
+                const nextGuides = dragRef.current.hasMoved ? pendingAlignmentGuidesRef.current : {};
+                setAlignmentGuides((current) => (current.vertical === nextGuides.vertical && current.horizontal === nextGuides.horizontal ? current : nextGuides));
+                dragFrameRef.current = null;
+            });
+        },
+        [nodesRef, viewportRef],
+    );
+
+    const handlePointerMove = useCallback(
+        (event: PointerEvent) => {
+            const currentSelection = selectionBoxRef.current;
+            if (!currentSelection) return;
+            if (event.buttons === 0) {
+                cancelSelectionBox();
+                return;
+            }
+            pendingSelectionPointRef.current = screenToCanvas(event.clientX, event.clientY);
+            if (selectionFrameRef.current) return;
+            selectionFrameRef.current = requestAnimationFrame(() => {
+                selectionFrameRef.current = null;
+                let selection = selectionBoxRef.current;
+                const world = pendingSelectionPointRef.current;
+                if (!selection || !world) return;
+                if (!selectionActivatedRef.current) {
+                    const threshold = 4 / viewportRef.current.k;
+                    if (Math.hypot(world.x - selection.startWorldX, world.y - selection.startWorldY) < threshold) return;
+                    selectionActivatedRef.current = true;
+                    selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
+                    selectionBoxRef.current = selection;
+                    setSelectionBox(selection);
+                    if (!selection.additive) {
+                        const emptySelection = new Set<string>();
+                        selectedNodeIdsRef.current = emptySelection;
+                        setSelectedNodeIds(emptySelection);
+                    }
+                }
+                const rectX = Math.min(selection.startWorldX, world.x);
+                const rectY = Math.min(selection.startWorldY, world.y);
+                const rectW = Math.abs(world.x - selection.startWorldX);
+                const rectH = Math.abs(world.y - selection.startWorldY);
+                selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y };
+                selectionBoxRef.current = selection;
+                applyCanvasSelectionPreview(containerRef.current, selection);
+                const nextSelected = new Set<string>(selection.additive || selection.subtractive ? selection.initialSelectedNodeIds : []);
+                selectionCandidatesRef.current.forEach((node) => {
+                    if (rectX >= node.right || rectX + rectW <= node.left || rectY >= node.bottom || rectY + rectH <= node.top) return;
+                    if (selection.subtractive) nextSelected.delete(node.id);
+                    else nextSelected.add(node.id);
+                });
+                if (sameStringSet(nextSelected, selectedNodeIdsRef.current)) return;
+                selectedNodeIdsRef.current = nextSelected;
+                setSelectedNodeIds(nextSelected);
+            });
+        },
+        [cancelSelectionBox, containerRef, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef],
+    );
 
     const finishSelection = useCallback(() => {
         const hadPendingSelection = Boolean(selectionBoxRef.current);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type SpeechRecognitionAlternative = { transcript: string; confidence: number };
 type SpeechRecognitionResult = { isFinal: boolean; length: number; [index: number]: SpeechRecognitionAlternative };
@@ -57,6 +58,7 @@ export type UseSpeechRecognitionReturn = {
  * 第一阶段 MVP 使用：不依赖后端、模型渠道或 API Key，零配置可用
  */
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}): UseSpeechRecognitionReturn {
+    const { t } = useTranslation("canvas");
     const { lang = "zh-CN" } = options;
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
     const finalTextRef = useRef("");
@@ -68,7 +70,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
     const start = useCallback(() => {
         const Constructor = getSpeechRecognition();
         if (!Constructor) {
-            setError({ code: "unsupported", message: "当前浏览器不支持语音识别，请使用 Chrome 或 Edge" });
+            setError({ code: "unsupported", message: t("domain:speech-recognition-is-not-supported-in-this-browser-use-chrome-or-edge-2") });
             return;
         }
         finalTextRef.current = "";
@@ -90,13 +92,13 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         };
         recognition.onerror = (event) => {
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-                setError({ code: event.error, message: "麦克风权限被拒绝，请在浏览器设置中允许访问麦克风" });
+                setError({ code: event.error, message: t("domain:microphone-access-denied-allow-microphone-access-in-your-browser-setting") });
             } else if (event.error === "no-speech") {
-                setError({ code: event.error, message: "未检测到语音，请重试" });
+                setError({ code: event.error, message: t("domain:no-speech-detected-try-again") });
             } else if (event.error === "network") {
-                setError({ code: event.error, message: "语音识别服务不可用，请检查网络后重试" });
+                setError({ code: event.error, message: t("domain:speech-recognition-service-unavailable-check-your-network-and-retry") });
             } else {
-                setError({ code: event.error, message: `语音识别失败（${event.error}）` });
+                setError({ code: event.error, message: t("domain:speech-recognition-failed-param", { error: event.error }) });
             }
         };
         recognition.onend = () => {
@@ -152,7 +154,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
             recognition.onend = null;
             try {
                 recognition.abort();
-            } catch { /* ignore */ }
+            } catch {
+                /* ignore */
+            }
         }
         finalTextRef.current = "";
     }, []);

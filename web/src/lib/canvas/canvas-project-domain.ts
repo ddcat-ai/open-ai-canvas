@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "@/constant/canvas";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
@@ -16,7 +17,7 @@ export function readCanvasWorkspaceMode(): CanvasWorkspaceMode {
     try {
         return scopedLocalStorage.getItem(CANVAS_WORKSPACE_MODE_STORAGE_KEY) === "simple" ? "simple" : "professional";
     } catch (error) {
-        console.warn("读取画布工作模式失败，已使用专业模式", error);
+        console.warn(t("canvas:failed-to-read-canvas-work-mode-pro-mode-used"), error);
         return "professional";
     }
 }
@@ -25,10 +26,9 @@ export function persistCanvasWorkspaceMode(mode: CanvasWorkspaceMode) {
     try {
         scopedLocalStorage.setItem(CANVAS_WORKSPACE_MODE_STORAGE_KEY, mode);
     } catch (error) {
-        console.warn("保存画布工作模式失败", error);
+        console.warn(t("canvas:failed-to-save-canvas-work-mode"), error);
     }
 }
-
 
 export function createCanvasNode(type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata): CanvasNodeData {
     const spec = getNodeSpec(type);
@@ -44,9 +44,14 @@ export function createCanvasNode(type: CanvasNodeType, position: Position, metad
         },
         width: spec.width,
         height: spec.height,
-        metadata: type === CanvasNodeType.Script
-            ? { ...spec.metadata, ...metadata, storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"], referenceNodeIds: [] } }
-            : { ...spec.metadata, ...metadata, ...(type === CanvasNodeType.Drawing ? { drawingId: metadata?.drawingId || `${id}-document` } : {}) },
+        metadata:
+            type === CanvasNodeType.Script
+                ? {
+                      ...spec.metadata,
+                      ...metadata,
+                      storyboard: metadata?.storyboard || { rows: [1, 2, 3].map((shotNumber) => createStoryboardRow(shotNumber)), visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"], referenceNodeIds: [] },
+                  }
+                : { ...spec.metadata, ...metadata, ...(type === CanvasNodeType.Drawing ? { drawingId: metadata?.drawingId || `${id}-document` } : {}) },
     };
 }
 
@@ -83,30 +88,30 @@ export function createStoryboardRow(shotNumber: number, patch: Partial<Storyboar
 // 有结构化变量时由服务端按最新平台模板和用户偏好编译；变量被清除表示用户已做镜头级手动覆盖。
 export function storyboardPromptTemplateMetadata(row: StoryboardRow, kind: "image" | "video"): Pick<CanvasNodeMetadata, "promptTemplateOperation" | "promptTemplateVariables"> {
     const variables = kind === "image" ? row.imagePromptTemplateVariables : row.videoPromptTemplateVariables;
-    return variables
-        ? { promptTemplateOperation: kind === "image" ? "storyboard_first_frame" : "storyboard_video", promptTemplateVariables: variables }
-        : { promptTemplateOperation: undefined, promptTemplateVariables: undefined };
+    return variables ? { promptTemplateOperation: kind === "image" ? "storyboard_first_frame" : "storyboard_video", promptTemplateVariables: variables } : { promptTemplateOperation: undefined, promptTemplateVariables: undefined };
 }
 
 export function cinematicStoryboardColumns(columns?: StoryboardColumn[]): StoryboardColumn[] {
-    return Array.from(new Set([
-        ...(columns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"]),
-        "shotSize",
-        "narrativeIntent",
-        "viewerPOV",
-        "performanceBlocking",
-        "camera",
-        "motion",
-        "timeBeats",
-        "lightingAndAtmosphere",
-        "continuityOut",
-        "negativePrompt",
-    ])) as StoryboardColumn[];
+    return Array.from(
+        new Set([
+            ...(columns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"]),
+            "shotSize",
+            "narrativeIntent",
+            "viewerPOV",
+            "performanceBlocking",
+            "camera",
+            "motion",
+            "timeBeats",
+            "lightingAndAtmosphere",
+            "continuityOut",
+            "negativePrompt",
+        ]),
+    ) as StoryboardColumn[];
 }
 
 export function storyboardRowsFromTask(task: GenerationTask) {
     const result = JSON.parse(task.resultJson || "{}") as { title?: string; rows?: Array<Partial<StoryboardRow>> };
-    if (!Array.isArray(result.rows) || !result.rows.length) throw new Error("分镜任务没有返回镜头行");
+    if (!Array.isArray(result.rows) || !result.rows.length) throw new Error(t("canvas:the-storyboard-task-returned-no-shot-rows"));
     return {
         title: result.title?.trim(),
         rows: result.rows.map((row, index) => {
@@ -125,23 +130,9 @@ export function storyboardRowsFromTask(task: GenerationTask) {
     };
 }
 
-
 // 模型切换时必须清理的节点级生成参数：这些参数属于旧模型的能力档位（分辨率/宽高比/质量等），
 // 新模型不支持时若残留，会在 buildNodeConfig 的「节点优先、全局兜底」合并中反复叠加（issue #254）。
-const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
-    "size",
-    "quality",
-    "transparentBackground",
-    "count",
-    "seconds",
-    "vquality",
-    "generateAudio",
-    "watermark",
-    "audioVoice",
-    "audioFormat",
-    "audioSpeed",
-    "audioInstructions",
-];
+const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = ["size", "quality", "transparentBackground", "count", "seconds", "vquality", "generateAudio", "watermark", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"];
 
 export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>) {
     const safePatch = patch || {};
@@ -228,7 +219,22 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
 
     return nodes.map((node) => {
         if (row && node.id === linkedNode.id && scriptNodeId === connection.fromNodeId && node.type === CanvasNodeType.Video) {
-            return { ...node, title: `镜头 ${row.shotNumber} · 视频`, metadata: { ...node.metadata, prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: node.metadata?.videoEditOperation || "text_to_video", seconds: String(row.durationSeconds) } };
+            return {
+                ...node,
+                title: t("canvas:shot-param-video-2", { shotNumber: row.shotNumber }),
+                metadata: {
+                    ...node.metadata,
+                    prompt: videoPrompt,
+                    composerContent: videoPrompt,
+                    ...storyboardPromptTemplateMetadata(row, "video"),
+                    workflowKind: "shot" as const,
+                    workflowTitle: t("canvas:shot-param-video", { shotNumber: row.shotNumber }),
+                    shotIndex: row.shotNumber,
+                    generationMode: "video" as const,
+                    videoEditOperation: node.metadata?.videoEditOperation || "text_to_video",
+                    seconds: String(row.durationSeconds),
+                },
+            };
         }
         if (node.id !== scriptNodeId || node.type !== CanvasNodeType.Script) return node;
         const storyboard = node.metadata?.storyboard;
@@ -237,9 +243,13 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
             metadata: {
                 ...node.metadata,
                 storyboard: {
-                    rows: (storyboard?.rows || []).map((item) => item.id !== rowId ? item : scriptNodeId === connection.fromNodeId
-                        ? { ...item, imageNodeId: linkedNode.type === CanvasNodeType.Image ? linkedNode.id : item.imageNodeId, videoNodeId: linkedNode.type === CanvasNodeType.Video ? linkedNode.id : item.videoNodeId }
-                        : { ...item, referenceNodeIds: Array.from(new Set([...(item.referenceNodeIds || []), linkedNode.id])) }),
+                    rows: (storyboard?.rows || []).map((item) =>
+                        item.id !== rowId
+                            ? item
+                            : scriptNodeId === connection.fromNodeId
+                              ? { ...item, imageNodeId: linkedNode.type === CanvasNodeType.Image ? linkedNode.id : item.imageNodeId, videoNodeId: linkedNode.type === CanvasNodeType.Video ? linkedNode.id : item.videoNodeId }
+                              : { ...item, referenceNodeIds: Array.from(new Set([...(item.referenceNodeIds || []), linkedNode.id])) },
+                    ),
                     visibleColumns: storyboard?.visibleColumns || ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
                     referenceNodeIds: handleId === "storyboard:context" ? Array.from(new Set([...(storyboard?.referenceNodeIds || []), linkedNode.id])) : storyboard?.referenceNodeIds || [],
                 },
@@ -255,12 +265,14 @@ export function storyboardRowFromHandle(nodes: CanvasNodeData[], nodeId: string,
 
 export function expandStoryboardTextMentions(prompt: string, references: CanvasResourceReference[]) {
     let expanded = prompt;
-    references.filter((reference) => reference.active && reference.kind === "text" && reference.text?.trim()).forEach((reference) => {
-        const replacement = `【项目设定：${reference.title}】\n${reference.text!.trim()}`;
-        for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`]) {
-            if (expanded.includes(token)) expanded = expanded.split(token).join(replacement);
-        }
-    });
+    references
+        .filter((reference) => reference.active && reference.kind === "text" && reference.text?.trim())
+        .forEach((reference) => {
+            const replacement = `【项目设定：${reference.title}】\n${reference.text!.trim()}`;
+            for (const token of [canvasResourceMentionToken(reference), `@${reference.label}`]) {
+                if (expanded.includes(token)) expanded = expanded.split(token).join(replacement);
+            }
+        });
     return expanded;
 }
 
@@ -299,10 +311,12 @@ export function createNodeAlignmentContext(nodes: CanvasNodeData[], initialPosit
         if (batchRoot && !batchRoot.metadata?.imageBatchExpanded) return [];
         const parent = node.parentId ? nodeById.get(node.parentId) : null;
         if (parent && isFrameNode(parent) && parent.metadata?.frame?.collapsed) return [];
-        return [{
-            x: [node.position.x, node.position.x + node.width / 2, node.position.x + node.width],
-            y: [node.position.y, node.position.y + node.height / 2, node.position.y + node.height],
-        }];
+        return [
+            {
+                x: [node.position.x, node.position.x + node.width / 2, node.position.x + node.width],
+                y: [node.position.y, node.position.y + node.height / 2, node.position.y + node.height],
+            },
+        ];
     });
     return { movingBounds: { left, top, right, bottom }, targets };
 }
@@ -339,7 +353,6 @@ export function calculateNodeAlignment(context: NodeAlignmentContext | null, raw
         guides: { vertical: bestXGuide, horizontal: bestYGuide },
     };
 }
-
 
 export function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], collapsingBatchIds?: Set<string>) {
     const rootId = node.metadata?.batchRootId;
@@ -421,9 +434,9 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
 }
 
 export function buildAngleLabel(params: CanvasImageAngleParams) {
-    const horizontal = params.horizontalAngle === 0 ? "正面视角" : params.horizontalAngle > 0 ? `向右旋转 ${params.horizontalAngle} 度` : `向左旋转 ${Math.abs(params.horizontalAngle)} 度`;
-    const pitch = params.pitchAngle === 0 ? "水平视角" : params.pitchAngle > 0 ? `俯视 ${params.pitchAngle} 度` : `仰视 ${Math.abs(params.pitchAngle)} 度`;
-    return `AI 多角度：${horizontal}，${pitch}，镜头距离 ${params.cameraDistance.toFixed(1)}，${params.wideAngle ? "广角" : "标准"}镜头`;
+    const horizontal = params.horizontalAngle === 0 ? t("canvas:front-view") : params.horizontalAngle > 0 ? t("canvas:rotate-right-param-degrees", { horizontalAngle: params.horizontalAngle }) : `向左旋转 ${Math.abs(params.horizontalAngle)} 度`;
+    const pitch = params.pitchAngle === 0 ? t("canvas:horizontal-view") : params.pitchAngle > 0 ? t("canvas:look-down-param-degrees", { pitchAngle: params.pitchAngle }) : `仰视 ${Math.abs(params.pitchAngle)} 度`;
+    return `AI 多角度：${horizontal}，${pitch}，镜头距离 ${params.cameraDistance.toFixed(1)}，${params.wideAngle ? t("canvas:wide-angle") : t("canvas:standard")}镜头`;
 }
 
 export function buildAnglePrompt(params: CanvasImageAngleParams) {

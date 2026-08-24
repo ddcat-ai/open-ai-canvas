@@ -1,23 +1,74 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, GalleryHorizontalEnd, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video } from "lucide-react";
+import {
+    AudioLines,
+    Captions,
+    Clapperboard,
+    Download,
+    FolderPlus,
+    GalleryHorizontalEnd,
+    Image as ImageIcon,
+    Info,
+    LoaderCircle,
+    Lock,
+    Maximize2,
+    MessageSquare,
+    Minus,
+    Music2,
+    Plus,
+    RefreshCw,
+    Scissors,
+    Settings2,
+    Trash2,
+    Unlock,
+    Upload,
+    UserRound,
+    Video,
+} from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType } from "@/types/canvas";
+import { t } from "@/i18n";
 
 // 节点状态判定辅助函数——从 ToolContext 派生
-function isImage(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Image; }
-function isVideo(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Video; }
-function isAudio(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Audio; }
-function isText(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Text; }
-function isConfig(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Config; }
-function hasImage(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.content); }
-function hasVideo(ctx: ToolContext) { return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content); }
-function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content); }
-function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId); }
-function isEditableText(ctx: ToolContext) { return isText(ctx) && !isCharacterReference(ctx); }
-function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || isImage(ctx) || isVideo(ctx); }
-function simpleMode(ctx: ToolContext) { return ctx.workspaceMode === "simple"; }
-function isImageBatchRoot(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.isBatchRoot && ctx.nodeMetadata.batchChildIds?.length); }
+function isImage(ctx: ToolContext) {
+    return ctx.node?.type === CanvasNodeType.Image;
+}
+function isVideo(ctx: ToolContext) {
+    return ctx.node?.type === CanvasNodeType.Video;
+}
+function isAudio(ctx: ToolContext) {
+    return ctx.node?.type === CanvasNodeType.Audio;
+}
+function isText(ctx: ToolContext) {
+    return ctx.node?.type === CanvasNodeType.Text;
+}
+function isConfig(ctx: ToolContext) {
+    return ctx.node?.type === CanvasNodeType.Config;
+}
+function hasImage(ctx: ToolContext) {
+    return isImage(ctx) && Boolean(ctx.nodeMetadata?.content);
+}
+function hasVideo(ctx: ToolContext) {
+    return isVideo(ctx) && Boolean(ctx.nodeMetadata?.content);
+}
+function hasAudio(ctx: ToolContext) {
+    return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content);
+}
+function isCharacterReference(ctx: ToolContext) {
+    return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId);
+}
+function isEditableText(ctx: ToolContext) {
+    return isText(ctx) && !isCharacterReference(ctx);
+}
+function canOpenDialog(ctx: ToolContext) {
+    return isEditableText(ctx) || isImage(ctx) || isVideo(ctx);
+}
+function simpleMode(ctx: ToolContext) {
+    return ctx.workspaceMode === "simple";
+}
+function isImageBatchRoot(ctx: ToolContext) {
+    return isImage(ctx) && Boolean(ctx.nodeMetadata?.isBatchRoot && ctx.nodeMetadata.batchChildIds?.length);
+}
 function canRetry(ctx: ToolContext) {
     const requiresPromptChange = ctx.nodeMetadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(ctx.nodeMetadata?.errorDetails);
     const batchHasFailures = isImageBatchRoot(ctx) && (ctx.nodeMetadata?.batchFailedCount || (ctx.nodeMetadata?.status === "error" ? 1 : 0)) > 0;
@@ -30,9 +81,9 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "info",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => isCharacterReference(ctx) ? "查看角色详情" : "查看节点信息",
-        displayLabel: (ctx) => isCharacterReference(ctx) ? "角色详情" : "信息",
-        icon: (ctx) => isCharacterReference(ctx) ? <UserRound className="size-3.5" /> : <Info className="size-3.5" />,
+        label: (ctx) => (isCharacterReference(ctx) ? t("canvas:view-character-details") : t("canvas:view-node-info")),
+        displayLabel: (ctx) => (isCharacterReference(ctx) ? t("canvas:character-details") : t("canvas:info")),
+        icon: (ctx) => (isCharacterReference(ctx) ? <UserRound className="size-3.5" /> : <Info className="size-3.5" />),
         defaultVisible: true,
         defaultOrder: 10,
         run: (ctx) => ctx.handlers.onNodeInfo(ctx.node!),
@@ -41,8 +92,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "delete",
         toolbar: "node-hover",
         category: "node-state",
-        label: "移除节点",
-        displayLabel: "删除",
+        label: t("canvas:remove-node"),
+        displayLabel: t("canvas:delete-5"),
         icon: <Trash2 className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 20,
@@ -54,8 +105,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "retry",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => isImageBatchRoot(ctx) ? "重试批次中的失败图片" : "重新生成",
-        displayLabel: (ctx) => isImageBatchRoot(ctx) ? "重试失败项" : "重试",
+        label: (ctx) => (isImageBatchRoot(ctx) ? t("canvas:retry-failed-images-in-batch") : t("canvas:regenerate-2")),
+        displayLabel: (ctx) => (isImageBatchRoot(ctx) ? t("canvas:retry-failed-items") : t("canvas:retry-2")),
         icon: <RefreshCw className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 30,
@@ -66,9 +117,9 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "extractLastFrame",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => ctx.extractingVideoFrame ? "正在截取尾帧" : "截取尾帧",
-        displayLabel: (ctx) => ctx.extractingVideoFrame ? "截取中" : "尾帧",
-        icon: (ctx) => ctx.extractingVideoFrame ? <LoaderCircle className="size-3.5 animate-spin" /> : <GalleryHorizontalEnd className="size-3.5" />,
+        label: (ctx) => (ctx.extractingVideoFrame ? t("canvas:grabbing-last-frame") : t("canvas:grab-last-frame")),
+        displayLabel: (ctx) => (ctx.extractingVideoFrame ? t("canvas:trimming") : t("canvas:last-frame")),
+        icon: (ctx) => (ctx.extractingVideoFrame ? <LoaderCircle className="size-3.5 animate-spin" /> : <GalleryHorizontalEnd className="size-3.5" />),
         defaultVisible: true,
         defaultOrder: 40,
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
@@ -79,9 +130,9 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "extractAudio",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => ctx.extractingAudio ? "正在提取声音为 MP3" : "提取声音为 MP3",
-        displayLabel: (ctx) => ctx.extractingAudio ? "提取中" : "提取音频",
-        icon: (ctx) => ctx.extractingAudio ? <LoaderCircle className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />,
+        label: (ctx) => (ctx.extractingAudio ? t("canvas:extracting-audio-to-mp3") : t("canvas:extract-audio-as-mp3")),
+        displayLabel: (ctx) => (ctx.extractingAudio ? t("canvas:extracting") : t("canvas:extract-audio")),
+        icon: (ctx) => (ctx.extractingAudio ? <LoaderCircle className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />),
         defaultVisible: true,
         defaultOrder: 42,
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
@@ -92,9 +143,9 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "trimRegenerate",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => ctx.trimmingVideo ? "正在截取片段" : "按段截取并重生成",
-        displayLabel: (ctx) => ctx.trimmingVideo ? "截取中" : "截取重生成",
-        icon: (ctx) => ctx.trimmingVideo ? <LoaderCircle className="size-3.5 animate-spin" /> : <Scissors className="size-3.5" />,
+        label: (ctx) => (ctx.trimmingVideo ? t("canvas:trimming-segments") : t("canvas:trim-by-segment-and-regenerate")),
+        displayLabel: (ctx) => (ctx.trimmingVideo ? t("canvas:trimming") : t("canvas:trim-and-regenerate")),
+        icon: (ctx) => (ctx.trimmingVideo ? <LoaderCircle className="size-3.5 animate-spin" /> : <Scissors className="size-3.5" />),
         defaultVisible: true,
         defaultOrder: 44,
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
@@ -105,8 +156,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "saveAsset",
         toolbar: "node-hover",
         category: "node-state",
-        label: "加入我的素材",
-        displayLabel: "存素材",
+        label: t("canvas:save-to-my-assets-2"),
+        displayLabel: t("canvas:save-asset"),
         icon: <FolderPlus className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 50,
@@ -117,8 +168,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "download",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => hasAudio(ctx) ? "下载音频" : hasVideo(ctx) ? "下载视频" : "下载图片",
-        displayLabel: "下载",
+        label: (ctx) => (hasAudio(ctx) ? t("canvas:download-audio") : hasVideo(ctx) ? t("canvas:download-video") : t("canvas:download-image")),
+        displayLabel: t("canvas:download-2"),
         icon: <Download className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 60,
@@ -129,8 +180,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "edit",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => isEditableText(ctx) ? "调用文本模型生成内容" : "编辑",
-        displayLabel: (ctx) => isEditableText(ctx) ? "文本生成" : "编辑",
+        label: (ctx) => (isEditableText(ctx) ? t("canvas:call-text-model-to-generate-content") : t("canvas:edit")),
+        displayLabel: (ctx) => (isEditableText(ctx) ? t("canvas:text-generation") : t("canvas:edit")),
         icon: <MessageSquare className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 70,
@@ -141,8 +192,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "editText",
         toolbar: "node-hover",
         category: "node-state",
-        label: "放大编辑文本",
-        displayLabel: "放大编辑",
+        label: t("canvas:zoom-edit-text"),
+        displayLabel: t("canvas:zoom-edit-3"),
         icon: <Maximize2 className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 80,
@@ -153,8 +204,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "generateImage",
         toolbar: "node-hover",
         category: "node-state",
-        label: "用文本生图",
-        displayLabel: "生图",
+        label: t("canvas:text-to-image"),
+        displayLabel: t("canvas:image-gen-3"),
         icon: <ImageIcon className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 90,
@@ -165,8 +216,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "config",
         toolbar: "node-hover",
         category: "node-state",
-        label: "生成配置",
-        displayLabel: "生成配置",
+        label: t("canvas:generation-config"),
+        displayLabel: t("canvas:generation-config"),
         icon: <Settings2 className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 100,
@@ -177,8 +228,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "decreaseFont",
         toolbar: "node-hover",
         category: "node-state",
-        label: "减小字号",
-        displayLabel: "缩小",
+        label: t("canvas:smaller-font"),
+        displayLabel: t("canvas:zoom-out"),
         icon: <Minus className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 110,
@@ -189,8 +240,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "increaseFont",
         toolbar: "node-hover",
         category: "node-state",
-        label: "增大字号",
-        displayLabel: "放大",
+        label: t("canvas:larger-font"),
+        displayLabel: t("canvas:zoom-in"),
         icon: <Plus className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 120,
@@ -201,8 +252,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "uploadImage",
         toolbar: "node-hover",
         category: "node-state",
-        label: "上传图片",
-        displayLabel: "上传图片",
+        label: t("canvas:upload-image"),
+        displayLabel: t("canvas:upload-image"),
         icon: <Upload className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 130,
@@ -213,8 +264,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "uploadVideo",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => hasVideo(ctx) ? "替换视频" : "上传视频",
-        displayLabel: (ctx) => hasVideo(ctx) ? "替换视频" : "上传视频",
+        label: (ctx) => (hasVideo(ctx) ? t("canvas:replace-video") : t("canvas:upload-video")),
+        displayLabel: (ctx) => (hasVideo(ctx) ? t("canvas:replace-video") : t("canvas:upload-video")),
         icon: <Video className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 140,
@@ -225,8 +276,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "subtitles",
         toolbar: "node-hover",
         category: "node-state",
-        label: "编辑字幕",
-        displayLabel: "字幕",
+        label: t("canvas:edit-subtitles"),
+        displayLabel: t("canvas:subtitles"),
         icon: <Captions className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 145,
@@ -237,8 +288,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "timeline",
         toolbar: "node-hover",
         category: "node-state",
-        label: "时间线编辑",
-        displayLabel: "时间线",
+        label: t("canvas:timeline-editing"),
+        displayLabel: t("canvas:timeline"),
         icon: <Clapperboard className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 148,
@@ -249,8 +300,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "uploadAudio",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => hasAudio(ctx) ? "替换音频" : "上传音频",
-        displayLabel: (ctx) => hasAudio(ctx) ? "替换音频" : "上传音频",
+        label: (ctx) => (hasAudio(ctx) ? t("canvas:replace-audio") : t("canvas:upload-audio")),
+        displayLabel: (ctx) => (hasAudio(ctx) ? t("canvas:replace-audio") : t("canvas:upload-audio")),
         icon: <Music2 className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 150,
@@ -262,9 +313,9 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "node-lock",
         toolbar: "node-hover",
         category: "navigation",
-        label: (ctx) => ctx.nodeMetadata?.locked ? "解锁节点" : "锁定位置和尺寸",
-        displayLabel: (ctx) => ctx.nodeMetadata?.locked ? "解锁" : "锁定",
-        icon: (ctx) => ctx.nodeMetadata?.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />,
+        label: (ctx) => (ctx.nodeMetadata?.locked ? t("canvas:unlock-node") : t("canvas:lock-position-and-size")),
+        displayLabel: (ctx) => (ctx.nodeMetadata?.locked ? t("canvas:unlock") : t("canvas:lock")),
+        icon: (ctx) => (ctx.nodeMetadata?.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />),
         defaultVisible: true,
         defaultOrder: 160,
         active: (ctx) => Boolean(ctx.nodeMetadata?.locked),

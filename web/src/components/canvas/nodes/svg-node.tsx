@@ -6,6 +6,7 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { CanvasNodeData } from "@/types/canvas";
 
 import { centeredFrameDocument, SandboxedFrame } from "./sandboxed-frame";
+import { useTranslation } from "react-i18next";
 
 type SvgNodeContentProps = {
     node: CanvasNodeData;
@@ -27,6 +28,7 @@ function extractSvgSource(text: string) {
  * 是这个节点存在的理由。渲染走沙箱 iframe（见 sandboxed-frame），不给脚本权限。
  */
 export function SvgNodeContent({ node, theme }: SvgNodeContentProps) {
+    const { t } = useTranslation("canvas");
     const upstream = useUpstreamNodes(node.id);
     const inherited = upstream.find((item) => getNodeResourceKind(item) === "text");
     const raw = node.metadata?.content || inherited?.metadata?.content || inherited?.metadata?.prompt || "";
@@ -36,7 +38,7 @@ export function SvgNodeContent({ node, theme }: SvgNodeContentProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center" style={{ color: theme.node.muted }}>
                 <Shapes className="size-5 opacity-60" />
-                <span style={{ fontSize: "var(--fs-label)" }}>{raw.trim() ? "上游内容里没有找到 <svg> 源码" : "连接输出 SVG 的文本节点"}</span>
+                <span style={{ fontSize: "var(--fs-label)" }}>{raw.trim() ? t("domain:no-svg-markup-found-in-upstream-content") : t("domain:connect-a-text-node-that-outputs-svg")}</span>
             </div>
         );
     }

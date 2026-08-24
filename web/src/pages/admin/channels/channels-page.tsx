@@ -17,6 +17,8 @@ import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { ChannelModelManager } from "../components/channel-model-manager";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type ChannelFormValues = { name: string; baseUrl: string; allowLocalChannel?: boolean; apiKey?: string; secretKey?: string; headers?: ChannelHeader[]; useGlobalConcurrency?: boolean; concurrencyLimit?: number; enabled?: boolean };
 
@@ -26,18 +28,27 @@ export function adminLocalChannelFormOwner(desktopLocalChannelsEnabled: boolean,
 }
 
 export function AdminLocalChannelSwitch({ visible, checked, onChange }: { visible: boolean; checked: boolean; onChange: (checked: boolean) => void }) {
+    const { t } = useTranslation("canvas");
     if (!visible) return null;
     return (
-        <Form.Item name="allowLocalChannel" label="允许本机渠道" valuePropName="checked" extra={`仅放行精确 localhost 或 127.0.0.1；示例：${DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL}`}>
+        <Form.Item
+            name="allowLocalChannel"
+            label={t("admin:allow-local-channels")}
+            valuePropName="checked"
+            extra={t("admin:only-exact-localhost-or-127-0-0-1-is-allowed-example-param", { DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL: DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL })}
+        >
             <Switch checked={checked} onChange={onChange} />
         </Form.Item>
     );
 }
 
 export function AdminLocalChannelFields({ visible, checked, form }: { visible: boolean; checked: boolean; form: Pick<FormInstance<ChannelFormValues>, "setFieldValue"> }) {
+    const { t } = useTranslation("canvas");
     return (
         <>
-            <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}><Input placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : "填写渠道 Base URL"} /></Form.Item>
+            <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: t("admin:enter-a-base-url") }]}>
+                <Input placeholder={checked ? DESKTOP_LOCAL_CHANNEL_EXAMPLE_BASE_URL : t("admin:enter-the-channel-base-url")} />
+            </Form.Item>
             <AdminLocalChannelSwitch visible={visible} checked={checked} onChange={(value) => form.setFieldValue("allowLocalChannel", value)} />
         </>
     );
@@ -58,6 +69,7 @@ export function adminChannelSavePayload(values: ChannelFormValues, desktopLocalC
 }
 
 export default function ChannelsPage() {
+    const { t } = useTranslation("canvas");
     const { message, modal } = App.useApp();
     const { reloadReferences } = useAdminContext();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -104,7 +116,7 @@ export default function ChannelsPage() {
             setTotal(result.total);
             if (result.total > 0 && result.channels.length === 0 && page > 1) updateUrl({ page: 1 }, true);
         } catch (error) {
-            if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : "读取渠道列表失败");
+            if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : t("admin:failed-to-load-channel-list"));
         } finally {
             if (sequence === requestSequence.current) setLoading(false);
         }
@@ -119,14 +131,28 @@ export default function ChannelsPage() {
         try {
             await refreshSystemChannels();
         } catch (error) {
-            message.warning(error instanceof Error ? `后台已保存，但配置同步失败：${error.message}` : "后台已保存，但配置同步失败，请稍后重新打开配置");
+            message.warning(error instanceof Error ? t("admin:saved-on-the-backend-but-config-sync-failed-param", { message: error.message }) : t("admin:saved-on-the-backend-but-config-sync-failed-reopen-settings-later"));
         }
     };
 
     const openDrawer = (channel?: ModelChannel) => {
         setEditingChannel(channel || null);
         form.resetFields();
-        form.setFieldsValue(channel ? { name: channel.name, baseUrl: channel.baseUrl, allowLocalChannel: adminLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked, apiKey: "", secretKey: "", headers: channel.headers || [], useGlobalConcurrency: !channel.concurrencyLimit, concurrencyLimit: channel.concurrencyLimit || undefined, enabled: channel.enabled !== false } : { name: "", baseUrl: "", allowLocalChannel: false, apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true });
+        form.setFieldsValue(
+            channel
+                ? {
+                      name: channel.name,
+                      baseUrl: channel.baseUrl,
+                      allowLocalChannel: adminLocalChannelFormOwner(desktopLocalChannelsEnabled, desktopLocalChannelHostname, channel.allowLocalChannel).checked,
+                      apiKey: "",
+                      secretKey: "",
+                      headers: channel.headers || [],
+                      useGlobalConcurrency: !channel.concurrencyLimit,
+                      concurrencyLimit: channel.concurrencyLimit || undefined,
+                      enabled: channel.enabled !== false,
+                  }
+                : { name: "", baseUrl: "", allowLocalChannel: false, apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true },
+        );
         setDrawerOpen(true);
     };
 
@@ -136,7 +162,14 @@ export default function ChannelsPage() {
             setDrawerOpen(false);
             return;
         }
-        modal.confirm({ title: "放弃渠道修改？", content: "尚未保存的连接信息将丢失。", okText: "放弃修改", cancelText: "继续编辑", okButtonProps: { danger: true }, onOk: () => setDrawerOpen(false) });
+        modal.confirm({
+            title: t("admin:discard-channel-changes"),
+            content: t("admin:unsaved-connection-details-will-be-lost"),
+            okText: t("admin:discard-changes"),
+            cancelText: t("admin:keep-editing-2"),
+            okButtonProps: { danger: true },
+            onOk: () => setDrawerOpen(false),
+        });
     };
 
     const save = async () => {
@@ -147,7 +180,7 @@ export default function ChannelsPage() {
             return;
         }
         if (!editingChannel && !values.apiKey?.trim()) {
-            message.error("请填写 API Key 或 Access Key");
+            message.error(t("admin:enter-an-api-key-or-access-key"));
             return;
         }
         setSaving(true);
@@ -158,9 +191,9 @@ export default function ChannelsPage() {
             setDrawerOpen(false);
             form.resetFields();
             await reload();
-            message.success(editingChannel ? "系统渠道已更新" : "系统渠道已创建");
+            message.success(editingChannel ? t("admin:system-channel-updated") : t("admin:system-channel-created"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存系统渠道失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-save-system-channel"));
         } finally {
             setSaving(false);
         }
@@ -171,9 +204,9 @@ export default function ChannelsPage() {
             await updateAdminChannel(channel.id, { enabled: channel.enabled === false });
             await syncChannels();
             await reload();
-            message.success(channel.enabled === false ? "系统渠道已启用" : "系统渠道已停用");
+            message.success(channel.enabled === false ? t("admin:system-channel-enabled") : t("admin:system-channel-disabled"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新系统渠道失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-update-system-channel"));
         }
     };
 
@@ -182,64 +215,228 @@ export default function ChannelsPage() {
             await deleteAdminChannel(channel.id);
             await syncChannels();
             await reload();
-            message.success("系统渠道已删除");
+            message.success(t("admin:system-channel-deleted"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "删除系统渠道失败");
+            message.error(error instanceof Error ? error.message : t("admin:failed-to-delete-system-channel"));
         }
     };
 
     const columns: ColumnsType<ModelChannel> = [
-        { title: "渠道", dataIndex: "name", render: (_, channel) => <div><div className="font-medium">{channel.name}</div><div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div></div> },
-        { title: "模型", dataIndex: "models", width: 100, render: (models: string[]) => `${models?.length || 0} 个` },
-        { title: "最大并发", dataIndex: "concurrencyLimit", width: 120, render: (value: number) => value > 0 ? value : <span className="text-foreground/45">跟随系统</span> },
-        { title: "凭证", width: 130, render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "未配置"} tone={channel.hasApiKey ? "success" : "neutral"} /> },
-        { title: "状态", dataIndex: "enabled", width: 100, render: (enabled) => <AdminStatusBadge label={enabled !== false ? "已启用" : "已停用"} tone={enabled !== false ? "success" : "neutral"} /> },
-        { title: "操作", width: 250, align: "right", render: (_, channel) => <AdminRowActions primary={{ label: "模型管理", onClick: () => setManagingChannel(channel) }} actions={[{ key: "edit", label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }, { key: "toggle", label: channel.enabled !== false ? "停用渠道" : "启用渠道", icon: <Power className="size-3.5" />, danger: channel.enabled !== false, confirm: { title: channel.enabled !== false ? "停用这个系统渠道？" : "启用这个系统渠道？", description: channel.enabled !== false ? "停用后新任务不会再使用该渠道，但仍会保留在列表中，可随时重新启用。" : "启用后，配置完整的模型会重新进入系统可用模型集合。", okText: channel.enabled !== false ? "确认停用" : "确认启用" }, onClick: () => toggleChannel(channel) }, { key: "delete", label: "删除渠道", icon: <Trash2 className="size-3.5" />, danger: true, confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" }, onClick: () => removeChannel(channel) }]} /> },
+        {
+            title: t("admin:channels"),
+            dataIndex: "name",
+            render: (_, channel) => (
+                <div>
+                    <div className="font-medium">{channel.name}</div>
+                    <div className="admin-monospace max-w-lg truncate text-foreground/45">{channel.baseUrl}</div>
+                </div>
+            ),
+        },
+        { title: t("admin:models"), dataIndex: "models", width: 100, render: (models: string[]) => `${models?.length || 0} 个` },
+        { title: t("admin:max-concurrency"), dataIndex: "concurrencyLimit", width: 120, render: (value: number) => (value > 0 ? value : <span className="text-foreground/45">{t("admin:follow-system")}</span>) },
+        {
+            title: t("admin:credentials"),
+            width: 130,
+            render: (_, channel) => <AdminStatusBadge label={channel.hasApiKey ? (channel.hasSecretKey ? t("admin:ak-sk-configured") : t("admin:api-key-configured")) : t("admin:not-configured-2")} tone={channel.hasApiKey ? "success" : "neutral"} />,
+        },
+        { title: t("admin:status"), dataIndex: "enabled", width: 100, render: (enabled) => <AdminStatusBadge label={enabled !== false ? t("admin:enabled") : t("admin:disabled")} tone={enabled !== false ? "success" : "neutral"} /> },
+        {
+            title: t("admin:actions"),
+            width: 250,
+            align: "right",
+            render: (_, channel) => (
+                <AdminRowActions
+                    primary={{ label: t("admin:model-management"), onClick: () => setManagingChannel(channel) }}
+                    actions={[
+                        { key: "edit", label: t("admin:edit-2"), icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) },
+                        {
+                            key: "toggle",
+                            label: channel.enabled !== false ? t("admin:disable-channel") : t("admin:enable-channel"),
+                            icon: <Power className="size-3.5" />,
+                            danger: channel.enabled !== false,
+                            confirm: {
+                                title: channel.enabled !== false ? t("admin:disable-this-system-channel") : t("admin:enable-this-system-channel"),
+                                description: channel.enabled !== false ? t("admin:new-tasks-will-no-longer-use-this-channel-after-it-is-disabled-it-stays") : t("admin:once-enabled-fully-configured-models-rejoin-the-available-system-model-p"),
+                                okText: channel.enabled !== false ? t("admin:confirm-disable") : t("admin:confirm-enable"),
+                            },
+                            onClick: () => toggleChannel(channel),
+                        },
+                        {
+                            key: "delete",
+                            label: t("admin:delete-channel"),
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            confirm: { title: t("admin:delete-this-system-channel"), description: t("admin:the-channel-and-its-models-will-disappear-after-deletion-the-api-key-is"), okText: t("admin:confirm-delete") },
+                            onClick: () => removeChannel(channel),
+                        },
+                    ]}
+                />
+            ),
+        },
     ];
 
     if (managingChannel) {
-        return <ChannelModelManager channel={managingChannel} onClose={() => setManagingChannel(null)} onChanged={async () => { await syncChannels(); await reload(); }} />;
+        return (
+            <ChannelModelManager
+                channel={managingChannel}
+                onClose={() => setManagingChannel(null)}
+                onChanged={async () => {
+                    await syncChannels();
+                    await reload();
+                }}
+            />
+        );
     }
 
     return (
-        <AdminPageFrame title="系统渠道" description="渠道、模型与售价" actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>}>
+        <AdminPageFrame
+            title={t("admin:system-channels")}
+            description={t("admin:channels-models-and-pricing")}
+            actions={
+                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                    {t("admin:add-system-channel-3")}
+                </Button>
+            }
+        >
             <AdminDataTable
-                toolbar={<Input id="admin-channel-search" aria-label="搜索系统渠道" autoComplete="off" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索渠道名称或地址" onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)} />}
-                toolbarActiveFilters={<>{keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}{status !== "all" ? <AdminFilterChip label={`状态：${status === "enabled" ? "已启用" : "已停用"}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}</>}
-                toolbarFilters={<Select className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={[{ label: "全部状态", value: "all" }, { label: "已启用", value: "enabled" }, { label: "已停用", value: "disabled" }]} />}
+                toolbar={
+                    <Input
+                        id="admin-channel-search"
+                        aria-label={t("admin:search-system-channels")}
+                        autoComplete="off"
+                        allowClear
+                        className="app-list-search"
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        value={keyword}
+                        placeholder={t("admin:search-channel-names-or-urls")}
+                        onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
+                    />
+                }
+                toolbarActiveFilters={
+                    <>
+                        {keyword ? <AdminFilterChip label={t("admin:search-param", { keyword: keyword })} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
+                        {status !== "all" ? <AdminFilterChip label={`状态：${status === "enabled" ? t("admin:enabled") : t("admin:disabled")}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
+                    </>
+                }
+                toolbarFilters={
+                    <Select
+                        className="w-32"
+                        value={status}
+                        onChange={(value) => updateUrl({ status: value, page: 1 })}
+                        options={[
+                            { label: t("admin:all-statuses"), value: "all" },
+                            { label: t("admin:enabled"), value: "enabled" },
+                            { label: t("admin:disabled"), value: "disabled" },
+                        ]}
+                    />
+                }
                 toolbarActive={hasFilters}
                 onReset={() => updateUrl({ filter: "", status: "all", page: 1 })}
                 skeletonColumns={6}
-                table={{ className: "app-data-table", size: "small", rowKey: "id", loading, columns, dataSource: channels, locale: { emptyText: <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} action={hasFilters ? undefined : <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>新增系统渠道</Button>} /> }, pagination: false, scroll: { x: 820 } }}
+                table={{
+                    className: "app-data-table",
+                    size: "small",
+                    rowKey: "id",
+                    loading,
+                    columns,
+                    dataSource: channels,
+                    locale: {
+                        emptyText: (
+                            <AdminTableEmpty
+                                filtered={hasFilters}
+                                title={hasFilters ? undefined : t("admin:no-system-channels-yet")}
+                                action={
+                                    hasFilters ? undefined : (
+                                        <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                                            {t("admin:add-system-channel-3")}
+                                        </Button>
+                                    )
+                                }
+                            />
+                        ),
+                    },
+                    pagination: false,
+                    scroll: { x: 820 },
+                }}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
             <Modal
                 className="workspace-modal workspace-modal-wide admin-channel-modal"
                 rootClassName="admin-channel-modal-root"
-                title={editingChannel ? "编辑系统渠道" : "新增系统渠道"}
+                title={editingChannel ? t("admin:edit-system-channel") : t("admin:add-system-channel-3")}
                 open={drawerOpen}
                 width={760}
                 onCancel={closeDrawer}
                 maskClosable={!saving}
                 destroyOnHidden
-                footer={<div className="flex justify-end gap-2"><Button onClick={closeDrawer}>取消</Button><Button type="primary" loading={saving} onClick={() => void save()}>保存</Button></div>}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button onClick={closeDrawer}>{t("admin:cancel-4")}</Button>
+                        <Button type="primary" loading={saving} onClick={() => void save()}>
+                            {t("admin:save-4")}
+                        </Button>
+                    </div>
+                }
             >
                 <Form form={form} layout="vertical" requiredMark={false}>
-                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请填写渠道名称" }]}><Input placeholder="例如：OpenAI 官方渠道" /></Form.Item>
+                    <Form.Item name="name" label={t("admin:channel-name")} rules={[{ required: true, message: t("admin:enter-a-channel-name") }]}>
+                        <Input placeholder={t("admin:e-g-openai-official-channel")} />
+                    </Form.Item>
                     <AdminLocalChannelFields visible={showDesktopLocalChannelControl} checked={allowLocalChannel} form={form} />
-                    <Form.Item name="apiKey" label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"} rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key 或 Access Key" }]} extra="OpenAI 兼容协议填写 API Key；即梦官方协议填写 IAM Access Key。"><Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原凭证" : "API Key 或 Access Key"} /></Form.Item>
-                    <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : "Secret Key（可选）"} extra="仅即梦官方等 AK/SK 签名协议需要；其他渠道留空。"><Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原 Secret Key" : "IAM Secret Key"} /></Form.Item>
-                    <div className="mb-6"><Form.Item name="headers" noStyle><ChannelHeadersEditor /></Form.Item></div>
-                    <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked"><Switch /></Form.Item>
-                    <Form.Item name="concurrencyLimit" label="渠道最大并发数" extra="后台任务和系统代理请求共享该渠道上限；槽位暂满时请求会等待。" rules={useGlobalConcurrency ? [] : [{ required: true, message: "请填写渠道最大并发数" }, { type: "number", min: 1, max: 999, message: "请输入 1-999 的整数" }]}><InputNumber className="w-full" min={1} max={999} precision={0} disabled={useGlobalConcurrency} placeholder={useGlobalConcurrency ? "使用系统默认值" : "1-999"} /></Form.Item>
-                    <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+                    <Form.Item
+                        name="apiKey"
+                        label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"}
+                        rules={editingChannel ? [] : [{ required: true, message: t("admin:enter-an-api-key-or-access-key") }]}
+                        extra={t("admin:enter-an-api-key-for-openai-compatible-protocols-an-iam-access-key-for-o")}
+                    >
+                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? t("admin:leave-blank-to-keep-current-credentials") : t("admin:api-key-or-access-key")} />
+                    </Form.Item>
+                    <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : t("admin:secret-key-optional")} extra={t("admin:required-only-for-ak-sk-signed-protocols-like-official-jimeng-leave-blan")}>
+                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? t("admin:leave-blank-to-keep-the-current-secret-key") : "IAM Secret Key"} />
+                    </Form.Item>
+                    <div className="mb-6">
+                        <Form.Item name="headers" noStyle>
+                            <ChannelHeadersEditor />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="useGlobalConcurrency" label={t("admin:follow-system-concurrency")} valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
+                    <Form.Item
+                        name="concurrencyLimit"
+                        label={t("admin:channel-max-concurrency")}
+                        extra={t("admin:backend-tasks-and-proxied-requests-share-this-limit-requests-wait-when-s")}
+                        rules={
+                            useGlobalConcurrency
+                                ? []
+                                : [
+                                      { required: true, message: t("admin:enter-the-channel-max-concurrency") },
+                                      { type: "number", min: 1, max: 999, message: t("admin:enter-an-integer-between-1-and-999") },
+                                  ]
+                        }
+                    >
+                        <InputNumber className="w-full" min={1} max={999} precision={0} disabled={useGlobalConcurrency} placeholder={useGlobalConcurrency ? t("admin:use-system-default") : "1-999"} />
+                    </Form.Item>
+                    <Form.Item name="enabled" label={t("admin:enabled-2")} valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
                 </Form>
             </Modal>
         </AdminPageFrame>
     );
 }
 
-function positiveInt(value: string | null, fallback: number) { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback; }
-function normalizePageSize(value: string | null) { const parsed = positiveInt(value, 20); return [20, 50, 100].includes(parsed) ? parsed : 20; }
-function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" { return value === "enabled" || value === "disabled" ? value : "all"; }
-function channelSecretText(channel: ModelChannel) { return channel.hasSecretKey ? "已配置，留空不修改" : "未配置"; }
+function positiveInt(value: string | null, fallback: number) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+function normalizePageSize(value: string | null) {
+    const parsed = positiveInt(value, 20);
+    return [20, 50, 100].includes(parsed) ? parsed : 20;
+}
+function normalizeStatus(value: string | null): "all" | "enabled" | "disabled" {
+    return value === "enabled" || value === "disabled" ? value : "all";
+}
+function channelSecretText(channel: ModelChannel) {
+    return channel.hasSecretKey ? t("admin:configured-leave-blank-to-keep") : t("admin:not-configured-2");
+}

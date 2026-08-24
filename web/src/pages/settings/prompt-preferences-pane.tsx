@@ -3,23 +3,31 @@ import { RotateCcw, Save, ShieldCheck, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PromptCodeEditor } from "@/components/prompt/prompt-code-editor";
-import {
-    listUserPromptPreferences,
-    resetUserPromptCustomization,
-    updateUserPromptCustomization,
-    type UserPromptCustomization,
-    type UserPromptPreference,
-} from "@/services/api/auth";
+import { listUserPromptPreferences, resetUserPromptCustomization, updateUserPromptCustomization, type UserPromptCustomization, type UserPromptPreference } from "@/services/api/auth";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 type CustomizationMode = UserPromptCustomization["mode"];
 
-const modeOptions = [
-    { label: "跟随平台", value: "inherit" },
-    { label: "追加要求", value: "append" },
-    { label: "高级改写", value: "rewrite" },
-];
+const promptDefinitionLocaleKeys: Record<string, { label: string; category: string; description: string }> = {
+    art_setup: { label: "art-setup", category: "creation-category", description: "art-setup-description" },
+    episode_script: { label: "episode-script", category: "creation-category", description: "episode-script-description" },
+    outline_plan: { label: "outline-plan", category: "creation-category", description: "outline-plan-description" },
+    storyboard_plan: { label: "storyboard-plan", category: "storyboard-category", description: "storyboard-plan-description" },
+    storyboard_repair: { label: "storyboard-repair", category: "storyboard-category", description: "storyboard-repair-description" },
+    storyboard_first_frame: { label: "storyboard-first-frame", category: "generation-category", description: "storyboard-first-frame-description" },
+    storyboard_video: { label: "storyboard-video", category: "generation-category", description: "storyboard-video-description" },
+    character_extract: { label: "character-extract", category: "character-category", description: "character-extract-description" },
+    character_turnaround: { label: "character-turnaround", category: "character-category", description: "character-turnaround-description" },
+};
 
 export function PromptPreferencesPane() {
+    const { t } = useTranslation("canvas");
+    const modeOptions = [
+        { label: t("settings:follow-platform"), value: "inherit" },
+        { label: t("settings:appended-requirements"), value: "append" },
+        { label: t("settings:advanced-rewrite"), value: "rewrite" },
+    ];
     const { message, modal } = App.useApp();
     const [preferences, setPreferences] = useState<UserPromptPreference[]>([]);
     const [selectedOperation, setSelectedOperation] = useState("");
@@ -42,7 +50,7 @@ export function PromptPreferencesPane() {
             setSelectedOperation((current) => preferredOperation || current || result.preferences[0]?.definition.operation || "");
         } catch (error) {
             if (reqId !== requestIdRef.current) return;
-            const msg = error instanceof Error ? error.message : "读取提示词偏好失败";
+            const msg = error instanceof Error ? error.message : t("settings:failed-to-load-prompt-preferences");
             setLoadError(msg);
             message.error(msg);
         } finally {
@@ -52,9 +60,28 @@ export function PromptPreferencesPane() {
         }
     };
 
-    useEffect(() => { void reload(); }, []);
+    useEffect(() => {
+        void reload();
+    }, []);
 
-    const selected = useMemo(() => preferences.find((item) => item.definition.operation === selectedOperation), [preferences, selectedOperation]);
+    const localizedPreferences = useMemo(
+        () =>
+            preferences.map((preference) => {
+                const keys = promptDefinitionLocaleKeys[preference.definition.operation];
+                if (!keys) return preference;
+                return {
+                    ...preference,
+                    definition: {
+                        ...preference.definition,
+                        label: t(`settings:${keys.label}`),
+                        category: t(`settings:${keys.category}`),
+                        description: t(`settings:${keys.description}`),
+                    },
+                };
+            }),
+        [preferences, t],
+    );
+    const selected = useMemo(() => localizedPreferences.find((item) => item.definition.operation === selectedOperation), [localizedPreferences, selectedOperation]);
     const savedMode = selected?.customization?.mode || "inherit";
     const savedAppendContent = savedMode === "append" ? selected?.customization?.content || "" : "";
     const savedRewriteContent = savedMode === "rewrite" ? selected?.customization?.content || "" : selected?.template?.content || "";
@@ -69,7 +96,9 @@ export function PromptPreferencesPane() {
         setRewriteContent(customization?.mode === "rewrite" ? customization.content : preference?.template?.content || "");
     };
 
-    useEffect(() => { restoreDraft(selected); }, [selected]);
+    useEffect(() => {
+        restoreDraft(selected);
+    }, [selected]);
 
     useEffect(() => {
         if (!dirty) return undefined;
@@ -85,10 +114,10 @@ export function PromptPreferencesPane() {
             return;
         }
         modal.confirm({
-            title: "切换模板并放弃修改？",
-            content: "当前模板还有未保存内容。切换后这些修改将丢失。",
-            okText: "放弃并切换",
-            cancelText: "继续编辑",
+            title: t("settings:switch-template-and-discard-changes"),
+            content: t("settings:this-template-has-unsaved-changes-switching-will-discard-them"),
+            okText: t("settings:discard-and-switch"),
+            cancelText: t("settings:keep-editing"),
             okButtonProps: { danger: true },
             onOk: () => setSelectedOperation(operation),
         });
@@ -98,16 +127,16 @@ export function PromptPreferencesPane() {
         if (!selected) return;
         const content = mode === "append" ? appendContent : mode === "rewrite" ? rewriteContent : "";
         if (mode !== "inherit" && !content.trim()) {
-            message.warning("请填写个人提示词内容");
+            message.warning(t("settings:enter-your-personal-prompt-content"));
             return;
         }
         setSaving(true);
         try {
             await updateUserPromptCustomization(selected.definition.operation, { mode, content });
             await reload(selected.definition.operation);
-            message.success("提示词偏好已保存");
+            message.success(t("settings:prompt-preferences-saved"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存提示词偏好失败");
+            message.error(error instanceof Error ? error.message : t("settings:failed-to-save-prompt-preferences"));
         } finally {
             setSaving(false);
         }
@@ -116,17 +145,17 @@ export function PromptPreferencesPane() {
     const reset = () => {
         if (!selected) return;
         modal.confirm({
-            title: "恢复平台模板？",
-            content: `将删除“${selected.definition.label}”的个人定制，后续自动跟随平台版本。`,
-            okText: "恢复平台模板",
-            cancelText: "取消",
+            title: t("settings:restore-the-platform-template"),
+            content: t("settings:this-removes-your-customization-of-param-it-will-follow-the-platform-ver", { label: selected.definition.label }),
+            okText: t("settings:restore-platform-template"),
+            cancelText: t("settings:cancel"),
             onOk: async () => {
                 try {
                     await resetUserPromptCustomization(selected.definition.operation);
                     await reload(selected.definition.operation);
-                    message.success("已恢复平台模板");
+                    message.success(t("settings:platform-template-restored"));
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "恢复平台模板失败");
+                    message.error(error instanceof Error ? error.message : t("settings:failed-to-restore-platform-template"));
                 }
             },
         });
@@ -136,38 +165,48 @@ export function PromptPreferencesPane() {
     if (loadError && preferences.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
-                <Alert type="error" showIcon message="加载提示词偏好失败" description={loadError} />
-                <Button icon={<RotateCcw className="size-4" />} onClick={() => void reload()}>重试</Button>
+                <Alert type="error" showIcon message={t("settings:failed-to-load-prompt-preferences-2")} description={loadError} />
+                <Button icon={<RotateCcw className="size-4" />} onClick={() => void reload()}>
+                    {t("settings:retry")}
+                </Button>
             </div>
         );
     }
-    if (!selected) return <div className="py-16 text-center text-sm text-foreground/50">暂无可配置的提示词模板</div>;
+    if (!selected) return <div className="py-16 text-center text-sm text-foreground/50">{t("settings:no-configurable-prompt-templates-yet")}</div>;
 
-    const templateContent = selected.template?.content || "当前没有启用的平台模板";
-    const previewCreative = mode === "inherit" ? templateContent : mode === "append" ? `${templateContent}\n\n【用户个性化创作要求】\n${appendContent}` : rewriteContent;
-    const outputLabel = selected.definition.outputType === "json" ? selected.definition.schemaKey || "JSON" : "文本";
+    const templateContent = selected.template?.content || t("settings:no-platform-templates-enabled");
+    const previewCreative = mode === "inherit" ? templateContent : mode === "append" ? t("settings:param-user-s-personal-creation-requirements-param", { templateContent: templateContent, appendContent: appendContent }) : rewriteContent;
+    const outputLabel = selected.definition.outputType === "json" ? selected.definition.schemaKey || "JSON" : t("settings:text");
 
     return (
         <div className="flex min-h-full flex-col">
             <header className="shrink-0 pb-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        <label className="mb-2 block text-xs font-medium text-foreground/55" htmlFor="prompt-template-select">提示词模板</label>
+                        <label className="mb-2 block text-xs font-medium text-foreground/55" htmlFor="prompt-template-select">
+                            {t("settings:prompt-templates")}
+                        </label>
                         <Select
                             id="prompt-template-select"
                             className="w-full max-w-md"
                             value={selectedOperation}
                             onChange={selectOperation}
-                            options={preferences.map((item) => ({
+                            options={localizedPreferences.map((item) => ({
                                 value: item.definition.operation,
-                                label: `${item.definition.category} · ${item.definition.label}${item.customization && item.customization.mode !== "inherit" ? " · 已定制" : ""}`,
+                                label: `${item.definition.category} · ${item.definition.label}${item.customization && item.customization.mode !== "inherit" ? t("settings:customized") : ""}`,
                             }))}
                         />
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button icon={<Undo2 className="size-4" />} disabled={!dirty || saving} onClick={() => restoreDraft()}>撤销修改</Button>
-                        <Button icon={<RotateCcw className="size-4" />} disabled={!selected.customization || saving} onClick={reset}>恢复平台</Button>
-                        <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty} onClick={() => void save()}>保存更改</Button>
+                        <Button icon={<Undo2 className="size-4" />} disabled={!dirty || saving} onClick={() => restoreDraft()}>
+                            {t("settings:revert-changes")}
+                        </Button>
+                        <Button icon={<RotateCcw className="size-4" />} disabled={!selected.customization || saving} onClick={reset}>
+                            {t("settings:restore-platform")}
+                        </Button>
+                        <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty} onClick={() => void save()}>
+                            {t("settings:save-changes")}
+                        </Button>
                     </div>
                 </div>
 
@@ -175,9 +214,16 @@ export function PromptPreferencesPane() {
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-base font-semibold">{selected.definition.label}</h2>
-                            <Tag variant="filled">平台 v{selected.template?.version || "--"}</Tag>
+                            <Tag variant="filled">
+                                {t("settings:platform-v")}
+                                {selected.template?.version || "--"}
+                            </Tag>
                             <Tag variant="filled">{outputLabel}</Tag>
-                            {dirty ? <Tag variant="filled" color="warning">未保存</Tag> : null}
+                            {dirty ? (
+                                <Tag variant="filled" color="warning">
+                                    {t("settings:unsaved")}
+                                </Tag>
+                            ) : null}
                         </div>
                         <p className="mt-1 text-xs leading-5 text-foreground/55">{selected.definition.description}</p>
                     </div>
@@ -185,14 +231,18 @@ export function PromptPreferencesPane() {
                 </div>
             </header>
 
-            {selected.outdated ? <Alert className="mt-4" type="warning" showIcon title="平台模板已更新" description="当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。" /> : null}
+            {selected.outdated ? <Alert className="mt-4" type="warning" showIcon title={t("settings:platform-template-updated")} description={t("settings:your-advanced-rewrite-is-based-on-an-older-version-keep-the-current-rewr")} /> : null}
 
             <div className="grid min-h-0 flex-1 gap-4 pt-4 lg:grid-cols-3">
                 <section className="flex min-h-0 flex-col lg:col-span-2">
                     <div className="mb-3 shrink-0">
-                        <h3 className="text-sm font-semibold">{mode === "inherit" ? "当前平台模板" : mode === "append" ? "追加个人要求" : "改写创作策略"}</h3>
+                        <h3 className="text-sm font-semibold">{mode === "inherit" ? t("settings:current-platform-template") : mode === "append" ? t("settings:append-personal-requirements") : t("settings:rewrite-creation-strategy")}</h3>
                         <p className="mt-1 text-xs leading-5 text-foreground/50">
-                            {mode === "inherit" ? "平台升级后自动使用新版本。" : mode === "append" ? "内容追加在平台策略之后，仍会自动继承平台升级。" : "只替换创作策略；动态项目数据和输出契约仍由服务端强制注入。"}
+                            {mode === "inherit"
+                                ? t("settings:automatically-adopts-new-versions-after-platform-upgrades")
+                                : mode === "append"
+                                  ? t("settings:content-is-appended-after-the-platform-strategy-and-still-inherits-platf")
+                                  : t("settings:only-replaces-the-creation-strategy-dynamic-project-data-and-output-cont")}
                         </p>
                     </div>
                     {mode === "append" ? (
@@ -201,7 +251,7 @@ export function PromptPreferencesPane() {
                             value={appendContent}
                             maxLength={12000}
                             showCount
-                            placeholder="例如：仙侠项目采用明亮、宏大、高清的休闲剧质感；避免阴森恐怖色调，人物表演自然、轻松。"
+                            placeholder={t("settings:e-g-for-a-xianxia-project-use-a-bright-grand-high-definition-casual-dram")}
                             onChange={(event) => setAppendContent(event.target.value)}
                         />
                     ) : (
@@ -209,7 +259,7 @@ export function PromptPreferencesPane() {
                             <PromptCodeEditor
                                 value={mode === "inherit" ? templateContent : rewriteContent}
                                 readOnly={mode === "inherit"}
-                                ariaLabel={mode === "inherit" ? "平台提示词模板" : "个人提示词改写"}
+                                ariaLabel={mode === "inherit" ? t("settings:platform-prompt-templates") : t("settings:personal-prompt-rewrites")}
                                 onChange={mode === "rewrite" ? setRewriteContent : undefined}
                             />
                         </div>
@@ -222,18 +272,37 @@ export function PromptPreferencesPane() {
                         items={[
                             {
                                 key: "baseline",
-                                label: "平台基线",
+                                label: t("settings:platform-baseline"),
                                 children: <pre className="thin-scrollbar max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-6 text-foreground/65">{templateContent}</pre>,
                             },
                             {
                                 key: "contract",
-                                label: "输出契约",
-                                children: <div><div className="mb-3 flex items-center gap-2 text-xs font-medium"><ShieldCheck className="size-4" />服务端只读</div><pre className="thin-scrollbar max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-6 text-foreground/65">{selected.definition.outputContract}</pre></div>,
+                                label: t("settings:output-contract"),
+                                children: (
+                                    <div>
+                                        <div className="mb-3 flex items-center gap-2 text-xs font-medium">
+                                            <ShieldCheck className="size-4" />
+                                            {t("settings:server-read-only")}
+                                        </div>
+                                        <pre className="thin-scrollbar max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-6 text-foreground/65">{selected.definition.outputContract}</pre>
+                                    </div>
+                                ),
                             },
                             {
                                 key: "preview",
-                                label: "最终结构",
-                                children: <div className="space-y-5 text-xs leading-6"><section><div className="mb-2 font-medium text-foreground/80">创作策略</div><pre className="thin-scrollbar max-h-64 overflow-auto whitespace-pre-wrap text-foreground/65">{previewCreative || "尚未填写"}</pre></section><section><div className="mb-2 font-medium text-foreground/80">运行时强制追加</div><p className="text-foreground/55">当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。</p></section></div>,
+                                label: t("settings:final-structure"),
+                                children: (
+                                    <div className="space-y-5 text-xs leading-6">
+                                        <section>
+                                            <div className="mb-2 font-medium text-foreground/80">{t("settings:creation-strategy")}</div>
+                                            <pre className="thin-scrollbar max-h-64 overflow-auto whitespace-pre-wrap text-foreground/65">{previewCreative || t("settings:not-filled-in-yet")}</pre>
+                                        </section>
+                                        <section>
+                                            <div className="mb-2 font-medium text-foreground/80">{t("settings:force-appended-at-runtime")}</div>
+                                            <p className="text-foreground/55">{t("settings:current-plot-project-style-active-character-versions-canvas-assets-and-p")}</p>
+                                        </section>
+                                    </div>
+                                ),
                             },
                         ]}
                     />

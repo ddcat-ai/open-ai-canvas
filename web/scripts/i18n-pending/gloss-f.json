@@ -1,0 +1,16 @@
+{
+    "角色版本信息不完整": "Character version info is incomplete",
+    "请先在设置中配置可用的图片模型": "Configure an available image model in Settings first",
+    "未选择角色": "No character selected",
+    "请选择一张包含正面、侧面和背面的三视图设定图": "Select a turnaround sheet showing front, side, and back views",
+    "所选图片尚未同步到后端资源库": "The selected image has not been synced to the backend asset library yet",
+    "所选素材已不存在，请重新选择": "The selected assets no longer exist. Please choose again",
+    "请选择一张三视图设定图": "Select a turnaround sheet",
+    "请选择章节": "Select a chapter",
+    "章节正文尚未加载完成": "Chapter content has not finished loading",
+    "请先保存当前章节，再运行 AI 分析": "Save the current chapter before running AI analysis",
+    "当前章节没有可分析的正文": "The current chapter has no content to analyze",
+    "目标画布尚未同步到本地，请刷新后重试": "Target canvas has not synced locally yet. Refresh and retry",
+    "模型没有返回可用结果": "The model returned no usable result",
+    "AI 没有返回有效的章节内容，请重试": "AI returned no valid chapter content. Please retry"
+}

@@ -1,0 +1,3956 @@
+[
+ {
+  "zh": "【服饰与材质系统】服装按角色身份建立黑白灰明度差、纹理密度和轮廓结构，使用羊毛、棉、皮革、金属与玻璃的真实反差；图案不依赖颜色，必须通过材质和明度可辨。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用几何清晰、层次明确的城市街道、室内、车站、剧院和工业空间；墙面、玻璃、砖石、金属和雾气都以灰阶材质库控制，不添加无叙事的奇观背景。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】使用硬光、侧光、背光和局部高光塑造戏剧性，允许少量胶片颗粒与光晕；表演通过停顿、视线、走位和夸张但可信的肢体传达，具体节奏由分镜决定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立灰阶色卡、角色轮廓、帽饰与道具明度表、光影基线和场景构图规则；同一角色的服装纹理和标志道具在不同曝光下仍需稳定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止随意套用棕色复古滤镜、画面全黑、现代彩色屏幕抢戏、过度烟雾、夸张舞台妆、无意义鱼眼变形、角色剪影混淆和字幕水印。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "宏大星际尺度与鲜明阵营服饰结合可信航天结构；用色彩、徽记和材质建立政治与冒险叙事，而不是堆砌宇宙奇观。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】东方叙事语境下的太空歌剧项目，融合星际航行、阵营政治、家族关系与冒险成长；世界观允许宏大奇观，但人物动机、技术限制和空间尺度必须清楚可追踪。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】全项目色板使用权重约为 45% 深空黑、冷灰、银白和舱体白，35% 阵营主色与舰队识别色，20% 星云紫、能源蓝或警戒橙作为叙事强调；每个阵营只拥有稳定主色和辅助色。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】角色采用真实东方骨相或统一动画化比例，通过军衔、阵营徽记、发型、体型和功能装备区分；太空服、驾驶服和礼服必须适配人体活动，角色脸部与身体比例跨视角稳定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】建立舱内工作服、战术航天服、舰队制服、外交礼服和维修装模块，统一使用复合纤维、陶瓷、金属、透明面罩和软质密封件；接口、扣件、徽记与生命保障装置具有功能逻辑。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用环形空间站、舰桥、推进舱、殖民地、轨道电梯和低重力生活区，结构遵循压力舱、维护通道、重力与照明逻辑；奇观服务于文明尺度，不随机拼贴异星建筑。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】保持深空黑与舱内工作光的层次，使用克制体积光和可信屏幕反射；动作体现惯性、失重、穿戴装备和空间限制，具体战斗与运镜由分镜决定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立舰船型号、阵营徽记、舱体材质、接口标准、武器尺寸、角色制服和能源颜色版本表；任何舰船升级、损坏与换装都要有剧情原因。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止现实宇航服直接套用、星球大小失真、所有阵营同一颜色、无功能 HUD、魔法与科技规则混杂、舰船结构穿透、角色装备随机变化和版权品牌标识。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "高对比块面、网点纹理与漫画格律构成可读的动作喜剧视觉；夸张来自构图、拟声和姿态，角色资产仍保持连续性。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】面向动作、喜剧与都市冒险的漫画分镜风格，统一使用清晰外轮廓、平涂块面、网点纹理和有节奏的画格感；画面可以夸张，但角色关系、动作方向与空间连续性必须可靠。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】全项目以米白、墨黑和中性灰为结构底色，30% 使用高饱和红、黄、蓝或项目主色，10% 使用单一冲击色承担危险、速度或情绪重点；颜色必须形成角色和阵营识别。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】统一采用稳定头身比例、强轮廓、清晰发型和可重复的表情符号；角色通过剪影、服装块面、姿态和道具区分，夸张表情不得改变基本脸型与身份。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】服饰细节简化成大色块、粗线纹样和少量高光，棉、皮革、金属、牛仔和玻璃通过线条密度与高光形状区分；战斗或动作服装必须兼顾可动性。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】使用可快速识别的街区、商店、学校、办公室、车站和屋顶等都市空间，背景以几何块面、透视线和有限网点表达；场景不抢角色轮廓，也不使用现实品牌标识。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】动作使用速度线、冲击形状、停格姿势和清晰重心，切换节奏由分镜控制；镜头可以模拟画格切分，但不得牺牲表情、手势和动作方向的可读性。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立角色标准角度、表情表、线宽、网点密度、拟声字形和动作特效模板；不同镜头共享同一线条、色块与纹理规则。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止写实照片与漫画角色混用、线条粗细随机、所有画面满屏速度线、复杂背景压住人物、拟声文字乱码、角色换脸、四肢结构错误和过度血腥猎奇。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "纸张颗粒、柔和色块和手绘边缘构成温暖童话世界；角色表情与轮廓清楚，避免把绘本感做成泛化的柔焦滤镜。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】面向成长、亲子与寓言叙事的绘本童话动画体系，统一使用手绘边缘、纸张颗粒、有限色块和可读角色表情；故事世界可以奇幻，但情绪和人物关系保持温暖、具体且可理解。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】全项目色板使用权重约为 55% 纸张暖白、雾蓝、鼠尾草绿和浅木色，30% 角色与场景主色，15% 蜜糖黄、珊瑚红或星光金作为叙事点色；避免所有画面都成为粉彩渐变。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】角色采用统一绘本头身、圆润但有差异的轮廓和清晰眼鼻嘴比例，通过帽子、发型、耳朵、体型与服装区分；正侧背视图必须保留同一手绘造型特征。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】衣服使用布料、针织、皮革、木扣、纸张和毛线等可触摸材质，纹样简化为少量重复元素；角色标志物件和衣领、袖口、鞋履保持稳定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用村庄、森林、阁楼、车站、河岸、市场与小型城堡等可读场景，建筑结构偏手工搭建和绘本透视；奇幻元素从生活物件变形而来，不做无逻辑异域拼贴。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】保持柔和但有方向的光影、纸张纹理和有限动画节奏，动作强调呼吸、重心、眼神与衣摆跟随；具体动作与镜头调度交由分镜决定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立标准色卡、纸张纹理、笔刷边缘、角色比例、表情表、场景模块和魔法点色规则；新资产必须匹配已有线条和颗粒尺度。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止塑料 3D、泛滥柔焦、角色同脸、过度糖果色、阴影方向漂移、复杂文字水印、细节密度失控、随机改发型和把儿童角色做成恐怖谷。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "现实材质与不可能空间并置，以镜像、尺度错位和雾化光线表达梦境；所有超现实变化服务角色心理和叙事线索。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】以现实人物进入不可能空间为核心的超现实梦境短剧体系，梦境不是随机奇观，而是由人物记忆、欲望、恐惧和选择构成的可追踪视觉系统；现实段落与梦境段落必须有明确差异和回返规则。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】现实段落使用自然中性灰与低饱和环境色，梦境段落使用 35% 雾白、浅金、冷青和暗紫，15% 固定象征色承载角色心理线索；同一象征色不能在不同角色间随意换义。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】角色保持真实东亚骨相、年龄与身体比例，梦境只允许在发型、服装、尺度、影子或局部材质上做有规则的变形；正侧背结构必须仍能确认是同一角色。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】现实服装遵循生活逻辑，梦境服装可以通过重复、倒置、透明、过大或过小表达心理，但面料、纽扣、鞋履和标志物件需要保持可追踪变体。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用镜像房间、无尽楼梯、漂浮街道、倒置建筑、空旷大厅和雾中自然等空间语法；每种不可能空间绑定一个叙事规则，不把随机生成的城堡和星空堆在一起。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】现实使用可信光源和稳定镜头，梦境使用慢速漂浮、镜面反射、尺度变化与非连续转场；特效保持节制，具体梦境动作和节拍由分镜决定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立象征色、梦境规则、角色标志物件、空间变形前后对照、镜面材质和转场语法表；每次变形都能对应剧情节点并可恢复。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止无因由的随机变形、全屏烟雾、过度镜面、所有空间都漂浮、梦境与现实没有区别、角色五官融化、符号含义漂移和用噪点掩盖生成错误。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "真实自然光、植物与手作生活构成松弛的在地质感；以季节、声音和微小行动表达疗愈，不做广告式空镜。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】面向家庭关系、返乡、成长与情绪修复的自然疗愈真人短剧体系，核心是人物在具体自然环境中的生活行动和关系变化；自然不是装饰背景，而是参与叙事的真实空间。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】全项目色板使用权重约为 55% 叶绿、苔藓绿、土色和米白，30% 木材、石头、天空与季节环境色，15% 赭红、芥末黄或人物识别色；保持自然白平衡和季节连续性。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】角色采用真实东亚面孔、自然年龄与生活状态，保留晒痕、发丝、体态和劳动痕迹；通过衣着层次、动作习惯、发型与随身物件建立差异，不使用商业广告式精致人物。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】建立棉麻、针织、旧牛仔、雨具、工作服、帆布鞋与草帽衣橱，材质保留褶皱、泥土、汗水和使用痕迹；固定角色的外套、包和手作物件形成识别资产。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用山村住宅、林间小屋、农场、茶室、河岸、菜园、集市和小城边缘空间，保留木、石、土、旧墙、工具与本地生活设施；建筑应有地域和季节证据。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】采用真实日光、阴天漫射、篝火与室内暖灯，允许风、雨、昆虫和环境声进入画面；动态观察人物的微小行动与关系停顿，避免只拍漂亮自然空镜。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立季节色卡、植物与农具库、住宅布局、角色衣橱、手作物件和天气连续性记录；季节变化应带来可见但渐进的资产版本。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止商业民宿广告感、过度航拍、饱和滤镜、欧美乡村替代中国在地生活、干净无人的自然空间、人物永远精致、随机换季和把疗愈做成空洞慢镜头。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自然灰土色、真实东亚普通人与中国在地生活空间；保留环境痕迹和观察式影像气质，让家庭与社会议题更可信。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目定位】家庭、成长与社会议题的现实生活纪实短剧体系，接近观察式剧情纪录片：真实东亚普通人、真实中国在地空间、自然曝光和适度不完美；全片追求生活证据与人物关系的可信度，不追求广告级精致。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【项目色彩系统】全项目色板使用权重约为 70% 自然灰、米白、旧木、土色和水泥色，20% 当地墙面、家具、植物与公共设施的环境色，10% 衣物、生活用品或项目识别色。色板允许随季节与地区变化，但始终保持低饱和、自然白平衡和在地真实感。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【角色设计系统】选择具有真实年龄、体型、家庭关系和职业痕迹的东亚人物，保留皱纹、晒痕、眼袋、发丝与生活状态；妆发接近日常，家人之间保持可信相似性，不使用网红脸、统一精致妆和不符合生活条件的造型。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【服饰与材质系统】按季节、职业和经济条件建立家居服、工装、校服、普通衬衫、羽绒服与布鞋等衣橱，保留褶皱、磨损和反复使用痕迹；生活用品采用真实品牌中性化设计与合理使用年限，不做崭新陈列品。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【建筑世界观】统一使用中国老小区、城中村、普通住宅、学校、医院、工厂、菜市场、公交站和县城街道，保留线缆、晾晒、污渍、拥挤家具与中文公共标识；项目地点共享明确地域、年代和经济环境。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【影像与动态基线】全片保持自然光感、现场混合色温、适度颗粒与观察式表演，允许真实环境中的停顿、重复和轻微不完美；动态风格朴素、贴近人物，不使用炫技摄影或消费苦难的煽情手法，具体调度由分镜决定。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【资产一致性】建立家庭成员外貌关系、角色衣橱、生活道具使用痕迹、住宅布局、社区设施和地域标识资产库；时间推进造成的磨损、成长和季节变化必须作为连续版本维护。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "【全局禁用】禁止商业广告布光、过度磨皮、精致样板房、欧美都市替代中国在地空间、强烈电影滤镜、摆拍式苦难、统一网红脸、无生活痕迹的道具和把纪实误做成低清脏画面。",
+  "files": [
+   "src/components/canvas/canvas-style-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{processedEntries}}/{{totalEntries}} 条 · 批次 {{batchIndex}}/{{batchTotal}}",
+  "files": [
+   "src/components/canvas/canvas-subtitle-dialog.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂停预览",
+  "files": [
+   "src/components/canvas/canvas-timeline-preview.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "播放预览",
+  "files": [
+   "src/components/canvas/canvas-timeline-preview.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "该位置无视频片段",
+  "files": [
+   "src/components/canvas/canvas-timeline-preview.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "无视频片段",
+  "files": [
+   "src/components/canvas/canvas-timeline-preview.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "此处无字幕，点选字幕片段后在下方编辑",
+  "files": [
+   "src/components/canvas/canvas-timeline-preview.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布外观",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx",
+   "src/lib/canvas/tool-registry/definitions/main-toolbar-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "调整整个创作空间",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "主题模式",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "浅色",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "深色",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "空间网格",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "点",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "线",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "空白",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片信息",
+  "files": [
+   "src/components/canvas/canvas-toolbar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文件上传失败，请稍后重试",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "上传文件",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "批量导入图片、视频和音频到当前画布",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "“{{name}}”不是支持的图片、视频或音频文件",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "拖动文件到这里，或点击选择",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持同时选择多个文件",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持的文件类型",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已选文件",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文件将在确认后按顺序添加到画布",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "预览：{{name}}",
+  "files": [
+   "src/components/canvas/canvas-upload-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "主版本",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "版本图片",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "版本视频",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "点击定位到画布节点",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认尺寸",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前主版本",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "设为主版本",
+  "files": [
+   "src/components/canvas/canvas-version-compare-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "尾帧",
+  "files": [
+   "src/components/canvas/canvas-video-prompt-tools.tsx",
+   "src/lib/canvas/canvas-project-generation.ts",
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "不指定",
+  "files": [
+   "src/components/canvas/canvas-video-prompt-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频设置：{{summary}}",
+  "files": [
+   "src/components/canvas/canvas-video-settings-popover.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频设置 · {{summary}}",
+  "files": [
+   "src/components/canvas/canvas-video-settings-popover.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "创建下一步",
+  "files": [
+   "src/components/canvas/canvas-workspace-overlays.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "引用已选 {{length}} 个节点",
+  "files": [
+   "src/components/canvas/canvas-workspace-overlays.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "引用当前节点",
+  "files": [
+   "src/components/canvas/canvas-workspace-overlays.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭连线创建菜单",
+  "files": [
+   "src/components/canvas/canvas-workspace-overlays.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音频参考",
+  "files": [
+   "src/components/canvas/canvas-workspace-overlays.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭小地图",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "打开小地图",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "适应全部内容",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "缩小画布",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "精确缩放",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "放大画布",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布快捷键",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布尺度",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "精确控制视野密度",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "精确缩放画布",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布视图控制",
+  "files": [
+   "src/components/canvas/canvas-zoom-controls.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "未设置镜头",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "打开 3D 导演台",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "切换到专业模式后编辑导演台",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{title}} 场景缩略图",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "进入导演台",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "专业模式可编辑",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "对象",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "机位",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "场景预览",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在准备场景",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{value}} 个{{label}}",
+  "files": [
+   "src/components/canvas/director/canvas-director-node-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "导演台视口工具",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "移动对象",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "旋转对象",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "缩放对象",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "添加演员",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "添加立方体",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "构图预览",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "骨骼视图",
+  "files": [
+   "src/components/canvas/director/director-viewport-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "无法解析为图表数据（需要 JSON 数组或 CSV）",
+  "files": [
+   "src/components/canvas/nodes/chart-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接输出 JSON 数组或 CSV 的文本节点",
+  "files": [
+   "src/components/canvas/nodes/chart-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "亮度",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "对比",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx",
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "饱和",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "色相",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接一张图片即可调色",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "调色",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx",
+   "src/lib/canvas/node-registry/definitions/builtin-nodes.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "未调色",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "复位",
+  "files": [
+   "src/components/canvas/nodes/color-grade-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "再连一张图片即可对比",
+  "files": [
+   "src/components/canvas/nodes/compare-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接两张图片进行对比",
+  "files": [
+   "src/components/canvas/nodes/compare-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接输出 HTML 的文本节点",
+  "files": [
+   "src/components/canvas/nodes/html-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "源码里的",
+  "files": [
+   "src/components/canvas/nodes/html-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "会替换为上游文本",
+  "files": [
+   "src/components/canvas/nodes/html-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接文本节点，或双击编辑 Markdown",
+  "files": [
+   "src/components/canvas/nodes/markdown-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接一张 360° 等距柱状全景图",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "全景加载失败（图片可能不允许跨域读取）",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "性能模式下仅显示预览",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "360° 全景",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "进入环视",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "退出环视",
+  "files": [
+   "src/components/canvas/nodes/panorama-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "节点预览",
+  "files": [
+   "src/components/canvas/nodes/sandboxed-frame.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "上游内容里没有找到 <svg> 源码",
+  "files": [
+   "src/components/canvas/nodes/svg-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接输出 SVG 的文本节点",
+  "files": [
+   "src/components/canvas/nodes/svg-node.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "工具栏设置",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "拖动调整顺序，关闭不常用入口",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭工具栏设置",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已显示",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "恢复默认工具栏设置",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "恢复默认",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "主工具栏顺序",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "拖动调整{{label}}顺序",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "隐藏",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "显示",
+  "files": [
+   "src/components/canvas/toolbars/toolbar-settings-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认",
+  "files": [
+   "src/components/image-settings-panel.tsx",
+   "src/components/model-capability-editor.tsx",
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "字幕",
+  "files": [
+   "src/components/video-player.tsx",
+   "src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "收起生成详情",
+  "files": [
+   "src/components/ai/generation-tool-card.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "展开生成详情",
+  "files": [
+   "src/components/ai/generation-tool-card.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在思考",
+  "files": [
+   "src/components/ai/message-reasoning.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已思考 {{durationSeconds}} 秒",
+  "files": [
+   "src/components/ai/message-reasoning.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "思考过程",
+  "files": [
+   "src/components/ai/message-reasoning.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "参考内容",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "这个分类还没有素材",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "换个分类后再试。",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "将文件夹放到画布",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "素材操作失败，请重试",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "素材上传失败，请重试",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文件夹操作失败，请重试",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "插件来源",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "本地素材",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "素材库来源：",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "搜索素材名称或标签",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "搜索素材",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已选",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "素材分类",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文件夹",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "全部文件夹",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "换个分类，或从底部上传一份新素材。",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在上传 {{uploadingCount}} 个素材",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "上传新素材",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "保存完成后会自动选中",
+  "files": [
+   "src/components/assets/asset-library-picker-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音频设置",
+  "files": [
+   "src/components/audio-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "声音",
+  "files": [
+   "src/components/audio-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "声音指令",
+  "files": [
+   "src/components/audio-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "例如：自然、温暖、适合旁白。",
+  "files": [
+   "src/components/audio-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "任务中心",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "读取功能开放状态失败",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在确认功能状态",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "无法确认功能状态",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "返回管理后台",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前功能已由平台管理员关闭。",
+  "files": [
+   "src/components/auth/require-feature.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自定义请求头",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认发送",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "；添加 User-Agent 后会覆盖默认值。",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "添加 User-Agent",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "Header 值",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "Header 名称",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "删除请求头",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "添加请求头",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自定义请求头最多支持 {{MAX_HEADER_COUNT}} 项",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请求头名称无效，请使用标准 HTTP Header 名称",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{name}} 由系统管理，不允许自定义",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请求头不能重复：{{name}}",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{name}} 的值包含非法控制字符",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "单个请求头名称或值过长",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自定义请求头总大小不能超过 16KB",
+  "files": [
+   "src/components/channel-headers-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "实时对话",
+  "files": [
+   "src/components/conversation/voice-recording-button.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器",
+  "files": [
+   "src/components/conversation/voice-recording-inline.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "未识别到语音内容，请重试",
+  "files": [
+   "src/components/conversation/voice-recording-inline.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在转写...",
+  "files": [
+   "src/components/conversation/voice-recording-inline.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "转写完成",
+  "files": [
+   "src/components/conversation/voice-recording-inline.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "停止并转写",
+  "files": [
+   "src/components/conversation/voice-recording-inline.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在创建图片",
+  "files": [
+   "src/components/image-generation-pending.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "马上就好了",
+  "files": [
+   "src/components/image-generation-pending.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "再等等",
+  "files": [
+   "src/components/image-generation-pending.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在整理细节",
+  "files": [
+   "src/components/image-generation-pending.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图像设置",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "质量",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请求模型输出保留 Alpha 通道的 PNG",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "是否支持透明背景由当前模型接口决定",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "16倍数对齐",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "输入完成后自动向上补成 16 的倍数",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "尺寸或比例",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成张数",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自定义生成张数",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "查看更新日志",
+  "files": [
+   "src/components/layout/app-changelog-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "产品能力、交互与稳定性变化",
+  "files": [
+   "src/components/layout/app-changelog-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "收起侧栏",
+  "files": [
+   "src/components/layout/app-top-nav.tsx",
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认渠道",
+  "files": [
+   "src/components/layout/client-root-init.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "出于安全考虑，链接中的 API Key 已忽略，请在配置中手动填写",
+  "files": [
+   "src/components/layout/client-root-init.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已导入本地直连地址",
+  "files": [
+   "src/components/layout/client-root-init.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "Linux.do 用户",
+  "files": [
+   "src/components/layout/identity-provider-badge.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "先选择创作模型",
+  "files": [
+   "src/components/layout/model-setup-guide.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "配置生图、视频和文本的默认模型，价格会在选择时显示。",
+  "files": [
+   "src/components/layout/model-setup-guide.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "打开模型选择",
+  "files": [
+   "src/components/layout/model-setup-guide.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭模型配置引导",
+  "files": [
+   "src/components/layout/model-setup-guide.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "读取公告失败",
+  "files": [
+   "src/components/layout/system-announcement-center.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "系统公告，{{unreadCount}} 条未读",
+  "files": [
+   "src/components/layout/system-announcement-center.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "读取个人对象存储配置失败",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "登录后可配置个人对象存储。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "个人对象存储已启用，后续上传将优先使用该存储",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "个人对象存储已停用，后续上传将使用平台存储",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "保存个人对象存储配置失败",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "我的对象存储",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "密钥已加密",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "启用个人对象存储",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请选择存储服务",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "可留空，系统会根据 Region 生成标准 COS Endpoint。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选填。填写后浏览器直连七牛私有下载地址；留空时采用“浏览器 → 当前后端 /api/resources/:id/file → 七牛 S3 Endpoint”的代理链路，后端使用 AK/SK 读取并返回文件，无需绑定域名。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请填写完整的 http/https CDN 加速域名",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "腾讯云 SecretId",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "阿里云 AccessKey ID",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{accessKeySecretLabel}}（留空保留）",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "留空保留已加密密钥",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "腾讯云 SecretKey",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "七牛云 SecretKey",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "阿里云 AccessKey Secret",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "上次保存：{{savedAt}}",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "尚未保存个人对象存储配置",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "保存个人对象存储",
+  "files": [
+   "src/components/layout/user-oss-settings-form.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "首页",
+  "files": [
+   "src/components/layout/workspace-command-palette.tsx",
+   "src/components/layout/workspace-sidebar-nav.tsx",
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "搜索页面或操作…",
+  "files": [
+   "src/components/layout/workspace-command-palette.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭搜索",
+  "files": [
+   "src/components/layout/workspace-command-palette.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "未找到「",
+  "files": [
+   "src/components/layout/workspace-command-palette.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "」相关页面",
+  "files": [
+   "src/components/layout/workspace-command-palette.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "筛选",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "有已应用筛选",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "共 0 条",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{start}}-{{end}} / 共 {{total}} 条",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{size}} 条/页",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "分页",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "上一页",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "下一页",
+  "files": [
+   "src/components/layout/workspace-page.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已退出登录",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "退出失败",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "积分",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "管理工具",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "管理员后台",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx",
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "深色模式",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "退出登录",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "登录",
+  "files": [
+   "src/components/layout/workspace-sidebar-footer.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "本机工具",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "模型选择",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成偏好",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "提示词偏好",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "工作台管理",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "展开侧栏菜单",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "创作工作台",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "设置",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx",
+   "src/components/layout/workspace-top-bar.tsx",
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "新建画布",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "快速搜索",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂时无法加载",
+  "files": [
+   "src/components/layout/workspace-state.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "重新加载",
+  "files": [
+   "src/components/layout/workspace-state.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "请检查网络连接后重试，当前内容不会被覆盖。",
+  "files": [
+   "src/components/layout/workspace-state.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在加载内容",
+  "files": [
+   "src/components/layout/workspace-state.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "素材",
+  "files": [
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前位置",
+  "files": [
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "切换主题",
+  "files": [
+   "src/components/layout/workspace-top-bar.tsx",
+   "src/components/ui/animated-theme-toggler.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频能力参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "这些参数会同步到创造页、画布和生成校验",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "协议模板可继续调整",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "引用限制",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "提示词字符数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最少图片引用",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大图片引用",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大视频引用",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频最长秒数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大音频引用",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音频上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音频最长秒数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "范围",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "固定值",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "固定时长（秒）",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "例如：5,10",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最短",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最长",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "步长",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "输出参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认比例",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选择标准档位或输入 768p 等模型专属值",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认分辨率",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "同步音频",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成模式",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持模式",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认模式",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文本理解能力",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认不假设支持图片或视频，只有明确配置后相关请求才会进入该模型。",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "输入限制",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "提示词最大字符数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大参考图片数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "单张图片上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大参考视频数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "单个视频上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片能力参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成界面和后端请求都会按此处裁剪参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前模型独立生效",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "输入与输出限制",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "最大参考图",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "单图上限 MB",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "单次生成张数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "蒙版编辑",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "允许调用图片编辑接口并提交 mask",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "尺寸参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "不发送",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持值",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "例如 1:1、1024x1024",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认值",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "允许自定义",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "允许用户输入支持值之外的尺寸",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "可选生成参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "发送 quality 参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "质量支持值",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "默认质量",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "发送 b64_json 响应格式",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "发送 PNG 输出格式",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持该参数",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "搜索 Logo",
+  "files": [
+   "src/components/model-logo.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "清除 Logo",
+  "files": [
+   "src/components/model-logo.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选择模型 Logo",
+  "files": [
+   "src/components/model-logo.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选择 Logo",
+  "files": [
+   "src/components/model-logo.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "选择模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "未命名渠道",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "平台服务",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "我的模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前输入不符合该模型能力",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂无支持当前输入的{{label}}模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂无匹配的{{label}}模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前没有可用模型，请联系管理员或检查模型配置",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片理解",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频理解",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "支持{{label}}",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{label}}最多 {{max}}{{unit}}",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "智能匹配当前输入",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "积分/秒",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "按量预估",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "全部分辨率",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "全部时长",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "预计 {{amount}}",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "预计",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "本次",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{label}} 积分",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "Gemini 高质量图片生成，适合角色和商业成片",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "高质量图片生成，适合角色和商业成片",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "快速出图，适合批量探索风格",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "通用图片模型，提示词理解稳定",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片生成模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "Gemini 镜头生成与图生视频，适合成片流程",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "镜头生成与图生视频，适合成片流程",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频生成模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "语音、音效或音乐生成",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "长文本、推理与创意写作",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "多模态理解与快速文本生成",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "推理、代码和结构化文本",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "文本生成模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前模型",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "对话与推理",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成与编辑",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成与续写",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "语音与音效",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "模型请求协议",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "异步轮询",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "同步响应",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "配置模型能力与请求协议",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "应用配置",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "智谱 GLM",
+  "files": [
+   "src/components/model-protocol-picker.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{length}} 条当前公告",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "当前没有进行中的公告",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在读取公告",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "公告读取失败",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂无系统公告",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "有新的服务动态时会在这里展示",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布工具",
+  "files": [
+   "src/components/ui/aceternity/floating-dock.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在恢复工作区",
+  "files": [
+   "src/components/ui/aceternity/full-screen-loader.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "同步账号、模型和项目数据",
+  "files": [
+   "src/components/ui/aceternity/full-screen-loader.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正在打开页面",
+  "files": [
+   "src/components/ui/aceternity/full-screen-loader.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "辅助功能",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "隔空播放",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音量增强",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "字幕样式",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "章节",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "关闭字幕",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "开启字幕",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已断开",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "进入全屏",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "进入画中画",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "退出全屏",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "退出画中画",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "全屏",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "循环播放",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "静音",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "正常",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画中画",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画质",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "重新播放",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "跳转",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "快退",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "快进",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "倍速",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "取消静音",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "音量",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "宽屏",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "长图",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频设置",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "添加水印",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "fast 模型自动使用 720P",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自动同步可信素材（确认拥有使用权）",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自适应",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "canvas",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成角色设定图：保持同一角色身份、五官、发型、服装和体态一致，包含正面、侧面、背面和关键表情参考，背景简洁，便于后续镜头复用。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "围绕同一主体设计多机位画面，保持人物、服装、场景和光线一致，分别给出远景、全景、中景、近景、特写、侧面、背面和俯拍视角，镜头之间具有连续性。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "基于当前画面推演下一个连续镜头：保持角色和场景一致，明确主体接下来的动作、视线、环境变化、镜头运动和自然衔接方式，不要跳变构图或身份。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "把这段内容拆成连续镜头节拍。每个镜头写清主体动作、景别、构图、机位、运镜、光线、情绪和与前后镜头的衔接，并保持角色、场景和道具一致。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "保留主体身份、动作和原始构图，优化为真实电影摄影光线：明确主光方向、环境反射、阴影层次、肤色和背景融合，降低塑料感与过度锐化，不改变画面内容。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "将当前要求改写为结构化视频提示词，按时间顺序描述开场画面、主体动作、镜头运动、环境变化、声音和结束画面；消除冲突指令，保留所有关键约束。",
+  "files": [
+   "src/components/canvas/canvas-preset-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "自动",
+  "files": [
+   "src/components/image-settings-panel.tsx",
+   "src/components/video-player.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "高",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "中",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "低",
+  "files": [
+   "src/components/image-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "画布",
+  "files": [
+   "src/components/layout/workspace-sidebar-nav.tsx",
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "创作",
+  "files": [
+   "src/components/layout/workspace-top-bar.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "水印",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "图片质量",
+  "files": [
+   "src/components/model-capability-editor.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生图",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "{{seconds}} 秒",
+  "files": [
+   "src/components/model-picker.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "刚刚",
+  "files": [
+   "src/components/ui/aceternity/announcement-timeline-modal.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "已连接",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "连接中",
+  "files": [
+   "src/components/video-player.tsx",
+   "src/stores/canvas/use-canvas-agent-store.ts"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "暂停",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "播放",
+  "files": [
+   "src/components/video-player.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "横屏",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "竖屏",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "方形",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "秒数",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "生成声音",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "参考图",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ },
+ {
+  "zh": "视频时长（秒）",
+  "files": [
+   "src/components/video-settings-panel.tsx"
+  ],
+  "ns": "domain",
+  "bucket": "D0"
+ }
+]

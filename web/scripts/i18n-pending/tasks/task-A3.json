@@ -1,0 +1,1275 @@
+[
+ {
+  "zh": "系统渠道由管理员维护",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前渠道",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "没有可拉取的自定义渠道，请先填写有效 Base URL 和 API Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "已更新 {{length}} 个渠道的模型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "未返回模型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "批量读取模型失败，原有模型列表未改动",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "拉取全部",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "新增渠道",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "· 已保存",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "个模型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "展开渠道配置",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "收起渠道配置",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "展开",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "收起",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "删除自定义渠道？",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "该渠道关联的模型选择会同时移除。",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "连接信息",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "例如：我的 NewAPI",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "渠道连接类型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "仅用于拉取模型目录；模型能力和请求协议在下方统一配置。",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "OpenAI 兼容",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "Gemini 原生",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "填写 Gemini API Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "填写当前渠道 API Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "即梦等 AK/SK 协议需要；其他协议留空。",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "填写 Secret Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模型与能力",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模型列表",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "输入模型名，或点击拉取模型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前没有自定义渠道",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "新增自定义渠道",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请添加至少一个模型",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "不允许访问本机",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "不允许访问保留地址",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "{{detail}}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "{{detail}}；也可以直接在模型列表中手动输入模型名",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "Base URL 只支持 HTTP 或 HTTPS",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "Base URL 格式不正确",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请填写 API Key / Access Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前协议需要填写 Secret Key",
+  "files": [
+   "src/pages/settings/channel-settings-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模型测试通过：{{detail}}",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模型能力与请求协议",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "待配置请求协议",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "配置使用",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "{{activeModel}} · 使用配置",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模型使用配置",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "每百万视频 Token 价格",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "每秒价格",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "每次价格",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "百万 Token",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx",
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "按火山方舟任务查询响应的 usage.completion_tokens 结算。",
+  "files": [
+   "src/pages/settings/channel-video-pricing.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "系统模型刷新失败：{{message}}",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "系统模型刷新失败，继续使用本地缓存",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请先完成至少一个渠道的 Base URL、API Key 和模型配置",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前没有可用渠道，请先完成连接信息和模型配置",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前没有可用的系统模型，请联系管理员配置系统渠道",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "配置已保存，正在返回创作页面",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "画布、视频与音频默认值，节点内仍可单独覆盖。",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "画布生成",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "设置新建生成任务时使用的初始值，节点内仍可单独覆盖。",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认生图张数",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "音频默认值",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "用于新建音频节点和未单独设置参数的生成任务。",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认声音",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "文件格式",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "音频指令",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "在音频节点没有单独填写时使用。",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认音频指令",
+  "files": [
+   "src/pages/settings/index.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "本机连接",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "本机服务已连接，CLI 状态会自动同步。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "正在检测本机服务；请确认已启动当前版本。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "重新连接",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "官方 CLI 登录资料保存在本机；本页面不读取或上传 Cookie、浏览器 Profile 或登录令牌。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "刷新状态",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "直接读取当前 Windows 用户的官方即梦 CLI 登录状态。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "连接本机服务后自动检测",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "重新连接本机服务后，将自动读取官方 CLI 状态。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "账号生成权限：未知。当前页面只确认本机适配器支持与登录状态；具体账号是否可生成，以官方最终结果为准。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "任务状态通过后台轮询最终同步，不是实时推送；关闭页面不会停止已经提交的官方任务。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "官方 Dreamina CLI 当前不提供取消命令；官方已接受的任务只能转入后台继续同步，不能伪装成已取消。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "本机任务运行期间，请不要在其他程序中切换 Dreamina CLI 账号；外部换号无法被本页面实时感知。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "模块未加载",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "正在检测",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "未安装",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "等待官方授权",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "已登录",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "上次刷新积分 {{creditObservedAt}}",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "未登录",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "检测失败",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请先连接已加载 Dreamina 的本机运行时",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "Dreamina CLI 已退出登录",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请打开官方验证页完成授权，再刷新状态",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "Dreamina CLI 操作失败",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "未检测到官方 Dreamina CLI。请按官方说明安装并确保命令在 PATH 中可用，安装后点击“刷新状态”。当前版本不内置未经核实的安装源。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "官方验证用户码",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "有效期至",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "打开官方验证页",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "退出 Dreamina CLI？",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "只清除当前 OS 用户的官方 CLI 登录状态。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "退出",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "需要重新连接",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "未发现",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "版本不兼容",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "运行时错误",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "尚未检测",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前 Runtime 未加载 Dreamina 模块，请更新并重启 Runtime。",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "正在检测 Dreamina CLI…",
+  "files": [
+   "src/pages/settings/local-cli-settings.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认生图模型",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "图片生成、图像编辑与视觉探索",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认视频模型",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "文生视频、图生视频与镜头延展",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认文本模型",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "提示词改写、脚本与结构化文本",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "默认音频模型",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "个可用",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "系统",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前渠道中没有可用的",
+  "files": [
+   "src/pages/settings/model-default-grid.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "跟随平台",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "追加要求",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "高级改写",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "读取提示词偏好失败",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "切换模板并放弃修改？",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前模板还有未保存内容。切换后这些修改将丢失。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "请填写个人提示词内容",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "提示词偏好已保存",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "保存提示词偏好失败",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "恢复平台模板？",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "将删除“{{label}}”的个人定制，后续自动跟随平台版本。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "恢复平台模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "已恢复平台模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "恢复平台模板失败",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "加载提示词偏好失败",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "暂无可配置的提示词模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前没有启用的平台模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "{{templateContent}}\n\n【用户个性化创作要求】\n{{appendContent}}",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": " · 已定制",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "撤销修改",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "恢复平台",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "保存更改",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "平台 v",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "平台模板已更新",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前高级改写基于旧版本。可以保留现有改写，或恢复平台后再基于新版本调整。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前平台模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "追加个人要求",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "改写创作策略",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "平台升级后自动使用新版本。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "内容追加在平台策略之后，仍会自动继承平台升级。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "只替换创作策略；动态项目数据和输出契约仍由服务端强制注入。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "例如：仙侠项目采用明亮、宏大、高清的休闲剧质感；避免阴森恐怖色调，人物表演自然、轻松。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "平台提示词模板",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "个人提示词改写",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "平台基线",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "创作策略",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ },
+ {
+  "zh": "当前剧情、项目画风、当前角色版本、画布资产与受保护输出契约。",
+  "files": [
+   "src/pages/settings/prompt-preferences-pane.tsx"
+  ],
+  "ns": "settings",
+  "bucket": "A3"
+ }
+]

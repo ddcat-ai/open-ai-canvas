@@ -164,7 +164,7 @@ describe("逻辑模型选择", () => {
             videoSeconds: "6",
         };
         expect(resolveCompatibleModel(config, "relay::cinema-text", requirements)).toBe("relay::cinema-audio");
-        expect(modelCompatibilityError(config, "relay::cinema-image", requirements)).toContain("参考音频");
+        expect(modelCompatibilityError(config, "relay::cinema-image", requirements)).toContain("lib:up-to-param-reference-audios");
     });
 
     test("逻辑视频模型将 720 与 720p 视为同一分辨率", () => {
@@ -233,7 +233,7 @@ describe("画布连线能力", () => {
         const config = policyConfig();
         const nodes = [node("image-a", CanvasNodeType.Image), node("image-b", CanvasNodeType.Image), node("target", CanvasNodeType.Config, "video")];
         const connections: CanvasConnection[] = [{ id: "existing", fromNodeId: "image-a", toNodeId: "target" }];
-        expect(canvasConnectionError(config, nodes, connections, { fromNodeId: "image-b", toNodeId: "target" })).toContain("最多支持 1");
+        expect(canvasConnectionError(config, nodes, connections, { fromNodeId: "image-b", toNodeId: "target" })).toContain("canvas:the-configured-model-supports-at-most");
     });
 
     test("存在音频细分模型时允许音频连接视频生成节点", () => {
@@ -245,7 +245,7 @@ describe("画布连线能力", () => {
     test("视频结果不能连接到图片生成节点", () => {
         const config = policyConfig();
         const nodes = [node("video", CanvasNodeType.Video), node("target", CanvasNodeType.Image)];
-        expect(canvasConnectionError(config, nodes, [], { fromNodeId: "video", toNodeId: "target" })).toContain("不能连接参考视频");
+        expect(canvasConnectionError(config, nodes, [], { fromNodeId: "video", toNodeId: "target" })).toContain("canvas:image-generation-nodes-cannot-connect-reference-videos");
     });
 
     test("单个角色卡可以连接到音频生成节点", () => {
@@ -267,7 +267,7 @@ describe("图片参考图上限", () => {
             { id: "image-b", name: "image-b.png", type: "image/png", dataUrl: "data:image/png;base64,Yg==" },
         ];
 
-        expect(canvasImageReferenceLimitError(config, references)).toContain("最多支持 1 张参考图，当前已连接 2 张");
+        expect(canvasImageReferenceLimitError(config, references)).toContain("canvas:the-image-model-supports-at-most-param-references");
         expect(() => assertCanvasImageReferenceLimit(config, references)).toThrow("请移除多余连线后重试");
         expect(references).toHaveLength(2);
     });

@@ -1,4 +1,5 @@
 import { AssetRecordType, createShapeId, createTLStore, type TLImageShape } from "tldraw";
+import { t } from "@/i18n";
 
 const INITIAL_DRAWING_SHAPE_MAX_DIMENSION = 1200;
 
@@ -14,7 +15,7 @@ export async function createTldrawDrawingFromImage(source: DrawingImageSource) {
     const sourceBlob = await fetch(source.dataUrl).then((response) => response.blob());
     const store = createTLStore();
     const page = store.allRecords().find((record) => record.typeName === "page");
-    if (!page) throw new Error("无法初始化 tldraw 绘图页面");
+    if (!page) throw new Error(t("canvas:unable-to-initialize-the-tldraw-drawing-page"));
 
     const assetId = AssetRecordType.createId();
     const scale = Math.min(1, INITIAL_DRAWING_SHAPE_MAX_DIMENSION / Math.max(source.width, source.height));
@@ -34,9 +35,16 @@ export async function createTldrawDrawingFromImage(source: DrawingImageSource) {
         },
     });
     const shape: TLImageShape = {
-        id: createShapeId(), typeName: "shape", type: "image", parentId: page.id,
-        index: "a1" as TLImageShape["index"], x: -width / 2, y: -height / 2, rotation: 0,
-        isLocked: false, opacity: 1,
+        id: createShapeId(),
+        typeName: "shape",
+        type: "image",
+        parentId: page.id,
+        index: "a1" as TLImageShape["index"],
+        x: -width / 2,
+        y: -height / 2,
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
         props: { w: width, h: height, playing: false, url: "", assetId, crop: null, flipX: false, flipY: false, altText: source.name },
         meta: {},
     };

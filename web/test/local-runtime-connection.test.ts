@@ -190,7 +190,7 @@ test("Runtime store exposes an actionable reconnect message without origin or au
     expect(store.getState()).toMatchObject({
         connection: "origin_not_trusted",
         connecting: false,
-        error: "本机连接需要重新建立",
+        error: "domain:the-local-connection-needs-to-be-re-established",
     });
     expect(store.getState().error).not.toMatch(/来源|Origin|授权|Runtime/i);
 });
@@ -280,7 +280,7 @@ test("Runtime store exposes a bounded timeout instead of hanging", async () => {
     expect(store.getState()).toMatchObject({
         connection: "unreachable",
         connecting: false,
-        error: "本机服务连接超时",
+        error: "domain:local-service-connection-timed-out",
     });
 });
 

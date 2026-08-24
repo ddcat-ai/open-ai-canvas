@@ -1,0 +1,12 @@
+{
+    "在下方写下这一镜的镜头、画面或故事。影策会拆解脚本、设计运镜并渲染成片，这一镜会作为 SC.": "Write this shot's visuals, camera, or story below. Yingce breaks down the script and renders it as SC.",
+    "自动加入镜头轨道。": " on the shot timeline.",
+    "这一镜还没开始——在下方写出你的脚本，我来接手。": "This shot hasn't started — write your script below and I'll take over.",
+    "导演手记": "Director's notes",
+    "{{name}} 超过 20MB，当前文本模型附件需要压缩后再上传": "{{name}} exceeds 20MB. Compress it before uploading as a text-model attachment",
+    "{{name}} 无法读取，请重新上传后再试": "{{name}} cannot be read. Upload it again",
+    "附件读取失败": "Failed to read attachment",
+    "生成结果资源化失败": "Failed to persist generation results",
+    "任务已结束，但生成结果暂时无法读取": "The task finished, but results cannot be read right now",
+    "时间未知": "Unknown time"
+}

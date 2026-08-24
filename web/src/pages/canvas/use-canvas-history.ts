@@ -77,10 +77,7 @@ export function useCanvasHistory({
     const historyPausedRef = useRef(false);
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
 
-    const createHistorySnapshot = useCallback(
-        (): CanvasHistorySnapshot => ({ nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo }),
-        [activeChatId, backgroundMode, chatSessions, connections, nodes, showImageInfo],
-    );
+    const createHistorySnapshot = useCallback((): CanvasHistorySnapshot => ({ nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo }), [activeChatId, backgroundMode, chatSessions, connections, nodes, showImageInfo]);
 
     const clearCommitTimer = useCallback(() => {
         if (!historyCommitTimerRef.current) return;
@@ -88,39 +85,45 @@ export function useCanvasHistory({
         historyCommitTimerRef.current = null;
     }, []);
 
-    const resetHistory = useCallback((snapshot: CanvasHistorySnapshot) => {
-        clearCommitTimer();
-        if (applyTimerRef.current) {
-            clearTimeout(applyTimerRef.current);
-            applyTimerRef.current = null;
-        }
-        historyRef.current = { past: [], future: [] };
-        lastHistoryRef.current = snapshot;
-        applyingHistoryRef.current = false;
-        historyPausedRef.current = false;
-        setHistoryState({ canUndo: false, canRedo: false });
-    }, [clearCommitTimer]);
-
-    const applyHistorySnapshot = useCallback((snapshot: CanvasHistorySnapshot) => {
-        clearCommitTimer();
-        applyingHistoryRef.current = true;
-        lastHistoryRef.current = snapshot;
-        setNodes(snapshot.nodes);
-        setConnections(snapshot.connections);
-        setChatSessions(snapshot.chatSessions);
-        setActiveChatId(snapshot.activeChatId);
-        setBackgroundMode(snapshot.backgroundMode);
-        setShowImageInfo(snapshot.showImageInfo);
-        setSelectedNodeIds(new Set());
-        setSelectedConnectionId(null);
-        setContextMenu(null);
-        if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
-        applyTimerRef.current = setTimeout(() => {
+    const resetHistory = useCallback(
+        (snapshot: CanvasHistorySnapshot) => {
+            clearCommitTimer();
+            if (applyTimerRef.current) {
+                clearTimeout(applyTimerRef.current);
+                applyTimerRef.current = null;
+            }
+            historyRef.current = { past: [], future: [] };
+            lastHistoryRef.current = snapshot;
             applyingHistoryRef.current = false;
-            applyTimerRef.current = null;
-            setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
-        });
-    }, [clearCommitTimer, setActiveChatId, setBackgroundMode, setChatSessions, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo]);
+            historyPausedRef.current = false;
+            setHistoryState({ canUndo: false, canRedo: false });
+        },
+        [clearCommitTimer],
+    );
+
+    const applyHistorySnapshot = useCallback(
+        (snapshot: CanvasHistorySnapshot) => {
+            clearCommitTimer();
+            applyingHistoryRef.current = true;
+            lastHistoryRef.current = snapshot;
+            setNodes(snapshot.nodes);
+            setConnections(snapshot.connections);
+            setChatSessions(snapshot.chatSessions);
+            setActiveChatId(snapshot.activeChatId);
+            setBackgroundMode(snapshot.backgroundMode);
+            setShowImageInfo(snapshot.showImageInfo);
+            setSelectedNodeIds(new Set());
+            setSelectedConnectionId(null);
+            setContextMenu(null);
+            if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+            applyTimerRef.current = setTimeout(() => {
+                applyingHistoryRef.current = false;
+                applyTimerRef.current = null;
+                setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
+            });
+        },
+        [clearCommitTimer, setActiveChatId, setBackgroundMode, setChatSessions, setConnections, setContextMenu, setNodes, setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo],
+    );
 
     const undoCanvas = useCallback(() => {
         const patch = historyRef.current.past.pop();
@@ -163,21 +166,26 @@ export function useCanvasHistory({
         return clearCommitTimer;
     }, [clearCommitTimer, createHistorySnapshot, projectLoaded]);
 
-    useEffect(() => () => {
-        clearCommitTimer();
-        if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
-    }, [clearCommitTimer]);
+    useEffect(
+        () => () => {
+            clearCommitTimer();
+            if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+        },
+        [clearCommitTimer],
+    );
 
     return { getHistoryCleanupContext, historyPausedRef, historyState, redoCanvas, resetHistory, undoCanvas };
 }
 
 function snapshotsShareReferences(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot) {
-    return before.nodes === after.nodes
-        && before.connections === after.connections
-        && before.chatSessions === after.chatSessions
-        && before.activeChatId === after.activeChatId
-        && before.backgroundMode === after.backgroundMode
-        && before.showImageInfo === after.showImageInfo;
+    return (
+        before.nodes === after.nodes &&
+        before.connections === after.connections &&
+        before.chatSessions === after.chatSessions &&
+        before.activeChatId === after.activeChatId &&
+        before.backgroundMode === after.backgroundMode &&
+        before.showImageInfo === after.showImageInfo
+    );
 }
 
 function createCanvasHistoryPatch(before: CanvasHistorySnapshot, after: CanvasHistorySnapshot): CanvasHistoryPatch | null {

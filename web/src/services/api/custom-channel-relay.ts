@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { projectDesktopLocalChannelRuntime } from "@/lib/desktop-local-channel";
 import { isSystemProxyBaseUrl, resolveBackendApiUrl, type AiConfig, type ChannelHeader } from "@/stores/use-config-store";
 
@@ -17,8 +18,8 @@ export function channelRequest(config: RelayConfig, upstreamUrl: string, headers
         return { url: upstreamUrl, headers: Object.fromEntries(normalizedHeaders.entries()), credentials: "include" };
     }
 
-    const normalizedBaseUrl = requireHttpUrl(runtimeConfig.baseUrl, "当前模型渠道 Base URL");
-    const normalizedUpstreamUrl = requireHttpUrl(upstreamUrl, "当前模型请求地址");
+    const normalizedBaseUrl = requireHttpUrl(runtimeConfig.baseUrl, t("domain:current-model-channel-base-url"));
+    const normalizedUpstreamUrl = requireHttpUrl(upstreamUrl, t("domain:current-model-request-url"));
     normalizedHeaders.delete("X-Canvas-Upstream-Headers");
     normalizedHeaders.delete("x-goog-api-key");
     normalizedHeaders.set("Authorization", `Bearer ${runtimeConfig.apiKey}`);
@@ -45,10 +46,10 @@ function requireHttpUrl(value: string, label: string) {
     try {
         parsed = new URL(normalized);
     } catch {
-        throw new Error(`${label} 无效，请填写完整地址，例如：https://api.example.com/v1`);
+        throw new Error(t("domain:param-is-invalid-enter-a-full-url-e-g-https-api-example-com-v1", { label: label }));
     }
     if (!parsed.hostname || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
-        throw new Error(`${label} 无效，请填写完整地址，例如：https://api.example.com/v1`);
+        throw new Error(t("domain:param-is-invalid-enter-a-full-url-e-g-https-api-example-com-v1", { label: label }));
     }
     return parsed.toString();
 }

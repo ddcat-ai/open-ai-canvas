@@ -10,6 +10,7 @@ import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, 
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, CanvasNodeMetadata, ViewportTransform } from "@/types/canvas";
 import type { CanvasHistorySnapshot } from "./use-canvas-history";
+import { useTranslation } from "react-i18next";
 
 type UseCanvasProjectLifecycleOptions = {
     projectId: string;
@@ -64,6 +65,7 @@ export function useCanvasProjectLifecycle({
     cleanupAssetImages,
     cleanupCanvasFiles,
 }: UseCanvasProjectLifecycleOptions) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const navigate = useNavigate();
     const hydrated = useCanvasStore((state) => state.hydrated);
@@ -118,7 +120,7 @@ export function useCanvasProjectLifecycle({
             if (cancelled) return;
             if (nodesResult.status === "fulfilled") setNodes((current) => mergeHydratedNodeMedia(current, initialNodes, nodesResult.value));
             if (sessionsResult.status === "fulfilled") setChatSessions((current) => mergeHydratedSessions(current, sessionsResult.value));
-            if (nodesResult.status === "rejected" || sessionsResult.status === "rejected") message.warning("部分本地媒体恢复失败，已使用项目记录继续打开");
+            if (nodesResult.status === "rejected" || sessionsResult.status === "rejected") message.warning(t("canvas:some-local-media-failed-to-restore-opened-from-project-records-instead"));
         };
         void restore();
         return () => {
@@ -158,38 +160,43 @@ export function useCanvasProjectLifecycle({
         };
     }, [projectId, projectLoaded, updateProject, viewport, viewportRef]);
 
-    useEffect(() => () => {
-        if (!projectLoaded) return;
-        if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
-        updateProject(projectId, { viewport: viewportRef.current });
-    }, [projectId, projectLoaded, updateProject, viewportRef]);
+    useEffect(
+        () => () => {
+            if (!projectLoaded) return;
+            if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+            updateProject(projectId, { viewport: viewportRef.current });
+        },
+        [projectId, projectLoaded, updateProject, viewportRef],
+    );
 
     const createAndOpenProject = useCallback(() => {
-        void createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`).then(({ id, syncError }) => {
-            if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
+        void createCanvasProjectWithRemoteSync(t("canvas:standalone-canvas-n", { n: useCanvasStore.getState().projects.length + 1 })).then(({ id, syncError }) => {
+            if (syncError) message.warning(syncError instanceof Error ? t("canvas:canvas-created-locally-cloud-sync-failed-param", { message: syncError.message }) : t("canvas:canvas-created-locally-cloud-sync-failed"));
             navigate(`/canvas/${id}`);
         });
     }, [message, navigate]);
 
     const deleteCurrentProject = useCallback(async () => {
-        const drawingIds = nodesRef.current.flatMap((node) => node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []);
+        const drawingIds = nodesRef.current.flatMap((node) => (node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []));
         try {
             await deleteCanvasProjectsWithRemoteSync([projectId]);
         } catch (error) {
-            message.error(error instanceof Error ? `删除画布失败：${error.message}` : "删除画布失败，请稍后重试");
+            message.error(error instanceof Error ? t("canvas:failed-to-delete-canvas-param", { message: error.message }) : t("canvas:failed-to-delete-canvas-try-again-later"));
             return;
         }
         if (drawingIds.length) {
-            void Promise.all(drawingIds.map((drawingId) => removeCanvasDrawing(projectId, drawingId)))
-                .catch(() => message.warning("项目已删除，但部分本地绘图缓存清理失败"));
+            void Promise.all(drawingIds.map((drawingId) => removeCanvasDrawing(projectId, drawingId))).catch(() => message.warning(t("canvas:project-deleted-but-some-local-drawing-caches-failed-to-clean-up")));
         }
         cleanupAssetImages();
         navigate("/canvas");
     }, [cleanupAssetImages, message, navigate, nodesRef, projectId]);
 
-    const renameCurrentProject = useCallback((title: string) => {
-        renameProject(projectId, title);
-    }, [projectId, renameProject]);
+    const renameCurrentProject = useCallback(
+        (title: string) => {
+            renameProject(projectId, title);
+        },
+        [projectId, renameProject],
+    );
 
     const saveCanvasProject = useCallback(async (): Promise<boolean> => {
         try {
@@ -205,15 +212,15 @@ export function useCanvasProjectLifecycle({
             });
             await flushCanvasStorePersistence();
         } catch {
-            message.error("画布保存失败，请稍后重试");
+            message.error(t("canvas:failed-to-save-canvas-try-again-later"));
             return false;
         }
         try {
             await saveRemoteUserDataNow();
-            message.success("画布布局和位置已保存");
+            message.success(t("canvas:canvas-layout-and-positions-saved"));
         } catch (error) {
-            const detail = error instanceof Error ? error.message : "未知错误";
-            message.warning(`本地画布布局已保存，云端同步失败：${detail}`);
+            const detail = error instanceof Error ? error.message : t("canvas:unknown-error");
+            message.warning(t("canvas:local-layout-saved-cloud-sync-failed-param", { detail: detail }));
         }
         return true;
     }, [activeChatId, backgroundMode, chatSessions, connectionsRef, currentProject?.directorScenes, message, nodesRef, projectId, showImageInfo, updateProject, viewportRef]);

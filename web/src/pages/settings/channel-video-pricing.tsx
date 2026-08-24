@@ -9,10 +9,12 @@ import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
 import { fetchProtocolCatalog } from "@/services/api/protocols";
 import { modelOptionName, type ModelChannel } from "@/stores/use-config-store";
+import { useTranslation } from "react-i18next";
 
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
 
 export function ChannelModelSettings({ channel, onChange }: { channel: ModelChannel; onChange: (costs: ModelCost[]) => void }) {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const [testingModel, setTestingModel] = useState("");
     const [activeModel, setActiveModel] = useState<string | null>(null);
@@ -39,9 +41,9 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
         setTestingModel(model);
         try {
             const detail = await testChannelModelConnection(channel, model, capability, protocol);
-            message.success(`模型测试通过：${detail}`);
+            message.success(t("settings:model-test-passed-param", { detail: detail }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "模型测试失败");
+            message.error(error instanceof Error ? error.message : t("settings:model-test-failed"));
         } finally {
             setTestingModel("");
         }
@@ -57,10 +59,12 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
         <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs font-medium">模型能力与请求协议</div>
-                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用</div>
+                    <div className="text-xs font-medium">{t("settings:model-capabilities-and-request-protocols-2")}</div>
+                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">{t("settings:uses-the-same-capability-catalog-as-the-admin-console-tests-send-real-re")}</div>
                 </div>
-                <span className="text-[var(--fs-tiny)] text-foreground/35">{channel.models.length} 个模型</span>
+                <span className="text-[var(--fs-tiny)] text-foreground/35">
+                    {channel.models.length} {t("settings:models-2")}
+                </span>
             </div>
             <div className="space-y-2">
                 {channel.models.map((rawModel) => {
@@ -84,19 +88,19 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         {capabilityLabel(capability)}
                                     </Tag>
                                     <span className="truncate font-mono text-[var(--fs-tiny)] text-foreground/40" title={modelProtocolDefinition(protocol, availableProtocols)?.create}>
-                                        {modelProtocolDefinition(protocol, availableProtocols)?.create || "待配置请求协议"}
+                                        {modelProtocolDefinition(protocol, availableProtocols)?.create || t("settings:request-protocol-not-configured-yet")}
                                     </span>
                                 </div>
                             </div>
                             <Button type="text" size="small" icon={<ChevronRight className="size-4" />} iconPosition="end" onClick={() => setActiveModel(model)}>
-                                配置使用
+                                {t("settings:configure-usage")}
                             </Button>
                         </div>
                     );
                 })}
             </div>
             <Drawer
-                title={activeModel ? `${activeModel} · 使用配置` : "模型使用配置"}
+                title={activeModel ? t("settings:param-usage-settings", { activeModel: activeModel }) : t("settings:model-usage-settings")}
                 open={Boolean(activeModel)}
                 onClose={() => setActiveModel(null)}
                 size="min(720px, 100vw)"
@@ -110,7 +114,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                             disabled={Boolean(testingModel && testingModel !== activeModel)}
                             onClick={() => void testModel(activeModel, activeCapability, activeProtocol)}
                         >
-                            测试模型
+                            {t("settings:test-model")}
                         </Button>
                     ) : null
                 }
@@ -118,11 +122,11 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                 {activeModel && activeCapability && activeProtocol ? (
                     <div className="space-y-4">
                         <div className="rounded-md bg-surface-active px-3 py-2.5">
-                            <div className="text-xs font-medium">模型能力与请求协议</div>
-                            <div className="mt-1 text-[var(--fs-tiny)] text-foreground/45">这些设置只影响当前渠道的这个模型，保存后会同步到生成校验。</div>
+                            <div className="text-xs font-medium">{t("settings:model-capabilities-and-request-protocols-2")}</div>
+                            <div className="mt-1 text-[var(--fs-tiny)] text-foreground/45">{t("settings:these-settings-apply-only-to-this-model-on-this-channel-and-sync-to-gene")}</div>
                         </div>
                         <section className="space-y-2">
-                            <div className="text-xs font-medium">模型能力</div>
+                            <div className="text-xs font-medium">{t("settings:model-capabilities")}</div>
                             <CapabilityCardPicker
                                 value={activeCapability}
                                 onChange={(nextCapability) => {
@@ -131,32 +135,41 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     updateCost(activeModel, {
                                         protocol: nextProtocol,
                                         capability: nextCapability,
-                                        billingMode: activeBillingMode === "per_second" && nextCapability === "video" ? "per_second" : activeBillingMode === "token" && modelProtocolSupportsTokenBilling(nextCapability, nextProtocol) ? "token" : "fixed_request",
+                                        billingMode:
+                                            activeBillingMode === "per_second" && nextCapability === "video" ? "per_second" : activeBillingMode === "token" && modelProtocolSupportsTokenBilling(nextCapability, nextProtocol) ? "token" : "fixed_request",
                                         capabilityConfig: nextCapability === "image" || nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
                                     });
                                 }}
                             />
                         </section>
-                        {availableProtocols.length ? <section className="space-y-2">
-                            <div className="text-xs font-medium">请求协议</div>
-                            <ProtocolCardPicker
-                                capability={activeCapability}
-                                value={activeProtocol}
-                                protocols={availableProtocols}
-                                onChange={(nextProtocol) => updateCost(activeModel, { protocol: nextProtocol, billingMode: activeBillingMode === "token" && !modelProtocolSupportsTokenBilling(activeCapability, nextProtocol) ? "fixed_request" : activeBillingMode, capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined })}
-                            />
-                        </section> : null}
+                        {availableProtocols.length ? (
+                            <section className="space-y-2">
+                                <div className="text-xs font-medium">{t("settings:request-protocol")}</div>
+                                <ProtocolCardPicker
+                                    capability={activeCapability}
+                                    value={activeProtocol}
+                                    protocols={availableProtocols}
+                                    onChange={(nextProtocol) =>
+                                        updateCost(activeModel, {
+                                            protocol: nextProtocol,
+                                            billingMode: activeBillingMode === "token" && !modelProtocolSupportsTokenBilling(activeCapability, nextProtocol) ? "fixed_request" : activeBillingMode,
+                                            capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
+                                        })
+                                    }
+                                />
+                            </section>
+                        ) : null}
                         {activeCapability === "video" ? (
                             <div className="space-y-2">
-                                <div className="text-xs font-medium">计费方式</div>
+                                <div className="text-xs font-medium">{t("settings:billing-basis")}</div>
                                 <div className="grid gap-2 lg:grid-cols-[176px_1fr]">
                                     <Segmented
                                         size="small"
                                         block
                                         value={activeBillingMode}
                                         options={[
-                                            { label: "按次", value: "fixed_request" },
-                                            { label: "按秒", value: "per_second" },
+                                            { label: t("settings:per-request"), value: "fixed_request" },
+                                            { label: t("settings:per-second"), value: "per_second" },
                                             { label: "Token", value: "token", disabled: !activeTokenBillingSupported },
                                         ]}
                                         onChange={(value) => updateCost(activeModel, { billingMode: value as ModelCost["billingMode"] })}
@@ -168,17 +181,25 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         precision={6}
                                         step={0.1}
                                         className="w-full"
-                                        placeholder={activeBillingMode === "token" ? "每百万视频 Token 价格" : activeBillingMode === "per_second" ? "每秒价格" : "每次价格"}
-                                        addonAfter={`积分/${activeBillingMode === "token" ? "百万 Token" : activeBillingMode === "per_second" ? "秒" : "次"}`}
-                                        value={activeModelCost ? (activeBillingMode === "token" ? (activeModelCost.outputTokenPriceMicrocredits || 0) : activeModelCost.unitPriceMicrocredits) / 1_000_000 : null}
-                                        onChange={(value) => updateCost(activeModel, activeBillingMode === "token" ? { outputTokenPriceMicrocredits: Math.round(Number(value || 0) * 1_000_000) } : { unitPriceMicrocredits: Math.round(Number(value || 0) * 1_000_000) })}
+                                        placeholder={activeBillingMode === "token" ? t("settings:price-per-million-video-tokens") : activeBillingMode === "per_second" ? t("settings:price-per-second") : t("settings:price-per-request")}
+                                        addonAfter={`积分/${activeBillingMode === "token" ? t("settings:million-tokens") : activeBillingMode === "per_second" ? t("settings:s") : t("settings:requests")}`}
+                                        value={activeModelCost ? (activeBillingMode === "token" ? activeModelCost.outputTokenPriceMicrocredits || 0 : activeModelCost.unitPriceMicrocredits) / 1_000_000 : null}
+                                        onChange={(value) =>
+                                            updateCost(activeModel, activeBillingMode === "token" ? { outputTokenPriceMicrocredits: Math.round(Number(value || 0) * 1_000_000) } : { unitPriceMicrocredits: Math.round(Number(value || 0) * 1_000_000) })
+                                        }
                                     />
                                 </div>
-                                {activeBillingMode === "token" ? <div className="text-[var(--fs-tiny)] text-foreground/45">按火山方舟任务查询响应的 usage.completion_tokens 结算。</div> : null}
+                                {activeBillingMode === "token" ? <div className="text-[var(--fs-tiny)] text-foreground/45">{t("settings:billed-by-usage-completion-tokens-in-the-volcano-ark-task-query-response")}</div> : null}
                             </div>
                         ) : null}
                         {activeCapability === "image" || activeCapability === "video" ? (
-                            <ModelCapabilityEditor capability={activeCapability} model={activeModel} value={activeModelCost?.capabilityConfig || defaultModelCapabilityConfig(activeProtocol, activeModel)} protocol={activeProtocol} onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })} />
+                            <ModelCapabilityEditor
+                                capability={activeCapability}
+                                model={activeModel}
+                                value={activeModelCost?.capabilityConfig || defaultModelCapabilityConfig(activeProtocol, activeModel)}
+                                protocol={activeProtocol}
+                                onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })}
+                            />
                         ) : null}
                     </div>
                 ) : null}
@@ -192,5 +213,6 @@ function defaultProtocolForModel(channel: ModelChannel, model: string): ModelPro
 }
 
 function capabilityLabel(value: ModelCost["capability"]) {
-    return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value] || "待配置";
+    const { t } = useTranslation("canvas");
+    return { text: t("settings:text"), image: t("settings:image"), video: t("settings:video"), audio: t("settings:audio"), "": t("settings:pending-config") }[value] || t("settings:pending-config");
 }

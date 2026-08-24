@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
 import { getNodeGenerationMode, getNodeInputKind } from "@/lib/canvas/node-registry";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -11,23 +12,27 @@ type CanvasConnectionPolicyOptions = {
 
 export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[], connections: CanvasConnection[], candidate: ConnectionCandidate, options: CanvasConnectionPolicyOptions = {}) {
     const target = nodes.find((node) => node.id === candidate.toNodeId);
-    if (!target) return "找不到连线目标节点";
+    if (!target) return t("canvas:connection-target-node-not-found");
     const mode = getNodeGenerationMode(target);
     if (!mode) return "";
     const input = connectionInputSummary(target.id, nodes, connections, candidate);
     const visualInputCount = input.imageCount + input.characterCount;
 
     if (mode === "image") {
-        if (input.videoCount > 0) return "图片生成节点不能连接参考视频";
-        if (input.audioCount > 0) return "图片生成节点不能连接参考音频";
-        return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, "参考图");
+        if (input.videoCount > 0) return t("canvas:image-generation-nodes-cannot-connect-reference-videos");
+        if (input.audioCount > 0) return t("canvas:image-generation-nodes-cannot-connect-reference-audio");
+        return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, t("canvas:reference-image-2"));
     }
     if (mode === "video") {
-        return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, "参考图") || capacityError(config, mode, "video", input.videoCount, "参考视频") || capacityError(config, mode, "audio", input.audioCount, "参考音频");
+        return options.ignoreCapacity
+            ? ""
+            : capacityError(config, mode, "image", visualInputCount, t("canvas:reference-image-2")) ||
+                  capacityError(config, mode, "video", input.videoCount, t("canvas:reference-videos-2")) ||
+                  capacityError(config, mode, "audio", input.audioCount, t("canvas:reference-audio-2"));
     }
-    if (mode === "text" && input.audioCount > 0) return "文本生成节点不能连接参考音频";
-    if (mode === "audio" && input.characterCount > 1) return "角色配音一次只能连接一个角色卡";
-    if (mode === "audio" && (input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0)) return "音频生成节点只接受文本或单个角色卡输入";
+    if (mode === "text" && input.audioCount > 0) return t("canvas:text-generation-nodes-cannot-connect-reference-audio");
+    if (mode === "audio" && input.characterCount > 1) return t("canvas:character-dubbing-accepts-only-one-character-card-at-a-time");
+    if (mode === "audio" && (input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0)) return t("canvas:audio-generation-nodes-accept-only-text-or-a-single-character-card-input");
     return "";
 }
 
@@ -51,6 +56,6 @@ export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeDa
 function capacityError(config: AiConfig, capability: "image" | "video", kind: "image" | "video" | "audio", count: number, label: string) {
     const maximum = maxModelInputCapacity(config, capability, kind);
     if (maximum === null || count <= maximum) return "";
-    const unit = kind === "image" ? "张" : "个";
-    return maximum > 0 ? `已配置模型最多支持 ${maximum} ${unit}${label}` : `已配置模型均不支持${label}`;
+    const unit = kind === "image" ? t("canvas:item-10") : t("canvas:total-4");
+    return maximum > 0 ? t("canvas:the-configured-model-supports-at-most-param-param-param", { maximum: maximum, unit: unit, label: label }) : t("canvas:none-of-the-configured-models-support-param", { label: label });
 }

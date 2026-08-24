@@ -7,8 +7,8 @@ import { removeCreationConversationSnapshot, updateCreationConversationSnapshot 
 
 test("Create exposes one accessible copy action beside each displayed user prompt", async () => {
     const source = await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text();
-    expect(source).toContain('aria-label="复制提示词"');
-    expect(source).toContain('copyText(visiblePrompt, "提示词已复制")');
+    expect(source).toContain('aria-label={t("canvas:copy-prompt")}');
+    expect(source).toContain('copyText(visiblePrompt, t("canvas:prompt-copied"))');
 });
 
 test("Create submit button does not forward the browser click event as retry context", async () => {
@@ -319,7 +319,7 @@ test("Create forwards owned result assets through one new canvas and the project
     expect(create).toContain("const resultAssetIds = result && resultUrls.length ? creationResultAssetIds(assets, { messageId: result.id, taskIds: result.taskIds || [], resultUrls }) : [];");
     expect(create).toContain('const canvasHandoffPath = result ? creationCanvasHandoffPath(resultAssetIds, resultUrls.length) : "";');
     expect(create).toContain('const canvasPath = canvasHandoffPath || "/canvas";');
-    expect(create).toContain('<Link to={canvasPath}>{canvasHandoffPath ? "添加到画布" : "打开画布"}</Link>');
+    expect(create).toContain('{canvasHandoffPath ? t("canvas:add-to-canvas") : t("canvas:open-canvas")}</Link>');
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');
     expect(canvasIndex).toContain('mode !== "new" && mode !== "recent" && mode !== "handoff"');
     expect(canvasProject).toContain('import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff"');

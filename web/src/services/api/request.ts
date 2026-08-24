@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import axios from "axios";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
@@ -32,7 +33,7 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
     try {
         const response = await promise;
         if (response.data.code !== 0) {
-            throw new ApiError(response.data.msg || "请求失败", {
+            throw new ApiError(response.data.msg || t("domain:request-failed"), {
                 status: response.status,
                 code: response.data.code,
                 retryable: isRetryableStatus(response.status) || isRetryableStatus(response.data.code),
@@ -41,12 +42,12 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
         return response.data.data;
     } catch (error) {
         if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === axios.AxiosError.ERR_CANCELED)) {
-            throw new DOMException("请求已取消", "AbortError");
+            throw new DOMException(t("domain:request-cancelled-3"), "AbortError");
         }
         if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
             const status = error.response?.status;
             const code = error.response?.data?.code;
-            throw new ApiError(error.response?.data?.msg || error.message || "请求失败", {
+            throw new ApiError(error.response?.data?.msg || error.message || t("domain:request-failed"), {
                 status,
                 code,
                 retryable: isRetryableStatus(status) || isRetryableStatus(code),

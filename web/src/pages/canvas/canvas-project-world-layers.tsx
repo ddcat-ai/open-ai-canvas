@@ -8,6 +8,7 @@ import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-con
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import type { CanvasDisplayConnection, CanvasFolderStyle, CanvasFolderTheme, CanvasNodeData, ConnectionHandle, Position, SelectionBox } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 type NodeBounds = { left: number; top: number; width: number; height: number; count: number } | null;
@@ -185,12 +186,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                     }}
                 >
                     {props.batchSourceNodeIds.length > 0 ? (
-                        <BatchConnectionHandle
-                            scale={viewportScale}
-                            count={props.batchSourceNodeIds.length}
-                            active={Boolean(props.batchConnectionPreview)}
-                            onPointerDown={(event) => props.onStartBatchConnection(event, props.batchSourceNodeIds)}
-                        />
+                        <BatchConnectionHandle scale={viewportScale} count={props.batchSourceNodeIds.length} active={Boolean(props.batchConnectionPreview)} onPointerDown={(event) => props.onStartBatchConnection(event, props.batchSourceNodeIds)} />
                     ) : null}
                 </div>
             ) : null}
@@ -199,6 +195,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
 });
 
 function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {
+    const { t } = useTranslation("canvas");
     const inverseScale = 1 / Math.max(scale, 0.05);
     const buttonStyle: CSSProperties = {
         right: -18 * inverseScale,
@@ -215,12 +212,14 @@ function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale:
             data-canvas-no-zoom
             className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={buttonStyle}
-            title={`批量连接 ${count} 个节点`}
-            aria-label={`批量连接 ${count} 个节点`}
+            title={t("canvas:batch-connect-param-nodes", { count: count })}
+            aria-label={t("canvas:batch-connect-param-nodes", { count: count })}
             onPointerDown={onPointerDown}
         >
             <Link2 style={{ width: 14 * inverseScale, height: 14 * inverseScale }} strokeWidth={2} />
-            <span className="sr-only">连接 {count} 个节点</span>
+            <span className="sr-only">
+                {t("canvas:connect")} {count} {t("canvas:nodes")}
+            </span>
         </button>
     );
 }

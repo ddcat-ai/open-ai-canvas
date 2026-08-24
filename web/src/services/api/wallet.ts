@@ -64,7 +64,7 @@ export type ChannelModel = {
     priceVersion: number;
     capabilityVersion?: number;
     capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
-	priceTiers: ChannelModelPriceTier[];
+    priceTiers: ChannelModelPriceTier[];
     createdAt: string;
     updatedAt: string;
 };
@@ -72,8 +72,8 @@ export type ChannelModel = {
 export type ChannelModelPriceTier = {
     id: string;
     channelModelId: string;
-	selector: Record<string, string>;
-	selectorKey: string;
+    selector: Record<string, string>;
+    selectorKey: string;
     resolution: string;
     videoSeconds: number;
     providerModelKey: string;
@@ -98,7 +98,7 @@ export type ChannelModelMutation = {
     protocol?: ChannelModel["protocol"];
     enabled?: boolean;
     capabilityConfig?: ChannelModel["capabilityConfig"];
-	priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
+    priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
     billingMode?: ChannelModel["billingMode"];
     unitPriceMicrocredits?: number;
     inputTokenPriceMicrocredits?: number;
@@ -283,7 +283,7 @@ export function updateAdminChannelModel(channelId: string, id: string, input: Ch
 }
 
 export function deleteAdminChannelModel(channelId: string, id: string) {
-	return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
+    return request<{ ok: boolean }>(api.delete(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`));
 }
 
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; limit?: number };

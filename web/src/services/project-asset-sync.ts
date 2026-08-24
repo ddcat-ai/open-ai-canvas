@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset, type CanvasAssetSource } from "@/lib/canvas/canvas-node-asset";
 import { readImageMeta } from "@/lib/image-utils";
 import { parseBackendGenerationResult, type BackendGenerationResult } from "@/services/api/generation-task";
@@ -59,12 +60,12 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
     let created = false;
     if (!asset) {
         const input = canvasNodeToAsset(options.node, { canvasId: options.canvasId, source: options.source, taskId: options.taskId });
-        if (!input) throw new Error("当前节点没有可保存的素材内容");
+        if (!input) throw new Error(t("domain:this-node-has-no-content-that-can-be-saved-as-an-asset"));
         const assetId = store.addAsset(options.category ? { ...input, category: options.category } : input);
         asset = useAssetStore.getState().assets.find((item) => item.id === assetId);
         created = true;
     }
-    if (!asset) throw new Error("素材写入本地失败");
+    if (!asset) throw new Error(t("domain:failed-to-write-the-asset-locally-2"));
     if (declaredCategory && asset.category !== declaredCategory) {
         store.updateAsset(asset.id, { category: declaredCategory });
         asset = useAssetStore.getState().assets.find((item) => item.id === asset?.id) || asset;
@@ -77,7 +78,7 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
 async function syncAssetToProject(assetId: string, domainProjectId: string, category?: AssetCategory, folderId?: string, signal?: AbortSignal) {
     throwIfAborted(signal);
     const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === assetId);
-    if (!asset) throw new Error("素材写入本地失败");
+    if (!asset) throw new Error(t("domain:failed-to-write-the-asset-locally-2"));
     const linkedProjectIds = Array.isArray(asset.metadata?.projectIds) ? asset.metadata.projectIds.filter((id): id is string => typeof id === "string") : [];
     if (linkedProjectIds.includes(domainProjectId)) {
         if (folderId !== undefined) await moveProjectAsset(domainProjectId, asset.id, folderId, signal);
@@ -154,7 +155,7 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     throwIfAborted(signal);
     if (result.storageKey) {
         const url = await resolveImageUrl(result.storageKey, result.dataUrl);
-        if (!url) throw new Error("图片结果资源不可用");
+        if (!url) throw new Error(t("domain:image-result-resource-unavailable-2"));
         const meta = result.width && result.height ? undefined : await readImageMeta(url, signal);
         throwIfAborted(signal);
         return {
@@ -178,7 +179,7 @@ async function storedGenerationImage(result: NonNullable<BackendGenerationResult
     throwIfAborted(signal);
     const url = await resolveImageUrl(storageKey);
     throwIfAborted(signal);
-    if (!url) throw new Error("图片结果资源不可用");
+    if (!url) throw new Error(t("domain:image-result-resource-unavailable-2"));
     const meta = result.width && result.height ? undefined : await readImageMeta(url, signal);
     throwIfAborted(signal);
     return {
@@ -205,7 +206,7 @@ async function storedGenerationMedia(dataUrl: string, effectKey: string, mediaTy
     throwIfAborted(signal);
     const url = await resolveMediaUrl(storageKey);
     throwIfAborted(signal);
-    if (!url) throw new Error(`${mediaType === "video" ? "视频" : "音频"}结果资源不可用`);
+    if (!url) throw new Error(`${mediaType === "video" ? t("domain:video") : t("domain:audio")}结果资源不可用`);
     return {
         url,
         storageKey,
@@ -232,15 +233,15 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
 
     if (input.output.mediaType === "image") {
         const image = result.images?.[input.output.outputIndex];
-        if (!image) throw new Error("生成任务缺少图片输出");
+        if (!image) throw new Error(t("domain:the-generation-task-lacks-an-image-output"));
         const stored = await storedGenerationImage(image, input.effectKey, scope, input.signal);
         return {
             kind: "image",
-            title: "生成图片",
+            title: t("domain:generate-image"),
             coverUrl: stored.url,
-            tags: ["生成"],
+            tags: [t("domain:generate")],
             status: "confirmed",
-            source: "生成任务",
+            source: t("domain:generation-tasks-2"),
             metadata,
             data: {
                 dataUrl: stored.url,
@@ -255,7 +256,7 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
 
     if (input.output.mediaType === "video") {
         const video = result.video;
-        if (!video) throw new Error("生成任务缺少视频输出");
+        if (!video) throw new Error(t("domain:the-generation-task-lacks-a-video-output"));
         const stored = video.storageKey
             ? {
                   url: await resolveMediaUrl(video.storageKey, video.dataUrl),
@@ -280,14 +281,14 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
                   scope,
                   input.signal,
               );
-        if (!stored.url) throw new Error("视频结果资源不可用");
+        if (!stored.url) throw new Error(t("domain:video-result-resource-unavailable"));
         return {
             kind: "video",
-            title: "生成视频",
+            title: t("domain:generate-video"),
             coverUrl: stored.url,
-            tags: ["生成"],
+            tags: [t("domain:generate")],
             status: "confirmed",
-            source: "生成任务",
+            source: t("domain:generation-tasks-2"),
             metadata,
             data: {
                 url: stored.url,
@@ -302,7 +303,7 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
     }
 
     const audio = result.audio;
-    if (!audio) throw new Error("生成任务缺少音频输出");
+    if (!audio) throw new Error(t("domain:the-generation-task-lacks-an-audio-output"));
     const stored = audio.storageKey
         ? {
               url: await resolveMediaUrl(audio.storageKey, audio.dataUrl),
@@ -323,14 +324,14 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
               scope,
               input.signal,
           );
-    if (!stored.url) throw new Error("音频结果资源不可用");
+    if (!stored.url) throw new Error(t("domain:audio-result-resource-unavailable"));
     return {
         kind: "audio",
-        title: "生成音频",
+        title: t("domain:generate-audio-2"),
         coverUrl: "",
-        tags: ["生成"],
+        tags: [t("domain:generate")],
         status: "confirmed",
-        source: "生成任务",
+        source: t("domain:generation-tasks-2"),
         metadata,
         data: {
             url: stored.url,
@@ -434,7 +435,7 @@ export async function consumeGenerationTaskNode(
     }
     const materialized = await (dependencies.materialize ?? materializeGenerationTaskAssets)(task, dependencies.signal);
     const output = materialized.outputs?.find((candidate) => candidate.outputIndex === outputIndex);
-    if (!output?.materializedAssetId) throw new Error("生成任务输出尚未物化");
+    if (!output?.materializedAssetId) throw new Error(t("domain:generation-task-output-has-not-been-materialized-yet"));
     await (dependencies.attachNode ?? attachGenerationTaskNode)(
         materialized,
         nodeId,

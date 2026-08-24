@@ -28,4 +28,3 @@ export function useCanvasActiveTasks(projectId: string, enabled: boolean) {
         refetch: query.refetch,
     };
 }
-

@@ -30,22 +30,20 @@ export const usePluginStore = create<PluginStore>()(
                     const current = state.installations.find((item) => item.manifest.id === manifest.id);
                     if (current && current.manifest.version === manifest.version) return { hydrated: true };
                     const timestamp = now();
-                    const next: PluginInstallation = current
-                        ? { ...current, manifest, updatedAt: timestamp }
-                        : { manifest, enabled: false, config: {}, installedAt: timestamp, updatedAt: timestamp };
+                    const next: PluginInstallation = current ? { ...current, manifest, updatedAt: timestamp } : { manifest, enabled: false, config: {}, installedAt: timestamp, updatedAt: timestamp };
                     return { hydrated: true, installations: [...state.installations.filter((item) => item.manifest.id !== manifest.id), next] };
                 }),
             setEnabled: (pluginId, enabled) =>
                 set((state) => ({
-                    installations: state.installations.map((item) => item.manifest.id === pluginId ? { ...item, enabled, updatedAt: now(), lastError: undefined } : item),
+                    installations: state.installations.map((item) => (item.manifest.id === pluginId ? { ...item, enabled, updatedAt: now(), lastError: undefined } : item)),
                 })),
             updateConfig: (pluginId, config) =>
                 set((state) => ({
-                    installations: state.installations.map((item) => item.manifest.id === pluginId ? { ...item, config: { ...item.config, ...config }, updatedAt: now() } : item),
+                    installations: state.installations.map((item) => (item.manifest.id === pluginId ? { ...item, config: { ...item.config, ...config }, updatedAt: now() } : item)),
                 })),
             setError: (pluginId, error) =>
                 set((state) => ({
-                    installations: state.installations.map((item) => item.manifest.id === pluginId ? { ...item, lastError: error, updatedAt: now() } : item),
+                    installations: state.installations.map((item) => (item.manifest.id === pluginId ? { ...item, lastError: error, updatedAt: now() } : item)),
                 })),
             removePlugin: (pluginId) => set((state) => ({ installations: state.installations.filter((item) => item.manifest.id !== pluginId) })),
         }),

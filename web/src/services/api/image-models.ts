@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import axios from "axios";
 
 import { sanitizeChannelModelCatalogItem, type ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
@@ -37,7 +38,7 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
             .filter((id): id is string => Boolean(id))
             .sort((a, b) => a.localeCompare(b));
     } catch (error) {
-        throw new Error(readAxiosError(error, "读取模型失败"));
+        throw new Error(readAxiosError(error, t("domain:failed-to-load-models")));
     }
 }
 
@@ -63,7 +64,7 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
             { withCredentials: true },
         );
         if (typeof response.data.code === "number" && response.data.code !== 0) {
-            throw new Error(response.data.msg || "读取模型失败");
+            throw new Error(response.data.msg || t("domain:failed-to-load-models"));
         }
         const catalog = new Map<string, ChannelModelCatalogItem>();
         for (const item of response.data.data?.models || []) {
@@ -76,6 +77,6 @@ export async function fetchChannelModels(channel: ModelChannel, viaBackend = fal
         const sortedCatalog = Array.from(catalog.values()).sort((a, b) => a.id.localeCompare(b.id));
         return { models, catalog: sortedCatalog };
     } catch (error) {
-        throw new Error(readAxiosError(error, "读取模型失败"));
+        throw new Error(readAxiosError(error, t("domain:failed-to-load-models")));
     }
 }

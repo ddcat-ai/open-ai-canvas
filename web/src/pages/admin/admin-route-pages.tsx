@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 
 import { useAdminContext } from "./admin-context";
 import { AdminPageFrame } from "./components/admin-shell";
+import { useTranslation } from "react-i18next";
 
 const AnalyticsPanel = lazy(() => import("./components/analytics-panel"));
 const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announcements-panel"));
@@ -11,31 +12,81 @@ const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 
 function PageFallback({ label }: { label: string }) {
-    return <div className="py-16 text-center text-sm text-foreground/50">正在读取{label}...</div>;
+    const { t } = useTranslation("canvas");
+    return (
+        <div className="py-16 text-center text-sm text-foreground/50">
+            {t("admin:loading")}
+            {label}...
+        </div>
+    );
 }
 
 export function AnalyticsPage() {
+    const { t } = useTranslation("canvas");
     const { references } = useAdminContext();
-    return <AdminPageFrame title="数据概览" description="活跃、调用与成本趋势"><Suspense fallback={<PageFallback label="统计数据" />}><AnalyticsPanel users={references.users} channels={references.channels} /></Suspense></AdminPageFrame>;
+    return (
+        <AdminPageFrame title={t("admin:data-overview")} description={t("admin:active-users-usage-and-cost-trends")}>
+            <Suspense fallback={<PageFallback label={t("admin:statistics")} />}>
+                <AnalyticsPanel users={references.users} channels={references.channels} />
+            </Suspense>
+        </AdminPageFrame>
+    );
 }
 
 export function AnnouncementsPage() {
-    return <AdminPageFrame title="系统公告" description="发布、关闭与历史公告"><Suspense fallback={<PageFallback label="系统公告" />}><AdminAnnouncementsPanel /></Suspense></AdminPageFrame>;
+    const { t } = useTranslation("canvas");
+    return (
+        <AdminPageFrame title={t("admin:system-announcements")} description={t("admin:publish-close-and-browse-announcements")}>
+            <Suspense fallback={<PageFallback label={t("admin:system-announcements")} />}>
+                <AdminAnnouncementsPanel />
+            </Suspense>
+        </AdminPageFrame>
+    );
 }
 
 export function CreditOperationsPage() {
+    const { t } = useTranslation("canvas");
     const { references } = useAdminContext();
-    return <AdminPageFrame title="积分运营" description="人工调账与异常计费"><Suspense fallback={<PageFallback label="积分运营数据" />}><CreditOperationsPanel users={references.users} /></Suspense></AdminPageFrame>;
+    return (
+        <AdminPageFrame title={t("admin:credit-operations")} description={t("admin:manual-credit-adjustments-and-abnormal-billing")}>
+            <Suspense fallback={<PageFallback label={t("admin:credit-operations-data")} />}>
+                <CreditOperationsPanel users={references.users} />
+            </Suspense>
+        </AdminPageFrame>
+    );
 }
 
 export function AccessSettingsPage() {
-    return <AdminPageFrame title="登录与注册" description="注册策略与 Linux.do" scroll><Suspense fallback={<PageFallback label="登录与注册配置" />}><AccessSettingsPanel /></Suspense></AdminPageFrame>;
+    const { t } = useTranslation("canvas");
+    return (
+        <AdminPageFrame title={t("admin:sign-in-and-registration")} description={t("admin:registration-policy-and-linux-do")} scroll>
+            <Suspense fallback={<PageFallback label={t("admin:sign-in-and-registration-settings")} />}>
+                <AccessSettingsPanel />
+            </Suspense>
+        </AdminPageFrame>
+    );
 }
 
 export function EmailSettingsPage() {
-    return <AdminPageFrame title="邮件服务" description="注册验证码 SMTP" scroll><div className="pt-4"><Suspense fallback={<PageFallback label="邮件配置" />}><EmailSettingsPanel /></Suspense></div></AdminPageFrame>;
+    const { t } = useTranslation("canvas");
+    return (
+        <AdminPageFrame title={t("admin:email-service")} description={t("admin:registration-verification-smtp")} scroll>
+            <div className="pt-4">
+                <Suspense fallback={<PageFallback label={t("admin:email-settings")} />}>
+                    <EmailSettingsPanel />
+                </Suspense>
+            </div>
+        </AdminPageFrame>
+    );
 }
 
 export function FeatureAvailabilityPage() {
-    return <AdminPageFrame title="功能开放" description="控制用户工作台入口、渠道、插件与计费模式" scroll><Suspense fallback={<PageFallback label="功能开放配置" />}><FeatureAvailabilityPanel /></Suspense></AdminPageFrame>;
+    const { t } = useTranslation("canvas");
+    return (
+        <AdminPageFrame title={t("admin:feature-access")} description={t("admin:control-workspace-entry-channels-and-billing-modes")} scroll>
+            <Suspense fallback={<PageFallback label={t("admin:feature-access-settings")} />}>
+                <FeatureAvailabilityPanel />
+            </Suspense>
+        </AdminPageFrame>
+    );
 }

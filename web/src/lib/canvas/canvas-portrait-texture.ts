@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 export type PortraitTextureSettings = {
     personSceneFusion: "light" | "natural" | "deep";
     lightingFusion: "soft" | "natural" | "atmosphere";
@@ -77,7 +78,7 @@ export const PORTRAIT_TEXTURE_GROUPS: readonly PortraitTextureGroup[] = [
 ] as const;
 
 export function normalizePortraitTextureSettings(value: unknown): PortraitTextureSettings {
-    const candidate = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    const candidate = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
     return {
         personSceneFusion: normalizeSetting("personSceneFusion", candidate.personSceneFusion),
         lightingFusion: normalizeSetting("lightingFusion", candidate.lightingFusion),
@@ -91,7 +92,7 @@ export function buildPortraitTexturePrompt(userPrompt: string, value: unknown) {
     const settings = normalizePortraitTextureSettings(value);
     const instructions = PORTRAIT_TEXTURE_GROUPS.map((group) => {
         const selected = group.options.find((option) => option.value === settings[group.key]);
-        return `${group.label}（${selected?.label || "默认"}）：${selected?.prompt || "保持自然"}`;
+        return `${group.label}（${selected?.label || t("canvas:default")}）：${selected?.prompt || "保持自然"}`;
     });
 
     return [
@@ -99,12 +100,12 @@ export function buildPortraitTexturePrompt(userPrompt: string, value: unknown) {
         "请基于参考图片进行人物质感调节，只优化下列视觉属性：",
         ...instructions.map((instruction) => `- ${instruction}`),
         "必须保持原人物身份、五官、发型、服装、姿势、构图、场景和画面比例；不得新增或删除主体，不得添加文字、水印或标志。",
-    ].filter(Boolean).join("\n");
+    ]
+        .filter(Boolean)
+        .join("\n");
 }
 
 function normalizeSetting<Key extends PortraitTextureSettingKey>(key: Key, value: unknown): PortraitTextureSettings[Key] {
     const group = PORTRAIT_TEXTURE_GROUPS.find((item) => item.key === key);
-    return group?.options.some((option) => option.value === value)
-        ? value as PortraitTextureSettings[Key]
-        : DEFAULT_PORTRAIT_TEXTURE_SETTINGS[key];
+    return group?.options.some((option) => option.value === value) ? (value as PortraitTextureSettings[Key]) : DEFAULT_PORTRAIT_TEXTURE_SETTINGS[key];
 }

@@ -12,6 +12,7 @@ import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-st
 import { useUserStore } from "@/stores/use-user-store";
 import type { DreaminaLocalModel } from "@/services/local-dreamina-model-catalog";
 import type { CapabilitySpec, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
+import { t } from "@/i18n";
 
 export type ApiCallFormat = "openai" | "gemini" | "claude";
 export type ChannelInterfaceType = ModelProtocol;
@@ -55,7 +56,7 @@ export type ModelChannel = {
         logicalModelId?: string;
         logicalCapabilitySpec?: CapabilitySpec;
         logicalCapabilityProfiles?: CapabilitySpec[];
-		logicalPriceTiers?: PublicLogicalModelPriceTier[];
+        logicalPriceTiers?: PublicLogicalModelPriceTier[];
         defaultOptions?: Record<string, unknown>;
     }>;
     transport?: "backend-channel" | "local-runtime";
@@ -374,7 +375,7 @@ export function effectiveConfigWithDreamina(config: AiConfig, catalogState: "idl
     if (catalogState !== "ready" || !dreaminaModels.length) return { ...config, channelMode: "local" };
     const channel: ModelChannel = {
         id: "local:dreamina-cli",
-        name: "官方即梦 CLI",
+        name: t("domain:official-dreamina-cli"),
         baseUrl: "",
         apiKey: "",
         apiFormat: "openai",
@@ -404,7 +405,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
     const providedBaseUrl = channel?.baseUrl?.trim();
     return {
         id: channel?.id?.trim() || nanoid(),
-        name: channel?.name?.trim() || "新渠道",
+        name: channel?.name?.trim() || t("domain:new-channel"),
         baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : defaultBaseUrlForApiFormat(apiFormat)),
         allowLocalChannel: channel?.allowLocalChannel === true,
         apiKey: channel?.apiKey || "",
@@ -446,7 +447,7 @@ export function modelDisplayName(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const displayName = channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim();
     if (displayName) return displayName;
-    return channel.scope === "system" ? "系统模型" : model;
+    return channel.scope === "system" ? t("domain:system-models") : model;
 }
 
 export function modelIcon(config: AiConfig, value: string) {
@@ -479,19 +480,19 @@ export function modelOptionsFromChannels(channels: ModelChannel[]) {
 export function hasSystemModelPrice(channel: ModelChannel, model: string) {
     if (channel.scope !== "system") return true;
     const positive = (value: number | undefined) => typeof value === "number" && Number.isFinite(value) && value > 0;
-    return channel.modelCosts?.some((item) => {
-        if (item.model !== model) return false;
-        const tiers = item.logicalPriceTiers || [];
-        if (tiers.length) {
-            return tiers.some((tier) => tier.billingMode === "token"
-                ? [tier.inputTokenPriceMicrocredits, tier.outputTokenPriceMicrocredits, tier.cachedTokenPriceMicrocredits].some(positive)
-                : positive(tier.unitPriceMicrocredits));
-        }
-        if (item.billingMode === "token") {
-            return [item.inputTokenPriceMicrocredits, item.outputTokenPriceMicrocredits, item.cachedTokenPriceMicrocredits].some(positive);
-        }
-        return positive(item.unitPriceMicrocredits);
-    }) === true;
+    return (
+        channel.modelCosts?.some((item) => {
+            if (item.model !== model) return false;
+            const tiers = item.logicalPriceTiers || [];
+            if (tiers.length) {
+                return tiers.some((tier) => (tier.billingMode === "token" ? [tier.inputTokenPriceMicrocredits, tier.outputTokenPriceMicrocredits, tier.cachedTokenPriceMicrocredits].some(positive) : positive(tier.unitPriceMicrocredits)));
+            }
+            if (item.billingMode === "token") {
+                return [item.inputTokenPriceMicrocredits, item.outputTokenPriceMicrocredits, item.cachedTokenPriceMicrocredits].some(positive);
+            }
+            return positive(item.unitPriceMicrocredits);
+        }) === true
+    );
 }
 
 export function normalizeModelOptionValue(value: unknown, channels: ModelChannel[]) {
@@ -512,7 +513,7 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     const decoded = decodeChannelModel(value);
     const model = decoded?.model || value;
     const matched = decoded ? config.channels.find((channel) => channel.id === decoded.channelId) : config.channels.find((channel) => channel.models.includes(model));
-    return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
+    return matched || config.channels[0] || createModelChannel({ id: "default", name: t("domain:default-channel"), baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
 export function logicalModelIDForConfig(config: AiConfig) {
@@ -550,7 +551,7 @@ function normalizeChannels(config: AiConfig, ensureDefault = true) {
             createModelChannel({
                 ...channel,
                 id: channel.id || (index === 0 ? "default" : `channel-${index + 1}`),
-                name: channel.name || (index === 0 ? "默认渠道" : `渠道 ${index + 1}`),
+                name: channel.name || (index === 0 ? t("domain:default-channel") : `渠道 ${index + 1}`),
                 models: uniqueRawModels(channel.models || []),
             }),
         )
@@ -559,7 +560,7 @@ function normalizeChannels(config: AiConfig, ensureDefault = true) {
         channels.push(
             createModelChannel({
                 id: "default",
-                name: "默认渠道",
+                name: t("domain:default-channel"),
                 baseUrl: config.baseUrl || defaultConfig.baseUrl,
                 apiKey: config.apiKey || "",
                 apiFormat: config.apiFormat || defaultConfig.apiFormat,

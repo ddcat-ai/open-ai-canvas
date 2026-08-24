@@ -1,8 +1,10 @@
 import { App, Button, Form, Input, InputNumber, Select } from "antd";
-import { ArrowLeft, Boxes, Cloud, MessageSquareText, RadioTower, SlidersHorizontal, SquareTerminal } from "lucide-react";
+import { ArrowLeft, Boxes, Cloud, Globe, MessageSquareText, RadioTower, SlidersHorizontal, SquareTerminal } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 
+import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { refreshSystemChannels } from "@/lib/user-session";
@@ -14,22 +16,17 @@ import { ModelDefaultGrid } from "./model-default-grid";
 import { LocalCliSettings } from "./local-cli-settings";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 
-type ConfigSectionKey = "local-cli" | "channels" | "models" | "preferences" | "prompts" | "storage";
+type ConfigSectionKey = "local-cli" | "channels" | "models" | "preferences" | "prompts" | "storage" | "language";
 
-const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
-    { key: "local-cli", label: "本机工具", description: "连接 Runtime 与官方 CLI", icon: <SquareTerminal className="size-4" /> },
-    { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
-    { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
-    { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
-    { key: "storage", label: "我的对象存储", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
-];
+// 文案必须在组件内经 t() 现取（模块求值时 catalog 未加载），这里只保留 key 清单供 isConfigSection 用
+const CONFIG_SECTION_KEYS: ConfigSectionKey[] = ["local-cli", "channels", "models", "preferences", "prompts", "storage", "language"];
 
 export function isConfigSection(value: string | null): value is ConfigSectionKey {
-    return configSections.some((section) => section.key === value);
+    return CONFIG_SECTION_KEYS.includes(value as ConfigSectionKey);
 }
 
 export default function SettingsPage() {
+    const { t } = useTranslation("settings");
     const { message } = App.useApp();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -43,6 +40,16 @@ export default function SettingsPage() {
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
+    // 文案随语言切换实时重算，所以放在组件体内而不是模块常量里
+    const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
+        { key: "local-cli", label: t("sections.local-cli.label"), description: t("sections.local-cli.description"), icon: <SquareTerminal className="size-4" /> },
+        { key: "channels", label: t("sections.channels.label"), description: t("sections.channels.description"), icon: <RadioTower className="size-4" /> },
+        { key: "models", label: t("sections.models.label"), description: t("sections.models.description"), icon: <Boxes className="size-4" /> },
+        { key: "preferences", label: t("sections.preferences.label"), description: t("sections.preferences.description"), icon: <SlidersHorizontal className="size-4" /> },
+        { key: "prompts", label: t("sections.prompts.label"), description: t("sections.prompts.description"), icon: <MessageSquareText className="size-4" /> },
+        { key: "storage", label: t("sections.storage.label"), description: t("sections.storage.description"), icon: <Cloud className="size-4" /> },
+        { key: "language", label: t("sections.language.label"), description: t("sections.language.description"), icon: <Globe className="size-4" /> },
+    ];
     const visibleConfigSections = customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels");
 
     useEffect(() => {
@@ -57,7 +64,7 @@ export default function SettingsPage() {
         if (!userId) return;
         let cancelled = false;
         void refreshSystemChannels().catch((error) => {
-            if (!cancelled) message.warning(error instanceof Error ? `系统模型刷新失败：${error.message}` : "系统模型刷新失败，继续使用本地缓存");
+            if (!cancelled) message.warning(error instanceof Error ? t("settings:system-model-refresh-failed-param", { message: error.message }) : t("settings:system-model-refresh-failed-using-local-cache"));
         });
         return () => {
             cancelled = true;
@@ -75,29 +82,43 @@ export default function SettingsPage() {
         const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel)) : undefined;
         if (invalidChannel) {
             selectSection("channels");
-            message.warning(`${invalidChannel.name || "未命名渠道"}：${channelValidationError(invalidChannel)}`);
+            message.warning(`${invalidChannel.name || t("settings:untitled-channel")}：${channelValidationError(invalidChannel)}`);
             focusInvalidChannelField(invalidChannel);
             return;
         }
         const hasReadyLocalRuntime = effectiveConfig.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false && Boolean(channel.localModels?.length));
         if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime) {
             selectSection(customChannelsEnabled ? "channels" : "models");
-            message.error(customChannelsEnabled ? (shouldPromptContinue ? "请先完成至少一个渠道的 Base URL、API Key 和模型配置" : "当前没有可用渠道，请先完成连接信息和模型配置") : "当前没有可用的系统模型，请联系管理员配置系统渠道");
+            message.error(
+                customChannelsEnabled
+                    ? shouldPromptContinue
+                        ? t("settings:finish-the-base-url-api-key-and-model-setup-for-at-least-one-channel-fir")
+                        : t("settings:no-usable-channels-yet-complete-connection-details-and-model-setup-first")
+                    : t("settings:no-system-models-available-ask-an-admin-to-set-up-system-channels"),
+            );
             return;
         }
-        message.success("配置已保存，正在返回创作页面");
+        message.success(t("settings:settings-saved-returning-to-the-creation-page"));
         navigate(-1);
     };
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
-        "local-cli": <SettingsPane><LocalCliSettings /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} /></SettingsPane>,
+        "local-cli": (
+            <SettingsPane>
+                <LocalCliSettings />
+            </SettingsPane>
+        ),
+        channels: (
+            <SettingsPane>
+                <ChannelSettingsPane onOpenModels={() => selectSection("models")} />
+            </SettingsPane>
+        ),
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>模型选择</h2>
-                        <p>按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。</p>
+                        <h2>{t("settings:models-3")}</h2>
+                        <p>{t("settings:pick-default-models-per-domain-capabilities-and-protocols-are-configured")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
@@ -109,18 +130,18 @@ export default function SettingsPage() {
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>生成偏好</h2>
-                        <p>画布、视频与音频默认值，节点内仍可单独覆盖。</p>
+                        <h2>{t("settings:generation-preferences")}</h2>
+                        <p>{t("settings:defaults-for-canvas-video-and-audio-each-node-can-still-override-them")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
                     <Form layout="vertical" requiredMark={false}>
                         <section className="settings-preference-block pb-6">
                             <div className="mb-4">
-                                <h3 className="text-sm font-semibold">画布生成</h3>
-                                <p className="mt-1 text-xs text-foreground/55">设置新建生成任务时使用的初始值，节点内仍可单独覆盖。</p>
+                                <h3 className="text-sm font-semibold">{t("settings:canvas-generation")}</h3>
+                                <p className="mt-1 text-xs text-foreground/55">{t("settings:initial-values-for-new-generation-tasks-each-node-can-still-override-the")}</p>
                             </div>
-                            <Form.Item label="默认生图张数" className="mb-0 max-w-xs">
+                            <Form.Item label={t("settings:default-image-count")} className="mb-0 max-w-xs">
                                 <InputNumber
                                     min={1}
                                     max={15}
@@ -133,17 +154,17 @@ export default function SettingsPage() {
                         </section>
                         <section className="settings-preference-block py-6">
                             <div className="mb-4">
-                                <h3 className="text-sm font-semibold">音频默认值</h3>
-                                <p className="mt-1 text-xs text-foreground/55">用于新建音频节点和未单独设置参数的生成任务。</p>
+                                <h3 className="text-sm font-semibold">{t("settings:audio-defaults")}</h3>
+                                <p className="mt-1 text-xs text-foreground/55">{t("settings:used-for-new-audio-nodes-and-tasks-without-explicit-parameters")}</p>
                             </div>
                             <div className="grid gap-4 md:grid-cols-3">
-                                <Form.Item label="默认声音" className="mb-0">
+                                <Form.Item label={t("settings:default-voice")} className="mb-0">
                                     <Select value={config.audioVoice} options={audioVoiceOptions} onChange={(value) => updateConfig("audioVoice", value)} />
                                 </Form.Item>
-                                <Form.Item label="文件格式" className="mb-0">
+                                <Form.Item label={t("settings:file-format")} className="mb-0">
                                     <Select value={config.audioFormat} options={audioFormatOptions} onChange={(value) => updateConfig("audioFormat", value)} />
                                 </Form.Item>
-                                <Form.Item label="语速" className="mb-0">
+                                <Form.Item label={t("settings:speech-rate")} className="mb-0">
                                     <InputNumber
                                         min={0.25}
                                         max={4}
@@ -158,12 +179,12 @@ export default function SettingsPage() {
                         </section>
                         <section className="settings-preference-block pt-6">
                             <div className="mb-4">
-                                <h3 className="text-sm font-semibold">音频指令</h3>
-                                <p className="mt-1 text-xs text-foreground/55">在音频节点没有单独填写时使用。</p>
+                                <h3 className="text-sm font-semibold">{t("settings:audio-instructions")}</h3>
+                                <p className="mt-1 text-xs text-foreground/55">{t("settings:used-when-an-audio-node-has-no-instructions-of-its-own")}</p>
                             </div>
                             <div className="max-w-2xl">
-                                <Form.Item label="默认音频指令" className="mb-0">
-                                    <Input.TextArea rows={5} value={config.audioInstructions} placeholder="例如：自然、温暖、适合旁白。" onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
+                                <Form.Item label={t("settings:default-audio-instructions")} className="mb-0">
+                                    <Input.TextArea rows={5} value={config.audioInstructions} placeholder={t("settings:e-g-natural-warm-suited-to-voice-over")} onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
                                 </Form.Item>
                             </div>
                         </section>
@@ -171,11 +192,28 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        prompts: <SettingsPane fill><PromptPreferencesPane /></SettingsPane>,
+        prompts: (
+            <SettingsPane fill>
+                <PromptPreferencesPane />
+            </SettingsPane>
+        ),
         storage: (
             <SettingsPane>
                 <div className="settings-section">
                     <UserOSSSettingsForm />
+                </div>
+            </SettingsPane>
+        ),
+        language: (
+            <SettingsPane>
+                <div className="settings-pane-header">
+                    <div className="min-w-0">
+                        <h2>{t("language.title")}</h2>
+                        <p>{t("language.description")}</p>
+                    </div>
+                </div>
+                <div className="settings-section max-w-md">
+                    <LocaleSwitcher className="w-44" />
                 </div>
             </SettingsPane>
         ),
@@ -186,17 +224,21 @@ export default function SettingsPage() {
             <header className="settings-topbar shrink-0">
                 <div className="flex min-w-0 items-center gap-2.5">
                     {shouldPromptContinue ? (
-                        <button type="button" className="app-workspace-icon-button shrink-0" onClick={() => navigate(-1)} aria-label="返回创作页面" title="返回创作页面">
+                        <button type="button" className="app-workspace-icon-button shrink-0" onClick={() => navigate(-1)} aria-label={t("back-to-create")} title={t("back-to-create")}>
                             <ArrowLeft className="size-4" />
                         </button>
                     ) : null}
-                    <h1 className="truncate text-sm font-semibold">设置</h1>
+                    <h1 className="truncate text-sm font-semibold">{t("title")}</h1>
                 </div>
-                {shouldPromptContinue ? <Button type="primary" size="small" onClick={finishConfig}>保存并返回</Button> : null}
+                {shouldPromptContinue ? (
+                    <Button type="primary" size="small" onClick={finishConfig}>
+                        {t("save-and-return")}
+                    </Button>
+                ) : null}
             </header>
             <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
                 <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2.5" aria-label="配置分类">
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2.5" aria-label={t("nav-aria")}>
                         {visibleConfigSections.map((item) => {
                             const selected = item.key === activeTab;
                             return (
@@ -219,9 +261,7 @@ export default function SettingsPage() {
                 </aside>
                 <section className="settings-content flex min-h-0 min-w-0 flex-1 flex-col">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
-                            {panes[activeTab]}
-                        </div>
+                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>{panes[activeTab]}</div>
                     </div>
                 </section>
             </div>

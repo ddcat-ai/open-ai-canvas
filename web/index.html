@@ -13,6 +13,16 @@
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;
             } catch (e) {}
+            try {
+                // 与 use-locale-store 同一 key：已选语言直接用，未选按环境猜一次（与 detectLocale 同规则）
+                var ls = JSON.parse(localStorage.getItem("infinite-canvas:locale_store") || "{}");
+                var loc = ls.state && ls.state.locale;
+                if (loc !== "zh-CN" && loc !== "en") {
+                    var nav = (navigator.language || "").toLowerCase();
+                    loc = nav.indexOf("zh") === 0 ? "zh-CN" : nav.indexOf("en") === 0 ? "en" : "zh-CN";
+                }
+                document.documentElement.lang = loc;
+            } catch (e) {}
         </script>
     </head>
     <body class="bg-background text-foreground antialiased">

@@ -12,10 +12,11 @@ describe("emotion edit provider plan", () => {
 
     test("falls back visibly to local compositing when the provider does not support masks", () => {
         const plan = resolveEmotionEditPlan(false);
+        // i18n 迁移后 notice 是 t() 返回的 key 字符串（测试环境未初始化 i18next）
         expect(plan).toEqual({
             mode: "local-composite",
             includeMask: false,
-            notice: "当前渠道不支持蒙版，使用脸部裁切与本地羽化融合",
+            notice: "canvas:the-channel-does-not-support-masks-using-face-crop-with-local-feathered",
         });
         expect(emotionProviderMask(plan, { dataUrl: "data:image/png;base64,bWFzaw==" })).toBeUndefined();
     });

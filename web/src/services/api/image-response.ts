@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import axios from "axios";
 import { nanoid } from "nanoid";
 
@@ -22,34 +23,34 @@ function resolveImageDataUrl(item: Record<string, unknown>) {
 }
 
 export function parseImagePayload(payload: ImageApiResponse) {
-    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "请求失败");
+    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || t("domain:request-failed"));
     const images =
         payload.data
             ?.map(resolveImageDataUrl)
             .filter((value): value is string => Boolean(value))
             .map((dataUrl) => ({ id: nanoid(), dataUrl })) || [];
-    if (images.length === 0) throw new Error("接口没有返回图片");
+    if (images.length === 0) throw new Error(t("domain:the-api-returned-no-image"));
     return images;
 }
 
 export function readAxiosError(error: unknown, fallback: string) {
-    if (axios.isCancel(error)) return "请求已取消";
+    if (axios.isCancel(error)) return t("domain:request-cancelled-3");
     if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number }>(error)) {
         const responseData = error.response?.data;
         return responseData?.msg || responseData?.error?.message || readStatusError(error.response?.status, fallback);
     }
-    if (error instanceof DOMException && error.name === "AbortError") return "请求已取消";
+    if (error instanceof DOMException && error.name === "AbortError") return t("domain:request-cancelled-3");
     return error instanceof Error ? error.message : fallback;
 }
 
 export function readStatusError(status: number | undefined, fallback: string) {
-    if (status === 401 || status === 403) return "鉴权失败，请检查 API Key、套餐权限或模型权限";
-    if (status === 429) return "请求被限流或额度不足，请稍后重试";
+    if (status === 401 || status === 403) return t("domain:authentication-failed-check-your-api-key-plan-permissions-or-model-acces");
+    if (status === 429) return t("domain:rate-limited-or-out-of-quota-try-again-later");
     return status ? `${fallback}：${status}` : fallback;
 }
 
 export function parseChatCompletionPayload(payload: ChatCompletionPayload): ToolResponseResult {
-    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "请求失败");
+    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || t("domain:request-failed"));
     if (payload.error?.message) throw new Error(payload.error.message);
     const message = payload.choices?.[0]?.message;
     const toolCalls = (message?.tool_calls || [])
@@ -98,13 +99,13 @@ export function responseErrorMessage(value: unknown) {
 }
 
 export function validateResponsePayload(payload: ResponseApiPayload) {
-    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || "请求失败");
+    if (typeof payload.code === "number" && payload.code !== 0) throw new Error(payload.msg || t("domain:request-failed"));
     if (payload.error?.message) throw new Error(payload.error.message);
 }
 
 export function validateGeminiPayload(payload: GeminiPayload) {
     if (payload.error?.message) throw new Error(payload.error.message);
-    if (payload.promptFeedback?.blockReason) throw new Error(`Gemini 拒绝了本次请求：${payload.promptFeedback.blockReason}`);
+    if (payload.promptFeedback?.blockReason) throw new Error(t("domain:gemini-rejected-this-request-param", { blockReason: payload.promptFeedback.blockReason }));
 }
 
 export async function readFetchError(response: Response, fallback: string) {
@@ -122,8 +123,8 @@ export async function readJsonPayload<T>(response: Response, fallback: string): 
     try {
         return JSON.parse(text) as T;
     } catch {
-        if (/^\s*(?:<!doctype|<html)/i.test(text)) throw new Error("后端代理返回了前端网页，请检查 VITE_CANVAS_BACKEND_URL 和反向代理配置");
-        throw new Error(`${fallback}：接口没有返回有效 JSON`);
+        if (/^\s*(?:<!doctype|<html)/i.test(text)) throw new Error(t("domain:the-backend-proxy-returned-the-frontend-page-check-vite-canvas-backend-u"));
+        throw new Error(t("domain:param-the-api-returned-no-valid-json", { fallback: fallback }));
     }
 }
 
@@ -296,6 +297,6 @@ export function parseGeminiImagePayload(payload: GeminiPayload) {
             })
             .filter((value): value is string => Boolean(value))
             .map((dataUrl) => ({ id: nanoid(), dataUrl })) || [];
-    if (!images.length) throw new Error("Gemini 接口没有返回图片");
+    if (!images.length) throw new Error(t("domain:the-gemini-api-returned-no-image"));
     return images;
 }

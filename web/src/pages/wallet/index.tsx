@@ -10,17 +10,13 @@ import { WorkspaceState } from "@/components/layout/workspace-state";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { checkinCredits, getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { modelDisplayName, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { useTranslation } from "react-i18next";
+import { t as translate } from "@/i18n";
 
 type LedgerFilter = "all" | "income" | "consume" | "refund";
 
-const ledgerFilterOptions = [
-    { label: "全部", value: "all" },
-    { label: "充值与调整", value: "income" },
-    { label: "模型消费", value: "consume" },
-    { label: "退款", value: "refund" },
-];
-
 export default function WalletPage() {
+    const { t } = useTranslation("canvas");
     const { message } = App.useApp();
     const screens = Grid.useBreakpoint();
     const reducedMotion = useReducedMotion();
@@ -34,6 +30,12 @@ export default function WalletPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const requestSequence = useRef(0);
+    const ledgerFilterOptions = [
+        { label: t("wallet:all"), value: "all" },
+        { label: t("wallet:top-ups-and-adjustments"), value: "income" },
+        { label: t("wallet:model-usage"), value: "consume" },
+        { label: t("wallet:refunds"), value: "refund" },
+    ];
 
     const reload = async (targetPage = page, targetPageSize = pageSize) => {
         const sequence = ++requestSequence.current;
@@ -42,7 +44,7 @@ export default function WalletPage() {
             const nextWallet = await getWallet(targetPage, targetPageSize, filter);
             if (sequence === requestSequence.current) setWallet(nextWallet);
         } catch (error) {
-            if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : "读取积分记录失败");
+            if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : t("wallet:failed-to-load-credit-history"));
         } finally {
             if (sequence === requestSequence.current) setLoading(false);
         }
@@ -55,7 +57,7 @@ export default function WalletPage() {
     const redeem = async () => {
         const normalized = code.trim().toLowerCase();
         if (normalized.length !== 32) {
-            message.error("请输入完整的 32 位兑换码");
+            message.error(t("wallet:enter-the-full-32-character-redeem-code"));
             return;
         }
         setRedeeming(true);
@@ -65,9 +67,9 @@ export default function WalletPage() {
             setPage(1);
             await reload(1, pageSize);
             window.dispatchEvent(new CustomEvent("wallet:updated"));
-            message.success("兑换成功，积分已到账");
+            message.success(t("wallet:redeemed-credits-added"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "兑换失败");
+            message.error(error instanceof Error ? error.message : t("wallet:redemption-failed"));
         } finally {
             setRedeeming(false);
         }
@@ -79,9 +81,9 @@ export default function WalletPage() {
             await checkinCredits();
             await reload(page, pageSize);
             window.dispatchEvent(new CustomEvent("wallet:updated"));
-            message.success("签到成功，积分已到账");
+            message.success(t("wallet:checked-in-credits-added"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "签到失败");
+            message.error(error instanceof Error ? error.message : t("wallet:check-in-failed"));
         } finally {
             setCheckingIn(false);
         }
@@ -92,50 +94,62 @@ export default function WalletPage() {
     const totalMicrocredits = (account?.availableMicrocredits || 0) + (account?.reservedMicrocredits || 0);
 
     const columns: ColumnsType<CreditLedgerEntry> = [
-        { title: "发生时间", dataIndex: "createdAt", width: 180, render: formatTime },
-        { title: "类型", dataIndex: "type", width: 120, render: (type) => <LedgerTypeTag type={type} /> },
+        { title: t("wallet:occurred-at"), dataIndex: "createdAt", width: 180, render: formatTime },
+        { title: t("wallet:type"), dataIndex: "type", width: 120, render: (type) => <LedgerTypeTag type={type} /> },
         {
-            title: "明细",
+            title: t("wallet:details"),
             width: 400,
             ellipsis: true,
             render: (_, entry) => (
                 <div className="min-w-0 max-w-full overflow-hidden" title={[ledgerModelName(config, entry), [sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}>
                     <div className="truncate font-medium">{ledgerModelName(config, entry)}</div>
-                    <div className="mt-1 truncate text-xs text-foreground/50">{[sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ") || "无补充说明"}</div>
+                    <div className="mt-1 truncate text-xs text-foreground/50">{[sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ") || t("wallet:no-notes")}</div>
                 </div>
             ),
         },
         {
-            title: "积分变化",
+            title: t("wallet:credit-change"),
             dataIndex: "amountMicrocredits",
             width: 145,
             align: "right",
             render: (value: number) => <CreditDelta value={value} />,
         },
-        { title: "变更后余额", dataIndex: "availableAfterMicrocredits", width: 145, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
+        { title: t("wallet:balance-after-change"), dataIndex: "availableAfterMicrocredits", width: 145, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
     ];
 
     return (
         <main className="app-user-content app-workspace-scroll library-page wallet-library-page relative h-full overflow-y-auto text-foreground">
             <div className="relative w-full px-4 py-6 sm:px-6 lg:px-8">
                 <div className="studio-band">
-                    <motion.header initial={reducedMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="app-page-header flex flex-wrap items-start justify-between gap-4">
+                    <motion.header
+                        initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
+                        className="app-page-header flex flex-wrap items-start justify-between gap-4"
+                    >
                         <div className="flex min-w-0 items-center gap-3">
                             <div className="min-w-0">
-                                <h1 className="text-[var(--fs-heading-lg)] font-semibold leading-7">积分中心</h1>
-                                <p className="mt-1 text-xs leading-5 text-foreground/58">模型调用、冻结与退款都在同一条可追溯流水中。</p>
+                                <h1 className="text-[var(--fs-heading-lg)] font-semibold leading-7">{t("wallet:credits-center")}</h1>
+                                <p className="mt-1 text-xs leading-5 text-foreground/58">{t("wallet:model-calls-freezes-and-refunds-share-one-traceable-ledger")}</p>
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="app-projects-header-meta wallet-credit-meta">
                                 <Coins className="size-3" />
-                                可用 {formatCredits(account?.availableMicrocredits || 0, 6)}
+                                {t("wallet:available")} {formatCredits(account?.availableMicrocredits || 0, 6)}
                             </span>
-                            <Button className="library-primary-action" icon={<CalendarCheck className="size-4" />} type={wallet?.policy.checkedInToday ? "default" : "primary"} loading={checkingIn} disabled={wallet?.policy.checkedInToday} onClick={() => void checkin()}>
-                                {wallet?.policy.checkedInToday ? "今日已签到" : `签到 +${formatCredits(wallet?.policy.checkinBonusMicrocredits || 0)}`}
+                            <Button
+                                className="library-primary-action"
+                                icon={<CalendarCheck className="size-4" />}
+                                type={wallet?.policy.checkedInToday ? "default" : "primary"}
+                                loading={checkingIn}
+                                disabled={wallet?.policy.checkedInToday}
+                                onClick={() => void checkin()}
+                            >
+                                {wallet?.policy.checkedInToday ? t("wallet:already-checked-in-today") : t("wallet:check-in-with-bonus", { amount: formatCredits(wallet?.policy.checkinBonusMicrocredits || 0) })}
                             </Button>
                             <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
-                                刷新余额
+                                {t("wallet:refresh-balance")}
                             </Button>
                         </div>
                     </motion.header>
@@ -146,42 +160,67 @@ export default function WalletPage() {
                         <div className="wallet-balance-inner">
                             <div className="wallet-balance-primary">
                                 <div className="wallet-balance-heading">
-                                    <span className="library-icon-tile wallet-balance-icon"><Coins /></span>
-                                    <div><strong>可用创作积分</strong><span>最近更新 {formatTime(account?.updatedAt)}</span></div>
+                                    <span className="library-icon-tile wallet-balance-icon">
+                                        <Coins />
+                                    </span>
+                                    <div>
+                                        <strong>{t("wallet:available-creative-credits")}</strong>
+                                        <span>
+                                            {t("wallet:recently-updated")} {formatTime(account?.updatedAt)}
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="wallet-balance-number">
                                     <strong>{formatCredits(account?.availableMicrocredits || 0, 6)}</strong>
-                                    <span>积分</span>
+                                    <span>{t("wallet:credits")}</span>
                                 </div>
                             </div>
                             <div className="wallet-balance-details">
-                                <span className="wallet-account-status"><ShieldCheck />账户正常</span>
-                                <BalanceMetric label="冻结积分" description="调用中或待核对" value={account?.reservedMicrocredits || 0} icon={<TicketCheck className="size-4" />} />
-                                <BalanceMetric label="账户总额" description="可用与冻结合计" value={totalMicrocredits} icon={<Coins className="size-4" />} />
+                                <span className="wallet-account-status">
+                                    <ShieldCheck />
+                                    {t("wallet:account-healthy")}
+                                </span>
+                                <BalanceMetric label={t("wallet:frozen-credits")} description={t("wallet:in-use-or-under-review")} value={account?.reservedMicrocredits || 0} icon={<TicketCheck className="size-4" />} />
+                                <BalanceMetric label={t("wallet:total-balance")} description={t("wallet:available-plus-frozen")} value={totalMicrocredits} icon={<Coins className="size-4" />} />
                             </div>
                         </div>
                     </section>
 
-                    <motion.div initial={reducedMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="wallet-redeem-panel app-workspace-surface flex flex-col rounded-lg p-5 backdrop-blur-xl sm:p-6">
+                    <motion.div
+                        initial={reducedMotion ? false : { opacity: 0, x: 12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
+                        className="wallet-redeem-panel app-workspace-surface flex flex-col rounded-lg p-5 backdrop-blur-xl sm:p-6"
+                    >
                         <div className="flex items-start gap-3">
                             <span className="wallet-redeem-icon grid size-9 shrink-0 place-items-center rounded-lg">
                                 <TicketCheck className="size-4" />
                             </span>
                             <div>
-                                <h2 className="text-base font-semibold">兑换积分</h2>
-                                <p className="mt-1 text-xs leading-5 text-foreground/55">输入管理员发放的 32 位兑换码。</p>
+                                <h2 className="text-base font-semibold">{t("wallet:redeem-credits-2")}</h2>
+                                <p className="mt-1 text-xs leading-5 text-foreground/55">{t("wallet:enter-the-32-character-code-issued-by-an-admin")}</p>
                             </div>
                         </div>
                         <label className="mt-6 block">
-                            <span className="text-xs font-medium text-foreground/70">兑换码</span>
-                            <Input className="mt-2 font-mono" size="large" value={code} maxLength={32} spellCheck={false} autoComplete="off" onChange={(event) => setCode(event.target.value.replace(/[-\s]/g, ""))} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" onPressEnter={() => void redeem()} />
+                            <span className="text-xs font-medium text-foreground/70">{t("wallet:redemption-codes")}</span>
+                            <Input
+                                className="mt-2 font-mono"
+                                size="large"
+                                value={code}
+                                maxLength={32}
+                                spellCheck={false}
+                                autoComplete="off"
+                                onChange={(event) => setCode(event.target.value.replace(/[-\s]/g, ""))}
+                                placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                onPressEnter={() => void redeem()}
+                            />
                         </label>
                         <div className="mt-2 flex items-center justify-between text-xs text-foreground/45">
-                            <span>兑换成功后立即到账</span>
+                            <span>{t("wallet:credits-arrive-immediately-after-redemption")}</span>
                             <span className="tabular-nums">{code.length} / 32</span>
                         </div>
                         <Button className="mt-5" type="primary" size="large" block loading={redeeming} disabled={code.length !== 32} onClick={() => void redeem()}>
-                            兑换积分
+                            {t("wallet:redeem-credits-2")}
                         </Button>
                     </motion.div>
                 </section>
@@ -189,8 +228,10 @@ export default function WalletPage() {
                 <section className="wallet-ledger-panel app-workspace-surface mt-9 rounded-lg p-4 backdrop-blur-xl sm:p-5">
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <h2 className="text-base font-semibold">积分流水</h2>
-                            <p className="mt-1 text-xs text-foreground/55">当前展示最近 {wallet?.entries.length || 0} 条记录。</p>
+                            <h2 className="text-base font-semibold">{t("wallet:credit-ledger")}</h2>
+                            <p className="mt-1 text-xs text-foreground/55">
+                                {t("wallet:showing-the-latest")} {wallet?.entries.length || 0} {t("wallet:entries")}
+                            </p>
                         </div>
                         <Segmented
                             block={!screens.sm}
@@ -208,7 +249,13 @@ export default function WalletPage() {
                             <Table className="app-data-table wallet-ledger-table" rowKey="id" size="middle" loading={loading} columns={columns} dataSource={entries} pagination={false} tableLayout="fixed" scroll={{ x: 990 }} />
                         </TableSurface>
                     ) : (
-                        <div className="grid gap-1 overflow-hidden rounded-md bg-transparent">{entries.length ? entries.map((entry) => <LedgerMobileRow key={entry.id} config={config} entry={entry} />) : <WorkspaceState compact icon="wallet" title="没有匹配的积分记录" description="切换流水类型，或完成一次生成后再回来查看。" />}</div>
+                        <div className="grid gap-1 overflow-hidden rounded-md bg-transparent">
+                            {entries.length ? (
+                                entries.map((entry) => <LedgerMobileRow key={entry.id} config={config} entry={entry} />)
+                            ) : (
+                                <WorkspaceState compact icon="wallet" title={t("wallet:no-matching-credit-records")} description={t("wallet:switch-ledger-type-or-come-back-after-your-next-generation")} />
+                            )}
+                        </div>
                     )}
                     <PaginationBar
                         current={page}
@@ -230,7 +277,11 @@ function BalanceMetric({ label, description, value, icon }: { label: string; des
     return (
         <div className="wallet-balance-metric">
             <span className="wallet-balance-metric-icon">{icon}</span>
-            <div><span>{label}</span><strong>{formatCredits(value, 6)}</strong><small>{description}</small></div>
+            <div>
+                <span>{label}</span>
+                <strong>{formatCredits(value, 6)}</strong>
+                <small>{description}</small>
+            </div>
         </div>
     );
 }
@@ -275,25 +326,25 @@ function LedgerTypeTag({ type }: { type: CreditLedgerEntry["type"] }) {
 
 function ledgerTypeMeta(type: CreditLedgerEntry["type"]) {
     const values = {
-        redeem: { label: "兑换充值", tagColor: "default", icon: <ArrowDownLeft className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
-        admin_grant: { label: "管理员充值", tagColor: "default", icon: <ArrowDownLeft className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
-        consume: { label: "模型消费", tagColor: "error", icon: <Sparkles className="size-4" />, iconClass: "bg-rose-500/10 text-rose-600 dark:text-rose-300" },
-        reserve: { label: "积分冻结", tagColor: "warning", icon: <ArrowUpRight className="size-4" />, iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-300" },
-        refund: { label: "消费退款", tagColor: "warning", icon: <RotateCcw className="size-4" />, iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-300" },
-        admin_adjustment: { label: "管理员调账", tagColor: "default", icon: <SlidersHorizontal className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
-        signup_bonus: { label: "注册奖励", tagColor: "default", icon: <Sparkles className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
-        checkin_bonus: { label: "签到奖励", tagColor: "default", icon: <CalendarCheck className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
+        redeem: { label: translate("wallet:redemption-top-up"), tagColor: "default", icon: <ArrowDownLeft className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
+        admin_grant: { label: translate("wallet:admin-top-up"), tagColor: "default", icon: <ArrowDownLeft className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
+        consume: { label: translate("wallet:model-usage"), tagColor: "error", icon: <Sparkles className="size-4" />, iconClass: "bg-rose-500/10 text-rose-600 dark:text-rose-300" },
+        reserve: { label: translate("wallet:credit-freeze"), tagColor: "warning", icon: <ArrowUpRight className="size-4" />, iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-300" },
+        refund: { label: translate("wallet:usage-refund"), tagColor: "warning", icon: <RotateCcw className="size-4" />, iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-300" },
+        admin_adjustment: { label: translate("wallet:admin-adjustment"), tagColor: "default", icon: <SlidersHorizontal className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
+        signup_bonus: { label: translate("wallet:sign-up-bonus"), tagColor: "default", icon: <Sparkles className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
+        checkin_bonus: { label: translate("wallet:daily-check-in-bonus"), tagColor: "default", icon: <CalendarCheck className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" },
     } as const;
-    return values[type] || { label: "其他积分变动", tagColor: "default", icon: <ArrowUpRight className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" };
+    return values[type] || { label: translate("wallet:other-credit-changes"), tagColor: "default", icon: <ArrowUpRight className="size-4" />, iconClass: "bg-foreground/8 text-foreground/70" };
 }
 
 function ledgerTitle(entry: CreditLedgerEntry) {
-    if (entry.type === "redeem") return "兑换码充值";
-    if (entry.type === "refund") return "模型消费退款";
-    if (entry.type === "consume") return "模型调用";
-    if (entry.type === "signup_bonus") return "新用户注册奖励";
-    if (entry.type === "checkin_bonus") return "每日签到奖励";
-    return entry.note || "积分调整";
+    if (entry.type === "redeem") return translate("wallet:redeem-code-top-up");
+    if (entry.type === "refund") return translate("wallet:model-usage-refund");
+    if (entry.type === "consume") return translate("wallet:model-call");
+    if (entry.type === "signup_bonus") return translate("wallet:new-user-sign-up-bonus");
+    if (entry.type === "checkin_bonus") return translate("wallet:daily-check-in-reward");
+    return entry.note || translate("wallet:credit-adjustment");
 }
 
 function ledgerModelName(config: AiConfig, entry: CreditLedgerEntry) {
@@ -301,10 +352,10 @@ function ledgerModelName(config: AiConfig, entry: CreditLedgerEntry) {
 }
 
 function sceneLabel(scene?: string) {
-    const labels: Record<string, string> = { image: "图片生成", text: "文本生成", video: "视频生成", audio: "音频生成", storyboard: "分镜生成" };
-    return scene ? labels[scene] || "其他场景" : "";
+    const labels: Record<string, string> = { image: translate("wallet:image-generation"), text: translate("wallet:text-generation"), video: translate("wallet:video-generation"), audio: translate("wallet:audio-generation"), storyboard: translate("wallet:storyboard-generation") };
+    return scene ? labels[scene] || translate("wallet:other-scenarios") : "";
 }
 
 function formatTime(value?: string) {
-    return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
+    return value ? new Date(value).toLocaleString(undefined, { hour12: false }) : "--";
 }

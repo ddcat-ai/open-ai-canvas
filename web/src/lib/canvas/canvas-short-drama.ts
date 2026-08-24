@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { nanoid } from "nanoid";
 
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
@@ -23,41 +24,53 @@ export type CanvasShortDramaProgress = {
 };
 
 export function createShortDramaPipeline(center: Position) {
-    const styleNode = createCanvasNode(CanvasNodeType.Text, { x: center.x - 760, y: center.y - 170 }, {
-        content: "",
-        status: "idle",
-        workflowKind: "styleboard",
-        workflowTitle: "项目画风",
-        workflowDescription: "待选择",
-        fontSize: 14,
-    });
-    styleNode.title = "项目画风 · 待选择";
+    const styleNode = createCanvasNode(
+        CanvasNodeType.Text,
+        { x: center.x - 760, y: center.y - 170 },
+        {
+            content: "",
+            status: "idle",
+            workflowKind: "styleboard",
+            workflowTitle: t("canvas:project-style-3"),
+            workflowDescription: t("canvas:to-choose-3"),
+            fontSize: 14,
+        },
+    );
+    styleNode.title = t("canvas:project-style-to-choose");
     styleNode.width = 360;
     styleNode.height = 220;
 
-    const storyNode = createCanvasNode(CanvasNodeType.Text, { x: center.x - 760, y: center.y + 170 }, {
-        content: "",
-        status: "idle",
-        workflowKind: "story_input",
-        workflowTitle: "故事输入",
-        workflowDescription: "题材、角色、冲突和结局方向",
-        fontSize: 14,
-    });
-    storyNode.title = "故事梗概";
+    const storyNode = createCanvasNode(
+        CanvasNodeType.Text,
+        { x: center.x - 760, y: center.y + 170 },
+        {
+            content: "",
+            status: "idle",
+            workflowKind: "story_input",
+            workflowTitle: t("canvas:story-input"),
+            workflowDescription: t("canvas:genre-characters-conflict-ending-direction"),
+            fontSize: 14,
+        },
+    );
+    storyNode.title = t("canvas:story-synopsis-3");
     storyNode.width = 420;
     storyNode.height = 260;
 
-    const scriptNode = createCanvasNode(CanvasNodeType.Script, { x: center.x + 180, y: center.y }, {
-        status: "idle",
-        workflowKind: "storyboard",
-        workflowTitle: "分镜脚本",
-        storyboard: {
-            rows: [],
-            visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
-            referenceNodeIds: [],
+    const scriptNode = createCanvasNode(
+        CanvasNodeType.Script,
+        { x: center.x + 180, y: center.y },
+        {
+            status: "idle",
+            workflowKind: "storyboard",
+            workflowTitle: t("canvas:storyboard-script"),
+            storyboard: {
+                rows: [],
+                visibleColumns: ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"],
+                referenceNodeIds: [],
+            },
         },
-    });
-    scriptNode.title = "分镜脚本 · 待生成";
+    );
+    scriptNode.title = t("canvas:storyboard-to-generate");
 
     const connections: CanvasConnection[] = [
         { id: nanoid(), fromNodeId: styleNode.id, toNodeId: scriptNode.id, toHandleId: "storyboard:context" },
@@ -83,7 +96,9 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
     const meaningfulRows = scriptNode ? meaningfulStoryboardRows(scriptNode) : [];
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const successfulVideoNodeIds = new Set(nodes.filter(isSuccessfulVideoNode).map((node) => node.id));
-    const completedShotVideos = nodes.filter((node) => isSuccessfulVideoNode(node) && (node.metadata?.workflowKind === "shot" || connections.some((connection) => shotNodes.some((shot) => shot.id === connection.fromNodeId) && connection.toNodeId === node.id)));
+    const completedShotVideos = nodes.filter(
+        (node) => isSuccessfulVideoNode(node) && (node.metadata?.workflowKind === "shot" || connections.some((connection) => shotNodes.some((shot) => shot.id === connection.fromNodeId) && connection.toNodeId === node.id)),
+    );
     const finalNode = finalNodes.find((node) => node.metadata?.status === "success" && Boolean(node.metadata.content));
 
     const storyText = (storyNode?.metadata?.content || "").trim();
@@ -92,21 +107,23 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
     const storyDone = Boolean(storyText && storyNode && (storyNode === agentScriptNode || !scriptNode || isConnectedToStoryboard(storyNode.id)));
     const storyboardDone = meaningfulRows.length > 0 || shotNodes.length > 0;
     const rowsWithVideo = meaningfulRows.filter((row) => row.videoNodeId && nodeById.get(row.videoNodeId)?.type === CanvasNodeType.Video);
-    const videoDone = meaningfulRows.length > 0
-        ? rowsWithVideo.length === meaningfulRows.length && rowsWithVideo.every((row) => {
-              const videoNode = nodeById.get(row.videoNodeId!);
-              return videoNode?.metadata?.status === "success" && Boolean(videoNode.metadata.content);
-          })
-        : shotNodes.length > 0 && shotNodes.every((shot) => connections.some((connection) => connection.fromNodeId === shot.id && successfulVideoNodeIds.has(connection.toNodeId)));
+    const videoDone =
+        meaningfulRows.length > 0
+            ? rowsWithVideo.length === meaningfulRows.length &&
+              rowsWithVideo.every((row) => {
+                  const videoNode = nodeById.get(row.videoNodeId!);
+                  return videoNode?.metadata?.status === "success" && Boolean(videoNode.metadata.content);
+              })
+            : shotNodes.length > 0 && shotNodes.every((shot) => connections.some((connection) => connection.fromNodeId === shot.id && successfulVideoNodeIds.has(connection.toNodeId)));
     const done = [styleDone, storyDone, storyboardDone, videoDone, Boolean(finalNode)];
     const firstIncomplete = done.findIndex((value) => !value);
     const firstShotNode = shotNodes[0];
     const definitions: Array<{ id: CanvasShortDramaStepId; label: string; nodeId?: string }> = [
-        { id: "style", label: "选择画风", nodeId: styleNode?.id },
-        { id: "story", label: "输入故事", nodeId: storyNode?.id },
-        { id: "storyboard", label: "生成分镜", nodeId: scriptNode?.id || firstShotNode?.id },
-        { id: "video", label: "生成视频", nodeId: scriptNode?.id || firstShotNode?.id || completedShotVideos[0]?.id },
-        { id: "final", label: "合并成片", nodeId: finalNode?.id || finalNodes[0]?.id || completedShotVideos[0]?.id },
+        { id: "style", label: t("canvas:select-style-2"), nodeId: styleNode?.id },
+        { id: "story", label: t("canvas:enter-story"), nodeId: storyNode?.id },
+        { id: "storyboard", label: t("canvas:generate-storyboard"), nodeId: scriptNode?.id || firstShotNode?.id },
+        { id: "video", label: t("canvas:generate-video"), nodeId: scriptNode?.id || firstShotNode?.id || completedShotVideos[0]?.id },
+        { id: "final", label: t("canvas:merge-videos-2"), nodeId: finalNode?.id || finalNodes[0]?.id || completedShotVideos[0]?.id },
     ];
     const steps = definitions.map((step, index): CanvasShortDramaStep => ({
         ...step,
@@ -124,7 +141,7 @@ export function readShortDramaGuideDismissed() {
     try {
         return scopedLocalStorage.getItem(SHORT_DRAMA_GUIDE_STORAGE_KEY) === "dismissed";
     } catch (error) {
-        console.warn("读取短剧导引状态失败", error);
+        console.warn(t("canvas:failed-to-read-drama-guide-state"), error);
         return false;
     }
 }
@@ -133,7 +150,7 @@ export function persistShortDramaGuideDismissed() {
     try {
         scopedLocalStorage.setItem(SHORT_DRAMA_GUIDE_STORAGE_KEY, "dismissed");
     } catch (error) {
-        console.warn("保存短剧导引状态失败", error);
+        console.warn(t("canvas:failed-to-save-drama-guide-state"), error);
     }
 }
 

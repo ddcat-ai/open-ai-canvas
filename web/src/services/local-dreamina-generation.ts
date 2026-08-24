@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { LocalRuntimeTransport } from "@/services/local-runtime";
 import { LocalRuntimeClientError, type LocalRuntimeConnection } from "@/services/local-runtime-session";
 import { getLocalRuntimeSessionClient } from "@/stores/use-local-runtime-store";
@@ -10,11 +11,11 @@ const MAX_EFFECT_RESPONSE_BYTES = 16 * 1024;
 const GENERATION_EFFECT_CONSUMER_ID = "web-generation-materializer";
 const MAX_TASK_LIST_ITEMS = 100;
 export const LOCAL_DREAMINA_WAIT_STOPPED_CODE = "dreamina_local_wait_stopped";
-export const LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE = "仅停止本机等待，官方任务仍可能继续。";
+export const LOCAL_DREAMINA_WAIT_STOPPED_MESSAGE = t("domain:only-the-local-wait-was-stopped-the-official-task-may-still-continue");
 export const LOCAL_DREAMINA_OFFICIAL_INCOMPLETE_CODE = "dreamina_official_incomplete";
-export const LOCAL_DREAMINA_OFFICIAL_INCOMPLETE_MESSAGE = "官方任务未完成；可能已在官方取消或生成失败。";
+export const LOCAL_DREAMINA_OFFICIAL_INCOMPLETE_MESSAGE = t("domain:the-official-task-did-not-finish-it-may-have-been-cancelled-or-failed-on");
 export const LOCAL_DREAMINA_OFFICIAL_FAILED_CODE = "dreamina_official_failed";
-export const LOCAL_DREAMINA_FAILED_OR_CANCELLED_MESSAGE = "任务未成功。当前 Dreamina CLI 无法可靠判断是官网取消还是生成失败。";
+export const LOCAL_DREAMINA_FAILED_OR_CANCELLED_MESSAGE = t("domain:the-task-did-not-succeed-the-current-dreamina-cli-cannot-reliably-tell-w");
 export const LOCAL_DREAMINA_OFFICIAL_FAILED_MESSAGE = LOCAL_DREAMINA_FAILED_OR_CANCELLED_MESSAGE;
 
 export type LocalDreaminaTaskLifecycle = "QUEUED_LOCAL" | "SUBMITTING" | "SUBMISSION_UNCERTAIN" | "ACCEPTED" | "RUNNING" | "TERMINAL";
@@ -160,7 +161,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
         const envelope = record(result.value);
         const value = record(envelope?.result);
         if (envelope?.ok !== true || !value) {
-            throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
+            throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", t("domain:invalid-local-task-side-effect-response"), 502);
         }
         return value;
     };
@@ -174,7 +175,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
             });
             if (value.status === "busy") {
                 if (typeof value.retryAt !== "string" || !Number.isFinite(Date.parse(value.retryAt))) {
-                    throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
+                    throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", t("domain:invalid-local-task-side-effect-response"), 502);
                 }
                 return { status: "busy", retryAt: value.retryAt };
             }
@@ -183,7 +184,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
                 return { status: "completed", result };
             }
             if (value.status !== "claimed" || typeof value.leaseToken !== "string" || typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt)) || !Number.isSafeInteger(value.fence) || (value.fence as number) < 1) {
-                throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
+                throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", t("domain:invalid-local-task-side-effect-response"), 502);
             }
             const lease = {
                 taskId,
@@ -198,7 +199,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
         async renew(effectKey, taskId) {
             const key = leaseKey(taskId, effectKey);
             const lease = leases.get(key);
-            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", "本机任务副作用租约缺失", 409);
+            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", t("domain:local-task-side-effect-lease-missing"), 409);
             const value = await call("/dreamina/generate/effects/renew", {
                 consumerId: GENERATION_EFFECT_CONSUMER_ID,
                 taskId: lease.taskId,
@@ -207,7 +208,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
                 fence: lease.fence,
             });
             if (typeof value.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(value.leaseExpiresAt)) || value.fence !== lease.fence) {
-                throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", "本机任务副作用租约已失效", 409);
+                throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", t("domain:local-task-side-effect-lease-expired"), 409);
             }
             lease.expiresAt = value.leaseExpiresAt;
             return { fence: lease.fence };
@@ -215,7 +216,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
         async complete(effectKey, taskId, result) {
             const key = leaseKey(taskId, effectKey);
             const lease = leases.get(key);
-            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", "本机任务副作用租约缺失", 409);
+            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", t("domain:local-task-side-effect-lease-missing"), 409);
             const value = await call("/dreamina/generate/effects/complete", {
                 consumerId: GENERATION_EFFECT_CONSUMER_ID,
                 taskId: lease.taskId,
@@ -224,13 +225,13 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
                 fence: lease.fence,
                 result,
             });
-            if (value.completed !== true) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", "本机任务副作用租约已失效", 409);
+            if (value.completed !== true) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", t("domain:local-task-side-effect-lease-expired"), 409);
             leases.delete(key);
         },
         async release(effectKey, taskId) {
             const key = leaseKey(taskId, effectKey);
             const lease = leases.get(key);
-            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", "本机任务副作用租约缺失", 409);
+            if (!lease) throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_missing", t("domain:local-task-side-effect-lease-missing"), 409);
             const value = await call("/dreamina/generate/effects/release", {
                 consumerId: GENERATION_EFFECT_CONSUMER_ID,
                 taskId: lease.taskId,
@@ -239,7 +240,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
                 fence: lease.fence,
             });
             if (value.released !== true) {
-                throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", "本机任务副作用租约已失效", 409);
+                throw new LocalDreaminaGenerationClientError("local_runtime_effect_lease_lost", t("domain:local-task-side-effect-lease-expired"), 409);
             }
             leases.delete(key);
         },
@@ -249,7 +250,7 @@ export function createLocalDreaminaTaskEffectStore(dependencies: Pick<Dependenci
 function parseEffectResult(value: unknown): GenerationTaskEffectResult {
     const result = record(value);
     if (!result || Object.keys(result).some((key) => key !== "materializedAssetId") || (result.materializedAssetId !== undefined && typeof result.materializedAssetId !== "string")) {
-        throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", "本机任务副作用响应无效", 502);
+        throw new LocalDreaminaGenerationClientError("local_runtime_response_invalid", t("domain:invalid-local-task-side-effect-response"), 502);
     }
     return typeof result.materializedAssetId === "string" ? { materializedAssetId: result.materializedAssetId } : {};
 }
@@ -279,7 +280,7 @@ export async function runLocalDreaminaGenerationTask(input: LocalDreaminaGenerat
     if (task.errorCode === LOCAL_DREAMINA_OFFICIAL_FAILED_CODE) {
         throw new LocalDreaminaGenerationClientError(task.errorCode, LOCAL_DREAMINA_OFFICIAL_FAILED_MESSAGE, 502);
     }
-    throw new LocalDreaminaGenerationClientError(task.errorCode ?? "local_generation_unknown", "本机即梦生成未完成", 502);
+    throw new LocalDreaminaGenerationClientError(task.errorCode ?? "local_generation_unknown", t("domain:local-dreamina-generation-did-not-finish"), 502);
 }
 
 export async function queryLocalDreaminaGenerationTask(idempotencyKey: string, mode: "image" | "video" | undefined, dependencies: Pick<Dependencies, "client"> = {}, signal?: AbortSignal) {
@@ -373,7 +374,7 @@ export async function deleteLocalDreaminaGenerationTask(idempotencyKey: string, 
     const envelope = record(value);
     const result = envelope?.ok === true ? record(envelope.result) : undefined;
     if (!result || typeof result !== "object" || Array.isArray(result) || (result as { deleted?: unknown }).deleted !== true) {
-        throw new LocalDreaminaGenerationClientError("dreamina_response_invalid", "本机即梦任务响应无效", 502);
+        throw new LocalDreaminaGenerationClientError("dreamina_response_invalid", t("domain:invalid-local-dreamina-task-response"), 502);
     }
     return { deleted: true as const };
 }
@@ -450,7 +451,7 @@ async function queryWithOneReconnect(client: RuntimeClient, idempotencyKey: stri
 
 async function requireConnection(client: RuntimeClient, signal?: AbortSignal) {
     const connection = await client.connect(signal);
-    if (connection.state !== "connected") throw new LocalRuntimeClientError("origin_not_trusted", "本机连接需要重新建立", 403);
+    if (connection.state !== "connected") throw new LocalRuntimeClientError("origin_not_trusted", t("domain:the-local-connection-needs-to-be-re-established"), 403);
 }
 
 function parseInput(value: LocalDreaminaGenerationInput): ParsedInput {
@@ -784,7 +785,7 @@ function runtimeError(status: number, value: unknown) {
     const source = record(value);
     const code = typeof source?.code === "string" ? source.code : "local_generation_request_failed";
     const allowed = /^(?:local_generation|dreamina)_[a-z0-9_]{2,80}$/.test(code);
-    throw new LocalDreaminaGenerationClientError(allowed ? code : "local_generation_request_failed", "本机即梦生成请求失败", status || 502);
+    throw new LocalDreaminaGenerationClientError(allowed ? code : "local_generation_request_failed", t("domain:local-dreamina-generation-request-failed"), status || 502);
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -806,11 +807,11 @@ function validateTaskIdentity(idempotencyKey: string, mode: "image" | "video" | 
 }
 
 function invalidRequest() {
-    return new LocalDreaminaGenerationClientError("local_generation_request_invalid", "本机即梦生成参数无效", 400);
+    return new LocalDreaminaGenerationClientError("local_generation_request_invalid", t("domain:invalid-local-dreamina-generation-parameters"), 400);
 }
 function unavailable() {
-    return new LocalDreaminaGenerationClientError("local_generation_model_unavailable", "所选本机即梦模型或操作不可用", 409);
+    return new LocalDreaminaGenerationClientError("local_generation_model_unavailable", t("domain:the-selected-local-dreamina-model-or-operation-is-unavailable"), 409);
 }
 function invalidResponse() {
-    return new LocalDreaminaGenerationClientError("local_generation_response_invalid", "本机即梦生成响应无效", 502);
+    return new LocalDreaminaGenerationClientError("local_generation_response_invalid", t("domain:invalid-local-dreamina-generation-response"), 502);
 }

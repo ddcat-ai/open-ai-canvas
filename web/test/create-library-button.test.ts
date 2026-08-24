@@ -16,8 +16,8 @@ describe("creation library button", () => {
         expect(dockEnd).toBeGreaterThan(dockStart);
         const dockSource = compactSource(source.slice(dockStart, dockEnd));
         const modePickerIndex = dockSource.indexOf("<ModePicker mode={props.mode}");
-        const attachmentIndex = dockSource.indexOf('aria-label="从本机上传附件"');
-        const libraryIndex = dockSource.indexOf('aria-label="打开素材库选择参考内容"');
+        const attachmentIndex = dockSource.indexOf('aria-label={t("canvas:upload-attachments-from-this-device")}');
+        const libraryIndex = dockSource.indexOf('aria-label={t("canvas:open-the-asset-library-to-pick-references")}');
 
         expect(modePickerIndex).toBeGreaterThanOrEqual(0);
         expect(attachmentIndex).toBeGreaterThan(modePickerIndex);
@@ -37,9 +37,10 @@ describe("creation library button", () => {
         expect(source.slice(uploadStart, uploadEnd)).not.toContain("setAttachments");
         expect(source).toContain("onUpload: uploadLibraryAssets");
         expect(source).not.toContain("onUpload={() => fileInputRef.current?.click()}");
-        expect(source).toContain("上传后保存到素材库");
+        const zhCatalog = readFileSync(resolve(import.meta.dir, "../src/locales/zh-CN/canvas.json"), "utf8");
+        expect(zhCatalog).toContain("上传后保存到素材库");
         expect(pickerSource).toContain("保存完成后会自动选中");
-        expect(source).toContain("个素材已上传到素材库并自动选中");
+        expect(source).toContain('t("canvas:param-assets-uploaded-to-the-library-and-selected-automatically"');
     });
 
     test("previews prompt reference images without removing them", () => {
@@ -55,11 +56,11 @@ describe("creation library button", () => {
     });
 
     test("promotes the first reference into the primary reference slot", () => {
-        const source = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
+        const source = compactSource(readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8"));
 
         expect(source).toContain("const [primaryAttachment, ...secondaryAttachments] = props.attachments");
         expect(source).toContain("<CreationAttachmentThumbnail item={primaryAttachment} primary");
-        expect(source).toContain("secondaryAttachments.map((item) => <CreationAttachmentThumbnail");
+        expect(source).toContain("secondaryAttachments.map((item) => ( <CreationAttachmentThumbnail");
         expect(source).toContain('className={primary ? "creation-chat-reference is-paper creation-chat-reference-media" : "creation-chat-attachment"}');
     });
 });

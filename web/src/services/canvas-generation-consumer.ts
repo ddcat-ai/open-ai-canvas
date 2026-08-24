@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { Dispatch, SetStateAction } from "react";
 
 import { applyMaterializedGenerationTaskResultToNodes } from "@/lib/canvas/canvas-generation-task-sync";
@@ -30,7 +31,7 @@ export class CanvasGenerationDurableAckError extends Error {
     readonly cause: unknown;
 
     constructor(cause: unknown) {
-        super(cause instanceof Error ? cause.message : "画布生成副作用持久化失败");
+        super(cause instanceof Error ? cause.message : t("domain:failed-to-persist-canvas-generation-side-effects"));
         this.name = "CanvasGenerationDurableAckError";
         this.cause = cause;
     }
@@ -115,7 +116,7 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     throwIfAborted(input.signal);
     const previousNodes = input.nodesRef.current;
     const applied = await applyMaterializedGenerationTaskResultToNodes(previousNodes, input.task, input.output, input.effectKey, input.nodeId);
-    if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
+    if (!applied.updated || !applied.node) throw new Error(t("domain:matching-task-node-not-found-on-canvas"));
     const persistedProject = await persistCanvasGenerationEffect({
         projectId: input.projectId,
         effectKey: input.effectKey,
@@ -141,7 +142,7 @@ export async function persistCanvasAgentGenerationContinuationEffect(input: {
     const previousNodes = input.previousNodes ?? input.nodesRef.current;
     const currentNodes = input.nodesRef.current;
     const currentNode = currentNodes.find((node) => node.id === input.nodeId);
-    if (!currentNode) throw new Error("画布中找不到 Agent continuation 节点");
+    if (!currentNode) throw new Error(t("domain:no-agent-continuation-node-found-on-the-canvas"));
     if (generationEffectApplied(currentNode.metadata || {}, input.effectKey) && currentNode.metadata?.agentGenerationContinuation?.status === "completed") return;
 
     const nodes = currentNodes.map((node) =>
@@ -390,7 +391,7 @@ function generationProjectDelta(input: CanvasGenerationEffectInput, memoryProjec
     const stampedNodes = (input.nodes || []).filter((node) => generationEffectApplied(node.metadata || {}, input.effectKey));
     const stampedSessions = (input.chatSessions || []).filter((session) => generationEffectApplied(session, input.effectKey));
 
-    if (input.connections && !input.previousConnections) throw new Error("生成副作用缺少连接前置快照");
+    if (input.connections && !input.previousConnections) throw new Error(t("domain:generation-side-effects-are-missing-the-pre-connection-snapshot"));
 
     const baseProject: CanvasProject = {
         ...memoryProject,
@@ -440,10 +441,10 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
     const baseRevision = canvasStoreStorageRevision(scope);
     const memoryProjects = useCanvasStore.getState().projects;
     const memoryProject = memoryProjects.find((candidate) => candidate.id === input.projectId);
-    if (!memoryProject) throw new Error("画布项目不存在，无法持久化生成副作用");
+    if (!memoryProject) throw new Error(t("domain:canvas-project-does-not-exist-cannot-persist-generation-side-effects"));
 
     const delta = generationProjectDelta(input, memoryProject);
-    if (!delta.stamped) throw new Error("生成副作用缺少持久幂等标记");
+    if (!delta.stamped) throw new Error(t("domain:generation-side-effects-are-missing-the-persistence-idempotency-marker"));
 
     return withCanvasStorePersistenceLock(
         scope,
@@ -468,11 +469,11 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
                 });
                 if (rebased.conflicts.some((conflict) => conflict.reason === "concurrent-update")) {
                     reconcileLiveOnFailure = true;
-                    throw new Error("画布生成副作用与并发修改冲突");
+                    throw new Error(t("domain:canvas-generation-side-effects-conflict-with-a-concurrent-modification"));
                 }
                 if (rebased.conflicts.length) {
                     reconcileLiveOnFailure = true;
-                    throw new Error("画布生成副作用与已删除内容冲突");
+                    throw new Error(t("domain:canvas-generation-side-effects-conflict-with-deleted-content"));
                 }
 
                 throwIfAborted(input.signal);
@@ -495,7 +496,7 @@ export async function persistCanvasGenerationEffect(input: CanvasGenerationEffec
                 latestDurable = finalDocument;
                 recordCanvasStorageDocument(scope, finalDocument);
                 const persistedProject = rebaseCommittedCanvasGenerationOntoLiveProject(scope, input.projectId, finalDocument, memoryProject, baseRevision) ?? generationCommittedProject;
-                if (!persistedProject) throw new Error("画布项目不存在，无法确认生成副作用");
+                if (!persistedProject) throw new Error(t("domain:canvas-project-does-not-exist-cannot-confirm-generation-side-effects"));
                 if (getActiveUserScope() === scope) {
                     withCanvasStorePersistenceSuppressed(() => {
                         useCanvasStore.setState((state) => ({

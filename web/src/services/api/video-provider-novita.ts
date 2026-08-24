@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { imageToDataUrl } from "@/services/image-storage";
 import { modelOptionName } from "@/stores/use-config-store";
 import { isPublicMediaUrl } from "./video-validation";
@@ -10,8 +11,17 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 
 type NovitaVideoResult = { task?: { status?: string; reason?: string }; videos?: Array<{ video_url?: string }> };
 
-export async function createNovitaVideoTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
-    if (references.length > 1 || videoReferences.length || audioReferences.length) throw new Error("Novita 视频当前只支持 1 张起始图，不支持参考视频或音频");
+export async function createNovitaVideoTask(
+    deps: VideoProviderDeps,
+    config: ResolvedAiConfig,
+    model: string,
+    prompt: string,
+    references: ReferenceImage[],
+    videoReferences: ReferenceVideo[],
+    audioReferences: ReferenceAudio[],
+    options?: RequestOptions,
+): Promise<VideoGenerationTask> {
+    if (references.length > 1 || videoReferences.length || audioReferences.length) throw new Error(t("domain:novita-video-currently-supports-only-one-start-image-and-no-reference-vi"));
     const payload: Record<string, unknown> = {
         model: modelOptionName(model),
         prompt: prompt.trim(),
@@ -24,10 +34,10 @@ export async function createNovitaVideoTask(deps: VideoProviderDeps, config: Res
     }
     try {
         const created = await deps.transport.post<{ task_id?: string }>(novitaVideoUrl(config, "/video/create"), payload, options);
-        if (!created.task_id) throw new Error("Novita 视频接口没有返回任务 ID");
+        if (!created.task_id) throw new Error(t("domain:the-novita-video-api-did-not-return-a-task-id"));
         return { id: created.task_id, provider: "novita", model };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "Novita 视频任务创建失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:novita-video-task-creation-failed")));
     }
 }
 
@@ -37,13 +47,13 @@ export async function pollNovitaVideoTask(deps: VideoProviderDeps, config: Resol
         const status = result.task?.status || "";
         if (status === "TASK_STATUS_SUCCEED") {
             const url = result.videos?.[0]?.video_url || "";
-            if (!url) return { status: "failed", error: "Novita 视频任务已完成但没有返回视频地址" };
+            if (!url) return { status: "failed", error: t("domain:the-novita-video-task-finished-but-returned-no-video-url") };
             return { status: "completed", result: await deps.response.videoResultFromUrl(url, options) };
         }
-        if (status === "TASK_STATUS_FAILED") return { status: "failed", error: result.task?.reason || "视频生成失败" };
+        if (status === "TASK_STATUS_FAILED") return { status: "failed", error: result.task?.reason || t("domain:video-generation-failed") };
         return { status: "pending" };
     } catch (error) {
-        throw new Error(deps.response.readAxiosError(error, "Novita 视频任务查询失败"));
+        throw new Error(deps.response.readAxiosError(error, t("domain:novita-video-task-query-failed")));
     }
 }
 

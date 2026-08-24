@@ -5,6 +5,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ModelIcon } from "@/components/model-picker";
 import { modelProtocolLabel, type ModelProtocol, type ModelProtocolDefinition, type ProtocolCapability } from "@/lib/model-protocols";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 
 export type ModelCapabilityChoice = ProtocolCapability;
 
@@ -15,17 +17,18 @@ const capabilityChoices: Array<{
     icon: ReactNode;
     brands: string[];
 }> = [
-    { value: "text", label: "文本", description: "对话与推理", icon: <MessageSquareText className="size-4" />, brands: ["openai", "deepseek", "glm"] },
-    { value: "image", label: "图片", description: "生成与编辑", icon: <Image className="size-4" />, brands: ["openai", "gemini"] },
-    { value: "video", label: "视频", description: "生成与续写", icon: <Film className="size-4" />, brands: ["grok", "gemini"] },
-    { value: "audio", label: "音频", description: "语音与音效", icon: <AudioLines className="size-4" />, brands: ["openai"] },
+    { value: "text", label: t("domain:text"), description: t("domain:chat-and-reasoning"), icon: <MessageSquareText className="size-4" />, brands: ["openai", "deepseek", "glm"] },
+    { value: "image", label: t("domain:image"), description: t("domain:generation-and-editing"), icon: <Image className="size-4" />, brands: ["openai", "gemini"] },
+    { value: "video", label: t("domain:video"), description: t("domain:generation-and-continuation"), icon: <Film className="size-4" />, brands: ["grok", "gemini"] },
+    { value: "audio", label: t("domain:audio"), description: t("domain:voice-and-sound-effects"), icon: <AudioLines className="size-4" />, brands: ["openai"] },
 ];
 
 type PickerDensity = "comfortable" | "compact";
 
 export function CapabilityCardPicker({ value, onChange, density = "comfortable" }: { value?: ModelCapabilityChoice; onChange?: (value: ModelCapabilityChoice) => void; density?: PickerDensity }) {
+    const { t } = useTranslation("canvas");
     return (
-        <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", density === "compact" && "gap-1.5")} role="radiogroup" aria-label="模型能力">
+        <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", density === "compact" && "gap-1.5")} role="radiogroup" aria-label={t("domain:model-capabilities-2")}>
             {capabilityChoices.map((item) => {
                 const selected = value === item.value;
                 return (
@@ -58,9 +61,10 @@ export function CapabilityCardPicker({ value, onChange, density = "comfortable" 
 }
 
 export function ProtocolCardPicker({ capability, value, onChange, density = "comfortable", protocols = [] }: { capability?: ModelCapabilityChoice; value?: ModelProtocol; onChange?: (value: ModelProtocol) => void; density?: PickerDensity; protocols?: ModelProtocolDefinition[] }) {
+    const { t } = useTranslation("canvas");
     const availableProtocols = protocols.filter((item) => item.capability === capability && item.enabled !== false);
     return (
-        <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", density === "compact" && "gap-1.5 xl:grid-cols-3")} role="radiogroup" aria-label="模型请求协议">
+        <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", density === "compact" && "gap-1.5 xl:grid-cols-3")} role="radiogroup" aria-label={t("domain:model-request-protocol")}>
             {availableProtocols.map((protocol) => {
                 const selected = value === protocol.value;
                 return (
@@ -93,7 +97,7 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
                                 <div className="mt-2 line-clamp-2 text-xs leading-5 text-foreground/58">{protocol.media}</div>
                                 <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-[var(--fs-tiny)] text-foreground/42">
                                     <span className="truncate">{protocol.contentType}</span>
-                                    {protocol.poll ? <span className="shrink-0">异步轮询</span> : <span className="shrink-0">同步响应</span>}
+                                    {protocol.poll ? <span className="shrink-0">{t("domain:async-polling")}</span> : <span className="shrink-0">{t("domain:synchronous-response")}</span>}
                                 </div>
                             </>
                         ) : null}
@@ -105,6 +109,7 @@ export function ProtocolCardPicker({ capability, value, onChange, density = "com
 }
 
 export function ModelCapabilityProtocolModal({ value, onChange, protocols = [] }: { value: { capability: ModelCapabilityChoice; protocol: ModelProtocol }; onChange: (value: { capability: ModelCapabilityChoice; protocol: ModelProtocol }) => void; protocols?: ModelProtocolDefinition[] }) {
+    const { t } = useTranslation("canvas");
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(value);
 
@@ -133,14 +138,14 @@ export function ModelCapabilityProtocolModal({ value, onChange, protocols = [] }
                 </span>
             </Button>
             <Modal
-                title="配置模型能力与请求协议"
+                title={t("domain:configure-model-capabilities-and-request-protocol")}
                 open={open}
                 width="min(720px, calc(100vw - 24px))"
                 centered
                 destroyOnHidden
                 onCancel={() => setOpen(false)}
-                okText="应用配置"
-                cancelText="取消"
+                okText={t("domain:apply-config")}
+                cancelText={t("domain:cancel-2")}
                 onOk={() => {
                     onChange(draft);
                     setOpen(false);
@@ -148,11 +153,11 @@ export function ModelCapabilityProtocolModal({ value, onChange, protocols = [] }
             >
                 <div className="space-y-4">
                     <section>
-                        <div className="mb-2 text-xs font-semibold text-foreground/65">模型能力</div>
+                        <div className="mb-2 text-xs font-semibold text-foreground/65">{t("domain:model-capabilities-2")}</div>
                         <CapabilityCardPicker value={draft.capability} onChange={updateCapability} />
                     </section>
                     <section>
-                        <div className="mb-2 text-xs font-semibold text-foreground/65">请求协议</div>
+                        <div className="mb-2 text-xs font-semibold text-foreground/65">{t("domain:request-protocol")}</div>
                         <ProtocolCardPicker capability={draft.capability} value={draft.protocol} protocols={protocols} onChange={(protocol) => setDraft((current) => ({ ...current, protocol }))} />
                     </section>
                 </div>
@@ -164,13 +169,13 @@ export function ModelCapabilityProtocolModal({ value, onChange, protocols = [] }
 function ProtocolBrandMark({ protocol, compact = false }: { protocol: ModelProtocolDefinition; compact?: boolean }) {
     const iconSize = compact ? "size-6" : "size-8";
     const vendor = `${protocol.vendor || ""} ${protocol.label}`.toLowerCase();
-    if (vendor.includes("jimeng") || vendor.includes("即梦"))
+    if (vendor.includes("jimeng"))
         return (
             <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}>
                 <Sparkles className={compact ? "size-3" : "size-4"} />
             </span>
         );
-    if (vendor.includes("volcengine") || vendor.includes("火山方舟"))
+    if (vendor.includes("volcengine"))
         return (
             <span className={cn("grid shrink-0 place-items-center rounded-md bg-muted text-foreground/65", iconSize)}>
                 <Flame className={compact ? "size-3" : "size-4"} />
@@ -182,7 +187,7 @@ function ProtocolBrandMark({ protocol, compact = false }: { protocol: ModelProto
                 <Network className={compact ? "size-3" : "size-4"} />
             </span>
         );
-    const brand = vendor.includes("gemini") || vendor.includes("google") ? "gemini" : vendor.includes("grok") || vendor.includes("xai") ? "grok" : vendor.includes("openai") ? "openai" : "openai";
+    const brand = vendor.includes("gemini") || vendor.includes("google") ? "gemini" : vendor.includes("grok") || vendor.includes("xai") ? "grok" : "openai";
     return <BrandIconRow models={[brand]} compact={compact} />;
 }
 
@@ -199,10 +204,12 @@ function BrandIconRow({ models, compact = false, className }: { models: string[]
 }
 
 function modelBrandLabel(model: string) {
-    const labels: Record<string, string> = { openai: "OpenAI", deepseek: "DeepSeek", glm: "智谱 GLM", gemini: "Google Gemini", grok: "xAI Grok" };
+    const { t } = useTranslation("canvas");
+    const labels: Record<string, string> = { openai: "OpenAI", deepseek: "DeepSeek", glm: t("domain:zhipu-glm"), gemini: "Google Gemini", grok: "xAI Grok" };
     return labels[model] || model;
 }
 
 function capabilityLabel(value: ModelCapabilityChoice) {
-    return { text: "文本", image: "图片", video: "视频", audio: "音频" }[value];
+    const { t } = useTranslation("canvas");
+    return { text: t("domain:text"), image: t("domain:image"), video: t("domain:video"), audio: t("domain:audio") }[value];
 }
