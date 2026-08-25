@@ -1,0 +1,515 @@
+# 用户诊断包设计
+
+本文定义影策“导出诊断包”功能的产品流程、前端采集、后端聚合、链路关联、安全脱敏和实施边界。第一阶段 MVP 已实现安全下载脱敏诊断包；提示词、截图、自动上传和异步大包等增强能力仍按后续阶段规划。
+
+## 目标
+
+当普通用户遇到页面报错、任务失败、生成卡住或插件不可用时，不要求用户打开开发者工具或理解技术日志，只需一键导出诊断包并提交给支持人员。开发人员应能从诊断包还原以下链路：
+
+```text
+用户操作
+  -> 前端事件或异常
+  -> HTTP 请求
+  -> 后端业务任务
+  -> 模型上游请求
+  -> 响应或失败结果
+```
+
+第一阶段需要满足：
+
+- 用户在任务失败后可以用不超过三步导出诊断包。
+- 诊断包同时包含前端上下文和当前用户有权访问的后端记录。
+- 开发人员可以通过关联 ID 查询一次操作涉及的请求、任务和上游调用。
+- 所有内容默认脱敏；当前 MVP 不提供加入提示词、截图或其他敏感数据的选项。
+- 单个诊断包有明确的时间、条数和体积上限，不能影响正常任务执行。
+
+## 非目标
+
+第一阶段不实现：
+
+- 自动把诊断包上传到客服、工单或第三方错误平台。
+- 全量采集浏览器控制台输出、键盘输入或用户操作录像。
+- 导出服务器数据库、环境变量、进程日志或宿主机文件。
+- 在管理后台直接渲染用户上传的任意 HTML 或其他不可信文件。
+- 用诊断包代替服务器监控、告警和生产可观测性系统。
+
+## 用户流程
+
+### 通用入口
+
+在“设置 -> 问题诊断”中提供“导出诊断包”。默认流程如下：
+
+1. 自动选择最近 30 分钟。
+2. 用户填写一句问题描述，例如“生成视频一直停在处理中”。
+3. 用户点击“导出”，浏览器下载 ZIP 文件。
+4. 页面展示诊断编号，用户将 ZIP 和编号一并提交给支持人员。
+
+文件名示例：
+
+```text
+影策诊断包-20260825-143012-DIAG_8F3K2P.zip
+```
+
+### 失败任务快捷入口
+
+当前实现先在任务中心失败详情提供“导出诊断包”快捷入口，并自动填入 `taskId` 和 `projectId`。任务创建前后自动扩展时间范围、通知入口和其他失败提示入口属于后续增强。
+
+### 当前选项
+
+当前 MVP 只提供必要控制：
+
+- 时间范围：最近 15 分钟、30 分钟、1 小时或 24 小时；当前不提供自定义时间范围。
+- 问题描述：最多 1000 个字符。
+- 数据预览：预计包含的前端事件、任务记录和上游调用数量。
+
+提示词、截图和可选项目元数据的开关属于后续阶段，当前不会写入诊断包。
+
+界面应使用“问题描述”“诊断包”“问题编号”等普通用户能理解的词，不把 `traceId`、JSONL 或调用链作为主界面概念。
+
+## 总体架构
+
+第一阶段由浏览器提交短期前端事件，后端按当前登录用户聚合数据库记录，统一脱敏后同步生成 ZIP：
+
+```text
+前端诊断缓冲区
+  + 当前页面、项目、任务上下文
+  + 用户问题描述
+            |
+            v
+POST /api/diagnostics/export
+            |
+            v
+后端权限校验 -> 数据查询 -> 统一脱敏 -> 限制与截断 -> ZIP 二进制
+            |
+            v
+浏览器下载诊断包
+```
+
+后端是诊断包内容和脱敏策略的最终边界。即使前端已经脱敏，后端仍需再次执行白名单过滤和敏感值清理。
+
+## 关联 ID
+
+诊断能力依赖统一的链路标识。建议区分以下四类 ID：
+
+| 字段 | 生命周期 | 用途 |
+| --- | --- | --- |
+| `traceId` | 一次用户业务操作 | 串联一次生成、重试或导入涉及的多个 HTTP 请求。 |
+| `requestId` | 单个 HTTP 请求 | 定位前端请求与 Gin 请求处理。 |
+| `taskId` | 一个异步业务任务 | 关联任务状态、任务日志、计费和结果。 |
+| `providerRequestId` | 一次上游模型调用 | 查询渠道供应商侧任务或请求。 |
+
+典型链路为：
+
+```text
+clientEvent.traceId
+  -> request.requestId
+  -> task.taskId
+  -> apiCallLog.providerRequestId
+```
+
+后端增加请求中间件，为每个请求生成不可预测的 `requestId`，写入 Gin Context，并通过 `X-Request-ID` 响应头返回。客户端提供的 ID 只能在通过长度、字符集和格式校验后作为 `traceId` 使用，不能直接覆盖后端生成的 `requestId`。
+
+一次生成操作由前端生成 `traceId`，通过 `X-Canvas-Trace-ID` 请求头传递。轮询、取消、重试等同一业务操作继续使用原 `traceId`；用户主动发起的新操作生成新值。
+
+## 前端设计
+
+### 模块边界
+
+当前 MVP 实现：
+
+```text
+web/src/services/diagnostics/
+  client-diagnostics.ts
+  diagnostics-api.ts
+```
+
+- `client-diagnostics.ts`：环形缓冲区、全局错误/请求事件采集、上下文关联和浏览器侧脱敏。
+- `diagnostics-api.ts`：预览、ZIP 导出请求和浏览器下载处理。
+
+事件和导出参数类型暂时与对应模块 colocate；后续协议稳定、类型复用扩大后再拆分独立文件。
+
+页面入口可以放在设置页面的私有组件目录；任务失败快捷入口复用同一个导出弹窗，不维护第二套导出逻辑。
+
+### 客户端事件结构
+
+```ts
+type ClientDiagnosticEvent = {
+  id: string;
+  timestamp: string;
+  level: "info" | "warning" | "error";
+  category: "navigation" | "action" | "request" | "runtime" | "task" | "plugin";
+  code?: string;
+  message: string;
+  route?: string;
+  durationMs?: number;
+  httpStatus?: number;
+  requestId?: string;
+  traceId?: string;
+  taskId?: string;
+  projectId?: string;
+  canvasId?: string;
+  stack?: string;
+};
+```
+
+事件只记录诊断所需的结果和关联字段，不保存组件完整状态、表单值或请求正文。
+
+### 当前采集范围
+
+当前 MVP 已采集：
+
+- `window.error`。
+- `unhandledrejection`。
+- 公共 `apiClient` 的 API 成功、业务失败和 HTTP 失败摘要，包括方法、规范化路径、状态、业务错误码、耗时和 `X-Request-ID`。
+- 创建任务事件。
+- 应用版本、构建提交、浏览器、操作系统和时区。
+
+第一阶段不采集：
+
+- 用户键盘、鼠标坐标和连续操作录像。
+- 全量 `console.log`、`console.info` 或第三方库调试输出。
+- Cookie、请求头、请求正文和响应正文。
+- Blob、data URL、图片、视频和完整画布快照。
+
+### 缓冲与持久化
+
+使用固定容量环形缓冲区，当前最多保存 500 条事件，默认只保存在内存中，不写入 `localforage` 或其他持久化存储。用户切换或退出登录时清空当前缓冲区，避免账号之间串数据。
+
+内存缓冲区需要：
+
+- 按登录用户隔离，用户 scope 变化时清理。
+- 单条堆栈和消息分别限制长度。
+- 无法序列化的对象转换为固定错误描述，不递归保存原始对象。
+
+### API 请求采集
+
+在公共 `apiClient` 的请求和响应拦截器中完成统一采集：
+
+- 请求开始时保存方法、规范化路径、开始时间和 `traceId`，并发送 `X-Canvas-Trace-ID`。
+- 响应结束时记录状态、耗时、业务错误码和 `X-Request-ID`。
+- URL 删除查询字符串和片段，动态资源 ID可以保留，令牌和签名参数不得保留。
+- 二进制、SSE 和本地 Agent 请求不复制完整载荷。
+
+### 生产堆栈
+
+如果生产构建不提供可解析的源码映射，前端堆栈只能定位到压缩后的文件。源码映射应作为受控的构建产物保存给开发团队，不公开部署到无需鉴权即可下载的位置。诊断包记录应用版本、构建 Commit 和资源文件名，开发人员据此使用对应源码映射还原堆栈。
+
+## 后端设计
+
+### 分层
+
+当前 MVP 实现：
+
+```text
+backend/internal/handler/diagnostics.go
+backend/internal/service/diagnostics.go
+backend/internal/repository/diagnostics.go
+```
+
+- Handler：绑定请求、获取当前用户、设置 ZIP 响应头并输出二进制内容。
+- Service：校验时间和上下文归属、聚合数据、脱敏、截断并生成清单。
+- Repository：只提供带 `userID` 的诊断查询，不向 Handler 暴露通用全表查询。
+
+第一阶段同步生成 ZIP，不新增诊断包数据库表，也不在服务器长期保存 ZIP。当前实现先在内存中生成并限制压缩包不超过 10 MB；数据量增大后再升级为异步任务或流式生成。
+
+### 数据来源
+
+优先复用现有业务数据：
+
+- `Task`：任务状态、时间、错误码和所属项目。
+- `TaskLog`：任务执行步骤和结构化失败信息。
+- `ApiCallLog`：渠道、模型、耗时、状态、错误码和 `providerRequestId`。
+- 前端运行时信息（版本、构建提交、浏览器、操作系统和时区）。
+- 前端请求体提交的短期客户端事件。
+
+Gin 当前标准访问日志输出到进程标准输出，无法可靠地按用户归属查询，因此不作为用户诊断包的数据源。服务器进程日志应属于独立的管理员诊断能力。
+
+### 模型调整
+
+为形成完整链路，当前已增加：
+
+```go
+type Task struct {
+    RequestID string
+    TraceID   string
+    // existing fields...
+}
+
+type ApiCallLog struct {
+    RequestID string
+    TraceID   string
+    // existing fields...
+}
+
+type TaskLog struct {
+    RequestID string
+    TraceID   string
+    // existing fields...
+}
+```
+
+`Task`、`TaskLog` 和 `ApiCallLog` 都保存关联字段，并为 `request_id`、`trace_id` 增加查询索引；诊断查询继续带当前用户和时间范围约束。
+
+字段和索引说明同步维护在后端数据库专题文档中。
+
+## API 设计
+
+### 预览
+
+```http
+POST /api/diagnostics/preview
+Content-Type: application/json
+```
+
+请求示例：
+
+```json
+{
+  "from": "2026-08-25T06:00:00Z",
+  "to": "2026-08-25T06:30:00Z",
+  "taskId": "task_xxx",
+  "projectId": "project_xxx"
+}
+```
+
+响应使用统一业务信封：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "clientEventLimit": 500,
+    "taskCount": 1,
+    "taskLogCount": 18,
+    "apiCallCount": 4,
+    "estimatedBytes": 86000,
+    "willTruncate": false
+  },
+  "msg": "ok"
+}
+```
+
+预览数量只是当前估算，导出期间产生的新事件可以不加入本次诊断包。
+
+### 导出
+
+```http
+POST /api/diagnostics/export
+Content-Type: application/json
+Accept: application/zip
+```
+
+请求示例：
+
+```json
+{
+  "from": "2026-08-25T06:00:00Z",
+  "to": "2026-08-25T06:30:00Z",
+  "taskId": "task_xxx",
+  "projectId": "project_xxx",
+  "description": "生成视频一直停在处理中",
+  "runtime": {
+    "appVersion": "0.1.0",
+    "buildCommit": "local"
+  },
+  "clientEvents": []
+}
+```
+
+成功响应：
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/zip
+Content-Disposition: attachment; filename="yingce-diagnostics-20260825-143012-DIAG_8F3K2P.zip"
+X-Diagnostic-Bundle-ID: DIAG_8F3K2P
+X-Diagnostic-Schema-Version: 1
+```
+
+由于成功响应是二进制，不经过只处理 JSON 信封的 `request<T>` 解包函数；仍复用现有 `apiClient` 的认证和 Base URL，设置 `responseType: "blob"`。错误响应继续使用统一 `{ code, data, msg }` 语义，前端按响应类型解析。
+
+### 权限规则
+
+- 必须登录才能预览或导出。
+- `taskId`、`projectId` 都由 Service 校验归属。
+- Repository 查询始终同时带当前 `userID`，不能先按 ID 查询后再由前端隐藏。
+- 不能因为用户知道其他任务 ID 而导出其他用户的日志。
+- 管理员也不通过用户接口绕过归属；管理员诊断使用独立接口和审计规则。
+
+## 诊断包格式
+
+第一版 ZIP 结构：
+
+```text
+manifest.json
+README.txt
+client/
+  events.jsonl
+backend/
+  tasks.jsonl
+  task-logs.jsonl
+  upstream-calls.jsonl
+context/
+  runtime.json
+```
+
+插件上下文、功能开关、截图和其他可选媒体尚未进入当前 MVP，后续增加时必须单独设计隐私开关和脱敏规则。
+
+JSONL 文件一行一个对象，便于流式生成、截断和命令行处理。所有文件使用 UTF-8。
+
+### Manifest
+
+```json
+{
+  "schemaVersion": 1,
+  "bundleId": "DIAG_8F3K2P",
+  "generatedAt": "2026-08-25T06:30:12Z",
+  "appVersion": "0.0.0",
+  "buildCommit": "abcdef1",
+  "timeRange": {
+    "from": "2026-08-25T06:00:00Z",
+    "to": "2026-08-25T06:30:00Z"
+  },
+  "redactionVersion": 1,
+  "truncated": false,
+  "counts": {
+    "clientEvents": 42,
+    "tasks": 1,
+    "taskLogs": 18,
+    "upstreamCalls": 4
+  }
+}
+```
+
+Manifest 不保存用户邮箱、用户名和真实 API Key。需要在包内区分同一用户时，使用只在当前诊断包内稳定的随机别名或哈希，不创建跨诊断包追踪标识。
+
+## 脱敏规则
+
+### 默认禁止内容
+
+无论用户如何选择，以下内容都不能进入诊断包：
+
+- `Authorization`、Cookie、Session、API Key、Access Key、Secret、Password、Token。
+- `x-goog-api-key`、`X-Canvas-Upstream-Headers` 等上游认证头。
+- 数据库、环境变量、`.settings-key` 和服务器配置原文。
+- 本机绝对文件路径、内部数据库路径和对象存储签名参数。
+- 完整浏览器存储、完整请求头和完整响应头。
+- 原始媒体文件和 data URL。
+
+### 默认关闭内容
+
+以下内容只有用户明确选择后才能加入，并在界面说明隐私影响：
+
+- 提示词原文和消息正文。
+- 项目、画布、素材的用户自定义名称。
+- 页面截图。
+- 上游请求或响应中的业务正文。
+
+即使用户选择包含，仍需执行密钥清理、字段白名单、字符串截断和 URL 去签名。
+
+### 脱敏实现
+
+后端维护单一脱敏服务，按以下顺序处理：
+
+1. 只构造允许导出的字段，不直接序列化完整数据库模型。
+2. 递归删除敏感键名。
+3. 对字符串执行 Token、Bearer、密钥和签名 URL 模式清理。
+4. 对路径、错误堆栈和上游错误信息执行长度限制。
+5. 将被清理的内容替换为 `[REDACTED]`，不留原值摘要。
+
+不要只依赖正则表达式处理完整对象；字段白名单是主要边界，模式清理只作为第二层防护。
+
+## 限制与降级
+
+建议第一阶段采用以下上限：
+
+| 项目 | 上限 |
+| --- | --- |
+| 时间范围 | 24 小时 |
+| 前端事件 | 500 条 |
+| 任务 | 100 条 |
+| 任务日志 | 2,000 条 |
+| 上游调用 | 1,000 条 |
+| 问题描述 | 1,000 字符 |
+| 单条消息或堆栈 | 4,000 字符 |
+| ZIP 总大小 | 10 MB |
+| 用户截图 | 当前不支持 |
+
+达到条数限制时优先保留错误事件、选中任务和距离错误最近的记录，并在 `manifest.json` 中写入 `truncated: true` 和各数据源的截断数量。
+
+达到 ZIP 体积限制时，依次移除：普通信息事件、成功请求、冗长堆栈和可选截图。不能为了完成导出而放宽敏感字段规则。
+
+导出失败不能影响原任务和用户数据。前端展示可操作错误，例如“时间范围过大，请缩短到 1 小时”，而不是笼统显示“系统错误”。
+
+## 开发人员排障流程
+
+拿到诊断包后建议按以下顺序检查：
+
+1. 阅读 `README.txt` 和 `manifest.json`，确认版本、时间范围、是否截断。
+2. 从用户描述或失败任务找到 `traceId`、`requestId` 和 `taskId`。
+3. 在 `client/events.jsonl` 中还原用户操作和前端异常。
+4. 在 `backend/tasks.jsonl` 和 `task-logs.jsonl` 中确认业务状态变化。
+5. 在 `backend/upstream-calls.jsonl` 中检查渠道、模型、状态码、耗时和 `providerRequestId`。
+6. 使用构建版本对应的源码映射还原前端堆栈。
+
+第二阶段可以提供本地只读诊断查看器，将 JSONL 转换为时间线。查看器不得执行诊断包中的脚本或渲染不可信 HTML。
+
+## 测试要求
+
+### 前端
+
+- 环形缓冲区按时间和容量正确淘汰。
+- 用户切换后不会读取其他账号的缓存。
+- Axios 成功、业务失败、HTTP 失败和取消请求均生成正确摘要。
+- URL 查询参数、Token 和请求正文不会进入事件。
+- 任务失败快捷入口正确带入 `taskId` 和时间范围。
+- 二进制下载失败时可以解析后端 JSON 错误。
+
+### 后端
+
+- 普通用户无法通过猜测 ID 导出其他用户的数据。
+- 时间范围、条数、消息长度和 ZIP 体积限制生效。
+- `RequestBody`、`ResponseBody`、`UpstreamURL` 中的密钥和签名参数不会泄漏。
+- ZIP 文件名、响应头、Manifest 和 JSONL 格式正确。
+- 达到上限时保留失败任务并正确标记截断。
+- 客户端提交恶意字段、超深 JSON、超长字符串和伪造关联 ID 时安全拒绝或截断。
+- 生成失败不会留下长期临时 ZIP 文件。
+
+### 验收场景
+
+至少验证：
+
+1. 前端渲染异常。
+2. 后端返回业务错误码。
+3. 模型上游返回 429 或 5xx。
+4. 异步任务长时间处理中。
+5. 插件连接失败。
+6. 用户主动取消请求。
+7. 诊断数据超过限制。
+8. 包含疑似 API Key、Cookie 和签名 URL 的错误文本。
+
+## 实施阶段
+
+### 第一阶段：可用的安全诊断包
+
+- 增加 `traceId`、`requestId` 和响应头。
+- 建立前端错误与请求环形缓冲区。
+- 增加设置入口和任务失败快捷入口。
+- 后端关联 `Task`、`TaskLog` 和 `ApiCallLog`。
+- 同步生成脱敏 ZIP，不落盘。
+- 补齐脱敏、权限、限制和下载测试。
+
+### 第二阶段：提升提交与分析效率
+
+- 异步生成诊断包并设置 24 小时自动过期。
+- 支持用户主动附加截图。
+- 提供离线诊断时间线查看器。
+- 管理员日志页面支持按 `traceId`、`requestId` 和诊断编号筛选。
+
+### 第三阶段：生产可观测性联动
+
+- 将结构化关联字段接入 OpenTelemetry 或内部监控。
+- 对相同错误码和堆栈进行聚类。
+- 在用户明确同意和部署方配置完成后接入工单提交。
+
+生产可观测性与用户诊断包共享关联 ID，但权限、保留周期和数据范围保持独立。

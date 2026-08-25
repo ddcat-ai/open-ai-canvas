@@ -10,7 +10,7 @@ type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number
 
 // 只允许按需加载 Mono 组件。这里不能使用 eager glob：模型 Logo 目录有数百个 provider 模块，
 // eager 会让每次进入工作区都发起数百个开发模块请求，即使用户从未打开 Logo 选择器。
-const iconModules = import.meta.glob("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { import: "default" });
+const iconModules = import.meta.glob?.("../../node_modules/@lobehub/icons/es/*/components/Mono.js", { import: "default" }) || {};
 const iconLoaders = Object.fromEntries(
     Object.entries(iconModules)
         .map(([path, loader]) => [path.match(/\/([^/]+)\/components\/Mono\.js$/)?.[1], loader])
@@ -43,11 +43,14 @@ function loadIcon(icon?: string) {
 }
 
 export function ModelLogo({ icon, size = 18, className }: { icon?: string; size?: number; className?: string }) {
-    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => icon ? iconRegistry.get(icon) : undefined);
+    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => (icon ? iconRegistry.get(icon) : undefined));
     useEffect(() => {
         let cancelled = false;
         setIcon(icon ? iconRegistry.get(icon) : undefined);
-        if (!icon || !iconLoaders[icon]) return () => { cancelled = true; };
+        if (!icon || !iconLoaders[icon])
+            return () => {
+                cancelled = true;
+            };
         void loadIcon(icon).then((loaded) => {
             if (!cancelled) setIcon(loaded);
         });

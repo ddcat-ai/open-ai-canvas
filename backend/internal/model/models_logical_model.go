@@ -85,21 +85,21 @@ type RouteAttempt struct {
 // 当 pricePolicy = unified 时，用户价格由此 SKU 决定，而非渠道价格。
 // SelectorJSON 统一使用结构化意图选择器，支持复杂的能力组合定价。
 type LogicalModelPriceSKU struct {
-	ID                           string    `json:"id" gorm:"primaryKey;size:36"`
-	LogicalModelRevisionID       string    `json:"logicalModelRevisionId" gorm:"size:36;index;uniqueIndex:idx_logical_sku_active,priority:1,where:deleted_at IS NULL"`
-	Code                         string    `json:"code" gorm:"size:80"`
-	Name                         string    `json:"name" gorm:"size:160"`
-	SelectorKey                  string    `json:"selectorKey" gorm:"size:500;not null;default:{};uniqueIndex:idx_logical_sku_active,priority:2,where:deleted_at IS NULL"`
-	SelectorJSON                 string    `json:"-" gorm:"type:text;not null;default:{}"`
-	BillingMode                  string    `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits        int64     `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64     `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64     `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64     `json:"cachedTokenPriceMicrocredits"`
-	Priority                     int       `json:"priority" gorm:"index"`
-	Enabled                      bool      `json:"enabled" gorm:"index"`
-	Version                      int       `json:"version"`
-	CreatedAt                    time.Time `json:"createdAt"`
-	UpdatedAt                    time.Time `json:"updatedAt"`
+	ID                           string     `json:"id" gorm:"primaryKey;size:36"`
+	LogicalModelRevisionID       string     `json:"logicalModelRevisionId" gorm:"size:36;index;uniqueIndex:idx_logical_sku_active,priority:1,where:deleted_at IS NULL"`
+	Code                         string     `json:"code" gorm:"size:80"`
+	Name                         string     `json:"name" gorm:"size:160"`
+	SelectorKey                  string     `json:"selectorKey" gorm:"size:500;not null;default:{};uniqueIndex:idx_logical_sku_active,priority:2,where:deleted_at IS NULL"`
+	SelectorJSON                 string     `json:"-" gorm:"type:text;not null;default:{}"`
+	BillingMode                  string     `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits        int64      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64      `json:"cachedTokenPriceMicrocredits"`
+	Priority                     int        `json:"priority" gorm:"index"`
+	Enabled                      bool       `json:"enabled" gorm:"index"`
+	Version                      int        `json:"version"`
+	CreatedAt                    time.Time  `json:"createdAt"`
+	UpdatedAt                    time.Time  `json:"updatedAt"`
 	DeletedAt                    *time.Time `json:"-" gorm:"index"`
 }

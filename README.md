@@ -19,6 +19,10 @@
 
 当前版本以仓库根目录 [`VERSION`](VERSION) 为准。
 
+## 仓库协作
+
+本项目的远端上游仓库是 [`ddcat-ai/open-ai-canvas`](https://github.com/ddcat-ai/open-ai-canvas)。本地同步主线代码时，应以该仓库的 `main` 分支为准。
+
 ## 赞助商
 
 感谢以下赞助商对影策项目的支持：
@@ -114,6 +118,14 @@ cd ../web
 bun install
 bun run dev
 ```
+
+Windows PowerShell 用户也可以在仓库根目录执行一键启动脚本：
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+脚本会使用 `.local/project-workbench-debug` 作为后端开发数据目录，并分别打开前后端窗口。缺少 `web/node_modules` 时会自动执行 `bun install --frozen-lockfile`。详细说明见 [`本地开发`](docs/content/docs/backend/local-development.mdx)。
 
 打开 <http://localhost:3000>，注册第一个管理员账号，再在设置中配置模型渠道。前端的 Vite 配置会把 `/api` 代理到本机 `8080`。
 

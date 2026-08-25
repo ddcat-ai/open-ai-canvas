@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
+import { buildLibTVImagePreviewUrl } from "@/lib/canvas/libtv-import";
+import { getNodeLabel } from "@/lib/canvas/node-registry/node-registry";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+
+const MINIMAP_WIDTH = 240;
+const MINIMAP_HEIGHT = 160;
+const MINIMAP_IMAGE_PREVIEW_LIMIT = 24;
 
 export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onViewportPreviewChange, onViewportChange }: { nodes: CanvasNodeData[]; viewport: ViewportTransform; viewportSize: { width: number; height: number }; canvasContainerRef?: RefObject<HTMLDivElement | null>; onViewportPreviewChange?: (viewport: ViewportTransform) => void; onViewportChange: (viewport: ViewportTransform) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -12,9 +19,10 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     const viewportRectRef = useRef<HTMLDivElement>(null);
     const liveViewportRef = useRef(viewport);
     const [isDragging, setIsDragging] = useState(false);
-    const width = 240;
-    const height = 160;
+    const width = MINIMAP_WIDTH;
+    const height = MINIMAP_HEIGHT;
     const displayNodes = useMemo(() => nodes.filter((node) => !isNodeHiddenByCollapsedFrame(node, nodes)), [nodes]);
+    const showImagePreviews = useMemo(() => displayNodes.filter((node) => node.type === CanvasNodeType.Image && Boolean(getImagePreviewSource(node) || node.metadata?.storageKey)).length <= MINIMAP_IMAGE_PREVIEW_LIMIT, [displayNodes]);
 
     const { worldBounds, scale, offset } = useMemo(() => {
         if (!displayNodes.length) {
@@ -151,6 +159,8 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                     const pos = toMinimap(node.position.x, node.position.y);
                     const frame = isFrameNode(node);
                     const color = node.type === CanvasNodeType.Image ? "#10b981" : node.type === CanvasNodeType.Video ? "#f97316" : node.type === CanvasNodeType.Audio ? "#a855f7" : node.type === CanvasNodeType.Config ? "#60a5fa" : node.type === CanvasNodeType.Skill ? "#818cf8" : frame ? theme.frame.stroke : theme.node.muted;
+                    const imagePreviewSource = showImagePreviews && node.type === CanvasNodeType.Image ? getImagePreviewSource(node) : "";
+                    const nodeLabel = node.title?.trim() || getNodeLabel(node.type);
                     return (
                         <div
                             key={node.id}
@@ -164,11 +174,40 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                                 border: frame ? `1px solid ${color}` : undefined,
                                 opacity: frame ? 0.95 : 0.8,
                             }}
-                        />
+                        >
+                            <div className="absolute inset-0 overflow-hidden rounded-[1px]">
+                                {imagePreviewSource || (showImagePreviews && node.type === CanvasNodeType.Image && node.metadata?.storageKey) ? (
+                                    <CachedResourceImage
+                                        storageKey={node.metadata?.storageKey}
+                                        src={imagePreviewSource}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        draggable={false}
+                                        className="size-full object-cover"
+                                        fallback={null}
+                                    />
+                                ) : null}
+                            </div>
+                            <span
+                                title={nodeLabel}
+                                aria-label={nodeLabel}
+                                className="pointer-events-none absolute left-0 top-0 z-[1] max-w-[7.5rem] -translate-y-1/2 truncate whitespace-nowrap rounded-[2px] border px-1 py-px text-[9px] font-medium leading-[1.15] shadow-sm"
+                                style={{ color: theme.node.text, background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
+                            >
+                                {nodeLabel}
+                            </span>
+                        </div>
                     );
                 })}
                 <div ref={viewportRectRef} className="pointer-events-none absolute rounded-[var(--r-xs)]" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }} />
             </div>
         </div>
     );
+}
+
+function getImagePreviewSource(node: CanvasNodeData) {
+    if (node.type !== CanvasNodeType.Image) return "";
+    const content = node.metadata?.content || "";
+    return node.metadata?.previewContent || (node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
 }

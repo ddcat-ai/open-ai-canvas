@@ -19,7 +19,7 @@ func TestValidateChannelModelPriceSupportsArkVideoTokensOnly(t *testing.T) {
 }
 
 func TestHasValidPriceUsesChannelProtocolForTokenTiers(t *testing.T) {
-	tier := model.ChannelModelPriceTier{Enabled: true, BillingMode: "token", OutputTokenPriceMicrocredits: 16_000_000}
+	tier := model.ChannelModelPriceTier{Enabled: true, PriceConfigured: true, BillingMode: "token", OutputTokenPriceMicrocredits: 16_000_000}
 	ark := &model.ChannelModel{Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, PriceTiers: []model.ChannelModelPriceTier{tier}}
 	if !HasValidPrice(ark) {
 		t.Fatal("Volcengine Ark video Token tier should be valid")

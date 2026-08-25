@@ -43,6 +43,8 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		req.TraceID = TraceID(c)
+		req.RequestID = RequestID(c)
 		task, err := svc.CreateTask(user.ID, req)
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -294,6 +296,8 @@ func RegisterSessionRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		req.TraceID = TraceID(c)
+		req.RequestID = RequestID(c)
 		detail, err := svc.CreateSession(user.ID, req)
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)

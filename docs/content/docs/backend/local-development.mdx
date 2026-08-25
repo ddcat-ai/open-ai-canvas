@@ -1,0 +1,68 @@
+---
+title: 本地开发
+description: 在宿主机启动影策前后端开发服务
+---
+
+# 本地开发
+
+## 一键启动（Windows PowerShell）
+
+在仓库根目录执行：
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+脚本会：
+
+- 使用 `.local/project-workbench-debug` 作为后端 SQLite 开发数据目录；
+- 创建 `.local/cache/go-build` 和 `.local/cache/go-mod` 缓存目录；
+- 首次启动时，如果 `web/node_modules` 不存在，执行 `bun install --frozen-lockfile`；
+- 打开两个 PowerShell 窗口，分别运行后端和前端；
+- 将前端 `/api` 请求代理到 `http://127.0.0.1:8080`。
+
+启动后访问 <http://localhost:3000>。后端健康检查地址是 <http://127.0.0.1:8080/api/health>。
+
+脚本使用固定的本地开发端口：前端 `3000`，后端 `8080`。如果端口被占用，脚本会先退出，不会关闭已有进程。请分别在两个开发窗口中按 `Ctrl+C` 停止服务。
+
+如果 PowerShell 的执行策略阻止脚本运行，可以只对当前进程临时放行：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\start-local.ps1
+```
+
+## 手工启动
+
+后端：
+
+```bash
+mkdir -p .local/project-workbench-debug .local/cache/go-build .local/cache/go-mod
+cd backend
+CANVAS_BACKEND_ADDR=127.0.0.1:8080 \
+CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug \
+GOCACHE=../.local/cache/go-build \
+GOMODCACHE=../.local/cache/go-mod \
+go run ./cmd/server
+```
+
+前端另开终端：
+
+```bash
+cd web
+bun install
+bun run dev
+```
+
+前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
+
+## Docker 开发
+
+需要容器化热更新时，在仓库根目录执行：
+
+```bash
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) \
+  docker compose -f docker-compose.dev.yml up --build
+```
+
+Docker 开发编排也使用 `.local/project-workbench-debug`，并默认暴露前端 `3000` 和后端 `8080`。端口冲突时，可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 调整宿主机端口。

@@ -4,6 +4,7 @@ import { Crosshair, FolderOpen, ImageIcon, Images, PanelLeftClose, Plus, Search,
 
 import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -52,6 +53,7 @@ type CanvasAssetTrayProps = {
 export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true, activeNodeId, onInsertAssetImage, onFocusCanvasImage }: CanvasAssetTrayProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const reducedMotion = useReducedMotion();
+    const { bringToFront, zIndex } = useCanvasOverlayLayer("asset-tray", "var(--z-panel)");
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<TrayTab>(() => showLibrary ? "library" : "canvas");
@@ -151,18 +153,11 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
 
     useEffect(() => {
         if (!open) return;
-        const closeTray = (event: PointerEvent) => {
-            const target = event.target instanceof Node ? event.target : null;
-            if (target && rootRef.current?.contains(target)) return;
-            setOpen(false);
-        };
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key === "Escape") setOpen(false);
         };
-        document.addEventListener("pointerdown", closeTray, true);
         document.addEventListener("keydown", closeOnEscape);
         return () => {
-            document.removeEventListener("pointerdown", closeTray, true);
             document.removeEventListener("keydown", closeOnEscape);
         };
     }, [open]);
@@ -173,12 +168,15 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
             label: open ? "收起素材空间" : `打开素材空间，共 ${(showLibrary ? assetImages.length : 0) + canvasImages.length} 项`,
             icon: <span className="relative"><Images /><span className="absolute -right-1.5 -top-1.5 min-w-3 rounded-full px-0.5 text-center text-[var(--fs-nano)] font-bold leading-3" style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}>{(showLibrary ? assetImages.length : 0) + canvasImages.length}</span></span>,
             active: open,
-            onClick: () => setOpen((value) => !value),
+            onClick: () => {
+                bringToFront();
+                setOpen((value) => !value);
+            },
         },
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-panel)]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="relative" style={{ zIndex }} onPointerDownCapture={bringToFront} onFocusCapture={bringToFront} onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {open ? (
                     <motion.aside

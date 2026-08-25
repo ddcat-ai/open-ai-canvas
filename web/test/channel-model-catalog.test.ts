@@ -105,36 +105,14 @@ describe("public channel model catalog", () => {
         });
     });
 
-    test("treats endpoint-only video metadata as authoritative without inventing 720P", async () => {
+    test("does not infer a protocol from endpoint-only video metadata", () => {
         const catalog: ChannelModelCatalogItem = {
             id: "endpoint-video",
             supportedEndpointTypes: ["openai-video"],
         };
         const config = configForCatalog([catalog], { videoSeconds: "6", size: "16:9", vquality: "720" });
-        const model = "flow::endpoint-video";
-        const cost = config.channels[0]!.modelCosts![0]!;
 
-        expect(cost.capability).toBe("video");
-        expect(cost.protocol).toBe("newapi-channel-2");
-        expect(cost.capabilityConfig?.video?.resolutions).toEqual([]);
-        expect(cost.capabilityConfig?.video?.defaultResolution).toBe("");
-        expect(selectableModelsByCapability(config, "video")).toEqual([model]);
-        expect(resolveModelRequestConfig(config, model).interfaceType).toBe("newapi-channel-2");
-
-        const canvasHtml = renderToStaticMarkup(React.createElement(CanvasVideoSettingsPopover, { config, onConfigChange: () => undefined }));
-        expect(canvasHtml).not.toContain("720P");
-
-        const createSource = await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text();
-        expect(createSource).toContain('const videoResolutionSupported = props.mode === "video" && resolutions.length > 0;');
-        expect(createSource).toContain("...(videoResolutionSupported ? [videoResolutionLabel(props.videoQuality)] : [])");
-
-        let requestBody: Record<string, unknown> = {};
-        axios.post = (async (_url: string, body: Record<string, unknown>) => {
-            requestBody = body;
-            return { data: { id: "endpoint-video-task" } };
-        }) as typeof axios.post;
-        await createVideoGenerationTask(config, "synthetic prompt");
-        expect(requestBody).not.toHaveProperty("resolution");
+        expect(config.channels[0]!.modelCosts).toEqual([]);
     });
 
     test("preserves a manually configured capability profile when a catalog only returns an ID", () => {
@@ -259,7 +237,7 @@ describe("public channel model catalog", () => {
 
         const html = renderToStaticMarkup(React.createElement(CanvasVideoSettingsPopover, { config, onConfigChange: () => undefined }));
 
-        expect(html).toContain("横屏 · 10s");
+        expect(html).toContain("16:9 · 10s");
         expect(html).not.toContain("720P");
     });
 
@@ -290,11 +268,7 @@ describe("public channel model catalog", () => {
         const normalized = normalizeConfigSnapshot({
             config: {
                 ...defaultConfig,
-                channels: [
-                    platform,
-                    custom,
-                    createModelChannel({ id: "default", name: "默认渠道", apiKey: "", models: ["gpt-image-2"] }),
-                ],
+                channels: [platform, custom, createModelChannel({ id: "default", name: "默认渠道", apiKey: "", models: ["gpt-image-2"] })],
                 models: ["default::gpt-image-2", "ghost-image"],
                 imageModels: ["default::gpt-image-2", "ghost-image"],
                 imageModel: "default::gpt-image-2",
@@ -302,10 +276,7 @@ describe("public channel model catalog", () => {
         }).config;
         const staleSnapshot = { ...normalized, models: [...normalized.models, "ghost-image"], imageModels: [...normalized.imageModels, "ghost-image"] };
 
-        expect(selectableModelsByCapability(staleSnapshot, "image")).toEqual([
-            "public-logical-models::frontend-image",
-            "custom-channel::custom-image-v1",
-        ]);
+        expect(selectableModelsByCapability(staleSnapshot, "image")).toEqual(["public-logical-models::frontend-image", "custom-channel::custom-image-v1"]);
         expect(staleSnapshot.channels.some((channel) => channel.id === "default")).toBe(false);
         expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("default::gpt-image-2");
         expect(selectableModelsByCapability(staleSnapshot, "image")).not.toContain("ghost-image");

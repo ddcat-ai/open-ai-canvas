@@ -75,6 +75,12 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
     const elevatedBackground = dark ? "rgba(31, 31, 32, 1)" : "rgba(255, 255, 255, 1)";
     const subtleBackground = dark ? "rgba(255, 255, 255, 0.055)" : "rgba(17, 17, 17, 0.035)";
     const interactiveBorder = dark ? "rgba(255, 255, 255, 0.18)" : "rgba(17, 17, 17, 0.18)";
+    // 信息提示使用独立的浅色/深色表面，不能复用主操作的纯黑/纯白色；
+    // 否则 Ant Design 会根据 colorInfo 生成近似纯黑的浅色主题背景，造成文字对比度失效。
+    const infoBackground = dark ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 17, 17, 0.045)";
+    const infoBackgroundHover = dark ? "rgba(255, 255, 255, 0.11)" : "rgba(17, 17, 17, 0.07)";
+    const infoBorder = dark ? "rgba(255, 255, 255, 0.2)" : "rgba(17, 17, 17, 0.14)";
+    const infoAccent = dark ? "#e4e4e7" : "#3f3f46";
     // 黑白主题使用边框表达焦点，避免输入控件周围出现蓝紫色光圈。
     const focusShadow = "none";
 
@@ -87,7 +93,16 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorPrimaryActive: color.solidActiveBg,
             colorPrimaryBg: color.selectedBg,
             colorPrimaryBgHover: color.selectedHoverBg,
-            colorInfo: color.solidBg,
+            colorInfoBg: infoBackground,
+            colorInfoBgHover: infoBackgroundHover,
+            colorInfoBorder: infoBorder,
+            colorInfoBorderHover: infoBorder,
+            colorInfo: infoAccent,
+            colorInfoHover: dark ? "#ffffff" : "#27272a",
+            colorInfoActive: dark ? "#d4d4d8" : "#52525b",
+            colorInfoTextHover: dark ? "#fafafa" : "#27272a",
+            colorInfoText: dark ? "#f4f4f5" : "#27272a",
+            colorInfoTextActive: dark ? "#e4e4e7" : "#3f3f46",
             colorLink: color.solidBg,
             colorLinkHover: color.solidHoverBg,
             colorLinkActive: color.solidActiveBg,

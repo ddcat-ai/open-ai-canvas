@@ -6,18 +6,18 @@ import (
 )
 
 type ModelChannel struct {
-	ID                string         `json:"id" gorm:"primaryKey;size:36"`
-	UserID            string         `json:"userId" gorm:"index;size:36"`
-	Scope             ChannelScope   `json:"scope" gorm:"index;size:24"`
-	Enabled           bool           `json:"enabled" gorm:"index"`
-	Name              string         `json:"name" gorm:"size:80"`
-	BaseURL           string         `json:"baseUrl"`
-	AllowLocalChannel bool           `json:"allowLocalChannel" gorm:"default:false"`
-	APIKey            string         `json:"-"`
-	SecretKey         string         `json:"-"`
-	APIFormat         string         `json:"apiFormat" gorm:"size:24"`
-	ConcurrencyLimit  int            `json:"concurrencyLimit"`
-	ModelsJSON        string         `json:"modelsJson" gorm:"type:text"`
+	ID                string       `json:"id" gorm:"primaryKey;size:36"`
+	UserID            string       `json:"userId" gorm:"index;size:36"`
+	Scope             ChannelScope `json:"scope" gorm:"index;size:24"`
+	Enabled           bool         `json:"enabled" gorm:"index"`
+	Name              string       `json:"name" gorm:"size:80"`
+	BaseURL           string       `json:"baseUrl"`
+	AllowLocalChannel bool         `json:"allowLocalChannel" gorm:"default:false"`
+	APIKey            string       `json:"-"`
+	SecretKey         string       `json:"-"`
+	APIFormat         string       `json:"apiFormat" gorm:"size:24"`
+	ConcurrencyLimit  int          `json:"concurrencyLimit"`
+	ModelsJSON        string       `json:"modelsJson" gorm:"type:text"`
 	// RetiredModelsJSON 记录已被一个模型家族吸收的上游 SKU，防止目录拉取时重新创建重复记录。
 	RetiredModelsJSON string         `json:"-" gorm:"type:text"`
 	HeadersJSON       string         `json:"-" gorm:"type:text"`
@@ -83,6 +83,8 @@ type ChannelModelPriceTier struct {
 type ApiCallLog struct {
 	ID                  string        `json:"id" gorm:"primaryKey;size:36"`
 	UserID              string        `json:"userId" gorm:"index;size:36;index:idx_api_logs_user_created,priority:1"`
+	TraceID             string        `json:"traceId,omitempty" gorm:"index;size:96"`
+	RequestID           string        `json:"requestId,omitempty" gorm:"index;size:96"`
 	UserDisplayName     string        `json:"userDisplayName,omitempty" gorm:"-"`
 	UserAccount         string        `json:"userAccount,omitempty" gorm:"-"`
 	ChannelID           string        `json:"channelId" gorm:"index;size:36;index:idx_api_logs_channel_created,priority:1"`

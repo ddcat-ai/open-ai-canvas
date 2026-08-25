@@ -6,15 +6,26 @@ import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useLocalDreaminaModelBootstrap } from "@/stores/use-local-dreamina-model-store";
 import { useLocalRuntimeBootstrap } from "@/stores/use-local-runtime-store";
+import { initializeClientDiagnostics, setDiagnosticUserScope } from "@/services/diagnostics/client-diagnostics";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
+    const userId = useUserStore((state) => state.user?.id || "");
     const localRuntimeConfigured = config.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false);
     useLocalRuntimeBootstrap(localRuntimeConfigured);
     useLocalDreaminaModelBootstrap();
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
+
+    useEffect(() => {
+        initializeClientDiagnostics();
+    }, []);
+
+    useEffect(() => {
+        setDiagnosticUserScope(userId);
+    }, [userId]);
 
     useEffect(() => {
         const interactiveSelector = 'button, [role="button"], a, [class*="card"], [class*="Card"]';

@@ -132,6 +132,30 @@ func TestCustomChannelTaskInputRequiresFeature(t *testing.T) {
 	}
 }
 
+func TestCreateTaskDoesNotClassifyCustomChannelAsMissingSystemModel(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+	actor := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+	if _, err := svc.UpdateFeatureAvailability(actor, FeatureAvailability{ShortDramaEnabled: true, TaskCenterEnabled: true, CreditsEnabled: true, CustomChannelsEnabled: false}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.CreateTask("user-1", CreateTaskRequest{
+		Type:   "canvas_text",
+		Prompt: "test custom channel",
+		Input: map[string]any{
+			"mode":   "text",
+			"config": providerConfig{BaseURL: "https://example.com/v1", APIKey: "private-key", Model: "text-model"},
+		},
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil")
+	}
+	var authErr *AuthError
+	if !errors.As(err, &authErr) || authErr.Message != "自定义渠道暂未开放" {
+		t.Fatalf("CreateTask() error = %#v, want custom channel feature error", err)
+	}
+}
+
 func TestTaskBillingOrderSkipsPricingWhenCreditsDisabled(t *testing.T) {
 	svc, _ := newFeatureAvailabilityTestService(t)
 	actor := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}

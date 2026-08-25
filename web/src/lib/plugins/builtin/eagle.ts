@@ -299,6 +299,8 @@ function fileToDataUrl(file: Blob, signal?: AbortSignal): Promise<string> {
 
 function toExternalItem(item: EagleItem, baseUrl: string, pathMap: Map<string, string[]>) {
     const kind = kindFromExtension(item.extension);
+    const folderIds = item.folderIds || [];
+    const tags = item.tags || [];
     return {
         id: item.id,
         title: item.name,
@@ -309,10 +311,10 @@ function toExternalItem(item: EagleItem, baseUrl: string, pathMap: Map<string, s
         width: item.width,
         height: item.height,
         bytes: item.size,
-        tags: item.tags,
-        folderId: item.folderIds[0],
-        folderIds: item.folderIds,
-        folderPath: item.folderIds[0] ? pathMap.get(item.folderIds[0]) : [],
+        tags,
+        folderId: folderIds[0],
+        folderIds,
+        folderPath: folderIds[0] ? pathMap.get(folderIds[0]) : [],
         description: item.annotation,
         metadata: { extension: item.extension, modificationTime: item.modificationTime, url: item.url, deleted: item.deleted },
     } satisfies ExternalAssetItem;

@@ -73,6 +73,17 @@ func (item *EagleItem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func normalizeEagleStringSlice(values []string) []string {
+	normalized := make([]string, len(values))
+	copy(normalized, values)
+	return normalized
+}
+
+func normalizeEagleItemCollections(item *EagleItem) {
+	item.FolderIDs = normalizeEagleStringSlice(item.FolderIDs)
+	item.Tags = normalizeEagleStringSlice(item.Tags)
+}
+
 type EagleItemQuery struct {
 	FolderID string
 	Keyword  string
@@ -168,8 +179,7 @@ func (s *Service) EagleItems(rawBaseURL string, query EagleItemQuery) ([]EagleIt
 	for index := range response.Data {
 		item := &response.Data[index]
 		item.Extension = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(item.Extension)), ".")
-		item.FolderIDs = append([]string(nil), item.FolderIDs...)
-		item.Tags = append([]string(nil), item.Tags...)
+		normalizeEagleItemCollections(item)
 	}
 	return response.Data, nil
 }

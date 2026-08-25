@@ -2,7 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Bot, Check, ChevronDown, Clapperboard, CloudDownload, Coins, CopyPlus, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Settings2, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Dropdown, Modal, Tooltip } from "antd";
+import { Button, Dropdown, Modal } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -102,38 +102,40 @@ export function CanvasTopBar({
         <>
             <div className="canvas-topbar pointer-events-none absolute left-0 right-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between px-4 sm:px-5">
                 <div className="canvas-topbar-cluster canvas-topbar-project-cluster pointer-events-auto flex min-w-0 items-center gap-2" style={dockStyle}>
-                    <Dropdown
-                        trigger={["click"]}
-                        menu={{
-                            items: [
-                                { key: "home", icon: <Home className="size-4" />, label: <Link to="/">主页</Link> },
-                                { key: "projects", icon: <LayoutGrid className="size-4" />, label: <Link to="/canvas">画布</Link> },
-                                { type: "divider" },
-                                { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
-                                { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
-                                { type: "divider" },
-                                { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
-                                { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ K" />, onClick: onOpenSearch },
-                                {
-                                    key: "performance",
-                                    icon: <Gauge className="size-4" />,
-                                    label: "媒体性能",
-                                    children: [
-                                        { key: "performance-auto", label: "自动性能", onClick: () => onMediaPerformanceModeChange("auto") },
-                                        { key: "performance-quality", label: "画质优先", onClick: () => onMediaPerformanceModeChange("quality") },
-                                        { key: "performance-fast", label: "性能优先", onClick: () => onMediaPerformanceModeChange("performance") },
-                                    ],
-                                },
-                                { type: "divider" },
-                                { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
-                                { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
-                            ],
-                        }}
-                    >
-                        <button type="button" className="canvas-topbar-action grid size-9 place-items-center rounded-full" style={{ color: theme.node.text }} aria-label="打开画布菜单">
-                            <Menu className="size-5" />
-                        </button>
-                    </Dropdown>
+                    <CanvasTopBarTooltip label="打开画布菜单">
+                        <Dropdown
+                            trigger={["click"]}
+                            menu={{
+                                items: [
+                                    { key: "home", icon: <Home className="size-4" />, label: <Link to="/">主页</Link> },
+                                    { key: "projects", icon: <LayoutGrid className="size-4" />, label: <Link to="/canvas">画布</Link> },
+                                    { type: "divider" },
+                                    { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
+                                    { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
+                                    { type: "divider" },
+                                    { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
+                                    { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ K" />, onClick: onOpenSearch },
+                                    {
+                                        key: "performance",
+                                        icon: <Gauge className="size-4" />,
+                                        label: "媒体性能",
+                                        children: [
+                                            { key: "performance-auto", label: "自动性能", onClick: () => onMediaPerformanceModeChange("auto") },
+                                            { key: "performance-quality", label: "画质优先", onClick: () => onMediaPerformanceModeChange("quality") },
+                                            { key: "performance-fast", label: "性能优先", onClick: () => onMediaPerformanceModeChange("performance") },
+                                        ],
+                                    },
+                                    { type: "divider" },
+                                    { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
+                                    { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
+                                ],
+                            }}
+                        >
+                            <button type="button" className="canvas-topbar-action grid size-9 place-items-center rounded-full" style={{ color: theme.node.text }} aria-label="打开画布菜单">
+                                <Menu className="size-5" />
+                            </button>
+                        </Dropdown>
+                    </CanvasTopBarTooltip>
 
                     <div ref={titleRef} className="canvas-topbar-title-block flex min-w-0 flex-auto flex-col items-start overflow-hidden">
                         {isTitleEditing ? (
@@ -156,11 +158,11 @@ export function CanvasTopBar({
                                 <button type="button" className="min-w-0 flex-1 truncate text-left text-base font-semibold tracking-normal transition-opacity hover:opacity-75" onClick={onStartTitleEditing} title="点击修改画布名称">
                                     {title}
                                 </button>
-                                <Tooltip title="重命名画布">
+                                <CanvasTopBarTooltip label="重命名画布">
                                     <button type="button" className="canvas-topbar-action grid size-7 shrink-0 place-items-center rounded-md opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2" style={{ color: theme.node.text }} onClick={onStartTitleEditing} aria-label="重命名画布">
                                         <Pencil className="size-3.5" />
                                     </button>
-                                </Tooltip>
+                                </CanvasTopBarTooltip>
                             </div>
                         )}
                         {projectContext && !isTitleEditing ? (
@@ -181,49 +183,57 @@ export function CanvasTopBar({
                 </div>
 
                 <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5" style={dockStyle}>
-                    <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" title="搜索画布节点" />
-                    <Dropdown
-                        trigger={["click"]}
-                        placement="bottomRight"
-                        menu={{
-                            items: [
-                                { key: "libtv", icon: <CopyPlus className="size-4" />, label: "导入 LibTV 画布", onClick: onImportLibTV },
-                                { key: "tapnow", icon: <CloudDownload className="size-4" />, label: "导入 TapNow 画布", onClick: onImportTapNow },
-                            ],
-                        }}
-                    >
-                        <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布" title="导入第三方画布">
-                            <span className="hidden lg:inline">导入第三方画布</span>
-                        </Button>
-                    </Dropdown>
-                    <Dropdown
-                        trigger={["click"]}
-                        menu={{
-                            selectable: true,
-                            selectedKeys: [mediaPerformanceMode],
-                            onClick: ({ key }) => onMediaPerformanceModeChange(key as CanvasMediaPerformanceMode),
-                            items: [
-                                { key: "auto", label: "自动性能" },
-                                { key: "quality", label: "画质优先" },
-                                { key: "performance", label: "性能优先" },
-                            ],
-                        }}
-                    >
-                        <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" title="媒体性能模式" />
-                    </Dropdown>
+                    <CanvasTopBarTooltip label="搜索画布节点">
+                        <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Search className="size-4" />} onClick={onOpenSearch} aria-label="搜索画布节点" />
+                    </CanvasTopBarTooltip>
+                    <CanvasTopBarTooltip label="导入第三方画布">
+                        <Dropdown
+                            trigger={["click"]}
+                            placement="bottomRight"
+                            menu={{
+                                items: [
+                                    { key: "libtv", icon: <CopyPlus className="size-4" />, label: "导入 LibTV 画布", onClick: onImportLibTV },
+                                    { key: "tapnow", icon: <CloudDownload className="size-4" />, label: "导入 TapNow 画布", onClick: onImportTapNow },
+                                ],
+                            }}
+                        >
+                            <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布">
+                                <span className="hidden lg:inline">导入第三方画布</span>
+                            </Button>
+                        </Dropdown>
+                    </CanvasTopBarTooltip>
+                    <CanvasTopBarTooltip label="媒体性能模式">
+                        <Dropdown
+                            trigger={["click"]}
+                            menu={{
+                                selectable: true,
+                                selectedKeys: [mediaPerformanceMode],
+                                onClick: ({ key }) => onMediaPerformanceModeChange(key as CanvasMediaPerformanceMode),
+                                items: [
+                                    { key: "auto", label: "自动性能" },
+                                    { key: "quality", label: "画质优先" },
+                                    { key: "performance", label: "性能优先" },
+                                ],
+                            }}
+                        >
+                            <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" />
+                        </Dropdown>
+                    </CanvasTopBarTooltip>
                     {compactAgentStatus ? <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} /> : null}
                     {user && creditsEnabled ? (
-                        <Link
-                            to="/wallet"
-                            className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
-                            style={{ color: theme.node.text }}
-                            title="查看积分明细"
-                        >
-                            {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" /> : <Coins className="size-3.5" />}
-                            <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
-                        </Link>
+                        <CanvasTopBarTooltip label="查看积分明细">
+                            <Link
+                                to="/wallet"
+                                className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
+                                style={{ color: theme.node.text }}
+                                aria-label="查看积分明细"
+                            >
+                                {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" /> : <Coins className="size-3.5" />}
+                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
+                            </Link>
+                        </CanvasTopBarTooltip>
                     ) : null}
-                    <Tooltip title="进入专注模式（⇧⌘F）">
+                    <CanvasTopBarTooltip label="进入专注模式（⇧⌘F）">
                         <Button
                             type="text"
                             className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
@@ -232,9 +242,9 @@ export function CanvasTopBar({
                             onClick={onEnterFocusMode}
                             aria-label="进入专注模式"
                         />
-                    </Tooltip>
+                    </CanvasTopBarTooltip>
                     {shortDramaGuide ? (
-                        <Tooltip title={shortDramaGuide.collapsed ? "展开短剧流程" : "收起短剧流程"}>
+                        <CanvasTopBarTooltip label={shortDramaGuide.collapsed ? "展开短剧流程" : "收起短剧流程"}>
                             <Button
                                 type="text"
                                 className="canvas-topbar-action !h-10 !rounded-xl !px-2.5 !font-medium"
@@ -246,9 +256,11 @@ export function CanvasTopBar({
                             >
                                 <span className="tabular-nums">{shortDramaGuide.progress.completedCount}/5</span>
                             </Button>
-                        </Tooltip>
+                        </CanvasTopBarTooltip>
                     ) : null}
-                    <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" title="分享画布" />
+                    <CanvasTopBarTooltip label="分享画布">
+                        <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />
+                    </CanvasTopBarTooltip>
                     <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
                     <Button
                         type="text"
@@ -271,7 +283,7 @@ export function CanvasTopBar({
                     <Shortcut keys={["工具栏「框选」", "左键拖动"]} value="框选多个节点，完成后自动回到「移动与选择」" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
                     <Shortcut keys={["Alt", "点击 / 框选"]} value="移除选择节点" />
-                    <Shortcut keys={["Ctrl / Cmd", "1 / 2 / 3"]} value="100% / 适应全部 / 适应选择" />
+                    <Shortcut keys={["Ctrl / Cmd", "1 / 2 / 3"]} value="100% / 适应画布 / 适应选择" />
                     <Shortcut keys={["?"]} value="打开快捷键" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "F"]} value="进入 / 退出专注模式" />
                     <Shortcut keys={["Ctrl / Cmd", "A"]} value="全选节点" />
@@ -366,6 +378,17 @@ export function CanvasWorkspaceModeSwitch({ mode, onChange }: { mode: CanvasWork
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
+function CanvasTopBarTooltip({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <span className="group relative inline-flex">
+            {children}
+            <span role="tooltip" className="aceternity-dock-tooltip pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[var(--dock-tooltip-z)] -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md border px-2 py-1 text-[var(--fs-tiny)] font-medium opacity-0 shadow-xl backdrop-blur-xl transition-all duration-150 motion-reduce:transition-none group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                {label}
+            </span>
+        </span>
+    );
+}
+
 function ModeOption({ active, motionEnabled, icon, title, description, theme, onClick }: { active: boolean; motionEnabled: boolean; icon: ReactNode; title: string; description: string; theme: CanvasTheme; onClick: () => void }) {
     return (
         <motion.button
@@ -403,12 +426,7 @@ function CompactAgentStatus({ status, onClick }: { status: { connected: boolean;
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const label = status.connected ? "已连接到本地 Codex" : status.enabled ? status.activity || "连接中" : "正在连接本地 Codex";
     const dotColor = status.connected ? "#22c55e" : status.enabled ? "#f59e0b" : theme.node.muted;
-    return (
-        <button type="button" className="canvas-topbar-action flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium" style={{ background: "transparent", color: theme.node.text }} onClick={onClick} title="打开本地 Codex 面板">
-            <span className="size-2 rounded-full" style={{ background: dotColor }} />
-            <span className="max-w-[180px] truncate">{label}</span>
-        </button>
-    );
+    return <CanvasTopBarTooltip label="打开本地 Codex 面板"><button type="button" className="canvas-topbar-action flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium" style={{ background: "transparent", color: theme.node.text }} onClick={onClick} aria-label="打开本地 Codex 面板"><span className="size-2 rounded-full" style={{ background: dotColor }} /><span className="max-w-[180px] truncate">{label}</span></button></CanvasTopBarTooltip>;
 }
 
 function Shortcut({ keys, value }: { keys: string[]; value: string }) {

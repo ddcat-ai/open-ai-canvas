@@ -29,6 +29,17 @@ export function canvasResourceMentionToken(reference: CanvasResourceReference) {
     return `@[node:${reference.nodeId}]`;
 }
 
+export function removeCanvasResourceMention(prompt: string, reference: CanvasResourceReference) {
+    const token = canvasResourceMentionToken(reference);
+    if (!token || !prompt.includes(token)) return prompt;
+    return prompt
+        .split(token)
+        .join("")
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 export function buildAssetMentionReferences(assets: Asset[]): CanvasResourceReference[] {
     return assets.flatMap((asset): CanvasResourceReference[] => {
         if (asset.kind === "model") return [];

@@ -64,6 +64,8 @@ type CreateSessionRequest struct {
 	Characters     []storyboardCharacterCard `json:"characters"`
 	Config         providerConfig            `json:"config"`
 	LogicalModelID string                    `json:"logicalModelId"`
+	TraceID        string                    `json:"-"`
+	RequestID      string                    `json:"-"`
 }
 
 type CreateTaskRequest struct {
@@ -76,6 +78,8 @@ type CreateTaskRequest struct {
 	Model          string         `json:"model"`
 	LogicalModelID string         `json:"logicalModelId"`
 	Input          map[string]any `json:"input"`
+	TraceID        string         `json:"-"`
+	RequestID      string         `json:"-"`
 }
 
 type SessionDetail struct {
@@ -267,7 +271,15 @@ func stringValue(value any) string {
 }
 
 func (s *Service) log(userID string, taskID string, level string, message string, payload string) error {
-	return s.repo.Create(&model.TaskLog{ID: newID(), UserID: userID, TaskID: taskID, Level: level, Message: message, Payload: truncateTaskLogPayload(payload)})
+	traceID := ""
+	requestID := ""
+	if taskID != "" {
+		if task, err := s.repo.Task(taskID); err == nil {
+			traceID = task.TraceID
+			requestID = task.RequestID
+		}
+	}
+	return s.repo.Create(&model.TaskLog{ID: newID(), UserID: userID, TaskID: taskID, TraceID: traceID, RequestID: requestID, Level: level, Message: message, Payload: truncateTaskLogPayload(payload)})
 }
 
 func truncateTaskLogPayload(payload string) string {

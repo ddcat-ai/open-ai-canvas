@@ -198,6 +198,7 @@
     --z-panel-floating: 80;     /* L7 浮动面板（助手/agent/活动任务）*/
     --z-modal: 100;             /* L8 对话框 */
     --z-modal-overlay: 110;     /* L9 遮罩 */
+    --z-canvas-overlay-active: 150; /* 画布浮层：最后交互的面板 */
     --z-popover: 200;           /* L10 弹出层 */
     --z-toast: 500;             /* L11 通知 */
     --z-tooltip: 1000;          /* L12 提示 */
@@ -5970,8 +5971,10 @@
     }
 
     .canvas-model-picker-menu {
+        width: max-content !important;
+        min-width: var(--canvas-model-picker-trigger-width, 0px);
+        max-width: calc(100vw - 24px);
         max-height: min(420px, calc(100vh - 32px));
-        min-width: 0;
         overflow-x: hidden;
         overflow-y: auto;
         padding: 4px;
@@ -6029,6 +6032,17 @@
         flex: 1 1 auto;
         min-width: 0;
         overflow: hidden;
+    }
+
+    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) {
+        flex: 0 0 auto;
+        min-width: max-content;
+        overflow: visible;
+    }
+
+    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) > span {
+        overflow: visible;
+        text-overflow: clip;
     }
 
     .canvas-model-picker-option-check {
@@ -6825,6 +6839,1083 @@
         padding: var(--space-3);
     }
 
+    /* 提示词优化保持在输入框附近，使用紧凑的 Popover 作为第二层输入工具。 */
+    .canvas-prompt-optimizer-popover-surface {
+        width: min(var(--canvas-prompt-optimizer-width, 420px), calc(100vw - 24px));
+        height: min(var(--canvas-prompt-optimizer-height, 620px), calc(100vh - 24px));
+        height: min(var(--canvas-prompt-optimizer-height, 620px), calc(100dvh - 24px));
+        max-width: calc(100vw - 24px);
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow: hidden;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: var(--r-xl) !important;
+        background: var(--popover) !important;
+        box-shadow: var(--elevation-panel), 0 20px 64px color-mix(in srgb, var(--foreground) 16%, transparent) !important;
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .canvas-prompt-optimizer-popover {
+        position: fixed !important;
+        inset: 0 auto auto 0 !important;
+        transition: none !important;
+        animation: none !important;
+        will-change: translate;
+    }
+
+    .canvas-prompt-optimizer-popover-content,
+    .canvas-prompt-optimizer-popover .ant-popover-inner {
+        width: 100%;
+        height: 100%;
+        padding: 0 !important;
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .canvas-prompt-optimizer-popover .ant-popover-inner {
+        overflow: hidden;
+        background: transparent !important;
+        transition: none !important;
+    }
+
+    .canvas-prompt-optimizer-panel {
+        position: relative;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        flex-direction: column;
+        overflow: hidden;
+        container-type: inline-size;
+        color: var(--foreground);
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .canvas-prompt-optimizer-chat-shell {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .canvas-prompt-optimizer-chat.ant-bubble-list {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-list-scroll-box {
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 14px 15px 12px;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-list-scroll-content {
+        display: flex;
+        height: max-content;
+        min-height: 100%;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-list-scroll-content > .ant-bubble {
+        flex: 0 0 auto;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble {
+        min-width: 0;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-content-borderless {
+        background: transparent;
+        padding: 0;
+    }
+
+    .canvas-prompt-optimizer-chat .ant-bubble-body {
+        min-width: 0;
+    }
+
+    .canvas-prompt-optimizer-user-content {
+        display: flex;
+        min-width: 0;
+        max-width: min(88%, 360px);
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+    }
+
+    .canvas-prompt-optimizer-message {
+        display: flex;
+        min-width: 0;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .canvas-prompt-optimizer-message.is-user {
+        justify-content: flex-end;
+    }
+
+    .canvas-prompt-optimizer-message-avatar {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--workspace-accent) 22%, transparent);
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--workspace-accent) 11%, transparent);
+        color: var(--workspace-accent);
+    }
+
+    .canvas-prompt-optimizer-message-body {
+        display: flex;
+        min-width: 0;
+        max-width: min(88%, 560px);
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .canvas-prompt-optimizer-message.is-user .canvas-prompt-optimizer-message-body {
+        align-items: flex-end;
+    }
+
+    .canvas-prompt-optimizer-message-meta {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 7px;
+        color: color-mix(in srgb, var(--foreground) 43%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 17px;
+    }
+
+    .canvas-prompt-optimizer-message-meta > :first-child {
+        color: color-mix(in srgb, var(--foreground) 66%, transparent);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-bubble {
+        max-width: 100%;
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border-radius: 14px;
+        padding: 9px 11px;
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+        font-size: var(--fs-body);
+        line-height: 20px;
+    }
+
+    .canvas-prompt-optimizer-bubble p {
+        margin: 0;
+    }
+
+    .canvas-prompt-optimizer-bubble.is-assistant-bubble {
+        border-top-left-radius: 5px;
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    }
+
+    .canvas-prompt-optimizer-bubble.is-user-bubble {
+        border-color: color-mix(in srgb, var(--workspace-accent) 22%, transparent);
+        border-top-right-radius: 5px;
+        background: color-mix(in srgb, var(--workspace-accent) 10%, transparent);
+        color: var(--foreground);
+        white-space: pre-wrap;
+    }
+
+    .canvas-prompt-optimizer-bubble.is-result-bubble {
+        width: 100%;
+    }
+
+    .canvas-prompt-optimizer-bubble.is-working {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    }
+
+    .canvas-prompt-optimizer-chat-reference {
+        display: flex;
+        min-width: 0;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 8px;
+        border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        padding-top: 8px;
+        color: color-mix(in srgb, var(--foreground) 46%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .canvas-prompt-optimizer-chat-reference > span {
+        flex: 0 0 auto;
+        padding-top: 2px;
+    }
+
+    .canvas-prompt-optimizer-chat-reference .ant-tag {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-reference-selection {
+        margin-top: 10px;
+        border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        padding-top: 8px;
+    }
+
+    .canvas-prompt-optimizer-reference-heading {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: color-mix(in srgb, var(--foreground) 56%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .canvas-prompt-optimizer-reference-heading > :first-child {
+        color: color-mix(in srgb, var(--foreground) 74%, transparent);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-reference-list {
+        display: flex;
+        max-height: 116px;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+        overflow-y: auto;
+        padding: 1px 1px 2px;
+    }
+
+    .canvas-prompt-optimizer-reference-chip {
+        display: inline-flex;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 32px;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 3%, transparent);
+        padding: 4px 8px 4px 5px;
+        color: color-mix(in srgb, var(--foreground) 56%, transparent);
+        font-size: var(--fs-micro);
+        text-align: left;
+        transition: border-color var(--motion-dur-fast) var(--motion-ease-out), background-color var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-prompt-optimizer-reference-chip:hover,
+    .canvas-prompt-optimizer-reference-chip.is-selected {
+        border-color: color-mix(in srgb, var(--workspace-accent) 38%, transparent);
+        background: color-mix(in srgb, var(--workspace-accent) 9%, transparent);
+        color: color-mix(in srgb, var(--foreground) 84%, transparent);
+    }
+
+    .canvas-prompt-optimizer-reference-chip:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 64%, transparent);
+        outline-offset: 1px;
+    }
+
+    .canvas-prompt-optimizer-reference-chip-preview,
+    .canvas-prompt-optimizer-reference-chip-icon {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+        place-items: center;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--foreground) 8%, transparent);
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+        object-fit: cover;
+    }
+
+    .canvas-prompt-optimizer-reference-chip-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-reference-empty {
+        margin: 7px 0 0;
+        color: color-mix(in srgb, var(--foreground) 43%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 17px;
+    }
+
+    .canvas-prompt-optimizer-result-bubble {
+        width: 100%;
+    }
+
+    .canvas-prompt-optimizer-result-heading {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .canvas-prompt-optimizer-result-heading {
+        margin-bottom: 7px;
+        color: color-mix(in srgb, var(--foreground) 78%, transparent);
+        font-size: var(--fs-caption);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-chat-detail {
+        margin-top: 10px;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        padding: 7px 9px;
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 18px;
+    }
+
+    .canvas-prompt-optimizer-chat-detail > span {
+        color: color-mix(in srgb, var(--foreground) 68%, transparent);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-chat-detail p {
+        margin-top: 2px;
+        white-space: pre-wrap;
+    }
+
+    .canvas-prompt-optimizer-composer {
+        flex: 0 0 auto;
+        background: transparent;
+        padding: 0;
+    }
+
+    .canvas-prompt-optimizer-sender.ant-sender {
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+        border-radius: var(--r-lg);
+        background: var(--popover);
+        box-shadow: none;
+        transition: border-color var(--motion-dur-fast) var(--motion-ease-out), box-shadow var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-prompt-optimizer-sender.ant-sender:hover {
+        border-color: color-mix(in srgb, var(--foreground) 23%, transparent);
+    }
+
+    .canvas-prompt-optimizer-sender.ant-sender:focus-within {
+        border-color: color-mix(in srgb, var(--workspace-accent) 58%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 12%, transparent);
+    }
+
+    .canvas-prompt-optimizer-sender .ant-sender-content {
+        min-height: 54px;
+        padding: 9px 11px 4px;
+    }
+
+    .canvas-prompt-optimizer-sender .ant-sender-input,
+    .canvas-prompt-optimizer-sender .ant-sender-input textarea {
+        min-height: 36px;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--foreground);
+        font-size: var(--fs-body);
+        line-height: 20px;
+        outline: none !important;
+        resize: none;
+    }
+
+    .canvas-prompt-optimizer-sender .ant-sender-input textarea::placeholder {
+        color: color-mix(in srgb, var(--foreground) 38%, transparent);
+    }
+
+    .canvas-prompt-optimizer-sender .ant-sender-footer {
+        padding: 0 8px 7px;
+    }
+
+    .canvas-prompt-optimizer-sender.ant-sender-disabled {
+        opacity: .72;
+    }
+
+    .canvas-prompt-optimizer-composer-input.ant-input {
+        min-height: 54px;
+        resize: none;
+        border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent) !important;
+        border-radius: var(--r-lg) !important;
+        background: var(--popover) !important;
+        padding: 10px 11px 7px;
+        box-shadow: none !important;
+        color: var(--foreground);
+        font-size: var(--fs-body);
+        line-height: 20px;
+    }
+
+    .canvas-prompt-optimizer-composer-input.ant-input:hover {
+        border-color: color-mix(in srgb, var(--foreground) 23%, transparent) !important;
+    }
+
+    .canvas-prompt-optimizer-composer-input.ant-input:focus {
+        border-color: color-mix(in srgb, var(--workspace-accent) 58%, transparent) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 12%, transparent) !important;
+    }
+
+    .canvas-prompt-optimizer-composer-toolbar {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 7px 2px 0;
+    }
+
+    .canvas-prompt-optimizer-composer-leading {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .canvas-prompt-optimizer-composer-toolbar > .flex.min-w-0 {
+        flex: 1 1 auto;
+        justify-content: flex-end;
+    }
+
+    .canvas-prompt-optimizer-mode-trigger {
+        display: inline-flex;
+        height: 28px;
+        min-width: 0;
+        align-items: center;
+        gap: 5px;
+        border: 0;
+        border-radius: var(--r-md);
+        background: transparent;
+        padding: 0 8px;
+        color: color-mix(in srgb, var(--foreground) 62%, transparent);
+        font-size: var(--fs-micro);
+        font-weight: 550;
+        transition: background-color var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-prompt-optimizer-mode-trigger:hover,
+    .canvas-prompt-optimizer-mode-trigger[aria-expanded="true"] {
+        background: color-mix(in srgb, var(--foreground) 7%, transparent);
+        color: var(--foreground);
+    }
+
+    .canvas-prompt-optimizer-mode-trigger > span {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-mode-trigger:focus-visible,
+    .canvas-prompt-optimizer-send:focus-visible,
+    .canvas-prompt-optimizer-model-picker:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 64%, transparent);
+        outline-offset: 1px;
+    }
+
+    .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker {
+        flex: 1 1 132px;
+        width: 132px !important;
+        max-width: 132px;
+        min-width: 0 !important;
+        height: 28px !important;
+        border-color: transparent !important;
+        border-radius: var(--r-md) !important;
+        background: transparent !important;
+        padding: 0 6px !important;
+        color: color-mix(in srgb, var(--foreground) 62%, transparent) !important;
+        font-size: var(--fs-micro) !important;
+    }
+
+    .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker:hover,
+    .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker[aria-expanded="true"] {
+        border-color: transparent !important;
+        background: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
+        color: var(--foreground) !important;
+    }
+
+    .canvas-prompt-optimizer-model-picker .canvas-model-picker-trigger-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+    }
+
+    .canvas-prompt-optimizer-model-picker .canvas-model-picker-label {
+        gap: 5px;
+    }
+
+    .canvas-prompt-optimizer-model-picker .canvas-model-picker-chevron {
+        width: 11px;
+        height: 11px;
+    }
+
+    .canvas-prompt-optimizer-model-popover .creation-model-picker-heading {
+        display: none;
+    }
+
+    .canvas-prompt-optimizer-mode-dropdown .ant-dropdown-menu {
+        width: min(278px, calc(100vw - 32px));
+        min-width: 0;
+        padding: 4px;
+    }
+
+    .canvas-prompt-optimizer-mode-dropdown .ant-dropdown-menu-item {
+        min-width: 0;
+        padding: 7px 8px;
+    }
+
+    .canvas-prompt-optimizer-mode-option {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+        padding: 2px 0;
+    }
+
+    .canvas-prompt-optimizer-mode-option > span {
+        color: var(--foreground);
+        font-size: var(--fs-caption);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-mode-option small {
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 16px;
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        white-space: normal;
+    }
+
+    .canvas-prompt-optimizer-send {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        place-items: center;
+        border: 0;
+        border-radius: var(--r-full);
+        background: var(--btn-solid-bg);
+        color: var(--btn-solid-fg) !important;
+        transition: opacity var(--motion-dur-fast) var(--motion-ease-out), transform var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-prompt-optimizer-send > svg {
+        color: inherit;
+        stroke: currentColor;
+    }
+
+    .canvas-prompt-optimizer-send:hover:not(:disabled) {
+        transform: translateY(-1px);
+    }
+
+    .canvas-prompt-optimizer-send:disabled {
+        cursor: not-allowed;
+        opacity: .38;
+    }
+
+    .canvas-prompt-optimizer-header {
+        display: flex;
+        min-height: 46px;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        border-bottom: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        padding: 7px 10px 7px 12px;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+    }
+
+    .canvas-prompt-optimizer-header:active,
+    .canvas-prompt-optimizer-panel.is-interacting .canvas-prompt-optimizer-header {
+        cursor: grabbing;
+    }
+
+    .canvas-prompt-optimizer-header-main {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+    }
+
+    .canvas-prompt-optimizer-header-title {
+        min-width: 0;
+    }
+
+    .canvas-prompt-optimizer-header-title-row {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-header-title-row > .ant-typography {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-drag-region {
+        cursor: grab !important;
+        touch-action: none;
+        user-select: none;
+    }
+
+    .canvas-prompt-optimizer-drag-region:active,
+    .canvas-prompt-optimizer-panel.is-interacting .canvas-prompt-optimizer-drag-region {
+        cursor: grabbing !important;
+    }
+
+    .canvas-prompt-optimizer-drag-region:focus-visible {
+        border-radius: var(--r-md);
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 64%, transparent);
+        outline-offset: 2px;
+    }
+
+    .canvas-prompt-optimizer-icon {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        place-items: center;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+        color: var(--workspace-accent);
+    }
+
+    .canvas-prompt-optimizer-mode-badge {
+        display: inline-flex;
+        height: 20px;
+        align-items: center;
+        border-radius: var(--r-full);
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+        padding-inline: 7px;
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 1;
+    }
+
+    .canvas-prompt-optimizer-context {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 220px;
+        overflow: hidden;
+        color: color-mix(in srgb, var(--foreground) 46%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 18px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-close {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
+        place-items: center;
+        border: 0;
+        border-radius: var(--r-md);
+        background: transparent;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        transition: color var(--motion-dur-fast) var(--motion-ease-out), background-color var(--motion-dur-fast) var(--motion-ease-out);
+        cursor: pointer;
+        touch-action: manipulation;
+        user-select: auto;
+    }
+
+    .canvas-prompt-optimizer-close:hover {
+        background: color-mix(in srgb, var(--foreground) 7%, transparent);
+        color: var(--foreground);
+    }
+
+    .canvas-prompt-optimizer-close:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 64%, transparent);
+        outline-offset: 1px;
+    }
+
+    .canvas-prompt-optimizer-resize-handle {
+        position: absolute;
+        z-index: 5;
+        display: block;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        touch-action: none;
+    }
+
+    .canvas-prompt-optimizer-resize-handle::before {
+        display: none;
+    }
+
+    .canvas-prompt-optimizer-resize-handle.is-edge-top,
+    .canvas-prompt-optimizer-resize-handle.is-edge-bottom {
+        right: 12px;
+        left: 12px;
+        height: 8px;
+        cursor: ns-resize;
+    }
+
+    .canvas-prompt-optimizer-resize-handle.is-edge-top { top: 0; }
+    .canvas-prompt-optimizer-resize-handle.is-edge-bottom { bottom: 0; }
+
+    .canvas-prompt-optimizer-resize-handle.is-edge-left,
+    .canvas-prompt-optimizer-resize-handle.is-edge-right {
+        top: 12px;
+        bottom: 12px;
+        width: 8px;
+        cursor: ew-resize;
+    }
+
+    .canvas-prompt-optimizer-resize-handle.is-edge-left { left: 0; }
+    .canvas-prompt-optimizer-resize-handle.is-edge-right { right: 0; }
+
+    .canvas-prompt-optimizer-resize-handle.is-corner-top-left,
+    .canvas-prompt-optimizer-resize-handle.is-corner-top-right,
+    .canvas-prompt-optimizer-resize-handle.is-corner-bottom-left {
+        width: 16px;
+        height: 16px;
+        cursor: nwse-resize;
+    }
+
+    .canvas-prompt-optimizer-resize-handle.is-corner-top-left { top: 0; left: 0; }
+    .canvas-prompt-optimizer-resize-handle.is-corner-top-right { top: 0; right: 0; cursor: nesw-resize; }
+    .canvas-prompt-optimizer-resize-handle.is-corner-bottom-left { bottom: 0; left: 0; cursor: nesw-resize; }
+
+    .canvas-prompt-optimizer-scroll {
+        min-height: 0;
+        overflow-y: auto;
+        padding: 13px 15px 14px;
+    }
+
+    .canvas-prompt-optimizer-section + .canvas-prompt-optimizer-section {
+        margin-top: 13px;
+    }
+
+    .canvas-prompt-optimizer-section-label,
+    .canvas-prompt-optimizer-field-label {
+        display: flex;
+        min-height: 22px;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        color: color-mix(in srgb, var(--foreground) 72%, transparent);
+        font-size: var(--fs-caption);
+        font-weight: 600;
+        line-height: 20px;
+    }
+
+    .canvas-prompt-optimizer-field-meta {
+        color: color-mix(in srgb, var(--foreground) 38%, transparent);
+        font-size: var(--fs-micro);
+        font-weight: 400;
+    }
+
+    .canvas-prompt-optimizer-modes.ant-segmented {
+        display: flex;
+        width: 100%;
+        margin-top: 6px;
+        padding: 3px;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
+
+    .canvas-prompt-optimizer-modes .ant-segmented-group {
+        display: flex;
+        width: 100%;
+    }
+
+    .canvas-prompt-optimizer-modes .ant-segmented-item {
+        min-width: 0;
+        flex: 1 1 0;
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .canvas-prompt-optimizer-modes .ant-segmented-item-label {
+        overflow: hidden;
+        padding-inline: 4px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-modes .ant-segmented-item-selected {
+        color: var(--foreground);
+        box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 10%, transparent);
+    }
+
+    .canvas-prompt-optimizer-hint {
+        margin: 6px 0 0;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+        padding: 7px 9px;
+        color: color-mix(in srgb, var(--foreground) 56%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 18px;
+    }
+
+    .canvas-prompt-optimizer-hint span {
+        margin-right: 5px;
+        color: color-mix(in srgb, var(--foreground) 78%, transparent);
+        font-weight: 600;
+    }
+
+    .canvas-prompt-optimizer-field-label + .canvas-prompt-optimizer-textarea {
+        margin-top: 6px;
+    }
+
+    .canvas-prompt-optimizer-textarea.ant-input {
+        resize: vertical;
+        border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+        border-radius: var(--r-md) !important;
+        background: color-mix(in srgb, var(--foreground) 3%, transparent) !important;
+        padding: 9px 10px;
+        box-shadow: none !important;
+        color: var(--foreground);
+        font-size: var(--fs-body);
+        line-height: 20px;
+    }
+
+    .canvas-prompt-optimizer-textarea.ant-input:hover {
+        border-color: color-mix(in srgb, var(--foreground) 22%, transparent) !important;
+    }
+
+    .canvas-prompt-optimizer-textarea.ant-input:focus {
+        border-color: color-mix(in srgb, var(--workspace-accent) 58%, transparent) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-accent) 12%, transparent) !important;
+    }
+
+    .canvas-prompt-optimizer-help {
+        margin: 5px 0 0;
+        color: color-mix(in srgb, var(--foreground) 40%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 17px;
+    }
+
+    .canvas-prompt-optimizer-reference-bar {
+        display: flex;
+        min-width: 0;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 12px;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+        padding: 8px 9px;
+    }
+
+    .canvas-prompt-optimizer-reference-label {
+        flex: 0 0 auto;
+        padding-top: 2px;
+        color: color-mix(in srgb, var(--foreground) 50%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .canvas-prompt-optimizer-reference-bar .ant-tag {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-alert {
+        margin-top: 12px;
+    }
+
+    .canvas-prompt-optimizer-result {
+        margin-top: 13px;
+        border: 1px solid color-mix(in srgb, var(--workspace-accent) 20%, transparent);
+        border-radius: var(--r-lg);
+        background: color-mix(in srgb, var(--workspace-accent) 3%, transparent);
+        padding: 10px;
+    }
+
+    .canvas-prompt-optimizer-result-textarea.ant-input {
+        min-height: 104px;
+        background: var(--popover) !important;
+    }
+
+    .canvas-prompt-optimizer-subsection {
+        margin-top: 12px;
+    }
+
+    .canvas-prompt-optimizer-list {
+        margin: 6px 0 0;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        padding: 8px 10px 8px 24px;
+        color: color-mix(in srgb, var(--foreground) 62%, transparent);
+        font-size: var(--fs-micro);
+        line-height: 18px;
+    }
+
+    .canvas-prompt-optimizer-list.is-warning {
+        background: color-mix(in srgb, var(--warning) 11%, transparent);
+    }
+
+    .canvas-prompt-optimizer-variant {
+        display: block;
+        width: 100%;
+        border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 3%, transparent);
+        padding: 9px 10px;
+        text-align: left;
+        transition: border-color var(--motion-dur-fast) var(--motion-ease-out), background-color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-prompt-optimizer-variant:hover,
+    .canvas-prompt-optimizer-variant.is-selected {
+        border-color: color-mix(in srgb, var(--workspace-accent) 52%, transparent);
+        background: color-mix(in srgb, var(--workspace-accent) 8%, transparent);
+    }
+
+    .canvas-prompt-optimizer-variant:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 64%, transparent);
+        outline-offset: 1px;
+    }
+
+    .canvas-prompt-optimizer-empty {
+        display: flex;
+        min-height: 92px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        margin-top: 13px;
+        border: 1px dashed color-mix(in srgb, var(--foreground) 16%, transparent);
+        border-radius: var(--r-lg);
+        color: color-mix(in srgb, var(--foreground) 48%, transparent);
+        font-size: var(--fs-caption);
+    }
+
+    .canvas-prompt-optimizer-empty small {
+        color: color-mix(in srgb, var(--foreground) 38%, transparent);
+        font-size: var(--fs-micro);
+    }
+
+    .canvas-prompt-optimizer-footer {
+        display: flex;
+        min-height: 52px;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+        padding: 9px 13px 10px 15px;
+    }
+
+    .canvas-prompt-optimizer-status {
+        display: inline-flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        color: color-mix(in srgb, var(--foreground) 42%, transparent);
+        font-size: var(--fs-micro);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .canvas-prompt-optimizer-footer .ant-btn {
+        height: 30px;
+        border-radius: var(--r-md);
+        padding-inline: 10px;
+        font-size: var(--fs-caption);
+    }
+
+    @media (max-width: 680px) {
+        .canvas-prompt-optimizer-popover-surface {
+            width: min(var(--canvas-prompt-optimizer-width, 420px), calc(100vw - 24px));
+            height: min(var(--canvas-prompt-optimizer-height, 620px), calc(100dvh - 16px));
+            max-width: calc(100vw - 24px);
+            max-height: calc(100dvh - 16px);
+        }
+
+        .canvas-prompt-optimizer-panel { max-height: none; }
+
+        .canvas-prompt-optimizer-scroll {
+            padding-inline: 11px;
+        }
+
+        .canvas-prompt-optimizer-header,
+        .canvas-prompt-optimizer-footer {
+            padding-inline: 11px;
+        }
+
+        .canvas-prompt-optimizer-status {
+            max-width: 46%;
+        }
+    }
+
+    @container (max-width: 420px) {
+        .canvas-prompt-optimizer-header {
+            gap: 6px;
+            padding-inline: 9px 7px;
+        }
+
+        .canvas-prompt-optimizer-header-title-row {
+            gap: 4px;
+        }
+
+        .canvas-prompt-optimizer-header-title-row > .ant-typography {
+            max-width: 112px;
+        }
+
+        .canvas-prompt-optimizer-context {
+            max-width: 120px;
+        }
+
+        .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker {
+            max-width: 112px;
+        }
+    }
+
+    @container (max-width: 350px) {
+        .canvas-prompt-optimizer-chat .ant-bubble-list-scroll-box {
+            padding-inline: 11px;
+        }
+
+        .canvas-prompt-optimizer-header-title-row > .ant-typography {
+            max-width: 86px;
+        }
+
+        .canvas-prompt-optimizer-context {
+            max-width: 72px;
+        }
+
+        .canvas-prompt-optimizer-mode-trigger {
+            max-width: 86px;
+            padding-inline: 4px;
+        }
+
+        .canvas-prompt-optimizer-mode-trigger > span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker {
+            max-width: 96px;
+            padding-inline: 3px !important;
+        }
+    }
+
     .canvas-node-composer-header {
         display: flex;
         min-width: 0;
@@ -6875,12 +7966,13 @@
     }
 
     .canvas-node-reference-chip {
+        position: relative;
         display: inline-flex;
         min-width: 0;
         height: 30px;
         flex: 0 0 auto;
         align-items: center;
-        overflow: hidden;
+        overflow: visible;
         border-radius: var(--r-md);
         background: var(--canvas-composer-control-surface);
     }
@@ -6913,6 +8005,28 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    .canvas-node-reference-remove {
+        position: absolute;
+        z-index: 1;
+        top: -4px;
+        right: -4px;
+        display: grid;
+        width: 16px;
+        height: 16px;
+        place-items: center;
+        border: var(--stroke-1) solid;
+        border-radius: var(--r-full);
+        padding: 0;
+        opacity: 0;
+        box-shadow: var(--shadow-sm);
+        transition: opacity var(--motion-dur-fast) var(--motion-ease-out), background-color var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
+    }
+
+    .canvas-node-reference-chip:hover .canvas-node-reference-remove,
+    .canvas-node-reference-remove:focus-visible {
+        opacity: 1;
     }
 
     .canvas-node-composer-parameters {
@@ -7282,6 +8396,15 @@
         }
     }
 
+    @keyframes canvas-node-panel-placement-blur {
+        from { opacity: .78; filter: blur(4px); }
+        to { opacity: 1; filter: blur(0); }
+    }
+
+    .canvas-node-panel-placement-change {
+        animation: canvas-node-panel-placement-blur 180ms var(--motion-ease-out) both;
+    }
+
     @keyframes canvas-connection-flow {
         to {
             stroke-dashoffset: -44;
@@ -7386,6 +8509,7 @@
 @media (prefers-reduced-motion: reduce) {
     .workspace-state { animation: none; }
     :where(.ant-btn:not(:disabled)):active { transform: none; }
+    .canvas-node-panel-placement-change { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8320,7 +9444,7 @@ html:not(.dark) .creation-duration-choices button:hover { background: rgba(28, 3
 .creation-home .creation-chat-writing-surface,
 .creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
 .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface {
-    min-height: 140px;
+    min-height: 176px;
     padding: 18px 20px 8px;
 }
 
@@ -8328,8 +9452,8 @@ html:not(.dark) .creation-duration-choices button:hover { background: rgba(28, 3
 .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { grid-template-columns: 62px minmax(0, 1fr); gap: 16px; }
 .creation-home .creation-chat-editor textarea,
 .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
-.creation-home .creation-chat-mention-container,
-.creation-home .creation-chat-mention-editor { min-height: 76px; }
+.creation-home .creation-chat-mention-container { min-height: 124px; }
+.creation-home .creation-chat-mention-editor { min-height: 124px; max-height: 320px; }
 .creation-home .creation-chat-dock { min-height: 48px; padding: 4px 12px 12px 16px; }
 
 .creation-home .creation-chat-control,
@@ -8443,11 +9567,11 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
 @media (max-width: 800px) {
     .creation-home .creation-chat-writing-surface,
     .creation-home .creation-chat-composer.is-empty .creation-chat-writing-surface,
-    .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { min-height: 96px; padding: 14px 13px 6px; }
+    .creation-home .creation-chat-composer.is-thread .creation-chat-writing-surface { min-height: 150px; padding: 14px 13px 6px; }
     .creation-home .creation-chat-editor textarea,
     .creation-home .creation-chat-composer.is-thread .creation-chat-editor textarea,
-    .creation-home .creation-chat-mention-container,
-    .creation-home .creation-chat-mention-editor { min-height: 64px; }
+    .creation-home .creation-chat-mention-container { min-height: 106px; }
+    .creation-home .creation-chat-mention-editor { min-height: 106px; max-height: 260px; }
     .creation-thread-stage, .creation-thread-composer { width: calc(100% - 28px); }
     .creation-thread-stage { padding-top: 36px; }
     .creation-user-message { max-width: 78%; }

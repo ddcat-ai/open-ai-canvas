@@ -19,7 +19,7 @@ type UseCanvasSelectionControllerOptions = {
     onCanvasSelectionStart: () => void;
     onNodeInteractionStart: (selectionModifier: boolean) => void;
     onNodeClick: (node: CanvasNodeData) => void;
-    onBatchConnectionTarget?: (event: ReactMouseEvent, nodeId: string) => boolean;
+    onBatchConnectionTarget?: (event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => boolean;
     onLinkedFolderDrop?: (folder: CanvasNodeData, nodes: CanvasNodeData[]) => void;
     onDeselect: () => void;
     onSelectionBoxEnd?: () => void;
@@ -127,7 +127,7 @@ export function useCanvasSelectionController({
         setSelectedConnectionId(null);
     }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId]);
 
-    const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
+    const handleNodeMouseDown = useCallback((event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => {
         event.stopPropagation();
         if (event.button !== 0) return;
         if (onBatchConnectionTarget?.(event, nodeId)) return;
@@ -227,7 +227,7 @@ export function useCanvasSelectionController({
         }
     }, [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, setNodes, viewportRef]);
 
-    const handleMouseMove = useCallback((event: MouseEvent) => {
+    const handleNodeDragMove = useCallback((event: MouseEvent | PointerEvent) => {
         if (!dragRef.current.isDraggingNode) return;
         const currentViewport = viewportRef.current;
         pendingNodeDragRef.current = { x: (event.clientX - dragRef.current.startX) / currentViewport.k, y: (event.clientY - dragRef.current.startY) / currentViewport.k };
@@ -256,6 +256,10 @@ export function useCanvasSelectionController({
     }, [nodesRef, viewportRef]);
 
     const handlePointerMove = useCallback((event: PointerEvent) => {
+        if (dragRef.current.isDraggingNode) {
+            handleNodeDragMove(event);
+            return;
+        }
         const currentSelection = selectionBoxRef.current;
         if (!currentSelection) return;
         if (event.buttons === 0) {
@@ -299,7 +303,7 @@ export function useCanvasSelectionController({
             selectedNodeIdsRef.current = nextSelected;
             setSelectedNodeIds(nextSelected);
         });
-    }, [cancelSelectionBox, containerRef, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+    }, [cancelSelectionBox, containerRef, handleNodeDragMove, screenToCanvas, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
 
     const finishSelection = useCallback(() => {
         const hadPendingSelection = Boolean(selectionBoxRef.current);
@@ -316,7 +320,7 @@ export function useCanvasSelectionController({
         };
         const handlePointerUp = (event: PointerEvent) => finishNodeDrag(event.clientX, event.clientY);
         const cancel = () => finishNodeDrag();
-        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mousemove", handleNodeDragMove);
         window.addEventListener("mouseup", handleMouseUp);
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerUp);
@@ -325,14 +329,14 @@ export function useCanvasSelectionController({
         return () => {
             if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
             if (selectionFrameRef.current) cancelAnimationFrame(selectionFrameRef.current);
-            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mousemove", handleNodeDragMove);
             window.removeEventListener("mouseup", handleMouseUp);
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
             window.removeEventListener("pointercancel", cancel);
             window.removeEventListener("blur", cancel);
         };
-    }, [finishNodeDrag, finishSelection, handleMouseMove, handlePointerMove]);
+    }, [finishNodeDrag, finishSelection, handleNodeDragMove, handlePointerMove]);
 
     return {
         alignmentGuides,

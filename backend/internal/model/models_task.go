@@ -5,6 +5,8 @@ import "time"
 type Task struct {
 	ID                     string     `json:"id" gorm:"primaryKey;size:36"`
 	UserID                 string     `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1"`
+	TraceID                string     `json:"-" gorm:"index;size:96"`
+	RequestID              string     `json:"-" gorm:"index;size:96"`
 	SessionID              string     `json:"sessionId" gorm:"index;size:36"`
 	ProjectID              string     `json:"projectId" gorm:"index;size:80"`
 	Type                   string     `json:"type" gorm:"index;size:64"`
@@ -82,6 +84,8 @@ type TaskLog struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
 	UserID    string    `json:"userId" gorm:"index;size:36"`
 	TaskID    string    `json:"taskId" gorm:"index;size:36"`
+	TraceID   string    `json:"-" gorm:"index;size:96"`
+	RequestID string    `json:"-" gorm:"index;size:96"`
 	Level     string    `json:"level" gorm:"size:24"`
 	Message   string    `json:"message"`
 	Payload   string    `json:"payload" gorm:"type:text"`

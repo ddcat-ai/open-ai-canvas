@@ -11,6 +11,7 @@ type AppError struct {
 	Retryable bool
 	Cause     error
 }
+
 func (e *AppError) Error() string {
 	if e == nil {
 		return ""

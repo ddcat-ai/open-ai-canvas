@@ -83,7 +83,7 @@ func (s *Service) prepareArkPrivateAssetReferences(ctx context.Context, userID s
 		if resourceID == "" {
 			continue
 		}
-		resource, err := s.ResourceForUser(&model.User{ID: userID}, resourceID)
+		resource, err := s.Resource(userID, resourceID)
 		if err != nil {
 			return fmt.Errorf("读取方舟参考素材失败：%w", err)
 		}
@@ -142,7 +142,7 @@ func (s *Service) SyncResourceToArkPrivateAsset(ctx context.Context, actor *mode
 	if resourceID == "" {
 		return nil, BadAuthRequest("请选择要同步的图片素材")
 	}
-	resource, err := s.ResourceForUser(actor, resourceID)
+	resource, err := s.Resource(actor.ID, resourceID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("图片素材不存在或无权访问")
 	}
@@ -221,7 +221,7 @@ func (s *Service) ensureArkPrivateAsset(ctx context.Context, userID string, reso
 		return "", s.failArkPrivateAssetBinding(binding, err)
 	}
 	binding.AssetGroupID = groupID
-	resourceURL, err := s.providerResourceURL(resource, time.Now().Add(time.Hour))
+	resourceURL, err := s.directResourceURL(resource, time.Now().Add(time.Hour))
 	if err != nil {
 		return "", s.failArkPrivateAssetBinding(binding, fmt.Errorf("生成方舟素材临时地址失败：%w", err))
 	}

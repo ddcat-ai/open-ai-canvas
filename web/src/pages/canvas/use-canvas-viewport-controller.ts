@@ -122,11 +122,6 @@ export function useCanvasViewportController({
         setDialogNodeId(node.type === CanvasNodeType.Drawing ? null : node.id);
     }, [nodesRef, selectFocusedNode, setDialogNodeId, size.height, size.width, transitionViewportTo, viewportRef]);
 
-    const resetViewport = useCallback(() => {
-        transitionViewportTo({ x: size.width / 2, y: size.height / 2, k: 1 });
-        setContextMenu(null);
-    }, [setContextMenu, size.height, size.width, transitionViewportTo]);
-
     const setZoomScale = useCallback((scale: number) => {
         cancelViewportTransition();
         const next = viewportAtScale(viewportRef.current, size, scale);
@@ -164,7 +159,6 @@ export function useCanvasViewportController({
         handleViewportChange,
         handleViewportPreviewChange,
         previewViewport,
-        resetViewport,
         screenToCanvas,
         setZoomScale,
         zoomCanvasIn,

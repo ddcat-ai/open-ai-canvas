@@ -24,6 +24,7 @@ export type PluginPermission =
     | "asset.import"
     | "asset.upload"
     | "generation.run"
+    | "ai.text"
     | "external.open";
 
 export type PluginManifest = {
@@ -54,11 +55,98 @@ export type PluginStorage = {
     remove(key: string): Promise<void>;
 };
 
+export type PluginTextContentPart =
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string } };
+
+export type PluginTextMessage = {
+    role: "system" | "user" | "assistant";
+    content: string | PluginTextContentPart[];
+};
+
+export type PluginTextTool = {
+    type: "function";
+    function: {
+        name: string;
+        description?: string;
+        parameters: Record<string, unknown>;
+        strict?: boolean;
+    };
+};
+
+export type PluginTextToolChoice = "auto" | "required" | { type: "function"; name: string };
+
+export type PluginTextToolCall = {
+    name: string;
+    arguments: string;
+};
+
+export type PluginTextResponse = {
+    content: string;
+    toolCalls: PluginTextToolCall[];
+};
+
+export type PluginTextRequest = {
+    model?: string;
+    messages: PluginTextMessage[];
+    tools?: PluginTextTool[];
+    toolChoice?: PluginTextToolChoice;
+    signal?: AbortSignal;
+    onDelta?: (text: string) => void;
+};
+
+export type PluginAiTextService = {
+    requestToolResponse: (request: PluginTextRequest) => Promise<PluginTextResponse>;
+};
+
+export type PluginHostServices = {
+    ai?: {
+        text?: PluginAiTextService;
+    };
+};
+
 export type PluginHostContext = {
     manifest: PluginManifest;
     permissions: ReadonlySet<PluginPermission>;
     storage: PluginStorage;
     config: Readonly<PluginInstallation["config"]>;
+    services?: PluginHostServices;
+};
+
+export type PromptOptimizationMode = "expand" | "refine" | "style" | "model-adapt" | "reference";
+
+export type PromptOptimizationInput = {
+    prompt: string;
+    mode: PromptOptimizationMode;
+    generationMode: "image" | "video";
+    targetModel?: string;
+    targetProtocol?: string;
+    optimizerModel?: string;
+    context?: {
+        texts?: Array<{ title: string; text: string }>;
+        images?: Array<{ title: string; url: string }>;
+    };
+};
+
+export type PromptOptimizationVariant = {
+    label: string;
+    prompt: string;
+};
+
+export type PromptOptimizationResult = {
+    optimizedPrompt: string;
+    negativePrompt: string;
+    changes: string[];
+    assumptions: string[];
+    variants: PromptOptimizationVariant[];
+    modelProfile?: { id: string; label: string };
+};
+
+export type PromptOptimizerProvider = {
+    optimize: (
+        input: PromptOptimizationInput,
+        options?: { signal?: AbortSignal; onDelta?: (text: string) => void },
+    ) => Promise<PromptOptimizationResult>;
 };
 
 export type AssetSourceQuery = {
@@ -118,6 +206,7 @@ export type RegisteredPlugin = {
     activate?: (context: PluginHostContext) => Promise<void> | void;
     deactivate?: (context: PluginHostContext) => Promise<void> | void;
     createAssetSource?: (context: PluginHostContext) => AssetSourceProvider;
+    createPromptOptimizer?: (context: PluginHostContext) => PromptOptimizerProvider;
 };
 
 export type PluginInstallation = {

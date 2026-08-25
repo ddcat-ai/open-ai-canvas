@@ -1,9 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, ScanFace, SquareDashedMousePointer, X } from "lucide-react";
 
 import { CanvasNodeEmotionPanel, type CanvasEmotionCharacter, type CanvasImageEmotionPayload } from "@/components/canvas/canvas-node-emotion-panel";
+import { CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -11,7 +12,7 @@ import { buildEmotionImageArtifacts, buildEmotionPrompt, neutralEmotionPreset, t
 import { detectCanvasFaces } from "@/lib/canvas/canvas-face-detection";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasNodeData, ViewportTransform } from "@/types/canvas";
+import type { CanvasNodeData, Position, ViewportTransform } from "@/types/canvas";
 
 type WorkspaceStatus = "detecting" | "selecting" | "manual" | "editing" | "generating" | "error";
 
@@ -19,11 +20,13 @@ type CanvasEmotionWorkspaceProps = {
     node: CanvasNodeData;
     viewport: ViewportTransform;
     containerRef: RefObject<HTMLDivElement | null>;
+    dragOffset?: Position | null;
+    isDragging?: boolean;
     onClose: () => void;
     onConfirm: (payload: CanvasImageEmotionPayload) => void;
 };
 
-export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, onConfirm }: CanvasEmotionWorkspaceProps) {
+export function CanvasEmotionWorkspace({ node, viewport, containerRef, dragOffset, isDragging = false, onClose, onConfirm }: CanvasEmotionWorkspaceProps) {
     const dataUrl = node.metadata?.content || "";
     const [status, setStatus] = useState<WorkspaceStatus>("detecting");
     const [faces, setFaces] = useState<CanvasFaceBox[]>([]);
@@ -134,7 +137,7 @@ export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, 
             <SelectionToolbar node={node} viewport={viewport} containerRef={containerRef} status={status} faceCount={faces.length} error={error} onManualSelect={beginManualSelection} onClose={onClose} />
             <AnimatePresence>
                 {activeCharacter && (status === "editing" || status === "generating") ? (
-                    <EmotionPanelOverlay node={node} viewport={viewport} containerRef={containerRef}>
+                    <CanvasNodePanelOverlay node={node} viewport={viewport} containerRef={containerRef} panelWidth={580} panelHeight={303} dragOffset={dragOffset} isDragging={isDragging}>
                         <CanvasNodeEmotionPanel
                             dataUrl={dataUrl}
                             imageWidth={imageSize.width}
@@ -153,7 +156,7 @@ export function CanvasEmotionWorkspace({ node, viewport, containerRef, onClose, 
                             onClose={onClose}
                             onConfirm={() => void confirmGeneration()}
                         />
-                    </EmotionPanelOverlay>
+                    </CanvasNodePanelOverlay>
                 ) : null}
             </AnimatePresence>
         </>,
@@ -391,16 +394,6 @@ function SelectionToolbar({
     );
 }
 
-function EmotionPanelOverlay({ node, viewport, containerRef, children }: { node: CanvasNodeData; viewport: ViewportTransform; containerRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
-    const panelRef = useRef<HTMLDivElement>(null);
-    useScreenAnchor(panelRef, node, viewport, containerRef, (next, container) => panelScreenRect(node, next, container, panelRef.current));
-    return (
-        <div ref={panelRef} data-canvas-no-zoom className="absolute z-[var(--z-modal-overlay)] w-[580px] max-w-[calc(100%_-_24px)]" style={{ left: 12, top: 76 }} onPointerDown={(event) => event.stopPropagation()}>
-            {children}
-        </div>
-    );
-}
-
 function useScreenAnchor(
     ref: RefObject<HTMLElement | null>,
     node: CanvasNodeData,
@@ -455,19 +448,6 @@ function toolbarScreenRect(node: CanvasNodeData, viewport: ViewportTransform, co
     const above = nodeRect.top - height - 10;
     const top = above >= viewportTop + 72 ? above : clamp(nodeRect.top + nodeRect.height + 10, viewportTop + 72, Math.max(viewportTop + 72, viewportTop + container.clientHeight - height - 12));
     return { left, top };
-}
-
-function panelScreenRect(node: CanvasNodeData, viewport: ViewportTransform, container: HTMLDivElement, element: HTMLElement | null) {
-    const width = Math.min(element?.offsetWidth || 580, Math.max(320, container.clientWidth - 24));
-    const height = element?.offsetHeight || 303;
-    const nodeRect = imageScreenRect(node, viewport, node.metadata?.naturalWidth || node.width, node.metadata?.naturalHeight || node.height);
-    const viewportLeft = container.scrollLeft;
-    const viewportTop = container.scrollTop;
-    const left = clamp(nodeRect.left + nodeRect.width / 2 - width / 2, viewportLeft + 12, Math.max(viewportLeft + 12, viewportLeft + container.clientWidth - width - 12));
-    const below = nodeRect.top + nodeRect.height + 10;
-    const above = nodeRect.top - height - 10;
-    const top = below + height <= viewportTop + container.clientHeight - 12 ? below : above;
-    return { left, top: clamp(top, viewportTop + 72, Math.max(viewportTop + 72, viewportTop + container.clientHeight - height - 12)) };
 }
 
 function sameFace(left: CanvasFaceBox, right: CanvasFaceBox) {

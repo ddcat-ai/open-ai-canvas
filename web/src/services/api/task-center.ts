@@ -1,5 +1,6 @@
 import { DREAMINA_SUBMIT_ERROR_MESSAGES, generationErrorMessage } from "@/lib/generation-error";
 import { apiClient, request, type BackendEnvelope } from "@/services/api/request";
+import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 import {
     deleteLocalDreaminaGenerationTask,
     listLocalDreaminaGenerationTaskPage,
@@ -219,6 +220,7 @@ export function uploadAgentFile(sessionId: string, file: File) {
 
 export function createGenerationTask(input: CreateTaskInput) {
     return request<GenerationTask>(api.post("/tasks", input)).then((task) => {
+        recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
         notifyCanvasTaskCreated(task);
         // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
         window.dispatchEvent(new CustomEvent("wallet:updated"));

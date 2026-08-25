@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
@@ -19,6 +19,7 @@ type ModelPickerProps = {
     onChange: (model: string) => void;
     capability?: ModelCapability;
     className?: string;
+    popoverClassName?: string;
     fullWidth?: boolean;
     placeholder?: string;
     onMissingConfig?: () => void;
@@ -28,13 +29,14 @@ type ModelPickerProps = {
     showConfiguredModelName?: boolean;
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements, showConfiguredModelName = false }: ModelPickerProps) {
+export function ModelPicker({ config, value, onChange, capability, className, popoverClassName, fullWidth = false, placeholder = "选择模型", onMissingConfig, showSelectedPrice = true, variant = "default", requirements, showConfiguredModelName = false }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
     const rawTheme = useThemeStore((state) => state.theme);
     const theme = (canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark) as CanvasTheme;
     const [open, setOpen] = useState(false);
+    const [triggerWidth, setTriggerWidth] = useState<number | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const options = useMemo(() => Array.from(new Set(selectableModelsByCapability(config, capability).filter(Boolean))), [capability, config]);
@@ -64,6 +66,16 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
     const quoteRequest = useMemo(() => modelQuoteRequest(config, current, capability, requirements), [capability, config, current, requirements]);
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | undefined>();
     const creationVariant = variant === "creation";
+
+    useLayoutEffect(() => {
+        const trigger = triggerRef.current;
+        if (!trigger) return;
+        const updateTriggerWidth = () => setTriggerWidth(Math.ceil(trigger.getBoundingClientRect().width));
+        updateTriggerWidth();
+        const observer = new ResizeObserver(updateTriggerWidth);
+        observer.observe(trigger);
+        return () => observer.disconnect();
+    }, [className, fullWidth, showSelectedPrice, variant, value]);
 
     useEffect(() => {
         if (!showSelectedPrice || !creditsEnabled || !quoteRequest) {
@@ -139,7 +151,11 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             ref={menuRef}
             data-canvas-no-zoom
             className={cn("canvas-model-picker-menu max-w-[calc(100vw-24px)]", creationVariant ? "creation-model-picker-menu w-[360px]" : "w-[var(--panel-width-compact)]")}
-            style={{ background: theme.node.panel, color: theme.node.text }}
+            style={{
+                background: theme.node.panel,
+                color: theme.node.text,
+                "--canvas-model-picker-trigger-width": triggerWidth ? String(triggerWidth) + "px" : undefined,
+            } as CSSProperties}
             role="listbox"
             aria-label={placeholder}
             onKeyDown={handleMenuKeyDown}
@@ -209,7 +225,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 arrow={false}
                 content={content}
                 classNames={{
-                    root: cn("canvas-model-picker-popover", creationVariant && "creation-model-picker-popover"),
+                    root: cn("canvas-model-picker-popover", creationVariant && "creation-model-picker-popover", popoverClassName),
                     container: cn("canvas-composer-popover-surface", creationVariant && "creation-model-picker-surface"),
                     content: "canvas-composer-popover-content",
                 }}
