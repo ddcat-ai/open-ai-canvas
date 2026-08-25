@@ -4,7 +4,7 @@ import localforage from "localforage";
 import { rebaseCanvasProjects } from "../src/lib/canvas/canvas-storage-revision";
 import { localForageStorageForScope } from "../src/lib/localforage-storage";
 import { getActiveUserScope, setActiveUserScope } from "../src/lib/user-scope";
-import { switchUserStorageScope } from "../src/lib/user-session";
+import { applyUserSession, switchUserStorageScope } from "../src/lib/user-session";
 import { canvasCinematicContinuationEntryAdapters } from "../src/components/canvas/canvas-assistant-panel";
 import { activeGenerationConsumerController, beginGenerationConsumer, runGenerationConsumer } from "../src/services/generation-consumer-lifecycle";
 import { createCanvasGenerationLiveProjectAdapter, persistCanvasCinematicSessionContinuationEffect, persistCanvasGenerationEffect, registerCanvasGenerationLiveProject } from "../src/services/canvas-generation-consumer";
@@ -14,8 +14,9 @@ import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, type Asset,
 import { withGenerationAssetStorageLock } from "../src/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceLock, withCanvasStorePersistenceSuppressed, type CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
-import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, resetRemoteUserDataSync, syncRemoteUserData, withRemoteUserDataSyncPaused } from "../src/services/user-data-sync";
+import { deleteAssetWithRemoteSync, deleteCanvasProjectsWithRemoteSync, installRemoteUserDataAutoSync, resetRemoteUserDataSync, saveRemoteUserDataNow, syncRemoteUserData, withRemoteUserDataSyncExclusive } from "../src/services/user-data-sync";
 import { apiClient } from "../src/services/api/request";
+import { useUserStore } from "../src/stores/use-user-store";
 
 test("creation recovery observes streaming text tasks after reload", () => {
     const conversations = [{
@@ -271,7 +272,7 @@ test("ordinary Asset add update and remove survive a failed catalog flush and re
         failWrites = true;
         useAssetStore.getState().updateAsset("asset-keep", { title: "A1" });
         const addedId = useAssetStore.getState().addAsset(generatedAsset("new asset"));
-        useAssetStore.getState().removeAsset("asset-remove");
+        void useAssetStore.getState().removeAsset("asset-remove");
         await expect(flushAssetStorePersistence()).rejects.toThrow("asset catalog write failed");
         const afterFailure = JSON.parse(durableValues.get(key)!) as { state: { assets: Asset[] }; storageRevision: number };
         expect(afterFailure.state.assets.map((asset) => asset.id).sort()).toEqual(["asset-keep", "asset-remove"]);
@@ -2055,6 +2056,87 @@ test("dedicated Canvas conflict reconciles the mounted live page generation stat
         expect(liveSessions[1]?.messages[0]?.text).toBe("ordinary newer before conflict");
     } finally {
         unregisterLive?.();
+        setActiveUserScope(previousScope);
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
+        await flushCanvasStorePersistence();
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("failed Canvas generation rolls back its fields without losing a concurrent edit on the same node", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousScope = getActiveUserScope();
+    const previousProjects = useCanvasStore.getState().projects;
+    const values = new Map<string, string>();
+    const localStorageValues = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            localStorage: {
+                getItem: (key: string) => localStorageValues.get(key) ?? null,
+                setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                removeItem: (key: string) => localStorageValues.delete(key),
+            },
+        },
+    });
+    localforage.getItem = (async (key: string) => values.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        values.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
+
+    const scope = "canvas-generation-same-node-edit";
+    const storageKey = `${CANVAS_STORE_KEY}:user:${scope}`;
+    const effectKey = "canvas-effect:same-node-edit";
+    const node = (title: string, content: string, stamped = false): CanvasNodeData => ({
+        id: "node-same-edit",
+        type: CanvasNodeType.Text,
+        title,
+        position: { x: 0, y: 0 },
+        width: 320,
+        height: 180,
+        metadata: { content, ...(stamped ? { generationEffectKeys: [effectKey] } : {}) },
+    });
+    const project = (currentNode: CanvasNodeData): CanvasProject => ({ ...storedCanvasProject("canvas-same-node-edit", "same node edit"), nodes: [currentNode] });
+
+    try {
+        setActiveUserScope(scope);
+        const previousNode = node("原始标题", "原始内容");
+        const attemptedNode = node("原始标题", "生成内容", true);
+        useCanvasStore.setState({ projects: [project(previousNode)] });
+        await flushCanvasStorePersistence();
+
+        localforage.setItem = (async (key: string, value: string) => {
+            if (value.includes(effectKey)) throw new Error("forced generation durable failure");
+            values.set(key, value);
+            return value;
+        }) as typeof localforage.setItem;
+        useCanvasStore.getState().updateProject("canvas-same-node-edit", {
+            nodes: [{ ...attemptedNode, title: "生成期间修改的标题" }],
+        });
+
+        await expect(
+            persistCanvasGenerationEffect({
+                projectId: "canvas-same-node-edit",
+                effectKey,
+                previousNodes: [previousNode],
+                nodes: [attemptedNode],
+            }),
+        ).rejects.toThrow("forced generation durable failure");
+
+        const liveNode = useCanvasStore.getState().projects[0]?.nodes[0];
+        expect(liveNode?.title).toBe("生成期间修改的标题");
+        expect(liveNode?.metadata?.content).toBe("原始内容");
+        expect(liveNode?.metadata?.generationEffectKeys).toBeUndefined();
+        const durable = JSON.parse(values.get(storageKey)!) as { state: { projects: CanvasProject[] } };
+        expect(durable.state.projects[0]?.nodes[0]?.title).toBe("生成期间修改的标题");
+        expect(durable.state.projects[0]?.nodes[0]?.metadata?.content).toBe("原始内容");
+    } finally {
         setActiveUserScope(previousScope);
         withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: previousProjects }));
         await flushCanvasStorePersistence();
@@ -3953,7 +4035,7 @@ test("account scope transition can hold remote user-data sync paused for its ful
         releaseResolve = resolve;
     });
     let entered = false;
-    const transition = withRemoteUserDataSyncPaused(async () => {
+    const transition = withRemoteUserDataSyncExclusive(async () => {
         entered = true;
         await release;
     });
@@ -3974,6 +4056,7 @@ test("account scope transition drains an active remote deletion before entering 
     const originalWindow = (globalThis as { window?: unknown }).window;
     const originalGetItem = localforage.getItem.bind(localforage);
     const originalSetItem = localforage.setItem.bind(localforage);
+    const originalCreateInstance = localforage.createInstance.bind(localforage);
     const indexedValues = new Map<string, string>();
     const localStorageValues = new Map<string, string>();
     const previousAdapter = apiClient.defaults.adapter;
@@ -3998,7 +4081,10 @@ test("account scope transition drains an active remote deletion before entering 
     Object.defineProperty(globalThis, "window", {
         configurable: true,
         value: {
-            setTimeout: () => 1,
+            setTimeout: (handler: () => void, delay = 0) => {
+                if (delay === 0) queueMicrotask(handler);
+                return 1;
+            },
             clearTimeout: () => undefined,
             localStorage: {
                 getItem: (key: string) => localStorageValues.get(key) ?? null,
@@ -4012,6 +4098,12 @@ test("account scope transition drains an active remote deletion before entering 
         indexedValues.set(key, value);
         return value;
     }) as typeof localforage.setItem;
+    localforage.createInstance = (() => ({
+        iterate: async () => undefined,
+        removeItem: async () => undefined,
+        getItem: async () => null,
+        setItem: async (_key: string, value: unknown) => value,
+    })) as typeof localforage.createInstance;
     try {
         useAssetStore.getState().replaceAssets([]);
         await syncRemoteUserData("account-A");
@@ -4034,7 +4126,7 @@ test("account scope transition drains an active remote deletion before entering 
         await new Promise<void>((resolve) => queueMicrotask(resolve));
         expect(deleteStarted).toBe(true);
         let transitionEntered = false;
-        const transition = withRemoteUserDataSyncPaused(async () => {
+        const transition = withRemoteUserDataSyncExclusive(async () => {
             transitionEntered = true;
         });
         await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -4052,6 +4144,7 @@ test("account scope transition drains an active remote deletion before entering 
         await flushAssetStorePersistence();
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
+        localforage.createInstance = originalCreateInstance;
         apiClient.defaults.adapter = previousAdapter;
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
@@ -4142,6 +4235,235 @@ test("login replaces stale local entities instead of resurrecting remote deletio
     } finally {
         resetRemoteUserDataSync();
         useCanvasStore.setState({ projects: previousProjects });
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("remote resource preparation never overwrites an edit made while upload is in flight", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousAssets = useAssetStore.getState().assets;
+    const indexedValues = new Map<string, string>();
+    const remoteWrites: Asset[] = [];
+    let releaseUpload!: () => void;
+    const uploadReleased = new Promise<void>((resolve) => {
+        releaseUpload = resolve;
+    });
+    let uploadStartedResolve!: () => void;
+    const uploadStarted = new Promise<void>((resolve) => {
+        uploadStartedResolve = resolve;
+    });
+
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+        },
+    });
+    localforage.getItem = (async (key: string) => indexedValues.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        indexedValues.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
+    apiClient.defaults.adapter = async (config) => {
+        const url = String(config.url || "");
+        const method = String(config.method || "get").toLowerCase();
+        if (url.includes("user-data/snapshot")) {
+            return { data: { code: 0, data: { projects: [], assets: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        if (method === "post" && url === "/resources") {
+            uploadStartedResolve();
+            await uploadReleased;
+            return {
+                data: {
+                    code: 0,
+                    data: {
+                        resource: {
+                            id: "resource-uploaded",
+                            userId: "account-sync-edit",
+                            kind: "image",
+                            status: "ready",
+                            provider: "local",
+                            endpoint: "",
+                            bucket: "",
+                            objectKey: "users/account-sync-edit/image.png",
+                            publicUrl: "",
+                            mimeType: "image/png",
+                            size: 1,
+                            createdAt: "2026-08-25T00:00:00.000Z",
+                            updatedAt: "2026-08-25T00:00:00.000Z",
+                        },
+                    },
+                    msg: "",
+                },
+                status: 200,
+                statusText: "OK",
+                headers: {},
+                config,
+            };
+        }
+        if (method === "put" && url.startsWith("/assets/")) {
+            const body = typeof config.data === "string" ? JSON.parse(config.data) : config.data;
+            remoteWrites.push(body.asset as Asset);
+            return { data: { code: 0, data: { asset: body.asset }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        throw new Error(`unexpected request: ${method} ${url}`);
+    };
+
+    try {
+        resetRemoteUserDataSync();
+        installRemoteUserDataAutoSync();
+        await syncRemoteUserData("account-sync-edit");
+        const asset = {
+            ...storedAsset("asset-sync-edit", "before upload"),
+            coverUrl: "data:image/png;base64,iVBORw0KGgo=",
+            data: {
+                dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+                width: 1,
+                height: 1,
+                bytes: 1,
+                mimeType: "image/png",
+            },
+        } as Asset;
+        useAssetStore.getState().replaceAssets([asset]);
+
+        const saving = saveRemoteUserDataNow();
+        await uploadStarted;
+        useAssetStore.getState().updateAsset(asset.id, { title: "edited during upload" });
+        releaseUpload();
+        await saving;
+
+        expect(useAssetStore.getState().assets.find((item) => item.id === asset.id)?.title).toBe("edited during upload");
+        expect(remoteWrites.at(-1)?.title).toBe("edited during upload");
+    } finally {
+        releaseUpload();
+        resetRemoteUserDataSync();
+        useAssetStore.getState().replaceAssets(previousAssets);
+        await flushAssetStorePersistence();
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("failed remote baseline cannot upload stale local cache", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const requests: string[] = [];
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+        },
+    });
+    apiClient.defaults.adapter = async (config) => {
+        const request = `${String(config.method || "get").toLowerCase()} ${String(config.url || "")}`;
+        requests.push(request);
+        if (String(config.url || "").includes("user-data/snapshot")) throw new Error("snapshot unavailable");
+        return { data: { code: 0, data: {}, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+
+    try {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: [storedCanvasProject("stale-local-project", "stale cache")] });
+        await expect(syncRemoteUserData("account-baseline-failed")).rejects.toThrow("snapshot unavailable");
+        useCanvasStore.getState().renameProject("stale-local-project", "edited without baseline");
+
+        await expect(saveRemoteUserDataNow()).rejects.toThrow("云端数据基线尚未建立");
+        expect(requests.some((request) => request.startsWith("put "))).toBe(false);
+    } finally {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: previousProjects });
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("user session stays unhydrated until the remote baseline is durable", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousUserState = useUserStore.getState();
+    const localValues = new Map<string, string>();
+    let releaseSnapshot!: () => void;
+    const snapshotReleased = new Promise<void>((resolve) => {
+        releaseSnapshot = resolve;
+    });
+    let snapshotStartedResolve!: () => void;
+    const snapshotStarted = new Promise<void>((resolve) => {
+        snapshotStartedResolve = resolve;
+    });
+    const localStorageValues = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: {
+                getItem: (key: string) => localStorageValues.get(key) ?? null,
+                setItem: (key: string, value: string) => localStorageValues.set(key, value),
+                removeItem: (key: string) => localStorageValues.delete(key),
+            },
+        },
+    });
+    localforage.getItem = (async (key: string) => localValues.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        localValues.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
+    apiClient.defaults.adapter = async (config) => {
+        const url = String(config.url || "");
+        if (url === "/model-catalog") {
+            return { data: { code: 0, data: { source: "frontend", models: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        if (url.includes("user-data/snapshot")) {
+            snapshotStartedResolve();
+            await snapshotReleased;
+            return { data: { code: 0, data: { projects: [], assets: [] }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+        }
+        throw new Error(`unexpected request: ${String(config.method || "get")} ${url}`);
+    };
+
+    let applying: Promise<void> | undefined;
+    try {
+        resetRemoteUserDataSync();
+        useUserStore.setState({ user: null, hydrated: true });
+        applying = applyUserSession({
+            user: {
+                id: "account-baseline-gate",
+                username: "baseline-gate",
+                displayName: "Baseline Gate",
+                role: "user",
+                status: "active",
+                createdAt: "2026-08-25T00:00:00.000Z",
+                updatedAt: "2026-08-25T00:00:00.000Z",
+            },
+        });
+        await snapshotStarted;
+        expect(useUserStore.getState().hydrated).toBe(false);
+        releaseSnapshot();
+        await applying;
+        expect(useUserStore.getState().hydrated).toBe(true);
+    } finally {
+        releaseSnapshot();
+        await applying?.catch(() => undefined);
+        resetRemoteUserDataSync();
+        useUserStore.setState(previousUserState);
         localforage.getItem = originalGetItem;
         localforage.setItem = originalSetItem;
         apiClient.defaults.adapter = previousAdapter;

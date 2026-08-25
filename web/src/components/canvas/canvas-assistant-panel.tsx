@@ -631,14 +631,14 @@ export function CanvasAssistantPanel({
             setLocalSessions(next);
             setLocalActiveSessionId(localActiveSessionId && ids.includes(localActiveSessionId) ? next[0].id : localActiveSessionId);
         }
-        cleanupImages({ sessions: next });
+        void cleanupImages({ sessions: next });
     };
 
     const clearSessions = () => {
         const session = createSession();
         setLocalSessions([session]);
         setLocalActiveSessionId(session.id);
-        cleanupImages({ sessions: [session] });
+        void cleanupImages({ sessions: [session] });
     };
 
     const sendMessage = async (text: string, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {

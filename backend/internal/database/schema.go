@@ -45,6 +45,7 @@ func Models() []any {
 		&model.Skill{},
 		&model.UserSkillState{},
 		&model.Resource{},
+		&model.ResourceDeletionJob{},
 		&model.Asset{},
 		&model.ProjectAssetLink{},
 		&model.ProjectAssetFolder{},
