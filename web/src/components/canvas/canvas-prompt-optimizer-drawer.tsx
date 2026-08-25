@@ -101,6 +101,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
     const { message } = App.useApp();
     const abortRef = useRef<AbortController | null>(null);
     const chatRef = useRef<HTMLDivElement | null>(null);
+    const contentRef = useRef<HTMLDivElement | null>(null);
     const [mode, setMode] = useState<PromptOptimizationMode>("expand");
     const [activeOptimizerModel, setActiveOptimizerModel] = useState("");
     const [draftPrompt, setDraftPrompt] = useState(prompt);
@@ -176,7 +177,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
     }, [open]);
 
     const syncPanelPositionToViewport = useCallback(() => {
-        const popoverRoot = document.querySelector<HTMLElement>(".canvas-prompt-optimizer-popover");
+        const popoverRoot = contentRef.current?.closest<HTMLElement>(".canvas-prompt-optimizer-popover");
         if (!popoverRoot) return;
 
         const rect = popoverRoot.getBoundingClientRect();
@@ -381,7 +382,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
     };
 
     const nudgePanel = (deltaX: number, deltaY: number) => {
-        const popoverRoot = document.querySelector<HTMLElement>(".canvas-prompt-optimizer-popover");
+        const popoverRoot = contentRef.current?.closest<HTMLElement>(".canvas-prompt-optimizer-popover");
         if (!popoverRoot) {
             setPanelOffset((current) => ({ x: current.x + deltaX, y: current.y + deltaY }));
             return;
@@ -622,7 +623,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
     } as CSSProperties;
 
     const content = (
-        <div className={`canvas-prompt-optimizer-panel${panelInteracting ? " is-interacting" : ""}`} data-canvas-no-zoom>
+        <div ref={contentRef} className={`canvas-prompt-optimizer-panel${panelInteracting ? " is-interacting" : ""}`} data-canvas-no-zoom>
             <div
                 className="canvas-prompt-optimizer-header"
                 onPointerDown={(event) => {

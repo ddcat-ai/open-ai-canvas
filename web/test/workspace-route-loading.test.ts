@@ -19,13 +19,14 @@ describe("workspace route loading", () => {
 
     test("preloads the reported workspace routes before navigation", () => {
         const modules = source("../src/lib/workspace-route-modules.ts");
-        const navigation = source("../src/components/layout/app-top-nav.tsx");
+        const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
 
         for (const route of ["projects", "canvas", "assets", "wallet", "create"]) {
             expect(modules).toContain(`${route}: () => import`);
         }
-        expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(tool.slug)}");
-        expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(tool.slug)}");
+        expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(linkTo)}");
+        expect(navigation).toContain("onPointerDown={() => preloadWorkspaceRoute(linkTo)}");
+        expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(linkTo)}");
     });
 
     test("uses a quiet workspace skeleton for initial hydration", () => {
