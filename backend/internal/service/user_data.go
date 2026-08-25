@@ -225,9 +225,6 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 }
 
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
-	if err := s.repo.DeleteCanvasShare(userID, id); err != nil {
-		return err
-	}
 	return s.repo.DeleteCanvasProject(userID, id)
 }
 

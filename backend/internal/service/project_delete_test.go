@@ -149,6 +149,55 @@ func TestDeleteProjectUnlinksCanvasAndKeepsIndependentRecords(t *testing.T) {
 	}
 }
 
+func TestDeleteUserCanvasProjectDetachesTaskAndSessionScope(t *testing.T) {
+	service, db := newProjectDeleteTestService(t)
+	canvas := model.CanvasProject{ID: "canvas-delete-1", UserID: "user-1", Title: "待删除画布", PayloadJSON: `{"id":"canvas-delete-1"}`}
+	task := model.Task{ID: "task-canvas-delete-1", UserID: "user-1", ProjectID: canvas.ID, Status: model.TaskStatusSucceeded, Prompt: "已完成"}
+	session := model.Session{ID: "session-canvas-delete-1", UserID: "user-1", ProjectID: canvas.ID, Status: model.SessionStatusCompleted}
+	canvasLink := model.CanvasUnitLink{ID: "canvas-link-delete-1", ProjectID: "project-1", CanvasID: canvas.ID, UnitID: "unit-1", Role: "primary"}
+	for _, item := range []any{&canvas, &model.CanvasShare{ID: "share-canvas-delete-1", UserID: "user-1", ProjectID: canvas.ID}, &canvasLink, &task, &session} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := service.DeleteUserCanvasProject("user-1", canvas.ID); err != nil {
+		t.Fatal(err)
+	}
+	var storedCanvas model.CanvasProject
+	if err := db.First(&storedCanvas, "id = ?", canvas.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("canvas error = %v, want record not found", err)
+	}
+	var storedTask model.Task
+	if err := db.First(&storedTask, "id = ?", task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedTask.ProjectID != "" {
+		t.Fatalf("task project id = %q, want empty", storedTask.ProjectID)
+	}
+	var storedSession model.Session
+	if err := db.First(&storedSession, "id = ?", session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedSession.ProjectID != "" {
+		t.Fatalf("session project id = %q, want empty", storedSession.ProjectID)
+	}
+	var shareCount int64
+	if err := db.Model(&model.CanvasShare{}).Where("project_id = ?", canvas.ID).Count(&shareCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if shareCount != 0 {
+		t.Fatalf("canvas share count = %d, want 0", shareCount)
+	}
+	var linkCount int64
+	if err := db.Model(&model.CanvasUnitLink{}).Where("canvas_id = ?", canvas.ID).Count(&linkCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if linkCount != 0 {
+		t.Fatalf("canvas link count = %d, want 0", linkCount)
+	}
+}
+
 func TestDeleteProjectRejectsActiveProjectOrCanvasTasks(t *testing.T) {
 	service, db := newProjectDeleteTestService(t)
 	project := model.Project{ID: "project-1", UserID: "user-1", Name: "短剧", Status: model.ProjectStatusActive}

@@ -9,21 +9,17 @@ import (
 
 func TestCollectOwnedAssetDocumentReferences(t *testing.T) {
 	resources := map[string]struct{}{}
-	tasks := map[string]struct{}{}
 	raw := `{
 		"data":{"storageKey":"resource:resource-1","url":"/api/resources/resource-2/file"},
 		"metadata":{"taskId":"task-1","referenceResourceIds":["resource-3"],"errorDetails":"failed near /api/resources/not-a-reference/file"}
 	}`
-	if err := collectOwnedAssetDocumentReferences(raw, resources, tasks); err != nil {
+	if err := collectOwnedAssetDocumentReferences(raw, resources); err != nil {
 		t.Fatal(err)
 	}
 	for _, resourceID := range []string{"resource-1", "resource-2", "resource-3"} {
 		if _, exists := resources[resourceID]; !exists {
 			t.Fatalf("resource %q was not collected: %#v", resourceID, resources)
 		}
-	}
-	if _, exists := tasks["task-1"]; !exists {
-		t.Fatalf("origin task was not collected: %#v", tasks)
 	}
 	if _, exists := resources["not-a-reference"]; exists {
 		t.Fatalf("diagnostic text must not be treated as an actual resource reference: %#v", resources)

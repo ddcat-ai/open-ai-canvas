@@ -4107,3 +4107,45 @@ test("canvas deletion removes the remote project before updating local state", a
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     }
 });
+
+test("login replaces stale local entities instead of resurrecting remote deletions", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const requestUrls: string[] = [];
+    const staleProject = storedCanvasProject("canvas-stale-after-delete", "服务端已删除");
+
+    apiClient.defaults.adapter = async (config) => {
+        const url = String(config.url || "");
+        requestUrls.push(`${String(config.method || "get").toLowerCase()} ${url}`);
+        const data = url.includes("user-data/snapshot") ? { projects: [], assets: [] } : { projects: [] };
+        return { data: { code: 0, data, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => undefined,
+            localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+        },
+    });
+    localforage.getItem = (async () => null) as typeof localforage.getItem;
+    localforage.setItem = (async (_key: string, value: string) => value) as typeof localforage.setItem;
+    try {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: [staleProject] });
+        await syncRemoteUserData("account-A");
+        expect(useCanvasStore.getState().projects).toEqual([]);
+        expect(requestUrls.some((url) => url.startsWith("put ") || url.startsWith("post "))).toBe(false);
+    } finally {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: previousProjects });
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});

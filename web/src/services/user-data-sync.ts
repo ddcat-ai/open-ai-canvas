@@ -3,7 +3,7 @@ import { getImageBlob } from "@/services/image-storage";
 import { deleteRemoteAsset, deleteRemoteCanvasProject, getRemoteUserDataSnapshot, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import type { Asset } from "@/stores/use-asset-store";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 
@@ -34,13 +34,10 @@ export async function syncRemoteUserData(userId?: string | null) {
             const snapshot = await getRemoteUserDataSnapshot();
             remoteProjectVersions = versionMap(snapshot.projects);
             remoteAssetVersions = versionMap(snapshot.assets);
-            const localProjects = useCanvasStore.getState().projects;
-            const localAssets = useAssetStore.getState().assets;
-            const mergedProjects = mergeById(localProjects, snapshot.projects);
-            // 这里只合并结构化素材数据，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
-            const mergedAssets = mergeById(localAssets, snapshot.assets);
-            useCanvasStore.getState().replaceProjects(mergedProjects);
-            useAssetStore.getState().replaceAssets(mergedAssets);
+            // 登录时服务端是实体真相。浏览器 IndexedDB 只作为首屏缓存，不能把服务端已删除的记录补回去。
+            // 这里只替换结构化记录，不在登录阶段解析图片/视频/音频 URL；媒体由实际使用方按需解析。
+            useCanvasStore.getState().replaceProjects(snapshot.projects);
+            useAssetStore.getState().replaceAssets(snapshot.assets);
         } finally {
             applyingRemoteState = false;
         }
@@ -174,6 +171,7 @@ export async function deleteAssetWithRemoteSync(id: string) {
             remoteAssetVersions.delete(id);
         }
         useAssetStore.getState().removeAsset(id);
+        await flushAssetStorePersistence();
     });
 }
 
@@ -334,19 +332,6 @@ async function uploadLocalStorageKey(storageKey: string, payload: Record<string,
         durationMs: numberValue(payload.durationMs),
     });
     return resourceStorageKey(resource.id);
-}
-
-function mergeById<T extends { id?: string; updatedAt?: string }>(local: T[], remote: T[]) {
-    const items = new Map<string, T>();
-    remote.forEach((item) => {
-        if (item.id) items.set(item.id, item);
-    });
-    local.forEach((item) => {
-        if (!item.id) return;
-        const current = items.get(item.id);
-        if (!current || timeValue(item.updatedAt) >= timeValue(current.updatedAt)) items.set(item.id, item);
-    });
-    return Array.from(items.values()).sort((a, b) => timeValue(b.updatedAt) - timeValue(a.updatedAt));
 }
 
 function versionMap(items: Array<{ id: string; updatedAt?: string }>) {

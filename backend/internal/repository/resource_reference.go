@@ -102,14 +102,6 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "画布", ID: canvas.ID, Title: canvas.Title, PrimaryJSON: canvas.PayloadJSON})
 	}
 
-	var tasks []model.Task
-	if err := resourceTextQuery(r.db.Where("user_id = ?", userID), []string{"input_json", "result_json"}, resourceIDs).Find(&tasks).Error; err != nil {
-		return snapshot, err
-	}
-	for _, task := range tasks {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务", ID: task.ID, Title: task.Prompt, PrimaryJSON: task.InputJSON, SecondaryJSON: task.ResultJSON})
-	}
-
 	var projects []model.Project
 	if err := resourceTextQuery(r.db.Where("user_id = ?", userID), []string{"style_profile_json"}, resourceIDs).Find(&projects).Error; err != nil {
 		return snapshot, err
@@ -238,10 +230,19 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", assetID)
+		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.CharacterVoiceBinding{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.AssetRepresentation{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("asset_id = ?", assetID).Delete(&model.ProjectAssetLink{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("resolved_asset_id = ?", assetID).Delete(&model.ProjectAssetCandidate{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("asset_id = ?", assetID).Delete(&model.AssetVersion{}).Error; err != nil {
@@ -252,6 +253,9 @@ func (r *Repository) DeleteAssetAndResources(userID string, assetID string, reso
 		}
 		if len(resourceIDs) == 0 {
 			return nil
+		}
+		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.ArkPrivateAssetBinding{}).Error; err != nil {
+			return err
 		}
 		return tx.Where("user_id = ? AND id IN ?", userID, resourceIDs).Delete(&model.Resource{}).Error
 	})

@@ -34,12 +34,11 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 	}
 
 	resourceIDs := map[string]struct{}{}
-	originTaskIDs := map[string]struct{}{}
-	if err := collectOwnedAssetDocumentReferences(asset.PayloadJSON, resourceIDs, originTaskIDs); err != nil {
+	if err := collectOwnedAssetDocumentReferences(asset.PayloadJSON, resourceIDs); err != nil {
 		return BadAuthRequest("素材数据无法解析，已停止删除以避免误删文件")
 	}
 	for _, version := range versions {
-		if err := collectOwnedAssetDocumentReferences(version.DefinitionJSON, resourceIDs, originTaskIDs); err != nil {
+		if err := collectOwnedAssetDocumentReferences(version.DefinitionJSON, resourceIDs); err != nil {
 			return BadAuthRequest("素材版本数据无法解析，已停止删除以避免误删文件")
 		}
 	}
@@ -47,10 +46,7 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 		if resourceID := validCanvasResourceID(representation.ResourceID); resourceID != "" {
 			resourceIDs[resourceID] = struct{}{}
 		}
-		if taskID := validCanvasResourceID(representation.TaskID); taskID != "" {
-			originTaskIDs[taskID] = struct{}{}
-		}
-		if err := collectOwnedAssetDocumentReferences(representation.MetadataJSON, resourceIDs, originTaskIDs); err != nil {
+		if err := collectOwnedAssetDocumentReferences(representation.MetadataJSON, resourceIDs); err != nil {
 			return BadAuthRequest("素材表现数据无法解析，已停止删除以避免误删文件")
 		}
 	}
@@ -84,10 +80,6 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string) er
 		for _, document := range snapshot.Documents {
 			primaryReferenced := documentReferencesResources(document.PrimaryJSON, ownedIDSet)
 			secondaryReferenced := documentReferencesResources(document.SecondaryJSON, ownedIDSet)
-			if document.Kind == "任务" {
-				_, originTask := originTaskIDs[document.ID]
-				secondaryReferenced = secondaryReferenced && !originTask
-			}
 			if primaryReferenced || secondaryReferenced {
 				usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
 			}
@@ -160,7 +152,7 @@ func resourceOccupiedMessage(usages []resourceUsage) string {
 	return "素材仍被" + strings.Join(visible, "、") + "引用，请先在对应画布、任务或业务记录中解除引用后再删除"
 }
 
-func collectOwnedAssetDocumentReferences(raw string, resourceIDs map[string]struct{}, taskIDs map[string]struct{}) error {
+func collectOwnedAssetDocumentReferences(raw string, resourceIDs map[string]struct{}) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -169,19 +161,19 @@ func collectOwnedAssetDocumentReferences(raw string, resourceIDs map[string]stru
 	if err := json.Unmarshal([]byte(raw), &value); err != nil {
 		return err
 	}
-	walkReferenceDocument(value, "", resourceIDs, taskIDs)
+	walkReferenceDocument(value, "", resourceIDs)
 	return nil
 }
 
-func walkReferenceDocument(value any, parentKey string, resourceIDs map[string]struct{}, taskIDs map[string]struct{}) {
+func walkReferenceDocument(value any, parentKey string, resourceIDs map[string]struct{}) {
 	switch item := value.(type) {
 	case map[string]any:
 		for key, child := range item {
-			walkReferenceDocument(child, key, resourceIDs, taskIDs)
+			walkReferenceDocument(child, key, resourceIDs)
 		}
 	case []any:
 		for _, child := range item {
-			walkReferenceDocument(child, parentKey, resourceIDs, taskIDs)
+			walkReferenceDocument(child, parentKey, resourceIDs)
 		}
 	case string:
 		key := normalizeReferenceKey(parentKey)
@@ -193,11 +185,6 @@ func walkReferenceDocument(value any, parentKey string, resourceIDs map[string]s
 		if isBareResourceIDKey(key) {
 			if resourceID := validCanvasResourceID(item); resourceID != "" {
 				resourceIDs[resourceID] = struct{}{}
-			}
-		}
-		if key == "taskid" || key == "taskids" {
-			if taskID := validCanvasResourceID(item); taskID != "" {
-				taskIDs[taskID] = struct{}{}
 			}
 		}
 	}
@@ -232,7 +219,7 @@ func documentReferencesResources(raw string, resourceIDs map[string]struct{}) bo
 	var value any
 	if err := json.Unmarshal([]byte(raw), &value); err == nil {
 		found := map[string]struct{}{}
-		walkReferenceDocument(value, "", found, map[string]struct{}{})
+		walkReferenceDocument(value, "", found)
 		for resourceID := range found {
 			if _, exists := resourceIDs[resourceID]; exists {
 				return true
