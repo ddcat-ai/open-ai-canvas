@@ -39,10 +39,17 @@ type storyboardAsset struct {
 	ID                 string   `json:"id"`
 	Title              string   `json:"title"`
 	Type               string   `json:"type"`
+	Category           string   `json:"category,omitempty"`
 	Tags               []string `json:"tags"`
 	Prompt             string   `json:"prompt"`
 	CharacterAssetID   string   `json:"characterAssetId,omitempty"`
 	CharacterVersionID string   `json:"characterVersionId,omitempty"`
+}
+
+type storyboardAssetRef struct {
+	NodeID   string `json:"nodeId"`
+	Role     string `json:"role"`
+	Priority int    `json:"priority"`
 }
 
 type agentStoryboardPlan struct {
@@ -56,28 +63,28 @@ type agentStoryboardPlan struct {
 }
 
 type agentStoryboardShot struct {
-	Title         string   `json:"title"`
-	Description   string   `json:"description"`
-	Duration      int      `json:"durationSeconds"`
-	Dialogue      string   `json:"dialogue"`
-	ShotSize      string   `json:"shotSize"`
-	Emotion       string   `json:"emotion"`
-	Lighting      string   `json:"lightingAndAtmosphere"`
-	AudioEffects  string   `json:"audioEffects"`
-	VisualPrompt  string   `json:"visualPrompt"`
-	VideoPrompt   string   `json:"videoPrompt"`
-	Camera        string   `json:"camera"`
-	Motion        string   `json:"motion"`
-	TimeBeats     string   `json:"timeBeats"`
-	Negative      string   `json:"negativePrompt"`
-	AssetTags     []string `json:"assetTags"`
-	CharacterIDs  []string `json:"characterIds"`
-	Intent        string   `json:"narrativeIntent"`
-	ViewerPOV     string   `json:"viewerPOV"`
-	Performance   string   `json:"performanceBlocking"`
-	MustHave      []string `json:"mustHave"`
-	Optional      []string `json:"optionalDetails"`
-	ContinuityOut string   `json:"continuityOut"`
+	Title         string               `json:"title"`
+	Description   string               `json:"description"`
+	Duration      int                  `json:"durationSeconds"`
+	Dialogue      string               `json:"dialogue"`
+	ShotSize      string               `json:"shotSize"`
+	Emotion       string               `json:"emotion"`
+	Lighting      string               `json:"lightingAndAtmosphere"`
+	AudioEffects  string               `json:"audioEffects"`
+	VisualPrompt  string               `json:"visualPrompt"`
+	VideoPrompt   string               `json:"videoPrompt"`
+	Camera        string               `json:"camera"`
+	Motion        string               `json:"motion"`
+	TimeBeats     string               `json:"timeBeats"`
+	Negative      string               `json:"negativePrompt"`
+	AssetRefs     []storyboardAssetRef `json:"assetRefs"`
+	CharacterIDs  []string             `json:"characterIds"`
+	Intent        string               `json:"narrativeIntent"`
+	ViewerPOV     string               `json:"viewerPOV"`
+	Performance   string               `json:"performanceBlocking"`
+	MustHave      []string             `json:"mustHave"`
+	Optional      []string             `json:"optionalDetails"`
+	ContinuityOut string               `json:"continuityOut"`
 }
 
 func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
@@ -106,7 +113,9 @@ func parseAgentStoryboardPlan(raw string) (agentStoryboardPlan, error) {
 			plan.Shots[i].Title = fmt.Sprintf("镜头 %d", i+1)
 		}
 		plan.Shots[i].CharacterIDs = nonNilStrings(plan.Shots[i].CharacterIDs)
-		plan.Shots[i].AssetTags = nonNilStrings(plan.Shots[i].AssetTags)
+		if plan.Shots[i].AssetRefs == nil {
+			plan.Shots[i].AssetRefs = []storyboardAssetRef{}
+		}
 		plan.Shots[i].Optional = nonNilStrings(plan.Shots[i].Optional)
 		plan.Shots[i].Intent = defaultString(strings.TrimSpace(plan.Shots[i].Intent), strings.TrimSpace(plan.Shots[i].Description))
 		plan.Shots[i].ViewerPOV = defaultString(strings.TrimSpace(plan.Shots[i].ViewerPOV), "客观观察当前主要角色与事件")
@@ -145,7 +154,7 @@ func validateStoryboardJSONFields(jsonText string) error {
 	if err := json.Unmarshal(root["shots"], &shots); err != nil {
 		return errors.New("分镜 JSON 的 shots 必须是数组")
 	}
-	required := []string{"title", "description", "durationSeconds", "dialogue", "characterIds", "narrativeIntent", "viewerPOV", "performanceBlocking", "shotSize", "emotion", "lightingAndAtmosphere", "audioEffects", "visualPrompt", "videoPrompt", "camera", "motion", "timeBeats", "mustHave", "optionalDetails", "continuityOut", "negativePrompt", "assetTags"}
+	required := []string{"title", "description", "durationSeconds", "dialogue", "characterIds", "narrativeIntent", "viewerPOV", "performanceBlocking", "shotSize", "emotion", "lightingAndAtmosphere", "audioEffects", "visualPrompt", "videoPrompt", "camera", "motion", "timeBeats", "mustHave", "optionalDetails", "continuityOut", "negativePrompt", "assetRefs"}
 	for index, shot := range shots {
 		for _, field := range required {
 			if _, ok := shot[field]; !ok {
@@ -195,7 +204,7 @@ func validateStoryboardShotDuration(plan agentStoryboardPlan, target int) error 
 	return nil
 }
 
-func validateStoryboardPlan(plan agentStoryboardPlan, shotDuration int, shotCount int, characters []storyboardCharacterCard) error {
+func validateStoryboardPlan(plan agentStoryboardPlan, shotDuration int, shotCount int, characters []storyboardCharacterCard, assets []storyboardAsset) error {
 	if utf8.RuneCountInString(strings.TrimSpace(plan.StyleGuide)) > 120 {
 		return errors.New("styleGuide 最多 120 个中文字符")
 	}
@@ -207,6 +216,43 @@ func validateStoryboardPlan(plan agentStoryboardPlan, shotDuration int, shotCoun
 	}
 	if err := validateStoryboardCharacterIDs(plan, characters); err != nil {
 		return err
+	}
+	if err := validateStoryboardAssetRefs(plan, assets); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateStoryboardAssetRefs(plan agentStoryboardPlan, assets []storyboardAsset) error {
+	allowed := make(map[string]storyboardAsset, len(assets))
+	for _, asset := range assets {
+		allowed[asset.ID] = asset
+	}
+	validRoles := map[string]bool{
+		"character": true, "environment": true, "wardrobe": true, "prop": true,
+		"weapon": true, "style": true, "motion": true, "audio": true,
+	}
+	for shotIndex, shot := range plan.Shots {
+		if len(shot.AssetRefs) > 6 {
+			return fmt.Errorf("镜头 %d 最多关联 6 个画布资产", shotIndex+1)
+		}
+		seen := make(map[string]bool, len(shot.AssetRefs))
+		for _, ref := range shot.AssetRefs {
+			asset, ok := allowed[ref.NodeID]
+			if !ok {
+				return fmt.Errorf("镜头 %d 引用了不在当前画布资产目录中的 nodeId：%s", shotIndex+1, ref.NodeID)
+			}
+			if seen[ref.NodeID] {
+				return fmt.Errorf("镜头 %d 重复引用画布资产：%s", shotIndex+1, ref.NodeID)
+			}
+			seen[ref.NodeID] = true
+			if !validRoles[ref.Role] {
+				return fmt.Errorf("镜头 %d 的资产 %s 使用了不支持的角色类型：%s", shotIndex+1, asset.Title, ref.Role)
+			}
+			if ref.Priority < 0 || ref.Priority > 100 {
+				return fmt.Errorf("镜头 %d 的资产 %s 优先级必须在 0 到 100 之间", shotIndex+1, asset.Title)
+			}
+		}
 	}
 	return nil
 }
@@ -395,8 +441,10 @@ func extractStoryboardAssets(snapshot map[string]any) []storyboardAsset {
 			metadata = map[string]interface{}{}
 		}
 		nodeType := stringValue(node["type"])
-		isCharacterCard := stringValue(metadata["workflowKind"]) == "character" && stringValue(metadata["characterAssetId"]) != "" && stringValue(metadata["characterVersionId"]) != ""
-		if nodeType != "image" && !isCharacterCard {
+		workflowKind := stringValue(metadata["workflowKind"])
+		isCharacterCard := workflowKind == "character" && stringValue(metadata["characterAssetId"]) != "" && stringValue(metadata["characterVersionId"]) != ""
+		isMedia := nodeType == "image" || nodeType == "video" || nodeType == "audio"
+		if (!isMedia && !isCharacterCard) || workflowKind == "shot" || workflowKind == "action_board" || workflowKind == "final" {
 			continue
 		}
 		id := stringValue(node["id"])
@@ -411,122 +459,82 @@ func extractStoryboardAssets(snapshot map[string]any) []storyboardAsset {
 		}
 		assets = append(assets, storyboardAsset{
 			ID:                 id,
-			Title:              defaultString(stringValue(node["title"]), "未命名图片"),
+			Title:              defaultString(stringValue(node["title"]), "未命名资产"),
 			Type:               defaultString(nodeType, "reference"),
+			Category:           stringValue(metadata["assetCategory"]),
 			Tags:               tags,
 			Prompt:             prompt,
 			CharacterAssetID:   stringValue(metadata["characterAssetId"]),
 			CharacterVersionID: stringValue(metadata["characterVersionId"]),
 		})
-		if len(assets) >= 30 {
+		if len(assets) >= 60 {
 			break
 		}
 	}
 	return assets
 }
 
-func matchStoryboardAssets(assets []storyboardAsset, shotTags []string) []storyboardAsset {
-	wanted := map[string]bool{}
-	for _, tag := range shotTags {
-		for _, token := range storyboardTagTokens(tag) {
-			wanted[token] = true
-		}
-	}
-	if len(wanted) == 0 {
-		return nil
-	}
-	matched := make([]storyboardAsset, 0)
+func resolveStoryboardAssets(assets []storyboardAsset, refs []storyboardAssetRef) []storyboardAsset {
+	byID := make(map[string]storyboardAsset, len(assets))
 	for _, asset := range assets {
-		tokens := map[string]bool{}
-		for _, token := range storyboardTagTokens(asset.Title) {
-			tokens[token] = true
+		byID[asset.ID] = asset
+	}
+	resolved := make([]storyboardAsset, 0, len(refs))
+	for _, ref := range refs {
+		if asset, ok := byID[ref.NodeID]; ok {
+			resolved = append(resolved, asset)
 		}
-		for _, tag := range asset.Tags {
-			for _, token := range storyboardTagTokens(tag) {
-				tokens[token] = true
+	}
+	return resolved
+}
+
+func normalizeStoryboardAssets(input []storyboardAsset) []storyboardAsset {
+	allowedTypes := map[string]bool{"image": true, "video": true, "audio": true, "character": true}
+	seenIDs := make(map[string]bool, len(input))
+	assets := make([]storyboardAsset, 0, min(len(input), 60))
+	for _, asset := range input {
+		id := strings.TrimSpace(asset.ID)
+		assetType := strings.ToLower(strings.TrimSpace(asset.Type))
+		if id == "" || utf8.RuneCountInString(id) > 160 || seenIDs[id] || !allowedTypes[assetType] {
+			continue
+		}
+		seenIDs[id] = true
+		tags := make([]string, 0, min(len(asset.Tags), 12))
+		seenTags := make(map[string]bool, len(asset.Tags))
+		for _, value := range asset.Tags {
+			tag := clipStoryboardAssetText(value, 64)
+			if tag == "" || seenTags[tag] {
+				continue
+			}
+			seenTags[tag] = true
+			tags = append(tags, tag)
+			if len(tags) == 12 {
+				break
 			}
 		}
-		if storyboardTokensMatch(wanted, tokens) {
-			matched = append(matched, asset)
-		}
-		if len(matched) >= 6 {
+		assets = append(assets, storyboardAsset{
+			ID:                 id,
+			Title:              defaultString(clipStoryboardAssetText(asset.Title, 120), "未命名资产"),
+			Type:               assetType,
+			Category:           clipStoryboardAssetText(asset.Category, 40),
+			Tags:               tags,
+			Prompt:             clipStoryboardAssetText(asset.Prompt, 600),
+			CharacterAssetID:   clipStoryboardAssetText(asset.CharacterAssetID, 160),
+			CharacterVersionID: clipStoryboardAssetText(asset.CharacterVersionID, 160),
+		})
+		if len(assets) == 60 {
 			break
 		}
 	}
-	return matched
+	return assets
 }
 
-func matchStoryboardAssetsForShot(assets []storyboardAsset, shot agentStoryboardShot) []storyboardAsset {
-	matched := make([]storyboardAsset, 0, 6)
-	seen := make(map[string]bool, 6)
-	wantedCharacters := make(map[string]bool, len(shot.CharacterIDs))
-	for _, assetID := range shot.CharacterIDs {
-		wantedCharacters[assetID] = true
+func clipStoryboardAssetText(value string, limit int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= limit {
+		return string(runes)
 	}
-	for _, asset := range assets {
-		if len(matched) >= 6 {
-			break
-		}
-		if !seen[asset.ID] && wantedCharacters[asset.CharacterAssetID] {
-			matched = append(matched, asset)
-			seen[asset.ID] = true
-		}
-	}
-	for _, asset := range matchStoryboardAssets(assets, shot.AssetTags) {
-		if len(matched) >= 6 {
-			break
-		}
-		if !seen[asset.ID] {
-			matched = append(matched, asset)
-			seen[asset.ID] = true
-		}
-	}
-	return matched
-}
-
-func storyboardTokensMatch(wanted map[string]bool, tokens map[string]bool) bool {
-	for want := range wanted {
-		if tokens[want] {
-			return true
-		}
-		for token := range tokens {
-			if meaningfulStoryboardTagToken(want) && meaningfulStoryboardTagToken(token) && (strings.Contains(token, want) || strings.Contains(want, token)) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func storyboardTagTokens(value string) []string {
-	normalized := strings.ToLower(strings.ReplaceAll(strings.Join(strings.Fields(strings.ReplaceAll(value, "：", ":")), ""), "，", ","))
-	if normalized == "" {
-		return nil
-	}
-	tokens := []string{normalized}
-	if index := strings.Index(normalized, ":"); index >= 0 {
-		tokens = append(tokens, normalized[index+1:])
-	}
-	unique := make([]string, 0, len(tokens))
-	seen := map[string]bool{}
-	for _, token := range tokens {
-		if meaningfulStoryboardTagToken(token) && !seen[token] {
-			seen[token] = true
-			unique = append(unique, token)
-		}
-	}
-	return unique
-}
-
-func meaningfulStoryboardTagToken(value string) bool {
-	if len([]rune(value)) < 2 {
-		return false
-	}
-	switch value {
-	case "角色", "环境", "场景", "道具", "武器", "风格":
-		return false
-	}
-	return true
+	return string(runes[:limit])
 }
 
 func listContent(title string, items []string) string {

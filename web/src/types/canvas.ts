@@ -70,8 +70,17 @@ export type StoryboardColumn =
     | "timeBeats"
     | "imageGenerationPrompt"
     | "videoMotionPrompt"
+    | "assets"
     | "continuityOut"
     | "negativePrompt";
+
+export type StoryboardAssetRole = "character" | "environment" | "wardrobe" | "prop" | "weapon" | "style" | "motion" | "audio";
+
+export type StoryboardAssetBinding = {
+    nodeId: string;
+    role: StoryboardAssetRole;
+    priority: number;
+};
 
 export type StoryboardCharacterReference = {
     characterName: string;
@@ -106,7 +115,7 @@ export type StoryboardRow = {
     optionalDetails: string[];
     continuityOut: string;
     negativePrompt: string;
-    referenceNodeIds: string[];
+    assetBindings: StoryboardAssetBinding[];
     imageNodeId?: string;
     videoNodeId?: string;
     status?: CanvasNodeStatus;
@@ -232,6 +241,7 @@ export type CanvasNodeMetadata = {
     characterIds?: string[];
     referenceSetId?: string;
     referenceAssetNodeIds?: string[];
+    assetBindings?: StoryboardAssetBinding[];
     characterName?: string;
     characterPrompt?: string;
     characterAliases?: string[];
@@ -392,6 +402,8 @@ export type CanvasConnection = {
     toHandleId?: string;
     fromAnchorRatio?: number;
     toAnchorRatio?: number;
+    relation?: "storyboard-output" | "storyboard-asset-reference";
+    storyboardRowId?: string;
 };
 
 export type CanvasDisplayConnection = {

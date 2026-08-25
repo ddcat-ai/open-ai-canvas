@@ -5,6 +5,7 @@ import type { ColumnsType } from "antd/es/table";
 import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
+import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
 import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -33,13 +34,16 @@ import type { TaskStatus } from "@/services/api/task-center";
 
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;
-const SCRIPT_GRID_TEMPLATE = "72px minmax(220px, 1fr) minmax(300px, 1.4fr) minmax(220px, 1fr) 58px";
+const SCRIPT_GRID_TEMPLATE = "64px 76px minmax(300px, 1.55fr) minmax(220px, 1fr) 180px";
 const EMPTY_STORYBOARD_ROWS: StoryboardRow[] = [];
-const DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"];
+const DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "videoMotionPrompt", "dialogue", "assets"];
 const LEGACY_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "plotDescription", "dialogue"];
+const PREVIOUS_DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"];
 
 function resolveStoryboardVisibleColumns(columns?: StoryboardColumn[]) {
-    if (!columns?.length || (columns.length === LEGACY_STORYBOARD_COLUMNS.length && LEGACY_STORYBOARD_COLUMNS.every((column) => columns.includes(column)))) {
+    const isLegacyDefault = columns?.length === LEGACY_STORYBOARD_COLUMNS.length && LEGACY_STORYBOARD_COLUMNS.every((column) => columns.includes(column));
+    const isPreviousDefault = columns?.length === PREVIOUS_DEFAULT_STORYBOARD_COLUMNS.length && PREVIOUS_DEFAULT_STORYBOARD_COLUMNS.every((column) => columns.includes(column));
+    if (!columns?.length || isLegacyDefault || isPreviousDefault) {
         return DEFAULT_STORYBOARD_COLUMNS;
     }
     return columns;
@@ -62,12 +66,14 @@ const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
     { label: "时间节拍", value: "timeBeats" },
     { label: "图片提示词", value: "imageGenerationPrompt" },
     { label: "视频提示词", value: "videoMotionPrompt" },
+    { label: "关联资产", value: "assets" },
     { label: "连续性出口", value: "continuityOut" },
     { label: "负面要求", value: "negativePrompt" },
 ];
 
 export function CanvasScriptNodeContent({
     node,
+    nodes,
     batch,
     pipeline,
     scale,
@@ -97,6 +103,7 @@ export function CanvasScriptNodeContent({
     workspaceMode = "professional",
 }: {
     node: CanvasNodeData;
+    nodes: CanvasNodeData[];
     batch?: CanvasGenerationBatch;
     pipeline: CanvasStoryboardPipelineProgress;
     scale: number;
@@ -285,10 +292,10 @@ export function CanvasScriptNodeContent({
                 <HeaderCell borderColor={theme.node.stroke} align="center">
                     序号
                 </HeaderCell>
-                <HeaderCell borderColor={theme.node.stroke}>画面</HeaderCell>
+                <HeaderCell borderColor={theme.node.stroke} align="center">时长</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>视频提示词</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>台词/旁白</HeaderCell>
-                <span className="text-center">操作</span>
+                <span className="px-3">关联资产</span>
             </div>
             <div
                 data-canvas-wheel-scroll
@@ -307,33 +314,36 @@ export function CanvasScriptNodeContent({
                 {rows.length ? (
                     rows.map((row) => (
                         <div key={row.id} className="relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
-                            <div className="flex flex-col items-center justify-center border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
-                                <span className="text-sm">{row.shotNumber}</span>
+                            <div className="flex flex-col items-center justify-center gap-0.5 border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
+                                <div className="flex items-center gap-0.5">
+                                    <span className="text-sm">{row.shotNumber}</span>
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{ items: [{ key: "delete", label: "删除镜头", icon: <Trash2 className="size-3.5" />, danger: true, disabled: rows.length <= 1, onClick: () => onRemoveRow(row.id) }] }}
+                                    >
+                                        <button
+                                            type="button"
+                                            className="grid size-5 place-items-center rounded outline-none opacity-45 transition hover:bg-black/5 hover:opacity-100 focus-visible:ring-2 dark:hover:bg-white/10"
+                                            aria-label={`镜头 ${row.shotNumber} 操作`}
+                                            onMouseDown={(event) => event.stopPropagation()}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onClick={(event) => event.stopPropagation()}
+                                        >
+                                            <MoreHorizontal className="size-3" />
+                                        </button>
+                                    </Dropdown>
+                                </div>
                                 {batchItemByRowId.get(row.id) ? (
-                                    <span className="max-w-16 truncate text-[var(--fs-micro)] leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>
+                                    <span className="max-w-14 truncate text-[var(--fs-micro)] leading-3" title={generationBatchItemLabel(batchItemByRowId.get(row.id)!)}>
                                         {generationBatchItemLabel(batchItemByRowId.get(row.id)!)}
                                     </span>
                                 ) : null}
                             </div>
-                            <CompactInput value={row.plotDescription} placeholder="描述画面内容" onChange={(value) => onUpdateRow(row.id, { plotDescription: value })} borderColor={theme.node.stroke} />
+                            <CompactDurationInput value={row.durationSeconds} borderColor={theme.node.stroke} onChange={(durationSeconds) => onUpdateRow(row.id, { durationSeconds })} />
                             <CompactInput value={row.videoMotionPrompt} placeholder="描述视频运动、镜头和动作" onChange={(value) => onUpdateRow(row.id, { videoMotionPrompt: value })} borderColor={theme.node.stroke} />
                             <CompactInput value={row.dialogue} placeholder="台词或旁白" onChange={(value) => onUpdateRow(row.id, { dialogue: value })} borderColor={theme.node.stroke} />
-                            <div className="grid h-full place-items-center">
-                                <button
-                                    type="button"
-                                    disabled={rows.length <= 1}
-                                    className="grid size-7 place-items-center rounded outline-none opacity-55 transition enabled:hover:bg-red-500/10 enabled:hover:opacity-100 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-20"
-                                    style={{ color: theme.accent.danger, "--tw-ring-color": theme.accent.danger } as CSSProperties}
-                                    title={rows.length <= 1 ? "至少保留一个镜头" : "删除镜头"}
-                                    aria-label={`删除镜头 ${row.shotNumber}`}
-                                    onMouseDown={(event) => event.stopPropagation()}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        onRemoveRow(row.id);
-                                    }}
-                                >
-                                    <Trash2 className="size-3.5" />
-                                </button>
+                            <div className="flex h-full min-w-0 items-center px-3">
+                                <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} />
                             </div>
                         </div>
                     ))
@@ -588,6 +598,7 @@ function batchItemTone(item?: CanvasGenerationBatchItem): CanvasNodeStatus | und
 
 export function CanvasScriptEditor({
     node,
+    nodes,
     open,
     onClose,
     onUpdateRows,
@@ -597,6 +608,7 @@ export function CanvasScriptEditor({
     onVideoInputModeChange,
 }: {
     node: CanvasNodeData | null;
+    nodes: CanvasNodeData[];
     open: boolean;
     onClose: () => void;
     onUpdateRows: (rows: StoryboardRow[]) => void;
@@ -610,18 +622,19 @@ export function CanvasScriptEditor({
     const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
     const visibleColumns = resolveStoryboardVisibleColumns(node?.metadata?.storyboard?.visibleColumns);
     const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
+    const nodeById = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes]);
     const filteredRows = useMemo(() => {
         const keyword = query.trim().toLowerCase();
         return keyword
             ? rows.filter((row) =>
-                  [row.plotDescription, row.dialogue, row.camera, row.motion, row.timeBeats, row.imageGenerationPrompt, row.videoMotionPrompt, row.negativePrompt].some((value) =>
+                  [row.plotDescription, row.dialogue, row.camera, row.motion, row.timeBeats, row.imageGenerationPrompt, row.videoMotionPrompt, row.negativePrompt, ...(row.assetBindings || []).map((binding) => nodeById.get(binding.nodeId)?.title || "")].some((value) =>
                       String(value || "")
                           .toLowerCase()
                           .includes(keyword),
                   ),
               )
             : rows;
-    }, [query, rows]);
+    }, [nodeById, query, rows]);
     useEffect(() => {
         setSelectedIds((current) => {
             const next = current.filter((id) => rows.some((row) => row.id === id));
@@ -651,13 +664,15 @@ export function CanvasScriptEditor({
             title: option.label,
             dataIndex: option.value,
             key: option.value,
-            width: option.value === "shotNumber" ? 72 : option.value === "durationSeconds" ? 100 : option.value === "plotDescription" || option.value === "dialogue" || option.value === "timeBeats" || option.value.endsWith("Prompt") ? 260 : 170,
+            width: option.value === "shotNumber" ? 72 : option.value === "durationSeconds" ? 100 : option.value === "assets" ? 220 : option.value === "plotDescription" || option.value === "dialogue" || option.value === "timeBeats" || option.value.endsWith("Prompt") ? 260 : 170,
             fixed: option.value === "shotNumber" ? ("left" as const) : undefined,
             render: (_: unknown, row: StoryboardRow) =>
                 option.value === "shotNumber" ? (
                     <span className="font-semibold">{row.shotNumber}</span>
                 ) : option.value === "durationSeconds" ? (
                     <InputNumber min={1} max={60} value={row.durationSeconds} addonAfter="s" onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })} />
+                ) : option.value === "assets" ? (
+                    <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} />
                 ) : option.value === "shotSize" ? (
                     <Select
                         className="w-full"
@@ -752,6 +767,25 @@ function CompactInput({ value, placeholder, borderColor, onChange }: { value: st
     );
 }
 
+function CompactDurationInput({ value, borderColor, onChange }: { value: number; borderColor: string; onChange: (value: number) => void }) {
+    return (
+        <label className="flex h-full items-center justify-center gap-1 border-r text-xs tabular-nums text-foreground/60" style={{ borderColor }}>
+            <input
+                type="number"
+                min={1}
+                max={60}
+                value={value}
+                className="w-9 bg-transparent text-right outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                aria-label="镜头时长（秒）"
+                onChange={(event) => onChange(Math.max(1, Math.min(60, Number(event.target.value) || 1)))}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+            />
+            秒
+        </label>
+    );
+}
+
 function HeaderCell({ children, borderColor, align = "left" }: { children: ReactNode; borderColor: string; align?: "left" | "center" }) {
     return (
         <span className={`flex h-full items-center border-r px-4 ${align === "center" ? "justify-center text-center" : "justify-start"}`} style={{ borderColor }}>
@@ -802,7 +836,7 @@ function editorRow(shotNumber: number): StoryboardRow {
         optionalDetails: [],
         continuityOut: "",
         negativePrompt: "",
-        referenceNodeIds: [],
+        assetBindings: [],
         status: "idle",
     };
 }

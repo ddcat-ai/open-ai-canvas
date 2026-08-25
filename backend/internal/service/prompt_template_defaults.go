@@ -139,7 +139,7 @@ const storyboardPlanJSONSchema = `{
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "description", "durationSeconds", "dialogue", "characterIds", "narrativeIntent", "viewerPOV", "performanceBlocking", "shotSize", "emotion", "lightingAndAtmosphere", "audioEffects", "visualPrompt", "videoPrompt", "camera", "motion", "timeBeats", "mustHave", "optionalDetails", "continuityOut", "negativePrompt", "assetTags"],
+        "required": ["title", "description", "durationSeconds", "dialogue", "characterIds", "narrativeIntent", "viewerPOV", "performanceBlocking", "shotSize", "emotion", "lightingAndAtmosphere", "audioEffects", "visualPrompt", "videoPrompt", "camera", "motion", "timeBeats", "mustHave", "optionalDetails", "continuityOut", "negativePrompt", "assetRefs"],
         "properties": {
           "title": {"type": "string"},
           "description": {"type": "string"},
@@ -162,7 +162,20 @@ const storyboardPlanJSONSchema = `{
           "optionalDetails": {"type": "array", "items": {"type": "string"}},
           "continuityOut": {"type": "string"},
           "negativePrompt": {"type": "string"},
-          "assetTags": {"type": "array", "items": {"type": "string"}}
+          "assetRefs": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["nodeId", "role", "priority"],
+              "properties": {
+                "nodeId": {"type": "string"},
+                "role": {"type": "string", "enum": ["character", "environment", "wardrobe", "prop", "weapon", "style", "motion", "audio"]},
+                "priority": {"type": "integer", "minimum": 0, "maximum": 100}
+              }
+            }
+          }
         }
       }
     }
@@ -231,6 +244,7 @@ func storyboardExecutionContract(durationRule string, countRule string) string {
 - 单镜头最多 2 名主要角色、1 个主运镜、1 条主要动作链、3 个 timeBeats 和 3 个 mustHave；超限必须拆镜或在固定镜头数内重新分配。
 - dialogue 只写本镜头实际念出的台词或简短旁白，字数上限按 1 秒最多约 5 个中文字符计算（至少 24 字）；超长台词/旁白必须拆镜或精简，不得用 dialogue 承载长段叙述。
 - characterIds 只能引用当前角色版本中的 assetId；没有角色时返回空数组。
+- assetRefs 只能引用当前画布资产中的 nodeId；不要根据相似名称编造 ID。每镜最多 6 个，priority 越大表示越重要。
 - styleGuide 最多 120 个中文字符；visualPrompt 只描述首帧，videoPrompt 只描述运动和结尾状态。
 - 画幅比例由视频节点参数控制，提示词不得写入具体比例，也不要讨论画幅配置。
 - 只返回完整 JSON，不要 Markdown 或解释。

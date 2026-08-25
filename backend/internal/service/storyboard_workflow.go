@@ -27,7 +27,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 	if err != nil {
 		return nil, nil, err
 	}
-	plan, assets, err := s.generateStoryboardPlan(ctx, task, input, input.ShotDuration, input.ShotCount)
+	plan, _, err := s.generateStoryboardPlan(ctx, task, input, input.ShotDuration, input.ShotCount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,11 +44,6 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 		if promptErr != nil {
 			return nil, nil, promptErr
 		}
-		matchedAssets := matchStoryboardAssets(assets, shot.AssetTags)
-		referenceNodeIDs := make([]string, 0, len(matchedAssets))
-		for _, asset := range matchedAssets {
-			referenceNodeIDs = append(referenceNodeIDs, asset.ID)
-		}
 		rows = append(rows, map[string]any{
 			"shotNumber": index + 1, "durationSeconds": shot.Duration, "plotDescription": shot.Description,
 			"dialogue": shot.Dialogue, "characters": storyboardRowCharacters(shot, input.Characters), "shotSize": shot.ShotSize, "emotion": shot.Emotion,
@@ -58,7 +53,7 @@ func (s *Service) processStoryboardRowsTask(ctx context.Context, task model.Task
 			"camera": shot.Camera, "motion": shot.Motion, "timeBeats": shot.TimeBeats, "negativePrompt": shot.Negative,
 			"narrativeIntent": shot.Intent, "viewerPOV": shot.ViewerPOV, "performanceBlocking": shot.Performance,
 			"mustHave": shot.MustHave, "optionalDetails": shot.Optional, "continuityOut": shot.ContinuityOut,
-			"referenceNodeIds": referenceNodeIDs, "assetTags": shot.AssetTags,
+			"assetBindings": shot.AssetRefs,
 		})
 	}
 	return map[string]interface{}{"title": plan.Title, "rows": rows}, nil, nil
@@ -85,7 +80,7 @@ func (s *Service) repairStoryboardPlan(ctx context.Context, task model.Task, inp
 		plan, parseErr := parseAgentStoryboardPlan(repairedText)
 		if parseErr == nil {
 			normalizeAutomaticStoryboardDurations(&plan, shotDuration)
-			parseErr = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters)
+			parseErr = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters, input.CanvasAssets)
 		}
 		if parseErr == nil {
 			return plan, nil
@@ -119,10 +114,11 @@ func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, i
 	if err := validateStoryboardContext(input.ProjectStyle, input.Characters); err != nil {
 		return agentStoryboardPlan{}, nil, err
 	}
-	assets := input.CanvasAssets
+	assets := normalizeStoryboardAssets(input.CanvasAssets)
 	if len(assets) == 0 {
-		assets = extractStoryboardAssets(input.CanvasSnapshot)
+		assets = normalizeStoryboardAssets(extractStoryboardAssets(input.CanvasSnapshot))
 	}
+	input.CanvasAssets = assets
 	config, err := s.resolveProviderConfig(input.Config)
 	if err != nil {
 		return agentStoryboardPlan{}, nil, err
@@ -140,7 +136,7 @@ func (s *Service) generateStoryboardPlan(ctx context.Context, task model.Task, i
 	plan, err := parseAgentStoryboardPlan(text)
 	if err == nil {
 		normalizeAutomaticStoryboardDurations(&plan, shotDuration)
-		err = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters)
+		err = validateStoryboardPlan(plan, shotDuration, shotCount, input.Characters, assets)
 	}
 	if err != nil {
 		plan, err = s.repairStoryboardPlan(ctx, task, input, config, text, err, shotDuration, shotCount)
@@ -178,7 +174,7 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 			return nil, nil, err
 		}
 		shotID := fmt.Sprintf("%s-shot-%d", prefix, index+1)
-		matchedAssets := matchStoryboardAssetsForShot(assets, shot)
+		matchedAssets := resolveStoryboardAssets(assets, shot.AssetRefs)
 		assetIDs := make([]string, 0, len(matchedAssets))
 		for _, asset := range matchedAssets {
 			assetIDs = append(assetIDs, asset.ID)
@@ -193,7 +189,7 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 				"prompt":                videoPrompt,
 				"composerContent":       shotComposerContent(videoPrompt, matchedAssets),
 				"videoEditOperation":    "text_to_video",
-				"assetTags":             shot.AssetTags,
+				"assetBindings":         shot.AssetRefs,
 				"referenceAssetNodeIds": assetIDs,
 				"status":                "idle",
 			}),
@@ -203,7 +199,7 @@ func (s *Service) buildAgentStoryboardResult(task model.Task, plan agentStoryboa
 		for _, asset := range matchedAssets {
 			ops = append(ops, connectOp(asset.ID, shotID))
 		}
-		resultShots = append(resultShots, map[string]any{"title": shot.Title, "description": shot.Description, "assetTags": shot.AssetTags, "referenceAssetNodeIds": assetIDs})
+		resultShots = append(resultShots, map[string]any{"title": shot.Title, "description": shot.Description, "assetBindings": shot.AssetRefs, "referenceAssetNodeIds": assetIDs})
 	}
 	ops = append(ops, map[string]any{"type": "select_nodes", "ids": shotIDs(prefix, len(plan.Shots))})
 	result := map[string]any{

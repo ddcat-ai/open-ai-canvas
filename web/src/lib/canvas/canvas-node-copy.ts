@@ -23,7 +23,7 @@ function copyStoryboardRow(row: StoryboardRow, idMap: ReadonlyMap<string, string
             ...character,
             characterImageNodeId: remapReferenceId(character.characterImageNodeId, idMap),
         })),
-        referenceNodeIds: remapReferenceIds(row.referenceNodeIds || [], idMap) || [],
+        assetBindings: (row.assetBindings || []).map((binding) => ({ ...binding, nodeId: remapReferenceId(binding.nodeId, idMap)! })),
         imageNodeId,
         videoNodeId,
         status: hasCopiedOutput ? row.status : "idle",
