@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FocusEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Drawer, Modal, Popover, Spin, Tooltip } from "antd";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
+import { Reorder } from "motion/react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, FolderOpen, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Music2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
 import { Link } from "react-router";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -469,6 +470,10 @@ export default function CreatePage() {
         if (reference) setPrompt((current) => removeCreationReferenceTokens(current, [reference]));
     };
 
+    const reorderAttachments = useCallback((next: CreationAttachment[]) => {
+        setAttachments(next);
+    }, []);
+
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
@@ -829,6 +834,7 @@ export default function CreatePage() {
         maxReferences,
         references: mentionReferences,
         onRemoveAttachment: removeAttachment,
+        onReorderAttachments: reorderAttachments,
         onOpenLibrary: () => setLibraryOpen(true),
         fileInputRef,
         onFileChange: handleFileChange,
@@ -1064,24 +1070,20 @@ function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: 
     return <Modal open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width={type === "video" ? "min(1160px, calc(100vw - 32px))" : "min(980px, calc(100vw - 32px))"} onCancel={onClose} className="creation-media-preview-modal" styles={{ body: { padding: 0 } }}>{url ? type === "video" ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : <img className="creation-media-preview-image" src={url} alt="媒体预览" /> : null}</Modal>;
 }
 
-function CreationAttachmentThumbnail({ item, primary = false, canAddMore = false, onPreview, onRemove, onAdd }: {
+function CreationAttachmentThumbnail({ item, onPreview, onRemove }: {
     item: CreationAttachment;
-    primary?: boolean;
-    canAddMore?: boolean;
     onPreview: (type: "image" | "video", url: string) => void;
     onRemove: (id: string) => void;
-    onAdd?: () => void;
 }) {
     const kind = creationAttachmentKind(item);
     const previewable = kind === "image" || kind === "video";
     const url = (kind === "video" ? item.url : item.previewUrl) || "";
-    return <div className={primary ? "creation-chat-reference is-paper creation-chat-reference-media" : "creation-chat-attachment"}>
-        <button type="button" className={`creation-chat-attachment-preview${previewable ? "" : " is-file"}`} onClick={() => { if (previewable) onPreview(kind === "video" ? "video" : "image", url); }} aria-label={previewable ? `放大预览 ${item.name}` : item.name} disabled={previewable && !url}>
+    return <div className="creation-reference-card-content">
+        <button type="button" className={`creation-reference-card-preview${previewable ? "" : " is-file"}`} onClick={() => { if (previewable) onPreview(kind === "video" ? "video" : "image", url); }} aria-label={previewable ? `放大预览 ${item.name}` : item.name} disabled={previewable && !url}>
             {kind === "video" ? <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} /> : kind === "image" ? <img src={item.previewUrl} alt={item.name} /> : <span className="creation-chat-file-icon">{kind === "audio" ? <Music2 /> : <FileText />}<em>{item.name}</em></span>}
             {previewable ? <span aria-hidden="true"><Maximize2 /></span> : null}
         </button>
-        <button type="button" className="creation-chat-attachment-remove" onClick={() => onRemove(item.id)} aria-label={`移除 ${item.name}`}><X /></button>
-        {primary && canAddMore && onAdd ? <Tooltip title="添加更多参考内容"><button type="button" className="creation-chat-reference-add" onClick={onAdd} aria-label="添加更多参考内容"><Plus /></button></Tooltip> : null}
+        <button type="button" className="creation-reference-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(item.id); }} aria-label={`移除 ${item.name}`}><X /></button>
     </div>;
 }
 
@@ -1096,6 +1098,7 @@ type ComposerProps = {
     maxReferences: number;
     references: CreationReference[];
     onRemoveAttachment: (id: string) => void;
+    onReorderAttachments: (attachments: CreationAttachment[]) => void;
     onOpenLibrary: () => void;
     fileInputRef: RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -1126,6 +1129,10 @@ function CreationComposer(props: ComposerProps) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
+    const attachmentTrackRef = useRef<HTMLUListElement>(null);
+    const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
+    const suppressAttachmentClickRef = useRef(false);
+    const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: false, isDragging: false });
     const canSubmit = Boolean(props.prompt.trim()) && !props.busy;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
@@ -1149,10 +1156,65 @@ function CreationComposer(props: ComposerProps) {
     const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
-    const [primaryAttachment, ...secondaryAttachments] = props.attachments;
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
     const imageSettingsSupported = props.imageProfile.size.parameter !== "none" || props.imageProfile.quality.supported || props.imageProfile.maxOutputs > 1;
+    const updateTrackScrollState = useCallback(() => {
+        const track = attachmentTrackRef.current;
+        if (!track) return;
+        setTrackState((current) => ({
+            ...current,
+            canScrollLeft: track.scrollLeft > 1,
+            canScrollRight: track.scrollLeft + track.clientWidth < track.scrollWidth - 1,
+        }));
+    }, []);
+    const handleTrackMouseEnter = useCallback(() => {
+        if (window.matchMedia("(hover: hover)").matches) setTrackState((current) => ({ ...current, isExpanded: true }));
+    }, []);
+    const handleTrackMouseLeave = useCallback(() => {
+        if (!trackState.isDragging) setTrackState((current) => ({ ...current, isExpanded: false }));
+    }, [trackState.isDragging]);
+    const handleTrackFocus = useCallback(() => {
+        setTrackState((current) => ({ ...current, isExpanded: true }));
+    }, []);
+    const handleTrackBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+        if (!trackState.isDragging && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setTrackState((current) => ({ ...current, isExpanded: false }));
+        }
+    }, [trackState.isDragging]);
+    useEffect(() => {
+        const touchOnly = window.matchMedia("(hover: none)").matches;
+        setTrackState((current) => ({ ...current, isExpanded: touchOnly || current.isDragging }));
+        updateTrackScrollState();
+    }, [props.attachments.length, updateTrackScrollState]);
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(updateTrackScrollState);
+        return () => window.cancelAnimationFrame(frame);
+    }, [trackState.isExpanded, updateTrackScrollState]);
+    const beginCardDrag = (event: PointerEvent<HTMLElement>) => {
+        if (event.button !== 0 || props.busy) return;
+        if ((event.target as HTMLElement).closest(".creation-reference-card-remove")) return;
+        cardDragRef.current = { startX: event.clientX, startY: event.clientY, moved: false };
+    };
+    const endCardDrag = (event: PointerEvent<HTMLElement>) => {
+        const drag = cardDragRef.current;
+        if (!drag) return;
+        cardDragRef.current = null;
+        if (drag.moved) {
+            suppressAttachmentClickRef.current = true;
+            window.setTimeout(() => { suppressAttachmentClickRef.current = false; }, 0);
+        }
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        setTrackState((current) => ({ ...current, isDragging: false }));
+    };
+    const moveCardDrag = (event: PointerEvent<HTMLElement>) => {
+        const drag = cardDragRef.current;
+        if (!drag || drag.moved) return;
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 4) return;
+        drag.moved = true;
+        setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true }));
+    };
     const previewAttachment = (type: "image" | "video", url: string) => {
+        if (suppressAttachmentClickRef.current || cardDragRef.current?.moved) return;
         setPreviewType(type);
         setPreviewUrl(url);
     };
@@ -1160,13 +1222,52 @@ function CreationComposer(props: ComposerProps) {
         if (!canOptimizePrompt) setPromptOptimizerOpen(false);
     }, [canOptimizePrompt]);
 
+    const scrollAttachmentTrack = (direction: -1 | 1) => {
+        const track = attachmentTrackRef.current;
+        if (!track) return;
+        track.scrollBy({ left: direction * Math.max(track.clientWidth * 0.72, 120), behavior: "smooth" });
+        window.setTimeout(updateTrackScrollState, 180);
+    };
     const composer = <section className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
             <input ref={props.fileInputRef} type="file" hidden accept={creationUploadAccept(props.mode)} multiple onChange={props.onFileChange} />
-            {primaryAttachment ? <CreationAttachmentThumbnail item={primaryAttachment} primary canAddMore={canAddMoreReferences && !props.busy} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} onAdd={props.onOpenLibrary} /> : <Tooltip title={!referencesSupported ? "当前模型不支持参考媒体" : "从素材库选择参考内容"}><button type="button" className="creation-chat-reference is-paper" onClick={props.onOpenLibrary} disabled={props.busy || !referencesSupported} aria-label="打开素材库选择参考内容"><Plus /><span>参考内容</span></button></Tooltip>}
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter={false} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能" spellCheck disabled={props.busy} />
-                {secondaryAttachments.length ? <div className="creation-chat-attachment-strip">{secondaryAttachments.map((item) => <CreationAttachmentThumbnail key={item.id} item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />)}</div> : null}
+                {props.attachments.length || canAddMoreReferences ? <div className="creation-reference-track-wrapper">
+                    <div className="creation-reference-stack-shell" onMouseEnter={handleTrackMouseEnter} onMouseLeave={handleTrackMouseLeave} onFocus={handleTrackFocus} onBlur={handleTrackBlur}>
+                        {trackState.canScrollLeft ? <button type="button" className="creation-reference-track-button is-left" onClick={() => scrollAttachmentTrack(-1)} aria-label="向左浏览参考内容" title="向左浏览参考内容"><ChevronLeft aria-hidden="true" /></button> : null}
+                        <Reorder.Group<CreationAttachment[]>
+                            as="ul"
+                            ref={attachmentTrackRef}
+                            className={`creation-reference-track${trackState.isExpanded ? " is-expanded" : ""}${trackState.isDragging ? " is-dragging" : ""}${props.attachments.length ? "" : " is-empty"}`}
+                            axis="x"
+                            values={props.attachments}
+                            onReorder={props.onReorderAttachments}
+                            layoutScroll
+                            role="list"
+                            aria-label="参考内容轨道"
+                            onScroll={updateTrackScrollState}
+                        >
+                            {props.attachments.map((item) => <Reorder.Item<CreationAttachment>
+                                key={item.id}
+                                value={item}
+                                layout="position"
+                                drag={!props.busy}
+                                className="creation-reference-stack-card"
+                                onPointerDown={beginCardDrag}
+                                onPointerMove={moveCardDrag}
+                                onPointerUp={endCardDrag}
+                                onPointerCancel={endCardDrag}
+                                onDragStart={() => setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true }))}
+                                onDragEnd={() => setTrackState((current) => ({ ...current, isDragging: false, isExpanded: true }))}
+                            >
+                                <CreationAttachmentThumbnail item={item} onPreview={previewAttachment} onRemove={props.onRemoveAttachment} />
+                            </Reorder.Item>)}
+                            {canAddMoreReferences ? <li className="creation-reference-add-slot"><Tooltip title="添加更多参考内容"><button type="button" className="creation-reference-add-button" onClick={props.onOpenLibrary} disabled={props.busy} aria-label="添加更多参考内容"><Plus aria-hidden="true" /></button></Tooltip></li> : null}
+                        </Reorder.Group>
+                        {trackState.canScrollRight ? <button type="button" className="creation-reference-track-button is-right" onClick={() => scrollAttachmentTrack(1)} aria-label="向右浏览参考内容" title="向右浏览参考内容"><ChevronRight aria-hidden="true" /></button> : null}
+                    </div>
+                </div> : null}
             </div>
         </div>
         <footer className="creation-chat-dock">
