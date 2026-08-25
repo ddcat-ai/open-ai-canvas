@@ -81,6 +81,14 @@ type providerConfig struct {
 	AudioInstructions     string                 `json:"audioInstructions"`
 	SystemPrompt          string                 `json:"systemPrompt"`
 	CapabilityConfig      *ModelCapabilityConfig `json:"capabilityConfig"`
+	WorkflowID            string                 `json:"workflowId"`
+	WebappID              string                 `json:"webappId"`
+	WorkflowJSON          map[string]interface{} `json:"workflowJson"`
+	WorkflowFields        []WorkflowField        `json:"workflowFields"`
+	BridgeID              string                 `json:"bridgeId"`
+	RunningHubUseWallet   bool                   `json:"runningHubUseWallet"`
+	RunningHubWalletKey   string                 `json:"runningHubWalletApiKey"`
+	RunningHubUploadKey   string                 `json:"runningHubUploadApiKey"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -286,6 +294,18 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	}
 	input.Config = config
 	ctx = withProviderOutboundPolicy(ctx, input.Config)
+	if isWorkflowProviderInterface(input.Config.InterfaceType) {
+		if err := validateWorkflowProviderConfig(input.Mode, input.Config); err != nil {
+			return nil, err
+		}
+		// 工作流参数由工作流字段定义校验，普通模型能力配置不能覆盖它们。
+		if resumedProviderRequestID(ctx) == "" || isComfyBridgeInterface(input.Config.InterfaceType) {
+			if err := s.hydrateGenerationMedia(userID, &input, false); err != nil {
+				return nil, err
+			}
+		}
+		return s.runWorkflowProviderTask(ctx, input)
+	}
 	if input.Mode == "image" && input.Metadata != nil {
 		if err := s.applyGenerationStyleProfile(userID, taskProjectID, &input); err != nil {
 			return nil, err
@@ -992,6 +1012,14 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		return providerConfig{}, err
 	}
 	config.Headers = headers
+	if isComfyBridgeInterface(config.InterfaceType) {
+		config.BaseURL = "bridge://local"
+		config.APIKey = ""
+		return config, nil
+	}
+	if isRunningHubInterface(config.InterfaceType) && strings.TrimSpace(config.BaseURL) == "" {
+		config.BaseURL = "https://www.runninghub.cn"
+	}
 	channelID := strings.TrimSpace(config.ChannelID)
 	if channelID == "" {
 		channelID = systemChannelIDFromBaseURL(config.BaseURL)

@@ -1,4 +1,4 @@
-import { Clapperboard, Folder, FolderOpen, Image as ImageIcon, Layers3, Music2, Palette, PanelTop, Pencil, Type, UploadCloud, UserRound, Video } from "lucide-react";
+import { Clapperboard, Folder, FolderOpen, Image as ImageIcon, Layers3, Music2, Palette, PanelTop, Pencil, Type, UploadCloud, UserRound, Video, Workflow } from "lucide-react";
 
 import { getNodeIcon, getNodeLabel } from "@/lib/canvas/node-registry";
 import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
@@ -39,6 +39,8 @@ export const addNodeMenuCommands: AddNodeMenuCommand[] = [
     extensionCommand(CanvasNodeType.Compare, 50),
     extensionCommand(CanvasNodeType.Chart, 60),
     extensionCommand(CanvasNodeType.ColorGrade, 70),
+    // 云端和本地工作流共用独立配置节点，不进入基础模型节点的渠道选择。
+    { id: "workflow", label: "工作流", icon: <Workflow />, section: "workflow", defaultOrder: 10, applicable: (ctx) => ctx.workspaceMode !== "simple", run: (ctx) => ctx.handlers.onAddWorkflow() },
     // 导入资源
     { id: "upload", label: "上传文件", icon: <UploadCloud />, section: "resource", defaultOrder: 10, run: (ctx) => ctx.handlers.onUpload() },
     { id: "project-character", label: "添加角色卡", icon: <UserRound />, section: "resource", defaultOrder: 20, applicable: (ctx) => ctx.isProjectLinked, run: (ctx) => ctx.handlers.onOpenProjectCharacters() },

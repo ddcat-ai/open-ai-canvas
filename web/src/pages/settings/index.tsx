@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, InputNumber, Select } from "antd";
-import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, RadioTower, SlidersHorizontal, SquareTerminal } from "lucide-react";
+import { ArrowLeft, Boxes, Bug, Cloud, MessageSquareText, MonitorUp, RadioTower, SlidersHorizontal, SquareTerminal, Workflow } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -10,17 +10,21 @@ import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
 export { UserLocalChannelFields, UserLocalChannelSwitch, userLocalChannelChangePatch, userLocalChannelFormOwner } from "./channel-settings-pane";
+import { ComfyUIBridgeSettingsPane } from "./comfyui-bridge-settings-pane";
 import { ModelDefaultGrid } from "./model-default-grid";
 import { LocalCliSettings } from "./local-cli-settings";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 import DiagnosticsPanel from "./diagnostics-panel";
+import { RunningHubSettingsPane } from "./runninghub-settings-pane";
 
-type ConfigSectionKey = "local-cli" | "channels" | "models" | "preferences" | "prompts" | "storage" | "diagnostics";
+type ConfigSectionKey = "local-cli" | "channels" | "models" | "runninghub" | "comfyui" | "preferences" | "prompts" | "storage" | "diagnostics";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
     { key: "local-cli", label: "本机工具", description: "连接 Runtime 与官方 CLI", icon: <SquareTerminal className="size-4" /> },
     { key: "channels", label: "自定义渠道", description: "连接你自己的模型服务", icon: <RadioTower className="size-4" /> },
     { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
+    { key: "runninghub", label: "RunningHub 工作流", description: "独立的云端工作流配置", icon: <Workflow className="size-4" /> },
+    { key: "comfyui", label: "ComfyUI Bridge", description: "连接本机、局域网或远程 ComfyUI", icon: <MonitorUp className="size-4" /> },
     { key: "preferences", label: "生成偏好", description: "画布、视频与音频默认值", icon: <SlidersHorizontal className="size-4" /> },
     { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
     { key: "storage", label: "我的对象存储", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
@@ -82,7 +86,11 @@ export default function SettingsPage() {
             return;
         }
         const hasReadyLocalRuntime = effectiveConfig.channels.some((channel) => channel.transport === "local-runtime" && channel.enabled !== false && Boolean(channel.localModels?.length));
-        if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime) {
+        const workflowReady = Boolean(
+            (config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim())
+            || (config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim()),
+        );
+        if (!effectiveConfig.channels.some(isChannelReady) && !hasReadyLocalRuntime && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
             message.error(customChannelsEnabled ? (shouldPromptContinue ? "请先完成至少一个渠道的 Base URL、API Key 和模型配置" : "当前没有可用渠道，请先完成连接信息和模型配置") : "当前没有可用的系统模型，请联系管理员配置系统渠道");
             return;
@@ -107,6 +115,8 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
+        runninghub: <SettingsPane><RunningHubSettingsPane /></SettingsPane>,
+        comfyui: <SettingsPane><ComfyUIBridgeSettingsPane /></SettingsPane>,
         preferences: (
             <SettingsPane>
                 <div className="settings-pane-header">

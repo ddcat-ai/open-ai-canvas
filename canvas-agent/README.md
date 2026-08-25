@@ -26,6 +26,39 @@ Connect token: xxxxxx
 
 在画布右上角点击 `Agent`，填入地址和 token 后连接。
 
+## ComfyUI Bridge
+
+Bridge 让云端后端把工作流请求投递到运行 Bridge 的机器，再由该进程访问 ComfyUI。`--comfy` 可填写本机 `127.0.0.1:8188`、局域网地址或公网 HTTP/HTTPS 地址，只要运行 Bridge 的机器能够访问即可；网页和云端不直接访问该地址。
+
+部署镜像会用 Go 标准库把 Bridge 交叉编译成站点根目录下的 Windows x64、Linux x64 和 Linux ARM64 原生程序。它们不捆绑 Node.js/Bun 运行时，运行 Bridge 的机器不需要安装 Node.js、npm 或项目源码；画布“设置 → ComfyUI Bridge”会按平台生成带当前地址、令牌和工作流目录的完整命令。
+
+```powershell
+$bridgeDir = Join-Path $env:LOCALAPPDATA "OpenAICanvas"
+New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
+$bridgeFile = Join-Path $bridgeDir "OpenAICanvas-ComfyBridge.exe"
+Invoke-WebRequest "https://你的画布服务地址/OpenAICanvas-ComfyBridge.exe" -OutFile $bridgeFile
+$bridgeStream = [System.IO.File]::OpenRead($bridgeFile)
+try { $bridgeHeader0 = $bridgeStream.ReadByte(); $bridgeHeader1 = $bridgeStream.ReadByte() } finally { $bridgeStream.Dispose() }
+if ($bridgeHeader0 -ne 0x4D -or $bridgeHeader1 -ne 0x5A) { throw "Bridge 下载失败：服务器未返回 Windows 可执行程序，请联系管理员重新部署 Bridge" }
+& $bridgeFile --server "https://你的画布服务地址" --token "你的 Bridge Token" --comfy "http://127.0.0.1:8188" --workflow-dir "D:\\ComfyUI\\workflows"
+```
+
+Linux x64 云服务器（ARM64 服务器请把文件名中的 `amd64` 改为 `arm64`）：
+
+```bash
+bridge_dir="./openai-canvas-bridge"
+mkdir -p "$bridge_dir"
+curl --fail --location "https://你的画布服务地址/OpenAICanvas-ComfyBridge-linux-amd64" --output "$bridge_dir/OpenAICanvas-ComfyBridge-linux-amd64"
+chmod +x "$bridge_dir/OpenAICanvas-ComfyBridge-linux-amd64"
+"$bridge_dir/OpenAICanvas-ComfyBridge-linux-amd64" --server "https://你的画布服务地址" --token "你的 Bridge Token" --comfy "http://127.0.0.1:8188" --workflow-dir "/opt/ComfyUI/user/default/workflows"
+```
+
+如果 ComfyUI 和 Bridge 都在云端 Linux，`--comfy` 建议使用 `http://127.0.0.1:8188`，不要把 ComfyUI 的 8188 端口暴露给公网。生产环境可将上面的 Bridge 命令配置为 systemd 服务，确保云服务器重启后自动恢复；Bridge Token 应通过受限的环境文件或服务管理器注入，不要写进公开脚本。
+
+工作流可以在“设置 → ComfyUI Bridge”中选择 Bridge 发现的 API JSON、粘贴 ComfyUI API 格式 JSON，也可以只填写 `workflowId`，让 Bridge 从 `--workflow-dir` 下读取同名 `.json` 文件。Bridge 会分析本机工作流，并把可配置字段回传给可视化映射面板；面板可设置任务提示词、固定文本、参考图片/视频/音频顺序、蒙版、尺寸、宽高、数量、质量、视频时长、音频参数、随机 Seed 以及必选/可选规则。未保存字段映射时，Bridge 也会在执行前按同一规则分析工作流；正向 Prompt 优先于负向文本节点。参考素材会先上传到本机 ComfyUI，多余素材或缺失的必选槽位会直接报错，可选媒体缺失时不会继续使用工作流模板中的旧文件名。映射同时兼容原项目配置里的 `node`、`input`、`default` 和 `bind_prompt` 字段。RunningHub 工作流在独立的“设置 → RunningHub 工作流”中管理，不属于模型渠道。
+
+Bridge Token 只用于主动轮询和回传结果，不要提交到 Git 或写入公开日志。Bridge 执行长任务时每 30 秒发送心跳；远程参考素材只允许解析到公网地址，`127.0.0.1`、localhost、私网和链路本地地址会被拒绝。当前队列和结果等待状态保存在后端进程内存中；后端或 Bridge 重启会丢失未完成的 Bridge 请求。工作流请求 JSON 上限为 16MB，结果 JSON（含 base64 媒体）上限为 64MB，超大视频建议改为资源上传链路。
+
 Codex app 插件会读取启动输出里的 Local URL 和 Connect token，并直接打开画布网页地址；Canvas Agent 不负责生成画布打开 URL。
 
 Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接后，Canvas Agent 会记录该网页 Origin；之后其他 Origin 不能复用这个本地 Agent，除非用户清理 `~/.infinite-canvas/canvas-agent.json` 里的 `origins`。

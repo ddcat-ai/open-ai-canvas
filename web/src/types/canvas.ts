@@ -198,6 +198,12 @@ export type CanvasNodeMetadata = {
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;
     model?: string;
+    workflowProvider?: "model" | "runninghub" | "comfyui";
+    runningHubWorkflowId?: string;
+    runningHubWorkflowKind?: "workflow" | "app";
+    comfyBridgeWorkflowId?: string;
+    /** 当前画布节点覆盖的工作流动态字段，键为 source:* 或 field:nodeId:fieldName。 */
+    workflowParameters?: Record<string, unknown>;
     size?: string;
     quality?: string;
     transparentBackground?: string;

@@ -918,9 +918,14 @@ function InfiniteCanvasPage() {
         } else if (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Frame) {
             setDialogNodeId((current) => (current === node.id ? current : null));
         } else {
-            setDialogNodeId(node.id);
+            // 选择参考媒体时保留当前工作流配置面板，避免点击图片后配置“返回/消失”。
+            // 没有工作流配置面板时，媒体节点仍按原逻辑打开自己的面板。
+            setDialogNodeId((current) => {
+                const currentNode = current ? nodesRef.current.find((item) => item.id === current) : undefined;
+                return currentNode?.type === CanvasNodeType.Config ? current : node.id;
+            });
         }
-    }, []);
+    }, [nodesRef]);
 
     const handleCanvasDeselect = useCallback(() => {
         setContextMenu(null);
@@ -2073,6 +2078,7 @@ function InfiniteCanvasPage() {
                                     onAddFolder={createFolder}
                                     onAddDrawing={() => createNode(CanvasNodeType.Drawing)}
                                     onAddExtensionNode={(type) => createNode(type)}
+                                    onAddWorkflow={() => createNode(CanvasNodeType.Config)}
                                     onOpenDirector={() => createDirectorShot()}
                                     onUndo={undoCanvas}
                                     onRedo={redoCanvas}

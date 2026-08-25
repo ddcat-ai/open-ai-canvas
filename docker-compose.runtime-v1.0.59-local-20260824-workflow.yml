@@ -1,0 +1,25 @@
+# 工作流功能部署：仅替换应用镜像，继续使用生产外部数据卷。
+services:
+  backend:
+    image: open-ai-canvas-backend:v1.0.59-local-20260824-workflow
+    volumes: !override
+      - open-ai-canvas_backend-data:/data
+  web:
+    image: open-ai-canvas-web:v1.0.59-local-20260824-workflow
+  postgres:
+    volumes: !override
+      - open-ai-canvas_postgres-data:/var/lib/postgresql/data
+  redis:
+    volumes: !override
+      - open-ai-canvas_redis-data:/data
+
+volumes:
+  open-ai-canvas_backend-data:
+    external: true
+    name: open-ai-canvas_backend-data
+  open-ai-canvas_postgres-data:
+    external: true
+    name: open-ai-canvas_postgres-data
+  open-ai-canvas_redis-data:
+    external: true
+    name: open-ai-canvas_redis-data

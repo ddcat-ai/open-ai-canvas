@@ -73,6 +73,11 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	if err != nil {
 		return s.markProviderCancellationUncertain(task, "读取上游取消配置失败，费用待核对："+err.Error())
 	}
+	if isComfyBridgeInterface(input.Config.InterfaceType) {
+		// 云端只能移除尚未领取的请求；已经在本机执行的 ComfyUI 工作流无法可靠中止。
+		s.CancelComfyBridgeRequest(task.ProviderRequestID)
+		return s.markProviderCancellationUncertain(task, "本地 ComfyUI Bridge 不支持取消已领取工作流，执行状态待核对")
+	}
 	if !supportsProviderCancellation(input.Config.InterfaceType) {
 		return s.markProviderCancellationUncertain(task, "当前上游协议不支持取消，费用待核对")
 	}
