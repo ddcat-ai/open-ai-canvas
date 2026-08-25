@@ -124,6 +124,7 @@ export function useCanvasGenerationExecutor({
                                       taskCreatedAt: new Date().toISOString(),
                                       errorDetails: undefined,
                                       generationErrorCode: undefined,
+                                      resourceReloadAvailable: undefined,
                                       failedPromptFingerprint: undefined,
                                   },
                               }
@@ -235,7 +236,7 @@ export function useCanvasGenerationExecutor({
             if (markSourceStatus)
                 setNodes((current) =>
                     current.map((node) =>
-                        node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: statusPrompt, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined } } : node,
+                        node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: statusPrompt, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : node,
                     ),
                 );
 

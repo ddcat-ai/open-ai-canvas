@@ -97,6 +97,7 @@ export async function executeImageGeneration({
             ...styleMetadata,
             imageBatchExpanded: count > 1 ? true : undefined,
             generationErrorCode: undefined,
+            resourceReloadAvailable: undefined,
             failedPromptFingerprint: undefined,
         },
     };
@@ -115,6 +116,7 @@ export async function executeImageGeneration({
             ...generationMetadata,
             ...styleMetadata,
             generationErrorCode: undefined,
+            resourceReloadAvailable: undefined,
             failedPromptFingerprint: undefined,
         },
     }));

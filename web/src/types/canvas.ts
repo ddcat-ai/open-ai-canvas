@@ -192,6 +192,7 @@ export type CanvasNodeMetadata = {
     locked?: boolean;
     errorDetails?: string;
     generationErrorCode?: string;
+    resourceReloadAvailable?: boolean;
     failedPromptFingerprint?: string;
     fontSize?: number;
     generationMode?: CanvasGenerationMode;

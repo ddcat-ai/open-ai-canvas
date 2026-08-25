@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 
-import { applyGenerationTaskResultToNodes, generationTaskNodeId } from "@/lib/canvas/canvas-generation-task-sync";
+import { applyGenerationTaskResultToNodes, generationTaskCanReloadResource, generationTaskNodeId } from "@/lib/canvas/canvas-generation-task-sync";
 import { applyCanvasGenerationTaskNodeEffect, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskNode, ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
@@ -120,6 +120,7 @@ export async function recoverCanvasGenerationTaskNode(input: {
                                   status: NODE_STATUS_SUCCESS,
                                   errorDetails: undefined,
                                   generationErrorCode: undefined,
+                                  resourceReloadAvailable: undefined,
                                   failedPromptFingerprint: undefined,
                                   storyboard: { rows: result.rows, visibleColumns: cinematicStoryboardColumns(item.metadata?.storyboard?.visibleColumns), referenceNodeIds: item.metadata?.storyboard?.referenceNodeIds || [] },
                               },
@@ -261,7 +262,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                             ...node.metadata,
                             ...generationTaskMetadata(task),
                             status: failed ? NODE_STATUS_ERROR : hasCompletedContent ? NODE_STATUS_SUCCESS : NODE_STATUS_LOADING,
-                            ...(failure || { errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined }),
+                            ...(failure || { errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined }),
                         },
                     };
                 }),
@@ -281,30 +282,37 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
 
     const applyGenerationTaskResult = useCallback(
         async (nodeId: string, task: GenerationTask) => {
-            if (!task.outputs?.length && task.type === "canvas_text") {
-                const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
-                if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
-                setNodes((current) => current.map((node) => (node.id === applied.nodeId ? applied.node! : node)));
-                return;
+            try {
+                if (!task.outputs?.length && task.type === "canvas_text") {
+                    const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
+                    if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
+                    setNodes((current) => current.map((node) => (node.id === applied.nodeId ? applied.node! : node)));
+                    return;
+                }
+                await consumeGenerationTaskNode(
+                    task,
+                    nodeId,
+                    0,
+                    async ({ task: materialized, output, effectKey, signal }) => {
+                        await applyCanvasGenerationTaskNodeEffect({
+                            projectId,
+                            nodeId,
+                            task: materialized,
+                            output,
+                            effectKey,
+                            signal,
+                            nodesRef,
+                            setNodes,
+                        });
+                    },
+                    { signal: consumerControllerRef.current.signal },
+                );
+            } catch (error) {
+                if (generationTaskCanReloadResource(task)) {
+                    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, resourceReloadAvailable: true } } : node)));
+                }
+                throw error;
             }
-            await consumeGenerationTaskNode(
-                task,
-                nodeId,
-                0,
-                async ({ task: materialized, output, effectKey, signal }) => {
-                    await applyCanvasGenerationTaskNodeEffect({
-                        projectId,
-                        nodeId,
-                        task: materialized,
-                        output,
-                        effectKey,
-                        signal,
-                        nodesRef,
-                        setNodes,
-                    });
-                },
-                { signal: consumerControllerRef.current.signal },
-            );
         },
         [nodesRef, projectId, setNodes],
     );

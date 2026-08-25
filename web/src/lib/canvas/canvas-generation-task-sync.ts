@@ -35,6 +35,11 @@ export function generationTaskMode(task: GenerationTask, fallback?: CanvasGenera
     return fallback || "image";
 }
 
+export function generationTaskCanReloadResource(task: GenerationTask) {
+    const mode = generationTaskMode(task);
+    return task.status === "succeeded" && (mode === "image" || mode === "video" || mode === "audio") && (Boolean(task.resultJson) || Boolean(task.outputs?.length));
+}
+
 export function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
     return {
         content: image.url,
@@ -46,6 +51,7 @@ export function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
         mimeType: image.mimeType,
         errorDetails: undefined,
         generationErrorCode: undefined,
+        resourceReloadAvailable: undefined,
         failedPromptFingerprint: undefined,
     };
 }
@@ -62,6 +68,7 @@ export function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
         durationMs: video.durationMs,
         errorDetails: undefined,
         generationErrorCode: undefined,
+        resourceReloadAvailable: undefined,
         failedPromptFingerprint: undefined,
     };
 }
@@ -76,6 +83,7 @@ export function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
         durationMs: audio.durationMs,
         errorDetails: undefined,
         generationErrorCode: undefined,
+        resourceReloadAvailable: undefined,
         failedPromptFingerprint: undefined,
     };
 }
@@ -162,7 +170,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     return {
         ...node,
         type: CanvasNodeType.Text,
-        metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, failedPromptFingerprint: undefined },
+        metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
     };
 }
 

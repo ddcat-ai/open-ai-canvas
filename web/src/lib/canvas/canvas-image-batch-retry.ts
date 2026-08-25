@@ -20,6 +20,7 @@ export function markImageBatchRetrying(rootId: string, childIds: string[], nodes
                 ...(node.id === rootId ? { batchFailedCount: childIds.length } : {}),
                 errorDetails: undefined,
                 generationErrorCode: undefined,
+                resourceReloadAvailable: undefined,
                 failedPromptFingerprint: undefined,
             },
         };
@@ -35,6 +36,7 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
             status: "error",
             errorDetails: original.metadata?.errorDetails || "重试请求未提交",
             generationErrorCode: original.metadata?.generationErrorCode,
+            resourceReloadAvailable: original.metadata?.resourceReloadAvailable,
             failedPromptFingerprint: original.metadata?.failedPromptFingerprint,
         },
     };
@@ -77,6 +79,7 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
         metadata.status = loading ? "loading" : failed ? "error" : "idle";
         metadata.errorDetails = failed?.metadata?.errorDetails;
         metadata.generationErrorCode = failed?.metadata?.generationErrorCode;
+        metadata.resourceReloadAvailable = failed?.metadata?.resourceReloadAvailable;
         metadata.failedPromptFingerprint = failed?.metadata?.failedPromptFingerprint;
     }
 
