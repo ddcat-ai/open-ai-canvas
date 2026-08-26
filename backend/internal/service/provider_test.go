@@ -1719,6 +1719,61 @@ func TestRunNewAPIChannel2VideoTaskReturnsTypedDeadlineWhenPollingWindowEnds(t *
 	}
 }
 
+func TestRunMiniMaxVideoTaskResumesOriginalProviderTaskWithoutAnotherPostOrReferenceValidation(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	paths := make([]string, 0, 2)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "GET /v2/query/video_generation/existing-minimax-task":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"task":{"status":"succeeded","content":{"url":"` + server.URL + `/video.mp4"}}}`))
+		case "GET /video.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	input := canvasGenerationInput{
+		Mode:            "video",
+		Prompt:          "test",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "MiniMax-H3", InterfaceType: string(model.ChannelInterfaceMiniMaxVideo)},
+		ReferenceImages: []providerMedia{{ID: "stored-reference"}},
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := withProviderAnalytics(context.Background(), nil, model.Task{
+		ID: "task-1", Type: "canvas_video", ProviderRequestID: "existing-minimax-task", InputJSON: string(inputJSON),
+	})
+	result, err := runMiniMaxVideoTask(ctx, input)
+	if err != nil {
+		t.Fatalf("runMiniMaxVideoTask() error = %v", err)
+	}
+	if result["video"] == nil {
+		t.Fatalf("result = %#v", result)
+	}
+	want := "GET /v2/query/video_generation/existing-minimax-task,GET /video.mp4"
+	if got := strings.Join(paths, ","); got != want {
+		t.Fatalf("paths = %q, want %q", got, want)
+	}
+}
+
+func TestRunMiniMaxVideoTaskReturnsTypedDeadlineWhenPollingWindowEnds(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	ctx = withProviderAnalytics(ctx, nil, model.Task{ID: "task-1", Type: "canvas_video", ProviderRequestID: "existing-minimax-task"})
+	_, err := runMiniMaxVideoTask(ctx, canvasGenerationInput{Prompt: "test"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("runMiniMaxVideoTask() error = %v, want context deadline exceeded", err)
+	}
+}
+
 func TestRunGeminiVeoVideoTaskUsesLongRunningOperation(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	paths := make([]string, 0, 3)

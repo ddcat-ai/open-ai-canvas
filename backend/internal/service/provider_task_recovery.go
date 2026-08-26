@@ -104,8 +104,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if err != nil {
 		return nil, err
 	}
-	if config.InterfaceType != string(model.ChannelInterfaceNewAPIChannel2) {
-		return nil, BadAuthRequest("该任务不使用 NewAPI Video Generations 协议")
+	protocol := model.ChannelInterfaceType(config.InterfaceType)
+	if protocol != model.ChannelInterfaceNewAPIChannel2 && protocol != model.ChannelInterfaceMiniMaxVideo {
+		return nil, BadAuthRequest("该视频协议不支持上游任务恢复")
 	}
 	input.Config = config
 	task.InputJSON = decryptedInput
@@ -130,7 +131,14 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 
 	queryCtx := withProviderAnalytics(ctx, s, *task)
 	queryCtx = withProviderOutboundPolicy(queryCtx, input.Config)
-	result, providerStatus, err := queryNewAPIChannel2VideoTask(queryCtx, input, providerRequestID)
+	var result map[string]interface{}
+	var providerStatus string
+	switch protocol {
+	case model.ChannelInterfaceNewAPIChannel2:
+		result, providerStatus, err = queryNewAPIChannel2VideoTask(queryCtx, input, providerRequestID)
+	case model.ChannelInterfaceMiniMaxVideo:
+		result, providerStatus, err = queryMiniMaxVideoTask(queryCtx, input, providerRequestID)
+	}
 	if err != nil {
 		_ = s.log(task.UserID, task.ID, "error", "人工查询上游视频任务失败", err.Error())
 		return nil, err

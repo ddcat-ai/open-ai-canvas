@@ -216,7 +216,15 @@ func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput s
 		return false
 	}
 	resolved, resolveErr := s.resolveProviderConfig(input.Config)
-	return resolveErr == nil && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	if resolveErr != nil {
+		return false
+	}
+	switch model.ChannelInterfaceType(resolved.InterfaceType) {
+	case model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceMiniMaxVideo:
+		return true
+	default:
+		return false
+	}
 }
 
 func taskTimeoutMessage(taskType string) string {

@@ -2428,51 +2428,51 @@ func runMiniMaxVideoTask(ctx context.Context, input canvasGenerationInput) (map[
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("MiniMax 视频提示词不能为空")
 	}
-	if len(input.ReferenceImages) > 9 || len(input.ReferenceVideos) > 3 || len(input.ReferenceAudios) > 3 {
-		return nil, errors.New("MiniMax 视频最多支持 9 张参考图、3 个参考视频和 3 个参考音频")
-	}
-	content := []miniMaxVideoContent{{Type: "text", Text: strings.TrimSpace(input.Prompt)}}
-	for index, image := range input.ReferenceImages {
-		url, err := miniMaxMediaURLValue(image)
-		if err != nil {
-			return nil, fmt.Errorf("MiniMax 参考图无效：%w", err)
-		}
-		role := "reference_image"
-		if len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0 && len(input.ReferenceImages) <= 2 {
-			if index == 0 {
-				role = "first_frame"
-			} else if index == 1 {
-				role = "last_frame"
-			}
-		}
-		content = append(content, miniMaxVideoContent{Type: "image_url", ImageURL: &miniMaxMediaURL{URL: url}, Role: role})
-	}
-	for _, video := range input.ReferenceVideos {
-		url, err := miniMaxMediaURLValue(video)
-		if err != nil {
-			return nil, fmt.Errorf("MiniMax 参考视频无效：%w", err)
-		}
-		content = append(content, miniMaxVideoContent{Type: "video_url", VideoURL: &miniMaxMediaURL{URL: url}, Role: "reference_video"})
-	}
-	for _, audio := range input.ReferenceAudios {
-		url, err := miniMaxMediaURLValue(audio)
-		if err != nil {
-			return nil, fmt.Errorf("MiniMax 参考音频无效：%w", err)
-		}
-		content = append(content, miniMaxVideoContent{Type: "audio_url", AudioURL: &miniMaxMediaURL{URL: url}, Role: "reference_audio"})
-	}
-	watermark := parseBool(input.Config.VideoWatermark, false)
-	frameMode := len(input.ReferenceImages) > 0 && len(input.ReferenceImages) <= 2 && len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0
-	body := miniMaxVideoRequest{
-		Model:         input.Config.Model,
-		Content:       content,
-		Resolution:    normalizeMiniMaxResolution(input.Config.VQuality),
-		Duration:      normalizeMiniMaxDuration(input.Config.VideoSeconds),
-		Ratio:         normalizeMiniMaxRatio(input.Config.Size, frameMode),
-		AIGCWatermark: &watermark,
-	}
 	id := resumedProviderRequestID(ctx)
 	if id == "" {
+		if len(input.ReferenceImages) > 9 || len(input.ReferenceVideos) > 3 || len(input.ReferenceAudios) > 3 {
+			return nil, errors.New("MiniMax 视频最多支持 9 张参考图、3 个参考视频和 3 个参考音频")
+		}
+		content := []miniMaxVideoContent{{Type: "text", Text: strings.TrimSpace(input.Prompt)}}
+		for index, image := range input.ReferenceImages {
+			url, err := miniMaxMediaURLValue(image)
+			if err != nil {
+				return nil, fmt.Errorf("MiniMax 参考图无效：%w", err)
+			}
+			role := "reference_image"
+			if len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0 && len(input.ReferenceImages) <= 2 {
+				if index == 0 {
+					role = "first_frame"
+				} else if index == 1 {
+					role = "last_frame"
+				}
+			}
+			content = append(content, miniMaxVideoContent{Type: "image_url", ImageURL: &miniMaxMediaURL{URL: url}, Role: role})
+		}
+		for _, video := range input.ReferenceVideos {
+			url, err := miniMaxMediaURLValue(video)
+			if err != nil {
+				return nil, fmt.Errorf("MiniMax 参考视频无效：%w", err)
+			}
+			content = append(content, miniMaxVideoContent{Type: "video_url", VideoURL: &miniMaxMediaURL{URL: url}, Role: "reference_video"})
+		}
+		for _, audio := range input.ReferenceAudios {
+			url, err := miniMaxMediaURLValue(audio)
+			if err != nil {
+				return nil, fmt.Errorf("MiniMax 参考音频无效：%w", err)
+			}
+			content = append(content, miniMaxVideoContent{Type: "audio_url", AudioURL: &miniMaxMediaURL{URL: url}, Role: "reference_audio"})
+		}
+		watermark := parseBool(input.Config.VideoWatermark, false)
+		frameMode := len(input.ReferenceImages) > 0 && len(input.ReferenceImages) <= 2 && len(input.ReferenceVideos) == 0 && len(input.ReferenceAudios) == 0
+		body := miniMaxVideoRequest{
+			Model:         input.Config.Model,
+			Content:       content,
+			Resolution:    normalizeMiniMaxResolution(input.Config.VQuality),
+			Duration:      normalizeMiniMaxDuration(input.Config.VideoSeconds),
+			Ratio:         normalizeMiniMaxRatio(input.Config.Size, frameMode),
+			AIGCWatermark: &watermark,
+		}
 		var created map[string]interface{}
 		if err := postJSON(ctx, input.Config, "/v2/video_generation", body, &created); err != nil {
 			return nil, err
@@ -2486,36 +2486,52 @@ func runMiniMaxVideoTask(ctx context.Context, input canvasGenerationInput) (map[
 		return nil, errors.New("MiniMax 视频接口没有返回任务 ID")
 	}
 	for deadline := providerPollingDeadline(ctx); time.Now().Before(deadline); {
-		var response map[string]interface{}
-		if err := getJSON(ctx, input.Config, "/v2/query/video_generation/"+url.PathEscape(id), &response); err != nil {
+		result, _, err := queryMiniMaxVideoTask(withProviderRequestKind(ctx, "poll"), input, id)
+		if err != nil {
 			return nil, err
 		}
-		task, _ := response["task"].(map[string]interface{})
-		if task == nil {
-			task = response
-		}
-		status := strings.ToLower(stringField(task, "status"))
-		if status == "succeeded" || status == "completed" {
-			contentValue, _ := task["content"].(map[string]interface{})
-			videoURL := stringField(contentValue, "url")
-			if videoURL == "" {
-				return nil, fmt.Errorf("MiniMax 视频任务 %s 已完成但没有返回视频 URL", id)
-			}
-			data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
-			if err != nil {
-				return nil, fmt.Errorf("MiniMax 视频结果下载失败（任务 %s）：%w", id, err)
-			}
-			mimeType = normalizedMediaMimeType(mimeType, data)
-			return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, nil
-		}
-		if status == "failed" || status == "cancelled" {
-			return nil, fmt.Errorf("MiniMax 视频生成失败（任务 %s）：%s", id, miniMaxTaskError(task))
+		if result != nil {
+			return result, nil
 		}
 		if err := sleepContext(ctx, 2500*time.Millisecond); err != nil {
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("MiniMax 视频生成超时（任务 %s）", id)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, context.DeadlineExceeded
+}
+
+// 单次查询只读取已有 MiniMax 任务，自动续查和人工恢复共用这条路径。
+func queryMiniMaxVideoTask(ctx context.Context, input canvasGenerationInput, id string) (map[string]interface{}, string, error) {
+	var response map[string]interface{}
+	if err := getJSON(ctx, input.Config, "/v2/query/video_generation/"+url.PathEscape(id), &response); err != nil {
+		return nil, "", err
+	}
+	task, _ := response["task"].(map[string]interface{})
+	if task == nil {
+		task = response
+	}
+	status := strings.ToLower(strings.TrimSpace(stringField(task, "status")))
+	switch status {
+	case "succeeded", "completed":
+		contentValue, _ := task["content"].(map[string]interface{})
+		videoURL := stringField(contentValue, "url")
+		if videoURL == "" {
+			return nil, status, fmt.Errorf("MiniMax 视频任务 %s 已完成但没有返回视频 URL", id)
+		}
+		data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), input.Config, videoURL)
+		if err != nil {
+			return nil, status, fmt.Errorf("MiniMax 视频结果下载失败（任务 %s）：%w", id, err)
+		}
+		mimeType = normalizedMediaMimeType(mimeType, data)
+		return map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}}, status, nil
+	case "failed", "cancelled":
+		return nil, status, fmt.Errorf("MiniMax 视频生成失败（任务 %s）：%s", id, miniMaxTaskError(task))
+	default:
+		return nil, status, nil
+	}
 }
 
 func miniMaxMediaURLValue(media providerMedia) (string, error) {
