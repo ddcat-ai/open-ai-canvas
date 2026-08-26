@@ -1945,6 +1945,10 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 }
 
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
+	resolution := input.Config.VQuality
+	if canonical := videoResolutionNameRequest(input.VideoCapability, resolution); canonical != "" {
+		resolution = canonical
+	}
 	request := protocol.GenerationRequest{
 		Model:         input.Config.Model,
 		Prompt:        input.Prompt,
@@ -1952,17 +1956,22 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
 		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
 		AspectRatio:   input.Config.Size,
-		Resolution:    input.Config.VQuality,
+		Resolution:    resolution,
 		Quality:       input.Config.Quality,
 		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),
 		Watermark:     parseBool(input.Config.VideoWatermark, false),
-		Operation:     metadataString(input.Metadata, "videoOperation"),
+		Operation:     metadataString(input.Metadata, "videoEditOperation"),
 		Extra: map[string]any{
 			"videoSeconds": input.Config.VideoSeconds,
 			"audioVoice":   input.Config.AudioVoice,
 			"audioFormat":  input.Config.AudioFormat,
 			"count":        input.Config.Count,
 		},
+	}
+	for _, key := range []string{"negative_prompt", "web_search", "seed"} {
+		if value, ok := input.Metadata[key]; ok {
+			request.Extra[key] = value
+		}
 	}
 	if duration, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds)); err == nil && duration > 0 {
 		request.Duration = duration

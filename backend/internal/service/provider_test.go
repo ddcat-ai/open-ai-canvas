@@ -311,6 +311,25 @@ func TestRunAgentToolTaskFallsBackToolChoice(t *testing.T) {
 	}
 }
 
+func TestProtocolRequestFromInputUsesCanonicalVideoResolution(t *testing.T) {
+	request := protocolRequestFromInput(canvasGenerationInput{
+		Config:          providerConfig{VQuality: "480"},
+		VideoCapability: &VideoCapabilityConfig{Resolutions: []string{"480p", "720p", "1080p"}},
+		Metadata: map[string]interface{}{
+			"videoEditOperation": "image_to_video",
+			"negative_prompt":    "blur",
+			"web_search":         true,
+			"seed":               42,
+		},
+	})
+	if request.Resolution != "480p" {
+		t.Fatalf("resolution = %q, want 480p", request.Resolution)
+	}
+	if request.Operation != "image_to_video" || request.Extra["negative_prompt"] != "blur" || request.Extra["web_search"] != true || request.Extra["seed"] != 42 {
+		t.Fatalf("request metadata = operation:%q extra:%#v", request.Operation, request.Extra)
+	}
+}
+
 func TestPostStreamingTextSetsStreamHeaders(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

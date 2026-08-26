@@ -697,7 +697,7 @@ func parseAsyncCreate(payload map[string]any) (CreateResult, error) {
 	if status == "" {
 		status = StatusPending
 	}
-	return CreateResult{TaskID: id, Status: status, Message: firstString(payload, "message", "error")}, nil
+	return CreateResult{TaskID: id, Status: status, Message: asyncMessage(payload)}, nil
 }
 
 func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capability) (PollResult, error) {
@@ -724,11 +724,16 @@ func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capab
 		references = append(references, mediaFromArray([]any{content}, capability)...)
 	}
 	keys := []string{resultKind + "_url", resultKind + "Url", "result_url", "url"}
-	if resultKind == "video" {
-		keys = append(keys, "object")
-	}
 	if value := firstString(payload, keys...); value != "" {
 		references = append(references, MediaReference{URL: value, Kind: resultKind})
+	}
+	// Some legacy video APIs put the result URL in `object`, while OpenAI-style
+	// responses use it as a type marker such as "video.generation". Only retain
+	// it when it is actually an absolute media URL.
+	if resultKind == "video" {
+		if value := firstString(payload, "object"); strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "http://") {
+			references = append(references, MediaReference{URL: value, Kind: resultKind})
+		}
 	}
 	switch capability {
 	case CapabilityImage:
@@ -741,7 +746,7 @@ func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capab
 	if status == StatusSucceeded && len(references) == 0 {
 		result = nil
 	}
-	return PollResult{TaskID: defaultValue(firstString(payload, "id", "task_id", "taskId"), c.TaskID), Status: status, Result: result, Message: firstString(payload, "message", "error", "fail_reason")}, nil
+	return PollResult{TaskID: defaultValue(firstString(payload, "id", "task_id", "taskId"), c.TaskID), Status: status, Result: result, Message: asyncMessage(payload)}, nil
 }
 
 func parseAudioResponse(payload map[string]any) (CreateResult, error) {
@@ -790,6 +795,15 @@ func firstString(payload map[string]any, keys ...string) string {
 		if value, ok := payload[key].(string); ok && strings.TrimSpace(value) != "" {
 			return strings.TrimSpace(value)
 		}
+	}
+	return ""
+}
+func asyncMessage(payload map[string]any) string {
+	if value := firstString(payload, "message", "fail_reason", "failure_reason", "error"); value != "" {
+		return value
+	}
+	if failure := object(payload["error"]); failure != nil {
+		return firstString(failure, "message", "msg", "detail", "code", "type")
 	}
 	return ""
 }

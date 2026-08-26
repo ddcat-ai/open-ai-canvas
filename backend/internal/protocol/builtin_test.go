@@ -150,6 +150,29 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 	}
 }
 
+func TestAsyncStatusErrorAndObjectFieldNormalization(t *testing.T) {
+	for raw, want := range map[string]Status{
+		"COMPLETED": StatusSucceeded, "SUCCEEDED": StatusSucceeded, "SUCCESS": StatusSucceeded,
+		"PROCESSING": StatusProcessing, "IN_PROGRESS": StatusProcessing, "PENDING": StatusPending,
+		"FAILED": StatusFailed, "FAILURE": StatusFailed, "CANCELED": StatusFailed, "CANCELLED": StatusFailed, "EXPIRED": StatusFailed,
+	} {
+		if got := normalizeStatus(raw); got != want {
+			t.Errorf("normalizeStatus(%q) = %q, want %q", raw, got, want)
+		}
+	}
+
+	adapter, _ := Builtins().Get("newapi-channel-2")
+	failed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-error"}, []byte(`{"status":"FAILED","error":{"code":"400","message":"参数不支持","type":"api_error"}}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "参数不支持" {
+		t.Fatalf("failed poll = %#v, err = %v", failed, err)
+	}
+
+	succeeded, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-ok"}, []byte(`{"id":"task-ok","object":"video.generation","status":"COMPLETED","data":[{"url":"https://cdn.example/result.mp4"}]}`))
+	if err != nil || succeeded.Result == nil || len(succeeded.Result.Videos) != 1 || succeeded.Result.Videos[0].URL != "https://cdn.example/result.mp4" {
+		t.Fatalf("succeeded poll = %#v, err = %v", succeeded, err)
+	}
+}
+
 func TestArkVideoAdapterMapsFullModalReferences(t *testing.T) {
 	adapter, ok := Builtins().Get("volcengine-ark-video")
 	if !ok {
