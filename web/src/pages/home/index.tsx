@@ -1,15 +1,19 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { App, Button } from "antd";
-import { ArrowRight, Bot, Clapperboard, FolderKanban, Images, LayoutGrid, ListChecks, Plus, Sparkles } from "lucide-react";
+import { App, Button, Input, Pagination, Segmented, Select } from "antd";
+import { ArrowRight, FolderKanban, Images, LayoutGrid, ListTodo, Plus, Search, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
-import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
+import { resolveCanvasStylePreset, resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
 import { WorkspaceSignalIcon } from "@/components/ui/aceternity/workspace-signal-icon";
-import { projectDetailStage, projectSummaryCompletion } from "@/lib/project-workbench";
-import { getProject, listProjects, type ProjectSummary } from "@/services/api/projects";
+import { parseStyleProfile } from "@/lib/canvas/style-profile";
+import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
+import { listProjects, type ProjectSummary } from "@/services/api/projects";
+import { listGenerationTasks } from "@/services/api/task-center";
 import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
+import { useAssetStore, type AssetKind } from "@/stores/use-asset-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -20,29 +24,49 @@ const workflow = [
     { title: "检查结果", description: "比较版本、处理失败并整理导出" },
 ];
 
+const sourceTypeLabels: Record<string, string> = {
+    blank: "空白开始",
+    novel: "导入小说",
+    text: "粘贴文本",
+};
+
+const ASSET_KINDS: Array<{ key: AssetKind; label: string }> = [
+    { key: "image", label: "图片" },
+    { key: "video", label: "视频" },
+    { key: "audio", label: "音频" },
+    { key: "text", label: "文本" },
+    { key: "entity", label: "实体" },
+    { key: "model", label: "模型" },
+];
+
+const CHART_ACCENT = "var(--workspace-accent)";
+const CHART_MUTED = "color-mix(in srgb, var(--workspace-accent) 30%, transparent)";
+
 export default function IndexPage() {
     const { message } = App.useApp();
     const navigate = useNavigate();
     const canvasHydrated = useCanvasStore((state) => state.hydrated);
     const canvasProjects = useCanvasStore((state) => state.projects);
+    const assets = useAssetStore((state) => state.assets);
     const user = useUserStore((state) => state.user);
     const userHydrated = useUserStore((state) => state.hydrated);
     const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
-    const domainProjectsQuery = useQuery({ queryKey: ["projects"], queryFn: () => listProjects(), enabled: Boolean(user && shortDramaEnabled) });
-    const domainProjects = useMemo(
-        () => [...(domainProjectsQuery.data?.projects || [])].sort((left, right) => right.project.updatedAt.localeCompare(left.project.updatedAt)),
-        [domainProjectsQuery.data],
-    );
-    const activeProject = domainProjects.find(({ project }) => project.status !== "archived") || domainProjects[0];
-    const activeProjectQuery = useQuery({
-        queryKey: ["project", activeProject?.project.id],
-        queryFn: () => getProject(activeProject!.project.id),
-        enabled: Boolean(user && shortDramaEnabled && activeProject?.project.id),
+    const taskCenterEnabled = useUserStore((state) => state.features.taskCenterEnabled);
+
+    const domainProjectsQuery = useQuery({
+        queryKey: ["projects"],
+        queryFn: () => listProjects(),
+        enabled: Boolean(user && shortDramaEnabled),
     });
-    const recentIndependentCanvases = useMemo(
-        () => canvasProjects.filter((project) => !project.projectId).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, 3),
-        [canvasProjects],
-    );
+    const domainProjects = useMemo(() => [...(domainProjectsQuery.data?.projects || [])].sort((left, right) => right.project.updatedAt.localeCompare(left.project.updatedAt)), [domainProjectsQuery.data]);
+
+    // 仪表盘需要生成记录做活跃度与任务统计；后端不可用时降级为空数据，不影响其他区块。
+    const tasksQuery = useQuery({
+        queryKey: ["home-dashboard-tasks"],
+        queryFn: () => listGenerationTasks(300).catch(() => []),
+        enabled: Boolean(user && taskCenterEnabled),
+    });
+    const tasks = useMemo(() => tasksQuery.data || [], [tasksQuery.data]);
 
     const createIndependentCanvas = () => {
         if (!canvasHydrated) return;
@@ -59,26 +83,21 @@ export default function IndexPage() {
     const loadingUserWorkspace = !userHydrated || (Boolean(user && shortDramaEnabled) && domainProjectsQuery.isLoading);
     return (
         <main className="app-user-content app-workspace-canvas app-workspace-scroll h-full overflow-y-auto text-foreground">
-            <div className="app-home-workbench w-full px-4 pb-12 pt-5 sm:px-6 lg:px-8">
+            <div className="app-home-dashboard w-full px-4 pb-14 pt-5 sm:px-6 lg:px-8">
                 {loadingUserWorkspace ? (
-                    <WorkspaceLoadingState className="mt-3" label="正在恢复工作台" detail="读取项目、章节和最近画布" rows={5} />
+                    <WorkspaceLoadingState className="mt-3" label="正在恢复工作台" detail="读取项目、素材和最近任务" rows={5} />
                 ) : user && shortDramaEnabled && domainProjectsQuery.isError ? (
                     <WorkspaceErrorState title="项目工作台加载失败" description={domainProjectsQuery.error instanceof Error ? domainProjectsQuery.error.message : "暂时无法读取项目列表。"} onRetry={() => void domainProjectsQuery.refetch()} />
-                ) : shortDramaEnabled && activeProject ? (
-                    <ReturningWorkspace
-                        summary={activeProject}
-                        detail={activeProjectQuery.data}
-                        recentProjects={domainProjects.slice(0, 5)}
-                        recentIndependentCanvases={recentIndependentCanvases}
-                        onCreateIndependentCanvas={createIndependentCanvas}
-                    />
                 ) : (
-                    <FirstProjectWorkspace
-                        authenticated={Boolean(user)}
-                        canvasHydrated={canvasHydrated}
-                        recentIndependentCanvases={recentIndependentCanvases}
-                        onCreateIndependentCanvas={createIndependentCanvas}
+                    <HomeDashboard
+                        user={user}
                         shortDramaEnabled={shortDramaEnabled}
+                        domainProjects={domainProjects}
+                        canvasProjects={canvasProjects}
+                        assets={assets}
+                        tasks={tasks}
+                        canvasHydrated={canvasHydrated}
+                        onCreateIndependentCanvas={createIndependentCanvas}
                     />
                 )}
             </div>
@@ -86,186 +105,487 @@ export default function IndexPage() {
     );
 }
 
-function ReturningWorkspace({ summary, detail, recentProjects, recentIndependentCanvases, onCreateIndependentCanvas }: {
-    summary: ProjectSummary;
-    detail?: Awaited<ReturnType<typeof getProject>>;
-    recentProjects: ProjectSummary[];
-    recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
-    onCreateIndependentCanvas: () => void;
-}) {
-    const stage = detail ? projectDetailStage(detail) : { label: "进行中", detail: "读取项目进度" };
-    const completion = projectSummaryCompletion(summary);
-    return (
-        <>
-            <div className="studio-band">
-                <header className="app-page-header flex min-h-14 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
-                        <div className="min-w-0">
-                            <h1 className="text-[var(--fs-title)] font-semibold leading-7">继续创作</h1>
-                            <p className="mt-1 text-xs leading-5 text-foreground/55">回到最近工作，或先处理阻塞制作的事项。</p>
-                        </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button icon={<LayoutGrid className="size-3.5" />} onClick={onCreateIndependentCanvas}>打开画布</Button>
-                        <Link className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3.5 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to="/projects?create=1"><Plus className="size-3.5" />创建项目</Link>
-                    </div>
-                </header>
-            </div>
-
-            <section className="app-home-quick-create grid gap-3 py-6 sm:grid-cols-3" aria-label="快捷创建">
-                <QuickCreateCard icon={<FolderKanban className="size-5" />} title="创建短剧项目" description="从空白、小说或文本开始建立章节流程。" action="创建" href="/projects?create=1" />
-                <QuickCreateCard icon={<LayoutGrid className="size-5" />} title="打开自由画布" description="适合快速试图、提示词实验和自由创作。" action="打开" onClick={onCreateIndependentCanvas} />
-                <QuickCreateCard icon={<Images className="size-5" />} title="进入素材库" description="整理角色、场景、画风和媒体资产。" action="进入" href="/assets" />
-            </section>
-
-            <section className="grid gap-8 py-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
-                <div className="min-w-0">
-                    <div className="mb-3 flex items-center justify-between gap-4">
-                        <div><h2 className="text-base font-semibold">最近项目</h2><p className="mt-1 text-xs text-foreground/45">按最近更新时间排列</p></div>
-                        <Link to="/projects" className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground">查看全部<ArrowRight className="size-3.5" /></Link>
-                    </div>
-                    <div className="app-home-timeline overflow-hidden rounded-lg border border-border/80 bg-background/65">
-                        {recentProjects.map((project, index) => <RecentProjectRow key={project.project.id} summary={project} divided={index > 0} />)}
-                    </div>
-                </div>
-
-                <div className="min-w-0">
-                    <div className="mb-3 flex items-center justify-between gap-4">
-                        <div><h2 className="text-base font-semibold">最近自由画布</h2><p className="mt-1 text-xs text-foreground/45">不属于项目的自由创作空间</p></div>
-                        <Link to="/canvas" className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground">管理画布<ArrowRight className="size-3.5" /></Link>
-                    </div>
-                    {recentIndependentCanvases.length ? (
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                            {recentIndependentCanvases.slice(0, 2).map((project) => <CanvasProjectCard key={project.id} project={project} variant="recent" />)}
-                        </div>
-                    ) : (
-                        <button type="button" className="flex min-h-32 w-full items-center justify-center gap-3 rounded-lg border border-dashed border-border text-sm text-foreground/55 hover:border-foreground/30 hover:text-foreground" onClick={onCreateIndependentCanvas}>
-                            <LayoutGrid className="size-4" />打开第一张画布
-                        </button>
-                    )}
-                </div>
-            </section>
-
-            <section className="app-home-template-rail border-t border-border/80 py-7" aria-label="工作流入口">
-                <div className="mb-4 flex items-end justify-between gap-4">
-                    <div><h2 className="text-base font-semibold">从工作流开始</h2><p className="mt-1 text-xs leading-5 text-foreground/48">整理故事 → 确认设定 → 制作镜头 → 检查结果。</p></div>
-                    <span className="hidden text-[var(--fs-label)] text-foreground/38 sm:block">{stage.label} · {completion}%</span>
-                </div>
-                <div className="app-workflow-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {workflow.map((item, index) => (
-                        <div key={item.title} className="app-workflow-card relative min-w-0 p-4">
-                            <div className="flex items-center justify-between">
-                                <span className="grid size-6 place-items-center rounded-md bg-foreground/[.06] text-[var(--fs-label)] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
-                                {index < workflow.length - 1 ? <ArrowRight className="size-3.5 text-foreground/25" aria-hidden="true" /> : null}
-                            </div>
-                            <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
-                            <p className="mt-1 text-xs leading-5 text-foreground/48">{item.description}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </>
-    );
-}
-
-function FirstProjectWorkspace({ authenticated, canvasHydrated, recentIndependentCanvases, onCreateIndependentCanvas, shortDramaEnabled }: {
-    authenticated: boolean;
-    canvasHydrated: boolean;
-    recentIndependentCanvases: ReturnType<typeof useCanvasStore.getState>["projects"];
-    onCreateIndependentCanvas: () => void;
+function HomeDashboard({
+    user,
+    shortDramaEnabled,
+    domainProjects,
+    canvasProjects,
+    assets,
+    tasks,
+    canvasHydrated,
+    onCreateIndependentCanvas,
+}: {
+    user: ReturnType<typeof useUserStore.getState>["user"];
     shortDramaEnabled: boolean;
+    domainProjects: ProjectSummary[];
+    canvasProjects: ReturnType<typeof useCanvasStore.getState>["projects"];
+    assets: ReturnType<typeof useAssetStore.getState>["assets"];
+    tasks: Awaited<ReturnType<typeof listGenerationTasks>>;
+    canvasHydrated: boolean;
+    onCreateIndependentCanvas: () => void;
 }) {
-    const projectHref = authenticated ? "/projects?create=1" : `/login?next=${encodeURIComponent("/projects?create=1")}`;
+    const hasProjects = Boolean(domainProjects.length);
+    const displayName = user?.displayName || user?.username || "创作者";
+
+    const activeProjects = useMemo(() => domainProjects.filter(({ project }) => project.status !== "archived"), [domainProjects]);
+    const archivedCount = domainProjects.length - activeProjects.length;
+    const totalUnits = useMemo(() => activeProjects.reduce((sum, row) => sum + row.unitCount, 0), [activeProjects]);
+    const activeProject = activeProjects[0];
+
+    const independentCanvases = useMemo(() => canvasProjects.filter((project) => !project.projectId), [canvasProjects]);
+    const latestCanvasUpdate = useMemo(() => canvasProjects.reduce<string | null>((latest, project) => (latest === null || project.updatedAt > latest ? project.updatedAt : latest), null), [canvasProjects]);
+
+    const weekWindow = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const weekTasks = useMemo(() => tasks.filter((task) => new Date(task.createdAt).getTime() >= weekWindow), [tasks, weekWindow]);
+    const weekSucceeded = useMemo(() => weekTasks.filter((task) => task.status === "succeeded").length, [weekTasks]);
+    const weekFailed = useMemo(() => weekTasks.filter((task) => task.status === "failed" || task.status === "cancelled").length, [weekTasks]);
+    const weekRunning = useMemo(() => weekTasks.filter((task) => task.status === "queued" || task.status === "running").length, [weekTasks]);
+
+    const assetKindCounts = useMemo(() => {
+        const counts: Partial<Record<AssetKind, number>> = {};
+        for (const asset of assets) counts[asset.kind] = (counts[asset.kind] || 0) + 1;
+        return counts;
+    }, [assets]);
+
+    const [rangeDays, setRangeDays] = useState(14);
+    const activityData = useMemo(
+        () =>
+            buildActivityBuckets(
+                rangeDays,
+                tasks.map((task) => new Date(task.createdAt).getTime()),
+                canvasProjects.map((project) => new Date(project.updatedAt).getTime()),
+            ),
+        [rangeDays, tasks, canvasProjects],
+    );
+    const assetChartEntries = useMemo(() => assetChartData(assets), [assets]);
+    const assetTotal = useMemo(() => assets.length, [assets]);
+
+    const [keyword, setKeyword] = useState("");
+    const [status, setStatus] = useState<"all" | "active" | "archived">("all");
+    const [sort, setSort] = useState<"updated" | "progress" | "name">("updated");
+    const [page, setPage] = useState(1);
+    const rows = useMemo(() => {
+        const normalizedKeyword = keyword.trim().toLowerCase();
+        return domainProjects
+            .filter(({ project }) => status === "all" || project.status === status)
+            .filter(({ project }) => !normalizedKeyword || `${project.name} ${project.description || ""} ${projectStyleTitle(project)}`.toLowerCase().includes(normalizedKeyword))
+            .sort((left, right) => {
+                if (sort === "name") return left.project.name.localeCompare(right.project.name, "zh-CN");
+                if (sort === "progress") return projectSummaryCompletion(right) - projectSummaryCompletion(left);
+                return right.project.updatedAt.localeCompare(left.project.updatedAt);
+            });
+    }, [domainProjects, keyword, sort, status]);
+    const pageSize = 5;
+    const safePage = Math.min(page, Math.max(1, Math.ceil(rows.length / pageSize)));
+    const pageRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+    const projectHref = user ? "/projects?create=1" : `/login?next=${encodeURIComponent("/projects?create=1")}`;
+
     return (
         <>
-            <section className="app-first-project-intro border-b border-border/80 pb-8 pt-3 sm:pb-10 sm:pt-6">
-                <div className="inline-flex items-center gap-2 text-xs font-semibold text-foreground/48"><WorkspaceSignalIcon variant="home" size="sm" />影策</div>
-                <h1 className="mt-5 max-w-[780px] text-3xl font-semibold leading-[1.08] sm:text-4xl lg:text-5xl">把一个故事推进到可交付的镜头</h1>
-                <p className="mt-5 max-w-[680px] text-sm leading-7 text-foreground/58 sm:text-base">从章节、角色和参考图开始，逐步生成分镜、视频和可复用资产。需要自由探索时，也可以先打开一张自由画布。</p>
-                <div className="mt-7 flex flex-wrap items-center gap-3">
-                    {shortDramaEnabled ? <Link className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25" to={projectHref}><FolderKanban className="size-4" />创建项目</Link> : null}
-                    <Button size="large" disabled={!canvasHydrated} icon={<LayoutGrid className="size-4" />} onClick={onCreateIndependentCanvas}>打开画布</Button>
+            <header className="home-welcome" aria-label="欢迎区">
+                <div className="min-w-0">
+                    <span className="home-welcome-kicker">
+                        <WorkspaceSignalIcon variant="home" size="sm" />
+                        影策 · AI 影视与短剧创作工作台
+                    </span>
+                    <h1 className="home-welcome-title">{hasProjects ? `欢迎回来，${displayName}` : `欢迎使用影策，${displayName}`}</h1>
+                    <p className="home-welcome-sub">{hasProjects ? "回到最近制作，或从一句话故事开始一部新的短剧。" : "从一个故事开始：整理章节、确认设定、制作镜头，直到可交付的结果。"}</p>
                 </div>
+                <div className="home-welcome-actions">
+                    {shortDramaEnabled ? (
+                        <Link
+                            className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25"
+                            to={projectHref}
+                        >
+                            <Plus className="size-4" />
+                            开始创作
+                        </Link>
+                    ) : null}
+                    <Button size="large" disabled={!canvasHydrated} icon={<LayoutGrid className="size-4" />} onClick={onCreateIndependentCanvas}>
+                        打开画布
+                    </Button>
+                </div>
+            </header>
+
+            <section className="home-stats-grid" aria-label="工作台统计">
+                {shortDramaEnabled ? (
+                    <StatCard icon={<FolderKanban className="size-4" />} label="进行中项目" value={activeProjects.length} hint={activeProjects.length ? `共 ${totalUnits} 章 · ${archivedCount} 个已归档` : "创建项目开始制作"} to="/projects" />
+                ) : null}
+                <StatCard icon={<LayoutGrid className="size-4" />} label="自由画布" value={independentCanvases.length} hint={latestCanvasUpdate ? `最近更新 ${formatRelativeTime(latestCanvasUpdate)}` : "新建独立创作空间"} to="/canvas" />
+                <StatCard icon={<Images className="size-4" />} label="素材资产" value={assets.length} hint={assetSummaryHint(assetKindCounts)} to="/assets" />
+                <StatCard icon={<ListTodo className="size-4" />} label="本周任务" value={weekTasks.length} hint={weekTasks.length ? `成功 ${weekSucceeded} · 失败 ${weekFailed} · 进行中 ${weekRunning}` : "本周还没有生成任务"} to="/tasks" />
             </section>
 
-            <section className="border-b border-border/80 py-7">
-                <div className="mb-5"><h2 className="text-lg font-semibold">从故事到结果</h2><p className="mt-1 text-xs leading-5 text-foreground/48">每一步都保留输入、版本和生成记录，可以随时返回调整。</p></div>
-                <div className="app-workflow-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {workflow.map((item, index) => (
-                        <div key={item.title} className="app-workflow-card relative min-w-0 p-4">
-                            <div className="flex items-center justify-between">
-                                <span className="grid size-6 place-items-center rounded-md bg-foreground/[.06] text-[var(--fs-label)] font-semibold tabular-nums text-[var(--workspace-accent)]">0{index + 1}</span>
-                                {index < workflow.length - 1 ? <ArrowRight className="size-3.5 text-foreground/25" aria-hidden="true" /> : null}
-                            </div>
-                            <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
-                            <p className="mt-1 text-xs leading-5 text-foreground/48">{item.description}</p>
+            <section className="home-charts-grid mt-3" aria-label="创作数据">
+                <div className="home-panel">
+                    <div className="home-panel-head">
+                        <div>
+                            <h2 className="home-panel-title">创作活跃度</h2>
+                            <p className="home-panel-sub">按天统计生成任务与画布更新</p>
                         </div>
-                    ))}
+                        <Segmented
+                            size="small"
+                            options={[
+                                { label: "近 7 天", value: 7 },
+                                { label: "近 14 天", value: 14 },
+                                { label: "近 30 天", value: 30 },
+                            ]}
+                            value={rangeDays}
+                            onChange={(value) => setRangeDays(value as number)}
+                        />
+                    </div>
+                    <div className="home-panel-body">
+                        {activityData.some((item) => item.tasks > 0 || item.canvases > 0) ? (
+                            <ResponsiveContainer width="100%" height={232}>
+                                <BarChart data={activityData} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} stroke="var(--workspace-border)" strokeOpacity={0.6} />
+                                    <XAxis
+                                        dataKey="label"
+                                        tickLine={false}
+                                        axisLine={{ stroke: "var(--workspace-border)" }}
+                                        tickMargin={6}
+                                        interval={rangeDays > 14 ? 4 : rangeDays > 7 ? 2 : 0}
+                                        tick={{ fill: "var(--foreground)", opacity: 0.45, fontSize: 11 }}
+                                    />
+                                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: "var(--foreground)", opacity: 0.45, fontSize: 10 }} />
+                                    <ChartTooltip
+                                        cursor={{ fill: "var(--workspace-accent)", opacity: 0.05 }}
+                                        contentStyle={tooltipStyle}
+                                        itemStyle={{ color: "var(--foreground)", fontSize: 12 }}
+                                        labelStyle={{ color: "var(--foreground)", fontWeight: 600, fontSize: 12 }}
+                                    />
+                                    <Bar dataKey="tasks" name="生成任务" fill={CHART_ACCENT} radius={[4, 4, 0, 0]} maxBarSize={14} />
+                                    <Bar dataKey="canvases" name="画布更新" fill={CHART_MUTED} radius={[4, 4, 0, 0]} maxBarSize={14} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="home-chart-empty">还没有生成记录，去画布或项目开始第一次创作。</div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="home-panel">
+                    <div className="home-panel-head">
+                        <div>
+                            <h2 className="home-panel-title">素材构成</h2>
+                            <p className="home-panel-sub">按类型统计当前素材库</p>
+                        </div>
+                    </div>
+                    <div className="home-panel-body">
+                        {assetTotal ? (
+                            <div className="flex min-h-[232px] items-center gap-2 py-2">
+                                <div className="relative h-[200px] w-[56%] shrink-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={assetChartEntries} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="88%" paddingAngle={2} cornerRadius={3} stroke="none">
+                                                {assetChartEntries.map((entry) => (
+                                                    <Cell key={entry.name} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <ChartTooltip contentStyle={tooltipStyle} itemStyle={{ color: "var(--foreground)", fontSize: 12 }} labelStyle={{ color: "var(--foreground)", fontWeight: 600, fontSize: 12 }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="home-donut-center">
+                                        <strong>{assetTotal}</strong>
+                                        <span>项素材</span>
+                                    </div>
+                                </div>
+                                <ul className="home-donut-legend">
+                                    {assetChartEntries.map((entry) => (
+                                        <li key={entry.name}>
+                                            <i style={{ background: entry.color }} />
+                                            <span>{entry.name}</span>
+                                            <em>{entry.value}</em>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : (
+                            <div className="home-chart-empty">还没有素材资产，生成的图片、视频和音频会沉淀在这里。</div>
+                        )}
+                    </div>
                 </div>
             </section>
 
-            <section className="grid gap-8 py-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.6fr)]">
-                <div>
-                    <h2 className="text-base font-semibold">两种开始方式</h2>
-                    <div className="mt-3 divide-y divide-border/75 border-y border-border/75">
-                        {shortDramaEnabled ? <StartMode icon={<Clapperboard className="size-4" />} title="项目" description="适合短剧、故事板和多章节制作。集中管理章节、资产、画布与进度。" action="创建项目" href={projectHref} /> : null}
-                        <StartMode icon={<Sparkles className="size-4" />} title="自由画布" description="适合快速试图、提示词实验和不需要章节流程的自由创作。" action="打开画布" onClick={onCreateIndependentCanvas} />
+            <section className="home-lower-grid mt-3" aria-label="最近项目与创作入口">
+                <div className="home-panel">
+                    <div className="home-panel-head">
+                        <div>
+                            <h2 className="home-panel-title">最近项目</h2>
+                            <p className="home-panel-sub">按更新时间排列，支持搜索、筛选与排序</p>
+                        </div>
+                        <Link to="/projects" className="inline-flex items-center gap-1.5 text-xs text-foreground/50 hover:text-foreground">
+                            查看全部
+                            <ArrowRight className="size-3.5" />
+                        </Link>
+                    </div>
+                    <div className="home-recent-toolbar">
+                        <Input
+                            allowClear
+                            className="home-recent-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索项目名称或画风"
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                            aria-label="搜索项目"
+                        />
+                        <Select
+                            size="middle"
+                            className="w-32"
+                            value={status}
+                            onChange={(value) => {
+                                setStatus(value as "all" | "active" | "archived");
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: "全部状态", value: "all" },
+                                { label: "进行中", value: "active" },
+                                { label: "已归档", value: "archived" },
+                            ]}
+                        />
+                        <Select
+                            size="middle"
+                            className="w-32"
+                            value={sort}
+                            onChange={(value) => {
+                                setSort(value as "updated" | "progress" | "name");
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: "最近更新", value: "updated" },
+                                { label: "章节进度", value: "progress" },
+                                { label: "项目名称", value: "name" },
+                            ]}
+                        />
+                    </div>
+                    <div className="home-recent-scroll">
+                        <div className="home-recent-table">
+                            <div className="home-recent-col-head" aria-hidden="true">
+                                <span>项目</span>
+                                <span>阶段</span>
+                                <span>章节进度</span>
+                                <span>更新时间</span>
+                                <span />
+                            </div>
+                            {rows.length ? (
+                                pageRows.map((row) => <RecentProjectRow key={row.project.id} row={row} />)
+                            ) : (
+                                <div className="home-recent-empty">
+                                    {domainProjects.length ? (
+                                        <>
+                                            <Search className="size-5 text-foreground/35" />
+                                            <p className="text-sm font-medium">没有匹配的项目</p>
+                                            <p className="text-xs leading-5 text-foreground/45">调整搜索词或状态筛选后再试。</p>
+                                        </>
+                                    ) : shortDramaEnabled ? (
+                                        <>
+                                            <Sparkles className="size-5 text-foreground/35" />
+                                            <p className="text-sm font-medium">创建第一个故事项目</p>
+                                            <p className="max-w-sm text-xs leading-5 text-foreground/45">项目会集中保存章节、项目画布、角色场景和制作进度，从这里开始一部短剧。</p>
+                                            <Link
+                                                className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3.5 text-sm font-medium text-background transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25"
+                                                to={projectHref}
+                                            >
+                                                <Plus className="size-3.5" />
+                                                创建项目
+                                            </Link>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="size-5 text-foreground/35" />
+                                            <p className="text-sm font-medium">项目功能尚未启用</p>
+                                            <p className="text-xs leading-5 text-foreground/45">可以从自由画布开始创作，或联系管理员开启短剧项目。</p>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="home-panel-foot">
+                        <span className="text-xs text-foreground/45">
+                            共 {rows.length} 个项目{rows.length ? `，每页 ${pageSize} 条` : ""}
+                        </span>
+                        {rows.length > pageSize ? <Pagination size="small" current={safePage} pageSize={pageSize} total={rows.length} showSizeChanger={false} onChange={setPage} /> : null}
                     </div>
                 </div>
-                <div>
-                    <h2 className="text-base font-semibold">创作过程中</h2>
-                    <div className="mt-3 space-y-3 text-xs leading-5 text-foreground/52">
-                        <FeatureLine icon={<Images className="size-4" />} text="图片、视频和音频结果可以继续生成变体或接入下一步。" />
-                        <FeatureLine icon={<Bot className="size-4" />} text="Agent 读取你选择的章节、节点和参考资料，再执行画布操作。" />
-                        <FeatureLine icon={<ListChecks className="size-4" />} text="任务、失败原因和用量记录会保留，便于恢复和重试。" />
+
+                <div className="home-side-stack">
+                    <div className="home-panel">
+                        <div className="home-panel-head">
+                            <div>
+                                <h2 className="home-panel-title">快捷创建</h2>
+                                <p className="home-panel-sub">常用创作入口</p>
+                            </div>
+                        </div>
+                        <div className="home-panel-body home-quick-create">
+                            {shortDramaEnabled ? <QuickItem icon={<FolderKanban className="size-4" />} title="创建短剧项目" description="从空白、小说或文本建立章节流程" href={projectHref} /> : null}
+                            <QuickItem icon={<LayoutGrid className="size-4" />} title="打开自由画布" description="适合快速试图与提示词实验" onClick={onCreateIndependentCanvas} disabled={!canvasHydrated} />
+                            <QuickItem icon={<Images className="size-4" />} title="进入素材库" description="整理角色、场景与媒体资产" href="/assets" />
+                        </div>
+                    </div>
+
+                    <div className="home-panel">
+                        <div className="home-panel-head">
+                            <div>
+                                <h2 className="home-panel-title">从工作流开始</h2>
+                                <p className="home-panel-sub">整理故事 → 确认设定 → 制作镜头 → 检查结果</p>
+                            </div>
+                        </div>
+                        <div className="home-panel-body">
+                            <div className="home-workflow">
+                                {workflow.map((item, index) => (
+                                    <div key={item.title} className="home-workflow-step">
+                                        <span className="home-workflow-num">0{index + 1}</span>
+                                        <span className="min-w-0">
+                                            <strong className="home-workflow-title block">{item.title}</strong>
+                                            <span className="home-workflow-desc block">{item.description}</span>
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="home-workflow-hint">{activeProject ? `${projectSummaryStage(activeProject).label} · ${projectSummaryCompletion(activeProject)}%` : "从一句话故事开始，逐步推进到可交付的镜头。"}</p>
+                        </div>
                     </div>
                 </div>
             </section>
-
-            {recentIndependentCanvases.length ? (
-                <section className="border-t border-border/80 pt-6">
-                    <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold">继续自由画布</h2><Link to="/canvas" className="text-xs text-foreground/50 hover:text-foreground">查看全部</Link></div>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{recentIndependentCanvases.map((project) => <CanvasProjectCard key={project.id} project={project} variant="recent" />)}</div>
-                </section>
-            ) : null}
         </>
     );
 }
 
-function QuickCreateCard({ icon, title, description, action, href, onClick }: { icon: ReactNode; title: string; description: string; action: string; href?: string; onClick?: () => void }) {
-    const content = (
-        <>
-            <span className="grid size-10 shrink-0 place-items-center rounded-md border border-border/70 bg-foreground/[.04] text-[var(--workspace-accent)]">{icon}</span>
-            <span className="mt-4 block text-sm font-semibold">{title}</span>
-            <span className="mt-1 block text-xs leading-5 text-foreground/48">{description}</span>
-            <span className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-foreground/55 transition-colors group-hover:text-foreground">{action}<ArrowRight className="size-3.5" /></span>
-        </>
-    );
-    const className = "app-home-quick-create-card group flex min-h-[148px] flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[var(--card-elevation-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-    return href ? <Link to={href} className={className}>{content}</Link> : <button type="button" className={className} onClick={onClick}>{content}</button>;
-}
-
-function RecentProjectRow({ summary, divided }: { summary: ProjectSummary; divided: boolean }) {
-    const completion = projectSummaryCompletion(summary);
+function StatCard({ icon, label, value, hint, to }: { icon: ReactNode; label: string; value: number; hint: string; to: string }) {
     return (
-        <Link to={`/projects/${summary.project.id}/overview`} className={`group grid min-h-[68px] grid-cols-[minmax(0,1fr)_80px_20px] items-center gap-3 px-3 py-2.5 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:grid-cols-[minmax(0,1fr)_100px_120px_20px] ${divided ? "border-t border-border/65" : ""}`}>
-            <span className="min-w-0"><span className="block truncate text-sm font-medium">{summary.project.name}</span><span className="mt-1 block truncate text-[var(--fs-label)] text-foreground/42">{summary.unitCount} 章 · {summary.canvasCount} 张项目画布 · {summary.assetCount} 项资产</span></span>
-            <span className="hidden text-[var(--fs-label)] text-foreground/45 sm:block">更新于<br />{formatRelativeTime(summary.project.updatedAt)}</span>
-            <span className="min-w-0"><span className="flex items-center justify-between text-[var(--fs-tiny)] text-foreground/42"><span>章节</span><span>{completion}%</span></span><span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-active"><span className="block h-full rounded-full bg-foreground/65" style={{ width: `${completion}%` }} /></span></span>
+        <Link to={to} className="home-stat-card group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="home-stat-top">
+                <span className="home-stat-icon">{icon}</span>
+                <span className="home-stat-value">{value}</span>
+            </span>
+            <span>
+                <span className="home-stat-label block">{label}</span>
+                <span className="home-stat-hint block">{hint}</span>
+            </span>
+        </Link>
+    );
+}
+
+function RecentProjectRow({ row }: { row: ProjectSummary }) {
+    const completion = projectSummaryCompletion(row);
+    const stage = projectSummaryStage(row);
+    const archived = row.project.status === "archived";
+    return (
+        <Link to={`/projects/${row.project.id}/overview`} className="home-recent-row group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20">
+            <span className="min-w-0">
+                <span className="flex min-w-0 items-center gap-2">
+                    <strong className="truncate text-sm font-medium">{row.project.name}</strong>
+                    {archived ? <em className="home-stage-pill">已归档</em> : null}
+                </span>
+                <span className="mt-1 block truncate text-xs text-foreground/42">
+                    {projectStyleTitle(row.project)} · {sourceTypeLabel(row.project.sourceType)} · {row.canvasCount} 画布 · {row.assetCount} 资产
+                </span>
+            </span>
+            <span className="min-w-0">
+                <span className="home-stage-pill">{stage.label}</span>
+            </span>
+            <span className="min-w-0">
+                <span className="flex items-center justify-between text-[var(--fs-tiny)] text-foreground/42">
+                    <span>
+                        {row.completedUnitCount}/{row.unitCount} 章
+                    </span>
+                    <span>{completion}%</span>
+                </span>
+                <span className="home-progress-track mt-1.5">
+                    <span className="home-progress-fill" style={{ width: `${completion}%` }} />
+                </span>
+            </span>
+            <span className="text-xs text-foreground/45">{formatRelativeTime(row.project.updatedAt)}</span>
             <ArrowRight className="size-4 text-foreground/25 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/60" />
         </Link>
     );
 }
 
-function StartMode({ icon, title, description, action, href, onClick }: { icon: ReactNode; title: string; description: string; action: string; href?: string; onClick?: () => void }) {
-    const content = <><span className="mt-0.5 text-foreground/45">{icon}</span><span className="min-w-0"><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs leading-5 text-foreground/48">{description}</span></span><span className="self-center text-xs font-medium text-foreground/50">{action} →</span></>;
-    const className = "grid w-full grid-cols-[20px_minmax(0,1fr)_auto] gap-3 py-4 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
-    return href ? <Link to={href} className={className}>{content}</Link> : <button type="button" className={className} onClick={onClick}>{content}</button>;
+function QuickItem({ icon, title, description, href, onClick, disabled }: { icon: ReactNode; title: string; description: string; href?: string; onClick?: () => void; disabled?: boolean }) {
+    const content = (
+        <>
+            <span className="home-quick-icon">{icon}</span>
+            <span className="min-w-0">
+                <strong className="home-quick-title block">{title}</strong>
+                <span className="home-quick-desc block">{description}</span>
+            </span>
+            <ArrowRight className="size-4 text-foreground/25 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/50" />
+        </>
+    );
+    const className = "home-quick-item group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+    return href ? (
+        <Link to={href} className={className}>
+            {content}
+        </Link>
+    ) : (
+        <button type="button" className={className} onClick={onClick} disabled={disabled}>
+            {content}
+        </button>
+    );
 }
 
-function FeatureLine({ icon, text }: { icon: ReactNode; text: string }) {
-    return <div className="grid grid-cols-[20px_minmax(0,1fr)] gap-2.5"><span className="text-foreground/35">{icon}</span><p>{text}</p></div>;
+function projectStyleTitle(project: ProjectSummary["project"]) {
+    const projectStyle = resolveProjectCanvasStyle(project.stylePresetId, project.styleProfileJson);
+    return projectStyle?.title || parseStyleProfile(project.styleProfileJson)?.title || resolveCanvasStylePreset(project.stylePresetId)?.title || (project.stylePresetId ? "自定义画风" : "未设置画风");
 }
+
+function sourceTypeLabel(value: string) {
+    return sourceTypeLabels[value] || "其他来源";
+}
+
+function assetSummaryHint(counts: Partial<Record<AssetKind, number>>) {
+    const parts = ASSET_KINDS.map(({ key, label }) => ({ label, count: counts[key] || 0 })).filter(({ count }) => count > 0);
+    if (!parts.length) return "从画布或项目中沉淀素材";
+    return parts
+        .slice(0, 3)
+        .map(({ label, count }) => `${label} ${count}`)
+        .join(" · ");
+}
+
+function assetChartData(assets: ReturnType<typeof useAssetStore.getState>["assets"]) {
+    const colors = [
+        CHART_ACCENT,
+        "color-mix(in srgb, var(--workspace-accent) 66%, transparent)",
+        "color-mix(in srgb, var(--workspace-accent) 44%, transparent)",
+        "color-mix(in srgb, var(--workspace-accent) 28%, transparent)",
+        "color-mix(in srgb, var(--workspace-accent) 16%, transparent)",
+    ];
+    const counts = new Map<string, number>();
+    for (const asset of assets) counts.set(asset.kind, (counts.get(asset.kind) || 0) + 1);
+    const entries = ASSET_KINDS.filter(({ key }) => (counts.get(key) || 0) > 0);
+    return entries.map(({ key, label }, index) => ({ name: label, value: counts.get(key) || 0, color: colors[index % colors.length] }));
+}
+
+function buildActivityBuckets(days: number, taskDates: number[], canvasDates: number[]) {
+    const buckets: Array<{ label: string; tasks: number; canvases: number }> = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+        const day = new Date(today);
+        day.setDate(today.getDate() - offset);
+        const start = day.getTime();
+        const end = start + 24 * 60 * 60 * 1000;
+        buckets.push({
+            label: `${day.getMonth() + 1}/${day.getDate()}`,
+            tasks: taskDates.filter((time) => time >= start && time < end).length,
+            canvases: canvasDates.filter((time) => time >= start && time < end).length,
+        });
+    }
+    return buckets;
+}
+
+const tooltipStyle = {
+    background: "var(--workspace-surface-strong)",
+    border: "1px solid var(--workspace-border)",
+    borderRadius: "var(--r-md)",
+    boxShadow: "var(--elevation-card-hover)",
+    fontSize: 12,
+};
 
 function formatRelativeTime(value: string) {
     const diffMinutes = Math.round((new Date(value).getTime() - Date.now()) / 60_000);
