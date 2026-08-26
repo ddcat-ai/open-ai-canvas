@@ -12997,6 +12997,13 @@ html:not(.dark) .creation-home .storyboard-workbench-bar-action:hover { backgrou
 .assets-empty-card strong { color: var(--foreground); font-size: var(--fs-body); font-weight: 620; }
 .assets-empty-card > span:last-child { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-label); line-height: 1.55; }
 
+.asset-preview-uploading { position: relative; overflow: hidden; }
+.asset-preview-uploading.is-uploading::after { position: absolute; inset: 0; background: color-mix(in srgb, var(--foreground) 16%, transparent); content: ""; pointer-events: none; }
+.asset-preview-uploading-panel { position: absolute; right: var(--space-3); bottom: var(--space-3); left: var(--space-3); z-index: 1; padding: var(--space-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--background) 92%, transparent); color: var(--foreground); }
+.asset-preview-uploading-copy { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-caption); }
+.asset-preview-uploading-copy strong { font-variant-numeric: tabular-nums; }
+.asset-preview-uploading-panel .ant-progress { margin: var(--space-2) 0 0; }
+
 /* 资产档案抽屉 */
 .asset-archive-header { display: flex; align-items: flex-start; gap: 14px; }
 .asset-archive-header-icon { display: grid; width: 46px; height: 46px; flex: 0 0 auto; place-items: center; border-radius: 14px; background: color-mix(in srgb, var(--workspace-accent) 10%, transparent); color: var(--workspace-accent); }

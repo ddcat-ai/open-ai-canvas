@@ -1,7 +1,7 @@
 import { AudioLines, Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, FolderOpen, Image as ImageIcon, Link2, MoreHorizontal, PencilLine, Play, Plus, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { App, Button, Drawer, Dropdown, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Drawer, Dropdown, Form, Input, Modal, Progress, Select, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { useNavigate } from "react-router";
 
@@ -13,7 +13,7 @@ import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
-import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
+import { formatBytes, readFileAsDataUrl, readImageMeta } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
@@ -93,6 +93,9 @@ export default function AssetsPage() {
 
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const [imageUploadProgress, setImageUploadProgress] = useState<{ phase: "uploading" | "confirming"; percent?: number } | null>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
@@ -133,6 +136,9 @@ export default function AssetsPage() {
     const openCreate = () => {
         setEditingAsset(null);
         setImageDraft(null);
+        setImageFile(null);
+        setImageUploading(false);
+        setImageUploadProgress(null);
         setFormKind("text");
         form.setFieldsValue({ kind: "text", category: "other", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
         setIsAssetOpen(true);
@@ -140,6 +146,9 @@ export default function AssetsPage() {
 
     const openEdit = (asset: LibraryAsset) => {
         setEditingAsset(asset);
+        setImageFile(null);
+        setImageUploading(false);
+        setImageUploadProgress(null);
         setFormKind(asset.kind);
         setImageDraft(asset.kind === "image" ? asset.data : null);
         form.setFieldsValue({
@@ -157,12 +166,32 @@ export default function AssetsPage() {
 
     const saveAsset = async () => {
         const values = await form.validateFields();
+        let imageData = imageDraft;
+        if (values.kind === "image" && imageFile) {
+            setImageUploading(true);
+            setImageUploadProgress({ phase: "uploading", percent: 0 });
+            try {
+                const image = await uploadImage(imageFile);
+                setImageUploadProgress({ phase: "confirming" });
+                imageData = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
+                setImageDraft(imageData);
+                setImageFile(null);
+                void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "图片上传失败，请重试");
+                return;
+            } finally {
+                setImageUploading(false);
+                setImageUploadProgress(null);
+            }
+        }
+
         const base = {
             title: values.title.trim(),
             category: values.category,
             status: editingAsset?.status || "confirmed" as const,
             primaryVersionId: editingAsset?.primaryVersionId,
-            coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageDraft ? imageDraft.dataUrl : ""),
+            coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageData ? imageData.dataUrl : ""),
             tags: values.tags || [],
             source: values.source?.trim(),
             note: values.note?.trim(),
@@ -173,11 +202,11 @@ export default function AssetsPage() {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         } else {
-            if (!imageDraft) {
+            if (!imageData) {
                 message.error("请选择图片文件");
                 return;
             }
-            const asset = { ...base, kind: "image" as const, data: imageDraft };
+            const asset = { ...base, kind: "image" as const, data: imageData };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         }
 
@@ -192,13 +221,18 @@ export default function AssetsPage() {
     };
 
     const readImageFile = async (file?: File) => {
-        if (!file || !file.type.startsWith("image/")) return;
-        const image = await uploadImage(file);
-        void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
-        const draft = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
-        setImageDraft(draft);
-        if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", draft.dataUrl);
-        if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
+        if (!file || !file.type.startsWith("image/") || imageUploading) return;
+        try {
+            const dataUrl = await readFileAsDataUrl(file);
+            const meta = await readImageMeta(dataUrl);
+            setImageFile(file);
+            const draft = { dataUrl, storageKey: "", width: meta.width, height: meta.height, bytes: file.size, mimeType: file.type || meta.mimeType };
+            setImageDraft(draft);
+            if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", dataUrl);
+            if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "读取图片失败，请重试");
+        }
     };
 
     const readModelFile = async (file?: File) => {
@@ -340,7 +374,7 @@ export default function AssetsPage() {
             </div>
             </WorkspacePage>
 
-            <Modal className="workspace-modal workspace-modal-wide library-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal className="workspace-modal workspace-modal-wide library-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} onCancel={() => { if (!imageUploading) setIsAssetOpen(false); }} onOk={() => void saveAsset()} okText={imageUploading ? "正在上传" : "保存"} cancelText="取消" confirmLoading={imageUploading} cancelButtonProps={{ disabled: imageUploading }} closable={!imageUploading} destroyOnHidden>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
                         <Form.Item name="kind" label="类型">
@@ -384,9 +418,10 @@ export default function AssetsPage() {
                         ) : (
                             <Form.Item label="图片内容" required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
-                                    <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
-                                        选择图片文件
+                                    <Button disabled={imageUploading} icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
+                                        {imageUploading ? "正在上传图片" : "选择图片文件"}
                                     </Button>
+                                    {imageFile ? <Tag color="gold" className="ml-3">待保存上传</Tag> : null}
                                     {imageDraft ? (
                                         <Typography.Text type="secondary" className="ml-3 text-xs" title={resourceStorageTitle(imageDraft.storageKey)}>
                                             {imageDraft.width}x{imageDraft.height} · {formatBytes(imageDraft.bytes)} · {resourceStorageLabel(imageDraft.storageKey)}
@@ -404,7 +439,18 @@ export default function AssetsPage() {
                         <Typography.Text strong className="text-xs">预览</Typography.Text>
                         <div className="mt-2 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">
                             {coverUrl || imageDraft?.dataUrl ? (
-                                <img src={coverUrl || imageDraft?.dataUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
+                                <div className={`asset-preview-uploading ${imageUploading ? "is-uploading" : ""}`}>
+                                    <img src={coverUrl || imageDraft?.dataUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
+                                    {imageUploading && imageUploadProgress ? (
+                                        <div className="asset-preview-uploading-panel">
+                                            <div className="asset-preview-uploading-copy">
+                                                <span>{imageUploadProgress.phase === "confirming" ? "正在确认资源" : "正在上传到云端"}</span>
+                                                {typeof imageUploadProgress.percent === "number" ? <strong>{imageUploadProgress.percent}%</strong> : null}
+                                            </div>
+                                            <Progress percent={imageUploadProgress.percent} showInfo={false} size="small" status="active" />
+                                        </div>
+                                    ) : null}
+                                </div>
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
                             )}
