@@ -8,10 +8,11 @@ import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_HEADER_HEIGHT, g
 import { alignCanvasNodes, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata } from "@/lib/canvas/canvas-node-copy";
-import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 import { useUserStore } from "@/stores/use-user-store";
+import { useEffectiveConfig } from "@/stores/use-config-store";
 
 type CanvasClipboard = {
     nodes: CanvasNodeData[];
@@ -54,6 +55,7 @@ export function useCanvasNodeOperations({
     onNodesDeleted,
 }: UseCanvasNodeOperationsOptions) {
     const { message } = App.useApp();
+    const effectiveConfig = useEffectiveConfig();
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
     const preferCopiedNodesRef = useRef(false);
@@ -122,16 +124,26 @@ export function useCanvasNodeOperations({
         setSelectedConnectionId(null);
     }, [selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const createNode = useCallback((type: CanvasNodeTypeId, position?: Position) => {
+    const createNode = useCallback((type: CanvasNodeTypeId, position?: Position, workflowProvider?: "runninghub" | "comfyui") => {
         if (type === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
             message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
             return;
         }
-        const node = createCanvasNode(type, position || getCanvasCenter(), type === CanvasNodeType.Drawing ? { drawingEngine: defaultDrawingEngine } : undefined);
+        const selectedWorkflowProvider = type === CanvasNodeType.Config
+            ? workflowProvider || "model"
+            : undefined;
+        const workflowTitle = type === CanvasNodeType.Config && selectedWorkflowProvider === "runninghub" ? "RunningHub 工作流" : type === CanvasNodeType.Config && selectedWorkflowProvider === "comfyui" ? "ComfyUI Bridge" : undefined;
+        const metadata: CanvasNodeMetadata | undefined = type === CanvasNodeType.Drawing
+            ? { drawingEngine: defaultDrawingEngine }
+            : type === CanvasNodeType.Config
+                ? { generationMode: "image", workflowProvider: selectedWorkflowProvider || "model" }
+                : undefined;
+        const node = createCanvasNode(type, position || getCanvasCenter(), metadata);
+        if (workflowTitle) node.title = workflowTitle;
         commitNodes([...nodesRef.current, node]);
         selectNodes(new Set([node.id]));
         if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Script && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Frame && type !== CanvasNodeType.Drawing) setDialogNodeId(node.id);
-    }, [commitNodes, defaultDrawingEngine, getCanvasCenter, message, nodesRef, selectNodes, setDialogNodeId, tldrawLicenseKey]);
+    }, [commitNodes, defaultDrawingEngine, effectiveConfig.comfyBridge.enabled, effectiveConfig.comfyBridge.workflows.length, effectiveConfig.runningHub.enabled, effectiveConfig.runningHub.workflows.length, getCanvasCenter, message, nodesRef, selectNodes, setDialogNodeId, tldrawLicenseKey]);
 
     const createFolder = useCallback((position?: Position, linked?: { id: string; projectId: string; title: string; style: CanvasFolderStyle; theme: CanvasFolderTheme; createdAt: string }) => {
         const folder = createCanvasNode(CanvasNodeType.Frame, position || getCanvasCenter(), {

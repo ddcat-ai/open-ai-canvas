@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, Popconfirm, Segmented, Select, Switch, Tooltip } from "antd";
-import { ChevronDown, ChevronUp, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, MonitorUp, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
@@ -23,7 +23,13 @@ import { ChannelModelSettings } from "./channel-video-pricing";
 import { useUserStore } from "@/stores/use-user-store";
 
 type UserChannelConnection = "openai" | "gemini";
-export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void }) {
+type ChannelSettingsPaneProps = {
+    onOpenModels: () => void;
+    onOpenRunningHub?: () => void;
+    onOpenComfyUI?: () => void;
+};
+
+export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub, onOpenComfyUI }: ChannelSettingsPaneProps) {
     const { message } = App.useApp();
     const config = useConfigStore((state) => state.config);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
@@ -33,6 +39,8 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
     const desktopLocalChannelsEnabled = useUserStore((state) => state.features.desktopLocalChannelsEnabled);
     const desktopLocalChannelHostname = typeof window === "undefined" ? "" : window.location.hostname;
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
+    const runningHubReady = Boolean(config.runningHub.enabled && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim() && config.runningHub.workflowId.trim());
+    const comfyBridgeReady = Boolean(config.comfyBridge.enabled && config.comfyBridge.bridgeId.trim() && config.comfyBridge.workflowId.trim());
 
     useEffect(() => {
         void fetchPluginProviderCatalog("user.custom-channel").then(setProviderCatalog).catch(() => setProviderCatalog([]));
@@ -156,7 +164,7 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
         const skipped = userChannels.filter((channel) => channelConnectionError(channel));
         if (!runnable.length) {
             const detail = skipped.map((channel) => `${channel.name || "未命名渠道"}：${channelConnectionError(channel)}`).join("；");
-            message.error(detail || "没有可拉取的自定义渠道，请先填写有效 Base URL 和 API Key");
+            message.error(detail || "没有可拉取的个人模型渠道，请先填写有效 Base URL 和 API Key");
             return;
         }
         setChannelLoading("all", true);
@@ -210,14 +218,38 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
         <Form layout="vertical" requiredMark={false}>
             <div className="settings-pane-header">
                 <div className="min-w-0">
-                    <h2>自定义渠道</h2>
-                    <p>渠道只保存连接类型；拉取模型后，请在“模型与能力”中配置协议。<Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={onOpenModels}>打开模型选择</Button></p>
+                    <h2>个人渠道</h2>
+                    <p>管理个人模型服务和工作流渠道。普通渠道只保存连接类型；模型能力在“模型与能力”中配置。<Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={onOpenModels}>打开模型选择</Button></p>
                 </div>
                 <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
                     <Button className="h-10 flex-1 sm:h-8 sm:flex-none" icon={<RefreshCw className="size-4" />} loading={loadingChannelIds.includes("all")} disabled={loadingChannelIds.some((id) => id !== "all")} onClick={() => void refreshAllModels()}>拉取全部</Button>
                     <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>新增渠道</Button>
                 </div>
             </div>
+            <section className="settings-section mb-3">
+                <div className="mb-3">
+                    <h3 className="text-sm font-semibold">个人工作流渠道</h3>
+                    <p className="mt-1 text-xs text-foreground/55">RunningHub 和 ComfyUI 使用各自的工作流参数与执行通道，配置入口统一放在个人渠道中。</p>
+                </div>
+                <div className="grid gap-2 lg:grid-cols-2">
+                    <WorkflowChannelEntry
+                        icon={<Workflow className="size-4" />}
+                        title="RunningHub"
+                        description="云端工作流和 RunningHub App"
+                        status={runningHubReady ? `${config.runningHub.workflows.length} 个工作流已配置` : config.runningHub.enabled ? "待完成连接和工作流配置" : "未启用"}
+                        ready={runningHubReady}
+                        onOpen={onOpenRunningHub}
+                    />
+                    <WorkflowChannelEntry
+                        icon={<MonitorUp className="size-4" />}
+                        title="ComfyUI"
+                        description="通过 Bridge 连接本机或远程 ComfyUI"
+                        status={comfyBridgeReady ? `${config.comfyBridge.workflows.length} 个工作流已配置` : config.comfyBridge.enabled ? "待选择 Bridge 和工作流" : "未启用"}
+                        ready={comfyBridgeReady}
+                        onOpen={onOpenComfyUI}
+                    />
+                </div>
+            </section>
             {userChannels.length ? (
                 <div className="settings-channel-list space-y-2">
                     {userChannels.map((channel) => {
@@ -237,7 +269,7 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
                                         <Tooltip title={collapsed ? "展开渠道配置" : "收起渠道配置"}>
                                             <Button className="size-10 p-0 sm:size-8" size="small" type="text" aria-label={`${collapsed ? "展开" : "收起"}渠道配置 ${channel.name || "未命名渠道"}`} aria-expanded={!collapsed} aria-controls={`channel-${channel.id}-details`} icon={collapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />} onClick={() => toggleChannelCollapsed(channel.id)} />
                                         </Tooltip>
-                                        <Popconfirm title="删除自定义渠道？" description="该渠道关联的模型选择会同时移除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
+                                        <Popconfirm title="删除个人模型渠道？" description="该渠道关联的模型选择会同时移除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
                                             <Tooltip title="删除渠道"><Button className="size-10 p-0 sm:size-8" aria-label={`删除渠道 ${channel.name || "未命名渠道"}`} size="small" type="text" danger disabled={loadingChannelIds.includes(channel.id) || loadingChannelIds.includes("all")} icon={<Trash2 className="size-3.5" />} /></Tooltip>
                                         </Popconfirm>
                                     </div>
@@ -270,8 +302,24 @@ export function ChannelSettingsPane({ onOpenModels }: { onOpenModels: () => void
                         );
                     })}
                 </div>
-            ) : <WorkspaceState icon="settings" compact title="当前没有自定义渠道" description="管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。" action={<Button icon={<Plus className="size-4" />} onClick={addChannel}>新增自定义渠道</Button>} />}
+            ) : <WorkspaceState icon="settings" compact title="当前没有个人模型渠道" description="管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。" action={<Button icon={<Plus className="size-4" />} onClick={addChannel}>新增个人模型渠道</Button>} />}
         </Form>
+    );
+}
+
+function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen }: { icon: ReactNode; title: string; description: string; status: string; ready: boolean; onOpen?: () => void }) {
+    return (
+        <div className="settings-channel flex min-w-0 items-center justify-between gap-3 p-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+                <span className="mt-0.5 shrink-0 text-[var(--workspace-accent)]" aria-hidden="true">{icon}</span>
+                <div className="min-w-0">
+                    <h4 className="text-sm font-semibold">{title}</h4>
+                    <p className="mt-0.5 truncate text-xs text-foreground/55">{description}</p>
+                    <span className={`settings-channel-status mt-1.5 ${ready ? "is-ready" : "is-warning"}`}><i aria-hidden="true" />{status}</span>
+                </div>
+            </div>
+            <Button size="small" onClick={onOpen} disabled={!onOpen}>配置</Button>
+        </div>
     );
 }
 

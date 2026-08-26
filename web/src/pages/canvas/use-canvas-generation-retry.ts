@@ -12,6 +12,7 @@ import {
     createGenerationRetryContext,
     findRetrySourceNode,
     generationReferenceUrls,
+    generationWorkflowMetadata,
     isGenerationCanceled,
     canvasImageReferenceLimitError,
     resolveMetadataReferences,
@@ -21,6 +22,7 @@ import {
     sourceNodeReferenceImages,
     supportsVideoReferenceAudio,
 } from "@/lib/canvas/canvas-project-generation";
+import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { expandSkillMentions } from "@/lib/canvas/canvas-skill-mentions";
 import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
@@ -82,17 +84,19 @@ export function useCanvasGenerationRetry({
             const batchRoot = node.metadata?.batchRootId ? nodesRef.current.find((item) => item.id === node.metadata?.batchRootId) : null;
             const savedImageMetadata = node.type === CanvasNodeType.Image ? { ...batchRoot?.metadata, ...node.metadata } : undefined;
             const hasSavedImageMetadata = Boolean(savedImageMetadata?.generationType);
+            const generationSourceNode = node.type === CanvasNodeType.Config && isCanvasWorkflowProvider(node.metadata) || node.metadata?.workflowProvider === "model" ? node : sourceNode;
+            const sourceGenerationConfig = buildGenerationConfig(effectiveConfig, generationSourceNode, retryMode);
             let generationConfig =
                 hasSavedImageMetadata && savedImageMetadata
                     ? {
-                          ...effectiveConfig,
-                          model: savedImageMetadata.model || effectiveConfig.imageModel || effectiveConfig.model,
-                          quality: savedImageMetadata.quality || effectiveConfig.quality,
-                          size: savedImageMetadata.size || effectiveConfig.size,
-                          transparentBackground: (savedImageMetadata.transparentBackground || effectiveConfig.transparentBackground) === "true" ? "true" : "false",
+                          ...sourceGenerationConfig,
+                          model: savedImageMetadata.model || effectiveConfig.imageModel || effectiveConfig.model || sourceGenerationConfig.model,
+                          quality: savedImageMetadata.quality || effectiveConfig.quality || sourceGenerationConfig.quality,
+                          size: savedImageMetadata.size || effectiveConfig.size || sourceGenerationConfig.size,
+                          transparentBackground: (savedImageMetadata.transparentBackground || effectiveConfig.transparentBackground || sourceGenerationConfig.transparentBackground) === "true" ? "true" : "false",
                           count: "1",
                       }
-                    : { ...buildGenerationConfig(effectiveConfig, sourceNode, retryMode), count: "1" };
+                    : { ...sourceGenerationConfig, count: "1" };
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
                 navigateToSettings({ continueCreation: true });
                 return;
@@ -231,7 +235,7 @@ export function useCanvasGenerationRetry({
                     return;
                 }
                 if (node.type === CanvasNodeType.Video) {
-                    const videoGenerationMetadata = buildVideoGenerationMetadata(node, videoContext);
+                    const videoGenerationMetadata = buildVideoGenerationMetadata(node, videoContext, generationConfig);
                     setNodes((current) =>
                         current.map((item) =>
                             item.id === node.id
@@ -343,6 +347,7 @@ export function useCanvasGenerationRetry({
                           transparentBackground: generationConfig.transparentBackground,
                           count: savedImageMetadata.count || 1,
                           references: savedImageMetadata.references,
+                          ...generationWorkflowMetadata(generationConfig),
                       }
                     : buildImageGenerationMetadata(useReferenceImages ? "edit" : "generation", generationConfig, 1, retryImages);
                 setNodes((current) =>

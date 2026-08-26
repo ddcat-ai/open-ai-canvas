@@ -159,7 +159,12 @@ export function useCanvasNodeEditor({
     }, [setNodes]);
 
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeMetadata>) => {
-        setNodes((current) => current.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
+        setNodes((current) => {
+            const next = current.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node));
+            // 生成入口读取 nodesRef；同步写入，避免刚修改工作流比例就立即生成时仍提交旧值。
+            nodesRef.current = next;
+            return next;
+        });
         if (!patch.assetCategory) return;
         const node = nodesRef.current.find((item) => item.id === nodeId);
         if (!node?.metadata?.content?.trim()) return;

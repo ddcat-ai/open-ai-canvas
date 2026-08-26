@@ -83,6 +83,12 @@ const (
 	ChannelInterfaceNovitaVideo           ChannelInterfaceType = "novita-video"
 	ChannelInterfaceMiniMaxVideo          ChannelInterfaceType = "minimax-video"
 	ChannelInterfaceAgnesVideo            ChannelInterfaceType = "agnes-video"
+	ChannelInterfaceRunningHubImage       ChannelInterfaceType = "runninghub-workflow-image"
+	ChannelInterfaceRunningHubVideo       ChannelInterfaceType = "runninghub-workflow-video"
+	ChannelInterfaceRunningHubAudio       ChannelInterfaceType = "runninghub-workflow-audio"
+	ChannelInterfaceComfyBridgeImage      ChannelInterfaceType = "comfyui-bridge-image"
+	ChannelInterfaceComfyBridgeVideo      ChannelInterfaceType = "comfyui-bridge-video"
+	ChannelInterfaceComfyBridgeAudio      ChannelInterfaceType = "comfyui-bridge-audio"
 
 	ApiCallStatusSucceeded ApiCallStatus = "succeeded"
 	ApiCallStatusFailed    ApiCallStatus = "failed"

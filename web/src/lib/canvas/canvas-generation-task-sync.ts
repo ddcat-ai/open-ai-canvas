@@ -88,6 +88,16 @@ export function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
     };
 }
 
+function workflowMetadataForResultNode(): Partial<CanvasNodeMetadata> {
+    return {
+        workflowProvider: undefined,
+        runningHubWorkflowId: undefined,
+        runningHubWorkflowKind: undefined,
+        comfyBridgeWorkflowId: undefined,
+        workflowParameters: undefined,
+    };
+}
+
 export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]): Promise<CanvasNodeData> {
     const mode = generationTaskMode(task, node.type === CanvasNodeType.Text ? "text" : node.type === CanvasNodeType.Video ? "video" : node.type === CanvasNodeType.Audio ? "audio" : "image");
     const prompt = node.metadata?.prompt || task.prompt;
@@ -125,7 +135,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             width: imageSize.width,
             height: imageSize.height,
             position: { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
-            metadata: { ...node.metadata, ...imageMetadata(normalizedImage), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
+            metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...imageMetadata(normalizedImage), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
         };
     }
 
@@ -154,7 +164,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             ...node,
             type: CanvasNodeType.Video,
             ...geometry,
-            metadata: { ...node.metadata, ...videoMetadata(video), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
+            metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...videoMetadata(video), prompt, ...completedTaskMetadata(task), errorDetails: undefined },
         };
     }
 
@@ -163,7 +173,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         const audio = result.audio.storageKey
             ? { url: await resolveMediaUrl(result.audio.storageKey, result.audio.dataUrl), storageKey: result.audio.storageKey, durationMs: result.audio.durationMs, bytes: result.audio.bytes || 0, mimeType: result.audio.mimeType || "audio/mpeg" }
             : await storeGeneratedAudio(await (await fetch(result.audio.dataUrl)).blob(), result.audio.format || "mp3");
-        return { ...node, type: CanvasNodeType.Audio, metadata: { ...node.metadata, ...audioMetadata(audio), prompt, ...completedTaskMetadata(task), errorDetails: undefined } };
+        return { ...node, type: CanvasNodeType.Audio, metadata: { ...node.metadata, ...workflowMetadataForResultNode(), ...audioMetadata(audio), prompt, ...completedTaskMetadata(task), errorDetails: undefined } };
     }
 
     if (!result.text) throw new Error("后端任务没有返回文本");

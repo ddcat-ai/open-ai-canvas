@@ -6,6 +6,7 @@ import { LOCAL_DREAMINA_WAIT_STOPPED_CODE, LocalDreaminaGenerationClientError, r
 import { isLocalDreaminaBackgroundTask, localDreaminaTaskId, projectLocalDreaminaTask, stripLocalDreaminaTaskPrefix } from "@/services/local-dreamina-task-projection";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
+import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
 import { resolveVideoOperation } from "@/lib/model-selection";
 import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useLocalDreaminaModelStore } from "@/stores/use-local-dreamina-model-store";
@@ -20,6 +21,7 @@ export { logicalModelIDForConfig };
 // 自建渠道则由所选协议插件负责第三方字段映射和结果解析。没有显式协议
 // 的旧配置继续保留前端直连兼容路径。
 export function backendModelRuntimeRequired(config: AiConfig) {
+    if ((config.taskWorkflowProvider || "model") !== "model") return true;
     if (logicalModelIDForConfig(config)) return true;
     const requestConfig = resolveModelRequestConfig(config, config.model);
     return Boolean(requestConfig.channelId || requestConfig.interfaceType);
@@ -108,7 +110,7 @@ export async function runBackendGenerationTask(
 ) {
     throwIfAborted(signal);
     assertClientPromptLimit(mode, prompt, config, metadata);
-    if (isLocalDreaminaModel(config.model)) {
+    if (usesLocalDreamina(config)) {
         await dependencies.ensureLocalDreaminaReady?.(signal);
         throwIfAborted(signal);
         return await runLocalDreaminaGeneration(
@@ -161,7 +163,7 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
-    if (isLocalDreaminaModel(options.config.model)) {
+    if (usesLocalDreamina(options.config)) {
         await dependencies.ensureLocalDreaminaReady?.(options.signal);
         throwIfAborted(options.signal);
         return Promise.allSettled(
@@ -368,12 +370,16 @@ function isLocalDreaminaModel(model: string) {
     return /^local:dreamina-cli:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(model.trim());
 }
 
+function usesLocalDreamina(config: AiConfig) {
+    return (config.taskWorkflowProvider || "model") === "model" && isLocalDreaminaModel(config.model);
+}
+
 function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 }
 
 function assertClientPromptLimit(mode: BackendGenerationMode, prompt: string, config: AiConfig, metadata?: Record<string, unknown>) {
-    if (mode !== "image" || metadata?.promptTemplateOperation) return;
+    if (mode !== "image" || metadata?.promptTemplateOperation || (config.taskWorkflowProvider || "model") !== "model") return;
     const requestConfig = resolveModelRequestConfig(config, config.model);
     const promptLimitError = grokImagePromptLimitError(prompt, requestConfig.interfaceType, requestConfig.model);
     if (promptLimitError) throw new Error(promptLimitError);
@@ -395,18 +401,21 @@ async function prepareGenerationReferences({
 async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
     const { projectId, mode, prompt, config, signal, metadata, onTaskUpdate } = options;
     const videoOperation = generationOperation(options);
-    const logicalModelId = logicalModelIDForConfig(config);
+    const workflow = resolveGenerationWorkflowExecution(config, mode);
+    const logicalModelId = workflow ? "" : logicalModelIDForConfig(config);
     const task = await dependencies.createTask({
         ...(projectId ? { projectId } : {}),
         type: `canvas_${mode}`,
         operation: mode === "video" ? videoOperation : mode,
         prompt,
-        model: config.model,
+        ...(workflow ? { provider: workflow.provider } : {}),
+        model: workflow?.taskModel || config.model,
         ...(logicalModelId ? { logicalModelId } : {}),
         input: {
             mode,
             prompt,
-            config: backendProviderConfig(config),
+            ...(workflow ? { execution: workflowPublicExecution(workflow) } : {}),
+            config: backendProviderConfig(config, mode),
             capabilityOptions: logicalModelId ? logicalCapabilityOptions(config, mode) : undefined,
             textHistory: options.textHistory,
             referenceImages: prepared.referenceImages,
@@ -481,8 +490,10 @@ function backendMediaReference<T extends ReferenceVideo | ReferenceAudio>(media:
     } as T;
 }
 
-export function backendProviderConfig(config: AiConfig) {
+export function backendProviderConfig(config: AiConfig, mode: BackendGenerationMode = "image") {
     const requestConfig = resolveModelRequestConfig(config, config.model);
+    const workflow = resolveGenerationWorkflowExecution(config, mode);
+    if (workflow) return workflowProviderConfig(config, requestConfig, workflow);
     const generationOptions = {
         size: config.size,
         quality: config.quality,
@@ -511,6 +522,57 @@ export function backendProviderConfig(config: AiConfig) {
         ...generationOptions,
         capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
         systemPrompt: "",
+    };
+}
+
+function workflowProviderConfig(config: AiConfig, requestConfig: ReturnType<typeof resolveModelRequestConfig>, workflow: GenerationWorkflowExecution) {
+    const runningHubActive = workflow.provider === "runninghub";
+    const comfyBridgeActive = workflow.provider === "comfyui-bridge";
+    return {
+        channelId: "",
+        apiFormat: requestConfig.apiFormat,
+        interfaceType: workflow.interfaceType,
+        baseUrl: comfyBridgeActive ? "bridge://local" : config.runningHub.baseUrl,
+        allowLocalChannel: false,
+        apiKey: runningHubActive ? config.runningHub.apiKey : "",
+        // 工作流是独立 Provider，不能继承普通模型渠道的密钥和自定义头。
+        secretKey: "",
+        headers: [],
+        model: workflow.providerModel,
+        size: config.size,
+        quality: config.quality,
+        transparentBackground: config.transparentBackground,
+        count: config.count,
+        videoSeconds: config.videoSeconds,
+        vquality: config.vquality,
+        videoGenerateAudio: config.videoGenerateAudio,
+        videoWatermark: config.videoWatermark,
+        videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
+        audioVoice: config.audioVoice,
+        audioFormat: config.audioFormat,
+        audioSpeed: config.audioSpeed,
+        audioInstructions: config.audioInstructions,
+        workflowId: workflow.workflowId,
+        webappId: workflow.webappId,
+        workflowJson: workflow.workflowJson,
+        workflowFields: workflow.workflowFields,
+        bridgeId: workflow.bridgeId,
+        runningHubUseWallet: false,
+        runningHubWalletApiKey: "",
+        runningHubUploadApiKey: runningHubActive ? config.runningHub.uploadApiKey || "" : "",
+        capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
+        systemPrompt: "",
+    };
+}
+
+function workflowPublicExecution(workflow: GenerationWorkflowExecution) {
+    return {
+        provider: workflow.provider,
+        kind: workflow.kind,
+        interfaceType: workflow.interfaceType,
+        name: workflow.name,
+        ...(workflow.workflowId ? { workflowId: workflow.workflowId } : {}),
+        ...(workflow.webappId ? { webappId: workflow.webappId } : {}),
     };
 }
 

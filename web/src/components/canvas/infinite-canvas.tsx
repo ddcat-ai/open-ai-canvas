@@ -25,6 +25,7 @@ type InfiniteCanvasProps = {
 };
 
 const CANVAS_WHEEL_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-canvas-wheel-scroll],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
+const CANVAS_POINTER_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-connection-create-menu],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
 const WHEEL_ZOOM_DELTA = 72;
 const TRACKPAD_PINCH_ZOOM_DELTA = 24;
 
@@ -191,8 +192,8 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-canvas-no-zoom]")) return;
-        if (target?.closest("[data-connection-create-menu]")) return;
+        // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
+        if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
         const isTouch = event.pointerType === "touch";
 

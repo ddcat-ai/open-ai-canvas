@@ -376,7 +376,7 @@ func (s *Service) protectTaskSecrets(value interface{}) error {
 	switch item := value.(type) {
 	case map[string]interface{}:
 		for key, child := range item {
-			if key == "apiKey" {
+			if isTaskSecretField(key) {
 				secret, _ := child.(string)
 				if secret != "" && secret != "system" && !strings.HasPrefix(secret, encryptedSettingPrefix) {
 					encrypted, err := s.encryptSettingSecret(secret)
@@ -420,7 +420,7 @@ func (s *Service) decryptTaskSecrets(value interface{}) error {
 	switch item := value.(type) {
 	case map[string]interface{}:
 		for key, child := range item {
-			if key == "apiKey" {
+			if isTaskSecretField(key) {
 				secret, _ := child.(string)
 				if strings.HasPrefix(secret, encryptedSettingPrefix) {
 					plain, err := s.decryptSettingSecret(secret)
@@ -443,6 +443,15 @@ func (s *Service) decryptTaskSecrets(value interface{}) error {
 		}
 	}
 	return nil
+}
+
+func isTaskSecretField(key string) bool {
+	switch key {
+	case "apiKey", "secretKey", "runningHubWalletApiKey", "runningHubUploadApiKey":
+		return true
+	default:
+		return false
+	}
 }
 
 func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossSettingValue, error) {

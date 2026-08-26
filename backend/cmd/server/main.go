@@ -95,6 +95,8 @@ func main() {
 	handler.RegisterSystemProxyRoutes(api, svc)
 	handler.RegisterCustomRelayRoutes(api, svc)
 	handler.RegisterTaskRoutes(api, svc)
+	handler.RegisterComfyBridgeRoutes(api, svc)
+	handler.RegisterRunningHubRoutes(api, svc)
 	handler.RegisterSessionRoutes(api, svc)
 	handler.RegisterSkillRoutes(api, svc)
 	handler.RegisterUserDataRoutes(api, svc)
@@ -157,7 +159,7 @@ func cors() (gin.HandlerFunc, error) {
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
 		}
-		c.Header("Access-Control-Allow-Headers", corsAllowedHeaders)
+		c.Header("Access-Control-Allow-Headers", corsAllowedHeaders+", X-Canvas-Comfy-Bridge-Token, X-Canvas-Bridge-Token")
 		c.Header("Access-Control-Expose-Headers", "X-Request-ID, X-Canvas-Trace-ID, X-Diagnostic-Bundle-ID, X-Diagnostic-Schema-Version")
 		c.Header("Access-Control-Allow-Methods", corsAllowedMethods)
 		c.Header("Access-Control-Max-Age", "86400")

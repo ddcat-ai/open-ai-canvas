@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadMediaFile } from "@/services/file-storage";
@@ -76,6 +76,7 @@ import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasAgentChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { backendProviderConfig, getGenerationCount } from "@/lib/canvas/canvas-project-generation";
+import { cancelGenerationTask } from "@/services/api/task-center";
 import { CanvasTopBar, CanvasWorkspaceModeSwitch } from "./canvas-project-top-bar";
 import { LibTVImportDialog } from "./components/libtv-import-dialog";
 import { TapNowImportDialog } from "./components/tapnow-import-dialog";
@@ -162,6 +163,7 @@ export default function CanvasPage() {
 
 function InfiniteCanvasPage() {
     const { message } = App.useApp();
+    const queryClient = useQueryClient();
     const params = useParams<{ id: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = params.id || "";
@@ -433,6 +435,35 @@ function InfiniteCanvasPage() {
         taskDetailLoading,
         taskDetailLogs,
     } = useCanvasGeneration({ projectId, domainProjectId: linkedProjectId, projectLoaded, nodes, nodesRef, setNodes });
+
+    const cancelCanvasTask = useCallback(
+        (task: import("@/services/api/task-center").GenerationTask) => {
+            if (task.provider === "dreamina-cli") {
+                message.warning("官方即梦 CLI 当前不支持可靠取消，请等待官方状态同步");
+                return;
+            }
+            Modal.confirm({
+                title: "取消生成任务？",
+                content: "任务会立即停止本地执行；如果已经提交到上游，系统会继续核对取消结果和积分状态。",
+                okText: "取消任务",
+                okButtonProps: { danger: true },
+                cancelText: "继续等待",
+                onOk: async () => {
+                    try {
+                        const next = await cancelGenerationTask(task.id);
+                        const node = nodesRef.current.find((item) => item.metadata?.taskId === task.id);
+                        if (node) bindGenerationTask(node.id, next);
+                        setTaskDetail((current) => (current?.id === task.id ? next : current));
+                        await queryClient.invalidateQueries({ queryKey: ["canvas-active-tasks", projectId] });
+                        message.success("任务已取消");
+                    } catch (error) {
+                        message.error(error instanceof Error ? error.message : "取消任务失败");
+                    }
+                },
+            });
+        },
+        [bindGenerationTask, message, nodesRef, projectId, queryClient, setTaskDetail],
+    );
 
     useEffect(() => {
         if (!projectLoaded || !codexAutoConnect) return;
@@ -918,9 +949,14 @@ function InfiniteCanvasPage() {
         } else if (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Frame) {
             setDialogNodeId((current) => (current === node.id ? current : null));
         } else {
-            setDialogNodeId(node.id);
+            // 选择参考媒体时保留当前工作流配置面板，避免点击图片后配置“返回/消失”。
+            // 没有工作流配置面板时，媒体节点仍按原逻辑打开自己的面板。
+            setDialogNodeId((current) => {
+                const currentNode = current ? nodesRef.current.find((item) => item.id === current) : undefined;
+                return currentNode?.type === CanvasNodeType.Config ? current : node.id;
+            });
         }
-    }, []);
+    }, [nodesRef]);
 
     const handleCanvasDeselect = useCallback(() => {
         setContextMenu(null);
@@ -2033,7 +2069,7 @@ function InfiniteCanvasPage() {
                                 </CanvasNodeActionContext.Provider>
                             </InfiniteCanvas>
 
-                            <CanvasActiveTaskPanel tasks={activeTasks} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
+                            <CanvasActiveTaskPanel tasks={activeTasks} onCancelTask={cancelCanvasTask} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
 
                             {focusMode ? (
                                 <CanvasFocusModeBar
@@ -2074,6 +2110,7 @@ function InfiniteCanvasPage() {
                                     onAddFolder={createFolder}
                                     onAddDrawing={() => createNode(CanvasNodeType.Drawing)}
                                     onAddExtensionNode={(type) => createNode(type)}
+                                    onAddWorkflow={() => createNode(CanvasNodeType.Config)}
                                     onOpenDirector={() => createDirectorShot()}
                                     onUndo={undoCanvas}
                                     onRedo={redoCanvas}
@@ -2526,6 +2563,7 @@ function InfiniteCanvasPage() {
                         taskLogs={taskDetailLogs}
                         taskLoading={taskDetailLoading}
                         onCloseTask={() => setTaskDetail(null)}
+                        onCancelTask={cancelCanvasTask}
                         superResolveNode={superResolveNode}
                         onCloseSuperResolve={() => setSuperResolveNodeId(null)}
                         previewNode={previewNode}

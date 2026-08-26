@@ -535,7 +535,14 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 		return BadAuthRequest("任务输入格式无效")
 	}
 	var taskInput canvasGenerationInput
-	if err := json.Unmarshal(encoded, &taskInput); err != nil || (taskInput.Mode != "image" && taskInput.Mode != "video") {
+	if err := json.Unmarshal(encoded, &taskInput); err != nil || (taskInput.Mode != "image" && taskInput.Mode != "video" && taskInput.Mode != "audio") {
+		return nil
+	}
+	if isWorkflowProviderInterface(taskInput.Config.InterfaceType) {
+		return validateWorkflowProviderConfig(taskInput.Mode, taskInput.Config)
+	}
+	// 普通音频模型沿用主线的能力校验路径；当前专用能力表只覆盖图片和视频。
+	if taskInput.Mode == "audio" {
 		return nil
 	}
 	channelID := strings.TrimSpace(taskInput.Config.ChannelID)
