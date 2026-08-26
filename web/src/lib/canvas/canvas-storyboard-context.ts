@@ -22,7 +22,10 @@ export function resolveStoryboardGenerationContext(nodes: CanvasNodeData[]): Sto
     const stylePresetId = String(styleNode?.metadata?.stylePresetId || "").trim();
     if (!styleNode || !stylePrompt || !stylePresetId) throw new Error("请先设置项目画风，再生成分镜");
 
-    const characterNodes = nodes.filter((node) => node.metadata?.workflowKind === "character");
+    // `workflowKind=character` is also used by standalone character-design
+    // image workflows. Only nodes linked to a project character asset are
+    // storyboard character cards and therefore participate in this check.
+    const characterNodes = nodes.filter((node) => node.metadata?.workflowKind === "character" && node.metadata?.characterAssetId?.trim());
     const invalidCharacter = characterNodes.find((node) => !node.metadata?.characterAssetId?.trim() || !node.metadata?.characterVersionId?.trim() || !(node.metadata?.characterName || node.title).trim());
     if (invalidCharacter) throw new Error(`角色卡“${invalidCharacter.metadata?.characterName || invalidCharacter.title || "未命名角色"}”版本未同步，请刷新角色资产后再生成分镜`);
 
